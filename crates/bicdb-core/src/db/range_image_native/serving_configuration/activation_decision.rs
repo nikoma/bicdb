@@ -851,3 +851,129 @@ impl BicDb {
 
 #[cfg(test)]
 mod tests;
+
+/// Read-only projection of actual old activation evidence while a later origin
+/// remains Pending. This is deliberately NOT NativeActivationDecisionReceipt,
+/// NativeRecoveredServingReceipt, NativeReady, or an Active-fence quorum.
+#[derive(Debug)]
+pub(crate) struct HistoricalPendingNativeActivationFacts {
+    native_receipt_sha256: String,
+    visibility: u64,
+    completion_sha256: String,
+    decision_sha256: String,
+}
+impl HistoricalPendingNativeActivationFacts {
+    pub(crate) fn native_receipt_sha256(&self) -> &str {
+        &self.native_receipt_sha256
+    }
+    pub(crate) fn visibility(&self) -> u64 {
+        self.visibility
+    }
+    pub(crate) fn completion_sha256(&self) -> &str {
+        &self.completion_sha256
+    }
+    pub(crate) fn decision_sha256(&self) -> &str {
+        &self.decision_sha256
+    }
+}
+impl BicDb {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn observe_historical_pending_native_activation(
+        &self,
+        store: &RangeWriteStore,
+        observer: &RecoveryObservationRoleAdmission,
+        scope: &RecoveryFenceScope,
+        expected_decision_sha: &str,
+        expected_serving_sha: &str,
+        r: u64,
+        h0: &str,
+        h: &str,
+    ) -> Result<Option<HistoricalPendingNativeActivationFacts>> {
+        observer.require_scope(scope)?;
+        self.check_recovery_state()?;
+        let _journal = self.try_native_image_journal()?;
+        let Some(known) = self.observe_known_pending_native_replica_prefix_under_journal(
+            store,
+            observer.current_range(),
+        )?
+        else {
+            return Ok(None);
+        };
+        if !matches!(scope.purpose, MetadataRecoveryRolePurpose::NormalRecovery) {
+            return Err(invalid(
+                "historical Pending activation only supports actual NormalRecovery",
+            ));
+        }
+        let actual = known.lineage_for_historical_activation();
+        let native = self.native_recovery_admission(
+            observer.cluster_id(),
+            observer.bootstrap_id(),
+            observer.local_node_id(),
+            observer.local_member_incarnation(),
+        )?;
+        native.require_current(self)?;
+        observer.require_native_identity(&native)?;
+        let record = self
+            .read_native_range_image_record::<NativeActivationDecisionRecord>(&decision_key(
+                scope.range_id,
+            ))?
+            .ok_or_else(|| invalid("historical Pending activation lost actual current decision"))?;
+        record.validate()?;
+        let archived = self
+            .read_native_range_image_record::<NativeActivationDecisionRecord>(
+                &decision_history_key(scope.range_id, expected_decision_sha),
+            )?
+            .ok_or_else(|| {
+                invalid("historical Pending activation lost immutable decision archive")
+            })?;
+        if record != archived
+            || record.checksum_sha256 != expected_decision_sha
+            || !record.scope.same_session(scope)
+            || record.native_serving_sha256 != expected_serving_sha
+            || record.range_index != r
+            || record.logical_genesis_sha256 != h0
+            || record.logical_history_sha256 != h
+            || record.range != canonical(observer.current_range())
+            || record.members != *observer.member_credentials()
+            || observer.expected_schema_sha256() != Some(record.schema_sha256.as_str())
+            || observer.restore_activation() != record.restore_activation.as_ref()
+        {
+            return Err(invalid(
+                "historical Pending activation differs from actual archives/fresh observer",
+            ));
+        }
+        record.require_fresh_anchor(observer.metadata_term(), observer.metadata_read_index())?;
+        record.require_native_binding_from_lineage(self, &native, true, actual)?;
+        let serving = actual
+            .serving
+            .as_ref()
+            .ok_or_else(|| invalid("historical Pending activation lost current serving anchor"))?;
+        let serving_archive =
+            self.read_native_range_image_record::<NativeRecoveredServingConfiguration>(
+                &history_key(scope.range_id, expected_serving_sha),
+            )?
+            .ok_or_else(|| {
+                invalid("historical Pending activation lost immutable serving archive")
+            })?;
+        if serving != &serving_archive {
+            return Err(invalid("historical Pending current/archive serving differ"));
+        }
+        for slot in self
+            .native_abort_slot_inventory()?
+            .iter()
+            .filter(|s| s.command.range_id == scope.range_id)
+        {
+            slot.domain.require_observer(observer)?;
+        }
+        // No mutation or await occurs under this journal; the exact Pending,
+        // physical prefix, native archives and original Store remain retained.
+        observer.require_scope(scope)?;
+        native.require_current(self)?;
+        Ok(Some(HistoricalPendingNativeActivationFacts {
+            native_receipt_sha256: record.native_receipt_sha256,
+            visibility: record.local_visibility_sequence,
+            completion_sha256: record.completion_quorum_sha256,
+            decision_sha256: record.checksum_sha256,
+        }))
+    }
+}

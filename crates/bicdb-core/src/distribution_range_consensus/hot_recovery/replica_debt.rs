@@ -4,6 +4,53 @@ use super::*;
 use crate::db::SourceRangeImageLineage;
 use crate::distribution_native_apply::{NativeOriginStatusRequest, NativeRecertifyRequest};
 
+enum MaterializedReplicaSource {
+    Current(SourceRangeImageLineage),
+    KnownPending(crate::db::KnownPendingNativeReplicaPrefix),
+}
+impl MaterializedReplicaSource {
+    fn range_index(&self) -> u64 {
+        match self {
+            Self::Current(s) => s.range_index(),
+            Self::KnownPending(s) => s.range_index(),
+        }
+    }
+    fn require_remote(
+        &self,
+        db: &crate::BicDb,
+        remote: &crate::distribution_native_apply::NativeReplicaProgressReply,
+    ) -> Result<()> {
+        match self {
+            Self::Current(s) => db.require_native_replica_prefix_compatible(s, remote),
+            Self::KnownPending(s) => s.require_remote(db, remote),
+        }
+    }
+    fn require_materialized(&self, db: &crate::BicDb, command: &RangeWriteCommand) -> Result<()> {
+        match self {
+            Self::Current(s) => db.require_native_command_materialized(s, command),
+            Self::KnownPending(s) => s.require_materialized(db, command),
+        }
+    }
+    fn plan(
+        &self,
+        command: &RangeWriteCommand,
+        range: &RangeDescriptor,
+        topology: &ClusterTopology,
+    ) -> Result<NativeRangeCommandIntent> {
+        match self {
+            Self::Current(s) => NativeRangeCommandIntent::plan_source(command, range, topology, s),
+            Self::KnownPending(s) => {
+                NativeRangeCommandIntent::plan_known_pending_replica(command, range, topology, s)
+            }
+        }
+    }
+    fn validate_plan(&self, plan: &NativeRangeCommandIntent) -> Result<()> {
+        match self {
+            Self::Current(s) => plan.validate_native_configuration(s),
+            Self::KnownPending(s) => s.validate_plan(plan),
+        }
+    }
+}
 pub(crate) struct NativeHotReplicaBinding {
     coordinator: std::sync::Weak<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
     range: RangeDescriptor,
@@ -19,7 +66,10 @@ pub(crate) struct NativeHotReplicaProgress {
 }
 impl NativeHotReplicaProgress {
     pub(crate) fn at_observed_source_cut(&self) -> bool {
-        self.remote_cut == self.source_cut && self.remote_resolved >= self.source_cut
+        // Compatibility was proved against actual immutable history before this
+        // data observation. KnownPending may observe the exact next command
+        // already materialized remotely; it never claims local Ready.
+        self.remote_cut >= self.source_cut && self.remote_resolved >= self.source_cut
     }
     pub(crate) fn diagnostic(&self) -> serde_json::Value {
         serde_json::json!({"actual_source_native_cut":self.source_cut,
@@ -86,12 +136,21 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
         use_actual: impl FnOnce(
             &mut ClusterDataNodeService,
             &crate::BicDb,
-            &SourceRangeImageLineage,
+            &MaterializedReplicaSource,
         ) -> Result<R>,
     ) -> Result<R> {
         self.with_hot_replica_actual(runtime, host, binding, role, parent, |service, db| {
-            let source = db.current_native_range_source_lineage(binding.range.id)?;
-            use_actual(service, db, &source)
+            let source = match service.observe_hot_known_pending_replica_prefix(db, role)? {
+                Some(known) => MaterializedReplicaSource::KnownPending(known),
+                None => MaterializedReplicaSource::Current(
+                    db.current_native_range_source_lineage(binding.range.id)?,
+                ),
+            };
+            let result = use_actual(service, db, &source)?;
+            if let MaterializedReplicaSource::KnownPending(known) = &source {
+                service.revalidate_hot_known_pending_replica_prefix(db, known)?;
+            }
+            Ok(result)
         })
     }
     fn with_hot_replica_actual<R>(
@@ -195,22 +254,21 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             .observe_hot_native_replica(voter, &request, &token)?;
         self.require_hot_replica_binding(runtime, host, binding, role, &token)?;
         let selected = self.with_hot_replica_source(runtime, host, binding, role, &token, |service, db, source| {
-            db.require_native_replica_prefix_compatible(source, remote.reply())?;
+            source.require_remote(db, remote.reply())?;
             if remote.reply().progress.current_epoch != range.epoch {
                 return Err(range_write_error("hot replica raw epoch differs from actual current domain"));
             }
             let after = remote.reply().native_index.min(remote.reply().progress.resolved_through);
-            if after == source.range_index() { return Ok(None); }
-            if after > source.range_index() { return Err(range_write_error("hot target is ahead of actual source")); }
+            if after >= source.range_index() { return Ok(None); }
             let entry = service.probe_range_write_for_peer(range, &self.local_node_id, after+1)?.entry
                 .ok_or_else(|| range_write_error("hot suffix needs retained command; compacted/native-gap image recovery remains required"))?;
             if entry.state != RangeWriteState::Applied || entry.command.range_epoch != range.epoch {
                 return Err(range_write_error("hot suffix requires actual same-epoch Applied source"));
             }
-            db.require_native_command_materialized(source, &entry.command)?;
+            source.require_materialized(db, &entry.command)?;
             let topology = self.topology.try_read().ok_or_else(|| range_write_error("hot suffix topology busy"))?;
-            let plan = NativeRangeCommandIntent::plan_source(&entry.command, range, &topology, source)?;
-            plan.validate_native_configuration(source)?;
+            let plan = source.plan(&entry.command, range, &topology)?;
+            source.validate_plan(&plan)?;
             drop(topology);
             let gate = service.range_mutation_gate();
             let permit = gate.try_enter(range.id)?;
@@ -263,8 +321,8 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
                 role,
                 &token,
                 |_, db, current| {
-                    db.require_native_command_materialized(current, &command)?;
-                    plan.validate_native_configuration(current)
+                    current.require_materialized(db, &command)?;
+                    current.validate_plan(&plan)
                 },
             )?;
             let certificate = plan.certify(&certified)?;
@@ -281,7 +339,7 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
                 role,
                 &token,
                 |_, db, current| {
-                    db.require_native_replica_prefix_compatible(current, applied.reply())?;
+                    current.require_remote(db, applied.reply())?;
                     if applied.reply().command_index != Some(command.index)
                         || applied.reply().command_checksum_sha256.as_deref()
                             != Some(command.checksum_sha256.as_str())
@@ -308,7 +366,7 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             return Ok(progress);
         }
         self.with_hot_replica_source(runtime, host, binding, role, &token, |_, db, current| {
-            db.require_native_replica_prefix_compatible(current, remote.reply())?;
+            current.require_remote(db, remote.reply())?;
             Ok(NativeHotReplicaProgress {
                 source_cut: current.range_index(),
                 remote_cut: remote.reply().native_index,

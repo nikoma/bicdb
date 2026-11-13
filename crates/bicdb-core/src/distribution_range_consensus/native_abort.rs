@@ -6,6 +6,7 @@ use crate::distribution_range_recovery::RecoveryRoleAdmission;
 
 pub(super) const NATIVE_ABORT_CATALOG_FORMAT: u32 = 15;
 const MAX_ABORT_SLOTS: usize = 4096;
+mod known_pending_replica;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct NativeAbortDomain {

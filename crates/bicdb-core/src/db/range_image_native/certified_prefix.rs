@@ -9,7 +9,9 @@ use crate::distribution_range_mutation::RangeMutationAuthority;
 mod no_data;
 use no_data::NativeNoDataPrefixEvidence;
 pub(crate) use no_data::NativeRecoveryAbortedReceipt;
+mod known_pending_replica;
 mod ordinary_apply;
+pub(crate) use known_pending_replica::KnownPendingNativeReplicaPrefix;
 #[cfg(test)]
 mod origin_fault;
 mod recovery_apply;

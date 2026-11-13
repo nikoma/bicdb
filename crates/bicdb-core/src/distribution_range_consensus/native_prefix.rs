@@ -525,8 +525,43 @@ impl NativeRangeCommandIntent {
         plan.scope_sha256 = plan.origin_scope_v2()?;
         Ok(plan)
     }
+    pub(super) fn plan_known_pending_replica(
+        command: &RangeWriteCommand,
+        range: &RangeDescriptor,
+        topology: &ClusterTopology,
+        known: &crate::db::KnownPendingNativeReplicaPrefix,
+    ) -> Result<Self> {
+        if command.index > known.range_index() {
+            return Err(range_write_error(
+                "KnownPending plan exceeds materialized source cut",
+            ));
+        }
+        let mut plan = Self::plan(command, range, topology)?;
+        plan.origin_scope_version = crate::distribution_native_apply::NATIVE_ORIGIN_SCOPE_VERSION;
+        plan.restore_activation = known.restore_activation().cloned();
+        plan.scope_sha256 = plan.origin_scope_v2()?;
+        known.validate_plan(&plan)?;
+        Ok(plan)
+    }
     fn origin_scope_v2(&self) -> Result<String> {
-        let mut range = self.range.clone();
+        Self::origin_scope_v2_for(
+            &self.cluster_id,
+            self.bootstrap_id,
+            &self.range,
+            &self.members,
+            &self.schema_sha256,
+            self.restore_activation.as_ref(),
+        )
+    }
+    fn origin_scope_v2_for(
+        cluster: &ClusterId,
+        bootstrap: Uuid,
+        range: &RangeDescriptor,
+        members: &BTreeMap<ClusterNodeId, RangeImageBirthMember>,
+        schema: &str,
+        restore: Option<&crate::distribution_consensus::MetadataRestoreActivation>,
+    ) -> Result<String> {
+        let mut range = range.clone();
         range.approximate_bytes = 0;
         range.approximate_qps = 0;
         range.replicas.sort_by_key(|replica| replica.id);
@@ -534,16 +569,43 @@ impl NativeRangeCommandIntent {
             crate::distribution_range_image::bounded_json(
                 &(
                     "bicdb.native.origin.scope.v2",
-                    &self.cluster_id,
-                    self.bootstrap_id,
+                    cluster,
+                    bootstrap,
                     range,
-                    &self.members,
-                    &self.schema_sha256,
-                    &self.restore_activation,
+                    members,
+                    schema,
+                    restore,
                 ),
                 MAX_NATIVE_SCOPE_BYTES,
             )?,
         )))
+    }
+    /// Pure retained-record check, not a recovery role or command certificate.
+    pub(crate) fn require_retained_materialized_prefix_origin_scope(
+        command: &RangeWriteCommand,
+        actual: &SourceRangeImageLineage,
+        expected: &str,
+    ) -> Result<()> {
+        let range = actual.native_write_range()?;
+        if command.cluster_id != *actual.cluster_id()
+            || command.range_id != range.id
+            || command.range_epoch != range.epoch
+            || command.leader_node_id != range.leader
+            || actual.range_index().checked_add(1) != Some(command.index)
+            || Self::origin_scope_v2_for(
+                actual.cluster_id(),
+                actual.bootstrap_id(),
+                range,
+                &actual.native_write_members()?,
+                actual.schema_sha256(),
+                actual.restore_activation(),
+            )? != expected
+        {
+            return Err(range_write_error(
+                "retained Pending has another actual native origin scope",
+            ));
+        }
+        Ok(())
     }
     pub(crate) fn from_authenticated_leader(
         command: &RangeWriteCommand,

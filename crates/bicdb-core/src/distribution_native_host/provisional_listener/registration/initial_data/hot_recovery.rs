@@ -328,19 +328,24 @@ impl NativeHotRecoveryMaintenance {
             {
                 continue;
             }
-            // Do not discard an older session's frozen/uncaught-up physical
-            // obligations when another origin failure appears. A separate
-            // completed-decision/new-session dominance producer is required.
-            // A session whose followers were last observed at the source cut
-            // is eligible for an attempt, not already retired. Keep its actual
-            // owners/constraints through every fallible successor operation.
+            // A second Pending clears readiness, but does not stop physical
+            // continuation of the retained old decision. Drive its actual
+            // completion/activation and bounded materialized-prefix replay
+            // first. Old debt is neither dropped nor treated as a new QQ.
             if state
                 .replica_debts
                 .get(&range.id)
                 .is_some_and(|debt| !debt.successor_attempt_eligible())
             {
                 state.cursor = (at + 1) % ranges.len();
-                return Err(invalid("new origin recovery with retained replica session debt needs explicit continuation; old debt is preserved"));
+                let debt = state
+                    .replica_debts
+                    .get_mut(&range.id)
+                    .expect("retained above");
+                self.run_replica_debt(debt, parent)?;
+                if !debt.successor_attempt_eligible() {
+                    return Ok(());
+                }
             }
             let command = match self.candidate(&range, parent) {
                 Ok(Some(command)) => command,

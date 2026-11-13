@@ -18,7 +18,9 @@ mod activation_scope;
 pub(crate) use activation_scope::NativeActivationReadScope;
 mod activation_decision;
 mod joint_handoff;
-pub(crate) use activation_decision::NativeActivationDecisionReceipt;
+pub(crate) use activation_decision::{
+    HistoricalPendingNativeActivationFacts, NativeActivationDecisionReceipt,
+};
 pub(in crate::db::range_image_native) use joint_handoff::NativeJointServingDomain;
 pub(crate) use joint_handoff::{
     NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,

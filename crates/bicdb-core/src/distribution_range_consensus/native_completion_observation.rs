@@ -222,35 +222,58 @@ impl RangeWriteStore {
             observer.local_member_incarnation(),
         )?;
         observer.require_native_identity(&native)?;
-        let receipt = db.observe_native_activated_completion_anchor(
-            observer,
-            &request.scope,
-            &completed.native_serving_sha256,
-            point.range_index(),
-            point.logical_genesis_sha256(),
-            point.logical_history_sha256(),
-        )?;
-        let activation = db.observe_native_activation_decision_for_observer(
-            observer,
-            &request.scope,
-            &activated.native_activation_sha256,
-            &completed.native_serving_sha256,
-            point.range_index(),
-            point.logical_genesis_sha256(),
-            point.logical_history_sha256(),
-        )?;
-        if activation.completion_quorum_sha256() != activated.completion_quorum_sha256 {
-            return Err(range_write_error(
-                "actual protected activation/cataloque commitments disagree",
-            ));
-        }
-        if receipt.native_receipt_at_activation_sha256() != point.native_receipt_sha256()
-            || receipt.local_visibility_at_activation() != point.local_visibility_sequence()
-        {
-            return Err(range_write_error(
-                "activated anchor differs from actual native completion receipt",
-            ));
-        }
+        let decision_sha256 = if let Some(historical) = db
+            .observe_historical_pending_native_activation(
+                self,
+                observer,
+                &request.scope,
+                &activated.native_activation_sha256,
+                &completed.native_serving_sha256,
+                point.range_index(),
+                point.logical_genesis_sha256(),
+                point.logical_history_sha256(),
+            )? {
+            if historical.completion_sha256() != activated.completion_quorum_sha256
+                || historical.native_receipt_sha256() != point.native_receipt_sha256()
+                || historical.visibility() != point.local_visibility_sequence()
+            {
+                return Err(range_write_error(
+                    "historical Pending activation differs from actual completed catalogue point",
+                ));
+            }
+            historical.decision_sha256().to_owned()
+        } else {
+            let receipt = db.observe_native_activated_completion_anchor(
+                observer,
+                &request.scope,
+                &completed.native_serving_sha256,
+                point.range_index(),
+                point.logical_genesis_sha256(),
+                point.logical_history_sha256(),
+            )?;
+            let activation = db.observe_native_activation_decision_for_observer(
+                observer,
+                &request.scope,
+                &activated.native_activation_sha256,
+                &completed.native_serving_sha256,
+                point.range_index(),
+                point.logical_genesis_sha256(),
+                point.logical_history_sha256(),
+            )?;
+            if activation.completion_quorum_sha256() != activated.completion_quorum_sha256 {
+                return Err(range_write_error(
+                    "actual protected activation/cataloque commitments disagree",
+                ));
+            }
+            if receipt.native_receipt_at_activation_sha256() != point.native_receipt_sha256()
+                || receipt.local_visibility_at_activation() != point.local_visibility_sequence()
+            {
+                return Err(range_write_error(
+                    "activated anchor differs from actual native completion receipt",
+                ));
+            }
+            activation.checksum_sha256().to_owned()
+        };
         Ok(LocalNativeCompletionEvidence {
             reply: NativeCompletionReply {
                 stage: crate::distribution_range_recovery::NativeCompletionStage::ActivatedAnchor,
@@ -270,7 +293,7 @@ impl RangeWriteStore {
                 native_receipt_sha256: point.native_receipt_sha256().to_owned(),
                 local_visibility_sequence_at_completion: point.local_visibility_sequence(),
                 native_serving_sha256: completed.native_serving_sha256.clone(),
-                activation_decision_sha256: Some(activation.checksum_sha256().to_owned()),
+                activation_decision_sha256: Some(decision_sha256),
             },
         })
     }

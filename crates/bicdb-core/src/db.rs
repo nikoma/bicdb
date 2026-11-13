@@ -103,21 +103,22 @@ pub(crate) use range_image_native::NativeRegisteredClosedPersistScope;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
     FreshNativeCatalogueBootstrap, FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard,
-    KnownNativeRecoveryPrefix, NativeAbortCatalogueBootstrap, NativeHistoryPublicationBinding,
-    NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,
-    NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
-    NativeLogicalHistoryStepV1, NativeRangeInstallSafety, NativeRangePendingApply,
-    NativeRangePrefixObservation, NativeRecoveredServingReceipt, NativeRecoveryAbortedReceipt,
-    NativeRecoveryAdmission, NativeRecoveryAppliedReceipt, NativeRegisteredReceiverHook,
-    NativeWriterHostState, RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
-    StagedNativeHistoryProof,
+    KnownNativeRecoveryPrefix, KnownPendingNativeReplicaPrefix, NativeAbortCatalogueBootstrap,
+    NativeHistoryPublicationBinding, NativeHistoryStage, NativeHistoryStageProgress,
+    NativeHistoryTargetContext, NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1,
+    NativeLogicalHistoryPoint, NativeLogicalHistoryStepV1, NativeRangeInstallSafety,
+    NativeRangePendingApply, NativeRangePrefixObservation, NativeRecoveredServingReceipt,
+    NativeRecoveryAbortedReceipt, NativeRecoveryAdmission, NativeRecoveryAppliedReceipt,
+    NativeRegisteredReceiverHook, NativeWriterHostState, RangeImageBirthMember,
+    RangeImageBirthSpec, SourceRangeImageLineage, StagedNativeHistoryProof,
 };
 pub(crate) use range_image_native::{
-    NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,
-    NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
-    NativeJointDecisionReceipt, NativeJointHistoricalCutScope, NativeJointOldCloseReceipt,
-    NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
-    NativeJointServingBridgeReceipt, NativeJointServingPreparation, NativeReadyObserverReadScope,
+    HistoricalPendingNativeActivationFacts, NativeActivationDecisionReceipt,
+    NativeActivationReadScope, NativeCompletionReadScope, NativeCurrentJointBinding,
+    NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope, NativeJointDecisionReceipt,
+    NativeJointHistoricalCutScope, NativeJointOldCloseReceipt, NativeJointOldPhysicalProof,
+    NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
+    NativeJointServingPreparation, NativeReadyObserverReadScope,
 };
 #[cfg(test)]
 pub(crate) use range_image_native::{

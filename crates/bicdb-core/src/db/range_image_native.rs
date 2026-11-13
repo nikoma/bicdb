@@ -40,12 +40,12 @@ pub(crate) use native_read::{
     NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,
 };
 pub(crate) use serving_configuration::{
-    NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,
-    NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
-    NativeJointDecisionReceipt, NativeJointHistoricalCutScope, NativeJointOldCloseReceipt,
-    NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
-    NativeJointServingBridgeReceipt, NativeJointServingPreparation, NativeReadyObserverReadScope,
-    NativeRecoveredServingReceipt,
+    HistoricalPendingNativeActivationFacts, NativeActivationDecisionReceipt,
+    NativeActivationReadScope, NativeCompletionReadScope, NativeCurrentJointBinding,
+    NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope, NativeJointDecisionReceipt,
+    NativeJointHistoricalCutScope, NativeJointOldCloseReceipt, NativeJointOldPhysicalProof,
+    NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
+    NativeJointServingPreparation, NativeReadyObserverReadScope, NativeRecoveredServingReceipt,
 };
 use serving_configuration::{NativeJointServingDomain, NativeRecoveredServingConfiguration};
 #[cfg(test)]
@@ -70,8 +70,8 @@ thread_local! {
 }
 pub(super) use certified_prefix::NativeRangeScopeRegistry;
 pub(crate) use certified_prefix::{
-    KnownNativeRecoveryPrefix, NativeRangeInstallSafety, NativeRangePendingApply,
-    NativeRecoveryAppliedReceipt, NativeReplicaMaterialization,
+    KnownNativeRecoveryPrefix, KnownPendingNativeReplicaPrefix, NativeRangeInstallSafety,
+    NativeRangePendingApply, NativeRecoveryAppliedReceipt, NativeReplicaMaterialization,
 };
 
 pub(super) fn native_key(key: &str) -> Vec<u8> {

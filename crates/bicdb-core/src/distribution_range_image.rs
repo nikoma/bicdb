@@ -25,6 +25,15 @@ use crate::{BicDb, BicDbError, CancellationToken, CollectionMeta, Result};
 mod history_export;
 pub(crate) use history_export::{RangeImageHistoryCursorV1, RangeImageHistoryStepV1};
 mod closed_image_source;
+#[cfg(feature = "tls-replication")]
+mod remote_source;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_source::{
+    ActualNativeRemoteImageSourceFrame, NativeRemoteImageManifestV1,
+    NativeRemoteImageSourceOperationV1, NativeRemoteImageSourcePayloadV1,
+    NativeRemoteImageSourceReplyV1, NativeRemoteImageSourceRequestV1,
+    NativeRemoteImageSourceSession,
+};
 mod source_cut;
 pub(crate) use closed_image_source::ClosedNativeImageSource;
 pub(crate) use source_cut::{

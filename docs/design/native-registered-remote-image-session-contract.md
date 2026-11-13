@@ -23,8 +23,10 @@ expected cursor/previous digest and an original per-step caller budget <=5s.
 Chunk byte/record/history limits bound memory, not total relocation size.
 
 The source retains its ACTUAL OLD closure, source capture and live local pins.
-Before each reply it validates those real objects and obtains fresh exact current
-CommittedHandoff authority for that bounded operation. Permanent OLD/cut facts
+Before each reply it validates those real objects and independently obtains fresh
+source OWN HostMQ for the exact current Pending plan. This is READONLY: source
+identity comes from the actual selected OLD cut, not the retiring plan.source,
+and no RecoveryRole initiator eligibility is borrowed or cast. Permanent OLD/cut facts
 remain historical bindings; an expired role is never renewed. Long relocation
 session identity/progress is separate from per-RPC caller lifetime. Source
 schema/open/namespace/cut replacement cannot rebase an existing session.
@@ -83,8 +85,12 @@ fake backend, source B substitution or declared index is acceptable.
 
 Fence/install range1 over authenticated source history/row steps, audit all
 history, use real controlled row Tx, physically verify/finalize while CLOSED.
-Only THEN fence/install range2 on the SAME populated fifth through the new
-obligation-preserving producer. Verify whole payloads, per-range source R/H,
+A first isolated component case may next install range2 while both remain CLOSED.
+The full vertical MUST first obtain genuine NEW quorum/open, ACK and Strong for
+range1, then fence/install range2 on the SAME Assigned fifth using a distinct
+current-writer capability. Policy installation revokes the original Registered
+no-writer capability permanently; its later None state cannot revive it. Verify
+whole payloads, per-range source R/H,
 actual local B/UID/history/catalogue, all prior obligations, source ACK ledger and
 all four original writers. Target APP/Strong/Serving remain refused until the
 separate NEW quorum/open lifecycle. A locally constructed genuine OLD quorum
@@ -97,8 +103,30 @@ other populated range's genuine slot/NoData/history preservation. Faults alter
 actual protected records or owners, never fabricate proof DTOs. Cold remote
 recovery and operator collector/placement remain distinct required gates.
 
-Final physical working set remains 8GiB with larger aggregate buffers. Existing
+Final physical working set remains 8GiB, larger than the aggregate configured
+buffer pools. Existing
 64MiB/3MiB/1024-history prototype caps are OPEN blockers, not a substitute corpus.
 Streaming must not unbound heap. Whole-range source freeze/pin is not an online
 catch-up/final-cut protocol; availability and actual size/performance need
 separate evidence. No local build, dispatch or capability result is claimed.
+
+## First source leaf (not wired or validated as an operator path)
+
+`NativeRemoteImageSourceSession::retain_actual_old_quorum` retains the actual
+source service/runtime/MStore/writer/coordinator and real locally-produced OLD
+quorum before fallible publication. `begin` bounds the source capture wait by
+the original publish request, retains capture/pins before subsequent validation,
+and publishes no frames on failure. A failed attempted capture is quarantined;
+it cannot recreate its cut or renew its session. The long-session cancellation
+is independent from each bounded request and remains checked on every frame.
+
+The first constructor accepts a genuine LOCAL opaque OLD quorum only. It is an
+explicit prerequisite for source framing, not the remote OLD collector. The
+manifest and frame DTOs are checksummed historical DATA with source/session/
+request/cursor/birth/OLD-receipt bindings. Only actual source capture export
+creates the source-side opaque frame. A future target wrapper must additionally
+be minted only by the real pinned TLS request path; decoding cannot reconstruct
+that wrapper, a source lineage, or target mutation permission. Source-owner loss
+closes future source operations; issued same-cut facts retain their historical
+meaning. Session publication, remote OLD collector, target controlled Tx and
+actual finalization/readiness consumers are still absent in this first leaf.

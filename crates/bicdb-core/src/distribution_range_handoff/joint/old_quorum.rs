@@ -305,6 +305,14 @@ impl NativeJointOldClosedQuorum {
             .map(|(node, obs)| (node.clone(), obs.receipt_sha256().into()))
             .collect()
     }
+    /// Historical projection from the actual retained OLD quorum only. A
+    /// decoded map cannot reconstruct that quorum or any source permission.
+    pub(crate) fn source_image_materialized_facts(
+        &self,
+    ) -> Result<BTreeMap<ClusterNodeId, super::materialized::NativeJointMaterializedFacts>> {
+        self.require_current()?;
+        Ok(self.materialized_facts())
+    }
     pub(crate) fn checksum_sha256(&self) -> Result<String> {
         self.require_current()?;
         Ok(hex::encode(sha2::Sha256::digest(

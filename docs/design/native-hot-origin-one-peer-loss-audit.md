@@ -294,3 +294,27 @@ Required source/test batch before qualification or main delivery:
 This contract does not claim the completed source supports reset/blackhole/lost
 reply yet. The original fault Unknown and all no-ACK API outcomes remain immutable;
 receiver persistence or a diagnostic state is never retroactively a user ACK.
+
+### Review resolution: actual bounded wire subrequests and semantic veto
+
+The implementation must cap the **transmitted** request budget to its actual
+bounded call child, not advertise a longer role/request budget behind a shorter
+network slice. The original five-second phase parent remains unchanged. A typed
+actual socket timeout is a non-success only; the sender checks the original
+phase parent again before it can become a scheduling hint. Explicit cancellation,
+original expiry, query-budget failure or a decoded late/incompatible response
+cannot become a successful observation. Existing normal transport calls opt out.
+
+A generic authenticated semantic/identity failure is retained per actual voter
+and phase. That voter cannot be skipped when it subsequently becomes unreachable;
+only an independently fresh successful same-peer/same-phase observation clears
+its veto. This conservatively blocks busy-then-lost-peer scenarios too, because
+there is no typed remote busy/history taxonomy. Do not claim that taxonomy or
+selective restart qualified. Actual structured inner QQ constraints remain
+unchanged. The first sender/controller source checkpoint uses a ten-second
+per-job peer retry hint, a 500-ms initial remote Fence subrequest, and otherwise
+original remaining phase time (with a 250-ms accounting margin for non-origin
+calls). The origin uses its full remaining budget and can never be backoff-skipped.
+These are bounded scheduling choices, not membership changes or serving proofs.
+All required controls above remain unexecuted until the coherent batch is frozen
+and remotely validated; the original ae584 failure is unchanged.

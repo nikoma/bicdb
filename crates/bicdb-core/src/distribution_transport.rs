@@ -52,6 +52,8 @@ use crate::distribution_metadata_read_provider::{
 };
 mod evidence;
 pub use evidence::{ClusterRpcEvidence, ClusterRpcEvidenceLimits, ClusterRpcEvidenceObserver};
+mod hot_recovery_peer;
+pub(crate) use hot_recovery_peer::{HotRecoveryPeerFailure, HotRecoveryPhaseRequest};
 mod host_metadata;
 mod initial_birth;
 mod initial_data_listener;
@@ -5070,6 +5072,27 @@ impl TcpClusterRelocationTransport {
         MetadataReadParticipant,
         Option<crate::distribution::NativeStoreBirthV1>,
     )> {
+        self.call_with_native_destination_peer_transport(
+            cancellation,
+            destination_node_id,
+            request,
+            false,
+        )
+    }
+
+    // HOT alone opts into typed socket-failure provenance. Its transmitted
+    // request budget is bounded by the actual call child; no longer wire TTL.
+    fn call_with_native_destination_peer_transport(
+        &self,
+        cancellation: &CancellationToken,
+        destination_node_id: &ClusterNodeId,
+        request: ClusterDataRequest,
+        classify_peer_io: bool,
+    ) -> Result<(
+        ClusterDataResponse,
+        MetadataReadParticipant,
+        Option<crate::distribution::NativeStoreBirthV1>,
+    )> {
         let Some(observer) = &self.evidence else {
             return self.call_with_native_destination_inner(
                 cancellation,
@@ -5077,6 +5100,7 @@ impl TcpClusterRelocationTransport {
                 request,
                 None,
                 None,
+                classify_peer_io,
             );
         };
         // Diagnostic IO consumes the same network/caller window; it cannot
@@ -5099,6 +5123,7 @@ impl TcpClusterRelocationTransport {
             request,
             Some(&mut observed),
             Some(network_deadline),
+            classify_peer_io,
         );
         if !matches!(&result, Err(BicDbError::RpcEvidenceFailure { .. })) {
             observed.finish(&result)?;
@@ -5114,8 +5139,18 @@ impl TcpClusterRelocationTransport {
                 }
             });
             if let Err(error) = after_evidence {
-                observed.return_boundary_error(&error)?;
-                return Err(error);
+                let peer_timeout_only = classify_peer_io
+                    && matches!(error, BicDbError::QueryTimedOut)
+                    && !cancellation.is_cancel_requested()
+                    && result
+                        .as_ref()
+                        .err()
+                        .and_then(HotRecoveryPeerFailure::from_error)
+                        .is_some();
+                if !peer_timeout_only {
+                    observed.return_boundary_error(&error)?;
+                    return Err(error);
+                }
             }
         }
         result
@@ -5127,6 +5162,7 @@ impl TcpClusterRelocationTransport {
         request: ClusterDataRequest,
         mut observed: Option<&mut evidence::Attempt>,
         observed_network_deadline: Option<Instant>,
+        classify_peer_io: bool,
     ) -> Result<(
         ClusterDataResponse,
         MetadataReadParticipant,
@@ -5252,7 +5288,14 @@ impl TcpClusterRelocationTransport {
         let stream = TcpStream::connect_timeout(
             &address_resolved,
             Duration::from_millis(self.config.connect_timeout_ms).min(remaining),
-        )?;
+        )
+        .map_err(|error| {
+            hot_recovery_peer::mark_socket_failure(
+                error,
+                classify_peer_io,
+                hot_recovery_peer::SocketStage::Connect,
+            )
+        })?;
         configure_stream(&stream, &self.config)?;
         let exchange = (|| -> Result<_> {
             let pair = if let Some(tls) = self.client_tls.as_ref() {
@@ -5302,6 +5345,17 @@ impl TcpClusterRelocationTransport {
             };
             Ok(pair)
         })();
+        // Mark ONLY genuine socket-exchange IO, before semantic/identity
+        // interpretation. A complete response, caller cancellation and local
+        // validation/JSON/evidence failure never acquire this provenance.
+        let exchange = exchange.map_err(|error| match error {
+            BicDbError::Io(error) => hot_recovery_peer::mark_socket_failure(
+                error,
+                classify_peer_io,
+                hot_recovery_peer::SocketStage::Exchange,
+            ),
+            other => other,
+        });
         if let (Some(observed), Err(error)) = (observed.as_deref_mut(), &exchange) {
             if !matches!(error, BicDbError::RpcEvidenceFailure { .. }) {
                 observed.exchange_error(error)?;
@@ -5309,7 +5363,23 @@ impl TcpClusterRelocationTransport {
         }
         // Preserve caller cancellation semantics and reject late decoded
         // responses. Socket progress does not renew the whole RPC budget.
-        cancellation.check()?;
+        if let Err(error) = cancellation.check() {
+            // NON-success only: preserve an actual socket timeout from a
+            // shorter HOT subrequest. Its sender separately checks the original
+            // phase parent. No decoded reply/expired observation uses this.
+            if classify_peer_io
+                && matches!(error, BicDbError::QueryTimedOut)
+                && !cancellation.is_cancel_requested()
+                && exchange
+                    .as_ref()
+                    .err()
+                    .and_then(HotRecoveryPeerFailure::from_error)
+                    .is_some()
+            {
+                return Err(exchange.err().expect("checked peer transport failure"));
+            }
+            return Err(error);
+        }
         if Instant::now() >= deadline {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,

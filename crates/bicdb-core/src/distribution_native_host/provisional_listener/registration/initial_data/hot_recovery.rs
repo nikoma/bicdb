@@ -7,9 +7,11 @@ use crate::distribution_range_consensus::{
     RecoveryFenceScope,
 };
 use crate::distribution_range_recovery::{
-    NativeCompletionRequest, NativeCompletionStage, NativeReadyRequest, RecoveryEpochFenceRequest,
+    NativeCompletionRequest, NativeReadyRequest, RecoveryEpochFenceRequest,
     RecoveryHistoricalCommandRequest, RecoveryRoleAdmission,
 };
+use crate::distribution_transport::{HotRecoveryPeerFailure, HotRecoveryPhaseRequest};
+use std::collections::BTreeSet;
 use std::sync::OnceLock;
 use std::thread::JoinHandle;
 
@@ -31,6 +33,11 @@ struct Job {
     members: Vec<ClusterNodeId>,
     phase: Phase,
     position: usize,
+    // Durable successful per-recipient phase facts are scheduling only. Each
+    // actual inner QQ and final recovered publisher still reprove authority.
+    phase_observed: BTreeSet<ClusterNodeId>,
+    semantic_veto: BTreeMap<ClusterNodeId, Phase>,
+    peer_retry_after: BTreeMap<ClusterNodeId, Instant>,
 }
 #[derive(Default)]
 struct State {
@@ -301,6 +308,9 @@ impl NativeHotRecoveryMaintenance {
                     members,
                     phase: Phase::Fence,
                     position: 0,
+                    phase_observed: BTreeSet::new(),
+                    semantic_veto: BTreeMap::new(),
+                    peer_retry_after: BTreeMap::new(),
                 },
             );
         }
@@ -331,24 +341,50 @@ impl NativeHotRecoveryMaintenance {
             &job.range,
             parent,
         )?;
+        // Reacquired actual role, never a cached topology/phase counter.
+        let role = self.fresh_role(&job.range, job.scope.recovery_nonce, parent)?;
+        job.scope.require_role(&role)?;
+        let phase_parent = parent.child_with_deadline(role.deadline());
         loop {
-            self.live(parent)?;
+            self.live(&phase_parent)?;
+            role.require_live_request()?;
             held.require_actual_store_slot()?;
             if job.phase == Phase::Publish {
-                let role = self.fresh_role(&job.range, job.scope.recovery_nonce, parent)?;
+                if !job.semantic_veto.is_empty() {
+                    return Err(invalid(
+                        "hot recovery retains an unresolved actual peer semantic veto",
+                    ));
+                }
+                let fresh = self.fresh_role(&job.range, job.scope.recovery_nonce, &phase_parent)?;
                 self.coordinator.publish_hot_native_recovery(
                     &self.runtime,
                     &self.host,
                     &held,
-                    &role,
+                    &fresh,
                     &job.scope,
                     &job.command,
-                    parent,
+                    &phase_parent,
                 )?;
                 return Ok(());
             }
             if job.position == job.members.len() {
+                // This threshold schedules the NEXT real producer. It is NOT
+                // a QQ, role, recovered epoch or admission grant. Original
+                // origin success and all known semantic vetoes are mandatory.
+                let fresh = self.fresh_role(&job.range, job.scope.recovery_nonce, &phase_parent)?;
+                job.scope.require_role(&fresh)?;
+                held.require_actual_store_slot()?;
+                if job.phase_observed.len() < job.members.len() / 2 + 1
+                    || !job.phase_observed.contains(&self.initial.seed.spec.node_id)
+                    || !job.semantic_veto.is_empty()
+                {
+                    job.position = 0;
+                    return Err(invalid("hot native phase lacks actual original-origin and majority recipient observations"));
+                }
+                self.live(&phase_parent)?;
+                fresh.require_live_request()?;
                 job.position = 0;
+                job.phase_observed.clear();
                 job.phase = match job.phase {
                     Phase::Fence => Phase::Certify,
                     Phase::Certify => Phase::Apply,
@@ -360,82 +396,99 @@ impl NativeHotRecoveryMaintenance {
                 };
                 continue;
             }
-            let node = &job.members[job.position];
-            let budget_ms = Self::remaining(parent)?;
-            #[cfg(test)]
-            eprintln!("NATIVE_HOT_DATA_PHASE node={} target={} phase={:?} command={} nonce={} remaining_ms={}",self.initial.seed.spec.node_id,node,job.phase,job.command.command_id,job.scope.recovery_nonce,budget_ms);
-            match job.phase {
-                Phase::Fence => {
-                    self.initial
-                        .transport
-                        .recovery_epoch_fence_observation(
-                            node,
-                            &RecoveryEpochFenceRequest {
-                                scope: job.scope.clone(),
-                                budget_ms,
-                            },
-                            parent,
-                        )?
-                        .require_live()?;
-                }
-                Phase::Certify | Phase::Apply => {
-                    self.initial
-                        .transport
-                        .recovery_historical_command_observation(
-                            node,
-                            &RecoveryHistoricalCommandRequest {
-                                scope: job.scope.clone(),
-                                command: job.command.clone(),
-                                budget_ms,
-                            },
-                            job.phase == Phase::Apply,
-                            parent,
-                        )?
-                        .fence()
-                        .require_live()?;
-                }
-                Phase::Prepare => {
-                    let observation = self.initial.transport.prepare_native_ready_observation(
-                        node,
-                        &NativeReadyRequest {
-                            scope: job.scope.clone(),
-                            challenge: Uuid::now_v7(),
-                            budget_ms,
-                        },
-                        parent,
-                    )?;
-                    observation.require_live()?;
-                    if observation.reply().range_index != job.command.index {
-                        return Err(invalid("hot native preparation changed selected point"));
-                    }
-                }
-                Phase::Complete | Phase::Activate => {
-                    let request = NativeCompletionRequest {
+            let node = job.members[job.position].clone();
+            let origin = node == self.initial.seed.spec.node_id;
+            if job.phase_observed.contains(&node) && !job.semantic_veto.contains_key(&node) {
+                job.position += 1;
+                continue;
+            }
+            // A previous authenticated rejection cannot become skippable when
+            // that same physical voter later disappears. Only a fresh actual
+            // successful SAME-peer/SAME-phase observation clears this veto.
+            if !origin
+                && !job.semantic_veto.contains_key(&node)
+                && job
+                    .peer_retry_after
+                    .get(&node)
+                    .is_some_and(|d| Instant::now() < *d)
+            {
+                job.position += 1;
+                continue;
+            }
+            let budget_ms = Self::remaining(&phase_parent)?;
+            let io_ms = if origin {
+                budget_ms
+            } else if job.phase == Phase::Fence {
+                budget_ms.min(500)
+            } else {
+                budget_ms.saturating_sub(250).max(1)
+            };
+            let request = match job.phase {
+                Phase::Fence => HotRecoveryPhaseRequest::Fence(RecoveryEpochFenceRequest {
+                    scope: job.scope.clone(),
+                    budget_ms,
+                }),
+                Phase::Certify | Phase::Apply => HotRecoveryPhaseRequest::Historical {
+                    request: RecoveryHistoricalCommandRequest {
+                        scope: job.scope.clone(),
+                        command: job.command.clone(),
+                        budget_ms,
+                    },
+                    apply: job.phase == Phase::Apply,
+                },
+                Phase::Prepare => HotRecoveryPhaseRequest::Prepare(NativeReadyRequest {
+                    scope: job.scope.clone(),
+                    challenge: Uuid::now_v7(),
+                    budget_ms,
+                }),
+                Phase::Complete | Phase::Activate => HotRecoveryPhaseRequest::Complete {
+                    request: NativeCompletionRequest {
                         scope: job.scope.clone(),
                         challenge: Uuid::now_v7(),
                         budget_ms,
-                    };
-                    let observation = if job.phase == Phase::Complete {
-                        self.initial
-                            .transport
-                            .complete_native_recovery_observation(node, &request, parent)?
+                    },
+                    activate: job.phase == Phase::Activate,
+                },
+                Phase::Publish => unreachable!(),
+            };
+            #[cfg(test)]
+            eprintln!("NATIVE_HOT_DATA_PHASE node={} target={} phase={:?} command={} nonce={} remaining_ms={} subrequest_ms={}", self.initial.seed.spec.node_id,node,job.phase,job.command.command_id,job.scope.recovery_nonce,budget_ms,io_ms);
+            let result = self.initial.transport.hot_recovery_phase_observation(
+                &node,
+                request,
+                job.command.index,
+                Duration::from_millis(io_ms),
+                &phase_parent,
+            );
+            // Expired caller/role or changed original service slot aborts the
+            // whole attempt regardless of any shorter peer socket timeout.
+            self.live(&phase_parent)?;
+            role.require_live_request()?;
+            held.require_actual_store_slot()?;
+            match result {
+                Ok(_actual_receipt) => {
+                    job.phase_observed.insert(node.clone());
+                    job.semantic_veto.remove(&node);
+                    job.peer_retry_after.remove(&node);
+                }
+                Err(error) => {
+                    if let Some(peer) = HotRecoveryPeerFailure::from_error(&error) {
+                        #[cfg(test)]
+                        eprintln!("NATIVE_HOT_PEER_UNAVAILABLE node={} target={} phase={:?} kind={:?} may_have_dispatched={} count_success=false", self.initial.seed.spec.node_id,node,job.phase,peer.kind(),peer.may_have_dispatched());
+                        if origin || job.semantic_veto.contains_key(&node) {
+                            return Err(error);
+                        }
+                        // SKIP ONLY; never change current voters or a QQ. A
+                        // persistent blackhole does not consume first budget
+                        // again in every later phase. Bounded next probe.
+                        job.peer_retry_after
+                            .insert(node, Instant::now() + Duration::from_secs(10));
                     } else {
-                        self.initial
-                            .transport
-                            .activate_native_recovery_observation(node, &request, parent)?
-                    };
-                    observation.require_live()?;
-                    if observation.reply().range_index != job.command.index
-                        || (job.phase == Phase::Activate
-                            && observation.reply().stage != NativeCompletionStage::ActivatedAnchor)
-                    {
-                        return Err(invalid("hot native completion/open changed selected point"));
+                        job.semantic_veto.insert(node, job.phase);
+                        return Err(error);
                     }
                 }
-                Phase::Publish => unreachable!(),
             }
-            self.live(parent)?;
-            held.require_actual_store_slot()?;
             job.position += 1;
         }
     }

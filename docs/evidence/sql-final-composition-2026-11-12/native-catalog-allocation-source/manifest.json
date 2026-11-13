@@ -1,0 +1,27 @@
+{
+  "source": "c932a98bc86aa221ece871cc6e7d79a3ef0e8efa",
+  "scope": "seven new focused Core source-producer regressions; broad checks submitted only",
+  "files": {
+    "README.md": "9fb1c5c072850238b189c96ae57bca494a565b8fb73b3650daf71a010bed4917",
+    "raw/native-catalog-allocation-source-v1-spec.json": "507acb838796be36d45cfd96021aae2e3f393005bd3818403838677c73ac93c7",
+    "raw/native-catalog-allocation-source-v2-spec.json": "7c676ea4e9080938a98bc433efeee4ab753d8814f934b2b7021cad597b994d17",
+    "raw/native-catalog-allocation-source-v3-spec.json": "a3a8eb806904d8e05ab62d3d5bbf602cf5dd61c6a20599224ca933824c415e81",
+    "raw/native-catalog-allocation-source-v4-spec.json": "17e152c1c8b026c036e73767c13f7f20709898eb4dc59f024c0e7757dea822d7",
+    "raw/native-origin-root-main492-integration-spec.json": "d2240bec8d7532c35d892b130eb87308bdb2bafefb14761dde11d8b10b918571",
+    "raw/native-origin-root-main492-version-final-spec.json": "fbd5dc9339dab218539305c37a798cd51a1bed77aae4d4c4824098e807215ce5",
+    "raw/report-native-catalog-allocation-source-v1.json": "b772c0c283f5ed3d2661377773210a36ed6c1a81d08d388f5a9914c8a6a9bcf2",
+    "raw/report-native-catalog-allocation-source-v2.json": "7dc5ca7633e36aa3d8b2c40e5621518c6c74fe3cb8501be3a1b9b5f4b71cfada",
+    "raw/report-native-catalog-allocation-source-v3.json": "bbfae65e4a910578d809aec5e6f58ee96bab7495794b972d7f9763cd7c3fae02",
+    "raw/report-native-catalog-allocation-source-v4.json": "60813d1986b7fe819b402aa8ab0e794f3d6cea4e4d4043b7838ddf9b2466e30e",
+    "raw/report-native-origin-root-main492-integration.json": "2a39d7e3028fdee75cd0b64dbfed213adf759d8aff487577eb03908c31ffe777",
+    "raw/report-native-origin-root-main492-version-final.json": "94b2cdfe10689a1d56532e7e10d82b9cd968b55d024af2570bdcd79a9f148723",
+    "raw/source-native_catalog_allocations.rs": "d0481c38d0560495e05bb093fe7db1a9666d5ff8528a41ea1b66e6d55fd6e83c",
+    "raw/source-tests.rs": "c368e00715733f5766585fe634b576ae5e849bd70a0a3b8a4b0d92496f6d381f",
+    "raw/tc-step-native-catalog-allocation-source-v1.log": "e530bc54dfa2189bff5fd484bf0573fad61f54d255a589f3669b8c7342bd0562",
+    "raw/tc-step-native-catalog-allocation-source-v2.log": "011ec2483d0494db2ff51de96a518939cc08d8118ba85e0679d00c2e1d2c19a8",
+    "raw/tc-step-native-catalog-allocation-source-v3.log": "fa28ce680787ac357d61d05510b9bb433d33444a835d995f47f359011613e0c3",
+    "raw/tc-step-native-catalog-allocation-source-v4.log": "3c3e9accba18abe37f57387e98f710e60971480a58865e4e2844ee2afa20fe6f",
+    "raw/tc-step-native-origin-root-main492-integration.log": "13293f765f12ec033bb350e7e13ccc13b8b73cb7d2da684bb323c159937853b3",
+    "raw/tc-step-native-origin-root-main492-version-final.log": "33ce7171d267be9f6ce203acf1daa515777a5bd74efa7fe7aa94b6761d257776"
+  }
+}

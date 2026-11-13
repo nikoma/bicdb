@@ -686,6 +686,48 @@ fn read_actual(
     Ok(NativeRegisteredRemoteFinalImageReceipt { record })
 }
 impl BicDb {
+    /// Bounded fixed-key observations on this actual still-open DB. This
+    /// health-gated diagnostic grants no authority and never reopens custody.
+    #[cfg(test)]
+    pub(crate) fn test_registered_native_final_forensic_status(
+        &self,
+        attempt: Uuid,
+        attempted_xid: Option<u64>,
+    ) -> Result<serde_json::Value> {
+        let _journal = self.try_native_image_journal()?;
+        self.check_recovery_state()?;
+        let current: Option<Record> = self.read_native_range_image_record(&current(attempt))?;
+        let xid = attempted_xid.or_else(|| current.as_ref().map(|record| record.native_page_xid));
+        let archived: Option<Record> = xid
+            .map(|xid| self.read_native_range_image_record(&archive(attempt, xid)))
+            .transpose()?
+            .flatten();
+        for record in current.iter().chain(archived.iter()) {
+            bounded_json(record, MAX_NATIVE_RECEIPT_BYTES)?;
+        }
+        let paged = self
+            .paged_records
+            .as_ref()
+            .ok_or_else(|| invalid("forensic native final page store absent"))?;
+        let mut statuses = BTreeMap::new();
+        for xid in attempted_xid
+            .into_iter()
+            .chain(current.as_ref().map(|record| record.native_page_xid))
+            .chain(archived.as_ref().map(|record| record.native_page_xid))
+        {
+            statuses.insert(
+                xid,
+                format!("{:?}", paged.store().transactions().status(xid)),
+            );
+        }
+        Ok(
+            serde_json::json!({"current":current,"attempt_archive":archived,
+            "requested_attempt":attempt,"requested_attempted_xid":attempted_xid,
+            "native_tx_status_api_observations":statuses,
+            "same_live_database_open":self.incarnation_id(),"read_only_fixed_keys":true,
+            "cold_or_powerloss_commit_proof":false,"authority_granted":false}),
+        )
+    }
     /// Read only immutable protected publication evidence at this actual DB
     /// root. A new native admission may inspect a historical floor, but this
     /// cannot reconstruct the old A lease/current image or authorize resume.

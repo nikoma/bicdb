@@ -280,8 +280,30 @@ pub(super) fn exercise(
     );
     let original = &first["image"]["value"]["native_base"];
     let current = &after["image"]["value"]["native_base"];
+    // The generic observer is intentionally health-gated: WriteFailed is
+    // correct after the injected native sync failure. Independently compare
+    // the actual host's memory-only retained lease/preflight/source custody.
+    assert!(before["owner"]["diagnostic_error"].is_null());
+    assert!(before["memory_custody"]["diagnostic_error"].is_null());
+    let original_custody = &before["memory_custody"]["value"];
+    assert_eq!(original_custody["lease_present"], true);
+    assert_eq!(original_custody["lease_has_exact_original_preflight"], true);
+    assert_eq!(
+        original_custody["actual_owner"],
+        original_custody["attempt"]
+    );
+    assert_eq!(
+        original_custody["attempt"],
+        original_custody["source_target_attempt"]
+    );
     for snapshot in [&first, &after] {
-        assert!(snapshot["owner"]["diagnostic_error"].is_null());
+        assert_eq!(
+            snapshot["owner"]["diagnostic_error"],
+            first_health["core_recovery_error"]
+        );
+        assert!(snapshot["owner"]["value"].is_null());
+        assert!(snapshot["memory_custody"]["diagnostic_error"].is_null());
+        assert_eq!(&snapshot["memory_custody"]["value"], original_custody);
         assert!(snapshot["image"]["diagnostic_error"].is_null());
     }
     assert_eq!(
@@ -290,10 +312,6 @@ pub(super) fn exercise(
     );
     assert_eq!(current["native_attempts_issued"], 1);
     assert!(current["retired"].as_array().unwrap().is_empty());
-    assert_eq!(
-        first["owner"]["value"]["actual_owner"],
-        after["owner"]["value"]["actual_owner"]
-    );
     assert!(
         fresh_result.is_err(),
         "fresh authority must not reset a failed native WAL"

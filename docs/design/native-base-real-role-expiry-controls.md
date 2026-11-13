@@ -8,9 +8,48 @@ publication. Actual after-commit Role expiry retained Committed xid 21 and a
 fresh request reconciled that same xid. Those complete original artifacts stay
 unchanged. This does not establish the original `e1ec` timeout's precise cause.
 
-This successor implements bounded same-open native-metadata abort resumption
-and adds safety controls. It has not been compiled or run. Earlier passing
-results do not validate its changed code; HA remains unqualified.
+The runtime successor `c1e4b3a4e8e7ad33c688436830f9af10a4203cc5` implements
+bounded same-open native-metadata abort resumption and adds safety controls.
+Its hosted run [43510565054](https://github.com/nikoma/bicdb/actions/runs/43510565054)
+compiled all targets and selected/executed exactly ten controls: **5 passed,
+5 failed** in 88.92 s. Earlier passing results do not validate changed code;
+HA remains unqualified.
+
+The before-put control recovered actual Aborted xid 21 with fresh xid 22;
+the after-successful-put control recovered Aborted xid 21 with fresh xid 23.
+Both retained the exact old boundary under the original A. The committed-expiry
+control reconciled the same xid 21. The default entry-budget control retained
+nine actual aborted requests (eight old plus the current owner) and refused a
+tenth allocation. Missing-final-image refusal also passed.
+
+Both actual sync-failure controls reached `page_log.sync` once and retained the
+same publisher with one native attempt and no retirement. The abort case
+observed Aborted xid 21; the commit case returned `CommitOutcomeUnknown` with
+same-open status InProgress. Fresh requests were refused by sticky
+`WriteFailed`. Nevertheless, **both tests failed** because a fixture assertion
+incorrectly required the health-gated ownership diagnostic to succeed on the
+intentionally fenced handle. The later acceptance assertions were not reached;
+independent reconciliation of retained observations does not relabel the tests.
+Three existing controls timed out in prerequisites: final-image publication for
+the cancellation case, and native-base publication for the normal and image
+invalidation cases. Their precise timeout causes and native publication
+outcomes remain **inconclusive**; their later named guarantees were not tested.
+The complete failed archive remains unchanged.
+
+The subsequent test-only observer correction is uncompiled and unrun. It keeps
+the generic observer's exact `WriteFailed` refusal and independently compares
+the actual host map, retained lease/frozen A, exact preflight and source IDs
+before/after the fault and fresh request. The new snapshot reads memory only;
+it does not check health, read native storage, grant admission or claim the
+retained lease can currently serve. Publisher equality, actual I/O/status,
+sticky health and no post-fault payload visibility claims remain mandatory.
+The critical final/base calls now opt into the same original request-window
+diagnostics and bounded CURRENT/archive/native-status observations. Fixed
+`registered-native-image-critical-outcome.json` preserves each actual call
+before its original unwrap/assertion; earlier outcomes are not overwritten.
+Request ordering, actual metadata windows and the five-second parent are
+unchanged. These diagnostics do not establish the causes of the earlier
+prerequisite failures.
 
 `RegisteredRemoteBasePublication` retains the actual issued native xid and
 request identity before any fallible or liveness check after begin. It retains

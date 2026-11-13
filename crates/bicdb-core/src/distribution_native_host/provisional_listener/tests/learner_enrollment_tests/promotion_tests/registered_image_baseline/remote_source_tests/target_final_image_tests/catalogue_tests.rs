@@ -55,6 +55,7 @@ pub(super) fn prerequisite_snapshot(
     acknowledged: &serde_json::Value,
 ) -> serde_json::Value {
     let owner = observed(control.test_registered_remote_attempt(range));
+    let memory_custody = observed(control.test_registered_remote_attempt_memory_custody(range));
     let image = observed(control.test_registered_remote_image_state(range));
     let attempted_xid = (image["value"]["native_base"]["attempted"].as_bool() == Some(true))
         .then(|| image["value"]["native_base"]["receipt"]["native_page_xid"].as_u64())
@@ -62,6 +63,15 @@ pub(super) fn prerequisite_snapshot(
         .filter(|xid| *xid > 0);
     let native = observed(match factory.database.try_read() {
         Some(db) => db.test_registered_native_base_forensic_status(range, attempt, attempted_xid),
+        None => Err(BicDbError::Cluster(
+            "prerequisite diagnostic actual DB busy".into(),
+        )),
+    });
+    let final_xid = image["value"]["final_image"]["record"]["native_page_xid"]
+        .as_u64()
+        .filter(|xid| *xid > 0);
+    let native_final = observed(match factory.database.try_read() {
+        Some(db) => db.test_registered_native_final_forensic_status(attempt, final_xid),
         None => Err(BicDbError::Cluster(
             "prerequisite diagnostic actual DB busy".into(),
         )),
@@ -79,7 +89,7 @@ pub(super) fn prerequisite_snapshot(
             })
             .collect::<Vec<_>>()
     });
-    serde_json::json!({"owner":owner,"image":image,"native":native,"logical":logical,
+    serde_json::json!({"owner":owner,"memory_custody":memory_custody,"image":image,"native":native,"native_final":native_final,"logical":logical,
         "acknowledged_logical_api":acknowledged,"exact_full_payload_physical_collections":physical_matches,
         "logical_event_collection_is_not_a_sql_table_claim":true,
         "original_owners_retained":true,"engine_reopened":false,"read_only_diagnostic_not_admission":true})

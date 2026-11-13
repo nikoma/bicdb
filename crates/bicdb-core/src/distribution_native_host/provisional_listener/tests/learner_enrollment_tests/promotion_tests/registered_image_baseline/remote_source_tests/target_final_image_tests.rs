@@ -347,13 +347,17 @@ pub(super) fn exercise(
     assert!(completed, "bounded actual target verification must finish");
     let mut canceled = None;
     if matches!(case, SourceCase::TargetFinalImageCanceled) {
-        let error = advance(
+        let error = critical_diagnostics::advance_publication(
             control,
             client,
             &source,
             plan,
             provider,
             actor,
+            factory,
+            pending,
+            ranges,
+            acknowledged,
             output,
             journal,
             Operation::PublishFinalImage,
@@ -382,13 +386,17 @@ pub(super) fn exercise(
             .is_err());
         canceled = Some(retained);
     }
-    let Progress::FinalImage(pointer) = advance(
+    let Progress::FinalImage(pointer) = critical_diagnostics::advance_publication(
         control,
         client,
         &source,
         plan,
         provider,
         actor,
+        factory,
+        pending,
+        ranges,
+        acknowledged,
         output,
         journal,
         Operation::PublishFinalImage,
@@ -397,13 +405,17 @@ pub(super) fn exercise(
     .unwrap() else {
         panic!("actual protected final image expected")
     };
-    let repeated = advance(
+    let repeated = critical_diagnostics::advance_publication(
         control,
         client,
         &source,
         plan,
         provider,
         actor,
+        factory,
+        pending,
+        ranges,
+        acknowledged,
         output,
         journal,
         Operation::PublishFinalImage,
@@ -532,8 +544,19 @@ pub(super) fn exercise(
             | SourceCase::TargetNativeBaseInvalidated
     ) {
         native_base_tests::exercise(
-            case, control, client, &source, plan, provider, actor, factory, pending, ranges,
-            output, journal,
+            case,
+            control,
+            client,
+            &source,
+            plan,
+            provider,
+            actor,
+            factory,
+            pending,
+            ranges,
+            acknowledged,
+            output,
+            journal,
         );
     }
     if matches!(
@@ -606,6 +629,7 @@ pub(super) fn exercise(
 }
 
 mod catalogue_tests;
+mod critical_diagnostics;
 mod native_abort_tests;
 mod native_base_tests;
 mod native_expiry_tests;

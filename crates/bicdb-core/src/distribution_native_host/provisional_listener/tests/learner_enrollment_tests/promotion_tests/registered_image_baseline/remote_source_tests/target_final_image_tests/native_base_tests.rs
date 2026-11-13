@@ -40,6 +40,7 @@ pub(super) fn exercise(
     factory: &Arc<crate::distribution_native_host::NativeUnassignedLearnerFactory>,
     pending: &ClusterTopology,
     ranges: &[crate::RangeDescriptor],
+    acknowledged: &serde_json::Value,
     output: &std::path::Path,
     journal: &mut Vec<serde_json::Value>,
 ) {
@@ -57,13 +58,17 @@ pub(super) fn exercise(
         .unwrap();
     assert!(before_base["base"].is_null());
     let canceled = if matches!(case, SourceCase::TargetNativeBaseCanceled) {
-        let error = advance(
+        let error = critical_diagnostics::advance_publication(
             control,
             client,
             source,
             plan,
             provider,
             actor,
+            factory,
+            pending,
+            ranges,
+            acknowledged,
             output,
             journal,
             Operation::PublishNativeBase,
@@ -98,26 +103,34 @@ pub(super) fn exercise(
     } else {
         None
     };
-    let first = advance(
+    let first = critical_diagnostics::advance_publication(
         control,
         client,
         source,
         plan,
         provider,
         actor,
+        factory,
+        pending,
+        ranges,
+        acknowledged,
         output,
         journal,
         Operation::PublishNativeBase,
         false,
     )
     .unwrap();
-    let second = advance(
+    let second = critical_diagnostics::advance_publication(
         control,
         client,
         source,
         plan,
         provider,
         actor,
+        factory,
+        pending,
+        ranges,
+        acknowledged,
         output,
         journal,
         Operation::PublishNativeBase,

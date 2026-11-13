@@ -303,6 +303,43 @@ impl NativeMetadataControlHost {
             "catalogue_floor":actual.catalogue_floor.as_ref().map(|publication|publication.test_state()),
             "retained":true,"lease_present":actual.lease.is_some()}))
     }
+    /// Memory-only DATA for fault controls. Deliberately does not call the
+    /// health-gated lease observer, touch native storage, acquire an admission
+    /// or prove that the retained owner is currently allowed to mutate/read.
+    #[cfg(test)]
+    pub(crate) fn test_registered_remote_attempt_memory_custody(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        let receiver = self
+            .replica
+            .as_ref()
+            .ok_or_else(|| invalid("actual Registered receiver absent"))?;
+        let actual = receiver
+            .remote_attempts
+            .get(&range)
+            .ok_or_else(|| invalid("retained actual remote attempt absent"))?;
+        let original = &actual.preflight.original;
+        let manifest = actual.preflight.source().manifest();
+        Ok(serde_json::json!({
+            "host_receiver_present":true,"host_attempt_map_entry_present":true,
+            "range":range,"attempt":actual.preflight.attempt_id(),
+            "original_freeze_owner":actual.preflight.intent().original_freeze_owner(),
+            "actual_owner":actual.lease.as_ref().map(|lease|lease.as_frozen().owner()),
+            "lease_present":actual.lease.is_some(),
+            "lease_has_exact_original_preflight":actual.lease.as_ref().map(|lease|Arc::ptr_eq(lease.preflight(), &actual.preflight)),
+            "original_metadata_store_id":original.metadata_store_id,
+            "original_range_store_open_id":original.store.id(),
+            "original_database_incarnation":original.database_incarnation,
+            "original_birth_id":original.birth_id,
+            "original_birth_sha256":original.birth_sha256,
+            "source_manifest_sha256":manifest.checksum_sha256,
+            "source_session":manifest.source_session,"source_id":manifest.source_id,
+            "source_target_id":manifest.target_id,"source_target_attempt":manifest.target_attempt,
+            "memory_only":true,"health_checked":false,"native_storage_read":false,
+            "admission_or_readiness_granted":false
+        }))
+    }
     /// Capture real readonly facts, retain this exact attempt, then transfer
     /// the unique actual runtime permit N→A. No durable writes occur here.
     pub(crate) fn prepare_registered_remote_install_attempt(

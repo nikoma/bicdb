@@ -78,4 +78,59 @@ impl BicDb {
         }
         Ok(())
     }
+    /// Actual protected DATA only, usable after intentionally invalidating
+    /// the schema verification cache. Never constructs SourceLineage/Ready.
+    pub(crate) fn test_serving_read_protected_data_inventory(
+        &self,
+        range: RangeId,
+    ) -> Result<serde_json::Value> {
+        let verified_before = self.schema_compatibility.verified_sha256();
+        let journal = self.try_native_image_journal()?;
+        journal.require_database(self)?;
+        let birth = self
+            .read_native_birth()?
+            .ok_or_else(|| invalid("data inventory native birth missing"))?;
+        let base = self
+            .actual_native_range_integrity_binding(&birth, range)?
+            .ok_or_else(|| invalid("data inventory actual native base unknown"))?;
+        self.validate_native_range_base_history(&birth, &base)?;
+        let prefix = self.read_native_certified_range_prefix(&birth, &base)?;
+        let (r, h, b) = match &prefix {
+            Some(prefix) => (
+                prefix.range_index(),
+                prefix.logical_history_sha256(),
+                prefix.actual_local_visibility_sequence(),
+            ),
+            None => (
+                base.range_index,
+                base.logical_history_sha256.as_str(),
+                base.actual_local_visibility_sequence,
+            ),
+        };
+        if r > crate::distribution_range_recovery::MAX_FENCED_IRREVERSIBLE_COMMANDS as u64 {
+            return Err(invalid("test protected-data inventory bound exceeded"));
+        }
+        let mut history = BTreeMap::new();
+        for index in 0..=r {
+            let entry = self.read_native_history_entry(range, base.history_generation, index)?;
+            history.insert(index, entry);
+        }
+        if history[&r].commitment_sha256 != h {
+            return Err(invalid("data inventory actual prefix/history head differs"));
+        }
+        let namespace_uid = self.local_namespace_identity("items")?;
+        let verified_after = self.schema_compatibility.verified_sha256();
+        if verified_after != verified_before {
+            return Err(invalid(
+                "test data inventory changed schema verification state",
+            ));
+        }
+        Ok(serde_json::json!({
+            "point": {"R":r,"H":h,"B":b,"UID":self.incarnation_id(),"birth":birth.birth_id,
+                "namespace_uid":namespace_uid,"history_generation":base.history_generation},
+            "base":base,"prefix":prefix,"history":history,
+            "schema_verified":verified_after,
+            "authority":"diagnostic DATA only; no source/currentness/role/grant"
+        }))
+    }
 }

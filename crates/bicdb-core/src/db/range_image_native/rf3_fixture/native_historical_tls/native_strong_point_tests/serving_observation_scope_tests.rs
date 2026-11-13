@@ -79,6 +79,16 @@ fn round(
 fn negative(cut: Cut) {
     let (fixture, range) = seed();
     let before = snapshot(&fixture, &range); // Never spend the live MQ on report IO.
+    let schema_before = if matches!(cut, Cut::SchemaGeneration) {
+        let (data, extra, _) = schema_data_snapshot(&fixture, &range);
+        assert_eq!(
+            data, before,
+            "actual protected inventory must match healthy original snapshot"
+        );
+        Some(extra)
+    } else {
+        None
+    };
     let foreign_database = fixture.native.databases[&node("n1")].clone();
     let foreign_root = tempfile::tempdir().unwrap();
     let foreign_store = RangeWriteStore::open(
@@ -167,7 +177,59 @@ fn negative(cut: Cut) {
     fixture.idle();
     // The history fault intentionally removes its one actual middle entry;
     // immutable HEAD/physical B/UID, full rows, raw slots and both ACKs stay exact.
-    assert_eq!(snapshot(&fixture, &range), before);
+    if let Some(extra_before) = schema_before {
+        eprintln!("ACTUAL_SERVING_SCHEMA_REFUSAL reached=true exact_schema_error=true parent_live_at_semantic_refusal=true before_data_report=true");
+        let (after, extra_after, verification) = schema_data_snapshot(&fixture, &range);
+        assert_eq!(
+            after, before,
+            "all original actual R/H/B/UID/raw/rows/ACK fields remain exact"
+        );
+        assert_eq!(
+            extra_after, extra_before,
+            "actual protected base/prefix/history remain exact"
+        );
+        assert!(
+            verification["n0"].is_null(),
+            "schema must remain deliberately unverified; no report may reset it"
+        );
+    } else {
+        assert_eq!(snapshot(&fixture, &range), before);
+    }
+}
+fn schema_data_snapshot(
+    fixture: &EnforcedNetwork,
+    range: &RangeDescriptor,
+) -> (serde_json::Value, serde_json::Value, serde_json::Value) {
+    let mut nodes = BTreeMap::new();
+    let mut extra = BTreeMap::new();
+    let mut verification = BTreeMap::new();
+    for id in [node("n0"), node("n1"), node("n2")] {
+        let db = fixture.native.databases[&id].read();
+        let actual = db
+            .test_serving_read_protected_data_inventory(range.id)
+            .unwrap();
+        assert_eq!(actual["point"]["R"].as_u64(), Some(2));
+        let mut point = actual["point"].clone();
+        let mut rows = db.scan_collection("items").unwrap();
+        rows.sort_by(|a, b| a.id.cmp(&b.id));
+        point["rows"] = serde_json::to_value(rows).unwrap();
+        point["raw"] = serde_json::to_value(
+            std::fs::read(
+                db.data_path()
+                    .join(crate::distribution_range_consensus::DEFAULT_RANGE_WRITE_LOG),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        extra.insert(id.clone(), serde_json::json!({"base":actual["base"],"prefix":actual["prefix"],"history":actual["history"]}));
+        verification.insert(id.clone(), actual["schema_verified"].clone());
+        nodes.insert(id, point);
+    }
+    (
+        serde_json::json!({"nodes":nodes,"ledger":std::fs::read(fixture.native.root.path().join("actual-joint-selected-range-ack-ledger.json")).unwrap()}),
+        serde_json::to_value(extra).unwrap(),
+        serde_json::to_value(verification).unwrap(),
+    )
 }
 fn range_write_cluster(fixture: &EnforcedNetwork) -> crate::ClusterId {
     fixture.native.topology.read().cluster_id.clone()

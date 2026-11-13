@@ -18,8 +18,8 @@ pub(crate) use bridge::{
 pub(crate) struct ActualServiceNativeJointOldEvidence {
     plan: Arc<NativeJointHandoffPlan>,
     role: Arc<RecoveryRoleAdmission>,
-    native: NativeJointOldCloseReceipt,
-    promise: NativeJointOldPromiseReceipt,
+    native: Arc<NativeJointOldCloseReceipt>,
+    promise: Arc<NativeJointOldPromiseReceipt>,
     frozen: Arc<FrozenRangeMutationPermit>,
     pin: Arc<SourceCaptureReadPin>,
 }
@@ -42,8 +42,8 @@ impl ActualServiceNativeJointOldEvidence {
     ) -> (
         Arc<NativeJointHandoffPlan>,
         Arc<RecoveryRoleAdmission>,
-        NativeJointOldCloseReceipt,
-        NativeJointOldPromiseReceipt,
+        Arc<NativeJointOldCloseReceipt>,
+        Arc<NativeJointOldPromiseReceipt>,
         Arc<FrozenRangeMutationPermit>,
         Arc<SourceCaptureReadPin>,
     ) {
@@ -56,6 +56,18 @@ impl ActualServiceNativeJointOldEvidence {
             self.pin,
         )
     }
+}
+/// Actual successful producer outcomes retained by the original remote OLD
+/// owner even if a subsequent original role/OWN/current check fails. This is
+/// neither a closure vote nor a permission; only the actual service populates
+/// these private slots. Uncertain persistence still leaves the runtime/freeze
+/// owner and durable refusal, and cannot manufacture a successful receipt.
+#[cfg(feature = "tls-replication")]
+#[derive(Default)]
+pub(crate) struct NativeJointOldRetainedOutcome {
+    promise: Option<Arc<NativeJointOldPromiseReceipt>>,
+    native: Option<Arc<NativeJointOldCloseReceipt>>,
+    pin: Option<Arc<SourceCaptureReadPin>>,
 }
 impl ClusterDataNodeService {
     #[cfg(feature = "tls-replication")]
@@ -103,6 +115,8 @@ impl ClusterDataNodeService {
             parent,
             #[cfg(feature = "tls-replication")]
             None,
+            #[cfg(feature = "tls-replication")]
+            None,
         )
     }
     #[cfg(feature = "tls-replication")]
@@ -129,6 +143,24 @@ impl ClusterDataNodeService {
             frozen,
             parent,
             Some(step),
+            None,
+        )
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn close_native_joint_old_retained_for_initial_step(
+        &mut self,
+        step: &crate::distribution_native_host::NativeInitialOldStep<'_>,
+        frozen: Arc<FrozenRangeMutationPermit>,
+        retained: &mut NativeJointOldRetainedOutcome,
+        parent: &CancellationToken,
+    ) -> Result<ActualServiceNativeJointOldEvidence> {
+        self.close_native_joint_old_guarded(
+            step.plan().clone(),
+            step.role().clone(),
+            frozen,
+            parent,
+            Some(step),
+            Some(retained),
         )
     }
     fn close_native_joint_old_guarded(
@@ -139,6 +171,9 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
         #[cfg(feature = "tls-replication")] step: Option<
             &crate::distribution_native_host::NativeInitialOldStep<'_>,
+        >,
+        #[cfg(feature = "tls-replication")] mut retained: Option<
+            &mut NativeJointOldRetainedOutcome,
         >,
     ) -> Result<ActualServiceNativeJointOldEvidence> {
         parent.check()?;
@@ -166,6 +201,38 @@ impl ClusterDataNodeService {
         #[cfg(feature = "tls-replication")]
         if let Some(step) = step {
             self.require_initial_old_step(step, &plan, &role, &database)?;
+        }
+        #[cfg(feature = "tls-replication")]
+        if let Some(outcome) = retained.as_deref_mut() {
+            if let (Some(promise), Some(native), Some(pin)) =
+                (&outcome.promise, &outcome.native, &outcome.pin)
+            {
+                // A previous completed producer may have lost its final reply
+                // or observation binding. Its SAME original pin/receipts are
+                // reused after full fresh-role/current validation. Never try a
+                // controlled mutation while that original read pin is held.
+                native.require_current(&database, &plan, &role, promise, &self.range_writes)?;
+                database
+                    .range_mutation_gate()
+                    .validate_source_capture_read_pin(plan.old_range().id, pin)?;
+                if let Some(step) = step {
+                    self.require_initial_old_step(step, &plan, &role, &database)?;
+                }
+                parent.check()?;
+                return Ok(ActualServiceNativeJointOldEvidence {
+                    plan,
+                    role,
+                    native: native.clone(),
+                    promise: promise.clone(),
+                    frozen,
+                    pin: pin.clone(),
+                });
+            }
+            if outcome.pin.is_some() {
+                return Err(data_error(
+                    "retained OLD pin lacks original actual promise/native receipts",
+                ));
+            }
         }
         // A writer-aware native birth is independently checked above. The
         // feature flag is only a durable refusal for older native binaries.
@@ -200,10 +267,28 @@ impl ClusterDataNodeService {
         if let Some(step) = step {
             self.require_initial_old_step(step, &plan, &role, &database)?;
         }
-        let promise = self
-            .range_writes
-            .current_mut()
-            .persist_native_joint_old_promise(&database, &plan, &role, &physical, &controlled)?;
+        let persist_promise = |store: &mut crate::distribution_range_consensus::RangeWriteStore| {
+            store
+                .persist_native_joint_old_promise(&database, &plan, &role, &physical, &controlled)
+                .map(Arc::new)
+        };
+        #[cfg(feature = "tls-replication")]
+        let promise = if let Some(outcome) = retained.as_deref_mut() {
+            self.range_writes
+                .current_mut()
+                .persist_native_joint_old_promise_retained(
+                    &database,
+                    &plan,
+                    &role,
+                    &physical,
+                    &controlled,
+                    &mut outcome.promise,
+                )?
+        } else {
+            persist_promise(self.range_writes.current_mut())?
+        };
+        #[cfg(not(feature = "tls-replication"))]
+        let promise = persist_promise(self.range_writes.current_mut())?;
         #[cfg(all(test, feature = "tls-replication"))]
         if step.is_some() {
             crate::distribution_native_host::before_native_old_wal(&self.db, &database, &role);
@@ -212,14 +297,38 @@ impl ClusterDataNodeService {
         if let Some(step) = step {
             self.require_initial_old_step(step, &plan, &role, &database)?;
         }
-        let native = database.persist_native_joint_old_close(
-            &plan,
-            &role,
-            &self.range_writes,
-            &physical,
-            &promise,
-            &controlled,
-        )?;
+        let persist_native = || {
+            database
+                .persist_native_joint_old_close(
+                    &plan,
+                    &role,
+                    &self.range_writes,
+                    &physical,
+                    &promise,
+                    &controlled,
+                )
+                .map(Arc::new)
+        };
+        #[cfg(feature = "tls-replication")]
+        let native = if let Some(outcome) = retained.as_deref_mut() {
+            database.persist_native_joint_old_close_retained(
+                &plan,
+                &role,
+                &self.range_writes,
+                &physical,
+                &promise,
+                &controlled,
+                &mut outcome.native,
+            )?
+        } else {
+            persist_native()?
+        };
+        #[cfg(not(feature = "tls-replication"))]
+        let native = persist_native()?;
+        #[cfg(all(test, feature = "tls-replication"))]
+        if retained.is_some() {
+            crate::distribution_native_host::after_remote_native_old_wal(&self.db, &role, parent);
+        }
         #[cfg(feature = "tls-replication")]
         if let Some(step) = step {
             self.require_initial_old_step(step, &plan, &role, &database)?;
@@ -228,7 +337,23 @@ impl ClusterDataNodeService {
             .current_mut()
             .confirm_native_joint_old_close(&database, &plan, &role, &promise, &native)?;
         drop(controlled);
-        let pin = Arc::new(gate.try_source_capture_read_pin(plan.old_range().id, &frozen)?);
+        let capture_pin = || {
+            gate.try_source_capture_read_pin(plan.old_range().id, &frozen)
+                .map(Arc::new)
+        };
+        #[cfg(feature = "tls-replication")]
+        let pin = if let Some(outcome) = retained.as_deref_mut() {
+            if outcome.pin.is_none() {
+                outcome.pin = Some(capture_pin()?);
+            }
+            let pin = outcome.pin.as_ref().unwrap();
+            gate.validate_source_capture_read_pin(plan.old_range().id, pin)?;
+            pin.clone()
+        } else {
+            capture_pin()?
+        };
+        #[cfg(not(feature = "tls-replication"))]
+        let pin = capture_pin()?;
         parent.check()?;
         plan.require_role(&role)?;
         native.require_current(&database, &plan, &role, &promise, &self.range_writes)?;

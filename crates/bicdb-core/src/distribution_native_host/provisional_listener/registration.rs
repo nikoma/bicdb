@@ -26,7 +26,10 @@ pub(crate) use registered_replica::{
 mod maintenance;
 use initial_data::NativeInitialDataHost;
 #[cfg(test)]
-pub(crate) use initial_data::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
+pub(crate) use initial_data::{
+    after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
+    CancelRemoteOldAfterNativeWal,
+};
 pub(crate) use initial_data::{NativeInitialDataAdmission, NativeInitialOldStep};
 pub use initial_data::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
 mod schema_export;

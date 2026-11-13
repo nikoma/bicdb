@@ -444,6 +444,32 @@ impl NativeJointHandoffRuntime {
         // merely because native WAL may have completed.
         NativeJointOldObservation::from_actual_service(actual, self.service.clone())
     }
+    /// The actual original host retains producer outcomes through every
+    /// fallible post-WAL, source-pin and observation-binding check. This path
+    /// never substitutes a newly constructed process or a decoded receipt.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn close_old_retained_for_initial_step(
+        &self,
+        step: &crate::distribution_native_host::NativeInitialOldStep<'_>,
+        retained: &mut crate::distribution_data::NativeJointOldRetainedOutcome,
+        parent: &crate::CancellationToken,
+    ) -> Result<NativeJointOldObservation> {
+        step.require_metadata_current()?;
+        step.require_joint_runtime(self)?;
+        let _operation = self.operation(step.plan().old_range().id)?;
+        let frozen = self.freeze(step.plan(), step.role(), parent)?;
+        let actual = {
+            let mut service = self
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("retained OLD actual source service busy"))?;
+            service
+                .close_native_joint_old_retained_for_initial_step(step, frozen, retained, parent)?
+        };
+        // Construction may refuse if the original service/native/pin changed.
+        // The caller's retained outcome still owns every actual receipt/pin.
+        NativeJointOldObservation::from_actual_service(actual, self.service.clone())
+    }
     pub(crate) fn close_old_with_role_owner(
         &self,
         plan: Arc<NativeJointHandoffPlan>,

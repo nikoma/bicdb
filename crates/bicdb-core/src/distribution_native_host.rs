@@ -603,4 +603,7 @@ pub(crate) use provisional_listener::{
 };
 
 #[cfg(all(test, feature = "tls-replication"))]
-pub(crate) use provisional_listener::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
+pub(crate) use provisional_listener::{
+    after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
+    CancelRemoteOldAfterNativeWal,
+};

@@ -131,6 +131,7 @@ impl NativeInitialDataAdmission {
                         runtime: actual_runtime,
                         actual: None,
                         constraints: None,
+                        outcome: Some(Default::default()),
                     }));
                     entries.insert(request.range_id, held.clone());
                     held
@@ -153,9 +154,16 @@ impl NativeInitialDataAdmission {
                 // The actual native/promise/Frozen/pin owner is retained here
                 // BEFORE metadata/reply checks may fail. No phase or DTO can
                 // stand in for a possibly completed mutation.
-                held.actual = Some(Arc::new(
-                    held.runtime.close_old_for_initial_step(&step, &token)?,
-                ));
+                let actual_runtime = held.runtime.clone();
+                let outcome = held.outcome.as_mut().ok_or_else(|| {
+                    invalid("remote OLD missing original retained producer outcome owner")
+                })?;
+                let observation =
+                    actual_runtime.close_old_retained_for_initial_step(&step, outcome, &token)?;
+                held.actual = Some(Arc::new(observation));
+                // The observation now owns the SAME actual receipts/pin. Drop
+                // only duplicate references after the original owner is safe.
+                held.outcome.take();
             }
             drop(held);
             step.require_metadata_current()?;

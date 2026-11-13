@@ -10,8 +10,8 @@ use std::sync::Arc;
 pub(crate) struct NativeJointOldObservation {
     plan: Arc<NativeJointHandoffPlan>,
     role: Arc<RecoveryRoleAdmission>,
-    native: crate::db::NativeJointOldCloseReceipt,
-    promise: crate::distribution_range_consensus::NativeJointOldPromiseReceipt,
+    native: Arc<crate::db::NativeJointOldCloseReceipt>,
+    promise: Arc<crate::distribution_range_consensus::NativeJointOldPromiseReceipt>,
     frozen: Arc<FrozenRangeMutationPermit>,
     pin: Mutex<Option<Arc<SourceCaptureReadPin>>>,
     service: Arc<Mutex<ClusterDataNodeService>>,

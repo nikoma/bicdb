@@ -107,3 +107,41 @@ consume actual committed decision/Open/cleanup evidence and preserve permanent
 refusals; TTL eviction or a Boolean completion hint is insufficient. No automatic
 operator, independent-host, throughput, RPO/RTO, production or deployment claim
 follows from this source leaf.
+
+## Retaining successful producer outcomes through postchecks
+
+A subsequent source-only retention leaf adds `NativeJointOldRetainedOutcome`
+inside the original remote OLD host owner. Successful raw-promise and native-WAL
+producers place their actual opaque receipts in this owner **before** their
+fallible final role/current checks. The actual source read pin is likewise
+retained before later parent/current and observation-binding checks. The local
+OLD API keeps its original final checks; sharing these same actual receipt
+objects uses `Arc`, not decoded projections or reconstructed admission.
+
+A fresh exact Close retry acquires its own real role and OWN context and checks
+the same protected MStore/open/Store slot/writer and retained runtime. It can
+continue from the original actual receipts. When a prior completed producer
+already owns its original pin, the retry validates that same pin rather than
+attempting a controlled mutation beneath it. Duplicate references are dropped
+only after the produced actual observation has been stored in the host. No
+original hosted-process lifetime, deadline or irreversible refusal is reset.
+
+The new unexecuted selector is
+`native_registered_fifth_remote_old_post_native_cancel_retains_outcome_and_exact_fresh_retry`.
+It keys a one-shot fault to the actual receiver DB/range/session and cancels
+only that receiver's original request after its successful native-WAL result
+has been retained. It requires the actual Close error and protected native
+record to be archived, readonly Observe to refuse the incomplete closure, and
+a distinct fresh exact Close to finish while preserving the **same** protected
+native record/checksum/page xid. The independent donor fetch, both complete ACK
+values, source frames and target fences then remain required as before. These
+are source assertions; the selector has not run.
+
+An ambiguous persistence error remains different from a successful producer
+followed by a failed postcheck. Failed/ambiguous fsync or page-WAL calls do not
+produce a successful receipt. Their retained runtime/freeze and conservative
+raw/native refusal remain owned, but this leaf does not claim general cold or
+unknown-outcome reconciliation. A partial native receipt without completed raw
+confirmation/read pin is not published as a complete closure by readonly
+Observe; exact fresh Close continuation is required. General constraint-only
+minorities, unavailable peers and cold reissue are still OPEN.

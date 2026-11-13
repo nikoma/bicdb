@@ -15,7 +15,10 @@ use hot_recovery::NativeHotRecoveryMaintenance;
 pub(crate) use old_step::NativeInitialOldStep;
 use old_step::RetainedInitialOldTable;
 #[cfg(test)]
-pub(crate) use old_step::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
+pub(crate) use old_step::{
+    after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
+    CancelRemoteOldAfterNativeWal,
+};
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct NativeInitialDataRangeStatus {

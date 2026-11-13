@@ -16,7 +16,10 @@ pub(crate) use metadata_startup::NativeInitialWriterEnrollment;
 pub(in crate::distribution_native_host) use registration::NativeMetadataMaintenanceReport;
 pub use registration::NativeRegisteredReplicaReceiverStatus;
 #[cfg(test)]
-pub(crate) use registration::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
+pub(crate) use registration::{
+    after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
+    CancelRemoteOldAfterNativeWal,
+};
 pub(crate) use registration::{
     NativeAssignedDataAdmission, NativeAssignedDataPolicyOrigin,
     NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission, NativeRegisteredRemoteImageStep,

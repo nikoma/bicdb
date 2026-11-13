@@ -17,6 +17,7 @@ pub(super) enum SourceCase {
     CancelAfterIssuedFrame,
     RevokeBeforeNativeWal,
     RemoteOldFrames,
+    RemoteOldRetainedNative,
 }
 #[test]
 fn native_registered_fifth_remote_source_actual_tls_history_rows_seal_local_old_seed() {
@@ -40,6 +41,13 @@ fn native_registered_fifth_remote_old_source_actual_hook_revoked_after_promise_b
 #[test]
 fn native_registered_fifth_remote_old_actual_close_fetch_cut_and_source_tls_without_local_quorum() {
     run_registered_image_baseline_with_source(Case::Required, Some(SourceCase::RemoteOldFrames));
+}
+#[test]
+fn native_registered_fifth_remote_old_post_native_cancel_retains_outcome_and_exact_fresh_retry() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::RemoteOldRetainedNative),
+    );
 }
 fn actual_role(
     provider: &MetadataReadProvider,
@@ -279,8 +287,10 @@ fn frame(
     }
 }
 fn remote_old_seed(
+    fault_after_native: bool,
     controls: &[NativeMetadataControlHost],
     clients: &[Arc<TcpClusterRelocationTransport>],
+    services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
     plan: &Arc<NativeJointHandoffPlan>,
     process: &CancellationToken,
     output: &std::path::Path,
@@ -292,7 +302,17 @@ fn remote_old_seed(
 ) {
     use crate::distribution_range_handoff::{NativeRemoteOldOperationV1, NativeRemoteOldRequestV1};
     let mut last_closed = Instant::now();
-    for recipient in plan.old_members().keys() {
+    for (ordinal, recipient) in plan.old_members().keys().enumerate() {
+        let native_fault = fault_after_native && ordinal == 0;
+        let recipient_index = (0..4).find(|i| node(*i) == *recipient).unwrap();
+        let database = services[recipient_index].lock().database();
+        let hook = native_fault.then(|| {
+            crate::distribution_native_host::CancelRemoteOldAfterNativeWal::install(
+                &database,
+                plan.old_range().id,
+                plan.promise().nonce,
+            )
+        });
         let parent = budget(5000);
         let business = Uuid::now_v7();
         // The real metadata leader is a valid mutation initiator even when
@@ -327,10 +347,142 @@ fn remote_old_seed(
             journal[index]["actual_reply"] = serde_json::to_value(actual.reply()).unwrap();
         }
         evidence(&output.join("remote-old-ledger.json"), journal).unwrap();
-        let actual = result.unwrap();
+        let actual = if let Some(hook) = hook {
+            assert!(
+                hook.fired(),
+                "actual selected receiver reached after-native boundary"
+            );
+            drop(hook);
+            parent.check().unwrap();
+            own.require_live_request(business).unwrap();
+            let error = result
+                .err()
+                .expect("actual receiver's original call was canceled");
+            assert!(
+                error
+                    .to_string()
+                    .contains(&BicDbError::QueryCanceled.to_string()),
+                "{error}"
+            );
+            let native_after_error = database
+                .read()
+                .test_native_old_close_record(plan.old_range().id)
+                .unwrap()
+                .expect("actual protected OLD WAL record remains after postcheck cancellation");
+            // A completed native receipt is retained, but raw confirmation/pin
+            // may still be incomplete. Readonly Observe must refuse explicitly
+            // rather than manufacture a completed closure from that record.
+            let readonly_parent = budget(5000);
+            let readonly_business = Uuid::now_v7();
+            let readonly_own = clients[recipient_index]
+                .acquire_host_metadata_observation(
+                    &node(0),
+                    readonly_business,
+                    Duration::from_secs(5),
+                    &readonly_parent,
+                )
+                .unwrap();
+            let readonly_request = NativeRemoteOldRequestV1::from_plan(
+                plan,
+                NativeRemoteOldOperationV1::Observe,
+                readonly_business,
+                4000,
+            )
+            .unwrap();
+            let readonly = clients[recipient_index].request_remote_native_old(
+                recipient,
+                plan,
+                &readonly_request,
+                &readonly_own,
+                &readonly_parent,
+            );
+            let readonly_error = readonly
+                .err()
+                .expect("partial exact OLD result is not a closure vote");
+            assert!(
+                readonly_error
+                    .to_string()
+                    .contains("OLD source native closure is not known complete"),
+                "{readonly_error}"
+            );
+            let retry_parent = budget(5000);
+            let retry_business = Uuid::now_v7();
+            let retry_own = clients[0]
+                .acquire_host_metadata_observation(
+                    &node(0),
+                    retry_business,
+                    Duration::from_secs(5),
+                    &retry_parent,
+                )
+                .unwrap();
+            let retry_request = NativeRemoteOldRequestV1::from_plan(
+                plan,
+                NativeRemoteOldOperationV1::Close,
+                retry_business,
+                4000,
+            )
+            .unwrap();
+            let retry_index = journal.len();
+            journal.push(serde_json::json!({
+                "operation":"remote_old_close_retry", "request":retry_request,
+                "recipient":recipient,"outcome":"not_started",
+                "original_error":error.to_string(),"native_after_original_error":native_after_error,
+                "readonly_request":readonly_request,"readonly_exact_error":readonly_error.to_string(),
+                "native_receipt_is_not_completed_closure":true,
+            }));
+            evidence(&output.join("remote-old-ledger.json"), journal).unwrap();
+            let retried = clients[0].request_remote_native_old(
+                recipient,
+                plan,
+                &retry_request,
+                &retry_own,
+                &retry_parent,
+            );
+            journal[retry_index]["outcome"] = if retried.is_ok() {
+                "returned_actual_closure"
+            } else {
+                "error_unknown_effect"
+            }
+            .into();
+            journal[retry_index]["exact_error"] =
+                serde_json::to_value(retried.as_ref().err().map(ToString::to_string)).unwrap();
+            if let Ok(actual) = &retried {
+                journal[retry_index]["actual_reply"] =
+                    serde_json::to_value(actual.reply()).unwrap();
+            }
+            let native_after_retry = database
+                .read()
+                .test_native_old_close_record(plan.old_range().id)
+                .unwrap()
+                .unwrap();
+            journal[retry_index]["native_after_retry"] = native_after_retry.clone();
+            evidence(&output.join("remote-old-ledger.json"), journal).unwrap();
+            assert_eq!(
+                native_after_retry, native_after_error,
+                "same durable native receipt/xid; fresh role does not rewrite WAL"
+            );
+            let actual = retried.unwrap();
+            actual.require_request_live().unwrap();
+            assert_eq!(
+                actual
+                    .reply()
+                    .closed
+                    .as_ref()
+                    .unwrap()
+                    .native_receipt_sha256,
+                native_after_error["checksum_sha256"].as_str().unwrap()
+            );
+            retry_parent.check().unwrap();
+            retry_own.require_live_request(retry_business).unwrap();
+            actual
+        } else {
+            result.unwrap()
+        };
         actual.require_request_live().unwrap();
-        parent.check().unwrap();
-        own.require_live_request(business).unwrap();
+        if !native_fault {
+            parent.check().unwrap();
+            own.require_live_request(business).unwrap();
+        }
         assert!(actual.reply().closed.is_some());
         last_closed = Instant::now();
     }
@@ -413,12 +565,23 @@ pub(super) fn exercise(
         let mut round = NativeJointOldRound::begin(observation, business, relocation.id).unwrap();
         let plan = round.plan();
         let mut runtimes = Vec::new();
-        let (source, retained, original_old_expiry) = if matches!(case, SourceCase::RemoteOldFrames)
-        {
+        let (source, retained, original_old_expiry) = if matches!(
+            case,
+            SourceCase::RemoteOldFrames | SourceCase::RemoteOldRetainedNative
+        ) {
             // The metadata round supplied purpose DATA only. It never records
             // local service observations and never finishes a local OLD QQ.
             drop(round);
-            remote_old_seed(controls, clients, &plan, process, output, &mut journal)
+            remote_old_seed(
+                matches!(case, SourceCase::RemoteOldRetainedNative),
+                controls,
+                clients,
+                services,
+                &plan,
+                process,
+                output,
+                &mut journal,
+            )
         } else {
             let old_indices = plan
                 .old_members()
@@ -759,7 +922,10 @@ pub(super) fn exercise(
         retained_sources.push(retained);
         retained_runtimes.extend(runtimes);
     }
-    if matches!(case, SourceCase::Frames | SourceCase::RemoteOldFrames) {
+    if matches!(
+        case,
+        SourceCase::Frames | SourceCase::RemoteOldFrames | SourceCase::RemoteOldRetainedNative
+    ) {
         let manifest = last_manifest.as_ref().unwrap();
         // This session remains healthy immediately before ACTUAL hosted
         // process cancellation; a per-session cancel cannot masquerade here.
@@ -784,14 +950,16 @@ pub(super) fn exercise(
     assert!(!factory.database.read().commit_admission_ready());
     evidence(&output.join("source-frames-result.json"), &serde_json::json!({
         "actual_two_range_manifest_observations":true,
-        "actual_two_range_history_rows_seals":matches!(case,SourceCase::Frames | SourceCase::RemoteOldFrames),
+        "actual_two_range_history_rows_seals":matches!(case,SourceCase::Frames | SourceCase::RemoteOldFrames | SourceCase::RemoteOldRetainedNative),
         "actual_session_cancel_after_issued_manifest":matches!(case,SourceCase::CancelAfterIssuedFrame),
-        "actual_hosted_process_cancel_after_healthy_frames":matches!(case,SourceCase::Frames | SourceCase::RemoteOldFrames),
+        "actual_hosted_process_cancel_after_healthy_frames":matches!(case,SourceCase::Frames | SourceCase::RemoteOldFrames | SourceCase::RemoteOldRetainedNative),
         "original_finite_old_and_publish_acquisitions_ended":true,
-        "source_seed":if matches!(case,SourceCase::RemoteOldFrames){"actual node-local CLOSE RPC then donor-fetched pinned TLS historical OLD; ALL-old component"}else{"genuine local native OLD QQ, NOT remote collector"},
+        "source_seed":if matches!(case,SourceCase::RemoteOldFrames | SourceCase::RemoteOldRetainedNative){"actual node-local CLOSE RPC then donor-fetched pinned TLS historical OLD; ALL-old component"}else{"genuine local native OLD QQ, NOT remote collector"},
         "actual_fifth_target_unchanged":true,"target_rows_installed":false,"serving_granted":false,
         "target_before":target_before,"actual_frame_count":journal.iter().filter(|r|r["operation"]=="source_image_frame").count(),
         "actual_remote_old_close_logical_calls":journal.iter().filter(|r|r["operation"]=="remote_old_close").count(),
+        "actual_remote_old_close_retry_logical_calls":journal.iter().filter(|r|r["operation"]=="remote_old_close_retry").count(),
+        "actual_post_native_cancel_and_exact_fresh_retry":matches!(case,SourceCase::RemoteOldRetainedNative),
         "original_four_writer_objects_retained":true,
         "real_target_namespaces":factory.database.read().capture_range_image_bindings().unwrap().namespace_ids(),
     })).unwrap();

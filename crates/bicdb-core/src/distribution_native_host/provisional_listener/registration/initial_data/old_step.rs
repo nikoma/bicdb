@@ -11,7 +11,10 @@ use crate::distribution_range_consensus::RangeWriteStore;
 use crate::distribution_range_handoff::NativeJointHandoffPlan;
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 #[cfg(test)]
-pub(crate) use sink_test::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
+pub(crate) use sink_test::{
+    after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
+    CancelRemoteOldAfterNativeWal,
+};
 
 const METADATA_LOCK_POLL: std::time::Duration = std::time::Duration::from_millis(5);
 
@@ -235,6 +238,9 @@ pub(super) struct RetainedInitialOld {
     runtime: Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>,
     actual: Option<Arc<crate::distribution_range_handoff::NativeJointOldObservation>>,
     constraints: Option<crate::distribution_data::NativeJointIrrevocableFacts>,
+    // Distinct actual durable outcomes, retained before postchecks. Cleared
+    // only after the SAME produced observation is stored in `actual`.
+    outcome: Option<crate::distribution_data::NativeJointOldRetainedOutcome>,
 }
 pub(super) type RetainedInitialOldTable =
     Mutex<BTreeMap<crate::RangeId, Arc<Mutex<RetainedInitialOld>>>>;
@@ -305,6 +311,7 @@ impl NativeInitialDataHost {
                     runtime: runtime.clone(),
                     actual: None,
                     constraints: None,
+                    outcome: None,
                 }));
                 owners.insert(range, owner.clone());
                 owner

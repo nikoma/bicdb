@@ -21242,6 +21242,7 @@ struct TxRecovery {
     last_commit_seq: u64,
     requires_native_collection_birth: bool,
     native_backings_by_tx: BTreeMap<u64, BTreeMap<String, (Uuid, Uuid)>>,
+    native_backing_history: BTreeSet<(Uuid, Uuid)>,
 }
 
 #[derive(Clone, Debug)]
@@ -21387,6 +21388,7 @@ fn recover_transaction_log(
     let mut max_commit_seq = 0_u64;
     let mut requires_native_collection_birth = false;
     let mut native_backings_by_tx = BTreeMap::new();
+    let mut native_backing_history = BTreeSet::new();
 
     // Stream the WAL independently of the record-segment read mode. Preserve
     // torn-tail repair, without retaining every raw frame beside decoded rows.
@@ -21451,8 +21453,9 @@ fn recover_transaction_log(
             } => {
                 requires_native_collection_birth |= !native_backings.is_empty();
                 if !native_backings.is_empty() {
-                    native_backings_by_tx
-                        .insert(tx_id.0, native_wal_backings::identities(&native_backings)?);
+                    let identities = native_wal_backings::identities(&native_backings)?;
+                    native_backing_history.extend(identities.values().copied());
+                    native_backings_by_tx.insert(tx_id.0, identities);
                 }
                 max_tx = max_tx.max(tx_id.0);
                 max_commit_seq = max_commit_seq.max(commit_seq);
@@ -21514,6 +21517,7 @@ fn recover_transaction_log(
         last_commit_seq: max_commit_seq,
         requires_native_collection_birth,
         native_backings_by_tx,
+        native_backing_history,
     })
 }
 

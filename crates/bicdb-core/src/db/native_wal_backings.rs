@@ -29,7 +29,7 @@ pub(super) fn rebind_recovery_writes(
     recovery: &mut TxRecovery,
     metas: &[CollectionMeta],
 ) -> Result<()> {
-    if recovery.native_backings_by_tx.is_empty() {
+    if recovery.native_backings_by_tx.is_empty() && recovery.native_backing_history.is_empty() {
         return Ok(());
     }
     let mut births = BTreeMap::new();
@@ -42,26 +42,30 @@ pub(super) fn rebind_recovery_writes(
             }
         }
     }
+    let resolve = |birth: &Uuid, namespace: &Uuid| -> Result<Option<&str>> {
+        match births.get(birth) {
+            Some((actual_namespace, name)) if actual_namespace == namespace => Ok(Some(*name)),
+            Some(_) => Err(BicDbError::FormatCompatibility(
+                "Native WAL birth has a changed local namespace identity".into(),
+            )),
+            None if namespaces.contains_key(namespace) => Err(BicDbError::FormatCompatibility(
+                "Native WAL namespace has a changed local backing birth".into(),
+            )),
+            None => Ok(None), // Both identities absent: that backing was dropped.
+        }
+    };
+    // Completed paged materialization can discard its row bodies and per-tx
+    // bindings, but must not discard the surviving immutable pair's checks.
+    for (birth, namespace) in &recovery.native_backing_history {
+        resolve(birth, namespace)?;
+    }
     for (tx_id, backings) in &recovery.native_backings_by_tx {
         if recovery.states.get(tx_id) != Some(&TxState::Committed) {
             continue;
         }
         let mut destinations = BTreeMap::new();
         for (name, (birth, namespace)) in backings {
-            let destination = match births.get(birth) {
-                Some((actual_namespace, name)) if actual_namespace == namespace => Some(*name),
-                Some(_) => {
-                    return Err(BicDbError::FormatCompatibility(
-                        "Native WAL birth has a changed local namespace identity".into(),
-                    ))
-                }
-                None if namespaces.contains_key(namespace) => {
-                    return Err(BicDbError::FormatCompatibility(
-                        "Native WAL namespace has a changed local backing birth".into(),
-                    ))
-                }
-                None => None, // Both identities are absent: that backing was dropped.
-            };
+            let destination = resolve(birth, namespace)?;
             destinations.insert(name.as_str(), destination);
         }
         if let Some(writes) = recovery.writes.get_mut(tx_id) {

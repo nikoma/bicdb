@@ -68,7 +68,7 @@ impl BicDb {
         if facts.is_empty() {
             return Ok(());
         }
-        if !self.native_catalog_allocation_facts_active {
+        if !self.native_catalog_allocation_facts_active || !self.config.fsync {
             return Err(BicDbError::FormatCompatibility(
                 "Native allocation facts have no publisher fence".into(),
             ));
@@ -118,7 +118,10 @@ impl BicDb {
     pub fn activate_native_catalog_allocation_facts_v1(&mut self) -> Result<()> {
         self.ensure_writable("activate Native catalog allocation facts")?;
         self.check_catalog_recovery_quiescent()?;
-        if !self.native_wal_backing_capture_active || self.observe_native_origin_root()?.is_none() {
+        if !self.config.fsync
+            || !self.native_wal_backing_capture_active
+            || self.observe_native_origin_root()?.is_none()
+        {
             return Err(BicDbError::InvalidConfig(
                 "Native allocation facts require actual origin and WAL capture".into(),
             ));
@@ -128,6 +131,15 @@ impl BicDb {
             return Err(error);
         }
         self.native_catalog_allocation_facts_active = true;
+        Ok(())
+    }
+
+    pub(super) fn check_native_catalog_allocation_publication(&self) -> Result<()> {
+        if self.native_catalog_allocation_logging_active() && !self.config.fsync {
+            return Err(BicDbError::InvalidConfig(
+                "Native catalog allocation publication requires fsync-enabled storage".into(),
+            ));
+        }
         Ok(())
     }
 

@@ -233,7 +233,9 @@ fn actual_wal_eio_leaves_pending_birth_and_retry_publishes_that_same_backing() {
             let row = Record::new("ACK").with_metadata(json!({"value":79}));
             db.insert("independent", row.clone()).unwrap();
             let ack_seq = db.last_commit_seq();
-            format::enable_range_image_install(&path).unwrap();
+            if mode == StorageMode::ServerPaged {
+                format::enable_range_image_install(&path).unwrap();
+            }
             let fault = bicdb_page::test_faults::arm_io_failure(site, &path, 1, false);
             assert!(db.create_collection("pending").is_err(), "{mode:?} {site}");
             drop(fault);
@@ -242,6 +244,7 @@ fn actual_wal_eio_leaves_pending_birth_and_retry_publishes_that_same_backing() {
             assert!(db.replication_shippable_seq() <= ack_seq);
             drop(db);
             let mut db = BicDb::open_with_config(&path, cfg.clone()).unwrap();
+            db.sync_quorum().hold("allocation-history", 0);
             assert_eq!(meta(&db, "pending"), allocated);
             let error = db
                 .insert("pending", Record::new("must_refuse"))
@@ -305,6 +308,7 @@ fn actual_marker_clear_eio_never_allocates_a_second_birth() {
         ));
         drop(db);
         let mut db = BicDb::open_with_config(&path, cfg.clone()).unwrap();
+        db.sync_quorum().hold("allocation-history", 0);
         db.create_collection("items").unwrap();
         assert_eq!(meta(&db, "items").native_backing_birth_id, birth);
         assert!(!meta(&db, "items").native_catalog_allocation_pending);
@@ -354,5 +358,37 @@ fn retained_creation_facts_require_their_fence_even_after_drop() {
         for frames in exports(&db, 0) {
             assert_eq!(facts(&frames, "items").len(), 1);
         }
+    }
+}
+
+#[test]
+fn asynchronous_reopen_cannot_publish_a_new_allocation_fact() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let parent = tempfile::tempdir().unwrap();
+        let path = parent.path().join("db");
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(&path, cfg.clone()).unwrap();
+        enable(&mut db);
+        db.create_collection("items").unwrap();
+        db.insert("items", Record::new("ACK")).unwrap();
+        let allocated = meta(&db, "items");
+        db.close().unwrap();
+        let mut db = BicDb::open_with_config(&path, cfg.clone().with_fsync(false)).unwrap();
+        let sequence = db.last_commit_seq();
+        let catalog = fs::read(path.join(DEFAULT_COLLECTION_CATALOG)).unwrap();
+        assert!(db.activate_native_catalog_allocation_facts_v1().is_err());
+        let error = db.create_collection("must_refuse").unwrap_err();
+        assert!(error.to_string().contains("fsync"), "{error}");
+        assert_eq!(db.last_commit_seq(), sequence);
+        assert!(!db.collections().iter().any(|m| m.name == "must_refuse"));
+        assert_eq!(
+            fs::read(path.join(DEFAULT_COLLECTION_CATALOG)).unwrap(),
+            catalog
+        );
+        assert_eq!(meta(&db, "items"), allocated);
+        db.close().unwrap();
+        let db = BicDb::open_with_config(&path, cfg).unwrap();
+        assert_eq!(meta(&db, "items"), allocated);
+        assert!(db.get("items", "ACK").unwrap().is_some());
     }
 }

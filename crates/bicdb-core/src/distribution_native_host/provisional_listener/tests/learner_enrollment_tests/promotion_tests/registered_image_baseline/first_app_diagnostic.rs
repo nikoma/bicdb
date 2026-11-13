@@ -133,7 +133,7 @@ pub(super) fn snapshot(
             "metadata_lock_busy":metadata_status.is_none(),
             "initial_data_status":status.as_ref().ok(),"initial_data_status_error":status.as_ref().err().map(|e|e.to_string()),
             "actual_service_store_open":service.as_ref().map(|(open,_,_)|open),
-            "actual_service_slot_error":service.as_ref().and_then(|(_,error,_)|error),
+            "actual_service_slot_error":service.as_ref().and_then(|(_,error,_)|error.as_ref()),
             "service_lock_busy":service.is_none(),"binding":actual_binding,
             "binding_error":binding.as_ref().err().map(|e|e.to_string()),
             "native_observations":native,"native_observation_not_obtained":native.is_none()}));

@@ -265,7 +265,16 @@ impl NativeRegisteredRemoteRowTransactionGrant {
     pub(in crate::db) fn retain_applied_known(&self, sequence: u64) {
         *self.logical.lock() = LogicalOutcome::AppliedKnown(sequence);
         #[cfg(test)]
-        cuts::fire(true);
+        cuts::fire(
+            true,
+            serde_json::json!({
+                "original_database_open":self.database_open,"attempt":self.intent.attempt,
+                "range_id":self.range.id,"logical_transaction_id":self.transaction_id,
+                "native_intent_xid":self.intent.native_xid,"mutations_sha256":self.mutations_sha256,
+                "native_intent_checksum_sha256":self.intent.checksum_sha256,
+                "actual_logical_sequence":sequence,"actual_boundary":"retain_applied_known"
+            }),
+        );
     }
     pub(in crate::db) fn require_current(&self, db: &BicDb, tx: &Transaction) -> Result<()> {
         self.lexical
@@ -613,7 +622,14 @@ impl RetainedRemoteRows {
                     logical: pending.logical.clone(),
                 });
             #[cfg(test)]
-            cuts::fire(false);
+            cuts::fire(
+                false,
+                serde_json::json!({
+                    "attempt":pending.intent.attempt,"logical_transaction_id":pending.intent.logical_txid,
+                    "native_intent_xid":pending.intent.native_xid,"mutations_sha256":pending.intent.mutations_sha256,
+                    "actual_boundary":"before_logical_wal_attempt"
+                }),
+            );
             context.require_current(db)?;
             *pending.logical.lock() = LogicalOutcome::AttemptedUnknown;
             let tx = pending
@@ -698,7 +714,7 @@ impl RetainedRemoteRows {
 #[cfg(test)]
 mod cuts {
     use std::cell::RefCell;
-    type Cut = Box<dyn FnOnce()>;
+    type Cut = Box<dyn FnOnce(serde_json::Value)>;
     thread_local! {static CUT:RefCell<Option<(bool,Cut)>>=const{RefCell::new(None)};}
     pub(crate) struct Guard(Option<(bool, Cut)>);
     impl Drop for Guard {
@@ -711,7 +727,7 @@ mod cuts {
     pub(crate) fn install(after: bool, cut: Cut) -> Guard {
         Guard(CUT.with(|slot| slot.replace(Some((after, cut)))))
     }
-    pub(super) fn fire(after: bool) {
+    pub(super) fn fire(after: bool, observation: serde_json::Value) {
         let callback = CUT.with(|slot| {
             let mut slot = slot.borrow_mut();
             if slot.as_ref().is_some_and(|(point, _)| *point == after) {
@@ -721,7 +737,7 @@ mod cuts {
             }
         });
         if let Some(callback) = callback {
-            callback();
+            callback(observation);
         }
     }
 }

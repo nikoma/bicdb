@@ -11,6 +11,7 @@ mod local_namespace_identity;
 mod mutation_identity;
 mod native_wal_apply;
 pub(crate) mod registered_row_retention;
+pub(crate) mod registered_row_wal_inspection;
 pub use deferred_materialize::DeferredMaterializeStats;
 pub(crate) use native_wal_apply::admission_mutations_sha256;
 pub use native_wal_apply::NativeWalApplyReceipt;

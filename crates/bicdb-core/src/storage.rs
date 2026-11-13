@@ -2999,7 +2999,7 @@ mod tests {
     }
 
     #[test]
-    fn readonly_complete_descriptor_refuses_damaged_tail_without_repair() {
+    fn registered_row_readonly_complete_descriptor_refuses_damaged_tail_without_repair() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("strict-readonly.log");
         let payloads = frame_payloads(3, "strict");

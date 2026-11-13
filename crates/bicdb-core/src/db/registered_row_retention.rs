@@ -12,6 +12,17 @@ const MAX_TOTAL_BYTES: usize = 16 * 1024 * 1024;
 fn refusal(message: &str) -> BicDbError {
     BicDbError::HighAvailability(format!("Registered row WAL preservation: {message}"))
 }
+fn require_opened_directory(
+    root: &Path,
+    paged: &crate::paged_collection::PagedRecords,
+) -> Result<()> {
+    if std::fs::canonicalize(root.join(DEFAULT_PAGED_DIR))? != paged.opened_directory() {
+        return Err(refusal(
+            "pending native page store and database root differ",
+        ));
+    }
+    Ok(())
+}
 fn bounded(value: &impl Serialize, maximum: usize) -> Result<Vec<u8>> {
     // The shared writer stops during serialization, before oversized DATA
     // could allocate an unbounded temporary buffer.
@@ -235,6 +246,7 @@ pub(super) fn require_no_outstanding(
             Ok(())
         };
     };
+    require_opened_directory(root, paged)?;
     let (entries, _) = scan(paged)?;
     if let Some(first) = entries.first() {
         return Err(refusal(&format!("cold repair required before logical replay/cut: {} outstanding; original attempt {} step {} Tx {:?}",
@@ -349,6 +361,7 @@ pub(crate) fn read_pending_data(
     root: &Path,
     paged: &crate::paged_collection::PagedRecords,
 ) -> Result<Vec<PendingRegisteredRowWal>> {
+    require_opened_directory(root, paged)?;
     if !fenced(root)? {
         return Err(refusal("pending DATA reader requires sticky index fence"));
     }
@@ -378,6 +391,28 @@ mod tests {
             },
         )
         .unwrap()
+    }
+    #[test]
+    fn registered_row_pending_foreign_empty_store_cannot_supply_absence() {
+        let actual = tempfile::tempdir().unwrap();
+        let foreign = tempfile::tempdir().unwrap();
+        let actual_store = paged(&actual.path().join(DEFAULT_PAGED_DIR));
+        let foreign_store = paged(&foreign.path().join(DEFAULT_PAGED_DIR));
+        require_no_outstanding(actual.path(), Some(&actual_store)).unwrap();
+        let error = require_no_outstanding(actual.path(), Some(&foreign_store)).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("page store and database root differ"),
+            "{error}"
+        );
+        let error = read_pending_data(actual.path(), &foreign_store).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("page store and database root differ"),
+            "{error}"
+        );
     }
     #[test]
     fn registered_row_pending_malformed_index_is_not_empty() {

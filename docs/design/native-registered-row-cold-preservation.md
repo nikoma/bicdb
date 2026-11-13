@@ -81,3 +81,41 @@ markers can be considered for an explicit public evidence whitelist after
 inspection. Raw WAL bytes, full fixture databases, seed/signing/TLS keys and
 other custody remain private unless separately reviewed. Nothing is added to
 historical failed-run archives or frozen documentation evidence packets.
+
+The composed candidate also adds a bounded, nonmutating inspector for one
+actual outstanding-index entry. It checks the actual opened page-directory
+binding, then inspects a complete checksum-valid logical WAL through one
+read-only descriptor and checks its byte hash before/after inspection. It
+matches the actual recorded logical TxID and canonical ordered mutations;
+logical TxID, native page XID and commit sequence remain distinct. The real
+SIGKILL control exercises this inspection before its normal-open refusal.
+The current encoder writes `Write* + Commit` without `Begin`; an explicit
+older Begin is optional. Missing records/decisions remain unknown. Incomplete
+framing, conflicting decisions, patches, business outboxes, payload mismatch,
+changes or resource bounds refuse without repairing the file.
+
+These are observed WAL facts. The WAL has no original-open incarnation field;
+the reported original open comes from the actual native index. The inspection
+performs no durability sync, materialization, generic recovery or grant. It
+cannot by itself establish a current image, resume the owner, clear debt,
+replace a transaction or authorize Serving. Default hard bounds are 512 MiB
+of WAL, one million frames, 8 MiB of selected writes and 4,096 selected writes.
+The large-file bound remains an explicit limit, not an automatic recovery
+qualification. All composed controls still require exact-source execution.
+
+The pre-kill marker now records the actual inner AppliedKnown boundary's
+original open, A, logical TxID, native intent XID/checksum, mutation hash and
+logical sequence, before parking. The parent cross-checks those exact facts
+against the recovered committed native index and independently parsed WAL;
+no visible-row or maximum-B inference substitutes for the original operation.
+
+The entry-size limits above bound accepted encoded index data. The current
+page cursor materializes a value before its encoded-size check, so this stage
+does not establish a strict peak-allocation/I/O bound for a corrupt oversized
+native value. That hardening and a complete restricted cold-repair producer
+remain open; neither can be inferred from these focused controls.
+The same-descriptor hashes do not by themselves exclude pathname replacement;
+actual closed-store ownership is still the caller's responsibility. Complete
+framing checks all CRCs and tags, but does not certify unrelated transaction
+bodies. The shared frame decoder retains its existing 128 MiB per-frame limit;
+the 8 MiB selected-data limit is not a smaller bound on that transient decode.

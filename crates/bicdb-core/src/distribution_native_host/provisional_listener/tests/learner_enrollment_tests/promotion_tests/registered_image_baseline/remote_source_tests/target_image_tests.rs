@@ -87,7 +87,7 @@ fn advance(
         let caller = parent.clone();
         crate::db::test_registered_remote_row_wal_cut(
             after,
-            Box::new(move || {
+            Box::new(move |observation| {
                 if after {
                     if let Some(marker) = std::env::var_os(COLD_CHILD_MARKER) {
                         // Actual retain_applied_known callback, before RowsHeader.
@@ -96,7 +96,8 @@ fn advance(
                             std::path::Path::new(&marker),
                             &serde_json::json!({
                                 "phase":"actual_applied_known_before_protected_progress",
-                                "child_pid":std::process::id(),"no_target_ack_claim":true
+                                "child_pid":std::process::id(),"no_target_ack_claim":true,
+                                "actual_inner_boundary":observation
                             }),
                         )
                         .unwrap();
@@ -377,7 +378,7 @@ pub(super) fn exercise(
         let apply_failure_guard = fail_apply.then(|| {
             crate::db::test_registered_remote_row_wal_cut(
                 false,
-                Box::new(|| {
+                Box::new(|_| {
                     std::env::set_var("BICDB_TEST_FAIL_COMMIT_APPLY", "1");
                 }),
             )

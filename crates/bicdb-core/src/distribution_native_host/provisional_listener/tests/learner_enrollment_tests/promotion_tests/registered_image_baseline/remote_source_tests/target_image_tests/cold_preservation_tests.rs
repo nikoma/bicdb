@@ -1,6 +1,7 @@
 //! Genuine process loss at actual AppliedKnown; normal open must preserve debt.
 use super::*;
 use std::io::Write;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::ExitStatusExt;
 mod stopped_custody;
 struct ChildCustody(std::process::Child);
@@ -32,7 +33,7 @@ fn business_bytes(root: &std::path::Path) -> std::collections::BTreeMap<String, 
     .collect()
 }
 #[test]
-fn native_registered_fifth_row_cold_sigkill_preserves_pending_before_generic_open() {
+fn native_registered_row_cold_sigkill_preserves_pending_before_generic_open() {
     if std::env::var_os(COLD_CHILD_MARKER).is_some() {
         run_registered_image_baseline_with_source(
             Case::Required,
@@ -49,13 +50,20 @@ fn native_registered_fifth_row_cold_sigkill_preserves_pending_before_generic_ope
             Uuid::now_v7()
         ));
     std::fs::create_dir_all(&output).unwrap();
+    std::fs::set_permissions(&output, std::fs::Permissions::from_mode(0o700)).unwrap();
     let marker = output.join("actual-applied-known-marker.json");
     let module = module_path!().split_once("::").unwrap().1;
     let exact = format!(
-        "{module}::native_registered_fifth_row_cold_sigkill_preserves_pending_before_generic_open"
+        "{module}::native_registered_row_cold_sigkill_preserves_pending_before_generic_open"
     );
     let stdout = std::fs::File::create(output.join("child.stdout.log")).unwrap();
     let stderr = std::fs::File::create(output.join("child.stderr.log")).unwrap();
+    stdout
+        .set_permissions(std::fs::Permissions::from_mode(0o600))
+        .unwrap();
+    stderr
+        .set_permissions(std::fs::Permissions::from_mode(0o600))
+        .unwrap();
     let child = std::process::Command::new(std::env::current_exe().unwrap())
         .args(["--exact", &exact, "--test-threads=1", "--nocapture"])
         .env(COLD_CHILD_MARKER, &marker)
@@ -103,6 +111,8 @@ fn native_registered_fifth_row_cold_sigkill_preserves_pending_before_generic_ope
     let wal = before[crate::DEFAULT_TRANSACTION_LOG].as_ref().unwrap();
     assert!(!wal.is_empty(), "real original row logical WAL required");
     let mut raw = std::fs::File::create(output.join("retained-original-logical-wal.bin")).unwrap();
+    raw.set_permissions(std::fs::Permissions::from_mode(0o600))
+        .unwrap();
     raw.write_all(wal).unwrap();
     raw.sync_all().unwrap();
     drop(raw);
@@ -128,6 +138,71 @@ fn native_registered_fifth_row_cold_sigkill_preserves_pending_before_generic_ope
     let intent = &pending["pending"][0]["intent"];
     assert!(intent["logical_txid"].as_u64().unwrap() > 0);
     assert_eq!(intent["mutations_sha256"].as_str().unwrap().len(), 64);
+    let attempt = Uuid::parse_str(intent["attempt"].as_str().unwrap()).unwrap();
+    let step = intent["step"].as_u64().unwrap();
+    let facts = crate::db::registered_row_wal_inspection::inspect_pending_row_wal(
+        &root,
+        &paged,
+        &crate::encryption::EncryptionRuntime::disabled(),
+        attempt,
+        step,
+        &budget(5000),
+    )
+    .unwrap();
+    let facts = serde_json::to_value(facts).unwrap();
+    evidence(
+        &output.join("registered-row-cold-readonly-wal-facts.json"),
+        &facts,
+    )
+    .unwrap();
+    assert_eq!(facts["logical_transaction_id"], intent["logical_txid"]);
+    let boundary = &actual_marker["actual_inner_boundary"];
+    assert_eq!(boundary["actual_boundary"], "retain_applied_known");
+    assert_eq!(boundary["logical_transaction_id"], intent["logical_txid"]);
+    assert_eq!(boundary["native_intent_xid"], intent["native_xid"]);
+    assert_eq!(
+        boundary["native_intent_checksum_sha256"],
+        intent["checksum_sha256"]
+    );
+    assert_eq!(boundary["mutations_sha256"], intent["mutations_sha256"]);
+    assert_eq!(
+        boundary["original_database_open"],
+        pending["pending"][0]["original_database_open"]
+    );
+    assert_eq!(
+        boundary["actual_logical_sequence"],
+        facts["observed_decision"]["sequence"]
+    );
+    assert_eq!(facts["original_native_intent_xid"], intent["native_xid"]);
+    assert_ne!(
+        facts["logical_transaction_id"], facts["original_native_intent_xid"],
+        "this real fixture must exercise distinct logical TxID and native page XID"
+    );
+    assert_eq!(facts["observed_decision"]["kind"], "commit");
+    assert!(facts["observed_decision"]["sequence"].as_u64().unwrap() > 0);
+    assert_eq!(facts["observed_payload_matches_intent"], true);
+    assert_eq!(facts["wal_sha256"], hex::encode(Sha256::digest(wal)));
+    assert_eq!(facts["establishes_current_image_or_serving"], false);
+    assert_eq!(
+        business_bytes(&root),
+        before,
+        "readonly WAL inspection cannot replay or rewrite"
+    );
+    let absent = crate::db::registered_row_wal_inspection::inspect_pending_row_wal(
+        &root,
+        &paged,
+        &crate::encryption::EncryptionRuntime::disabled(),
+        Uuid::now_v7(),
+        step,
+        &budget(5000),
+    )
+    .unwrap_err();
+    assert!(
+        absent
+            .to_string()
+            .contains("actual pending native entry absent"),
+        "{absent}"
+    );
     drop(paged);
     let error = match BicDb::open_with_config(&root, db_config()) {
         Ok(_) => panic!("normal open must not consume original pending row evidence"),
@@ -136,6 +211,7 @@ fn native_registered_fifth_row_cold_sigkill_preserves_pending_before_generic_ope
     let after = business_bytes(&root);
     evidence(&output.join("registered-row-cold-preservation.json"),&serde_json::json!({
         "actual_marker":actual_marker,"signal":terminal.signal(),"pre":pre,"actual_pending":pending,
+        "readonly_wal_facts":facts,"absent_selector_error":absent.to_string(),
         "stopped_target_custody":stopped_target_custody,
         "all_five_fixture_nodes_died_in_same_process":true,
         "custody_scope":"stopped target only, copied before first native recovery open",

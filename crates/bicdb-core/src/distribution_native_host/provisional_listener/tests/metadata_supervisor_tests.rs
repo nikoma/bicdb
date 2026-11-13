@@ -147,6 +147,63 @@ impl Drop for Network {
         }
     }
 }
+
+#[test]
+fn native_owned_metadata_supervisor_closed_ingress_cannot_hold_leadership_same_worker_resumes() {
+    let mut f = Network::new();
+    // Elect n2 through actual votes first. No role/term/cache setter is used.
+    f.start(2);
+    assert_eq!(f.wait_leader(&[2]), 2);
+    f.start(0);
+    f.start(1);
+    f.fresh_mq(0, 2);
+    let original_metadata = f.launch(2).metadata.clone();
+    let original_service = f.launch(2).service.clone();
+    let original_process = f.workers[2].as_ref().unwrap().lifecycle_cancellation();
+    let original_worker = f.workers[2].as_ref().unwrap() as *const _ as usize;
+
+    // ONLY incoming ingress is stopped. The original actual metadata worker
+    // and all database/service owners remain; outgoing RPC is still possible.
+    f.listeners[2]
+        .as_mut()
+        .unwrap()
+        .stop_and_drain(&budget())
+        .unwrap();
+    f.listeners[2].take();
+    original_process.check().unwrap();
+    let healthy = f.wait_leader(&[0, 1]);
+    f.fresh_mq(0, healthy);
+    f.fresh_mq(1, healthy);
+    assert_eq!(
+        f.launch(2).metadata.lock().status().role,
+        MetadataConsensusRole::Follower
+    );
+
+    // Rebind SAME service/open and leave the original supervisor untouched.
+    f.listeners[2] = Some(
+        f.launch(2)
+            .start_metadata_listener(f.fixture.networks[2].clone(), &budget())
+            .unwrap(),
+    );
+    assert!(Arc::ptr_eq(&original_metadata, &f.launch(2).metadata));
+    assert!(Arc::ptr_eq(&original_service, &f.launch(2).service));
+    assert_eq!(
+        original_worker,
+        f.workers[2].as_ref().unwrap() as *const _ as usize
+    );
+    original_process.check().unwrap();
+    f.fresh_mq(2, healthy);
+
+    // Make ONLY that original worker responsible for the next election.
+    // The remaining follower's actual endpoint still supplies its real vote.
+    let other = if healthy == 0 { 1 } else { 0 };
+    f.workers[other].as_mut().unwrap().stop(&budget()).unwrap();
+    f.workers[other].take();
+    f.stop(healthy);
+    assert_eq!(f.wait_leader(&[2]), 2);
+    original_process.check().unwrap();
+    f.fresh_mq(other, 2);
+}
 #[test]
 fn native_owned_metadata_supervisor_actual_tls_majority_minority_stationary_leader_and_heal() {
     let mut f = Network::new();

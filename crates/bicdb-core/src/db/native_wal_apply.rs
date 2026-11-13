@@ -272,6 +272,14 @@ impl Transaction {
     }
 }
 impl BicDb {
+    /// Diagnostic only; no durability, admission or row-outcome authority.
+    #[cfg(test)]
+    pub(crate) fn test_native_wal_retention_active(&self) -> usize {
+        self.tx_log
+            .native_retention
+            .active
+            .load(AtomicOrdering::Acquire)
+    }
     pub(crate) fn validate_native_wal_apply_receipt(
         &self,
         receipt: &NativeWalApplyReceipt,

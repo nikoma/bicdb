@@ -382,6 +382,8 @@ pub(super) fn exercise(
                 "{error}"
             );
             let retained = control.test_registered_remote_image_state(range).unwrap();
+            assert_eq!(factory.database.read().test_native_wal_retention_active(),1,
+                "original pending-apply row owner must retain its actual WAL lease after Transaction consumption");
             assert_eq!(
                 retained["rows"]["pending"]["logical_outcome"],
                 "wal_durable_pending_apply"
@@ -442,6 +444,11 @@ pub(super) fn exercise(
                 retained,
                 "fenced retry must not replace original Tx/intent or advance rows"
             );
+            assert_eq!(
+                factory.database.read().test_native_wal_retention_active(),
+                1,
+                "fenced retry must not release or replace original pending WAL retention"
+            );
             evidence(&output.join("registered-image-inner-durable-apply-failure.json"),&serde_json::json!({
                 "exact_error":error.to_string(),"fenced_error":fenced.to_string(),"fresh_retry_error":retry_error.to_string(),"retained":retained,
                 "existing_failure_seam":"BICDB_TEST_FAIL_COMMIT_APPLY","durable_logical_wal_proven_at_actual_inner_boundary":true,"apply_complete":false,"row_progress_complete":false,
@@ -477,6 +484,32 @@ pub(super) fn exercise(
                 );
                 assert_eq!(factory.database.read().current_commit_seq(), 0);
             }
+            assert_eq!(
+                factory.database.read().test_native_wal_retention_active(),
+                1,
+                "one pending original row step owns one shared WAL retention lease"
+            );
+            let mut wal_retention =
+                serde_json::json!({"active_before_retry":1,"checkpoint_exercised":after});
+            let retained_wal = if after {
+                let db = factory.database.read();
+                let path = db.data_path().join(crate::DEFAULT_TRANSACTION_LOG);
+                let before = std::fs::read(&path).unwrap();
+                assert!(
+                    !before.is_empty(),
+                    "actual committed logical WAL must exist before the explicit cut"
+                );
+                db.checkpoint_for_resume().unwrap();
+                let observed = std::fs::read(&path).unwrap();
+                assert_eq!(observed,before,"same-open checkpoint must retain exact logical WAL while committed row progress is unpublished");
+                assert_eq!(db.test_native_wal_retention_active(), 1);
+                wal_retention["retained_bytes"] = serde_json::json!(before.len());
+                wal_retention["retained_sha256"] =
+                    serde_json::json!(hex::encode(Sha256::digest(&before)));
+                Some(before)
+            } else {
+                None
+            };
             let b_before = factory.database.read().current_commit_seq();
             let fresh = source
                 .bind_step(
@@ -510,7 +543,28 @@ pub(super) fn exercise(
             }
             let completed = control.test_registered_remote_image_state(range).unwrap();
             assert_eq!(completed["rows"]["pending"], serde_json::Value::Null);
-            fault_outcomes.push(serde_json::json!({"exact_error":error.to_string(),"retained":retained,"original_intent":intent,"original_txid":txid,"completed":completed,"known_durable_case":after}));
+            {
+                let db = factory.database.read();
+                assert_eq!(db.test_native_wal_retention_active(),0,
+                    "actual committed row header and postchecks must release the completed step's lease");
+                wal_retention["active_after_committed_progress"] = serde_json::json!(0);
+                if let Some(before) = retained_wal {
+                    let path = db.data_path().join(crate::DEFAULT_TRANSACTION_LOG);
+                    assert_eq!(
+                        std::fs::read(&path).unwrap(),
+                        before,
+                        "fresh progress completion must not execute another logical transaction"
+                    );
+                    db.checkpoint_for_resume().unwrap();
+                    let after_cut = std::fs::read(&path).unwrap();
+                    assert!(
+                        after_cut.is_empty(),
+                        "completed protected progress must not leak its retention lease"
+                    );
+                    wal_retention["after_release_cut_bytes"] = serde_json::json!(after_cut.len());
+                }
+            }
+            fault_outcomes.push(serde_json::json!({"exact_error":error.to_string(),"retained":retained,"original_intent":intent,"original_txid":txid,"completed":completed,"known_durable_case":after,"wal_retention":wal_retention}));
             progress
         } else {
             result.unwrap()

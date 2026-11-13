@@ -137,6 +137,87 @@ fn native_birth_retained_live_export_does_not_rebind_old_writes_to_reused_names(
 }
 
 #[test]
+fn native_birth_wal_capture_never_exports_failed_io_beyond_the_durable_prefix() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for site in ["transaction_log.write", "transaction_log.sync"] {
+            let root = tempfile::tempdir().unwrap();
+            let cfg = config(mode.clone());
+            let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            db.sync_quorum().hold("native-capture-io-control", 0);
+            db.activate_local_namespace_identity_v1().unwrap();
+            db.activate_native_collection_birth_v1().unwrap();
+            db.activate_native_wal_backing_capture_v1().unwrap();
+            db.create_collection("items").unwrap();
+            db.insert(
+                "items",
+                Record::new("ACK").with_metadata(json!({"value":17})),
+            )
+            .unwrap();
+            let ack_seq = db.last_commit_seq();
+            let ack = db
+                .get("items", "ACK")
+                .unwrap()
+                .unwrap()
+                .content_hash()
+                .unwrap();
+            let birth = db.native_collection_birth_id("items").unwrap();
+            let uncertain = Record::new("uncertain").with_metadata(json!({"value":29}));
+            let fault = bicdb_page::test_faults::arm_io_failure(site, root.path(), 1, false);
+            assert!(
+                db.insert("items", uncertain.clone()).is_err(),
+                "fault was not injected: {mode:?} {site}"
+            );
+            drop(fault);
+            assert!(db.replication_shippable_seq() <= ack_seq);
+            match db.export_replication_frames_since(ack_seq, usize::MAX) {
+                Ok(frames) => assert!(frames.iter().all(|frame| frame.commit_seq <= ack_seq
+                    && frame
+                        .writes
+                        .iter()
+                        .all(|write| write.record_id != "uncertain"))),
+                Err(error) => assert!(matches!(error, BicDbError::WriteFailed { .. }), "{error}"),
+            }
+            drop(db);
+            for _ in 0..2 {
+                let db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+                assert_eq!(
+                    db.get("items", "ACK")
+                        .unwrap()
+                        .unwrap()
+                        .content_hash()
+                        .unwrap(),
+                    ack
+                );
+                assert_eq!(db.native_collection_birth_id("items").unwrap(), birth);
+                if let Some(row) = db.get("items", "uncertain").unwrap() {
+                    assert_eq!(
+                        row.content_hash().unwrap(),
+                        uncertain.content_hash().unwrap()
+                    );
+                }
+                for frame in db
+                    .export_replication_frames_since(ack_seq, usize::MAX)
+                    .unwrap()
+                {
+                    if frame
+                        .writes
+                        .iter()
+                        .any(|write| write.record_id == "uncertain")
+                    {
+                        assert_eq!(
+                            frame.captured_native_wal_backings().unwrap().unwrap()["items"]
+                                .native_backing_birth_id,
+                            birth
+                        );
+                    }
+                }
+                db.close().unwrap();
+            }
+        }
+    }
+}
+
+#[test]
 fn native_birth_wal_activation_is_separate_future_only_and_persists_across_restart() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();

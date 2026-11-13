@@ -142,6 +142,7 @@ impl BicDb {
         &self,
         writes: &[TxWrite],
     ) -> Result<BTreeMap<String, CollectionMeta>> {
+        self.observe_native_origin_root()?;
         if !self.native_wal_backing_capture_active {
             return Ok(BTreeMap::new());
         }

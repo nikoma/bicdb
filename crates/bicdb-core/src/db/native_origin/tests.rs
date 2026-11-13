@@ -307,6 +307,170 @@ fn native_origin_untrusted_snapshot_metadata_never_adopts_or_retrofits_source_ro
 }
 
 #[test]
+fn native_origin_protected_image_binds_actual_root_and_rejects_live_directory_replacement() {
+    let parent = tempfile::tempdir().unwrap();
+    let path = parent.path().join("db");
+    let mut db = BicDb::open_with_config(&path, config(StorageMode::ServerPaged)).unwrap();
+    enable_birth(&mut db);
+    let topology = tempfile::tempdir().unwrap();
+    let range = DistributionStore::initialize_at(
+        topology.path(),
+        DistributionConfig {
+            enabled: true,
+            initial_ranges: 1,
+            replication_factor: 1,
+            ..Default::default()
+        },
+        false,
+        1,
+    )
+    .unwrap()
+    .topology()
+    .ranges
+    .values()
+    .next()
+    .unwrap()
+    .clone();
+    let row = Record::new("ACK").with_metadata(json!({"value":71}));
+    let batch = RangeSnapshotBatch {
+        collection: "items".into(),
+        range_id: range.id,
+        range_epoch: range.epoch,
+        snapshot_commit_sequence: 1,
+        required_reader_features: Vec::new(),
+        resume_after_key: row.id.clone(),
+        serialized_record_bytes: serde_json::to_vec(&row).unwrap().len(),
+        records: vec![row.clone()],
+    };
+    db.apply_range_snapshot_batch(&range, &CollectionMeta::standard("items"), &batch)
+        .unwrap();
+    format::enable_range_image_install(&path).unwrap();
+    db.schema_compatibility_fingerprint().unwrap();
+    let before = db.capture_range_image_bindings().unwrap();
+    assert!(before.native_origin().is_none());
+    db.activate_native_origin_root_v1().unwrap();
+    let root = db.native_origin_root_id().unwrap().unwrap();
+    assert!(db.validate_range_image_bindings(&before).is_err());
+    let current = db.capture_range_image_bindings().unwrap();
+    assert_eq!(current.native_origin().unwrap().root_id(), root);
+    assert_eq!(
+        meta(&db, "items").native_backing_origin_root,
+        None,
+        "origin observation must not retroactively scope old backing"
+    );
+    let held = parent.path().join("held");
+    fs::rename(&path, &held).unwrap();
+    fs::create_dir(&path).unwrap();
+    for name in [format::FORMAT_METADATA_FILE, ROOT_FILE] {
+        fs::copy(held.join(name), path.join(name)).unwrap();
+    }
+    let foreign = hashes(&path);
+    assert!(db.validate_range_image_bindings(&current).is_err());
+    assert!(db.create_collection("must_refuse").is_err());
+    assert_eq!(hashes(&path), foreign);
+    fs::remove_dir_all(&path).unwrap();
+    fs::rename(&held, &path).unwrap();
+    db.validate_range_image_bindings(&current).unwrap();
+    assert_eq!(
+        db.get("items", "ACK")
+            .unwrap()
+            .unwrap()
+            .content_hash()
+            .unwrap(),
+        row.content_hash().unwrap()
+    );
+}
+
+#[test]
+fn native_origin_retained_wal_requires_root_after_scoped_backing_was_dropped() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let parent = tempfile::tempdir().unwrap();
+        let path = parent.path().join("db");
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(&path, cfg.clone()).unwrap();
+        db.sync_quorum().hold("origin-history-control", 0);
+        db.activate_native_origin_root_v1().unwrap();
+        enable_birth(&mut db);
+        let root = db.native_origin_root_id().unwrap();
+        db.create_collection("scoped").unwrap();
+        db.insert("scoped", Record::new("ACK")).unwrap();
+        db.drop_collection("scoped").unwrap();
+        db.close().unwrap();
+        let file = format::metadata_path(&path);
+        let original = fs::read(&file).unwrap();
+        let mut metadata: Value = serde_json::from_slice(&original).unwrap();
+        metadata["feature_flags"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|f| f.as_str() != Some(format::NATIVE_ORIGIN_ROOT_FEATURE_FLAG));
+        fs::write(&file, serde_json::to_vec_pretty(&metadata).unwrap()).unwrap();
+        let error = BicDb::open_with_config(&path, cfg.clone()).unwrap_err();
+        assert!(
+            error.to_string().contains("recorded WAL allocation roots"),
+            "{error}"
+        );
+        fs::write(file, original).unwrap();
+        let db = BicDb::open_with_config(&path, cfg).unwrap();
+        assert_eq!(db.native_origin_root_id().unwrap(), root);
+    }
+}
+
+#[test]
+fn native_origin_root_publication_eio_fences_then_recovers_actual_prepared_root() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let parent = tempfile::tempdir().unwrap();
+        let path = parent.path().join("db");
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(&path, cfg.clone()).unwrap();
+        enable_birth(&mut db);
+        db.create_collection("before").unwrap();
+        db.insert(
+            "before",
+            Record::new("ACK").with_metadata(json!({"value":89})),
+        )
+        .unwrap();
+        let ack = db
+            .get("before", "ACK")
+            .unwrap()
+            .unwrap()
+            .content_hash()
+            .unwrap();
+        let fault =
+            bicdb_page::test_faults::arm_io_failure("native_origin.root.dir_sync", &path, 1, false);
+        assert!(
+            db.activate_native_origin_root_v1().is_err(),
+            "actual publication EIO was not injected"
+        );
+        drop(fault);
+        assert!(matches!(
+            db.create_collection("must_refuse"),
+            Err(BicDbError::WriteFailed { .. })
+        ));
+        let prepared = read_record(&path).unwrap().unwrap().root_id;
+        drop(db);
+        let mut db = BicDb::open_with_config(&path, cfg.clone()).unwrap();
+        assert_eq!(db.native_origin_root_id().unwrap(), None);
+        db.activate_native_origin_root_v1().unwrap();
+        assert_eq!(db.native_origin_root_id().unwrap(), Some(prepared));
+        assert_eq!(meta(&db, "before").native_backing_origin_root, None);
+        db.close().unwrap();
+        for _ in 0..2 {
+            let db = BicDb::open_with_config(&path, cfg.clone()).unwrap();
+            assert_eq!(db.native_origin_root_id().unwrap(), Some(prepared));
+            assert_eq!(
+                db.get("before", "ACK")
+                    .unwrap()
+                    .unwrap()
+                    .content_hash()
+                    .unwrap(),
+                ack
+            );
+            db.close().unwrap();
+        }
+    }
+}
+
+#[test]
 fn native_origin_durable_prepared_factory_can_finish_flag_fence_without_rebinding() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let parent = tempfile::tempdir().unwrap();

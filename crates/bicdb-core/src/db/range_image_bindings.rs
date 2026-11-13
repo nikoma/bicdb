@@ -24,6 +24,7 @@ pub(crate) struct RangeImageDbBindings {
     reader_features: Vec<String>,
     namespaces: Vec<NamespacePin>,
     portable_collections: Vec<CollectionMeta>,
+    native_origin: Option<NativeOriginObservation>,
 }
 
 impl RangeImageDbBindings {
@@ -38,6 +39,9 @@ impl RangeImageDbBindings {
     }
     pub(crate) fn collections(&self) -> &[CollectionMeta] {
         &self.portable_collections
+    }
+    pub(crate) fn native_origin(&self) -> Option<&NativeOriginObservation> {
+        self.native_origin.as_ref()
     }
     pub(crate) fn namespace_ids(&self) -> Vec<(String, Uuid)> {
         self.namespaces
@@ -68,6 +72,7 @@ impl BicDb {
             BicDbError::Cluster("range image schema has no current verified digest".into())
         })?;
         let reader_features = format::required_reader_features(&self.path)?;
+        let native_origin = self.observe_native_origin_root()?;
         if self.collections.len() > MAX_IMAGE_NAMESPACES {
             return Err(BicDbError::Cluster(
                 "range image namespace bound exceeded".into(),
@@ -115,6 +120,7 @@ impl BicDb {
             reader_features,
             namespaces,
             portable_collections,
+            native_origin,
         };
         self.validate_range_image_bindings(&bindings)?;
         Ok(bindings)
@@ -137,6 +143,7 @@ impl BicDb {
                 != Some(expected.schema_sha256.as_str())
             || format::required_reader_features(&self.path)? != expected.reader_features
             || self.collections.len() != expected.namespaces.len()
+            || self.observe_native_origin_root()? != expected.native_origin
         {
             return Err(BicDbError::Cluster(
                 "range image database/schema/reader identity changed; discard this capture".into(),

@@ -220,6 +220,22 @@ impl Driver {
         // Republish a successfully durable backend C even after restart or a
         // previous cache-publication failure. This is configuration DATA only.
         self.transport.install_topology(snapshot.topology.clone())?;
+        if !self.actual.has_live_metadata_ingress(&self.metadata)? {
+            // Outgoing votes/heartbeats can still succeed after our incoming
+            // socket closes. They must not keep an unreachable node elected.
+            // Do not cancel this process: SAME-owner rebind resumes this same
+            // worker without replacing or reviving any lifecycle token.
+            self.election_at = Instant::now() + election_delay(&snapshot, self.config);
+            let mut store = self
+                .metadata
+                .try_lock()
+                .ok_or_else(|| invalid("native metadata ingress relinquish store busy"))?;
+            store.native_supervisor_snapshot(&self.actual, Some(self.store_id))?;
+            store.relinquish_leadership()?;
+            return Err(invalid(
+                "native metadata scheduler paused: actual owned ingress unavailable",
+            ));
+        }
         if snapshot.contact != self.contact || snapshot.status.current_term != self.observed_term {
             self.contact = snapshot.contact;
             self.observed_term = snapshot.status.current_term;

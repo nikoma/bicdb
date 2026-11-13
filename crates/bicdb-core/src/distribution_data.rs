@@ -51,7 +51,9 @@ mod native_apply;
 mod native_completion_materialize;
 mod native_recertify;
 pub(crate) use native_recertify::LocalNativeRecertifyEvidence;
+mod metadata_ingress;
 mod native_durability;
+pub(crate) use metadata_ingress::NativeMetadataIngressRegistration;
 mod native_joint_handoff;
 mod native_writer;
 #[cfg(feature = "tls-replication")]

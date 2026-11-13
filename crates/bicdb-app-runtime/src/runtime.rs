@@ -533,6 +533,8 @@ pub struct ApplicationRuntime {
     lifecycle: Mutex<()>,
     history: Mutex<BTreeMap<String, VecDeque<Arc<PackageSnapshot>>>>,
     supervisors: Mutex<BTreeMap<String, SupervisorSet>>,
+    /// Offline lifecycle commands validate plans without starting business traffic.
+    background_supervisors: bool,
     wasm_engine: WasmEngine,
     module_cache: Mutex<CompiledModuleCache>,
 }

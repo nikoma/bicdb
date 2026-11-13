@@ -4,7 +4,7 @@ use bigdecimal::num_bigint::BigInt;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
-use crate::{BicDbError, Result, MAX_EXACT_DECIMAL_LIST_SUM_ITEMS};
+use crate::{BicDbError, MAX_EXACT_DECIMAL_LIST_SUM_ITEMS, Result};
 
 const MAX_UNITS_BITS: u64 = 254;
 const MAX_UNITS_DIGITS: usize = 77;
@@ -357,6 +357,36 @@ pub fn nearest_native_full_display_ratio_value(arguments: &[Value]) -> Result<Va
         &(quantity * ten.pow(scale)),
         operation,
     )
+}
+
+/// `(String C, String Q, Int p, Int s) -> Bool`, with the same strict input
+/// domain as the full display leaf. False means a valid finite exact ratio
+/// cannot round to any native Decimal; invalid inputs remain errors.
+///
+/// MAX96 is odd. At native scale zero, the midpoint MAX96 + 1/2 therefore
+/// rounds upward to the unrepresentable even coefficient 2^96. Higher scales
+/// cannot admit a value that already exceeds this boundary. Comparing the
+/// exact rational to that midpoint avoids calling a fallible Decimal helper or
+/// classifying an error string, and does not confer source or posting authority.
+pub fn native_ratio_representable_units_value(arguments: &[Value]) -> Result<Value> {
+    let operation = "native ratio representability";
+    if arguments.len() != 4 {
+        return Err(invalid(operation, "requires exactly four scalar arguments"));
+    }
+    let total = unsigned_units(&arguments[0], operation, "total cost units")?;
+    let quantity = unsigned_units(&arguments[1], operation, "quantity atoms")?;
+    let precision = int_scale(&arguments[2], 28, operation, "quantity precision")?;
+    let scale = int_scale(&arguments[3], 28, operation, "cost unit scale")?;
+    if quantity == BigInt::from(0u8) {
+        return Err(invalid(operation, "quantity atoms must be positive"));
+    }
+    let ten = BigInt::from(10u8);
+    let numerator = total * ten.pow(precision);
+    let denominator = quantity * ten.pow(scale);
+    let twice_max_plus_one = BigInt::from(Decimal::MAX.mantissa()) * 2u8 + 1u8;
+    Ok(Value::Bool(
+        numerator * 2u8 < twice_max_plus_one * denominator,
+    ))
 }
 
 /// Six actual Int64 limbs, highest first, each in [0,10^14), to canonical

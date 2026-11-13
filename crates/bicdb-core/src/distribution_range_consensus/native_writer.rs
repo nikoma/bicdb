@@ -208,6 +208,26 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
         database: &BicDb,
         range: &RangeDescriptor,
     ) -> Result<()> {
+        self.require_native_writer_host_context_under(database, range, None)
+    }
+    /// Same check for a caller that ALREADY holds this coordinator's routing
+    /// read guard. Reacquiring that lock would wait behind any queued routing
+    /// writer, which itself waits for the caller's guard: a self-deadlock
+    /// that also parks every later routing reader on this node.
+    pub(crate) fn require_native_writer_host_context_with_topology(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+        held_topology: &ClusterTopology,
+    ) -> Result<()> {
+        self.require_native_writer_host_context_under(database, range, Some(held_topology))
+    }
+    fn require_native_writer_host_context_under(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+        held_topology: Option<&ClusterTopology>,
+    ) -> Result<()> {
         if database.actual_native_writer_enforcement_version()? == 0 {
             return Ok(());
         }
@@ -225,7 +245,10 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
             ));
         }
         state.require_database(database, range)?;
-        state.require_topology(&self.topology.read())
+        match held_topology {
+            Some(topology) => state.require_topology(topology),
+            None => state.require_topology(&self.topology.read_recursive()),
+        }
     }
     pub(crate) fn validate_native_writer_enrollment(
         &self,
@@ -245,7 +268,7 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
             ));
         }
         {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             policy.facts().require_topology(&topology)?;
             for range in topology.ranges.values() {
                 policy.facts().require_range(range)?;

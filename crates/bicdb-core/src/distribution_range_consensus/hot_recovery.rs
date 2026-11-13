@@ -256,7 +256,16 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             .and_then(|_| final_metadata.require_live_request(business))
             .and_then(|_| role.require_live_request())
             .and_then(|_| held.require_actual_store_slot())
-            .and_then(|_| host.require_for_coordinator(&db, role.current_range(), self))
+            // The routing read guard taken above is still held: prove the
+            // host against that same guard instead of locking it again.
+            .and_then(|_| {
+                host.require_for_coordinator_with_topology(
+                    &db,
+                    role.current_range(),
+                    self,
+                    &topology,
+                )
+            })
         {
             self.recovered_epochs.lock().remove(&scope.range_id);
             return Err(error);

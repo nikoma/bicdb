@@ -81,7 +81,7 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
         request: &NativeStrongPointReadRequest,
     ) -> Result<RangeDescriptor> {
         let scope = request.require_metadata(first, &self.local_node_id)?;
-        let topology = self.topology.read();
+        let topology = self.topology.read_recursive();
         let current = topology.range_by_id(scope.range.id).ok_or_else(|| {
             range_write_error("strong point route absent from installed coordinator")
         })?;

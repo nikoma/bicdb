@@ -2117,6 +2117,46 @@ pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
     ) -> Result<RangeWriteAck>;
 }
 
+/// One independent exchange per voter. With `concurrent`, every exchange runs
+/// on its own scoped thread and all of them have returned before this
+/// function does; results keep `targets` order. `None` only when a worker
+/// panicked, which the caller treats like any other missing reply.
+fn voter_fan_out<R: Send>(
+    targets: &[ClusterNodeId],
+    concurrent: bool,
+    exchange: impl Fn(&ClusterNodeId) -> R + Sync,
+) -> Vec<(ClusterNodeId, Option<R>)> {
+    if !concurrent || targets.len() < 2 {
+        return targets
+            .iter()
+            .map(|target| (target.clone(), Some(exchange(target))))
+            .collect();
+    }
+    std::thread::scope(|scope| {
+        let exchange = &exchange;
+        let started = targets
+            .iter()
+            .map(|target| {
+                let worker = std::thread::Builder::new()
+                    .name("range-voter-exchange".into())
+                    .spawn_scoped(scope, move || exchange(target));
+                (target, worker)
+            })
+            .collect::<Vec<_>>();
+        started
+            .into_iter()
+            .map(|(target, worker)| {
+                let returned = match worker {
+                    Ok(worker) => worker.join().ok(),
+                    // No thread: perform the same exchange on this one.
+                    Err(_) => Some(exchange(target)),
+                };
+                (target.clone(), returned)
+            })
+            .collect()
+    })
+}
+
 /// Production commit authority installed into `BicDb` by the cluster host.
 #[derive(Debug)]
 pub struct RangeWriteCoordinator<Transport: RangeWriteTransport> {
@@ -2139,7 +2179,18 @@ pub struct RangeWriteCoordinator<Transport: RangeWriteTransport> {
     native_coordinator_id: Uuid,
     native_writer_host: Mutex<Option<std::sync::Weak<crate::db::NativeWriterHostState>>>,
     pending_acknowledgements: Mutex<BTreeMap<String, RangeAcknowledgementEvidence>>,
+    // Scheduling hint only, bounded by current voters. A voter whose socket
+    // recently stalled is contacted LAST by ordinary native admission and is
+    // skipped only once a real quorum already answered. It is never counted,
+    // never changes voters/quorum and expires without any other producer.
+    native_voter_stall_until: Mutex<BTreeMap<ClusterNodeId, Instant>>,
 }
+
+/// Bounded scheduling cooldown for one voter whose transport stalled.
+const NATIVE_VOTER_STALL_COOLDOWN: Duration = Duration::from_secs(5);
+/// A failed voter exchange at least this long is a stall, not a fast refusal.
+const NATIVE_VOTER_STALL_THRESHOLD: Duration = Duration::from_millis(1000);
+const MAX_NATIVE_VOTER_STALL_HINTS: usize = 64;
 
 // Bounded by active range admissions. This is a callback handoff, not durable
 // recovery evidence: durable certificate states remain in each replica log.
@@ -2360,7 +2411,38 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             native_coordinator_id: Uuid::now_v7(),
             native_writer_host: Mutex::new(None),
             pending_acknowledgements: Mutex::new(BTreeMap::new()),
+            native_voter_stall_until: Mutex::new(BTreeMap::new()),
         })
+    }
+
+    /// Record that `voter`'s transport stalled (timeout, not a refusal).
+    /// SKIP-ORDER HINT ONLY: no ACK, quorum, voter set or readiness changes.
+    pub(crate) fn note_native_voter_stalled(&self, voter: &ClusterNodeId, until: Instant) {
+        if *voter == self.local_node_id {
+            return;
+        }
+        let now = Instant::now();
+        let mut stalled = self.native_voter_stall_until.lock();
+        stalled.retain(|_, at| now < *at);
+        if stalled.len() >= MAX_NATIVE_VOTER_STALL_HINTS && !stalled.contains_key(voter) {
+            return;
+        }
+        let bounded = until.min(now + Duration::from_secs(10));
+        let entry = stalled.entry(voter.clone()).or_insert(bounded);
+        if *entry < bounded {
+            *entry = bounded;
+        }
+    }
+
+    fn clear_native_voter_stall(&self, voter: &ClusterNodeId) {
+        self.native_voter_stall_until.lock().remove(voter);
+    }
+
+    fn native_voter_recently_stalled(&self, voter: &ClusterNodeId) -> bool {
+        self.native_voter_stall_until
+            .lock()
+            .get(voter)
+            .is_some_and(|at| Instant::now() < *at)
     }
 
     /// Validate the complete checksummed plan once. Per-range fencing then
@@ -2371,7 +2453,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         plan: &ClusterBackupPlan,
         now_ms: u64,
     ) -> Result<RangeBackupFenceSession> {
-        let topology = self.topology.read();
+        let topology = self.topology.read_recursive();
         let captured = ClusterBackupMetadata::capture(&topology)?;
         if plan.format_version != CLUSTER_BACKUP_CERTIFICATE_FORMAT_VERSION
             || plan.plan_id.is_nil()
@@ -2414,7 +2496,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             return Err(range_write_error("backup fence plan id must not be nil"));
         }
         let (topology_generation, range) = {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             if session.cluster_id != self.cluster_id
                 || session.topology_generation != topology.generation
                 || installed_at_ms < session.created_at_ms
@@ -2524,7 +2606,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             )));
         }
         let still_current = {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             topology.generation == topology_generation
                 && topology.range_by_id(range.id).is_some_and(|current| {
                     current.epoch == range.epoch && current.leader == self.local_node_id
@@ -2703,7 +2785,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             ));
         }
         let mut ranges = {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             let recovered = self.recovered_epochs.lock();
             topology
                 .ranges
@@ -2738,7 +2820,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 completed = completed.saturating_add(1);
             }
         }
-        let topology = self.topology.read();
+        let topology = self.topology.read_recursive();
         self.recovered_epochs.lock().retain(|range_id, epoch| {
             topology
                 .range_by_id(*range_id)
@@ -2798,7 +2880,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             return Ok(());
         }
         let (required, pending_target, advertised, advertised_pending) = {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             let current = topology
                 .range_by_id(range.id)
                 .filter(|current| {
@@ -2935,7 +3017,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         if intent.mutations.is_empty() {
             return Err(range_write_error("distributed commit intent is empty"));
         }
-        let topology = self.topology.read();
+        let topology = self.topology.read_recursive();
         let mut resolved = None;
         for mutation in &intent.mutations {
             let range = topology.range_for_key(&mutation.collection, &mutation.record_id)?;
@@ -3367,7 +3449,7 @@ impl<Transport: RangeWriteTransport> RangeAntiEntropyFenceAuthority
         now_ms: u64,
     ) -> Result<RangeBackupFenceQuorum> {
         let topology_generation = {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             plan.validate(&topology, &self.local_node_id, now_ms)?;
             topology.generation
         };
@@ -3486,7 +3568,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             )?
         };
         let native_plan = if let Some(database) = native_database {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             let bootstrap = topology.range_image_bootstrap_id.ok_or_else(|| {
                 range_write_error("native admission has no committed bootstrap domain")
             })?;
@@ -3561,28 +3643,94 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         let mut prepared = 1usize;
         let mut prepared_nodes = Vec::new();
         let mut repair_failures = Vec::new();
-        for voter in voters.iter().filter(|node| **node != self.local_node_id) {
+        // Native admission contacts recently stalled voters LAST and skips
+        // them only after a real prepare quorum already exists. A silent
+        // minority voter therefore cannot add its socket timeout to every
+        // ordinary commit; it is still required whenever quorum needs it.
+        let (prompt_voters, stalled_voters): (Vec<ClusterNodeId>, Vec<ClusterNodeId>) = voters
+            .iter()
+            .filter(|node| **node != self.local_node_id)
+            .cloned()
+            .partition(|node| {
+                native_database.is_none() || !self.native_voter_recently_stalled(node)
+            });
+        // Native voters are independent recipients of the same step; one
+        // exchange per voter runs concurrently and only actual validated
+        // replies are counted, in voter order, exactly as before.
+        let concurrent_voters = native_database.is_some();
+        let transport = &self.transport;
+        // One voter's actual catch-up followed, only after it succeeded, by
+        // its actual Prepare. Nothing is counted here.
+        let contact = |voter: &ClusterNodeId| -> (Result<()>, Option<Result<RangeWriteAck>>) {
+            let repair_started = Instant::now();
             let repaired = if let Some(database) = native_database {
                 self.repair_native_voter(database, &range, voter, authority)
             } else {
                 self.repair_voter(&range, voter)
             };
-            if let Err(error) = repaired {
-                repair_failures.push(format!("{voter}: {error}"));
-            } else if let Ok(ack) = self.transport.prepare_range_write(voter, &command) {
-                if self.validate_ack(voter, &command, &ack).is_ok()
-                    && matches!(
-                        ack.state,
-                        RangeWriteState::Prepared
-                            | RangeWriteState::Committed
-                            | RangeWriteState::QuorumCommitted
-                            | RangeWriteState::Applied
-                    )
-                {
-                    prepared += 1;
-                    prepared_nodes.push(voter.clone());
+            if native_database.is_some() {
+                match &repaired {
+                    Ok(()) => self.clear_native_voter_stall(voter),
+                    Err(error) => {
+                        let timed_out = match error {
+                            BicDbError::Io(io) => matches!(
+                                io.kind(),
+                                std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+                            ),
+                            BicDbError::QueryTimedOut => true,
+                            _ => false,
+                        };
+                        if timed_out || repair_started.elapsed() >= NATIVE_VOTER_STALL_THRESHOLD {
+                            self.note_native_voter_stalled(
+                                voter,
+                                Instant::now() + NATIVE_VOTER_STALL_COOLDOWN,
+                            );
+                        }
+                    }
                 }
             }
+            let prepare = repaired
+                .is_ok()
+                .then(|| transport.prepare_range_write(voter, &command));
+            (repaired, prepare)
+        };
+        let mut outcomes = voter_fan_out(&prompt_voters, concurrent_voters, &contact);
+        let mut stalled_voters = stalled_voters.into_iter();
+        loop {
+            for (voter, outcome) in outcomes.drain(..) {
+                match outcome {
+                    None => {
+                        repair_failures.push(format!("{voter}: voter exchange ended abnormally"))
+                    }
+                    Some((Err(error), _)) => repair_failures.push(format!("{voter}: {error}")),
+                    Some((Ok(()), Some(Ok(ack)))) => {
+                        if self.validate_ack(&voter, &command, &ack).is_ok()
+                            && matches!(
+                                ack.state,
+                                RangeWriteState::Prepared
+                                    | RangeWriteState::Committed
+                                    | RangeWriteState::QuorumCommitted
+                                    | RangeWriteState::Applied
+                            )
+                        {
+                            prepared += 1;
+                            prepared_nodes.push(voter);
+                        }
+                    }
+                    Some((Ok(()), _)) => {}
+                }
+            }
+            let Some(voter) = stalled_voters.next() else {
+                break;
+            };
+            if prepared >= quorum {
+                repair_failures.push(format!(
+                    "{voter}: skipped during bounded transport stall cooldown after actual prepare quorum"
+                ));
+                continue;
+            }
+            let outcome = contact(&voter);
+            outcomes.push((voter, Some(outcome)));
         }
         if prepared < quorum {
             if let Some(attempt) = native_abort_attempt {
@@ -3663,9 +3811,11 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         }
         let mut committed = 1usize;
         let mut committed_nodes = Vec::new();
-        for voter in &prepared_nodes {
-            if let Ok(ack) = self.transport.commit_range_write(voter, &command) {
-                if self.validate_ack(voter, &command, &ack).is_ok()
+        for (voter, ack) in voter_fan_out(&prepared_nodes, concurrent_voters, |voter| {
+            transport.commit_range_write(voter, &command)
+        }) {
+            if let Some(Ok(ack)) = ack {
+                if self.validate_ack(&voter, &command, &ack).is_ok()
                     && matches!(
                         ack.state,
                         RangeWriteState::Committed
@@ -3674,7 +3824,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                     )
                 {
                     committed += 1;
-                    committed_nodes.push(voter.clone());
+                    committed_nodes.push(voter);
                 }
             }
         }
@@ -3722,24 +3872,22 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         reservation.preserve_for_recovery(&command.command_id);
         let mut certified_voters = 1usize;
         let mut certified_nodes = BTreeSet::from([self.local_node_id.clone()]);
-        for voter in &committed_nodes {
-            let certified = self
-                .transport
-                .certify_range_write(voter, &command)
-                .ok()
-                .filter(|ack| {
-                    self.validate_ack(voter, &command, ack).is_ok()
-                        && matches!(
-                            ack.state,
-                            RangeWriteState::QuorumCommitted | RangeWriteState::Applied
-                        )
-                });
+        for (voter, ack) in voter_fan_out(&committed_nodes, concurrent_voters, |voter| {
+            transport.certify_range_write(voter, &command)
+        }) {
+            let certified = ack.and_then(|ack| ack.ok()).filter(|ack| {
+                self.validate_ack(&voter, &command, ack).is_ok()
+                    && matches!(
+                        ack.state,
+                        RangeWriteState::QuorumCommitted | RangeWriteState::Applied
+                    )
+            });
             if certified.is_some() {
                 certified_voters += 1;
-                certified_nodes.insert(voter.clone());
                 if native_database.is_none() {
-                    let _ = self.transport.apply_range_write(voter, &command);
+                    let _ = self.transport.apply_range_write(&voter, &command);
                 }
+                certified_nodes.insert(voter);
             }
         }
         let native = if let (Some(database), Some(plan)) = (native_database, native_plan) {
@@ -3772,16 +3920,18 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                             crate::distribution_native_apply::NATIVE_ORDINARY_BUDGET_MS,
                         ),
                 );
-                for voter in certified_nodes
+                let apply_targets = certified_nodes
                     .iter()
                     .filter(|node| **node != self.local_node_id)
-                {
-                    // The actual QQ exists before any authenticated native
-                    // instruction. A lost materialization reply is not rollback.
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let apply_budget = &budget;
+                // The actual QQ exists before any authenticated native
+                // instruction. A lost materialization reply is not rollback.
+                let _ = voter_fan_out(&apply_targets, true, |voter| {
                     let _ =
-                        self.transport
-                            .apply_native_origin(voter, &command, certificate, &budget);
-                }
+                        transport.apply_native_origin(voter, &command, certificate, apply_budget);
+                });
             }
             Some(NativeRangeAcknowledgementEvidence {
                 pending,
@@ -3843,8 +3993,12 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         let mut actual_native_apply_verified = !self.native_image_mode;
         if let Some(native) = &evidence.native {
             if let Some((receipt, database)) = native_context {
-                let current_range =
-                    { self.topology.read().range_by_id(evidence.range_id).cloned() };
+                let current_range = {
+                    self.topology
+                        .read_recursive()
+                        .range_by_id(evidence.range_id)
+                        .cloned()
+                };
                 let validation = current_range
                     .ok_or_else(|| range_write_error("native callback range disappeared"))
                     .and_then(|range| self.require_native_writer_host_context(database,&range))
@@ -3895,7 +4049,12 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             ));
         }
         if let Some((_, database)) = native_context {
-            let current_range = { self.topology.read().range_by_id(evidence.range_id).cloned() };
+            let current_range = {
+                self.topology
+                    .read_recursive()
+                    .range_by_id(evidence.range_id)
+                    .cloned()
+            };
             let validation = current_range
                 .ok_or_else(|| range_write_error("native callback range disappeared"))
                 .and_then(|range| self.require_native_writer_host_context(database, &range));

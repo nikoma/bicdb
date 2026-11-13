@@ -25,6 +25,11 @@ impl ReplicaDebt {
             "recipient_next":self.next.iter().map(|(n,p)|(n.to_string(),format!("{p:?}"))).collect::<BTreeMap<_,_>>(),
             "diagnostic_not_authority":true})
     }
+    /// Every follower was last actually observed activated and at the source
+    /// cut and no refusal is retained: this session owes nothing further.
+    pub(super) fn converged(&self) -> bool {
+        self.pending.is_empty() && self.semantic_veto.is_empty()
+    }
     pub(super) fn from_published(job: Job) -> Self {
         let pending = job
             .members
@@ -283,6 +288,15 @@ impl NativeHotRecoveryMaintenance {
         })();
         if let Err(error) = &result {
             debt.pending.insert(node.clone());
+            if matches!(error, crate::BicDbError::Io(io) if matches!(
+                io.kind(),
+                std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+            )) {
+                // Ordering hint only: ordinary admission contacts this silent
+                // follower last. Nothing is counted, granted or retired.
+                self.coordinator
+                    .note_native_voter_stalled(&node, Instant::now() + Duration::from_secs(10));
+            }
             if HotRecoveryPeerFailure::from_error(error).is_some()
                 && !debt.semantic_veto.contains_key(&node)
             {

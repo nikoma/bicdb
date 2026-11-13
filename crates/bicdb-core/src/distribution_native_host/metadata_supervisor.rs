@@ -101,14 +101,29 @@ impl NativeMetadataSupervisor {
                 "native metadata supervisor requires pinned mutual TLS",
             ));
         }
-        let actual = service
-            .try_lock()
-            .ok_or_else(|| invalid("native metadata supervisor service busy"))?
-            .listener_open_guard();
-        let (id, snapshot) = metadata
-            .try_lock()
-            .ok_or_else(|| invalid("native metadata supervisor store busy"))?
-            .native_supervisor_snapshot(&actual, None)?;
+        // The listener is already serving: one in-flight handler may hold the
+        // service or the metadata store for a moment. Starting the owned
+        // worker waits a bounded time for that instead of refusing the whole
+        // start on a single lost race; an owner that stays busy still refuses.
+        let busy_until = Instant::now() + Duration::from_secs(2);
+        let actual = loop {
+            parent.check()?;
+            if let Some(service) = service.try_lock_for(Duration::from_millis(5)) {
+                break service.listener_open_guard();
+            }
+            if Instant::now() >= busy_until {
+                return Err(invalid("native metadata supervisor service busy"));
+            }
+        };
+        let (id, snapshot) = loop {
+            parent.check()?;
+            if let Some(store) = metadata.try_lock_for(Duration::from_millis(5)) {
+                break store.native_supervisor_snapshot(&actual, None)?;
+            }
+            if Instant::now() >= busy_until {
+                return Err(invalid("native metadata supervisor store busy"));
+            }
+        };
         let transport = Arc::new(TcpClusterRelocationTransport::new(
             snapshot.status.cluster_id.clone(),
             snapshot.status.node_id.clone(),

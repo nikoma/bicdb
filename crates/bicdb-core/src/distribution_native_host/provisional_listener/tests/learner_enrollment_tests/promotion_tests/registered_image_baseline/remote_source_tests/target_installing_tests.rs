@@ -242,14 +242,12 @@ pub(super) fn exercise(
         normalized_after, before,
         "only durable catalogue refusal changes: no rows/floors/namespace/writer/schema"
     );
-    assert_eq!(
-        factory
-            .database
-            .read()
-            .test_registered_remote_native_inventory()
-            .unwrap(),
-        native_before
-    );
+    let native_after = factory
+        .database
+        .read()
+        .test_registered_remote_native_inventory()
+        .unwrap();
+    assert_eq!(native_after, native_before);
     assert_eq!(
         factory
             .database
@@ -261,7 +259,7 @@ pub(super) fn exercise(
     evidence(&output.join(format!("registered-installing-{}.json", range.get())), &serde_json::json!({
         "before":before,"after":after,"protected_proposal":proposal_before,"failed_outcomes":failed_outcomes,
         "errors":failures,"retained_before":retained_before,"retained_after":retained_after,
-        "native_before":native_before,"no_rows_or_serving":true,"actual_catalogue_installing":true,
+        "native_before":native_before,"native_after":native_after,"no_rows_or_serving":true,"actual_catalogue_installing":true,
         "hardware_power_loss":false,"actual_injected_io":matches!(case,SourceCase::TargetInstallingDirSyncRetry)
     })).unwrap();
 }

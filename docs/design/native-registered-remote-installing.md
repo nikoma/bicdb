@@ -63,3 +63,28 @@ attempt substitution and format downgrade, so checksum mismatch cannot mask a
 missing semantic check. These are hosted component tests, not power-loss tests.
 At initial source publication these new selectors have not yet been executed.
 Historical failed cohorts and evidence remain unchanged.
+
+## Source-pinned validation follow-up
+
+At `fd4d0595d70e82dff20889c19918e34dbd42575d`, the happy singleton
+[passed 1/0 in 9.43s](https://github.com/nikoma/bicdb/actions/runs/43468368964).
+The same source's three-case group
+[passed 3/0 in 9.95s](https://github.com/nikoma/bicdb/actions/runs/43469675906),
+including post-fsync cancellation and two directory-sync EIO failures followed
+by exact-candidate retry. Both workflows' workspace all-target and separate
+no-default-feature consumer checks passed. These tests executed three independent
+fixtures on one hosted runner, not independent machines or a physical power cut.
+
+Complete fixture originals remain private because they contain database/signing
+material. Whitelisted logical projections preserve omission hashes and original
+archive identity. Independent JSON checks reproduce the exact new intent and
+canonical pre-pointer bytes, unchanged target state except the refusal, retained
+A/proposal and all three error outcomes. The original artifacts assert post-install
+hidden-inventory equality in Rust but omit an explicit `native_after` field; a
+later test-only evidence addition records that actual observation for future runs.
+It does not retroactively fill the original artifacts or establish a WAL replay.
+
+The dedicated sink still holds the existing service/native-journal exclusions
+across fsync. These tests do not establish independent other-range progress
+under stalled disk I/O, kernel I/O time bounds, cold continuation, final Image,
+Serving or automatic multi-range movement. Those qualification gates stay open.

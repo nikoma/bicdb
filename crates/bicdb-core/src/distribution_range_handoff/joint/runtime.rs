@@ -383,6 +383,14 @@ impl NativeJointHandoffRuntime {
         role: RecoveryRoleAdmission,
         parent: &crate::CancellationToken,
     ) -> Result<NativeJointOldObservation> {
+        self.close_old_with_role_owner(plan, Arc::new(role), parent)
+    }
+    pub(crate) fn close_old_with_role_owner(
+        &self,
+        plan: Arc<NativeJointHandoffPlan>,
+        role: Arc<RecoveryRoleAdmission>,
+        parent: &crate::CancellationToken,
+    ) -> Result<NativeJointOldObservation> {
         let _operation = self.operation(plan.old_range().id)?;
         let frozen = self.freeze(&plan, &role, parent)?;
         let actual = {
@@ -390,7 +398,7 @@ impl NativeJointHandoffRuntime {
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("joint closure actual service busy"))?;
-            service.close_native_joint_old(plan, role, frozen, parent)?
+            service.close_native_joint_old_with_role_owner(plan, role, frozen, parent)?
         };
         NativeJointOldObservation::from_actual_service(actual, self.service.clone())
     }

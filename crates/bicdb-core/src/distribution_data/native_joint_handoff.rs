@@ -17,7 +17,7 @@ pub(crate) use bridge::{
 /// or native receipts can be substituted when the observation consumes it.
 pub(crate) struct ActualServiceNativeJointOldEvidence {
     plan: Arc<NativeJointHandoffPlan>,
-    role: RecoveryRoleAdmission,
+    role: Arc<RecoveryRoleAdmission>,
     native: NativeJointOldCloseReceipt,
     promise: NativeJointOldPromiseReceipt,
     frozen: Arc<FrozenRangeMutationPermit>,
@@ -41,7 +41,7 @@ impl ActualServiceNativeJointOldEvidence {
         self,
     ) -> (
         Arc<NativeJointHandoffPlan>,
-        RecoveryRoleAdmission,
+        Arc<RecoveryRoleAdmission>,
         NativeJointOldCloseReceipt,
         NativeJointOldPromiseReceipt,
         Arc<FrozenRangeMutationPermit>,
@@ -62,6 +62,17 @@ impl ClusterDataNodeService {
         &mut self,
         plan: Arc<NativeJointHandoffPlan>,
         role: RecoveryRoleAdmission,
+        frozen: Arc<FrozenRangeMutationPermit>,
+        parent: &CancellationToken,
+    ) -> Result<ActualServiceNativeJointOldEvidence> {
+        self.close_native_joint_old_with_role_owner(plan, Arc::new(role), frozen, parent)
+    }
+    /// Same original sealed role shared with its actual receiver step. This
+    /// does not clone/reseal an observation or change any validation predicate.
+    pub(crate) fn close_native_joint_old_with_role_owner(
+        &mut self,
+        plan: Arc<NativeJointHandoffPlan>,
+        role: Arc<RecoveryRoleAdmission>,
         frozen: Arc<FrozenRangeMutationPermit>,
         parent: &CancellationToken,
     ) -> Result<ActualServiceNativeJointOldEvidence> {

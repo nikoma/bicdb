@@ -232,3 +232,17 @@ Those are source-only controls, not a remote OLD-certificate acceptance. The
 remote collector must still collect actual authenticated receiver native-close
 receipts/constraints and verify the selected real source's complete ancestry and
 irreversible commands, without reconstructing local service/pin observations.
+
+## Original OLD-close role ownership prerequisite
+
+The actual OLD service evidence and observation now retain the SAME sealed role
+through `Arc` ownership. Existing owned-role Runtime/service entry points wrap
+that role once; new role-owner entries can share it with the future receiver
+step's original OWN/caller/actual-owner admission through the real persistence
+boundaries. No Clone/Serde/DTO-to-role conversion is introduced. Original
+Runtime/service body token parity holds after the exact ownership callee rename;
+all scope/freeze/raw/native/pin/role/caller checks and ordering stay unchanged.
+Sharing a role is not a new authority, response certificate or mutation bypass.
+The remote OLD step/sink and actual remote certificate remain unimplemented in
+this prerequisite; its eventual guarded admission cannot be replaced by a plan,
+a status getter, a cached passed Boolean or an independently refreshed role.

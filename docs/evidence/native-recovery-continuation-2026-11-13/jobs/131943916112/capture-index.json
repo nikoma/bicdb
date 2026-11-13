@@ -1,0 +1,172 @@
+{
+  "source_revision": "6c9a8b65131d122970de2e496b5539396b517e65",
+  "requested_source": "6c9a8b65131d122970de2e496b5539396b517e65",
+  "authoritative_source_verified": true,
+  "run_id": 43442632698,
+  "job_id": 131943916112,
+  "job_name": "Focused Core library (origin_pre_wal_fault_tests)",
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "captured_at_utc": "2026-11-13T14:47:37.344013+00:00",
+  "raw_bytes": 18211234,
+  "raw_sha256": "e795b0f476465ce5975439279d9f0ee6f1c822f96c174357073a7179ea84b800",
+  "compressed_file": "job.log.gz",
+  "compressed_sha256": "f40e84e90be689d41fcd74ec9acac8980b2ce84e842157c05374f21f9417d29c",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-13T14:30:22.4291936Z test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1005 filtered out; finished in 67.34s"
+  ],
+  "failure_context": [],
+  "test_observations": [
+    {
+      "line": 16020,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_origin_fault_arm_drop_revokes_retained_probe_without_erasing_successor",
+      "result": "ok"
+    },
+    {
+      "line": 22092,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_actual_rpc_post_admission_fault_requires_autonomous_tail_recovery",
+      "result": "ok"
+    },
+    {
+      "line": 22886,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_one_peer_loss_actual_rpc_requires_autonomous_tail_recovery",
+      "result": "ok"
+    },
+    {
+      "line": 25723,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_actual_CQ2_native1_before_fence_requires_automatic_R4_convergence",
+      "result": "ok"
+    },
+    {
+      "line": 27218,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_actual_semantic_rejection_then_socket_loss_retains_veto",
+      "result": "ok"
+    },
+    {
+      "line": 28985,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_blackhole_actual_rpc_requires_autonomous_tail_recovery",
+      "result": "ok"
+    },
+    {
+      "line": 32611,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_completion_reply_requires_fresh_recovery",
+      "result": "ok"
+    },
+    {
+      "line": 34164,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_fence_reply_requires_automatic_R4_convergence",
+      "result": "ok"
+    },
+    {
+      "line": 35267,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_origin_completion_reply_requires_fresh_reattest",
+      "result": "ok"
+    },
+    {
+      "line": 35607,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_prepare_reply_requires_automatic_R4_convergence",
+      "result": "ok"
+    },
+    {
+      "line": 38710,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_socket_eof_actual_rpc_requires_autonomous_tail_recovery",
+      "result": "ok"
+    },
+    {
+      "line": 40088,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_second_actual_origin_unknown5_same_owners_requires_ack6_and_full_replica_convergence",
+      "result": "ok"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T14:26:01Z",
+      "completed_at": "2026-11-13T14:26:04Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T14:26:04Z",
+      "completed_at": "2026-11-13T14:26:16Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T14:26:16Z",
+      "completed_at": "2026-11-13T14:26:30Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T14:26:30Z",
+      "completed_at": "2026-11-13T14:26:45Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T14:26:45Z",
+      "completed_at": "2026-11-13T14:27:51Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T14:27:51Z",
+      "completed_at": "2026-11-13T14:29:12Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-11-13T14:29:12Z",
+      "completed_at": "2026-11-13T14:30:22Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T14:30:22Z",
+      "completed_at": "2026-11-13T14:30:24Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 15,
+      "started_at": "2026-11-13T14:30:24Z",
+      "completed_at": "2026-11-13T14:30:24Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T14:30:24Z",
+      "completed_at": "2026-11-13T14:30:25Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T14:30:25Z",
+      "completed_at": "2026-11-13T14:30:25Z"
+    }
+  ]
+}

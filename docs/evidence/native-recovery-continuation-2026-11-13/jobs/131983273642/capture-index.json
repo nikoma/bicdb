@@ -1,0 +1,199 @@
+{
+  "source_revision": "6d795aac644a71b36ffef395a649ffc21b62206d",
+  "requested_source": "6d795aac644a71b36ffef395a649ffc21b62206d",
+  "authoritative_source_verified": true,
+  "run_id": 43453994180,
+  "job_id": 131983273642,
+  "job_name": "Focused Core library (native_registered_fifth_remote_transfer_)",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T15:46:39.220624+00:00",
+  "raw_bytes": 2551817,
+  "raw_sha256": "b369c5958d146dfb7b3e332d4730b743db7ffd37002cb91fb02920a4599f42ce",
+  "compressed_file": "job.log.gz",
+  "compressed_sha256": "350760d8a62860425549245bef35b8abb1ccf38eb9d1699830ccfd92463c2d02",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-13T15:41:58.6193751Z test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 1028 filtered out; finished in 14.36s"
+  ],
+  "failure_context": [
+    {
+      "line": 20777,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T15:41:58.6161466Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6161716Z",
+        "2026-11-13T15:41:58.6163182Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_actual_callback_arc_blocks_then_fresh_retry' (7764) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs:405:28:",
+        "2026-11-13T15:41:58.6165014Z called `Result::unwrap()` on an `Err` value: Cluster(\"no event cluster member is reachable\")",
+        "2026-11-13T15:41:58.6165559Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "2026-11-13T15:41:58.6166036Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6166296Z",
+        "2026-11-13T15:41:58.6167174Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_actual_hook_aba_before_rotation_preserves_n stdout ----",
+        "2026-11-13T15:41:58.6168267Z NATIVE_LEARNER_ENROLLMENT_ROOT /tmp/.tmpjOupw2",
+        "2026-11-13T15:41:58.6168640Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6169052Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6169787Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6170197Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6170612Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6171016Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6171427Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)"
+      ]
+    },
+    {
+      "line": 20792,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T15:41:58.6171427Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6171680Z",
+        "2026-11-13T15:41:58.6173128Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_actual_hook_aba_before_rotation_preserves_n' (7766) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs:405:28:",
+        "2026-11-13T15:41:58.6174991Z called `Result::unwrap()` on an `Err` value: Cluster(\"no event cluster member is reachable\")",
+        "2026-11-13T15:41:58.6175489Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6175747Z",
+        "2026-11-13T15:41:58.6176803Z ---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_unique_runtime_owner_preserves_data stdout ----",
+        "2026-11-13T15:41:58.6177917Z NATIVE_LEARNER_ENROLLMENT_ROOT /tmp/.tmph2tPur",
+        "2026-11-13T15:41:58.6178673Z bicdb cluster data RPC error: io error: peer closed connection without sending TLS close_notify: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof",
+        "2026-11-13T15:41:58.6179774Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6180188Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6180595Z bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-13T15:41:58.6181005Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6181412Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6181815Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6182220Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)"
+      ]
+    },
+    {
+      "line": 20811,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T15:41:58.6183848Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6184104Z",
+        "2026-11-13T15:41:58.6185522Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_unique_runtime_owner_preserves_data' (7767) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs:405:28:",
+        "2026-11-13T15:41:58.6187239Z called `Result::unwrap()` on an `Err` value: Cluster(\"no event cluster member is reachable\")",
+        "2026-11-13T15:41:58.6187731Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T15:41:58.6187991Z",
+        "2026-11-13T15:41:58.6187994Z",
+        "2026-11-13T15:41:58.6188071Z failures:",
+        "2026-11-13T15:41:58.6188992Z     distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_actual_callback_arc_blocks_then_fresh_retry",
+        "2026-11-13T15:41:58.6190890Z     distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_actual_hook_aba_before_rotation_preserves_n",
+        "2026-11-13T15:41:58.6192596Z     distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_unique_runtime_owner_preserves_data",
+        "2026-11-13T15:41:58.6193479Z",
+        "2026-11-13T15:41:58.6193751Z test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 1028 filtered out; finished in 14.36s",
+        "2026-11-13T15:41:58.6194130Z",
+        "2026-11-13T15:41:58.6214346Z error: test failed, to rerun pass `-p bicdb-core --lib`",
+        "2026-11-13T15:41:58.6381719Z ##[error]Process completed with exit code 101."
+      ]
+    }
+  ],
+  "test_observations": [
+    {
+      "line": 20687,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_actual_callback_arc_blocks_then_fresh_retry",
+      "result": "FAILED"
+    },
+    {
+      "line": 20689,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_actual_hook_aba_before_rotation_preserves_n",
+      "result": "FAILED"
+    },
+    {
+      "line": 20691,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_unique_runtime_owner_preserves_data",
+      "result": "FAILED"
+    },
+    {
+      "line": 20694,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_actual_cancellation_before_rotation_preserves_n",
+      "result": "ok"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T15:34:48Z",
+      "completed_at": "2026-11-13T15:34:50Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T15:34:50Z",
+      "completed_at": "2026-11-13T15:34:58Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T15:34:58Z",
+      "completed_at": "2026-11-13T15:35:07Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T15:35:07Z",
+      "completed_at": "2026-11-13T15:35:17Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T15:35:17Z",
+      "completed_at": "2026-11-13T15:39:49Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T15:39:49Z",
+      "completed_at": "2026-11-13T15:41:43Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 7,
+      "started_at": "2026-11-13T15:41:43Z",
+      "completed_at": "2026-11-13T15:41:58Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T15:41:58Z",
+      "completed_at": "2026-11-13T15:42:00Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-13T15:42:00Z",
+      "completed_at": "2026-11-13T15:42:00Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T15:42:00Z",
+      "completed_at": "2026-11-13T15:42:00Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T15:42:00Z",
+      "completed_at": "2026-11-13T15:42:00Z"
+    }
+  ]
+}

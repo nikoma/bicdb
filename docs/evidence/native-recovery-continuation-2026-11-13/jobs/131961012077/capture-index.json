@@ -1,0 +1,138 @@
+{
+  "source_revision": "156a586b18d1324de04c468ca941f3bcc989fdee",
+  "requested_source": "156a586b18d1324de04c468ca941f3bcc989fdee",
+  "authoritative_source_verified": true,
+  "run_id": 43447592065,
+  "job_id": 131961012077,
+  "job_name": "Community-only workspace compiles, tests included",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T14:59:34.640927+00:00",
+  "raw_bytes": 76238,
+  "raw_sha256": "a82481a047f7879a64133991304f06dc1e249d4a5b0d04d74a740576d0386199",
+  "compressed_file": "job.log.gz",
+  "compressed_sha256": "53cbf7f4392cfa9ecdffc29e325a9febedb0f721d7124243b2fc2f7e41c609ac",
+  "capture_exit_code": 0,
+  "test_summaries": [],
+  "failure_context": [
+    {
+      "line": 821,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T14:57:49.9904312Z     |                                 ^^^^ help: if this is intentional, prefix it with an underscore: `_peer`",
+        "2026-11-13T14:57:49.9904913Z",
+        "2026-11-13T14:57:51.0302234Z error[E0502]: cannot borrow `*self` as immutable because it is also borrowed as mutable",
+        "2026-11-13T14:57:51.0302953Z    --> crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/activation/fresh.rs:180:49",
+        "2026-11-13T14:57:51.0303383Z     |",
+        "2026-11-13T14:57:51.0303647Z 166 |           let state = self",
+        "2026-11-13T14:57:51.0303957Z     |  _____________________-",
+        "2026-11-13T14:57:51.0304283Z 167 | |             .catalog",
+        "2026-11-13T14:57:51.0304659Z 168 | |             .native_joint_handoffs",
+        "2026-11-13T14:57:51.0305095Z     | |__________________________________- mutable borrow occurs here",
+        "2026-11-13T14:57:51.0305464Z ...",
+        "2026-11-13T14:57:51.0305867Z 180 |           writer_domain.require_current(database, self, data.activation_range())?;",
+        "2026-11-13T14:57:51.0306396Z     |                                                   ^^^^ immutable borrow occurs here",
+        "2026-11-13T14:57:51.0306835Z 181 |           self.recovery_persistence_uncertain = true;",
+        "2026-11-13T14:57:51.0307266Z 182 |           state.serving_activation = Some(candidate.clone());",
+        "2026-11-13T14:57:51.0307741Z     |           ------------------------ mutable borrow later used here"
+      ]
+    },
+    {
+      "line": 836,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T14:57:51.0307741Z     |           ------------------------ mutable borrow later used here",
+        "2026-11-13T14:57:51.0307988Z",
+        "2026-11-13T14:57:51.0594786Z error[E0502]: cannot borrow `*self` as immutable because it is also borrowed as mutable",
+        "2026-11-13T14:57:51.0595632Z    --> crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/activation.rs:602:49",
+        "2026-11-13T14:57:51.0596317Z     |",
+        "2026-11-13T14:57:51.0596585Z 584 |           let state = self",
+        "2026-11-13T14:57:51.0596902Z     |  _____________________-",
+        "2026-11-13T14:57:51.0597222Z 585 | |             .catalog",
+        "2026-11-13T14:57:51.0597590Z 586 | |             .native_joint_handoffs",
+        "2026-11-13T14:57:51.0598023Z     | |__________________________________- mutable borrow occurs here",
+        "2026-11-13T14:57:51.0598359Z ...",
+        "2026-11-13T14:57:51.0598746Z 602 |           writer_domain.require_current(database, self, data.activation_range())?;",
+        "2026-11-13T14:57:51.0599284Z     |                                                   ^^^^ immutable borrow occurs here",
+        "2026-11-13T14:57:51.0599730Z 603 |           self.recovery_persistence_uncertain = true;",
+        "2026-11-13T14:57:51.0600153Z 604 |           state.serving_activation = Some(candidate.clone());",
+        "2026-11-13T14:57:51.0600620Z     |           ------------------------ mutable borrow later used here"
+      ]
+    }
+  ],
+  "test_observations": [],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T14:56:46Z",
+      "completed_at": "2026-11-13T14:56:47Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T14:56:47Z",
+      "completed_at": "2026-11-13T14:56:52Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T14:56:52Z",
+      "completed_at": "2026-11-13T14:57:03Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T14:57:03Z",
+      "completed_at": "2026-11-13T14:57:20Z"
+    },
+    {
+      "name": "cargo check --workspace --all-targets",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 5,
+      "started_at": "2026-11-13T14:57:20Z",
+      "completed_at": "2026-11-13T14:57:55Z"
+    },
+    {
+      "name": "Workflow consumer compiles without Core defaults",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 6,
+      "started_at": "2026-11-13T14:57:55Z",
+      "completed_at": "2026-11-13T14:57:55Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 11,
+      "started_at": "2026-11-13T14:57:55Z",
+      "completed_at": "2026-11-13T14:57:55Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 12,
+      "started_at": "2026-11-13T14:57:55Z",
+      "completed_at": "2026-11-13T14:57:56Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 13,
+      "started_at": "2026-11-13T14:57:56Z",
+      "completed_at": "2026-11-13T14:57:56Z"
+    }
+  ]
+}

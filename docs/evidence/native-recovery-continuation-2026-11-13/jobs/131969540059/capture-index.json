@@ -1,0 +1,122 @@
+{
+  "source_revision": "a9b6a8532751d19cea5b5edafef9fef29c8c9310",
+  "requested_source": "a9b6a8532751d19cea5b5edafef9fef29c8c9310",
+  "authoritative_source_verified": true,
+  "run_id": 43450034110,
+  "job_id": 131969540059,
+  "job_name": "Focused Core library (native_writer_data_domain_)",
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "captured_at_utc": "2026-11-13T15:24:37.349287+00:00",
+  "raw_bytes": 1897452,
+  "raw_sha256": "1a1659dc47e3a5b5639b16cf75049ff90d27c48f2fbdb02b26aca3b05c5089b1",
+  "compressed_file": "job.log.gz",
+  "compressed_sha256": "76b8dced1467d436efa28a47f23dd490e9bb59b40a5a1a30840f075918b98c84",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-13T15:17:14.1039401Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1026 filtered out; finished in 6.48s"
+  ],
+  "failure_context": [],
+  "test_observations": [
+    {
+      "line": 18368,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::writer_data_domain_fact_tests::native_writer_data_domain_actual_decided_closed_points_preserve_original_policy",
+      "result": "ok"
+    },
+    {
+      "line": 18369,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::writer_data_domain_fact_tests::native_writer_data_domain_actual_foreign_mstore_refuses_without_native_change",
+      "result": "ok"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T15:11:24Z",
+      "completed_at": "2026-11-13T15:11:26Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T15:11:26Z",
+      "completed_at": "2026-11-13T15:11:29Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T15:11:29Z",
+      "completed_at": "2026-11-13T15:11:37Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T15:11:37Z",
+      "completed_at": "2026-11-13T15:11:46Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T15:11:46Z",
+      "completed_at": "2026-11-13T15:15:35Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T15:15:35Z",
+      "completed_at": "2026-11-13T15:17:07Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-11-13T15:17:07Z",
+      "completed_at": "2026-11-13T15:17:14Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T15:17:14Z",
+      "completed_at": "2026-11-13T15:17:15Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 15,
+      "started_at": "2026-11-13T15:17:15Z",
+      "completed_at": "2026-11-13T15:17:25Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T15:17:25Z",
+      "completed_at": "2026-11-13T15:17:25Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T15:17:25Z",
+      "completed_at": "2026-11-13T15:17:25Z"
+    }
+  ]
+}

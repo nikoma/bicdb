@@ -1,0 +1,154 @@
+{
+  "source_revision": "156a586b18d1324de04c468ca941f3bcc989fdee",
+  "requested_source": "156a586b18d1324de04c468ca941f3bcc989fdee",
+  "authoritative_source_verified": true,
+  "run_id": 43447592065,
+  "job_id": 131961063210,
+  "job_name": "Focused Core library (native_registered_fifth_remote_old_)",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T15:08:36.780553+00:00",
+  "raw_bytes": 112857,
+  "raw_sha256": "5a0e7785e7716de925937c48c4bd3604f5a5d903daed4bee4b22d9e71a913b0f",
+  "compressed_file": "job.log.gz",
+  "compressed_sha256": "57a1acfa6675a52b2b7596f4ddca9bffbacfa391e663d3bd192256f1409beef8",
+  "capture_exit_code": 0,
+  "test_summaries": [],
+  "failure_context": [
+    {
+      "line": 1298,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T15:00:53.4029840Z     |                                 ^^^^ help: if this is intentional, prefix it with an underscore: `_peer`",
+        "2026-11-13T15:00:53.4030375Z",
+        "2026-11-13T15:00:54.9795173Z error[E0502]: cannot borrow `*self` as immutable because it is also borrowed as mutable",
+        "2026-11-13T15:00:54.9796642Z    --> crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/activation/fresh.rs:180:49",
+        "2026-11-13T15:00:54.9797576Z     |",
+        "2026-11-13T15:00:54.9798466Z 166 |           let state = self",
+        "2026-11-13T15:00:54.9799148Z     |  _____________________-",
+        "2026-11-13T15:00:54.9799824Z 167 | |             .catalog",
+        "2026-11-13T15:00:54.9800629Z 168 | |             .native_joint_handoffs",
+        "2026-11-13T15:00:54.9801529Z     | |__________________________________- mutable borrow occurs here",
+        "2026-11-13T15:00:54.9802222Z ...",
+        "2026-11-13T15:00:54.9802994Z 180 |           writer_domain.require_current(database, self, data.activation_range())?;",
+        "2026-11-13T15:00:54.9804179Z     |                                                   ^^^^ immutable borrow occurs here",
+        "2026-11-13T15:00:54.9805187Z 181 |           self.recovery_persistence_uncertain = true;",
+        "2026-11-13T15:00:54.9806098Z 182 |           state.serving_activation = Some(candidate.clone());",
+        "2026-11-13T15:00:54.9807223Z     |           ------------------------ mutable borrow later used here"
+      ]
+    },
+    {
+      "line": 1313,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T15:00:54.9807223Z     |           ------------------------ mutable borrow later used here",
+        "2026-11-13T15:00:54.9807805Z",
+        "2026-11-13T15:00:55.0232791Z error[E0502]: cannot borrow `*self` as immutable because it is also borrowed as mutable",
+        "2026-11-13T15:00:55.0234254Z    --> crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/activation.rs:602:49",
+        "2026-11-13T15:00:55.0235183Z     |",
+        "2026-11-13T15:00:55.0235671Z 584 |           let state = self",
+        "2026-11-13T15:00:55.0236385Z     |  _____________________-",
+        "2026-11-13T15:00:55.0237079Z 585 | |             .catalog",
+        "2026-11-13T15:00:55.0238182Z 586 | |             .native_joint_handoffs",
+        "2026-11-13T15:00:55.0239219Z     | |__________________________________- mutable borrow occurs here",
+        "2026-11-13T15:00:55.0239977Z ...",
+        "2026-11-13T15:00:55.0241120Z 602 |           writer_domain.require_current(database, self, data.activation_range())?;",
+        "2026-11-13T15:00:55.0242355Z     |                                                   ^^^^ immutable borrow occurs here",
+        "2026-11-13T15:00:55.0243365Z 603 |           self.recovery_persistence_uncertain = true;",
+        "2026-11-13T15:00:55.0244328Z 604 |           state.serving_activation = Some(candidate.clone());",
+        "2026-11-13T15:00:55.0245374Z     |           ------------------------ mutable borrow later used here"
+      ]
+    }
+  ],
+  "test_observations": [],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T14:56:53Z",
+      "completed_at": "2026-11-13T14:56:54Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T14:56:54Z",
+      "completed_at": "2026-11-13T14:57:00Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T14:57:00Z",
+      "completed_at": "2026-11-13T14:57:10Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T14:57:10Z",
+      "completed_at": "2026-11-13T14:57:19Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 5,
+      "started_at": "2026-11-13T14:57:19Z",
+      "completed_at": "2026-11-13T15:01:02Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 6,
+      "started_at": "2026-11-13T15:01:02Z",
+      "completed_at": "2026-11-13T15:01:02Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 7,
+      "started_at": "2026-11-13T15:01:02Z",
+      "completed_at": "2026-11-13T15:01:02Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T15:01:02Z",
+      "completed_at": "2026-11-13T15:01:02Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-13T15:01:02Z",
+      "completed_at": "2026-11-13T15:01:02Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T15:01:02Z",
+      "completed_at": "2026-11-13T15:01:02Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T15:01:02Z",
+      "completed_at": "2026-11-13T15:01:02Z"
+    }
+  ]
+}

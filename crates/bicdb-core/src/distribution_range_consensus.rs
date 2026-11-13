@@ -2139,7 +2139,18 @@ pub struct RangeWriteCoordinator<Transport: RangeWriteTransport> {
     native_coordinator_id: Uuid,
     native_writer_host: Mutex<Option<std::sync::Weak<crate::db::NativeWriterHostState>>>,
     pending_acknowledgements: Mutex<BTreeMap<String, RangeAcknowledgementEvidence>>,
+    // Scheduling hint only, bounded by current voters. A voter whose socket
+    // recently stalled is contacted LAST by ordinary native admission and is
+    // skipped only once a real quorum already answered. It is never counted,
+    // never changes voters/quorum and expires without any other producer.
+    native_voter_stall_until: Mutex<BTreeMap<ClusterNodeId, Instant>>,
 }
+
+/// Bounded scheduling cooldown for one voter whose transport stalled.
+const NATIVE_VOTER_STALL_COOLDOWN: Duration = Duration::from_secs(5);
+/// A failed voter exchange at least this long is a stall, not a fast refusal.
+const NATIVE_VOTER_STALL_THRESHOLD: Duration = Duration::from_millis(1000);
+const MAX_NATIVE_VOTER_STALL_HINTS: usize = 64;
 
 // Bounded by active range admissions. This is a callback handoff, not durable
 // recovery evidence: durable certificate states remain in each replica log.
@@ -2360,7 +2371,38 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             native_coordinator_id: Uuid::now_v7(),
             native_writer_host: Mutex::new(None),
             pending_acknowledgements: Mutex::new(BTreeMap::new()),
+            native_voter_stall_until: Mutex::new(BTreeMap::new()),
         })
+    }
+
+    /// Record that `voter`'s transport stalled (timeout, not a refusal).
+    /// SKIP-ORDER HINT ONLY: no ACK, quorum, voter set or readiness changes.
+    pub(crate) fn note_native_voter_stalled(&self, voter: &ClusterNodeId, until: Instant) {
+        if *voter == self.local_node_id {
+            return;
+        }
+        let now = Instant::now();
+        let mut stalled = self.native_voter_stall_until.lock();
+        stalled.retain(|_, at| now < *at);
+        if stalled.len() >= MAX_NATIVE_VOTER_STALL_HINTS && !stalled.contains_key(voter) {
+            return;
+        }
+        let bounded = until.min(now + Duration::from_secs(10));
+        let entry = stalled.entry(voter.clone()).or_insert(bounded);
+        if *entry < bounded {
+            *entry = bounded;
+        }
+    }
+
+    fn clear_native_voter_stall(&self, voter: &ClusterNodeId) {
+        self.native_voter_stall_until.lock().remove(voter);
+    }
+
+    fn native_voter_recently_stalled(&self, voter: &ClusterNodeId) -> bool {
+        self.native_voter_stall_until
+            .lock()
+            .get(voter)
+            .is_some_and(|at| Instant::now() < *at)
     }
 
     /// Validate the complete checksummed plan once. Per-range fencing then
@@ -3561,12 +3603,51 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         let mut prepared = 1usize;
         let mut prepared_nodes = Vec::new();
         let mut repair_failures = Vec::new();
-        for voter in voters.iter().filter(|node| **node != self.local_node_id) {
+        // Native admission contacts recently stalled voters LAST and skips
+        // them only after a real prepare quorum already exists. A silent
+        // minority voter therefore cannot add its socket timeout to every
+        // ordinary commit; it is still required whenever quorum needs it.
+        let (prompt_voters, stalled_voters): (Vec<&ClusterNodeId>, Vec<&ClusterNodeId>) = voters
+            .iter()
+            .filter(|node| **node != self.local_node_id)
+            .partition(|node| {
+                native_database.is_none() || !self.native_voter_recently_stalled(node)
+            });
+        let stalled_from = prompt_voters.len();
+        for (order, voter) in prompt_voters.into_iter().chain(stalled_voters).enumerate() {
+            if order >= stalled_from && prepared >= quorum {
+                repair_failures.push(format!(
+                    "{voter}: skipped during bounded transport stall cooldown after actual prepare quorum"
+                ));
+                continue;
+            }
+            let repair_started = Instant::now();
             let repaired = if let Some(database) = native_database {
                 self.repair_native_voter(database, &range, voter, authority)
             } else {
                 self.repair_voter(&range, voter)
             };
+            if native_database.is_some() {
+                match &repaired {
+                    Ok(()) => self.clear_native_voter_stall(voter),
+                    Err(error) => {
+                        let timed_out = match error {
+                            BicDbError::Io(io) => matches!(
+                                io.kind(),
+                                std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+                            ),
+                            BicDbError::QueryTimedOut => true,
+                            _ => false,
+                        };
+                        if timed_out || repair_started.elapsed() >= NATIVE_VOTER_STALL_THRESHOLD {
+                            self.note_native_voter_stalled(
+                                voter,
+                                Instant::now() + NATIVE_VOTER_STALL_COOLDOWN,
+                            );
+                        }
+                    }
+                }
+            }
             if let Err(error) = repaired {
                 repair_failures.push(format!("{voter}: {error}"));
             } else if let Ok(ack) = self.transport.prepare_range_write(voter, &command) {

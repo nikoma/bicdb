@@ -21,6 +21,12 @@ mod replica_debt;
 #[cfg(test)]
 pub(crate) use replica_debt::NativeHotDebtScheduleHold;
 const MAX_JOBS: usize = 64;
+/// Idle led ranges passed over by one attempt before it yields to pacing.
+const MAX_IDLE_RANGE_SCAN: usize = 64;
+/// A non-Fence peer subrequest shorter than this was truncated by THIS
+/// sender's nearly exhausted attempt budget. Its socket timeout says nothing
+/// about the peer, which answered the previous phase of the same job.
+const MIN_UNSTARVED_PEER_IO_MS: u64 = 1000;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Phase {
     Fence,
@@ -286,9 +292,17 @@ impl NativeHotRecoveryMaintenance {
         if ranges.is_empty() {
             return Ok(());
         }
-        let range = (*ranges[state.cursor % ranges.len()]).clone();
-        state.cursor = (state.cursor + 1) % ranges.len();
-        if !state.jobs.contains_key(&range.id) {
+        // One bounded unit of actual work per attempt. Idle led ranges are
+        // passed over (memory/local reads only) so a retained job on another
+        // range is not delayed by a whole pacing interval per idle range.
+        let mut selected = None;
+        for _ in 0..ranges.len().min(MAX_IDLE_RANGE_SCAN) {
+            let range = (*ranges[state.cursor % ranges.len()]).clone();
+            state.cursor = (state.cursor + 1) % ranges.len();
+            if state.jobs.contains_key(&range.id) {
+                selected = Some(range);
+                break;
+            }
             // SKIP ONLY: this cached scheduling hint never grants APP/Strong
             // or repairs a Pending. Actual Unknown release clears readiness;
             // retained jobs always continue through all fresh proof boundaries.
@@ -299,17 +313,29 @@ impl NativeHotRecoveryMaintenance {
                 if let Some(debt) = state.replica_debts.get_mut(&range.id) {
                     return self.run_replica_debt(debt, parent);
                 }
-                return Ok(());
+                continue;
             }
             // Do not discard an older session's frozen/uncaught-up physical
             // obligations when another origin failure appears. A separate
             // completed-decision/new-session dominance producer is required.
-            if state.replica_debts.contains_key(&range.id) {
+            // A session whose every follower was last observed activated and
+            // at the actual source cut, with no retained veto, has no such
+            // obligation left: only that one may be retired below.
+            if state
+                .replica_debts
+                .get(&range.id)
+                .is_some_and(|debt| !debt.converged())
+            {
                 return Err(invalid("new origin recovery with retained replica session debt needs explicit continuation; old debt is preserved"));
             }
             let Some(command) = self.candidate(&range, parent)? else {
-                return Ok(());
+                continue;
             };
+            if let Some(retired) = state.replica_debts.remove(&range.id) {
+                self.record(
+                    retired.diagnostic("converged_session_retired_for_new_actual_origin_pending"),
+                );
+            }
             if state.jobs.len() + state.replica_debts.len() >= MAX_JOBS {
                 return Err(invalid("hot DATA retained job bound exhausted"));
             }
@@ -340,7 +366,12 @@ impl NativeHotRecoveryMaintenance {
                     peer_opens: BTreeMap::new(),
                 },
             );
+            selected = Some(range);
+            break;
         }
+        let Some(range) = selected else {
+            return Ok(());
+        };
         let job = state.jobs.get_mut(&range.id).unwrap();
         let result = self.run_job(job, parent);
         let mut detail = serde_json::json!({"range_id":range.id,"epoch":job.range.epoch,"recovery_nonce":job.scope.recovery_nonce,
@@ -382,6 +413,9 @@ impl NativeHotRecoveryMaintenance {
         let role = self.fresh_role(&job.range, job.scope.recovery_nonce, parent)?;
         job.scope.require_role(&role)?;
         let phase_parent = parent.child_with_deadline(role.deadline());
+        // Per attempt and phase: a transport cooldown may defer a peer only
+        // while the origin plus a majority can be observed without it.
+        let mut cooldown_probe = false;
         loop {
             self.live(&phase_parent)?;
             role.require_live_request()?;
@@ -432,11 +466,30 @@ impl NativeHotRecoveryMaintenance {
                     || !job.semantic_veto.is_empty()
                 {
                     job.position = 0;
+                    // SKIP HINT ONLY: the cooldown exists to avoid paying a
+                    // silent minority's timeout again. It must never hold back
+                    // the very peer whose real answer the majority needs.
+                    // Probe each still-eligible deferred peer once more now;
+                    // only its actual successful observation is counted.
+                    let now = Instant::now();
+                    if !cooldown_probe
+                        && job.semantic_veto.is_empty()
+                        && job.members.iter().any(|n| {
+                            *n != self.initial.seed.spec.node_id
+                                && !job.phase_observed.contains(n)
+                                && job.recipient_next.get(n) == Some(&job.phase)
+                                && job.peer_retry_after.get(n).is_some_and(|d| now < *d)
+                        })
+                    {
+                        cooldown_probe = true;
+                        continue;
+                    }
                     return Err(invalid("hot native phase lacks actual original-origin and majority recipient observations"));
                 }
                 self.live(&phase_parent)?;
                 fresh.require_live_request()?;
                 job.position = 0;
+                cooldown_probe = false;
                 job.phase_observed.clear();
                 job.phase = match job.phase {
                     Phase::Fence => Phase::Certify,
@@ -455,16 +508,30 @@ impl NativeHotRecoveryMaintenance {
                 job.position += 1;
                 continue;
             }
+            // A follower without an actual successful observation of every
+            // EARLIER phase of this session is never sent the current phase:
+            // its receiver would refuse the out-of-order request, and that
+            // refusal would become a permanent veto no later same-phase
+            // success could clear. It is not counted here; its retained
+            // per-recipient next phase is continued as replica debt after the
+            // origin-plus-majority publication.
+            if !origin
+                && !job.semantic_veto.contains_key(&node)
+                && job.recipient_next.get(&node) != Some(&job.phase)
+            {
+                job.position += 1;
+                continue;
+            }
             // A previous authenticated rejection cannot become skippable when
             // that same physical voter later disappears. Only a fresh actual
             // successful SAME-peer/SAME-phase observation clears this veto.
-            if !origin
+            let deferred = !origin
                 && !job.semantic_veto.contains_key(&node)
                 && job
                     .peer_retry_after
                     .get(&node)
-                    .is_some_and(|d| Instant::now() < *d)
-            {
+                    .is_some_and(|d| Instant::now() < *d);
+            if deferred && !cooldown_probe {
                 job.position += 1;
                 continue;
             }
@@ -473,6 +540,10 @@ impl NativeHotRecoveryMaintenance {
                 budget_ms
             } else if job.phase == Phase::Fence {
                 budget_ms.min(500)
+            } else if deferred {
+                // Bounded re-probe: leave budget for the other deferred peer
+                // and for the mandatory original origin.
+                (budget_ms / 2).max(1)
             } else {
                 budget_ms.saturating_sub(250).max(1)
             };
@@ -561,11 +632,30 @@ impl NativeHotRecoveryMaintenance {
                         if origin || job.semantic_veto.contains_key(&node) {
                             return Err(error);
                         }
+                        let timed_out = matches!(
+                            peer.kind(),
+                            std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+                        );
+                        // This sender's own nearly exhausted attempt budget
+                        // truncated the subrequest. End the attempt without
+                        // success, veto or cooldown; the next attempt asks the
+                        // same peer again with a whole budget.
+                        if timed_out
+                            && job.phase != Phase::Fence
+                            && io_ms < MIN_UNSTARVED_PEER_IO_MS
+                        {
+                            return Err(error);
+                        }
                         // SKIP ONLY; never change current voters or a QQ. A
                         // persistent blackhole does not consume first budget
                         // again in every later phase. Bounded next probe.
-                        job.peer_retry_after
-                            .insert(node, Instant::now() + Duration::from_secs(10));
+                        let until = Instant::now() + Duration::from_secs(10);
+                        if timed_out {
+                            // Ordering hint for ordinary admission after the
+                            // publication; it grants and counts nothing.
+                            self.coordinator.note_native_voter_stalled(&node, until);
+                        }
+                        job.peer_retry_after.insert(node, until);
                     } else {
                         // Sender-local cancellation/expiry is not an
                         // authenticated semantic statement by this voter.

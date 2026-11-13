@@ -329,6 +329,49 @@ impl BicDb {
         Ok(serde_json::json!({"base":receipt,"archive":archived}))
     }
 
+    /// Bounded read-only forensic observations from THIS still-open database.
+    /// No recovery, checkpoint, archive engine open or admission is performed.
+    #[cfg(test)]
+    pub(crate) fn test_registered_native_base_forensic_status(
+        &self,
+        range: RangeId,
+        attempt: Uuid,
+        attempted_xid: Option<u64>,
+    ) -> Result<serde_json::Value> {
+        let _journal = self.try_native_image_journal()?;
+        self.check_recovery_state()?;
+        let base: Option<NativeInstalledRangeImageReceipt> =
+            self.read_native_range_image_record(&base_key(range))?;
+        let xid = attempted_xid.or_else(|| base.as_ref().map(|b| b.native_page_xid));
+        let archived: Option<NativeInstalledRangeImageReceipt> = xid
+            .map(|xid| self.read_native_range_image_record(&archive(attempt, xid)))
+            .transpose()?
+            .flatten();
+        for receipt in base.iter().chain(archived.iter()) {
+            bounded_json(receipt, MAX_NATIVE_RECEIPT_BYTES)?;
+        }
+        let paged = self
+            .paged_records
+            .as_ref()
+            .ok_or_else(|| invalid("forensic native page store absent"))?;
+        let mut statuses = BTreeMap::new();
+        for xid in attempted_xid
+            .into_iter()
+            .chain(base.as_ref().map(|b| b.native_page_xid))
+            .chain(archived.as_ref().map(|b| b.native_page_xid))
+        {
+            statuses.insert(
+                xid,
+                format!("{:?}", paged.store().transactions().status(xid)),
+            );
+        }
+        Ok(serde_json::json!({"base":base,"attempt_archive":archived,
+            "requested_attempt":attempt,"requested_attempted_xid":attempted_xid,
+            "native_tx_status_api_observations":statuses,
+            "same_live_database_open":self.incarnation_id(),
+            "read_only_fixed_keys":true,"cold_or_powerloss_commit_proof":false,"authority_granted":false}))
+    }
+
     pub(super) fn validate_registered_installed_history(
         &self,
         receipt: &NativeInstalledRangeImageReceipt,

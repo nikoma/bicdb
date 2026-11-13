@@ -89,6 +89,12 @@ pub(crate) struct NativeRemoteImageStep<'source> {
     actual: AuthenticatedNativeRemoteImageSourceFrame,
 }
 impl NativeRemoteImageStep<'_> {
+    /// Test-only forensic liveness, including an already expired original
+    /// request. Never reissues a frame or makes it valid for a target action.
+    #[cfg(test)]
+    pub(crate) fn test_original_request_cancellation(&self) -> CancellationToken {
+        self.actual.test_original_request_cancellation()
+    }
     /// Preserve the original authenticated request's exact cancellation and
     /// deadline through one private synchronous row transaction. This is only
     /// liveness DATA; it is neither a renewed request nor target authority.

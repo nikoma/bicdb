@@ -52,43 +52,140 @@ pub(super) fn advance(
     operation: Operation,
     cancel: bool,
 ) -> Result<Progress> {
+    advance_with_diagnostics(
+        control, client, source, plan, provider, actor, output, journal, operation, cancel, None,
+    )
+}
+fn diagnostic_window(deadline: Option<Instant>, check: Result<()>) -> serde_json::Value {
+    let now = Instant::now();
+    let remaining_us = deadline.map(|deadline| {
+        if deadline >= now {
+            deadline
+                .duration_since(now)
+                .as_micros()
+                .min(i64::MAX as u128) as i64
+        } else {
+            -(now
+                .duration_since(deadline)
+                .as_micros()
+                .min(i64::MAX as u128) as i64)
+        }
+    });
+    serde_json::json!({"remaining_us":remaining_us,"expired_by_clock":remaining_us.is_some_and(|n|n<=0),"original_check_error":check.err().map(|e|e.to_string()),"renews_request":false})
+}
+#[allow(clippy::too_many_arguments)]
+fn advance_with_diagnostics(
+    control: &mut NativeMetadataControlHost,
+    client: &TcpClusterRelocationTransport,
+    source: &Arc<NativeRemoteImageFact>,
+    plan: &NativeJointHandoffPlan,
+    provider: &MetadataReadProvider,
+    actor: &crate::distribution_consensus::MetadataReadParticipant,
+    output: &std::path::Path,
+    journal: &mut Vec<serde_json::Value>,
+    operation: Operation,
+    cancel: bool,
+    mut observations: Option<&mut Vec<serde_json::Value>>,
+) -> Result<Progress> {
+    let started = Instant::now();
     let parent = budget(5000);
-    let role = actual_role(provider, actor, plan, &node(4), &parent).into_handoff()?;
-    let business = Uuid::now_v7();
-    let own = client.acquire_host_metadata_observation(
-        &node(0),
-        business,
-        Duration::from_secs(5),
-        &parent,
-    )?;
-    let frame = source.bind_step(super::frame(
-        client,
-        source.manifest(),
-        Op::Finish,
-        output,
-        journal,
-    )?)?;
-    let native_base = matches!(operation, Operation::PublishNativeBase);
-    let adoption = matches!(operation, Operation::AdoptCatalogueFloor);
-    let adoption_guard = (cancel && adoption).then(|| {
-        let token = parent.clone();
-        crate::distribution_range_consensus::test_registered_remote_adoption_after_fsync(Box::new(
-            move || token.cancel(),
-        ))
-    });
-    let base_guard = (cancel && native_base).then(|| {
-        let token = parent.clone();
-        crate::db::test_registered_remote_base_after_wal(Box::new(move || token.cancel()))
-    });
-    let guard = (cancel && !native_base && !adoption).then(|| {
-        let token = parent.clone();
-        crate::db::test_registered_remote_final_image_after_wal(Box::new(move || token.cancel()))
-    });
-    let result = control
-        .advance_registered_remote_image(source, &frame, role, own, business, &parent, operation);
-    drop(guard);
-    drop(base_guard);
-    drop(adoption_guard);
+    let mut stage = "role_witness";
+    let observing = observations.is_some();
+    let previous_elapsed = std::cell::Cell::new(0u128);
+    // No extra liveness checks/JSON or request clones when diagnostics are
+    // disabled. This fixture does not change another control's request path.
+    macro_rules! record {
+        ($name:expr,$value:expr $(,)?) => {{
+            if let Some(log)=observations.as_deref_mut() {
+                let value=$value;
+                let elapsed=started.elapsed().as_micros();
+                let stage_elapsed=elapsed-previous_elapsed.replace(elapsed);
+                log.push(serde_json::json!({"stage":$name,"elapsed_us":elapsed,"stage_elapsed_us":stage_elapsed,"observation":value}));
+            }
+        }};
+    }
+    record!(
+        "parent_created",
+        diagnostic_window(parent.deadline(), parent.check()),
+    );
+    let result = (|| {
+        let role = actual_role(provider, actor, plan, &node(4), &parent).into_handoff()?;
+        record!(
+            "role_witness_returned",
+            serde_json::json!({"role":diagnostic_window(Some(role.role().deadline()),role.role().require_live_request()),"parent":diagnostic_window(parent.deadline(),parent.check()),"context":role.role().context_id(),"term":role.role().metadata_term(),"index":role.role().metadata_read_index()}),
+        );
+        stage = "own_metadata";
+        let business = Uuid::now_v7();
+        let own = client.acquire_host_metadata_observation(
+            &node(0),
+            business,
+            Duration::from_secs(5),
+            &parent,
+        )?;
+        record!(
+            "own_metadata_returned",
+            serde_json::json!({"own":diagnostic_window(Some(own.deadline()),own.require_live_request(business)),"role":diagnostic_window(Some(role.role().deadline()),role.role().require_live_request()),"parent":diagnostic_window(parent.deadline(),parent.check()),"context":own.context_id(),"term":own.term(),"index":own.read_index()}),
+        );
+        stage = "source_finished_fetch_and_bind";
+        let frame = source.bind_step(super::frame(
+            client,
+            source.manifest(),
+            Op::Finish,
+            output,
+            journal,
+        )?)?;
+        let original_windows = observing.then(|| {
+            (
+                role.retain_original(),
+                own.test_original_request_cancellation(),
+                frame.test_original_request_cancellation(),
+            )
+        });
+        if let Some((_, own_original, source_original)) = &original_windows {
+            record!(
+                "before_actual_host_invoke",
+                serde_json::json!({"role":diagnostic_window(Some(role.role().deadline()),role.role().require_live_request()),"own":diagnostic_window(Some(own.deadline()),own.require_live_request(business)),"own_original_token":diagnostic_window(own_original.deadline(),own_original.check()),"source_original_token":diagnostic_window(source_original.deadline(),frame.require_request_live()),"parent":diagnostic_window(parent.deadline(),parent.check()),"same_manifest":source.manifest().checksum_sha256,"actual_target_attempt":source.manifest().target_attempt}),
+            );
+        }
+        let native_base = matches!(operation, Operation::PublishNativeBase);
+        let adoption = matches!(operation, Operation::AdoptCatalogueFloor);
+        let adoption_guard = (cancel && adoption).then(|| {
+            let token = parent.clone();
+            crate::distribution_range_consensus::test_registered_remote_adoption_after_fsync(
+                Box::new(move || token.cancel()),
+            )
+        });
+        let base_guard = (cancel && native_base).then(|| {
+            let token = parent.clone();
+            crate::db::test_registered_remote_base_after_wal(Box::new(move || token.cancel()))
+        });
+        let guard = (cancel && !native_base && !adoption).then(|| {
+            let token = parent.clone();
+            crate::db::test_registered_remote_final_image_after_wal(Box::new(move || {
+                token.cancel()
+            }))
+        });
+        stage = "actual_host_invoke";
+        let actual_started = Instant::now();
+        let result = control.advance_registered_remote_image(
+            source, &frame, role, own, business, &parent, operation,
+        );
+        if let Some((role_original, own_original, source_original)) = &original_windows {
+            record!(
+                "after_actual_host_invoke",
+                serde_json::json!({"host_elapsed_us":actual_started.elapsed().as_micros(),"exact_error":result.as_ref().err().map(|e|e.to_string()),"progress":result.as_ref().ok(),"role":diagnostic_window(Some(role_original.deadline()),role_original.require_live_request()),"own_original_token":diagnostic_window(own_original.deadline(),own_original.check()),"source_original_token":diagnostic_window(source_original.deadline(),source_original.check()),"parent":diagnostic_window(parent.deadline(),parent.check())}),
+            );
+        }
+        drop(guard);
+        drop(base_guard);
+        drop(adoption_guard);
+        stage = "actual_host_returned";
+        result
+    })();
+    record!(
+        "request_return_before_explicit_cancel",
+        serde_json::json!({"last_stage":stage,"exact_error":result.as_ref().err().map(|e|e.to_string()),"parent":diagnostic_window(parent.deadline(),parent.check())}),
+    );
     parent.cancel();
     result
 }
@@ -443,8 +540,19 @@ pub(super) fn exercise(
             | SourceCase::TargetCatalogueFloorCanceled
     ) {
         catalogue_tests::exercise(
-            case, control, client, &source, plan, provider, actor, factory, pending, ranges,
-            output, journal,
+            case,
+            control,
+            client,
+            &source,
+            plan,
+            provider,
+            actor,
+            factory,
+            pending,
+            ranges,
+            output,
+            journal,
+            acknowledged,
         );
     }
 }

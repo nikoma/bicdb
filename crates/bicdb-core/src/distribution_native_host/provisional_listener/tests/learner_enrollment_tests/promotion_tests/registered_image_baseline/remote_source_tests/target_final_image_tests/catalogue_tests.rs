@@ -39,6 +39,51 @@ fn catalogue(state: &serde_json::Value) -> serde_json::Value {
         .collect::<Vec<_>>();
     serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()["catalog"].clone()
 }
+fn observed(result: Result<serde_json::Value>) -> serde_json::Value {
+    match result {
+        Ok(value) => serde_json::json!({"value":value,"diagnostic_error":null}),
+        Err(error) => serde_json::json!({"value":null,"diagnostic_error":error.to_string()}),
+    }
+}
+fn prerequisite_snapshot(
+    control: &NativeMetadataControlHost,
+    factory: &Arc<crate::distribution_native_host::NativeUnassignedLearnerFactory>,
+    pending: &ClusterTopology,
+    ranges: &[crate::RangeDescriptor],
+    range: crate::RangeId,
+    attempt: Uuid,
+    acknowledged: &serde_json::Value,
+) -> serde_json::Value {
+    let owner = observed(control.test_registered_remote_attempt(range));
+    let image = observed(control.test_registered_remote_image_state(range));
+    let attempted_xid = (image["value"]["native_base"]["attempted"].as_bool() == Some(true))
+        .then(|| image["value"]["native_base"]["receipt"]["native_page_xid"].as_u64())
+        .flatten()
+        .filter(|xid| *xid > 0);
+    let native = observed(match factory.database.try_read() {
+        Some(db) => db.test_registered_native_base_forensic_status(range, attempt, attempted_xid),
+        None => Err(BicDbError::Cluster(
+            "prerequisite diagnostic actual DB busy".into(),
+        )),
+    });
+    let logical = observed(state(&factory.database, pending, &node(4), ranges));
+    let payload = &acknowledged["actual_full_record"];
+    let physical_matches = logical["value"]["rows"].as_object().map(|collections| {
+        collections
+            .iter()
+            .filter_map(|(name, records)| {
+                records
+                    .as_array()
+                    .is_some_and(|records| records.contains(payload))
+                    .then_some(name.clone())
+            })
+            .collect::<Vec<_>>()
+    });
+    serde_json::json!({"owner":owner,"image":image,"native":native,"logical":logical,
+        "acknowledged_logical_api":acknowledged,"exact_full_payload_physical_collections":physical_matches,
+        "logical_event_collection_is_not_a_sql_table_claim":true,
+        "original_owners_retained":true,"engine_reopened":false,"read_only_diagnostic_not_admission":true})
+}
 #[allow(clippy::too_many_arguments)]
 pub(super) fn exercise(
     case: SourceCase,
@@ -53,6 +98,7 @@ pub(super) fn exercise(
     ranges: &[crate::RangeDescriptor],
     output: &std::path::Path,
     journal: &mut Vec<serde_json::Value>,
+    acknowledged: &serde_json::Value,
 ) {
     let range = plan.old_range().id;
     if matches!(case, SourceCase::TargetCatalogueFloorMissingBase) {
@@ -87,7 +133,18 @@ pub(super) fn exercise(
         assert_eq!(image_before, image_after);
         return;
     }
-    advance(
+    let prerequisite_before = prerequisite_snapshot(
+        control,
+        factory,
+        pending,
+        ranges,
+        range,
+        source.manifest().target_attempt,
+        acknowledged,
+    );
+    let mut request_observations = Vec::new();
+    let prerequisite_started = Instant::now();
+    let prerequisite_result = advance_with_diagnostics(
         control,
         client,
         source,
@@ -98,8 +155,42 @@ pub(super) fn exercise(
         journal,
         Operation::PublishNativeBase,
         false,
+        Some(&mut request_observations),
+    );
+    let prerequisite_elapsed_us = prerequisite_started.elapsed().as_micros();
+    let prerequisite_after = prerequisite_snapshot(
+        control,
+        factory,
+        pending,
+        ranges,
+        range,
+        source.manifest().target_attempt,
+        acknowledged,
+    );
+    let prerequisite_report = serde_json::json!({"version":1,"operation":"PublishNativeBase prerequisite before catalogue fault arming",
+        "source_manifest_sha256":source.manifest().checksum_sha256,"actual_target_attempt":source.manifest().target_attempt,
+        "before":prerequisite_before,"after":prerequisite_after,"request_observations":request_observations,
+        "elapsed_us":prerequisite_elapsed_us,"exact_error":prerequisite_result.as_ref().err().map(|e|e.to_string()),
+        "error_debug":prerequisite_result.as_ref().err().map(|e|format!("{e:?}")),"actual_progress":prerequisite_result.as_ref().ok(),
+        "scope_budget_ms_unchanged":5000,"request_order_unchanged":["Role","OWN","Finished","actual_host"],
+        "observations_are_local_attempt_diagnostics_not_source_frames":true,
+        "catalogue_fault_not_yet_armed":true,"cold_reopen_or_serving_claim":false});
+    let diagnostic_write_error = evidence(
+        &output.join("registered-catalogue-prerequisite-outcome.json"),
+        &prerequisite_report,
     )
-    .unwrap();
+    .err()
+    .map(|e| e.to_string());
+    if let Some(error) = &diagnostic_write_error {
+        eprintln!("REGISTERED_CATALOGUE_PREREQUISITE_DIAGNOSTIC_ERROR {error}");
+    }
+    // Retain the exact primary API outcome even if a diagnostic read/write
+    // failed. This assertion follows the outcome report, not the other way round.
+    prerequisite_result.unwrap();
+    assert!(
+        diagnostic_write_error.is_none(),
+        "diagnostic persistence failed: {diagnostic_write_error:?}"
+    );
     let before = state(&factory.database, pending, &node(4), ranges).unwrap();
     let owner_before = control.test_registered_remote_attempt(range).unwrap();
     let image_before = control.test_registered_remote_image_state(range).unwrap();

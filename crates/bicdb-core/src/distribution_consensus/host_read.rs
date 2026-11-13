@@ -157,6 +157,12 @@ pub(crate) struct HostMetadataReadObservation {
     cancellation: crate::CancellationToken,
 }
 impl HostMetadataReadObservation {
+    /// Test-only liveness DATA from the SAME original request; no observation
+    /// clone, deadline renewal or metadata authority is constructed.
+    #[cfg(test)]
+    pub(crate) fn test_original_request_cancellation(&self) -> crate::CancellationToken {
+        self.cancellation.clone()
+    }
     #[cfg(feature = "tls-replication")]
     pub(crate) fn from_transport(
         authenticated: crate::distribution_transport::AuthenticatedHostMetadataReadReply,

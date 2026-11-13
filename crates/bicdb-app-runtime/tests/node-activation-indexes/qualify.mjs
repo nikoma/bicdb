@@ -56,8 +56,8 @@ async function build(version, resources) {
     export:'carrier_resource_api',resource:r.name,operation,public:false,auth_scheme:'IndexAuth',roles:['probe_operator'],scopes:[],roles_any:true,scopes_any:true,
     max_request_bytes:16384,max_response_bytes:1048576,streaming_request:false,streaming_response:false,sse:false,websocket:false,
   })));
-  const migration = (version, rows) => ({version,schema_version:version,contract_versions:Object.fromEntries(rows.map(r=>[r.name,1]).sort()),
-    forward:rows.map(r=>({kind:'validate_contract',resource:r.name})),compatibility_checks:[],transformations:[],activation_boundary:'before routes',rollback:[],irreversible:false,dependency_requirements:{}});
+  const migration = (version, rows) => ({version:1,schema_version:version,contract_versions:Object.fromEntries(rows.map(r=>[r.name,1]).sort()),
+    forward:rows.map(r=>({kind:'validate_contract',resource:r.name})),compatibility_checks:[],transformations:[],activation_boundary:'before routes',rollback:version===1?[]:[{kind:'validate_contract',resource:original[0].name}],irreversible:false,dependency_requirements:{}});
   const application = {abi_version:2,application_profile:'bicdb-application-v2',package:{application:name,version,package_sha256:'0'.repeat(64),dependency_lock_sha256:sha(lock),sbom_sha256:sha(sbom),provenance_sha256:sha(provenance),signature_key_id:keyId,signature_algorithm:'ed25519',signature:'unsigned-placeholder'},
     relation_permissions:relations.map(relation=>({relation,actions:['select','insert'],readable_columns:['amount','id','organization_id'],writable_columns:['amount','id','organization_id']})),
     raw_sql:[],service_imports:[],service_exports:[],secrets:[],egress:[],blobs:[],routes,auth_schemes:{IndexAuth:{kind:'oidc_rs256',issuer:'https://issuer.invalid',audience:'native-rollback-probe'}},resources,invariants:[],

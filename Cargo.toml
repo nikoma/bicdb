@@ -131,6 +131,13 @@ zeroize = { version = "1.9", features = ["derive"] }
 
 x509-parser = { version = "0.18.1", default-features = false }
 
+# Cluster and recovery tests are CPU-bound in third-party code (SHA-256, JSON,
+# TLS records): unoptimized, those crates dominate every authenticated RPC and
+# every re-validation. They are compiled once and cached, so optimize them in
+# dev/test builds too; workspace crates keep their fast unoptimized builds.
+[profile.dev.package."*"]
+opt-level = 2
+
 [profile.release]
 debug = "line-tables-only"
 # Thin LTO restores cross-codegen-unit inlining (the module split scattered

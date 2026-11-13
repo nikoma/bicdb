@@ -52,6 +52,12 @@ use crate::distribution_metadata_read_provider::{
 };
 mod evidence;
 pub use evidence::{ClusterRpcEvidence, ClusterRpcEvidenceLimits, ClusterRpcEvidenceObserver};
+mod hot_recovery_peer;
+mod native_recertify;
+pub(crate) use hot_recovery_peer::{
+    HotRecoveryPeerFailure, HotRecoveryPeerOpen, HotRecoveryPhaseRequest,
+};
+pub(crate) use native_recertify::AuthenticatedNativeRecertifyReply;
 mod host_metadata;
 mod initial_birth;
 mod initial_data_listener;
@@ -442,6 +448,9 @@ enum ClusterDataRequest {
     ObserveNativeOrigin {
         request: crate::distribution_native_apply::NativeOriginStatusRequest,
     },
+    RecertifyNativeOrigin {
+        request: crate::distribution_native_apply::NativeRecertifyRequest,
+    },
     AbortRangeWrite {
         command: RangeWriteCommand,
     },
@@ -531,6 +540,7 @@ impl ClusterDataRequest {
             | Self::ExportRangeDigestBucket { range_id, .. }
             | Self::ApplyRangeDigestRepair { range_id, .. } => Some(*range_id),
             Self::ApplyRangeWriteRepair { batch, .. } => Some(batch.range_id),
+            Self::RecertifyNativeOrigin { request } => Some(request.instruction.command.range_id),
             Self::ApplyNativeOrigin { request } => Some(request.command.range_id),
             Self::ObserveNativeOrigin { request } => Some(request.range_id),
             Self::ObserveCurrentNativeRange { request } => Some(request.scope.range.id),
@@ -591,6 +601,7 @@ impl ClusterDataRequest {
                 | Self::MetadataReadAcquire { .. }
                 | Self::HostMetadataReadAcquire { .. }
                 | Self::AcquireMetadataRecoveryRole { .. }
+                | Self::RecertifyNativeOrigin { .. }
         )
     }
 }
@@ -629,6 +640,7 @@ enum ClusterDataResponse {
     RecoveryFencedProbe(crate::distribution_range_recovery::RecoveryFencedProbeReply),
     NativeReady(crate::distribution_range_recovery::NativeReadyReply),
     NativeCompletion(crate::distribution_range_recovery::NativeCompletionReply),
+    NativeRecertify(crate::distribution_native_apply::NativeRecertifyReply),
     NativeAbortCandidate(
         crate::distribution_range_recovery::native_abort::NativeAbortCandidateReply,
     ),
@@ -1264,6 +1276,8 @@ fn handle_cluster_data_connection(
         Some(NativeDataListenerMode::RegisteredReplica(admission)) => Some(admission),
         _ => None,
     };
+    #[cfg(test)]
+    let suppress_actual_completion_reply = std::cell::Cell::new(false);
     let response = (|| {
         if request.protocol_version != CLUSTER_DATA_PROTOCOL_VERSION {
             return Err(transport_error(format!(
@@ -1683,6 +1697,21 @@ fn handle_cluster_data_connection(
                 .acquire_recovery_role(caller, request, &cancellation)
                 .map(ClusterDataResponse::MetadataRecoveryRole);
         }
+        if let ClusterDataRequest::RecertifyNativeOrigin { request } = request.request {
+            let runtime = recovery_runtime.ok_or_else(|| {
+                transport_error("bounded native recertification receiver is not wired")
+            })?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error(
+                    "bounded native recertification requires authenticated current leader",
+                )
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .recertify_native_ordinary(caller, request, &token)
+                .map(|actual| ClusterDataResponse::NativeRecertify(actual.into_reply()));
+        }
         if let ClusterDataRequest::ApplyNativeOrigin { request } = request.request {
             let runtime = recovery_runtime
                 .ok_or_else(|| transport_error("ordinary native receiver is not wired"))?;
@@ -1831,6 +1860,9 @@ fn handle_cluster_data_connection(
             {
                 runtime.test_wait_completion_reply(&token)?;
                 observation.require_live()?;
+                if runtime.test_suppress_actual_hot_completion_reply(observation.reply()) {
+                    suppress_actual_completion_reply.set(true);
+                }
             }
             return Ok(ClusterDataResponse::NativeCompletion(
                 observation.into_reply(),
@@ -1886,6 +1918,12 @@ fn handle_cluster_data_connection(
             Some(&local_open),
         )
     })();
+    #[cfg(test)]
+    if suppress_actual_completion_reply.get() {
+        // Actual producer succeeded; close this actual connection without any
+        // response frame. This is reply loss, not a fabricated remote error.
+        return Ok(());
+    }
     let response = ClusterDataResponseEnvelope {
         actual_native_source: local_open.native_destination_birth().cloned(),
         protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,
@@ -2723,6 +2761,7 @@ fn dispatch_cluster_data_request(
             ))
         }
         ClusterDataRequest::ApplyNativeOrigin { .. }
+        | ClusterDataRequest::RecertifyNativeOrigin { .. }
         | ClusterDataRequest::ObserveNativeOrigin { .. } => Err(transport_error(
             "ordinary native requests require the fresh-role receiver",
         )),
@@ -5073,6 +5112,27 @@ impl TcpClusterRelocationTransport {
         MetadataReadParticipant,
         Option<crate::distribution::NativeStoreBirthV1>,
     )> {
+        self.call_with_native_destination_peer_transport(
+            cancellation,
+            destination_node_id,
+            request,
+            false,
+        )
+    }
+
+    // HOT alone opts into typed socket-failure provenance. Its transmitted
+    // request budget is bounded by the actual call child; no longer wire TTL.
+    fn call_with_native_destination_peer_transport(
+        &self,
+        cancellation: &CancellationToken,
+        destination_node_id: &ClusterNodeId,
+        request: ClusterDataRequest,
+        classify_peer_io: bool,
+    ) -> Result<(
+        ClusterDataResponse,
+        MetadataReadParticipant,
+        Option<crate::distribution::NativeStoreBirthV1>,
+    )> {
         let Some(observer) = &self.evidence else {
             return self.call_with_native_destination_inner(
                 cancellation,
@@ -5080,6 +5140,7 @@ impl TcpClusterRelocationTransport {
                 request,
                 None,
                 None,
+                classify_peer_io,
             );
         };
         // Diagnostic IO consumes the same network/caller window; it cannot
@@ -5102,6 +5163,7 @@ impl TcpClusterRelocationTransport {
             request,
             Some(&mut observed),
             Some(network_deadline),
+            classify_peer_io,
         );
         if !matches!(&result, Err(BicDbError::RpcEvidenceFailure { .. })) {
             observed.finish(&result)?;
@@ -5117,8 +5179,18 @@ impl TcpClusterRelocationTransport {
                 }
             });
             if let Err(error) = after_evidence {
-                observed.return_boundary_error(&error)?;
-                return Err(error);
+                let peer_timeout_only = classify_peer_io
+                    && matches!(error, BicDbError::QueryTimedOut)
+                    && !cancellation.is_cancel_requested()
+                    && result
+                        .as_ref()
+                        .err()
+                        .and_then(HotRecoveryPeerFailure::from_error)
+                        .is_some();
+                if !peer_timeout_only {
+                    observed.return_boundary_error(&error)?;
+                    return Err(error);
+                }
             }
         }
         result
@@ -5130,37 +5202,45 @@ impl TcpClusterRelocationTransport {
         request: ClusterDataRequest,
         mut observed: Option<&mut evidence::Attempt>,
         observed_network_deadline: Option<Instant>,
+        classify_peer_io: bool,
     ) -> Result<(
         ClusterDataResponse,
         MetadataReadParticipant,
         Option<crate::distribution::NativeStoreBirthV1>,
     )> {
         cancellation.check()?;
-        let numeric_metadata_read = matches!(
-            &request,
-            ClusterDataRequest::MetadataReadProbe { .. }
-                | ClusterDataRequest::MetadataReadAcquire { .. }
-                | ClusterDataRequest::HostMetadataReadAcquire { .. }
-                | ClusterDataRequest::NativeInitialBirthOffer { .. }
-                | ClusterDataRequest::NativeInitialPreparation { .. }
-                | ClusterDataRequest::NativeLearnerBirth { .. }
-                | ClusterDataRequest::AcquireMetadataRecoveryRole { .. }
-                | ClusterDataRequest::RecoveryEpochFence { .. }
-                | ClusterDataRequest::RecoveryFencedProbe { .. }
-                | ClusterDataRequest::PrepareNativeReady { .. }
-                | ClusterDataRequest::ObserveNativeReady { .. }
-                | ClusterDataRequest::ObserveNativeAbortCandidate { .. }
-                | ClusterDataRequest::PromiseNativeAbort { .. }
-                | ClusterDataRequest::ObserveNativeAbortPromise { .. }
-                | ClusterDataRequest::ResolveNativeAbort { .. }
-                | ClusterDataRequest::CompleteNativeRecovery { .. }
-                | ClusterDataRequest::ActivateNativeRecovery { .. }
-                | ClusterDataRequest::ObserveNativeCompletion { .. }
-                | ClusterDataRequest::ObserveCurrentNativeRange { .. }
-                | ClusterDataRequest::RecoveryCertifyHistorical { .. }
-                | ClusterDataRequest::RecoveryCertifySparseHistorical { .. }
-                | ClusterDataRequest::RecoveryApplyHistorical { .. }
-        );
+        let numeric_metadata_read = (classify_peer_io
+            && matches!(
+                &request,
+                ClusterDataRequest::ApplyNativeOrigin { .. }
+                    | ClusterDataRequest::ObserveNativeOrigin { .. }
+            ))
+            || matches!(
+                &request,
+                ClusterDataRequest::MetadataReadProbe { .. }
+                    | ClusterDataRequest::MetadataReadAcquire { .. }
+                    | ClusterDataRequest::HostMetadataReadAcquire { .. }
+                    | ClusterDataRequest::NativeInitialBirthOffer { .. }
+                    | ClusterDataRequest::NativeInitialPreparation { .. }
+                    | ClusterDataRequest::NativeLearnerBirth { .. }
+                    | ClusterDataRequest::AcquireMetadataRecoveryRole { .. }
+                    | ClusterDataRequest::RecertifyNativeOrigin { .. }
+                    | ClusterDataRequest::RecoveryEpochFence { .. }
+                    | ClusterDataRequest::RecoveryFencedProbe { .. }
+                    | ClusterDataRequest::PrepareNativeReady { .. }
+                    | ClusterDataRequest::ObserveNativeReady { .. }
+                    | ClusterDataRequest::ObserveNativeAbortCandidate { .. }
+                    | ClusterDataRequest::PromiseNativeAbort { .. }
+                    | ClusterDataRequest::ObserveNativeAbortPromise { .. }
+                    | ClusterDataRequest::ResolveNativeAbort { .. }
+                    | ClusterDataRequest::CompleteNativeRecovery { .. }
+                    | ClusterDataRequest::ActivateNativeRecovery { .. }
+                    | ClusterDataRequest::ObserveNativeCompletion { .. }
+                    | ClusterDataRequest::ObserveCurrentNativeRange { .. }
+                    | ClusterDataRequest::RecoveryCertifyHistorical { .. }
+                    | ClusterDataRequest::RecoveryCertifySparseHistorical { .. }
+                    | ClusterDataRequest::RecoveryApplyHistorical { .. }
+            );
         let network_deadline = observed_network_deadline
             .unwrap_or_else(|| Instant::now() + Duration::from_millis(self.config.io_timeout_ms));
         let deadline = cancellation
@@ -5255,7 +5335,14 @@ impl TcpClusterRelocationTransport {
         let stream = TcpStream::connect_timeout(
             &address_resolved,
             Duration::from_millis(self.config.connect_timeout_ms).min(remaining),
-        )?;
+        )
+        .map_err(|error| {
+            hot_recovery_peer::mark_socket_failure(
+                error,
+                classify_peer_io,
+                hot_recovery_peer::SocketStage::Connect,
+            )
+        })?;
         configure_stream(&stream, &self.config)?;
         let exchange = (|| -> Result<_> {
             let pair = if let Some(tls) = self.client_tls.as_ref() {
@@ -5305,6 +5392,17 @@ impl TcpClusterRelocationTransport {
             };
             Ok(pair)
         })();
+        // Mark ONLY genuine socket-exchange IO, before semantic/identity
+        // interpretation. A complete response, caller cancellation and local
+        // validation/JSON/evidence failure never acquire this provenance.
+        let exchange = exchange.map_err(|error| match error {
+            BicDbError::Io(error) => hot_recovery_peer::mark_socket_failure(
+                error,
+                classify_peer_io,
+                hot_recovery_peer::SocketStage::Exchange,
+            ),
+            other => other,
+        });
         if let (Some(observed), Err(error)) = (observed.as_deref_mut(), &exchange) {
             if !matches!(error, BicDbError::RpcEvidenceFailure { .. }) {
                 observed.exchange_error(error)?;
@@ -5312,7 +5410,23 @@ impl TcpClusterRelocationTransport {
         }
         // Preserve caller cancellation semantics and reject late decoded
         // responses. Socket progress does not renew the whole RPC budget.
-        cancellation.check()?;
+        if let Err(error) = cancellation.check() {
+            // NON-success only: preserve an actual socket timeout from a
+            // shorter HOT subrequest. Its sender separately checks the original
+            // phase parent. No decoded reply/expired observation uses this.
+            if classify_peer_io
+                && matches!(error, BicDbError::QueryTimedOut)
+                && !cancellation.is_cancel_requested()
+                && exchange
+                    .as_ref()
+                    .err()
+                    .and_then(HotRecoveryPeerFailure::from_error)
+                    .is_some()
+            {
+                return Err(exchange.err().expect("checked peer transport failure"));
+            }
+            return Err(error);
+        }
         if Instant::now() >= deadline {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,

@@ -48,6 +48,8 @@ mod hot_recovery;
 mod native_abort;
 mod native_activation;
 mod native_apply;
+mod native_recertify;
+pub(crate) use native_recertify::LocalNativeRecertifyEvidence;
 mod native_durability;
 mod native_joint_handoff;
 mod native_writer;

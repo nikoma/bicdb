@@ -3,16 +3,23 @@
 use super::*;
 use crate::distribution_consensus::MetadataRecoveryRolePurpose;
 use crate::distribution_range_consensus::{
-    RangeWriteCommand, RangeWriteCoordinator, RangeWriteState, RangeWriteTransport,
-    RecoveryFenceScope,
+    NativeHotReplicaBinding, RangeWriteCommand, RangeWriteCoordinator, RangeWriteState,
+    RangeWriteTransport, RecoveryFenceScope,
 };
 use crate::distribution_range_recovery::{
-    NativeCompletionRequest, NativeCompletionStage, NativeReadyRequest, RecoveryEpochFenceRequest,
+    NativeCompletionRequest, NativeReadyRequest, RecoveryEpochFenceRequest,
     RecoveryHistoricalCommandRequest, RecoveryRoleAdmission,
 };
+use crate::distribution_transport::{
+    HotRecoveryPeerFailure, HotRecoveryPeerOpen, HotRecoveryPhaseRequest,
+};
+use std::collections::BTreeSet;
 use std::sync::OnceLock;
 use std::thread::JoinHandle;
 
+mod replica_debt;
+#[cfg(test)]
+pub(crate) use replica_debt::NativeHotDebtScheduleHold;
 const MAX_JOBS: usize = 64;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Phase {
@@ -23,6 +30,7 @@ enum Phase {
     Complete,
     Activate,
     Publish,
+    Replica,
 }
 struct Job {
     scope: RecoveryFenceScope,
@@ -31,10 +39,19 @@ struct Job {
     members: Vec<ClusterNodeId>,
     phase: Phase,
     position: usize,
+    // Durable successful per-recipient phase facts are scheduling only. Each
+    // actual inner QQ and final recovered publisher still reprove authority.
+    phase_observed: BTreeSet<ClusterNodeId>,
+    semantic_veto: BTreeMap<ClusterNodeId, Phase>,
+    peer_retry_after: BTreeMap<ClusterNodeId, Instant>,
+    recipient_next: BTreeMap<ClusterNodeId, Phase>,
+    replica_binding: Option<NativeHotReplicaBinding>,
+    peer_opens: BTreeMap<ClusterNodeId, HotRecoveryPeerOpen>,
 }
 #[derive(Default)]
 struct State {
     jobs: BTreeMap<crate::RangeId, Job>,
+    replica_debts: BTreeMap<crate::RangeId, replica_debt::ReplicaDebt>,
     cursor: usize,
 }
 pub(super) struct NativeHotRecoveryMaintenance {
@@ -44,6 +61,8 @@ pub(super) struct NativeHotRecoveryMaintenance {
     runtime: Arc<RangeRecoveryRuntime>,
     admission: Arc<NativeInitialDataAdmission>,
     state: Mutex<State>,
+    #[cfg(test)]
+    debt_schedule_test: Mutex<()>,
     last: Mutex<Option<serde_json::Value>>,
     stopping: AtomicBool,
     process: OnceLock<CancellationToken>,
@@ -75,6 +94,8 @@ impl NativeHotRecoveryMaintenance {
                 .ok_or_else(|| invalid("hot DATA owner has no actual admission"))?
                 .clone(),
             state: Mutex::new(State::default()),
+            #[cfg(test)]
+            debt_schedule_test: Mutex::new(()),
             last: Mutex::new(None),
             stopping: AtomicBool::new(false),
             process: OnceLock::new(),
@@ -275,12 +296,21 @@ impl NativeHotRecoveryMaintenance {
                 .coordinator
                 .initial_data_leader_admission_observed(&range)
             {
+                if let Some(debt) = state.replica_debts.get_mut(&range.id) {
+                    return self.run_replica_debt(debt, parent);
+                }
                 return Ok(());
+            }
+            // Do not discard an older session's frozen/uncaught-up physical
+            // obligations when another origin failure appears. A separate
+            // completed-decision/new-session dominance producer is required.
+            if state.replica_debts.contains_key(&range.id) {
+                return Err(invalid("new origin recovery with retained replica session debt needs explicit continuation; old debt is preserved"));
             }
             let Some(command) = self.candidate(&range, parent)? else {
                 return Ok(());
             };
-            if state.jobs.len() >= MAX_JOBS {
+            if state.jobs.len() + state.replica_debts.len() >= MAX_JOBS {
                 return Err(invalid("hot DATA retained job bound exhausted"));
             }
             let role = self.fresh_role(&range, Uuid::now_v7(), parent)?;
@@ -292,6 +322,7 @@ impl NativeHotRecoveryMaintenance {
                 .collect::<Vec<_>>();
             // Actual original origin opens LAST; followers release first.
             members.sort_by_key(|n| *n == self.initial.seed.spec.node_id);
+            let recipient_next = members.iter().cloned().map(|n| (n, Phase::Fence)).collect();
             state.jobs.insert(
                 range.id,
                 Job {
@@ -301,6 +332,12 @@ impl NativeHotRecoveryMaintenance {
                     members,
                     phase: Phase::Fence,
                     position: 0,
+                    phase_observed: BTreeSet::new(),
+                    semantic_veto: BTreeMap::new(),
+                    peer_retry_after: BTreeMap::new(),
+                    recipient_next,
+                    replica_binding: None,
+                    peer_opens: BTreeMap::new(),
                 },
             );
         }
@@ -308,7 +345,7 @@ impl NativeHotRecoveryMaintenance {
         let result = self.run_job(job, parent);
         let mut detail = serde_json::json!({"range_id":range.id,"epoch":job.range.epoch,"recovery_nonce":job.scope.recovery_nonce,
             "command_id":job.command.command_id,"command_sha256":job.command.checksum_sha256,"phase":format!("{:?}",job.phase),"position":job.position,
-            "completed":result.is_ok(),"remaining_ms":parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_millis()),"diagnostic_not_authority":true});
+            "completed":result.is_ok(),"phase_observed":job.phase_observed,"semantic_veto":job.semantic_veto.iter().map(|(n,p)|(n.to_string(),format!("{p:?}"))).collect::<BTreeMap<_,_>>(),"remaining_ms":parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_millis()),"diagnostic_not_authority":true});
         if let Err(error) = &result {
             let message = error.to_string();
             detail["error"] = serde_json::json!(if message.len() <= 4096 {
@@ -319,7 +356,17 @@ impl NativeHotRecoveryMaintenance {
         }
         self.record(detail);
         if result.is_ok() {
-            state.jobs.remove(&range.id);
+            let published = state
+                .jobs
+                .remove(&range.id)
+                .expect("actual published job retained");
+            // Allocation/data transfer only, after actual quorum publication.
+            // Never erase unfinished peer obligations with the ready job.
+            state.replica_debts.insert(
+                range.id,
+                replica_debt::ReplicaDebt::from_published(published),
+            );
+            self.record(state.replica_debts[&range.id].diagnostic("queued_after_actual_publish"));
         }
         result
     }
@@ -331,24 +378,66 @@ impl NativeHotRecoveryMaintenance {
             &job.range,
             parent,
         )?;
+        // Reacquired actual role, never a cached topology/phase counter.
+        let role = self.fresh_role(&job.range, job.scope.recovery_nonce, parent)?;
+        job.scope.require_role(&role)?;
+        let phase_parent = parent.child_with_deadline(role.deadline());
         loop {
-            self.live(parent)?;
+            self.live(&phase_parent)?;
+            role.require_live_request()?;
             held.require_actual_store_slot()?;
             if job.phase == Phase::Publish {
-                let role = self.fresh_role(&job.range, job.scope.recovery_nonce, parent)?;
+                if !job.semantic_veto.is_empty() {
+                    return Err(invalid(
+                        "hot recovery retains an unresolved actual peer semantic veto",
+                    ));
+                }
+                let fresh = self.fresh_role(&job.range, job.scope.recovery_nonce, &phase_parent)?;
+                if job.replica_binding.is_none() {
+                    job.replica_binding = Some(self.coordinator.capture_hot_replica_binding(
+                        &self.runtime,
+                        &self.host,
+                        &held,
+                        &fresh,
+                        &phase_parent,
+                    )?);
+                }
+                self.coordinator.require_hot_replica_binding(
+                    &self.runtime,
+                    &self.host,
+                    job.replica_binding.as_ref().unwrap(),
+                    &fresh,
+                    &phase_parent,
+                )?;
                 self.coordinator.publish_hot_native_recovery(
                     &self.runtime,
                     &self.host,
                     &held,
-                    &role,
+                    &fresh,
                     &job.scope,
                     &job.command,
-                    parent,
+                    &phase_parent,
                 )?;
                 return Ok(());
             }
             if job.position == job.members.len() {
+                // This threshold schedules the NEXT real producer. It is NOT
+                // a QQ, role, recovered epoch or admission grant. Original
+                // origin success and all known semantic vetoes are mandatory.
+                let fresh = self.fresh_role(&job.range, job.scope.recovery_nonce, &phase_parent)?;
+                job.scope.require_role(&fresh)?;
+                held.require_actual_store_slot()?;
+                if job.phase_observed.len() < job.members.len() / 2 + 1
+                    || !job.phase_observed.contains(&self.initial.seed.spec.node_id)
+                    || !job.semantic_veto.is_empty()
+                {
+                    job.position = 0;
+                    return Err(invalid("hot native phase lacks actual original-origin and majority recipient observations"));
+                }
+                self.live(&phase_parent)?;
+                fresh.require_live_request()?;
                 job.position = 0;
+                job.phase_observed.clear();
                 job.phase = match job.phase {
                     Phase::Fence => Phase::Certify,
                     Phase::Certify => Phase::Apply,
@@ -356,86 +445,144 @@ impl NativeHotRecoveryMaintenance {
                     Phase::Prepare => Phase::Complete,
                     Phase::Complete => Phase::Activate,
                     Phase::Activate => Phase::Publish,
-                    Phase::Publish => unreachable!(),
+                    Phase::Publish | Phase::Replica => unreachable!(),
                 };
                 continue;
             }
-            let node = &job.members[job.position];
-            let budget_ms = Self::remaining(parent)?;
-            #[cfg(test)]
-            eprintln!("NATIVE_HOT_DATA_PHASE node={} target={} phase={:?} command={} nonce={} remaining_ms={}",self.initial.seed.spec.node_id,node,job.phase,job.command.command_id,job.scope.recovery_nonce,budget_ms);
-            match job.phase {
-                Phase::Fence => {
-                    self.initial
-                        .transport
-                        .recovery_epoch_fence_observation(
-                            node,
-                            &RecoveryEpochFenceRequest {
-                                scope: job.scope.clone(),
-                                budget_ms,
-                            },
-                            parent,
-                        )?
-                        .require_live()?;
-                }
-                Phase::Certify | Phase::Apply => {
-                    self.initial
-                        .transport
-                        .recovery_historical_command_observation(
-                            node,
-                            &RecoveryHistoricalCommandRequest {
-                                scope: job.scope.clone(),
-                                command: job.command.clone(),
-                                budget_ms,
-                            },
-                            job.phase == Phase::Apply,
-                            parent,
-                        )?
-                        .fence()
-                        .require_live()?;
-                }
-                Phase::Prepare => {
-                    let observation = self.initial.transport.prepare_native_ready_observation(
-                        node,
-                        &NativeReadyRequest {
-                            scope: job.scope.clone(),
-                            challenge: Uuid::now_v7(),
-                            budget_ms,
-                        },
-                        parent,
-                    )?;
-                    observation.require_live()?;
-                    if observation.reply().range_index != job.command.index {
-                        return Err(invalid("hot native preparation changed selected point"));
-                    }
-                }
-                Phase::Complete | Phase::Activate => {
-                    let request = NativeCompletionRequest {
+            let node = job.members[job.position].clone();
+            let origin = node == self.initial.seed.spec.node_id;
+            if job.phase_observed.contains(&node) && !job.semantic_veto.contains_key(&node) {
+                job.position += 1;
+                continue;
+            }
+            // A previous authenticated rejection cannot become skippable when
+            // that same physical voter later disappears. Only a fresh actual
+            // successful SAME-peer/SAME-phase observation clears this veto.
+            if !origin
+                && !job.semantic_veto.contains_key(&node)
+                && job
+                    .peer_retry_after
+                    .get(&node)
+                    .is_some_and(|d| Instant::now() < *d)
+            {
+                job.position += 1;
+                continue;
+            }
+            let budget_ms = Self::remaining(&phase_parent)?;
+            let io_ms = if origin {
+                budget_ms
+            } else if job.phase == Phase::Fence {
+                budget_ms.min(500)
+            } else {
+                budget_ms.saturating_sub(250).max(1)
+            };
+            let request = match job.phase {
+                Phase::Fence => HotRecoveryPhaseRequest::Fence(RecoveryEpochFenceRequest {
+                    scope: job.scope.clone(),
+                    budget_ms,
+                }),
+                Phase::Certify | Phase::Apply => HotRecoveryPhaseRequest::Historical {
+                    request: RecoveryHistoricalCommandRequest {
+                        scope: job.scope.clone(),
+                        command: job.command.clone(),
+                        budget_ms,
+                    },
+                    apply: job.phase == Phase::Apply,
+                },
+                Phase::Prepare => HotRecoveryPhaseRequest::Prepare(NativeReadyRequest {
+                    scope: job.scope.clone(),
+                    challenge: Uuid::now_v7(),
+                    budget_ms,
+                }),
+                Phase::Complete | Phase::Activate => HotRecoveryPhaseRequest::Complete {
+                    request: NativeCompletionRequest {
                         scope: job.scope.clone(),
                         challenge: Uuid::now_v7(),
                         budget_ms,
-                    };
-                    let observation = if job.phase == Phase::Complete {
-                        self.initial
-                            .transport
-                            .complete_native_recovery_observation(node, &request, parent)?
+                    },
+                    activate: job.phase == Phase::Activate,
+                },
+                Phase::Publish | Phase::Replica => unreachable!(),
+            };
+            #[cfg(test)]
+            eprintln!("NATIVE_HOT_DATA_PHASE node={} target={} phase={:?} command={} nonce={} remaining_ms={} subrequest_ms={}", self.initial.seed.spec.node_id,node,job.phase,job.command.command_id,job.scope.recovery_nonce,budget_ms,io_ms);
+            let result = self.initial.transport.hot_recovery_phase_observation(
+                &node,
+                request,
+                job.command.index,
+                Duration::from_millis(io_ms),
+                &phase_parent,
+            );
+            // Expired caller/role or changed original service slot aborts the
+            // whole attempt regardless of any shorter peer socket timeout.
+            self.live(&phase_parent)?;
+            role.require_live_request()?;
+            held.require_actual_store_slot()?;
+            match result {
+                Ok(actual_receipt) => {
+                    if let Some(original) = job.peer_opens.get(&node) {
+                        if let Err(error) = original.require_same(actual_receipt.observed_open()) {
+                            job.semantic_veto.insert(node.clone(), job.phase);
+                            return Err(error);
+                        }
                     } else {
-                        self.initial
-                            .transport
-                            .activate_native_recovery_observation(node, &request, parent)?
-                    };
-                    observation.require_live()?;
-                    if observation.reply().range_index != job.command.index
-                        || (job.phase == Phase::Activate
-                            && observation.reply().stage != NativeCompletionStage::ActivatedAnchor)
-                    {
-                        return Err(invalid("hot native completion/open changed selected point"));
+                        job.peer_opens
+                            .insert(node.clone(), actual_receipt.observed_open().clone());
+                    }
+                    job.phase_observed.insert(node.clone());
+                    match job.phase {
+                        Phase::Fence => {
+                            job.recipient_next.insert(node.clone(), Phase::Certify);
+                        }
+                        Phase::Certify => {
+                            job.recipient_next.insert(node.clone(), Phase::Apply);
+                        }
+                        Phase::Apply => {
+                            job.recipient_next.insert(node.clone(), Phase::Prepare);
+                        }
+                        Phase::Prepare => {
+                            job.recipient_next.insert(node.clone(), Phase::Complete);
+                        }
+                        Phase::Complete => {
+                            job.recipient_next.insert(node.clone(), Phase::Activate);
+                        }
+                        Phase::Activate => {
+                            job.recipient_next.remove(&node);
+                        }
+                        Phase::Publish | Phase::Replica => unreachable!(),
+                    }
+                    job.semantic_veto.remove(&node);
+                    job.peer_retry_after.remove(&node);
+                }
+                Err(error) => {
+                    if let Some(peer) = HotRecoveryPeerFailure::from_error(&error) {
+                        #[cfg(test)]
+                        eprintln!("NATIVE_HOT_PEER_UNAVAILABLE node={} target={} phase={:?} kind={:?} may_have_dispatched={} count_success=false", self.initial.seed.spec.node_id,node,job.phase,peer.kind(),peer.may_have_dispatched());
+                        if origin || job.semantic_veto.contains_key(&node) {
+                            return Err(error);
+                        }
+                        // SKIP ONLY; never change current voters or a QQ. A
+                        // persistent blackhole does not consume first budget
+                        // again in every later phase. Bounded next probe.
+                        job.peer_retry_after
+                            .insert(node, Instant::now() + Duration::from_secs(10));
+                    } else {
+                        // Sender-local cancellation/expiry is not an
+                        // authenticated semantic statement by this voter.
+                        // It still aborts this attempt and never enables skip
+                        // or successful phase progress. Remote timeout/busy
+                        // replies remain generic authenticated Cluster errors
+                        // and conservatively retain their actual-peer veto.
+                        if !matches!(
+                            error,
+                            crate::BicDbError::QueryCanceled | crate::BicDbError::QueryTimedOut
+                        ) {
+                            job.semantic_veto.insert(node, job.phase);
+                        }
+                        return Err(error);
                     }
                 }
-                Phase::Publish => unreachable!(),
             }
-            self.live(parent)?;
-            held.require_actual_store_slot()?;
             job.position += 1;
         }
     }
@@ -454,5 +601,38 @@ impl NativeHotRecoveryMaintenance {
         parent: &CancellationToken,
     ) -> Result<RecoveryFenceScope> {
         RecoveryFenceScope::from_role(&self.fresh_role(range, Uuid::now_v7(), parent)?)
+    }
+}
+
+/// Test scheduling hold ONLY. It owns the actual existing state mutex and
+/// exposes no state, mutator, range reservation, role or permission. Rc marker
+/// keeps it !Send/!Sync even if parking_lot feature selection changes.
+#[cfg(test)]
+pub(crate) struct NativeHotControllerTestHold<'a> {
+    _held: parking_lot::MutexGuard<'a, State>,
+    _not_send: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+#[cfg(test)]
+impl NativeHotRecoveryMaintenance {
+    pub(super) fn hold_controller_for_test(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<NativeHotControllerTestHold<'_>> {
+        if parent.deadline().is_none() {
+            return Err(invalid(
+                "test controller hold needs a finite acquisition deadline",
+            ));
+        }
+        loop {
+            parent.check()?;
+            if let Some(held) = self.state.try_lock() {
+                parent.check()?;
+                return Ok(NativeHotControllerTestHold {
+                    _held: held,
+                    _not_send: std::marker::PhantomData,
+                });
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
     }
 }

@@ -67,6 +67,7 @@ pub(super) fn require_request(
         | ClusterDataRequest::CommitRangeWrite { .. }
         | ClusterDataRequest::CertifyRangeWrite { .. }
         | ClusterDataRequest::AbortRangeWrite { .. }
+        | ClusterDataRequest::RecertifyNativeOrigin { .. }
         | ClusterDataRequest::ApplyNativeOrigin { .. }
         | ClusterDataRequest::ObserveNativeOrigin { .. }
         | ClusterDataRequest::RangeWriteProgress { .. }

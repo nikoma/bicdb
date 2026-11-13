@@ -532,3 +532,27 @@ impl RangeWriteStore {
         self.native_activated_opens.remove(&range);
     }
 }
+
+// Actual retained Store/open diagnostics only, never a role/read/write grant.
+#[cfg(test)]
+impl RangeWriteStore {
+    pub(crate) fn test_native_replica_open_state(
+        &self,
+        range: RangeId,
+    ) -> Result<serde_json::Value> {
+        self.require_durable_recovery_catalog()?;
+        let saved = self
+            .catalog
+            .recovery_fences
+            .get(&range)
+            .ok_or_else(|| range_write_error("actual native replica has no recovery record"))?;
+        let phase = self.recovery_observation_phase(&saved.scope)?;
+        let open = self.require_actual_native_activated_open(range);
+        Ok(
+            serde_json::json!({"phase":phase,"actual_store_open":self.open_id,
+            "actual_scope":saved.scope,"actual_current_open_valid":open.is_ok(),
+            "actual_current_open_error":open.as_ref().err().map(ToString::to_string),
+            "scope":"actual Store/open snapshot DATA only; not permission"}),
+        )
+    }
+}

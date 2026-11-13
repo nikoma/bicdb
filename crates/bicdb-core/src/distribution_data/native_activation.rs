@@ -70,3 +70,13 @@ impl ClusterDataNodeService {
             .require_current_native_activation_decision(quorum, fresh)
     }
 }
+
+#[cfg(test)]
+impl ClusterDataNodeService {
+    pub(crate) fn test_native_replica_open_state(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        self.range_writes.test_native_replica_open_state(range)
+    }
+}

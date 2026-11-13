@@ -6,7 +6,7 @@ use crate::distribution_native_apply::{
     NativeReplicaApplyObservation,
 };
 impl RangeRecoveryRuntime {
-    fn normal_role(
+    pub(super) fn normal_role(
         &self,
         initiator: &MetadataReadParticipant,
         range_id: RangeId,

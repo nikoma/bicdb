@@ -2,6 +2,8 @@
 //! drain happen outside service/DB latches. A durable fence retains its freeze
 //! even when its response is lost or the caller's one-shot budget expires.
 use super::*;
+#[cfg(test)]
+mod hot_reply_loss_test;
 use crate::distribution_data::ClusterDataNodeService;
 use crate::distribution_metadata_read_provider::MetadataReadProvider;
 use crate::distribution_range_mutation::{FrozenRangeMutationPermit, RangeMutationGate};
@@ -19,6 +21,7 @@ mod native_completion_quorum;
 mod native_read;
 mod native_ready;
 mod native_ready_quorum;
+mod native_recertify;
 mod normal_apply;
 mod participants;
 #[cfg(feature = "tls-replication")]
@@ -79,6 +82,8 @@ pub(crate) struct RangeRecoveryRuntime {
     sessions: Arc<Mutex<Sessions>>,
     participant_transport:
         Option<Arc<dyn crate::distribution_range_consensus::RangeWriteTransport>>,
+    #[cfg(test)]
+    test_hot_completion_reply_loss: Mutex<Option<std::sync::Weak<hot_reply_loss_test::ReplyLoss>>>,
     #[cfg(test)]
     test_completion_reply_barrier: Mutex<Option<Arc<NativeCompletionReplyBarrier>>>,
     #[cfg(test)]
@@ -675,6 +680,8 @@ impl RangeRecoveryRuntime {
             event_dispatcher: Mutex::new(std::sync::Weak::new()),
             sessions: Arc::new(Mutex::new(Sessions::default())),
             participant_transport: None,
+            #[cfg(test)]
+            test_hot_completion_reply_loss: Mutex::new(None),
             #[cfg(test)]
             test_completion_reply_barrier: Mutex::new(None),
             #[cfg(test)]

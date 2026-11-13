@@ -1,7 +1,9 @@
 //! Actual source-owner admission for ONLY OLD refusal/closure. Purpose/plan
 //! DATA alone is insufficient. No APP/Strong/image-row/Serving grant.
 use super::*;
+mod constraint_step;
 mod remote_old;
+pub(crate) use constraint_step::NativeInitialOldConstraintStep;
 #[cfg(test)]
 mod sink_test;
 use crate::distribution_consensus::{
@@ -235,9 +237,11 @@ impl NativeInitialOldStep<'_> {
 /// An uncertain producer never removes this owner or invents an observation.
 pub(super) struct RetainedInitialOld {
     plan_sha256: String,
+    plan: Arc<NativeJointHandoffPlan>,
     runtime: Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>,
     actual: Option<Arc<crate::distribution_range_handoff::NativeJointOldObservation>>,
     constraints: Option<crate::distribution_data::NativeJointIrrevocableFacts>,
+    constraint_owner: Option<Arc<crate::distribution_data::ActualServiceNativeJointConstraints>>,
     // Distinct actual durable outcomes, retained before postchecks. Cleared
     // only after the SAME produced observation is stored in `actual`.
     outcome: Option<crate::distribution_data::NativeJointOldRetainedOutcome>,
@@ -308,9 +312,11 @@ impl NativeInitialDataHost {
                 }
                 let owner = Arc::new(Mutex::new(RetainedInitialOld {
                     plan_sha256: digest.clone(),
+                    plan: step.plan().clone(),
                     runtime: runtime.clone(),
                     actual: None,
                     constraints: None,
+                    constraint_owner: None,
                     outcome: None,
                 }));
                 owners.insert(range, owner.clone());

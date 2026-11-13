@@ -61,7 +61,7 @@ impl NativeInitialDataAdmission {
         // does not borrow the controller's leader/initiator purpose.
         let receiver_business = Uuid::now_v7();
         let receiver_challenge = Uuid::now_v7();
-        let role = if request.operation == NativeRemoteOldOperationV1::Close {
+        let role = if request.operation != NativeRemoteOldOperationV1::Observe {
             let purpose = request.purpose();
             let observed = provider.witness_recovery_role(
                 peer,
@@ -107,6 +107,19 @@ impl NativeInitialDataAdmission {
         let local = own.requester_node_id();
 
         if let Some(role) = role {
+            if request.operation == NativeRemoteOldOperationV1::Constrain {
+                return self.constrain_remote_old(
+                    peer,
+                    request,
+                    role,
+                    own,
+                    receiver_business,
+                    metadata,
+                    service,
+                    table,
+                    &token,
+                );
+            }
             let step = self.observe_hosted_initial_old_step(
                 metadata.clone(),
                 role,
@@ -128,9 +141,11 @@ impl NativeInitialDataAdmission {
                     let actual_runtime = Arc::new(NativeJointHandoffRuntime::new(service.clone())?);
                     let held = Arc::new(Mutex::new(RetainedInitialOld {
                         plan_sha256: request.scope_sha256.clone(),
+                        plan: step.plan().clone(),
                         runtime: actual_runtime,
                         actual: None,
                         constraints: None,
+                        constraint_owner: None,
                         outcome: Some(Default::default()),
                     }));
                     entries.insert(request.range_id, held.clone());
@@ -209,13 +224,12 @@ impl NativeInitialDataAdmission {
             let held = retained
                 .try_lock()
                 .ok_or_else(|| invalid("OLD source operation still active"))?;
-            let actual = held
-                .actual
-                .as_ref()
-                .ok_or_else(|| invalid("OLD source native closure is not known complete"))?;
-            request.require_plan(actual.plan())?;
-            if !actual.plan().old_members().contains_key(peer.node_id())
-                || !actual.plan().old_members().contains_key(local)
+            if held.actual.is_none() && held.constraint_owner.is_none() {
+                return Err(invalid("OLD source native closure is not known complete"));
+            }
+            request.require_plan(&held.plan)?;
+            if !held.plan.old_members().contains_key(peer.node_id())
+                || !held.plan.old_members().contains_key(local)
             {
                 return Err(invalid(
                     "OLD readonly fetch requires actual old donor and recipient",
@@ -234,6 +248,90 @@ impl NativeInitialDataAdmission {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn constrain_remote_old(
+        &self,
+        peer: &MetadataReadParticipant,
+        request: &NativeRemoteOldRequestV1,
+        role: Arc<RecoveryRoleAdmission>,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        metadata: Arc<Mutex<MetadataConsensusStore>>,
+        service: Arc<Mutex<ClusterDataNodeService>>,
+        table: Arc<RetainedInitialOldTable>,
+        token: &CancellationToken,
+    ) -> Result<ActualNativeRemoteOldFrame> {
+        let step =
+            self.observe_initial_old_constraint_step(metadata.clone(), role, own, business, token)?;
+        request.require_plan(step.plan())?;
+        let retained = {
+            let mut entries = table
+                .try_lock()
+                .ok_or_else(|| invalid("OLD constraint owner table busy"))?;
+            if let Some(owner) = entries.get(&request.range_id) {
+                owner.clone()
+            } else {
+                if entries.len() >= 8 {
+                    return Err(invalid(
+                        "OLD constraint owner capacity; no refusal eviction",
+                    ));
+                }
+                let runtime = Arc::new(NativeJointHandoffRuntime::new(service.clone())?);
+                let owner = Arc::new(Mutex::new(RetainedInitialOld {
+                    plan_sha256: request.scope_sha256.clone(),
+                    plan: step.plan().clone(),
+                    runtime,
+                    actual: None,
+                    constraints: None,
+                    constraint_owner: None,
+                    outcome: None,
+                }));
+                entries.insert(request.range_id, owner.clone());
+                owner
+            }
+        };
+        {
+            let mut held = retained
+                .try_lock()
+                .ok_or_else(|| invalid("OLD constraint operation already active"))?;
+            if held.plan_sha256 != request.scope_sha256
+                || held.actual.is_some()
+                || held.outcome.is_some()
+            {
+                return Err(invalid(
+                    "OLD constraint capture cannot retag another original producer",
+                ));
+            }
+            let runtime = held.runtime.clone();
+            step.require_joint_runtime(&runtime)?;
+            let facts = runtime.observe_constraints_for_constraint_step(
+                &step,
+                &mut held.constraint_owner,
+                token,
+            )?;
+            held.constraints = Some(facts);
+        }
+        step.require_metadata_current()?;
+        step.require_live()?;
+        let frame = self.finish_remote_old_observation(
+            peer,
+            request,
+            step.own(),
+            business,
+            &metadata,
+            &service,
+            &table,
+            token,
+        )?;
+        if frame.reply.closed.is_some() {
+            return Err(invalid(
+                "constraint-only producer cannot emit a closed OLD vote",
+            ));
+        }
+        step.require_metadata_current()?;
+        step.require_live()?;
+        Ok(frame)
+    }
     fn finish_remote_old_observation(
         &self,
         _peer: &MetadataReadParticipant,
@@ -247,7 +345,7 @@ impl NativeInitialDataAdmission {
     ) -> Result<ActualNativeRemoteOldFrame> {
         token.check()?;
         self.require_live()?;
-        let (actual, constraints) = {
+        let (plan, actual, constraint_owner, retained_constraints) = {
             let entries = table
                 .try_lock()
                 .ok_or_else(|| invalid("OLD source retained table busy at observation"))?;
@@ -261,18 +359,32 @@ impl NativeInitialDataAdmission {
                 return Err(invalid("OLD observation changed retained scope"));
             }
             (
-                held.actual
-                    .clone()
-                    .ok_or_else(|| invalid("OLD native outcome remains uncertain"))?,
+                held.plan.clone(),
+                held.actual.clone(),
+                held.constraint_owner.clone(),
                 held.constraints.clone().ok_or_else(|| {
                     invalid("OLD actual irreversible constraints were not retained")
                 })?,
             )
         };
-        request.require_plan(actual.plan())?;
-        actual
-            .plan()
-            .require_source_host_metadata(own, own_business, actual.node_id())?;
+        request.require_plan(&plan)?;
+        let local = own.requester_node_id();
+        plan.require_source_host_metadata(own, own_business, local)?;
+        let constraints = if actual.is_some() {
+            retained_constraints
+        } else {
+            let owner = constraint_owner.as_ref().ok_or_else(|| {
+                invalid("OLD native outcome remains uncertain without actual constraint owner")
+            })?;
+            let s = service.try_lock().ok_or_else(|| {
+                invalid("OLD actual constraint service busy at readonly observation")
+            })?;
+            let current = owner.actual_facts(&s)?;
+            if current != retained_constraints {
+                return Err(invalid("OLD actual retained constraint facts changed"));
+            }
+            current
+        };
         let member = {
             let store = loop {
                 token.check()?;
@@ -284,8 +396,10 @@ impl NativeInitialDataAdmission {
             store.require_listener_database(&self.database)?;
             store.observe_owned_native_metadata_member(own, own_business, token)?
         };
-        actual.require_current()?;
-        let facts = actual.actual_materialized_facts()?;
+        let facts = actual
+            .as_ref()
+            .map(|actual| actual.actual_materialized_facts())
+            .transpose()?;
         let (birth, db_open) = {
             let s = service
                 .try_lock()
@@ -297,39 +411,56 @@ impl NativeInitialDataAdmission {
             self.database.require_database(&db)?;
             member.require_database(&db)?;
             self.store_slot.require_live()?;
-            let lineage = db.current_native_range_source_lineage(request.range_id)?;
-            actual.plan().require_old_native_configuration(&lineage)?;
-            s.require_remote_old_original_writer(
-                &db,
-                &self.writer,
-                &self.store_slot,
-                lineage.native_write_range()?,
-            )?;
+            if actual.is_some() {
+                let lineage = db.current_native_range_source_lineage(request.range_id)?;
+                plan.require_old_native_configuration(&lineage)?;
+                s.require_remote_old_original_writer(
+                    &db,
+                    &self.writer,
+                    &self.store_slot,
+                    lineage.native_write_range()?,
+                )?;
+            } else {
+                self.writer.require_old_constraint_predecessor(&db, &plan)?;
+                s.require_remote_old_original_writer(
+                    &db,
+                    &self.writer,
+                    &self.store_slot,
+                    &plan.old_native_predecessor_data()?,
+                )?;
+            }
+            let topology = own.committed_topology(own_business)?;
+            let bootstrap = topology
+                .range_image_bootstrap_id
+                .ok_or_else(|| invalid("OLD actual native bootstrap disappeared"))?;
             let native = db.native_recovery_admission(
-                &own.committed_topology(own_business)?.cluster_id,
-                lineage.bootstrap_id(),
-                actual.node_id(),
+                &topology.cluster_id,
+                bootstrap,
+                local,
                 own.requester_incarnation(),
             )?;
+            plan.require_actual_native(&native)?;
             (
                 crate::distribution::NativeStoreBirthV1::from_actual_native(&native)?,
                 db.incarnation_id().to_owned(),
             )
         };
-        if facts.scope_sha256 != request.scope_sha256
-            || constraints.scope_sha256 != request.scope_sha256
-            || facts.node_id != *actual.node_id()
-            || constraints.node_id != *actual.node_id()
-            || facts.birth_id != birth.birth_id()
-            || facts.birth_sha256 != birth.birth_sha256()
+        if constraints.scope_sha256 != request.scope_sha256
+            || constraints.node_id != *local
             || constraints.birth_id != birth.birth_id()
             || constraints.birth_sha256 != birth.birth_sha256()
+            || facts.as_ref().is_some_and(|f| {
+                f.scope_sha256 != request.scope_sha256
+                    || f.node_id != *local
+                    || f.birth_id != birth.birth_id()
+                    || f.birth_sha256 != birth.birth_sha256()
+            })
         {
             return Err(invalid("OLD actual native fact/constraints/birth differ"));
         }
         let mut reply = NativeRemoteOldReplyV1 {
             request: request.clone(),
-            node_id: actual.node_id().clone(),
+            node_id: local.clone(),
             birth,
             database_open: db_open,
             store_open: self.store_slot.id(),
@@ -337,7 +468,7 @@ impl NativeInitialDataAdmission {
             metadata_term: own.term(),
             metadata_read_index: own.read_index(),
             metadata_context_id: own.context_id(),
-            closed: Some(facts),
+            closed: facts,
             constraints,
             checksum_sha256: String::new(),
         };
@@ -352,7 +483,14 @@ impl NativeInitialDataAdmission {
             };
             member.require_current(&store)?;
         }
-        actual.require_current()?;
+        if let Some(actual) = actual {
+            actual.require_current()?;
+        } else {
+            let s = service.try_lock().ok_or_else(|| {
+                invalid("OLD actual constraint service busy before readonly reply")
+            })?;
+            constraint_owner.as_ref().unwrap().actual_facts(&s)?;
+        }
         self.require_live()?;
         token.check()?;
         own.require_live_request(own_business)?;

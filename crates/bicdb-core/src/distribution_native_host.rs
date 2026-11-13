@@ -50,6 +50,8 @@ pub(crate) use initial_offer::{
     NativeInitialBirthOfferResponse,
 };
 #[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeInitialOldConstraintStep;
+#[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::{
     NativeInitialConsensusLaunch, NativeLearnerMetadataEnrollment, NativeMetadataControlHost,
     NativeMetadataRegistrationController, NativeProvisionalHost,

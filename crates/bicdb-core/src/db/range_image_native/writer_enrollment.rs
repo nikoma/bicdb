@@ -20,6 +20,8 @@ mod joint_domain;
 mod registered_no_domain;
 #[cfg(feature = "tls-replication")]
 pub(crate) use registered_no_domain::NativeRegisteredNoDomainScope;
+#[cfg(feature = "tls-replication")]
+mod old_constraints;
 mod registry_refresh;
 #[cfg(feature = "tls-replication")]
 pub(crate) use assigned_install::NativeAssignedWriterInstallAttempt;

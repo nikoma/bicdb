@@ -104,9 +104,17 @@ impl TcpClusterRelocationTransport {
             || reply.constraints.birth_sha256 != native_birth.birth_sha256()
             || reply.constraints.commands.len() > 4096
             || reply.constraints.unresolved_commands.len() > 4096
+            || reply.constraints.catalogue_observation_sha256.len() != 64
+            || reply.constraints.native_observation_sha256.len() != 64
+            || reply.constraints.native_irreversible_sha256.len() != 64
         {
             return Err(transport_error(
                 "remote OLD actual response/request/identity/constraints differ",
+            ));
+        }
+        if request.operation == NativeRemoteOldOperationV1::Constrain && reply.closed.is_some() {
+            return Err(transport_error(
+                "constraint-only OLD producer returned a closed vote",
             ));
         }
         if let Some(facts) = &reply.closed {

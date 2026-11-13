@@ -12,13 +12,13 @@ mod old_step;
 mod writer_data_domain;
 use cleanup::{NativeInitialDataCleanup, NativeInitialDataCleanupSender};
 use hot_recovery::NativeHotRecoveryMaintenance;
-pub(crate) use old_step::NativeInitialOldStep;
 use old_step::RetainedInitialOldTable;
 #[cfg(test)]
 pub(crate) use old_step::{
     after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
     CancelRemoteOldAfterNativeWal,
 };
+pub(crate) use old_step::{NativeInitialOldConstraintStep, NativeInitialOldStep};
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct NativeInitialDataRangeStatus {

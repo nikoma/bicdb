@@ -169,3 +169,42 @@ identity, actual last/resolved watermarks and absence of a fabricated CQ. It
 has not run for this leaf. The all-OLD certificate still requires all peers
 closed. A constraints-only minority needs a separate actual guarded producer
 and a distinct majority lane before it can use these preserved obligations.
+
+## Separate actual constraint-only producer
+
+The next source-only component adds the distinct `Constrain` wire operation
+and `NativeInitialOldConstraintStep`. It independently acquires the real
+recipient Role and OWN observations, retains the original hosted process and
+MStore/DB-open/Store-slot/writer, and validates the actual installed predecessor
+policy, old-member incarnations/pins/births, schema and restore activation.
+Comparison data derived from the plan cannot create that admission. No ready
+`SourceRangeImageLineage`, local OLD observation or closed vote is constructed.
+
+The actual runtime retains its real drained Frozen owner before reading the
+native safety and complete raw/archive obligations. The original host retains
+those actual tokens before final checks. A readonly Observe revalidates the
+same native/raw/Frozen token and original writer/open/slot with fresh OWN before
+returning `closed: null`. A changed or unknown observation refuses; it is never
+reported as index zero. Required maps and digests have no Serde default. This
+component also exports the actual native base/applied/pending/materialized
+indices, invalidation flag and raw/native observation digests for evidence.
+
+The unexecuted component selector is
+`native_registered_fifth_remote_old_constraint_only_guarded_capture_is_not_closed_vote`.
+It uses a **healthy** actual peer at R1, captures constraints over pinned TLS,
+and independently fetches them from another old member. It requires that the
+constraint recipient's actual rows/raw/native/B/UID/writer state remain equal
+and that no native OLD-close record appear. Other old peers then close through
+the real RPC. The actual donor's ALL-old collector must still refuse the real
+constraint-only peer rather than treating it as a closed vote. Both original
+ranges, full existing ACK records, original writer objects and fifth-target
+fences remain part of the surrounding genuine fixture.
+
+This component has not been compiled or executed. It does not establish the
+required genuine KnownPending minority with a canonical full Applied donor
+spine. ALL-old finish remains unchanged, and no majority-with-constraints cut
+or target permission is produced. Explicit constraint-only capture also cannot
+be silently upgraded to a Close producer; a separately reviewed actual repair
+continuation is still needed. Unavailable peers, conflicting/future tails,
+Prepared-versus-canonical-Abort decisions, cold reissue and retirement remain
+open, with conservative refusal preserved.

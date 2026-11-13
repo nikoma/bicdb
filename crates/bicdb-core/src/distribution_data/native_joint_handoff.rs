@@ -411,6 +411,14 @@ pub(crate) struct NativeJointIrrevocableFacts {
     pub(crate) actual_last: u64,
     pub(crate) actual_resolved: u64,
     pub(crate) actual_compacted: u64,
+    pub(crate) catalogue_observation_sha256: String,
+    pub(crate) native_base_index: Option<u64>,
+    pub(crate) native_applied_index: Option<u64>,
+    pub(crate) native_pending_index: Option<u64>,
+    pub(crate) native_materialized_pending_index: Option<u64>,
+    pub(crate) native_source_invalidated: bool,
+    pub(crate) native_observation_sha256: String,
+    pub(crate) native_irreversible_sha256: String,
 }
 pub(crate) struct ActualServiceNativeJointConstraints {
     plan: Arc<NativeJointHandoffPlan>,
@@ -422,6 +430,14 @@ pub(crate) struct ActualServiceNativeJointConstraints {
 impl ActualServiceNativeJointConstraints {
     pub(crate) fn into_actual_facts(
         self,
+        service: &ClusterDataNodeService,
+    ) -> Result<NativeJointIrrevocableFacts> {
+        self.actual_facts(service)
+    }
+    /// Revalidate the SAME retained actual safety/catalogue/frozen observation.
+    /// It is not reconstructed from its exported hash map.
+    pub(crate) fn actual_facts(
+        &self,
         service: &ClusterDataNodeService,
     ) -> Result<NativeJointIrrevocableFacts> {
         let database = checked_database_read(&service.db, &service.storage_policy)?;
@@ -470,10 +486,47 @@ impl ActualServiceNativeJointConstraints {
             actual_last: self.catalogue.last_index(),
             actual_resolved: self.catalogue.resolved_through(),
             actual_compacted: self.catalogue.compacted_through(),
+            catalogue_observation_sha256: self.catalogue.range_log_sha256().into(),
+            native_base_index: self.safety.base_index(),
+            native_applied_index: self.safety.applied_index(),
+            native_pending_index: self.safety.pending_index(),
+            native_materialized_pending_index: self.safety.materialized_pending_index(),
+            native_source_invalidated: self.safety.source_invalidated(),
+            native_observation_sha256: self.safety.records_sha256().into(),
+            native_irreversible_sha256: self.safety.irreversible_records_sha256().into(),
         })
     }
 }
 impl ClusterDataNodeService {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_initial_old_constraint_step(
+        &self,
+        step: &crate::distribution_native_host::NativeInitialOldConstraintStep<'_>,
+        plan: &Arc<NativeJointHandoffPlan>,
+        role: &Arc<RecoveryRoleAdmission>,
+        database: &BicDb,
+    ) -> Result<()> {
+        self.storage_policy.require_database(database)?;
+        if self.node_id != *role.local_node_id() {
+            return Err(data_error(
+                "OLD constraint actual recipient differs from role",
+            ));
+        }
+        step.require_database_store(database, &self.range_writes, plan, role)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn observe_native_joint_constraints_for_constraint_step(
+        &self,
+        step: &crate::distribution_native_host::NativeInitialOldConstraintStep<'_>,
+        frozen: Arc<FrozenRangeMutationPermit>,
+        parent: &CancellationToken,
+    ) -> Result<ActualServiceNativeJointConstraints> {
+        {
+            let db = checked_database_read(&self.db, &self.storage_policy)?;
+            self.require_initial_old_constraint_step(step, step.plan(), step.role(), &db)?;
+        }
+        self.observe_native_joint_constraints(step.plan().clone(), step.role(), frozen, parent)
+    }
     pub(crate) fn observe_native_joint_constraints(
         &self,
         plan: Arc<NativeJointHandoffPlan>,

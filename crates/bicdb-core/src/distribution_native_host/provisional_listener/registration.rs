@@ -31,7 +31,9 @@ pub(crate) use initial_data::{
     after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
     CancelRemoteOldAfterNativeWal,
 };
-pub(crate) use initial_data::{NativeInitialDataAdmission, NativeInitialOldStep};
+pub(crate) use initial_data::{
+    NativeInitialDataAdmission, NativeInitialOldConstraintStep, NativeInitialOldStep,
+};
 pub use initial_data::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
 mod schema_export;
 pub(crate) use maintenance::NativeMetadataMaintenanceReport;

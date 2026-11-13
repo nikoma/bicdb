@@ -22,6 +22,7 @@ pub(super) enum SourceCase {
     TargetNoDomainHookRevoked,
     TargetNoDomainMemberChanged,
     TargetNoDomainSchemaRevoked,
+    RemoteConstraintCapture,
 }
 #[test]
 fn native_registered_fifth_remote_source_actual_tls_history_rows_seal_local_old_seed() {
@@ -51,6 +52,13 @@ fn native_registered_fifth_remote_old_post_native_cancel_retains_outcome_and_exa
     run_registered_image_baseline_with_source(
         Case::Required,
         Some(SourceCase::RemoteOldRetainedNative),
+    );
+}
+#[test]
+fn native_registered_fifth_remote_old_constraint_only_guarded_capture_is_not_closed_vote() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::RemoteConstraintCapture),
     );
 }
 fn actual_role(
@@ -521,6 +529,123 @@ fn remote_old_seed(
     (source, retained, expiry_bound)
 }
 #[allow(clippy::too_many_arguments)]
+fn constraint_capture_control(
+    controls: &[NativeMetadataControlHost],
+    clients: &[Arc<TcpClusterRelocationTransport>],
+    services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
+    plan: &Arc<NativeJointHandoffPlan>,
+    pending: &ClusterTopology,
+    ranges: &[crate::RangeDescriptor],
+    output: &std::path::Path,
+    journal: &mut Vec<serde_json::Value>,
+) {
+    use crate::distribution_range_handoff::{
+        NativeRemoteOldOperationV1 as OldOp, NativeRemoteOldRequestV1,
+    };
+    let recipient = plan.old_members().keys().next().unwrap();
+    let index = (0..4).find(|i| node(*i) == *recipient).unwrap();
+    let donor = plan
+        .old_members()
+        .keys()
+        .find(|id| *id != recipient)
+        .unwrap();
+    let donor_index = (0..4).find(|i| node(*i) == *donor).unwrap();
+    let db = services[index].lock().database();
+    let before = state(&db, pending, recipient, ranges).unwrap();
+    assert!(db
+        .read()
+        .test_native_old_close_record(plan.old_range().id)
+        .unwrap()
+        .is_none());
+    let mut request = |actor: usize, target: &ClusterNodeId, operation: OldOp| {
+        let parent = budget(5000);
+        let business = Uuid::now_v7();
+        let own = clients[actor]
+            .acquire_host_metadata_observation(&node(0), business, Duration::from_secs(5), &parent)
+            .unwrap();
+        let request = NativeRemoteOldRequestV1::from_plan(plan, operation, business, 4000).unwrap();
+        let journal_index = journal.len();
+        journal.push(
+            serde_json::json!({"operation":"remote_old_constraint_control", "request":request,
+            "actual_initiator":node(actor),"recipient":target,"outcome":"not_started"}),
+        );
+        evidence(&output.join("remote-old-ledger.json"), journal).unwrap();
+        let result =
+            clients[actor].request_remote_native_old(target, plan, &request, &own, &parent);
+        journal[journal_index]["outcome"] = if result.is_ok() {
+            "actual_returned"
+        } else {
+            "error_unknown_effect"
+        }
+        .into();
+        journal[journal_index]["exact_error"] =
+            serde_json::to_value(result.as_ref().err().map(ToString::to_string)).unwrap();
+        if let Ok(actual) = &result {
+            journal[journal_index]["actual_reply"] = serde_json::to_value(actual.reply()).unwrap();
+        }
+        evidence(&output.join("remote-old-ledger.json"), journal).unwrap();
+        let actual = result.unwrap();
+        actual.require_request_live().unwrap();
+        parent.check().unwrap();
+        own.require_live_request(business).unwrap();
+        actual
+    };
+    let capture = request(0, recipient, OldOp::Constrain);
+    assert!(capture.reply().closed.is_none());
+    assert_eq!(capture.reply().constraints.native_applied_index, Some(1));
+    assert_eq!(
+        capture.reply().constraints.native_pending_index,
+        None,
+        "this control uses a healthy replica; genuine KnownPending qualification remains OPEN"
+    );
+    assert_eq!(capture.reply().constraints.actual_last, 1);
+    assert_eq!(capture.reply().constraints.actual_resolved, 1);
+    let readonly = request(donor_index, recipient, OldOp::Observe);
+    assert!(readonly.reply().closed.is_none());
+    assert_eq!(readonly.reply().constraints, capture.reply().constraints);
+    assert_eq!(
+        readonly.reply().database_open,
+        capture.reply().database_open
+    );
+    assert_eq!(readonly.reply().store_open, capture.reply().store_open);
+    assert_eq!(
+        state(&db, pending, recipient, ranges).unwrap(),
+        before,
+        "constraint capture cannot write rows/native/RAW/B/UID or replace writer policy"
+    );
+    assert!(db
+        .read()
+        .test_native_old_close_record(plan.old_range().id)
+        .unwrap()
+        .is_none());
+    for old in plan.old_members().keys().filter(|id| *id != recipient) {
+        let closed = request(0, old, OldOp::Close);
+        assert!(closed.reply().closed.is_some());
+    }
+    drop(request);
+    // Actual donor has its own closed prefix, but the first ALL-old collector
+    // must refuse the real independently fetched constraint-only peer.
+    let parent = budget(5000);
+    let result = controls[donor_index]
+        .collect_initial_remote_old_at_actual_donor(plan.old_range().id, &parent);
+    let error = result
+        .err()
+        .expect("all-OLD certificate cannot reinterpret constraint-only peer as a vote");
+    assert!(
+        error
+            .to_string()
+            .contains("remote OLD peer closure unknown; not a zero/absence vote"),
+        "{error}"
+    );
+    journal.push(
+        serde_json::json!({"operation":"remote_old_all_closed_collector_control",
+        "actual_donor":donor,"constraint_recipient":recipient,"exact_error":error.to_string(),
+        "healthy_constraint_peer_not_known_pending":true,"all_closed_required":true,
+        "source_image_captured":false,"target_permission":false}),
+    );
+    evidence(&output.join("remote-old-ledger.json"), journal).unwrap();
+}
+#[allow(clippy::too_many_arguments)]
 pub(super) fn exercise(
     case: SourceCase,
     controls: &[NativeMetadataControlHost],
@@ -572,6 +697,35 @@ pub(super) fn exercise(
             .unwrap();
         let mut round = NativeJointOldRound::begin(observation, business, relocation.id).unwrap();
         let plan = round.plan();
+        if matches!(case, SourceCase::RemoteConstraintCapture) {
+            drop(round);
+            constraint_capture_control(
+                controls,
+                clients,
+                services,
+                &plan,
+                pending,
+                ranges,
+                output,
+                &mut journal,
+            );
+            for (i, original_guard) in original_writers.iter().enumerate() {
+                assert!(Arc::ptr_eq(
+                    original_guard,
+                    &controls[i]
+                        .test_retained_initial_data_writer_guard()
+                        .unwrap()
+                ));
+                original_guard
+                    .require_current(&services[i].lock().database().read(), original)
+                    .unwrap();
+            }
+            assert_eq!(
+                state(&factory.database, pending, &node(4), ranges).unwrap(),
+                target_before
+            );
+            continue;
+        }
         let mut runtimes = Vec::new();
         let (source, retained, original_old_expiry) = if matches!(
             case,
@@ -960,6 +1114,16 @@ pub(super) fn exercise(
         last_manifest = Some(manifest);
         retained_sources.push(retained);
         retained_runtimes.extend(runtimes);
+    }
+    if matches!(case, SourceCase::RemoteConstraintCapture) {
+        evidence(&output.join("source-constraints-result.json"), &serde_json::json!({
+            "actual_two_range_constraint_captures":true,"actual_pinned_independent_observe":true,
+            "actual_closed_majority_not_all_closed":true,"all_old_collector_refused":true,
+            "healthy_constraint_peer_not_known_pending":true,"known_pending_qualified":false,
+            "source_image_captured":false,"serving_granted":false,"target_before":target_before,
+            "target_after":state(&factory.database,pending,&node(4),ranges).unwrap(),
+        })).unwrap();
+        return;
     }
     if matches!(
         case,

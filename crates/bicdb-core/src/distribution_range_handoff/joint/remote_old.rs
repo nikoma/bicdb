@@ -11,6 +11,8 @@ use std::time::{Duration, Instant};
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) enum NativeRemoteOldOperationV1 {
     Close,
+    /// Distinct real guarded capture; never a closed OLD vote.
+    Constrain,
     Observe,
 }
 

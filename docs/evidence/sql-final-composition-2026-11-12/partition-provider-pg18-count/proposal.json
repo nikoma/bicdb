@@ -1,0 +1,7 @@
+{
+  "status": "proposed_not_applied_or_application_qualified",
+  "upstream_source_path": "/tmp/bicdb-idempiere-reference-20261101/org.compiere.db.postgresql.provider/src/org/adempiere/db/postgresql/partition/TablePartitionService.java",
+  "source_sha256": "4462ab5fd6f826a40e310ac44d6e7a498ab3480d7d0d8eeb319035c872987486",
+  "patch_sha256": "370541c16b14e1f0c4598d4c21e4247369b63a9a074850ba72bfd1818ee375fa",
+  "purpose": "ExcludePG18not-nullcatalogentries fromthe upstreamalready-migratedCOUNT; preservePG16predicateoutcome. Originalsource/providerJAR/testsunchanged. No upstreammessageorPRsent."
+}

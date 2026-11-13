@@ -84,3 +84,50 @@ Remote kernel/session admission and durable cold/resume reissue therefore remain
 separate missing producers. The full goal still requires all-range population,
 real NEW native quorum/open, target next ACK/full Strong, ordinary movement and
 fault self-healing; a receiver fence or local image component cannot substitute.
+
+## Frozen test-only baseline shape
+
+`promotion_tests/registered_image_baseline.rs` adds the single focused selector
+`native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_baseline`.
+It reuses `EnrollmentFixture` and its genuine birth/owned-ACK promotion producers,
+then opens the existing registered receiver **before** DATA assignment. Only the
+four retained actual INITIAL launches become DATA hosts; the fifth factory stays
+`initial_ranges=[]`, with no installed writer and UNKNOWN per-range native point.
+The four original writer guards are retained from before the two source ACKs
+through both actual Pending range assignments and target fence attempts.
+
+The test separately proves the current OWN HostMQ/protected Registered member
+identity against its SAME actual DB and rechecks its store. The existing
+metadata-only factory validator must still refuse data placement. This is not
+permission to ignore that validator in production. A new actual target provider
+wraps the SAME owned metadata backend for fresh request-scope production; the
+target's actual registered listener/runtime independently acquires and validates
+its own recipient witness when the genuine TLS fence request arrives.
+
+API ACK/error and complete payload are fsynced before native-row inspection;
+each actual fence error, original caller/role remaining budget, target snapshot
+and owner identity are retained before the final required-success assertion.
+Two safe refusals therefore remain **RED**, not a passing recovery test. Source
+full ACK records are reconciled again, with original writer guards checked at
+both boundaries. There is no OLD closed-data quorum or source image capture in
+this earliest-fence baseline; these later actual image producers remain required.
+
+The test attempts bounded raw custody of all five actual DB roots, including
+their nested owned metadata, while all five real metadata/service/DB/native
+journal guards remain held. Acquisitions are nonwaiting, credential-like files
+and symlinks refuse, copies/fsyncs/hash inventories are bounded and checked, and
+custody failure is explicit. Listeners are **not** claimed drained; live-owner
+observed stability is not an atomic power-loss/replay proof. Original roots stay
+retained even on failure. Cleanup errors are recorded without replacing the
+original failure. All of this is test source only; no local compilation or
+baseline execution is claimed.
+
+The two baseline ranges are both assigned while this SAME fifth is still
+unmaterialized. This does not qualify reusing it for a second image after the
+first image has advanced local B or acquired permanent slot/promise history.
+That continuation cannot rely on `B==0` or the old factory's no-business guard:
+it must prove actual already-installed per-range native history and keep those
+other-range obligations while admitting only the exact new CLOSED range. No
+legitimate target writer-start/promise can currently be manufactured merely to
+test a nonempty fifth domain: APP is refused and the earlier fence is missing.
+Those tests need the corresponding genuine producers, not raw fixture edits.

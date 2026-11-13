@@ -203,20 +203,20 @@ jobs:
       # workspace's examples, so build exactly that helper in the core job.
       - name: Build projection chaos helper
         if: startsWith(matrix.suite.name, 'bicdb-core')
-        run: cargo build -p bicdb-core --example chaos_child --locked
+        run: cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
       - name: cargo test ${{ matrix.suite.args }}
         if: matrix.suite.name == 'bicdb-pgwire'
         run: cargo test ${{ matrix.suite.args }} --locked -- --test-threads=4
       - name: cargo test bicdb-core without the serial native multi-node fixtures
         if: matrix.suite.name == 'bicdb-core'
         run: >-
-          cargo test ${{ matrix.suite.args }} --locked -- --test-threads=4
+          cargo test --config 'profile.dev.package."*".opt-level=2' ${{ matrix.suite.args }} --locked -- --test-threads=4
           --skip distribution_native_host::
           --skip range_image_native::rf3_fixture::
       - name: cargo test bicdb-core native multi-node fixtures one at a time
         if: matrix.suite.name == 'bicdb-core native multi-node (serial)'
         run: >-
-          cargo test ${{ matrix.suite.args }} --locked --
+          cargo test --config 'profile.dev.package."*".opt-level=2' ${{ matrix.suite.args }} --locked --
           distribution_native_host:: range_image_native::rf3_fixture::
           --test-threads=1
       - name: cargo test bicdb-sql with bounded linked artifacts
@@ -249,7 +249,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build projection chaos helper
-        run: cargo build -p bicdb-core --example chaos_child --locked
+        run: cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
       - name: Record source and list selected Core library tests
         shell: bash
         run: |
@@ -260,7 +260,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/native-core-evidence"
           git rev-parse HEAD > "$RUNNER_TEMP/native-core-evidence/source-revision.txt"
           rustc --version --verbose > "$RUNNER_TEMP/native-core-evidence/rustc.txt"
-          cargo test -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --list \
+          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --list \
             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/selected-tests.log"
           python3 - <<'PY'
           import os, pathlib
@@ -277,7 +277,7 @@ jobs:
           export BICDB_TEST_EVIDENCE_ROOT="$RUNNER_TEMP/native-core-evidence/fault-state"
           export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
           mkdir -p "$BICDB_TEST_EVIDENCE_ROOT"
-          cargo test -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=4 --show-output \
+          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=4 --show-output \
             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/tests.log"
       - name: Retain focused source, log and opted-in fault-state evidence
         if: always()

@@ -250,7 +250,9 @@ movement remain separate gates.
    into either success or peer unavailability.
 6. Preserve caller/role cancellation precedence. Explicit HOT-only network
    slices are capped by the original request/attempt deadline and do not replace
-   or extend the original transmitted request/role budget. A silent peer can
+   or extend authority. Each genuine bounded subrequest must preserve the
+   existing transmitted-budget cap: the wire/recipient budget cannot exceed its
+   actual original call/transport bound or the phase parent. A silent peer can
    exhaust its network slice while the actual phase parent remains live; that
    is transport unknown-effect, never success. A complete authenticated frame
    with an incompatible identity/semantic body is not reclassified unavailable
@@ -267,8 +269,11 @@ movement remain separate gates.
    `cluster_data_operation_failed`, mapped to `BicDbError::Cluster`; they lack a
    typed busy-versus-history-conflict taxonomy. At minimum every such rejection
    aborts the current scan, cannot count toward success, and prevents its phase
-   transition; a new attempt must freshly revalidate role and scan. Selective
-   permanent cross-attempt veto needs actual typed constraint provenance; it
+   transition. Retain that physical member/phase as a semantic veto across
+   attempts until an actual independently fresh successful same-peer observation
+   or an explicit existing typed fresh decision proof resolves the constraint;
+   a new role followed only by socket refusal cannot erase the ambiguity.
+   Selective permanent conflict classification needs actual typed provenance; it
    must not be inferred from error text. Existing inner QQs' genuine higher or
    incompatible observations remain vetoes. This boundary must be resolved in
    source review before claiming general lost-reply/conflict liveness.

@@ -1578,7 +1578,7 @@ impl GucAssignmentTargets {
             && self.gucs.iter().any(|key| {
                 matches!(
                     key.as_str(),
-                    "transaction_isolation" | "transaction_deferrable"
+                    "transaction_isolation" | "transaction_read_only" | "transaction_deferrable"
                 )
             })
     }
@@ -2668,13 +2668,54 @@ impl<'db> SqlSession<'db> {
     /// change it. Only the host may finish that transaction; ordinary operator
     /// SQL transactions retain their existing control semantics.
     pub(crate) fn require_local_transaction_control(&self) -> Result<()> {
-        if self
-            .read_tx()
-            .is_some_and(|tx| tx.mutation_actor().is_some())
-        {
+        if self.has_host_owned_transaction() {
             return Err(SqlError::ApplicationTransactionControlDenied);
         }
         Ok(())
+    }
+
+    fn has_host_owned_transaction(&self) -> bool {
+        // A routine's local slot must not hide its application-owned parent.
+        self.tx
+            .as_ref()
+            .is_some_and(|tx| tx.mutation_actor().is_some())
+            || self
+                .parent_tx
+                .is_some_and(|tx| tx.mutation_actor().is_some())
+    }
+
+    fn require_local_transaction_setting_control(&self, setting: &str) -> Result<()> {
+        if matches!(
+            setting,
+            "transaction_isolation" | "transaction_read_only" | "transaction_deferrable"
+        ) {
+            self.require_local_transaction_control()?;
+        }
+        Ok(())
+    }
+
+    fn require_local_transaction_set_control(&self, set: &Set) -> Result<()> {
+        if !self.has_host_owned_transaction() {
+            return Ok(());
+        }
+        match set {
+            Set::SetTransaction { session: false, .. } => self.require_local_transaction_control(),
+            Set::SingleAssignment { variable, .. } => self
+                .require_local_transaction_setting_control(
+                    &object_name(variable)?.to_ascii_lowercase(),
+                ),
+            Set::MultipleAssignments { assignments } => {
+                // Preflight every name before any assignment in the statement.
+                for assignment in assignments {
+                    self.require_local_transaction_setting_control(
+                        &object_name(&assignment.name)?.to_ascii_lowercase(),
+                    )?;
+                }
+                Ok(())
+            }
+            // Session defaults apply to future local transactions only.
+            _ => Ok(()),
+        }
     }
 
     /// Takes the pending (uncommitted) transaction produced by a deferred
@@ -2894,6 +2935,9 @@ impl<'db> SqlSession<'db> {
         targets: GucAssignmentTargets,
         apply: impl FnOnce(&mut Self) -> Result<()>,
     ) -> Result<()> {
+        if targets.is_current_transaction_mode() {
+            self.require_local_transaction_control()?;
+        }
         let previous_gucs = self.session_gucs.clone();
         let previous_settings = self.settings;
         let local = local
@@ -3953,6 +3997,9 @@ impl<'db> SqlSession<'db> {
     }
 
     fn execute_parsed_statement_in_sql(&mut self, statement: &Statement) -> Result<SqlResult> {
+        if let Statement::Set(set) = statement {
+            self.require_local_transaction_set_control(set)?;
+        }
         if matches!(
             statement,
             Statement::StartTransaction { .. }
@@ -5050,6 +5097,7 @@ impl<'db> SqlSession<'db> {
     }
 
     fn apply_transaction_modes(&mut self, modes: &[TransactionMode]) -> Result<()> {
+        self.require_local_transaction_control()?;
         let oracle_preview = oracle::preview_routine_language_enabled(self.db_ref())?;
         let level = modes.iter().find_map(|mode| match mode {
             TransactionMode::IsolationLevel(level) => Some(level),
@@ -5147,6 +5195,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_set(&mut self, set: &Set) -> Result<SqlResult> {
+        self.require_local_transaction_set_control(set)?;
         match set {
             Set::SetTransaction {
                 modes,
@@ -5699,6 +5748,7 @@ impl<'db> SqlSession<'db> {
             normalize_object_name(raw)
         };
         let targets = GucAssignmentTargets::setting(&setting);
+        self.require_local_transaction_setting_control(&setting)?;
         if targets.is_current_transaction_mode()
             && !oracle::preview_routine_language_enabled(self.db_ref())?
         {

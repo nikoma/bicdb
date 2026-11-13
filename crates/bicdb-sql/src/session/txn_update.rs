@@ -3559,6 +3559,8 @@ impl<'db> SqlSession<'db> {
                 "set_config name must be text".to_string(),
             ));
         };
+        let setting = setting.to_ascii_lowercase();
+        self.require_local_transaction_setting_control(&setting)?;
         let value = self
             .eval_session_expr(args.get(1).expect("validated argument count"))?
             .to_cell();
@@ -3569,7 +3571,6 @@ impl<'db> SqlSession<'db> {
                 "set_config is_local must be boolean".to_string(),
             ));
         };
-        let setting = setting.to_ascii_lowercase();
         if is_protected_security_setting(&setting)
             && self.signed_application_security_guc_compatibility
         {

@@ -1,6 +1,7 @@
 //! REQUIRED repeat-fault success, never pass on safe refusal/queued debt.
 //! No new factory, manual maintenance, epoch/role setter or data authority.
 use super::*;
+mod passive_phase;
 pub(super) type OriginalWriter = (
     Arc<
         crate::distribution_range_consensus::RangeWriteCoordinator<
@@ -130,6 +131,7 @@ pub(super) fn run(
         first_convergence,
         cancel_successor,
         None,
+        false,
     )
 }
 #[allow(clippy::too_many_arguments)]
@@ -145,6 +147,7 @@ pub(super) fn run_partial<ActualHeldDebtSchedule>(
     originals: &[OriginalWriter],
     first_partial: &serde_json::Value,
     debt_hold: ActualHeldDebtSchedule,
+    passive_phase_progress: bool,
 ) -> Result<serde_json::Value> {
     run_impl(
         f,
@@ -159,6 +162,7 @@ pub(super) fn run_partial<ActualHeldDebtSchedule>(
         first_partial,
         false,
         Some(debt_hold),
+        passive_phase_progress,
     )
 }
 #[allow(clippy::too_many_arguments)]
@@ -175,8 +179,13 @@ fn run_impl<ActualHeldDebtSchedule>(
     first_convergence: &serde_json::Value,
     cancel_successor: bool,
     prior_debt_hold: Option<ActualHeldDebtSchedule>,
+    passive_phase_progress: bool,
 ) -> Result<serde_json::Value> {
     let partial = prior_debt_hold.is_some();
+    check(
+        !passive_phase_progress || partial,
+        "passive phase case requires actual retained partial debt",
+    )?;
     let fifth = key_in(topology, range.id, "same-origin-second-unknown5");
     let sixth = key_in(topology, range.id, "same-origin-second-next-ack6");
     let fifth_value =
@@ -383,22 +392,59 @@ fn run_impl<ActualHeldDebtSchedule>(
     )?;
     drop(held);
     drop(prior_debt_hold);
+    if passive_phase_progress {
+        passive_phase::wait_for_original_native_five(
+            f,
+            originals,
+            range,
+            base + 1,
+            &[
+                old,
+                prior_unknown.as_str(),
+                prior_next.as_str(),
+                fourth.as_str(),
+                fifth.as_str(),
+            ],
+            &original_all4,
+            journal,
+            start,
+            end,
+            &parent,
+        )?;
+    }
     let mut ever_ack = false;
     let mut round = 0;
     while Instant::now() < end {
         round += 1;
+        if passive_phase_progress {
+            passive_phase::require_original_call_fits(end, &parent)?;
+        }
         let old_read = read(journal, client, old);
+        if passive_phase_progress {
+            passive_phase::require_original_call_fits(end, &parent)?;
+        }
         let committed = read(journal, client, &fifth);
+        if passive_phase_progress {
+            passive_phase::require_original_call_fits(end, &parent)?;
+        }
         let next = append(journal, client, &sixth, &sixth_value);
         ever_ack |= next.is_ok();
+        if passive_phase_progress {
+            passive_phase::require_original_call_fits(end, &parent)?;
+        }
         let next_read = read(journal, client, &sixth);
+        if passive_phase_progress {
+            parent.check()?;
+        }
         let elapsed = start.elapsed().as_nanos();
         journal.append(serde_json::json!({"kind":"second_origin_required_health_round","round":round,
             "receipt_elapsed_ns":elapsed,"old_exact":old_read.as_ref().is_ok_and(|v|v.as_ref()==Some(old_value)),
             "committed5_exact":committed.as_ref().is_ok_and(|v|v.as_ref()==Some(&fifth_value)),
             "actual_next_API_ACK":next.is_ok(),"ever_next_API_ACK":ever_ack,
             "next6_exact":next_read.as_ref().is_ok_and(|v|v.as_ref()==Some(&sixth_value)),
-            "controller_diagnostic":control.initial_data_status(&budget(50)).ok().flatten()}))?;
+            "controller_diagnostic":control.initial_data_status(&budget(50)).ok().flatten(),
+            "passive_phase_progress_variant":passive_phase_progress,
+            "workload_availability_qualification":false}))?;
         check(no_false_successful_value(&old_read,old_value) && no_false_successful_value(&committed,&fifth_value)
             && (!ever_ack || no_false_successful_value(&next_read,&sixth_value)),"second recovery returned successful false absence/wrong value after actual ACK/decision")?;
         let healthy = elapsed <= 20_000_000_000
@@ -481,7 +527,9 @@ fn run_impl<ActualHeldDebtSchedule>(
                     let receipt = serde_json::json!({"required_second_unknown5_then_ACK6_all_native6":true,
                         "actual_second_Unknown":fault,"second_health_receipt_ns":elapsed,"all_replicas_receipt_ns":final_receipt_ns,
                         "actual_all":all,"original_all4":original_all4,"prior_debt_was_partial":partial,"actual_successor_cancellation":cancellation,"no_manual_recovery":true,
-                        "first_Unknown_and_noACK_not_reclassified":true});
+                        "first_Unknown_and_noACK_not_reclassified":true,
+                        "passive_phase_progress_variant":passive_phase_progress,
+                        "original_failed_workload_case_not_replaced":passive_phase_progress});
                     journal.append(serde_json::json!({"kind":"required_repeat_origin_success","receipt":receipt}))?;
                     return Ok(receipt);
                 }

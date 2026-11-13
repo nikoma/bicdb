@@ -13,6 +13,7 @@ enum Scenario {
     RepeatOriginalOrigin,
     RepeatOriginCancelSuccessor,
     RepeatOriginWhilePriorDebtPartial,
+    RepeatOriginPartialPassivePhaseProgress,
     LostFollowerFenceReply,
     LostFollowerPrepareReply,
     LostOriginReply,
@@ -51,6 +52,7 @@ fn run_one_peer_loss(
         Scenario::RepeatOriginalOrigin
             | Scenario::RepeatOriginCancelSuccessor
             | Scenario::RepeatOriginWhilePriorDebtPartial
+            | Scenario::RepeatOriginPartialPassivePhaseProgress
     ) {
         controls
             .iter()
@@ -72,6 +74,7 @@ fn run_one_peer_loss(
             | Scenario::RepeatOriginalOrigin
             | Scenario::RepeatOriginCancelSuccessor
             | Scenario::RepeatOriginWhilePriorDebtPartial
+            | Scenario::RepeatOriginPartialPassivePhaseProgress
             | Scenario::LostFollowerFenceReply
             | Scenario::LostFollowerPrepareReply
             | Scenario::NativeGapBeforeFence
@@ -404,6 +407,7 @@ fn run_one_peer_loss(
         | Scenario::RepeatOriginalOrigin
         | Scenario::RepeatOriginCancelSuccessor
         | Scenario::RepeatOriginWhilePriorDebtPartial
+        | Scenario::RepeatOriginPartialPassivePhaseProgress
         | Scenario::LostFollowerFenceReply
         | Scenario::LostFollowerPrepareReply => Some(peers[1].test_hot_recovery_bindings()?.2),
         Scenario::LostOriginReply => Some(origin_control.test_hot_recovery_bindings()?.2),
@@ -645,6 +649,7 @@ fn run_one_peer_loss(
             | Scenario::RepeatOriginalOrigin
             | Scenario::RepeatOriginCancelSuccessor
             | Scenario::RepeatOriginWhilePriorDebtPartial
+            | Scenario::RepeatOriginPartialPassivePhaseProgress
             | Scenario::LostFollowerFenceReply
             | Scenario::LostFollowerPrepareReply
             | Scenario::NativeGapBeforeFence
@@ -698,8 +703,15 @@ fn run_one_peer_loss(
                     Ok(())
                 }
             },
-            if matches!(scenario, Scenario::RepeatOriginWhilePriorDebtPartial) {
-                Some(original_writers.as_slice())
+            if matches!(
+                scenario,
+                Scenario::RepeatOriginWhilePriorDebtPartial
+                    | Scenario::RepeatOriginPartialPassivePhaseProgress
+            ) {
+                Some((
+                    original_writers.as_slice(),
+                    matches!(scenario, Scenario::RepeatOriginPartialPassivePhaseProgress),
+                ))
             } else {
                 None
             },
@@ -989,4 +1001,11 @@ fn native_hot_peer_repeat_unknown_canceled_successor_acquisition_preserves_prior
 #[test]
 fn native_hot_peer_second_unknown_while_prior_completed_replica_debt_requires_full_recovery() {
     run_case(Scenario::RepeatOriginWhilePriorDebtPartial);
+}
+
+/// Isolates actual old-debt/new-session phase progress without the overlapping
+/// repeated workload of the separately preserved original required scenario.
+#[test]
+fn native_hot_peer_partial_debt_passive_native5_then_ack6_strong_within_original20s() {
+    run_case(Scenario::RepeatOriginPartialPassivePhaseProgress);
 }

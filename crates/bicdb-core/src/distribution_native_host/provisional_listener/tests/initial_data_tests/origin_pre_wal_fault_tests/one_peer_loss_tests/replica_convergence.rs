@@ -64,7 +64,7 @@ pub(super) fn run<
     expected_blocked_native: u64,
     expected_blocked_phase: &str,
     resume_actual_target: ResumeActualTarget,
-    partial_repeat: Option<&[repeat_origin::OriginalWriter]>,
+    partial_repeat: Option<(&[repeat_origin::OriginalWriter], bool)>,
 ) -> Result<serde_json::Value> {
     check(
         first_public_receipt_ns <= 20_000_000_000,
@@ -191,7 +191,7 @@ pub(super) fn run<
         serde_json::json!({"kind":"actual_origin_r4_full_commands_before_debt_release",
         "elapsed_ns":start.elapsed().as_nanos(),"source":source,"actual_commands":commands}),
     )?;
-    if let Some(originals) = partial_repeat {
+    if let Some((originals, passive_phase_progress)) = partial_repeat {
         // This distinct REQUIRED scenario intentionally injects the next
         // genuine origin fault BEFORE the old completed follower converges.
         // The retained actual debt guard remains held throughout that APP.
@@ -215,6 +215,7 @@ pub(super) fn run<
             originals,
             &partial,
             actual_debt_schedule,
+            passive_phase_progress,
         );
     }
     journal.append(serde_json::json!({"kind":"same_actual_target_network_resume_intent",

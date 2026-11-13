@@ -26,7 +26,11 @@ become R=0, genesis, acknowledged history or a read floor. Any command, complete
 phase, certification, retired nonce, slot, backup fence, handoff promise, image
 intent/base, sparse decision, Installing handover/certification or current/joint
 DATA state for the selected range refuses observation. Mandatory native catalogue
-fields must be present. Other ranges' actual refusal records remain untouched.
+fields must satisfy their actual versioned envelope rules: native-abort format15
+legitimately has no native-joint/current-joint maps, whereas format16 requires
+the current-joint map and its prerequisite maps. The verified durable envelope
+and exact custody read enforce those rules. An absent optional map grants no
+native floor. Other ranges' actual refusal records remain untouched.
 
 Actual MStore checks occur before and after engine scopes. Inside native scopes,
 the protected-record point check verifies the same original DB open, native birth,

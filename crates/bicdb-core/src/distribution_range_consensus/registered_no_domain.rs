@@ -109,17 +109,12 @@ impl RangeWriteStore {
             .ok_or_else(|| {
                 range_write_error("Registered NoDomain mandatory handover field absent")
             })?;
-        let joint =
-            self.catalog.native_joint_handoffs.as_ref().ok_or_else(|| {
-                range_write_error("Registered NoDomain mandatory joint field absent")
-            })?;
-        let current = self
-            .catalog
-            .current_joint_recoveries
-            .as_ref()
-            .ok_or_else(|| {
-                range_write_error("Registered NoDomain mandatory current-joint field absent")
-            })?;
+        // Actual native-abort format15 legitimately has neither joint map.
+        // The verified on-disk envelope/custody read above enforces each
+        // version's required-map rules (including mandatory current at16).
+        // Optional-map absence is no DATA-state evidence or R=0 floor.
+        let joint = self.catalog.native_joint_handoffs.as_ref();
+        let current = self.catalog.current_joint_recoveries.as_ref();
         let abort =
             self.catalog.native_abort_protocol.as_ref().ok_or_else(|| {
                 range_write_error("Registered NoDomain protected abort field absent")
@@ -164,8 +159,8 @@ impl RangeWriteStore {
             || sparse.contains_key(&range)
             || installing.contains_key(&range)
             || handovers.contains_key(&range)
-            || joint.contains_key(&range)
-            || current.contains_key(&range)
+            || joint.is_some_and(|map| map.contains_key(&range))
+            || current.is_some_and(|map| map.contains_key(&range))
             || abort.range(range).is_some()
             || self.native_activated_opens.contains_key(&range)
             || self.native_joint_activated_opens.contains_key(&range)

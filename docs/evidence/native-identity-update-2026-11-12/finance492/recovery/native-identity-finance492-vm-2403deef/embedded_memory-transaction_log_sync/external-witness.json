@@ -1,0 +1,1 @@
+{"mode": "embedded_memory", "site": "transaction_log.sync", "owned_qemu_pid": 2056725, "guest_witness": {"site": "transaction_log.sync"}, "tx_started": {"native_tx_id": 4, "new_id": "4", "old_id": "2"}, "acknowledged": false, "ack": null, "observed_unix": 1794525345.2702272}

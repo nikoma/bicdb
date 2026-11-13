@@ -1,0 +1,405 @@
+{
+  "version": 1,
+  "scope": "failure-only stopped CLI process diagnostics and explicit saved-state JSON allowlist",
+  "status": "captured_allowlist_after_actual_wait",
+  "source_revision": "3ee40c19b44affa0a481a66b278ded3af817e910",
+  "workflow_sha_not_source_authority": "3ee40c19b44affa0a481a66b278ded3af817e910",
+  "package_version": "1.0.488-beta",
+  "test": "initial_data_tests::native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value",
+  "actual_children_waited": [
+    {
+      "slot": 0,
+      "pid": 16241,
+      "before_kill": {
+        "exited": false
+      },
+      "kill_attempted": true,
+      "kill_error": null,
+      "wait_ok": true,
+      "exit": {
+        "success": false,
+        "code": null,
+        "signal": 9,
+        "display": "signal: 9 (SIGKILL)"
+      },
+      "wait_error": null
+    },
+    {
+      "slot": 1,
+      "pid": 16242,
+      "before_kill": {
+        "exited": false
+      },
+      "kill_attempted": true,
+      "kill_error": null,
+      "wait_ok": true,
+      "exit": {
+        "success": false,
+        "code": null,
+        "signal": 9,
+        "display": "signal: 9 (SIGKILL)"
+      },
+      "wait_error": null
+    },
+    {
+      "slot": 2,
+      "pid": 16243,
+      "before_kill": {
+        "exited": false
+      },
+      "kill_attempted": true,
+      "kill_error": null,
+      "wait_ok": true,
+      "exit": {
+        "success": false,
+        "code": null,
+        "signal": 9,
+        "display": "signal: 9 (SIGKILL)"
+      },
+      "wait_error": null
+    },
+    {
+      "slot": 3,
+      "pid": 16244,
+      "before_kill": {
+        "exited": false
+      },
+      "kill_attempted": true,
+      "kill_error": null,
+      "wait_ok": true,
+      "exit": {
+        "success": false,
+        "code": null,
+        "signal": 9,
+        "display": "signal: 9 (SIGKILL)"
+      },
+      "wait_error": null
+    }
+  ],
+  "prior_test_exits": [],
+  "actual_spawn_commands_paths_only": [
+    {
+      "pid": 16241,
+      "invocation": {
+        "program": "/home/runner/work/bicdb/bicdb/target/debug/bicdb",
+        "args": [
+          "cluster",
+          "native-metadata",
+          "serve-fresh",
+          "/tmp/.tmpeOzxTf/db0",
+          "--plan",
+          "/tmp/.tmpeOzxTf/common-plan.json",
+          "--node-id",
+          "n0",
+          "--address",
+          "127.0.0.1:36515",
+          "--command-file",
+          "/tmp/.tmpeOzxTf/node0.command",
+          "--status-file",
+          "/tmp/.tmpeOzxTf/node0.status",
+          "--run-seconds",
+          "120",
+          "--cluster-tls-cert",
+          "/tmp/.tmpeOzxTf/n0.pem",
+          "--cluster-tls-key",
+          "/tmp/.tmpeOzxTf/n0.key",
+          "--cluster-tls-ca",
+          "/tmp/.tmpeOzxTf/ca.pem"
+        ],
+        "cwd": null,
+        "credential_file_contents_recorded": false
+      }
+    },
+    {
+      "pid": 16242,
+      "invocation": {
+        "program": "/home/runner/work/bicdb/bicdb/target/debug/bicdb",
+        "args": [
+          "cluster",
+          "native-metadata",
+          "serve-fresh",
+          "/tmp/.tmpeOzxTf/db1",
+          "--plan",
+          "/tmp/.tmpeOzxTf/common-plan.json",
+          "--node-id",
+          "n1",
+          "--address",
+          "127.0.0.1:46305",
+          "--command-file",
+          "/tmp/.tmpeOzxTf/node1.command",
+          "--status-file",
+          "/tmp/.tmpeOzxTf/node1.status",
+          "--run-seconds",
+          "120",
+          "--cluster-tls-cert",
+          "/tmp/.tmpeOzxTf/n1.pem",
+          "--cluster-tls-key",
+          "/tmp/.tmpeOzxTf/n1.key",
+          "--cluster-tls-ca",
+          "/tmp/.tmpeOzxTf/ca.pem"
+        ],
+        "cwd": null,
+        "credential_file_contents_recorded": false
+      }
+    },
+    {
+      "pid": 16243,
+      "invocation": {
+        "program": "/home/runner/work/bicdb/bicdb/target/debug/bicdb",
+        "args": [
+          "cluster",
+          "native-metadata",
+          "serve-fresh",
+          "/tmp/.tmpeOzxTf/db2",
+          "--plan",
+          "/tmp/.tmpeOzxTf/common-plan.json",
+          "--node-id",
+          "n2",
+          "--address",
+          "127.0.0.1:40395",
+          "--command-file",
+          "/tmp/.tmpeOzxTf/node2.command",
+          "--status-file",
+          "/tmp/.tmpeOzxTf/node2.status",
+          "--run-seconds",
+          "120",
+          "--cluster-tls-cert",
+          "/tmp/.tmpeOzxTf/n2.pem",
+          "--cluster-tls-key",
+          "/tmp/.tmpeOzxTf/n2.key",
+          "--cluster-tls-ca",
+          "/tmp/.tmpeOzxTf/ca.pem"
+        ],
+        "cwd": null,
+        "credential_file_contents_recorded": false
+      }
+    },
+    {
+      "pid": 16244,
+      "invocation": {
+        "program": "/home/runner/work/bicdb/bicdb/target/debug/bicdb",
+        "args": [
+          "cluster",
+          "native-metadata",
+          "serve-fresh",
+          "/tmp/.tmpeOzxTf/db3",
+          "--plan",
+          "/tmp/.tmpeOzxTf/common-plan.json",
+          "--node-id",
+          "n3",
+          "--address",
+          "127.0.0.1:34741",
+          "--command-file",
+          "/tmp/.tmpeOzxTf/node3.command",
+          "--status-file",
+          "/tmp/.tmpeOzxTf/node3.status",
+          "--run-seconds",
+          "120",
+          "--cluster-tls-cert",
+          "/tmp/.tmpeOzxTf/n3.pem",
+          "--cluster-tls-key",
+          "/tmp/.tmpeOzxTf/n3.key",
+          "--cluster-tls-ca",
+          "/tmp/.tmpeOzxTf/ca.pem"
+        ],
+        "cwd": null,
+        "credential_file_contents_recorded": false
+      }
+    }
+  ],
+  "no_db_tree_capture": true,
+  "no_tls_key_or_certificate_file_capture": true,
+  "no_engine_open_repair_or_state_fabrication": true,
+  "copied_files_fsynced": true,
+  "total_bytes": 58126,
+  "files": [
+    {
+      "path": "files/common-plan.json",
+      "bytes": 2130,
+      "sha256": "c07ffdf7a6e7472020d7280e0712c1ced5bc2e5140c6a64dbdb923a0dd86ec2b"
+    },
+    {
+      "path": "files/db0/native-bootstrap-seed.json",
+      "bytes": 366,
+      "sha256": "0659459a4ab66a2f50078a7288ad8a51c545212d2df1633017cac13e241bd7d8"
+    },
+    {
+      "path": "files/db0/native-initial-metadata/cluster-metadata-consensus.json",
+      "bytes": 7861,
+      "sha256": "e94ef28b9e48ea2bdaeed9d8dcaf4dbb91a4a794a704f9c29a353b29a96df050"
+    },
+    {
+      "path": "files/db1/native-bootstrap-seed.json",
+      "bytes": 366,
+      "sha256": "7287baaacb091639497681455711af8c6dc4d932e56938e727f272d1ebeb1d7c"
+    },
+    {
+      "path": "files/db1/native-initial-metadata/cluster-metadata-consensus.json",
+      "bytes": 7863,
+      "sha256": "d661e13dc54353c6e11c86372147e750c1df2b25008c6e7221e0089f64fb952b"
+    },
+    {
+      "path": "files/db2/native-bootstrap-seed.json",
+      "bytes": 366,
+      "sha256": "437bbc373f45363dbdb8d1c4c07ab4461bda59c5040893f6244165ef91934e1f"
+    },
+    {
+      "path": "files/db2/native-initial-metadata/cluster-metadata-consensus.json",
+      "bytes": 7863,
+      "sha256": "45408c2283dd916ac97620a5bfbd1d6978ab67160694e80d7f3f35e905ffcc85"
+    },
+    {
+      "path": "files/db3/native-bootstrap-seed.json",
+      "bytes": 366,
+      "sha256": "fa1d969b66c75f3877b0120a113739f397c56dfc84b4cdb4ace12b7c914bb9b8"
+    },
+    {
+      "path": "files/db3/native-initial-metadata/cluster-metadata-consensus.json",
+      "bytes": 7863,
+      "sha256": "d01fce5b33d2c18b2e414955f530dc720638ce698238fbc8f761df81687a5789"
+    },
+    {
+      "path": "files/initial-data-external-ledger.jsonl",
+      "bytes": 13066,
+      "sha256": "f04d84ea75bea57f54713f74ee21a2aa2526eb3569f837582fc86521ced005e5"
+    },
+    {
+      "path": "files/node0.command",
+      "bytes": 89,
+      "sha256": "6347b81bdc5b66a4a2541e616b1c96702960ed7327f935e56116292f1f01470d"
+    },
+    {
+      "path": "files/node0.status",
+      "bytes": 1884,
+      "sha256": "c30f73abaae03d479565ffce448621e008a4d6f4a922d9d6588b3650ae82e694"
+    },
+    {
+      "path": "files/node0.stderr",
+      "bytes": 903,
+      "sha256": "627660f46e9a2acc2e8b43ef623ea53f94b311cfd64328d74579352fed81ee8b"
+    },
+    {
+      "path": "files/node0.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "files/node1.command",
+      "bytes": 89,
+      "sha256": "849fecc3d52fcd4e993d1ed7c76282ab99f38e683916abb62e89d054c45b73c4"
+    },
+    {
+      "path": "files/node1.status",
+      "bytes": 1737,
+      "sha256": "3d5c3c318b6cf4b1b54cdb7e4bb404543eef8c9b6bcfc0eb04e32efbfaa8f97c"
+    },
+    {
+      "path": "files/node1.stderr",
+      "bytes": 683,
+      "sha256": "d8be1c0dc84ecda43d0d421f7111574c79d9bac45ac96c30ff7fb3414b1921c6"
+    },
+    {
+      "path": "files/node1.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "files/node2.command",
+      "bytes": 89,
+      "sha256": "270b2cf6cc77944557a50c5c18cef3a7ccc243d1dbfde82fc77bc87361795704"
+    },
+    {
+      "path": "files/node2.status",
+      "bytes": 1737,
+      "sha256": "cc69cc2edf6584c8a30e66ec5bc81d209ff44d956c36f30935054318c3748c02"
+    },
+    {
+      "path": "files/node2.stderr",
+      "bytes": 403,
+      "sha256": "d746f6ad1b8cb5d48f3909d7ab85e99a35d6ba082f46311c24275c4cfb9bb9b2"
+    },
+    {
+      "path": "files/node2.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "files/node3.command",
+      "bytes": 89,
+      "sha256": "270b2cf6cc77944557a50c5c18cef3a7ccc243d1dbfde82fc77bc87361795704"
+    },
+    {
+      "path": "files/node3.status",
+      "bytes": 1737,
+      "sha256": "defcb5d39fdab735f0315ea08d21fc47672243d79269d8e8fc06fd76e0145a7f"
+    },
+    {
+      "path": "files/node3.stderr",
+      "bytes": 576,
+      "sha256": "0d7fc10444c18ed071fd02d3ad5195e98c0f091af503199e3143c17c022060b3"
+    },
+    {
+      "path": "files/node3.stdout",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "missing_allowlisted_paths": [
+    "db0/cluster-topology.json",
+    "db0/native-learner-metadata/cluster-metadata-consensus.json",
+    "db0/native-learner-metadata/native-learner-metadata-original-c.json",
+    "db0/native-unassigned-learner.json",
+    "db1/cluster-topology.json",
+    "db1/native-learner-metadata/cluster-metadata-consensus.json",
+    "db1/native-learner-metadata/native-learner-metadata-original-c.json",
+    "db1/native-unassigned-learner.json",
+    "db2/cluster-topology.json",
+    "db2/native-learner-metadata/cluster-metadata-consensus.json",
+    "db2/native-learner-metadata/native-learner-metadata-original-c.json",
+    "db2/native-unassigned-learner.json",
+    "db3/cluster-topology.json",
+    "db3/native-learner-metadata/cluster-metadata-consensus.json",
+    "db3/native-learner-metadata/native-learner-metadata-original-c.json",
+    "db3/native-unassigned-learner.json",
+    "db4/cluster-topology.json",
+    "db4/native-bootstrap-seed.json",
+    "db4/native-initial-metadata/cluster-metadata-consensus.json",
+    "db4/native-learner-metadata/cluster-metadata-consensus.json",
+    "db4/native-learner-metadata/native-learner-metadata-original-c.json",
+    "db4/native-unassigned-learner.json",
+    "db5/cluster-topology.json",
+    "db5/native-bootstrap-seed.json",
+    "db5/native-initial-metadata/cluster-metadata-consensus.json",
+    "db5/native-learner-metadata/cluster-metadata-consensus.json",
+    "db5/native-learner-metadata/native-learner-metadata-original-c.json",
+    "db5/native-unassigned-learner.json",
+    "fresh-over-existing.command",
+    "fresh-over-existing.status",
+    "node4-cold.stderr",
+    "node4-cold.stdout",
+    "node4-killed-metadata.json",
+    "node4-promoted-before.json",
+    "node4-promoted-cold.stderr",
+    "node4-promoted-cold.stdout",
+    "node4-promoted-kill-state.json",
+    "node4.command",
+    "node4.pre-kill.command",
+    "node4.pre-kill.status",
+    "node4.promoted-pre-kill.status",
+    "node4.status",
+    "node4.stderr",
+    "node4.stdout",
+    "node5.command",
+    "node5.status",
+    "node5.stderr",
+    "node5.stdout",
+    "other.command",
+    "other.status",
+    "registered-replica-external-ledger.jsonl",
+    "replacement.command",
+    "replacement.status",
+    "wrong-address.command",
+    "wrong-address.status"
+  ],
+  "refused_allowlisted_paths": []
+}

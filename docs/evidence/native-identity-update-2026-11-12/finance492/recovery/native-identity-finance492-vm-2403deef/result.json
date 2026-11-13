@@ -1,0 +1,1991 @@
+{
+  "source": "2403deefde68869c15f02b73d40406ffdfb50148",
+  "production_equivalent": "2403deefde68869c15f02b73d40406ffdfb50148",
+  "status": "vm_matrix_passed",
+  "started_unix": 1794525338.7214103,
+  "scope": "ActualdisposableKVMguestRAMloss forexactversionedfinance492candidateCore-onlyNativeidentityUPDATE; no privateSQLpartition/generatedcolumncode. ExistingpreIOtxlog/pageWAL hooks; postcommit andafterindependentfsyncedACK. Twooriginalcurrent-sourceACKs perMode includeNativevector/timestamp/payload/unknownmetadata. Requireexactold/newfullrecords+schema+policy, onecorrectNativeTX-boundaudit/no duplicates,3stableguestopens/indexes/grantlessrefusals. No volatileemulation/newspend, notphysicalhostpowercut/HA/fullapplication.",
+  "cases": [
+    {
+      "mode": "embedded_memory",
+      "site": "transaction_log.write",
+      "owned_qemu_pid": 2053718,
+      "guest_witness": {
+        "site": "transaction_log.write"
+      },
+      "tx_started": {
+        "native_tx_id": 4,
+        "new_id": "4",
+        "old_id": "2"
+      },
+      "acknowledged": false,
+      "ack": null,
+      "observed_unix": 1794525341.532832,
+      "passed": true,
+      "hard_kill_exit": -9,
+      "requires_complete_new": false,
+      "observations": [
+        {
+          "audit_count": 0,
+          "audit_messages": [],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 0,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "2cd0486375f71ea38f87cfb26ebc2221a651f3941a6a95cbc37c696584700a68",
+              "id": "2"
+            }
+          ],
+          "state": "complete_old"
+        },
+        {
+          "audit_count": 0,
+          "audit_messages": [],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 1,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "2cd0486375f71ea38f87cfb26ebc2221a651f3941a6a95cbc37c696584700a68",
+              "id": "2"
+            }
+          ],
+          "state": "complete_old"
+        },
+        {
+          "audit_count": 0,
+          "audit_messages": [],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 2,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "2cd0486375f71ea38f87cfb26ebc2221a651f3941a6a95cbc37c696584700a68",
+              "id": "2"
+            }
+          ],
+          "state": "complete_old"
+        }
+      ],
+      "original_ACKs_linked": 2,
+      "saved_image": "/root/bicdb-durability-s3/native-identity-finance492-vm-2403deef/embedded_memory-transaction_log_write/crashed.raw",
+      "saved_image_sha256": "a781b4b31f094ed718a1945a961a2b61d4500f3c0fc502aed1d0b07d57036f86",
+      "saved_image_unchanged_after_verification": true,
+      "original_ACK_sha256": "c358f50132f950cc22265a59a10bd3fe8b2c0ae1768050a943d6809b1017de52"
+    },
+    {
+      "mode": "embedded_memory",
+      "site": "transaction_log.sync",
+      "owned_qemu_pid": 2056725,
+      "guest_witness": {
+        "site": "transaction_log.sync"
+      },
+      "tx_started": {
+        "native_tx_id": 4,
+        "new_id": "4",
+        "old_id": "2"
+      },
+      "acknowledged": false,
+      "ack": null,
+      "observed_unix": 1794525345.2702272,
+      "passed": true,
+      "hard_kill_exit": -9,
+      "requires_complete_new": false,
+      "observations": [
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525345753,
+              "created_at": 1794525345753,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "15ea0be7-88bf-4101-ba8f-89eb603176ef",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 0,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525345753,
+              "created_at": 1794525345753,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "15ea0be7-88bf-4101-ba8f-89eb603176ef",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 1,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525345753,
+              "created_at": 1794525345753,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "15ea0be7-88bf-4101-ba8f-89eb603176ef",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 2,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        }
+      ],
+      "original_ACKs_linked": 2,
+      "saved_image": "/root/bicdb-durability-s3/native-identity-finance492-vm-2403deef/embedded_memory-transaction_log_sync/crashed.raw",
+      "saved_image_sha256": "410ca5bce1f024d4b890e15884f841621577d4abb2540e35024d4e303e97215c",
+      "saved_image_unchanged_after_verification": true,
+      "original_ACK_sha256": "c358f50132f950cc22265a59a10bd3fe8b2c0ae1768050a943d6809b1017de52"
+    },
+    {
+      "mode": "embedded_memory",
+      "site": "identity.after_commit",
+      "owned_qemu_pid": 2059248,
+      "guest_witness": {
+        "site": "identity.after_commit"
+      },
+      "tx_started": {
+        "native_tx_id": 4,
+        "new_id": "4",
+        "old_id": "2"
+      },
+      "acknowledged": false,
+      "ack": null,
+      "observed_unix": 1794525348.5267978,
+      "passed": true,
+      "hard_kill_exit": -9,
+      "requires_complete_new": true,
+      "observations": [
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525347882,
+              "created_at": 1794525347882,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "6cdd305e-bdfa-4bff-bbd9-66319e50b54c",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 0,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525347882,
+              "created_at": 1794525347882,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "6cdd305e-bdfa-4bff-bbd9-66319e50b54c",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 1,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525347882,
+              "created_at": 1794525347882,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "6cdd305e-bdfa-4bff-bbd9-66319e50b54c",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 2,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        }
+      ],
+      "original_ACKs_linked": 2,
+      "saved_image": "/root/bicdb-durability-s3/native-identity-finance492-vm-2403deef/embedded_memory-identity_after_commit/crashed.raw",
+      "saved_image_sha256": "2ef8ffc7a8922549dfcc2e168dcb123e32561f91caa4f303667cf32df5c5e25f",
+      "saved_image_unchanged_after_verification": true,
+      "original_ACK_sha256": "c358f50132f950cc22265a59a10bd3fe8b2c0ae1768050a943d6809b1017de52"
+    },
+    {
+      "mode": "embedded_memory",
+      "site": "identity.after_ack",
+      "owned_qemu_pid": 2062561,
+      "guest_witness": {
+        "site": "identity.after_ack"
+      },
+      "tx_started": {
+        "native_tx_id": 4,
+        "new_id": "4",
+        "old_id": "2"
+      },
+      "acknowledged": true,
+      "ack": {
+        "after_native_sequence": 4,
+        "audit_message_id": "7f9259c8-f580-4d8c-8946-fb2667f129ff",
+        "before_native_sequence": 3,
+        "native_tx_id": 4,
+        "new_id": "4",
+        "old_id": "2",
+        "update_acknowledged": true
+      },
+      "observed_unix": 1794525352.210398,
+      "passed": true,
+      "hard_kill_exit": -9,
+      "requires_complete_new": true,
+      "observations": [
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525351740,
+              "created_at": 1794525351740,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "7f9259c8-f580-4d8c-8946-fb2667f129ff",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 0,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525351740,
+              "created_at": 1794525351740,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "7f9259c8-f580-4d8c-8946-fb2667f129ff",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 1,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525351740,
+              "created_at": 1794525351740,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "7f9259c8-f580-4d8c-8946-fb2667f129ff",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 2,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        }
+      ],
+      "original_ACKs_linked": 2,
+      "saved_image": "/root/bicdb-durability-s3/native-identity-finance492-vm-2403deef/embedded_memory-identity_after_ack/crashed.raw",
+      "saved_image_sha256": "b9e639ba3a2e71757993361d9135a830b297738b9088f84ee595e7c815e38737",
+      "saved_image_unchanged_after_verification": true,
+      "original_ACK_sha256": "c358f50132f950cc22265a59a10bd3fe8b2c0ae1768050a943d6809b1017de52"
+    },
+    {
+      "mode": "server_paged",
+      "site": "transaction_log.write",
+      "owned_qemu_pid": 2065073,
+      "guest_witness": {
+        "site": "transaction_log.write"
+      },
+      "tx_started": {
+        "native_tx_id": 4,
+        "new_id": "4",
+        "old_id": "2"
+      },
+      "acknowledged": false,
+      "ack": null,
+      "observed_unix": 1794525355.9198053,
+      "passed": true,
+      "hard_kill_exit": -9,
+      "requires_complete_new": false,
+      "observations": [
+        {
+          "audit_count": 0,
+          "audit_messages": [],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 0,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "2cd0486375f71ea38f87cfb26ebc2221a651f3941a6a95cbc37c696584700a68",
+              "id": "2"
+            }
+          ],
+          "state": "complete_old"
+        },
+        {
+          "audit_count": 0,
+          "audit_messages": [],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 1,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "2cd0486375f71ea38f87cfb26ebc2221a651f3941a6a95cbc37c696584700a68",
+              "id": "2"
+            }
+          ],
+          "state": "complete_old"
+        },
+        {
+          "audit_count": 0,
+          "audit_messages": [],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 2,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "2cd0486375f71ea38f87cfb26ebc2221a651f3941a6a95cbc37c696584700a68",
+              "id": "2"
+            }
+          ],
+          "state": "complete_old"
+        }
+      ],
+      "original_ACKs_linked": 2,
+      "saved_image": "/root/bicdb-durability-s3/native-identity-finance492-vm-2403deef/server_paged-transaction_log_write/crashed.raw",
+      "saved_image_sha256": "998b2e1a4c405d89b23533ceb66cb98477e8274168f07d294ee82b2643eea101",
+      "saved_image_unchanged_after_verification": true,
+      "original_ACK_sha256": "c358f50132f950cc22265a59a10bd3fe8b2c0ae1768050a943d6809b1017de52"
+    },
+    {
+      "mode": "server_paged",
+      "site": "transaction_log.sync",
+      "owned_qemu_pid": 2067288,
+      "guest_witness": {
+        "site": "transaction_log.sync"
+      },
+      "tx_started": {
+        "native_tx_id": 4,
+        "new_id": "4",
+        "old_id": "2"
+      },
+      "acknowledged": false,
+      "ack": null,
+      "observed_unix": 1794525359.337389,
+      "passed": true,
+      "hard_kill_exit": -9,
+      "requires_complete_new": false,
+      "observations": [
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525360711,
+              "created_at": 1794525360711,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "c8d2c36b-5ac1-494c-9fe1-cae47940c752",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 0,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525360711,
+              "created_at": 1794525360711,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "c8d2c36b-5ac1-494c-9fe1-cae47940c752",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 1,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525360711,
+              "created_at": 1794525360711,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "c8d2c36b-5ac1-494c-9fe1-cae47940c752",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 2,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        }
+      ],
+      "original_ACKs_linked": 2,
+      "saved_image": "/root/bicdb-durability-s3/native-identity-finance492-vm-2403deef/server_paged-transaction_log_sync/crashed.raw",
+      "saved_image_sha256": "05826586e2961b339b8478f0f76a80f5e470e166f09bd6fbb41032b928eab8be",
+      "saved_image_unchanged_after_verification": true,
+      "original_ACK_sha256": "c358f50132f950cc22265a59a10bd3fe8b2c0ae1768050a943d6809b1017de52"
+    },
+    {
+      "mode": "server_paged",
+      "site": "identity.after_commit",
+      "owned_qemu_pid": 2069934,
+      "guest_witness": {
+        "site": "identity.after_commit"
+      },
+      "tx_started": {
+        "native_tx_id": 4,
+        "new_id": "4",
+        "old_id": "2"
+      },
+      "acknowledged": false,
+      "ack": null,
+      "observed_unix": 1794525362.5005858,
+      "passed": true,
+      "hard_kill_exit": -9,
+      "requires_complete_new": true,
+      "observations": [
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525361733,
+              "created_at": 1794525361733,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "1d8f7b58-7ad5-4a4a-ba48-846288442b40",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 0,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525361733,
+              "created_at": 1794525361733,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "1d8f7b58-7ad5-4a4a-ba48-846288442b40",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 1,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525361733,
+              "created_at": 1794525361733,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "1d8f7b58-7ad5-4a4a-ba48-846288442b40",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 2,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        }
+      ],
+      "original_ACKs_linked": 2,
+      "saved_image": "/root/bicdb-durability-s3/native-identity-finance492-vm-2403deef/server_paged-identity_after_commit/crashed.raw",
+      "saved_image_sha256": "0a8f04e5bba7377b61113d58e448b8563245d545d3a6456bcae99e17ee448dd7",
+      "saved_image_unchanged_after_verification": true,
+      "original_ACK_sha256": "c358f50132f950cc22265a59a10bd3fe8b2c0ae1768050a943d6809b1017de52"
+    },
+    {
+      "mode": "server_paged",
+      "site": "identity.after_ack",
+      "owned_qemu_pid": 2072071,
+      "guest_witness": {
+        "site": "identity.after_ack"
+      },
+      "tx_started": {
+        "native_tx_id": 4,
+        "new_id": "4",
+        "old_id": "2"
+      },
+      "acknowledged": true,
+      "ack": {
+        "after_native_sequence": 4,
+        "audit_message_id": "2764adf3-0255-448a-b406-80574ff4288e",
+        "before_native_sequence": 3,
+        "native_tx_id": 4,
+        "new_id": "4",
+        "old_id": "2",
+        "update_acknowledged": true
+      },
+      "observed_unix": 1794525365.6988513,
+      "passed": true,
+      "hard_kill_exit": -9,
+      "requires_complete_new": true,
+      "observations": [
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525364805,
+              "created_at": 1794525364805,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "2764adf3-0255-448a-b406-80574ff4288e",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 0,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525364805,
+              "created_at": 1794525364805,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "2764adf3-0255-448a-b406-80574ff4288e",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 1,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525364805,
+              "created_at": 1794525364805,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "2764adf3-0255-448a-b406-80574ff4288e",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 2,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        }
+      ],
+      "original_ACKs_linked": 2,
+      "saved_image": "/root/bicdb-durability-s3/native-identity-finance492-vm-2403deef/server_paged-identity_after_ack/crashed.raw",
+      "saved_image_sha256": "2650338aa0cf0d82af0c824ea5731099a4cccfaeff361a93c9df2c921b5877d9",
+      "saved_image_unchanged_after_verification": true,
+      "original_ACK_sha256": "c358f50132f950cc22265a59a10bd3fe8b2c0ae1768050a943d6809b1017de52"
+    },
+    {
+      "mode": "server_paged",
+      "site": "page_log.write",
+      "owned_qemu_pid": 2074879,
+      "guest_witness": {
+        "site": "page_log.write"
+      },
+      "tx_started": {
+        "native_tx_id": 4,
+        "new_id": "4",
+        "old_id": "2"
+      },
+      "acknowledged": false,
+      "ack": null,
+      "observed_unix": 1794525369.3921337,
+      "passed": true,
+      "hard_kill_exit": -9,
+      "requires_complete_new": false,
+      "observations": [
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525369747,
+              "created_at": 1794525369747,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "215e90bb-349b-42a3-8842-75516e3af7df",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 0,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525369747,
+              "created_at": 1794525369747,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "215e90bb-349b-42a3-8842-75516e3af7df",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 1,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525369747,
+              "created_at": 1794525369747,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "215e90bb-349b-42a3-8842-75516e3af7df",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 2,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        }
+      ],
+      "original_ACKs_linked": 2,
+      "saved_image": "/root/bicdb-durability-s3/native-identity-finance492-vm-2403deef/server_paged-page_log_write/crashed.raw",
+      "saved_image_sha256": "f188619a5973b1b204afbcd56b1d308816c07d8dfe057736c60668d0bd5e6530",
+      "saved_image_unchanged_after_verification": true,
+      "original_ACK_sha256": "c358f50132f950cc22265a59a10bd3fe8b2c0ae1768050a943d6809b1017de52"
+    },
+    {
+      "mode": "server_paged",
+      "site": "page_log.sync",
+      "owned_qemu_pid": 2076783,
+      "guest_witness": {
+        "site": "page_log.sync"
+      },
+      "tx_started": {
+        "native_tx_id": 4,
+        "new_id": "4",
+        "old_id": "2"
+      },
+      "acknowledged": false,
+      "ack": null,
+      "observed_unix": 1794525372.1262474,
+      "passed": true,
+      "hard_kill_exit": -9,
+      "requires_complete_new": false,
+      "observations": [
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525372867,
+              "created_at": 1794525372867,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "53ea6c2c-153b-47ed-a18d-1559bb459ecd",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 0,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525372867,
+              "created_at": 1794525372867,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "53ea6c2c-153b-47ed-a18d-1559bb459ecd",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 1,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        },
+        {
+          "audit_count": 1,
+          "audit_messages": [
+            {
+              "available_at": 1794525372867,
+              "created_at": 1794525372867,
+              "headers": {
+                "actor_id": "identity-recovery-host",
+                "originating_plugin": "source-pinned-recovery-probe",
+                "tenant_id": null,
+                "trace_id": "one-authorized-identity-update",
+                "workspace_id": null
+              },
+              "idempotency_key": "mutation-audit/4/1/1",
+              "max_attempts": 16,
+              "message_id": "53ea6c2c-153b-47ed-a18d-1559bb459ecd",
+              "payload": {
+                "actor": {
+                  "actor_id": "identity-recovery-host",
+                  "deadline_unix_ms": 4102444800000,
+                  "originating_action": "update",
+                  "originating_plugin": "source-pinned-recovery-probe",
+                  "originating_resource": "computed",
+                  "roles": [
+                    "writer"
+                  ],
+                  "scopes": [],
+                  "tenant_id": null,
+                  "trace_id": "one-authorized-identity-update",
+                  "workspace_id": null
+                },
+                "audit_metadata": {
+                  "proof": "one actual authorized UPDATE"
+                },
+                "grant_id": 1,
+                "operation": "update",
+                "record_count": 1,
+                "record_ids": [
+                  "2"
+                ],
+                "record_ids_truncated": false,
+                "relation": "computed",
+                "replacement_record_ids": [
+                  "4"
+                ],
+                "transaction_id": 4
+              },
+              "sequence": 0
+            }
+          ],
+          "full_records_schema_policy_equal": true,
+          "grantless_write_refused": true,
+          "native_indexes_valid": true,
+          "reopen": 2,
+          "row_hashes": [
+            {
+              "hash": "52713d1811c980dfd5bfa1710b4db991c6fe93b5d6ae19620be31e3b499ab3cc",
+              "id": "10"
+            },
+            {
+              "hash": "1081bbe5592bb706283f2c964fdbb2ec506689b134a4346ffebfbdb5ce1503d6",
+              "id": "4"
+            }
+          ],
+          "state": "complete_new"
+        }
+      ],
+      "original_ACKs_linked": 2,
+      "saved_image": "/root/bicdb-durability-s3/native-identity-finance492-vm-2403deef/server_paged-page_log_sync/crashed.raw",
+      "saved_image_sha256": "8659a4e096065e67741279e98d9f5c2a433aa63eba6976f223c5c07212ca0e5d",
+      "saved_image_unchanged_after_verification": true,
+      "original_ACK_sha256": "c358f50132f950cc22265a59a10bd3fe8b2c0ae1768050a943d6809b1017de52"
+    }
+  ],
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/2403deefde68869c15f02b73d40406ffdfb50148/native_identity_crash_probe",
+  "binary_sha256": "fd1c88d04014ec8913194efdd23956a1c910da5d1a03168d9585d10bc8d6e592",
+  "guest_sha256": "fd1c88d04014ec8913194efdd23956a1c910da5d1a03168d9585d10bc8d6e592",
+  "kernel_sha256": "41ba36d860aa0b0cd995f4ca8856d80249b244577e704929b55be13fbd1ebd2f",
+  "initrd_sha256": "089bb848b25dee41836d6b0d377b92fc27b5cede55d7ccdf3be915d6f9a17d15",
+  "expected_cases": 10,
+  "originals_unchanged": true,
+  "finished_unix": 1794525374.0905046
+}

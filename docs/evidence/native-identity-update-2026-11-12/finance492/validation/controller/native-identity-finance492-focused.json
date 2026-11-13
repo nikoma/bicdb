@@ -1,0 +1,80 @@
+{
+  "label": "native-identity-finance492-focused",
+  "source": "5fab7f47be70b935afdbd2d68dfcdbdfc688d9ec",
+  "base": "6cafd400844f0dc11200afed52ab2f015009ecf2",
+  "repo": "/root/bicdb-native-identity-delivery",
+  "scope": "Version492 candidate over actual finance/owner main490702f; HA491 alreadystaged byotherowner, no reused491 and mainmerge mustwaitactual491+freshnextpatch verification. Adapt identityUPDATEtoAuthorizedMutation retainingissueronbothphysicalwrites; addtrueNativeissuer/rollback/ACKreopen andimmutablefactownernegative checks. Prior4906cafd/52f8 qualificationhistoricalonly. Focused tests, notfinalmain/fullCore/recovery/application/HA/release/deployment qualification. Originalassertions/waits preserved;goalactive/P2off/no newcloudspend.",
+  "continue_on_failure": true,
+  "commands": [
+    [
+      "python3",
+      "scripts/bump-version.py",
+      "--check"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "mutation_identity::issuer_tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "mutation_grants",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "mutation_authority",
+      "--test",
+      "version_identity",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-semantic-reader-current-core-broad-v2"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-semantic-reader-current-core-broad-v2.json",
+      "equals": {
+        "source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

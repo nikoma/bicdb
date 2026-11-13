@@ -1,0 +1,115 @@
+{
+  "source": "6cafd400844f0dc11200afed52ab2f015009ecf2",
+  "scope": "IsolatedversionedNativeCoreidentityUPDATE API+SQLMutationDenied42501 overactualmain489; excludesprivateSQLpartition/generated-columnruntime. 29packages490synchronized. Exactcandidate: buildcurrentCorehelpers+directNative recoveryprobe, runCoregrant/SQLauthority regression, allCorelib+tests andversions. Mainmergeonlyaftercandidateprocess/EIO/VMandrequiredCI. Prior70+56recoveryprivatecomposition notcandidatequalification. Alloriginalassertions/timeouts preserved. GoalACTIVE/P2off/no newcloudspend orpromotion.",
+  "started_unix": 1794515949.4490933,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794515949.4492865,
+      "exit": 0,
+      "finished_unix": 1794515949.5302951
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--example",
+        "native_identity_crash_probe",
+        "--example",
+        "durability_child",
+        "--example",
+        "chaos_child",
+        "--example",
+        "ha_state_child"
+      ],
+      "started_unix": 1794515949.530488,
+      "exit": 0,
+      "finished_unix": 1794516009.3778667
+    },
+    {
+      "command": [
+        "python3",
+        "-c",
+        "import pathlib,shutil,hashlib,json,subprocess,os;root=pathlib.Path('/root/bicdb-durability-s3');source=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip();assert source=='6cafd400844f0dc11200afed52ab2f015009ecf2';out=root/'qualification-artifacts-debug'/source;out.mkdir(exist_ok=False);probe=out/'native_identity_crash_probe';shutil.copy2(pathlib.Path(os.environ['CARGO_TARGET_DIR'])/'debug/examples/native_identity_crash_probe',probe);record={'source':source,'status':'probe_built','binary':str(probe),'binary_sha256':hashlib.file_digest(probe.open('rb'),'sha256').hexdigest(),'scope':'Explicitprecedingbuildsucceeded; Core-onlyversion490candidate probe, not a passingqualification.'};(root/'native-identity-main490-probe-custody.json').write_text(json.dumps(record,indent=2)+'\\n');print(json.dumps(record))"
+      ],
+      "started_unix": 1794516009.3780549,
+      "exit": 0,
+      "finished_unix": 1794516009.4439218
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "mutation_grants",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794516009.4441655,
+      "exit": 0,
+      "finished_unix": 1794516012.9937603
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "mutation_authority",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794516012.9939861,
+      "exit": 0,
+      "finished_unix": 1794516201.2491589
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "--tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794516201.2493954,
+      "exit": 0,
+      "finished_unix": 1794518381.767151
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794518381.7674892
+}

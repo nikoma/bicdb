@@ -1,0 +1,4663 @@
+{
+  "failed_children_waits": [
+    {
+      "before_kill": {
+        "exited": false
+      },
+      "exit": {
+        "code": null,
+        "display": "signal: 9 (SIGKILL)",
+        "signal": 9,
+        "success": false
+      },
+      "kill_attempted": true,
+      "kill_error": null,
+      "pid": 17505,
+      "slot": 0,
+      "wait_error": null,
+      "wait_ok": true
+    },
+    {
+      "before_kill": {
+        "exited": false
+      },
+      "exit": {
+        "code": null,
+        "display": "signal: 9 (SIGKILL)",
+        "signal": 9,
+        "success": false
+      },
+      "kill_attempted": true,
+      "kill_error": null,
+      "pid": 17506,
+      "slot": 1,
+      "wait_error": null,
+      "wait_ok": true
+    },
+    {
+      "before_kill": {
+        "exited": false
+      },
+      "exit": {
+        "code": null,
+        "display": "signal: 9 (SIGKILL)",
+        "signal": 9,
+        "success": false
+      },
+      "kill_attempted": true,
+      "kill_error": null,
+      "pid": 17507,
+      "slot": 2,
+      "wait_error": null,
+      "wait_ok": true
+    },
+    {
+      "before_kill": {
+        "exited": false
+      },
+      "exit": {
+        "code": null,
+        "display": "signal: 9 (SIGKILL)",
+        "signal": 9,
+        "success": false
+      },
+      "kill_attempted": true,
+      "kill_error": null,
+      "pid": 17508,
+      "slot": 3,
+      "wait_error": null,
+      "wait_ok": true
+    },
+    {
+      "before_kill": {
+        "exited": false
+      },
+      "exit": {
+        "code": null,
+        "display": "signal: 9 (SIGKILL)",
+        "signal": 9,
+        "success": false
+      },
+      "kill_attempted": true,
+      "kill_error": null,
+      "pid": 17591,
+      "slot": 4,
+      "wait_error": null,
+      "wait_ok": true
+    }
+  ],
+  "failed_command": {
+    "action": "elect",
+    "budget_ms": 5000,
+    "sequence": 1,
+    "version": 1
+  },
+  "failed_status": {
+    "data_serving": false,
+    "error": "cluster error: native host bootstrap: owned metadata member changed/busy",
+    "host": {
+      "birth_bound": true,
+      "birth_id": "01a1d16b-61f1-74a2-9960-e91be24d87c7",
+      "birth_sha256": "adecadcc34b1a249070b6db57c59dce7398e445f52d490141ce001fa0400acc8",
+      "data_serving": false,
+      "last_metadata_maintenance": null,
+      "last_metadata_promotion": null,
+      "metadata": {
+        "cluster_id": "native-operator-cli",
+        "commit_index": 4,
+        "current_term": 1,
+        "last_log_index": 4,
+        "last_log_term": 1,
+        "leader_id": "n0",
+        "learners": [],
+        "node_id": "n4",
+        "role": "follower",
+        "topology_generation": 4,
+        "voted_for": null,
+        "voters": [
+          "n0",
+          "n1",
+          "n2",
+          "n3",
+          "n4"
+        ]
+      },
+      "metadata_control_owned": true,
+      "metadata_listener_owned": true,
+      "metadata_role": "voter",
+      "metadata_store_id": "01a1d16b-6456-7861-bd28-ef1f753a09bf",
+      "namespace_ids": [
+        [
+          "__bic_cluster_events",
+          "8962c4da-f17f-4e60-84b6-0ac936887bfe"
+        ],
+        [
+          "items",
+          "128ee741-4be9-4fb6-8642-5c4f0d4a56fa"
+        ]
+      ],
+      "node_id": "n4",
+      "phase": "owned_metadata_voter",
+      "replica_receiver": null,
+      "schema_sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b",
+      "version": 1
+    },
+    "process_id": 17591,
+    "sequence": 1,
+    "version": 1
+  },
+  "failed_stderr_bytes": 0,
+  "projection": "all54 records retained in order; raw framed bytes replaced by exact length/SHA256 and decoded frame; bootstrap reply omits source config and retains topology DATA only",
+  "records": [
+    {
+      "bootstrap_raw_frame_covered": false,
+      "fixture_root": "/tmp/.tmp9cb39T",
+      "kind": "journal_started",
+      "max_bytes": 67108864,
+      "max_records": 4096,
+      "no_protocol_or_serving_authority": true,
+      "scope": "actual public EventClient and explicit replica transport only; no global host/peer-wire coverage",
+      "sink_sequence": 1,
+      "sink_unix_ns": 1794514873419095287,
+      "source": "aac6192c2b034e1f2e4c88a16fd84bcd94e0bf6b",
+      "test": "writer_registry_refresh_baseline::native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_and_fresh_ack"
+    },
+    {
+      "context_is_protocol_business_id": false,
+      "diagnostic_operation_id": "01a1d16b-f101-7440-ad78-4bc98d8cf976",
+      "kind": "logical_request_intent",
+      "request": {
+        "address": "127.0.0.1:44271",
+        "bootstrap_raw_frame_covered": false,
+        "destination": "n0",
+        "public_operation": "authenticated_bootstrap_setup"
+      },
+      "sink_sequence": 2,
+      "sink_unix_ns": 1794514874625862345
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": false,
+      "diagnostic_operation_id": "01a1d16b-f101-7440-ad78-4bc98d8cf976",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "bootstrap_raw_frame_covered": false,
+        "classification": "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY",
+        "snapshot_topology": {
+          "applied_rebalance_plans": [],
+          "cluster_id": "native-operator-cli",
+          "format_version": 2,
+          "generation": 1,
+          "hash_version": 1,
+          "history": [
+            {
+              "actor": "n0",
+              "at_ms": 10,
+              "generation": 1,
+              "summary": "cluster initialized"
+            }
+          ],
+          "next_range_id": 5,
+          "next_relocation_id": 1,
+          "next_replica_id": 14,
+          "nodes": {
+            "n0": {
+              "address": "127.0.0.1:44271",
+              "capacity_bytes": 1073741824,
+              "id": "n0",
+              "incarnation": 1,
+              "joined_at_ms": 10,
+              "labels": {
+                "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+              },
+              "last_heartbeat_ms": 10,
+              "lifecycle": "active",
+              "native_store_birth_v1": {
+                "abort_protocol_version": 1,
+                "birth_id": "01a1d16b-e621-79e0-9b94-4c699894cfc4",
+                "birth_sha256": "f5e6910d7c79e4d160dd9663f576c2d217c96de0a35b7b48e96406314bdeb40b",
+                "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+                "node_incarnation": 1,
+                "version": 1,
+                "writer_enforcement_version": 1
+              },
+              "tls_certificate_sha256": "a2111cbf340405f3b842a74002083c60e68bdffaaf1204b719419a130b5929b7",
+              "used_bytes": 0
+            },
+            "n1": {
+              "address": "127.0.0.1:37361",
+              "capacity_bytes": 1073741824,
+              "id": "n1",
+              "incarnation": 1,
+              "joined_at_ms": 10,
+              "labels": {
+                "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+              },
+              "last_heartbeat_ms": 10,
+              "lifecycle": "active",
+              "native_store_birth_v1": {
+                "abort_protocol_version": 1,
+                "birth_id": "01a1d16b-e620-7ea2-8edb-b1199cd2c1ff",
+                "birth_sha256": "1267a130b0a10e5da55cd01e72e9b94c03abc5388e5134628fcb808f08e58b9a",
+                "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+                "node_incarnation": 1,
+                "version": 1,
+                "writer_enforcement_version": 1
+              },
+              "tls_certificate_sha256": "fe2faf0b91b403c0b720d65b2ebadf5591cada3cf5184fa577626f36d6677159",
+              "used_bytes": 0
+            },
+            "n2": {
+              "address": "127.0.0.1:34845",
+              "capacity_bytes": 1073741824,
+              "id": "n2",
+              "incarnation": 1,
+              "joined_at_ms": 10,
+              "labels": {
+                "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+              },
+              "last_heartbeat_ms": 10,
+              "lifecycle": "active",
+              "native_store_birth_v1": {
+                "abort_protocol_version": 1,
+                "birth_id": "01a1d16b-e620-7f93-ba97-56a937f0d49a",
+                "birth_sha256": "2007ad09419548b963d708729d7ecd3a143d4b35e4aa8a402be0265d52d32813",
+                "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+                "node_incarnation": 1,
+                "version": 1,
+                "writer_enforcement_version": 1
+              },
+              "tls_certificate_sha256": "779a795890b85796414491c69da1fd68deeb38eaf01c60fbfc6c3ae69480e9b6",
+              "used_bytes": 0
+            },
+            "n3": {
+              "address": "127.0.0.1:45911",
+              "capacity_bytes": 1073741824,
+              "id": "n3",
+              "incarnation": 1,
+              "joined_at_ms": 10,
+              "labels": {
+                "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+              },
+              "last_heartbeat_ms": 10,
+              "lifecycle": "active",
+              "native_store_birth_v1": {
+                "abort_protocol_version": 1,
+                "birth_id": "01a1d16b-e622-7852-8798-54533db36b4d",
+                "birth_sha256": "4257ee2c13a8677c3c41b65c9c2faf950a1052c7b3c22e4556abf951247a6b37",
+                "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+                "node_incarnation": 1,
+                "version": 1,
+                "writer_enforcement_version": 1
+              },
+              "tls_certificate_sha256": "31bfd578fc5c413db9afadb7ab9542eb92364552b224006a834ebdcedbf501ea",
+              "used_bytes": 0
+            }
+          },
+          "range_image_bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+          "ranges": {
+            "0": {
+              "approximate_bytes": 0,
+              "approximate_qps": 0,
+              "end_token": 4611686018427387904,
+              "epoch": 1,
+              "id": 1,
+              "leader": "n1",
+              "placement": {
+                "distinct_failure_domains": [],
+                "required_node_labels": {}
+              },
+              "replicas": [
+                {
+                  "id": 5,
+                  "node_id": "n1",
+                  "role": "voter"
+                },
+                {
+                  "id": 9,
+                  "node_id": "n2",
+                  "role": "voter"
+                },
+                {
+                  "id": 13,
+                  "node_id": "n3",
+                  "role": "voter"
+                }
+              ],
+              "start_token": 0
+            },
+            "13835058055282163712": {
+              "approximate_bytes": 0,
+              "approximate_qps": 0,
+              "end_token": null,
+              "epoch": 1,
+              "id": 4,
+              "leader": "n0",
+              "placement": {
+                "distinct_failure_domains": [],
+                "required_node_labels": {}
+              },
+              "replicas": [
+                {
+                  "id": 4,
+                  "node_id": "n0",
+                  "role": "voter"
+                },
+                {
+                  "id": 8,
+                  "node_id": "n1",
+                  "role": "voter"
+                },
+                {
+                  "id": 12,
+                  "node_id": "n2",
+                  "role": "voter"
+                }
+              ],
+              "start_token": 13835058055282163712
+            },
+            "4611686018427387904": {
+              "approximate_bytes": 0,
+              "approximate_qps": 0,
+              "end_token": 9223372036854775808,
+              "epoch": 1,
+              "id": 2,
+              "leader": "n2",
+              "placement": {
+                "distinct_failure_domains": [],
+                "required_node_labels": {}
+              },
+              "replicas": [
+                {
+                  "id": 2,
+                  "node_id": "n0",
+                  "role": "voter"
+                },
+                {
+                  "id": 6,
+                  "node_id": "n2",
+                  "role": "voter"
+                },
+                {
+                  "id": 10,
+                  "node_id": "n3",
+                  "role": "voter"
+                }
+              ],
+              "start_token": 4611686018427387904
+            },
+            "9223372036854775808": {
+              "approximate_bytes": 0,
+              "approximate_qps": 0,
+              "end_token": 13835058055282163712,
+              "epoch": 1,
+              "id": 3,
+              "leader": "n3",
+              "placement": {
+                "distinct_failure_domains": [],
+                "required_node_labels": {}
+              },
+              "replicas": [
+                {
+                  "id": 3,
+                  "node_id": "n0",
+                  "role": "voter"
+                },
+                {
+                  "id": 7,
+                  "node_id": "n3",
+                  "role": "voter"
+                },
+                {
+                  "id": 11,
+                  "node_id": "n1",
+                  "role": "voter"
+                }
+              ],
+              "start_token": 9223372036854775808
+            }
+          },
+          "relocations": {},
+          "replication_factor": 3
+        }
+      },
+      "sink_sequence": 3,
+      "sink_unix_ns": 1794514874632830280
+    },
+    {
+      "context_is_protocol_business_id": false,
+      "diagnostic_operation_id": "01a1d16b-f1aa-74e0-a0e6-7769f84c4359",
+      "kind": "logical_request_intent",
+      "request": {
+        "key": "ack-before-fifth-registry-refresh",
+        "namespace": "items",
+        "payload_sha256": "9e9b15a725377d8f278a04a34098d8b721adc2b15456def3aaf99c053c25bbd1",
+        "phase": "before_fifth",
+        "public_operation": "append",
+        "request_timeout_ms": 2000,
+        "value": {
+          "entire": "external ACK precedes fifth stage",
+          "nested": [
+            17,
+            null,
+            {
+              "retained": true
+            }
+          ]
+        }
+      },
+      "sink_sequence": 4,
+      "sink_unix_ns": 1794514874794198623
+    },
+    {
+      "actual": {
+        "address": null,
+        "attempt_id": "01a1d16b-f1aa-74e0-a0e6-777d797c3360",
+        "bytes_written": 0,
+        "caller": "n0",
+        "destination": "n0",
+        "elapsed_ns": 1803,
+        "error_chain": [],
+        "journal_sequence": 1,
+        "may_have_dispatched": false,
+        "operation": "event_append",
+        "phase": "invoked",
+        "phase_unix_ns": 1794514874794943321,
+        "request_id": null,
+        "topology_generation": null
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-f1aa-74e0-a0e6-7769f84c4359",
+        "request": {
+          "key": "ack-before-fifth-registry-refresh",
+          "namespace": "items",
+          "payload_sha256": "9e9b15a725377d8f278a04a34098d8b721adc2b15456def3aaf99c053c25bbd1",
+          "phase": "before_fifth",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {
+            "entire": "external ACK precedes fifth stage",
+            "nested": [
+              17,
+              null,
+              {
+                "retained": true
+              }
+            ]
+          }
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 5,
+      "sink_unix_ns": 1794514874795030743
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:44271",
+        "attempt_id": "01a1d16b-f1aa-74e0-a0e6-777d797c3360",
+        "bytes_written": 0,
+        "caller": "n0",
+        "decoded_frame": {
+          "caller_node_id": "n0",
+          "cluster_id": "native-operator-cli",
+          "destination_node_id": "n0",
+          "protocol_version": 28,
+          "request": {
+            "ApplicationEvent": {
+              "operation": {
+                "key": "ack-before-fifth-registry-refresh",
+                "namespace": "items",
+                "operation": "append",
+                "value": {
+                  "entire": "external ACK precedes fifth stage",
+                  "nested": [
+                    17,
+                    null,
+                    {
+                      "retained": true
+                    }
+                  ]
+                }
+              },
+              "range_epoch": 1,
+              "range_id": 4
+            }
+          },
+          "request_id": 1
+        },
+        "destination": "n0",
+        "elapsed_ns": 373824,
+        "error_chain": [],
+        "journal_sequence": 2,
+        "may_have_dispatched": false,
+        "operation": "event_append",
+        "phase": "request_frame_before_dispatch",
+        "phase_unix_ns": 1794514874795315993,
+        "raw_frame_bytes": 377,
+        "raw_frame_sha256": "68a32a56694d6e7f72d41afb0bbb91bd0a90c54eb3efffc3e223c3e333239cbe",
+        "request_id": 1,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-f1aa-74e0-a0e6-7769f84c4359",
+        "request": {
+          "key": "ack-before-fifth-registry-refresh",
+          "namespace": "items",
+          "payload_sha256": "9e9b15a725377d8f278a04a34098d8b721adc2b15456def3aaf99c053c25bbd1",
+          "phase": "before_fifth",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {
+            "entire": "external ACK precedes fifth stage",
+            "nested": [
+              17,
+              null,
+              {
+                "retained": true
+              }
+            ]
+          }
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 6,
+      "sink_unix_ns": 1794514874795416555
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:44271",
+        "attempt_id": "01a1d16b-f1aa-74e0-a0e6-777d797c3360",
+        "bytes_written": 377,
+        "caller": "n0",
+        "decoded_frame": {
+          "actual_native_source": {
+            "abort_protocol_version": 1,
+            "birth_id": "01a1d16b-e621-79e0-9b94-4c699894cfc4",
+            "birth_sha256": "f5e6910d7c79e4d160dd9663f576c2d217c96de0a35b7b48e96406314bdeb40b",
+            "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+            "node_incarnation": 1,
+            "version": 1,
+            "writer_enforcement_version": 1
+          },
+          "cluster_id": "native-operator-cli",
+          "protocol_version": 28,
+          "request_id": 1,
+          "response": {
+            "Ok": {
+              "ApplicationEvent": {
+                "inserted": true,
+                "result": "appended"
+              }
+            }
+          },
+          "source_node_id": "n0"
+        },
+        "destination": "n0",
+        "elapsed_ns": 366365963,
+        "error_chain": [],
+        "journal_sequence": 3,
+        "may_have_dispatched": true,
+        "operation": "event_append",
+        "phase": "response_frame_before_decode",
+        "phase_unix_ns": 1794514875161307150,
+        "raw_frame_bytes": 478,
+        "raw_frame_sha256": "6aa3bc485b111a4a46d5ef3d1803f2a383902ca5bf2cf4c9869a03b299855c2f",
+        "request_id": 1,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-f1aa-74e0-a0e6-7769f84c4359",
+        "request": {
+          "key": "ack-before-fifth-registry-refresh",
+          "namespace": "items",
+          "payload_sha256": "9e9b15a725377d8f278a04a34098d8b721adc2b15456def3aaf99c053c25bbd1",
+          "phase": "before_fifth",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {
+            "entire": "external ACK precedes fifth stage",
+            "nested": [
+              17,
+              null,
+              {
+                "retained": true
+              }
+            ]
+          }
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 7,
+      "sink_unix_ns": 1794514875161622836
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:44271",
+        "attempt_id": "01a1d16b-f1aa-74e0-a0e6-777d797c3360",
+        "bytes_written": 377,
+        "caller": "n0",
+        "destination": "n0",
+        "elapsed_ns": 367336420,
+        "error_chain": [],
+        "journal_sequence": 4,
+        "may_have_dispatched": true,
+        "operation": "event_append",
+        "phase": "validated_transport_result_ok",
+        "phase_unix_ns": 1794514875162278359,
+        "request_id": 1,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-f1aa-74e0-a0e6-7769f84c4359",
+        "request": {
+          "key": "ack-before-fifth-registry-refresh",
+          "namespace": "items",
+          "payload_sha256": "9e9b15a725377d8f278a04a34098d8b721adc2b15456def3aaf99c053c25bbd1",
+          "phase": "before_fifth",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "value": {
+            "entire": "external ACK precedes fifth stage",
+            "nested": [
+              17,
+              null,
+              {
+                "retained": true
+              }
+            ]
+          }
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 8,
+      "sink_unix_ns": 1794514875162346351
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": true,
+      "diagnostic_operation_id": "01a1d16b-f1aa-74e0-a0e6-7769f84c4359",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "classification": "USER_ACK",
+        "inserted": true
+      },
+      "sink_sequence": 9,
+      "sink_unix_ns": 1794514875163047804
+    },
+    {
+      "context_is_protocol_business_id": false,
+      "diagnostic_operation_id": "01a1d16b-f31b-77b3-9894-e1eae9df6ebb",
+      "kind": "logical_request_intent",
+      "request": {
+        "key": "ack-before-fifth-registry-refresh",
+        "namespace": "items",
+        "phase": "before_fifth",
+        "public_operation": "get_strong",
+        "request_timeout_ms": 2000
+      },
+      "sink_sequence": 10,
+      "sink_unix_ns": 1794514875163365754
+    },
+    {
+      "actual": {
+        "address": null,
+        "attempt_id": "01a1d16b-f31b-77b3-9894-e214c0a8dc08",
+        "bytes_written": 0,
+        "caller": "n0",
+        "destination": "n0",
+        "elapsed_ns": 1132,
+        "error_chain": [],
+        "journal_sequence": 5,
+        "may_have_dispatched": false,
+        "operation": "native_event_get",
+        "phase": "invoked",
+        "phase_unix_ns": 1794514875163682882,
+        "request_id": null,
+        "topology_generation": null
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-f31b-77b3-9894-e1eae9df6ebb",
+        "request": {
+          "key": "ack-before-fifth-registry-refresh",
+          "namespace": "items",
+          "phase": "before_fifth",
+          "public_operation": "get_strong",
+          "request_timeout_ms": 2000
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 11,
+      "sink_unix_ns": 1794514875163728781
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:44271",
+        "attempt_id": "01a1d16b-f31b-77b3-9894-e214c0a8dc08",
+        "bytes_written": 0,
+        "caller": "n0",
+        "decoded_frame": {
+          "caller_node_id": "n0",
+          "cluster_id": "native-operator-cli",
+          "destination_node_id": "n0",
+          "protocol_version": 28,
+          "request": {
+            "NativeEventGet": {
+              "budget_ms": 999,
+              "business_request_id": "01a1d16b-f31b-77b3-9894-e1fe49bf22e3",
+              "challenge": "01a1d16b-f31b-77b3-9894-e20d2c53bd14",
+              "key": "ack-before-fifth-registry-refresh",
+              "mode": "strong",
+              "namespace": "items",
+              "range_epoch": 1,
+              "range_id": 4,
+              "version": 1
+            }
+          },
+          "request_id": 2
+        },
+        "destination": "n0",
+        "elapsed_ns": 322336,
+        "error_chain": [],
+        "journal_sequence": 6,
+        "may_have_dispatched": false,
+        "operation": "native_event_get",
+        "phase": "request_frame_before_dispatch",
+        "phase_unix_ns": 1794514875164004256,
+        "raw_frame_bytes": 404,
+        "raw_frame_sha256": "769a8411a1d66e32e52c103041f775162bb315ff16fb67f95f8b92ab953e1469",
+        "request_id": 2,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-f31b-77b3-9894-e1eae9df6ebb",
+        "request": {
+          "key": "ack-before-fifth-registry-refresh",
+          "namespace": "items",
+          "phase": "before_fifth",
+          "public_operation": "get_strong",
+          "request_timeout_ms": 2000
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 12,
+      "sink_unix_ns": 1794514875164094542
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:44271",
+        "attempt_id": "01a1d16b-f31b-77b3-9894-e214c0a8dc08",
+        "bytes_written": 404,
+        "caller": "n0",
+        "decoded_frame": {
+          "actual_native_source": {
+            "abort_protocol_version": 1,
+            "birth_id": "01a1d16b-e621-79e0-9b94-4c699894cfc4",
+            "birth_sha256": "f5e6910d7c79e4d160dd9663f576c2d217c96de0a35b7b48e96406314bdeb40b",
+            "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+            "node_incarnation": 1,
+            "version": 1,
+            "writer_enforcement_version": 1
+          },
+          "cluster_id": "native-operator-cli",
+          "protocol_version": 28,
+          "request_id": 2,
+          "response": {
+            "Ok": {
+              "NativeEventGet": {
+                "business_request_id": "01a1d16b-f31b-77b3-9894-e1fe49bf22e3",
+                "challenge": "01a1d16b-f31b-77b3-9894-e20d2c53bd14",
+                "result": {
+                  "audit": {
+                    "business_request_id": "01a1d16b-f31b-77b3-9894-e1fe49bf22e3",
+                    "challenge": "01a1d16b-f31b-77b3-9894-e20d2c53bd14",
+                    "final_metadata_context_id": "01a1d16b-f3c0-7f13-8b0e-9c47c6d4594e",
+                    "final_metadata_generation": 1,
+                    "final_metadata_read_index": 1,
+                    "final_metadata_term": 1,
+                    "first_metadata_context_id": "01a1d16b-f345-7701-9071-1e3f8fa83440",
+                    "logical_genesis_sha256": "a088a57b6028328cdea630db2a2aeabdd15c9553de78389e8d286b3c591be6ed",
+                    "logical_history_sha256": "9c860d9a1e980c956fadca665a42633ebd8d0e46eaf39716314e56b4580f24da",
+                    "range_epoch": 1,
+                    "range_id": 4,
+                    "range_index": 1,
+                    "snapshot_sequence": 1,
+                    "target_local_visibility_db_sequence": 1
+                  },
+                  "kind": "value",
+                  "route": {
+                    "generation": 1,
+                    "leader": "n0",
+                    "range_epoch": 1,
+                    "range_id": 4
+                  },
+                  "value": {
+                    "presence": "present",
+                    "value": {
+                      "entire": "external ACK precedes fifth stage",
+                      "nested": [
+                        17,
+                        null,
+                        {
+                          "retained": true
+                        }
+                      ]
+                    }
+                  }
+                },
+                "version": 1
+              }
+            }
+          },
+          "source_node_id": "n0"
+        },
+        "destination": "n0",
+        "elapsed_ns": 207115101,
+        "error_chain": [],
+        "journal_sequence": 7,
+        "may_have_dispatched": true,
+        "operation": "native_event_get",
+        "phase": "response_frame_before_decode",
+        "phase_unix_ns": 1794514875370796390,
+        "raw_frame_bytes": 1412,
+        "raw_frame_sha256": "07a77594851e1eb4561bcccd64134da3b776f54bb727edbf53720e28aa4a510d",
+        "request_id": 2,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-f31b-77b3-9894-e1eae9df6ebb",
+        "request": {
+          "key": "ack-before-fifth-registry-refresh",
+          "namespace": "items",
+          "phase": "before_fifth",
+          "public_operation": "get_strong",
+          "request_timeout_ms": 2000
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 13,
+      "sink_unix_ns": 1794514875371140489
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:44271",
+        "attempt_id": "01a1d16b-f31b-77b3-9894-e214c0a8dc08",
+        "bytes_written": 404,
+        "caller": "n0",
+        "destination": "n0",
+        "elapsed_ns": 208290152,
+        "error_chain": [],
+        "journal_sequence": 8,
+        "may_have_dispatched": true,
+        "operation": "native_event_get",
+        "phase": "validated_transport_result_ok",
+        "phase_unix_ns": 1794514875371971802,
+        "request_id": 2,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-f31b-77b3-9894-e1eae9df6ebb",
+        "request": {
+          "key": "ack-before-fifth-registry-refresh",
+          "namespace": "items",
+          "phase": "before_fifth",
+          "public_operation": "get_strong",
+          "request_timeout_ms": 2000
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 14,
+      "sink_unix_ns": 1794514875372020425
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": true,
+      "diagnostic_operation_id": "01a1d16b-f31b-77b3-9894-e1eae9df6ebb",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "classification": "STRONG_SUCCESS",
+        "presence": "present",
+        "value": {
+          "entire": "external ACK precedes fifth stage",
+          "nested": [
+            17,
+            null,
+            {
+              "retained": true
+            }
+          ]
+        }
+      },
+      "sink_sequence": 15,
+      "sink_unix_ns": 1794514875372307778
+    },
+    {
+      "context_is_protocol_business_id": false,
+      "diagnostic_operation_id": "01a1d16b-fc5d-7a61-ac41-ed2524f34a45",
+      "kind": "logical_request_intent",
+      "request": {
+        "address": "127.0.0.1:38367",
+        "bootstrap_raw_frame_covered": false,
+        "destination": "n4",
+        "public_operation": "authenticated_bootstrap_after_fifth"
+      },
+      "sink_sequence": 16,
+      "sink_unix_ns": 1794514877533179680
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": false,
+      "diagnostic_operation_id": "01a1d16b-fc5d-7a61-ac41-ed2524f34a45",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "bootstrap_raw_frame_covered": false,
+        "classification": "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY",
+        "snapshot_topology": {
+          "applied_rebalance_plans": [],
+          "cluster_id": "native-operator-cli",
+          "format_version": 2,
+          "generation": 4,
+          "hash_version": 1,
+          "history": [
+            {
+              "actor": "n0",
+              "at_ms": 10,
+              "generation": 1,
+              "summary": "cluster initialized"
+            },
+            {
+              "actor": "n0",
+              "at_ms": 1794514875404,
+              "generation": 2,
+              "summary": "node n4 joined as metadata Learner"
+            },
+            {
+              "actor": "n0",
+              "at_ms": 1794514876868,
+              "generation": 4,
+              "summary": "node n4 promoted to metadata voter"
+            }
+          ],
+          "next_range_id": 5,
+          "next_relocation_id": 1,
+          "next_replica_id": 14,
+          "nodes": {
+            "n0": {
+              "address": "127.0.0.1:44271",
+              "capacity_bytes": 1073741824,
+              "id": "n0",
+              "incarnation": 1,
+              "joined_at_ms": 10,
+              "labels": {
+                "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+              },
+              "last_heartbeat_ms": 10,
+              "lifecycle": "active",
+              "native_store_birth_v1": {
+                "abort_protocol_version": 1,
+                "birth_id": "01a1d16b-e621-79e0-9b94-4c699894cfc4",
+                "birth_sha256": "f5e6910d7c79e4d160dd9663f576c2d217c96de0a35b7b48e96406314bdeb40b",
+                "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+                "node_incarnation": 1,
+                "version": 1,
+                "writer_enforcement_version": 1
+              },
+              "tls_certificate_sha256": "a2111cbf340405f3b842a74002083c60e68bdffaaf1204b719419a130b5929b7",
+              "used_bytes": 0
+            },
+            "n1": {
+              "address": "127.0.0.1:37361",
+              "capacity_bytes": 1073741824,
+              "id": "n1",
+              "incarnation": 1,
+              "joined_at_ms": 10,
+              "labels": {
+                "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+              },
+              "last_heartbeat_ms": 10,
+              "lifecycle": "active",
+              "native_store_birth_v1": {
+                "abort_protocol_version": 1,
+                "birth_id": "01a1d16b-e620-7ea2-8edb-b1199cd2c1ff",
+                "birth_sha256": "1267a130b0a10e5da55cd01e72e9b94c03abc5388e5134628fcb808f08e58b9a",
+                "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+                "node_incarnation": 1,
+                "version": 1,
+                "writer_enforcement_version": 1
+              },
+              "tls_certificate_sha256": "fe2faf0b91b403c0b720d65b2ebadf5591cada3cf5184fa577626f36d6677159",
+              "used_bytes": 0
+            },
+            "n2": {
+              "address": "127.0.0.1:34845",
+              "capacity_bytes": 1073741824,
+              "id": "n2",
+              "incarnation": 1,
+              "joined_at_ms": 10,
+              "labels": {
+                "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+              },
+              "last_heartbeat_ms": 10,
+              "lifecycle": "active",
+              "native_store_birth_v1": {
+                "abort_protocol_version": 1,
+                "birth_id": "01a1d16b-e620-7f93-ba97-56a937f0d49a",
+                "birth_sha256": "2007ad09419548b963d708729d7ecd3a143d4b35e4aa8a402be0265d52d32813",
+                "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+                "node_incarnation": 1,
+                "version": 1,
+                "writer_enforcement_version": 1
+              },
+              "tls_certificate_sha256": "779a795890b85796414491c69da1fd68deeb38eaf01c60fbfc6c3ae69480e9b6",
+              "used_bytes": 0
+            },
+            "n3": {
+              "address": "127.0.0.1:45911",
+              "capacity_bytes": 1073741824,
+              "id": "n3",
+              "incarnation": 1,
+              "joined_at_ms": 10,
+              "labels": {
+                "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+              },
+              "last_heartbeat_ms": 10,
+              "lifecycle": "active",
+              "native_store_birth_v1": {
+                "abort_protocol_version": 1,
+                "birth_id": "01a1d16b-e622-7852-8798-54533db36b4d",
+                "birth_sha256": "4257ee2c13a8677c3c41b65c9c2faf950a1052c7b3c22e4556abf951247a6b37",
+                "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+                "node_incarnation": 1,
+                "version": 1,
+                "writer_enforcement_version": 1
+              },
+              "tls_certificate_sha256": "31bfd578fc5c413db9afadb7ab9542eb92364552b224006a834ebdcedbf501ea",
+              "used_bytes": 0
+            },
+            "n4": {
+              "address": "127.0.0.1:38367",
+              "capacity_bytes": 1099511627776,
+              "id": "n4",
+              "incarnation": 1,
+              "joined_at_ms": 1794514875404,
+              "labels": {
+                "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+              },
+              "last_heartbeat_ms": 1794514875404,
+              "lifecycle": "active",
+              "native_store_birth_v1": {
+                "abort_protocol_version": 1,
+                "birth_id": "01a1d16b-f520-77e1-a380-3e4787ad6b4f",
+                "birth_sha256": "48659327681fe8975e7ff04393e512ee46b594a6657f17620c1f64b9deeb2293",
+                "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+                "node_incarnation": 1,
+                "version": 1,
+                "writer_enforcement_version": 1
+              },
+              "tls_certificate_sha256": "67fa61c30edd85ce58654fc6a25ce4209625da8a02b85c252b4bbbb54fca35ab",
+              "used_bytes": 0
+            }
+          },
+          "range_image_bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+          "ranges": {
+            "0": {
+              "approximate_bytes": 0,
+              "approximate_qps": 0,
+              "end_token": 4611686018427387904,
+              "epoch": 1,
+              "id": 1,
+              "leader": "n1",
+              "placement": {
+                "distinct_failure_domains": [],
+                "required_node_labels": {}
+              },
+              "replicas": [
+                {
+                  "id": 5,
+                  "node_id": "n1",
+                  "role": "voter"
+                },
+                {
+                  "id": 9,
+                  "node_id": "n2",
+                  "role": "voter"
+                },
+                {
+                  "id": 13,
+                  "node_id": "n3",
+                  "role": "voter"
+                }
+              ],
+              "start_token": 0
+            },
+            "13835058055282163712": {
+              "approximate_bytes": 0,
+              "approximate_qps": 0,
+              "end_token": null,
+              "epoch": 1,
+              "id": 4,
+              "leader": "n0",
+              "placement": {
+                "distinct_failure_domains": [],
+                "required_node_labels": {}
+              },
+              "replicas": [
+                {
+                  "id": 4,
+                  "node_id": "n0",
+                  "role": "voter"
+                },
+                {
+                  "id": 8,
+                  "node_id": "n1",
+                  "role": "voter"
+                },
+                {
+                  "id": 12,
+                  "node_id": "n2",
+                  "role": "voter"
+                }
+              ],
+              "start_token": 13835058055282163712
+            },
+            "4611686018427387904": {
+              "approximate_bytes": 0,
+              "approximate_qps": 0,
+              "end_token": 9223372036854775808,
+              "epoch": 1,
+              "id": 2,
+              "leader": "n2",
+              "placement": {
+                "distinct_failure_domains": [],
+                "required_node_labels": {}
+              },
+              "replicas": [
+                {
+                  "id": 2,
+                  "node_id": "n0",
+                  "role": "voter"
+                },
+                {
+                  "id": 6,
+                  "node_id": "n2",
+                  "role": "voter"
+                },
+                {
+                  "id": 10,
+                  "node_id": "n3",
+                  "role": "voter"
+                }
+              ],
+              "start_token": 4611686018427387904
+            },
+            "9223372036854775808": {
+              "approximate_bytes": 0,
+              "approximate_qps": 0,
+              "end_token": 13835058055282163712,
+              "epoch": 1,
+              "id": 3,
+              "leader": "n3",
+              "placement": {
+                "distinct_failure_domains": [],
+                "required_node_labels": {}
+              },
+              "replicas": [
+                {
+                  "id": 3,
+                  "node_id": "n0",
+                  "role": "voter"
+                },
+                {
+                  "id": 7,
+                  "node_id": "n3",
+                  "role": "voter"
+                },
+                {
+                  "id": 11,
+                  "node_id": "n1",
+                  "role": "voter"
+                }
+              ],
+              "start_token": 9223372036854775808
+            }
+          },
+          "relocations": {},
+          "replication_factor": 3
+        }
+      },
+      "sink_sequence": 17,
+      "sink_unix_ns": 1794514877544034891
+    },
+    {
+      "context_is_protocol_business_id": false,
+      "diagnostic_operation_id": "01a1d16b-fc6c-75b2-bde6-0c7cebb045db",
+      "kind": "logical_request_intent",
+      "request": {
+        "destination": "n4",
+        "operation": {
+          "key": "no-blank-app",
+          "namespace": "items",
+          "operation": "append",
+          "value": {
+            "entire": "external ACK precedes fifth stage",
+            "nested": [
+              17,
+              null,
+              {
+                "retained": true
+              }
+            ]
+          }
+        },
+        "public_operation": "replica_receiver_refusal_probe",
+        "range_epoch": 1,
+        "range_id": 1
+      },
+      "sink_sequence": 18,
+      "sink_unix_ns": 1794514877548784565
+    },
+    {
+      "actual": {
+        "address": null,
+        "attempt_id": "01a1d16b-fc6d-7b10-b309-d31e0c34c02c",
+        "bytes_written": 0,
+        "caller": "n0",
+        "destination": "n4",
+        "elapsed_ns": 1472,
+        "error_chain": [],
+        "journal_sequence": 1,
+        "may_have_dispatched": false,
+        "operation": "event_append",
+        "phase": "invoked",
+        "phase_unix_ns": 1794514877549037286,
+        "request_id": null,
+        "topology_generation": null
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc6c-75b2-bde6-0c7cebb045db",
+        "request": {
+          "destination": "n4",
+          "operation": {
+            "key": "no-blank-app",
+            "namespace": "items",
+            "operation": "append",
+            "value": {
+              "entire": "external ACK precedes fifth stage",
+              "nested": [
+                17,
+                null,
+                {
+                  "retained": true
+                }
+              ]
+            }
+          },
+          "public_operation": "replica_receiver_refusal_probe",
+          "range_epoch": 1,
+          "range_id": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-fc6c-75b2-bde6-0c6f7fe678ab",
+      "observer_name": "direct_unassigned_receiver_probe",
+      "sink_sequence": 19,
+      "sink_unix_ns": 1794514877549107061
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38367",
+        "attempt_id": "01a1d16b-fc6d-7b10-b309-d31e0c34c02c",
+        "bytes_written": 0,
+        "caller": "n0",
+        "decoded_frame": {
+          "caller_node_id": "n0",
+          "cluster_id": "native-operator-cli",
+          "destination_node_id": "n4",
+          "protocol_version": 28,
+          "request": {
+            "ApplicationEvent": {
+              "operation": {
+                "key": "no-blank-app",
+                "namespace": "items",
+                "operation": "append",
+                "value": {
+                  "entire": "external ACK precedes fifth stage",
+                  "nested": [
+                    17,
+                    null,
+                    {
+                      "retained": true
+                    }
+                  ]
+                }
+              },
+              "range_epoch": 1,
+              "range_id": 1
+            }
+          },
+          "request_id": 1
+        },
+        "destination": "n4",
+        "elapsed_ns": 394885,
+        "error_chain": [],
+        "journal_sequence": 2,
+        "may_have_dispatched": false,
+        "operation": "event_append",
+        "phase": "request_frame_before_dispatch",
+        "phase_unix_ns": 1794514877549431310,
+        "raw_frame_bytes": 356,
+        "raw_frame_sha256": "36db53e8d4bc7fcaff195085171eada335db649c1cdf36b23794cacd4fa3ac98",
+        "request_id": 1,
+        "topology_generation": 4
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc6c-75b2-bde6-0c7cebb045db",
+        "request": {
+          "destination": "n4",
+          "operation": {
+            "key": "no-blank-app",
+            "namespace": "items",
+            "operation": "append",
+            "value": {
+              "entire": "external ACK precedes fifth stage",
+              "nested": [
+                17,
+                null,
+                {
+                  "retained": true
+                }
+              ]
+            }
+          },
+          "public_operation": "replica_receiver_refusal_probe",
+          "range_epoch": 1,
+          "range_id": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-fc6c-75b2-bde6-0c6f7fe678ab",
+      "observer_name": "direct_unassigned_receiver_probe",
+      "sink_sequence": 20,
+      "sink_unix_ns": 1794514877549545072
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38367",
+        "attempt_id": "01a1d16b-fc6d-7b10-b309-d31e0c34c02c",
+        "bytes_written": 356,
+        "caller": "n0",
+        "decoded_frame": {
+          "actual_native_source": {
+            "abort_protocol_version": 1,
+            "birth_id": "01a1d16b-f520-77e1-a380-3e4787ad6b4f",
+            "birth_sha256": "48659327681fe8975e7ff04393e512ee46b594a6657f17620c1f64b9deeb2293",
+            "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+            "node_incarnation": 1,
+            "version": 1,
+            "writer_enforcement_version": 1
+          },
+          "cluster_id": "native-operator-cli",
+          "protocol_version": 28,
+          "request_id": 1,
+          "response": {
+            "Err": {
+              "code": "cluster_data_operation_failed",
+              "message": "cluster error: registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required"
+            }
+          },
+          "source_node_id": "n4"
+        },
+        "destination": "n4",
+        "elapsed_ns": 4024217,
+        "error_chain": [],
+        "journal_sequence": 3,
+        "may_have_dispatched": true,
+        "operation": "event_append",
+        "phase": "response_frame_before_decode",
+        "phase_unix_ns": 1794514877553060461,
+        "raw_frame_bytes": 648,
+        "raw_frame_sha256": "4d3a85e9d69e04738b64d910d1f6168663202e9ac76a0eb28276594f924fe71b",
+        "request_id": 1,
+        "topology_generation": 4
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc6c-75b2-bde6-0c7cebb045db",
+        "request": {
+          "destination": "n4",
+          "operation": {
+            "key": "no-blank-app",
+            "namespace": "items",
+            "operation": "append",
+            "value": {
+              "entire": "external ACK precedes fifth stage",
+              "nested": [
+                17,
+                null,
+                {
+                  "retained": true
+                }
+              ]
+            }
+          },
+          "public_operation": "replica_receiver_refusal_probe",
+          "range_epoch": 1,
+          "range_id": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-fc6c-75b2-bde6-0c6f7fe678ab",
+      "observer_name": "direct_unassigned_receiver_probe",
+      "sink_sequence": 21,
+      "sink_unix_ns": 1794514877553251469
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38367",
+        "attempt_id": "01a1d16b-fc6d-7b10-b309-d31e0c34c02c",
+        "bytes_written": 356,
+        "caller": "n0",
+        "destination": "n4",
+        "elapsed_ns": 4741358,
+        "error_chain": [
+          "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required"
+        ],
+        "journal_sequence": 4,
+        "may_have_dispatched": true,
+        "operation": "event_append",
+        "phase": "validated_transport_result_error",
+        "phase_unix_ns": 1794514877553777603,
+        "request_id": 1,
+        "topology_generation": 4
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc6c-75b2-bde6-0c7cebb045db",
+        "request": {
+          "destination": "n4",
+          "operation": {
+            "key": "no-blank-app",
+            "namespace": "items",
+            "operation": "append",
+            "value": {
+              "entire": "external ACK precedes fifth stage",
+              "nested": [
+                17,
+                null,
+                {
+                  "retained": true
+                }
+              ]
+            }
+          },
+          "public_operation": "replica_receiver_refusal_probe",
+          "range_epoch": 1,
+          "range_id": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-fc6c-75b2-bde6-0c6f7fe678ab",
+      "observer_name": "direct_unassigned_receiver_probe",
+      "sink_sequence": 22,
+      "sink_unix_ns": 1794514877553839516
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": true,
+      "diagnostic_operation_id": "01a1d16b-fc6c-75b2-bde6-0c7cebb045db",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "classification": "ACTUAL_RECEIVER_REFUSAL",
+        "error_chain": [
+          "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required"
+        ]
+      },
+      "sink_sequence": 23,
+      "sink_unix_ns": 1794514877554084806
+    },
+    {
+      "context_is_protocol_business_id": false,
+      "diagnostic_operation_id": "01a1d16b-fc72-7de0-8862-bb2ddb95dfcd",
+      "kind": "logical_request_intent",
+      "request": {
+        "destination": "n4",
+        "operation": {
+          "key": "not-a-blank-absence-proof",
+          "namespace": "items",
+          "operation": "get"
+        },
+        "public_operation": "replica_receiver_refusal_probe",
+        "range_epoch": 1,
+        "range_id": 1
+      },
+      "sink_sequence": 24,
+      "sink_unix_ns": 1794514877554301382
+    },
+    {
+      "actual": {
+        "address": null,
+        "attempt_id": "01a1d16b-fc72-7de0-8862-bb53b01fade7",
+        "bytes_written": 0,
+        "caller": "n0",
+        "destination": "n4",
+        "elapsed_ns": 351,
+        "error_chain": [],
+        "journal_sequence": 5,
+        "may_have_dispatched": false,
+        "operation": "native_event_get",
+        "phase": "invoked",
+        "phase_unix_ns": 1794514877554502105,
+        "request_id": null,
+        "topology_generation": null
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc72-7de0-8862-bb2ddb95dfcd",
+        "request": {
+          "destination": "n4",
+          "operation": {
+            "key": "not-a-blank-absence-proof",
+            "namespace": "items",
+            "operation": "get"
+          },
+          "public_operation": "replica_receiver_refusal_probe",
+          "range_epoch": 1,
+          "range_id": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-fc6c-75b2-bde6-0c6f7fe678ab",
+      "observer_name": "direct_unassigned_receiver_probe",
+      "sink_sequence": 25,
+      "sink_unix_ns": 1794514877554537017
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38367",
+        "attempt_id": "01a1d16b-fc72-7de0-8862-bb53b01fade7",
+        "bytes_written": 0,
+        "caller": "n0",
+        "decoded_frame": {
+          "caller_node_id": "n0",
+          "cluster_id": "native-operator-cli",
+          "destination_node_id": "n4",
+          "protocol_version": 28,
+          "request": {
+            "NativeEventGet": {
+              "budget_ms": 5000,
+              "business_request_id": "01a1d16b-fc72-7de0-8862-bb3ccd3885d5",
+              "challenge": "01a1d16b-fc72-7de0-8862-bb4437cbd204",
+              "key": "not-a-blank-absence-proof",
+              "mode": "strong",
+              "namespace": "items",
+              "range_epoch": 1,
+              "range_id": 1,
+              "version": 1
+            }
+          },
+          "request_id": 2
+        },
+        "destination": "n4",
+        "elapsed_ns": 355877,
+        "error_chain": [],
+        "journal_sequence": 6,
+        "may_have_dispatched": false,
+        "operation": "native_event_get",
+        "phase": "request_frame_before_dispatch",
+        "phase_unix_ns": 1794514877554857661,
+        "raw_frame_bytes": 397,
+        "raw_frame_sha256": "b68f008d1f5a45486a750d9118c66d033d1b8c5b891475e8668b8dad7e7fbc91",
+        "request_id": 2,
+        "topology_generation": 4
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc72-7de0-8862-bb2ddb95dfcd",
+        "request": {
+          "destination": "n4",
+          "operation": {
+            "key": "not-a-blank-absence-proof",
+            "namespace": "items",
+            "operation": "get"
+          },
+          "public_operation": "replica_receiver_refusal_probe",
+          "range_epoch": 1,
+          "range_id": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-fc6c-75b2-bde6-0c6f7fe678ab",
+      "observer_name": "direct_unassigned_receiver_probe",
+      "sink_sequence": 26,
+      "sink_unix_ns": 1794514877554944672
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38367",
+        "attempt_id": "01a1d16b-fc72-7de0-8862-bb53b01fade7",
+        "bytes_written": 397,
+        "caller": "n0",
+        "decoded_frame": {
+          "actual_native_source": {
+            "abort_protocol_version": 1,
+            "birth_id": "01a1d16b-f520-77e1-a380-3e4787ad6b4f",
+            "birth_sha256": "48659327681fe8975e7ff04393e512ee46b594a6657f17620c1f64b9deeb2293",
+            "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+            "node_incarnation": 1,
+            "version": 1,
+            "writer_enforcement_version": 1
+          },
+          "cluster_id": "native-operator-cli",
+          "protocol_version": 28,
+          "request_id": 2,
+          "response": {
+            "Ok": {
+              "NativeEventGet": {
+                "business_request_id": "01a1d16b-fc72-7de0-8862-bb3ccd3885d5",
+                "challenge": "01a1d16b-fc72-7de0-8862-bb4437cbd204",
+                "result": {
+                  "code": {
+                    "code": "missing_dispatcher"
+                  },
+                  "detail": "registered replica-only receiver has no materialized DATA/Strong serving admission",
+                  "kind": "unavailable",
+                  "retry_after_ms": 50,
+                  "route": null
+                },
+                "version": 1
+              }
+            }
+          },
+          "source_node_id": "n4"
+        },
+        "destination": "n4",
+        "elapsed_ns": 8007843,
+        "error_chain": [],
+        "journal_sequence": 7,
+        "may_have_dispatched": true,
+        "operation": "native_event_get",
+        "phase": "response_frame_before_decode",
+        "phase_unix_ns": 1794514877562509487,
+        "raw_frame_bytes": 760,
+        "raw_frame_sha256": "b5362c8ee6b769cd5b7c4ea41fa170e432efc71f96fee6a49bb82681e10c13bd",
+        "request_id": 2,
+        "topology_generation": 4
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc72-7de0-8862-bb2ddb95dfcd",
+        "request": {
+          "destination": "n4",
+          "operation": {
+            "key": "not-a-blank-absence-proof",
+            "namespace": "items",
+            "operation": "get"
+          },
+          "public_operation": "replica_receiver_refusal_probe",
+          "range_epoch": 1,
+          "range_id": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-fc6c-75b2-bde6-0c6f7fe678ab",
+      "observer_name": "direct_unassigned_receiver_probe",
+      "sink_sequence": 27,
+      "sink_unix_ns": 1794514877562670099
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38367",
+        "attempt_id": "01a1d16b-fc72-7de0-8862-bb53b01fade7",
+        "bytes_written": 397,
+        "caller": "n0",
+        "destination": "n4",
+        "elapsed_ns": 8623611,
+        "error_chain": [],
+        "journal_sequence": 8,
+        "may_have_dispatched": true,
+        "operation": "native_event_get",
+        "phase": "validated_transport_result_ok",
+        "phase_unix_ns": 1794514877563125255,
+        "request_id": 2,
+        "topology_generation": 4
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc72-7de0-8862-bb2ddb95dfcd",
+        "request": {
+          "destination": "n4",
+          "operation": {
+            "key": "not-a-blank-absence-proof",
+            "namespace": "items",
+            "operation": "get"
+          },
+          "public_operation": "replica_receiver_refusal_probe",
+          "range_epoch": 1,
+          "range_id": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-fc6c-75b2-bde6-0c6f7fe678ab",
+      "observer_name": "direct_unassigned_receiver_probe",
+      "sink_sequence": 28,
+      "sink_unix_ns": 1794514877563173698
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": true,
+      "diagnostic_operation_id": "01a1d16b-fc72-7de0-8862-bb2ddb95dfcd",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "classification": "ACTUAL_RECEIVER_REFUSAL",
+        "error_chain": [
+          "cluster error: strong_point_read_unavailable: registered replica-only receiver has no materialized DATA/Strong serving admission"
+        ]
+      },
+      "sink_sequence": 29,
+      "sink_unix_ns": 1794514877563423384
+    },
+    {
+      "context_is_protocol_business_id": false,
+      "diagnostic_operation_id": "01a1d16b-fc7b-7fd0-af25-54fb9ab89248",
+      "kind": "logical_request_intent",
+      "request": {
+        "destination": "n4",
+        "operation": {
+          "after": null,
+          "limit": 1,
+          "namespace": "items",
+          "operation": "scan"
+        },
+        "public_operation": "replica_receiver_refusal_probe",
+        "range_epoch": 1,
+        "range_id": 1
+      },
+      "sink_sequence": 30,
+      "sink_unix_ns": 1794514877563647442
+    },
+    {
+      "actual": {
+        "address": null,
+        "attempt_id": "01a1d16b-fc7b-7fd0-af25-55077f650574",
+        "bytes_written": 0,
+        "caller": "n0",
+        "destination": "n4",
+        "elapsed_ns": 410,
+        "error_chain": [],
+        "journal_sequence": 9,
+        "may_have_dispatched": false,
+        "operation": "event_scan",
+        "phase": "invoked",
+        "phase_unix_ns": 1794514877563861024,
+        "request_id": null,
+        "topology_generation": null
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc7b-7fd0-af25-54fb9ab89248",
+        "request": {
+          "destination": "n4",
+          "operation": {
+            "after": null,
+            "limit": 1,
+            "namespace": "items",
+            "operation": "scan"
+          },
+          "public_operation": "replica_receiver_refusal_probe",
+          "range_epoch": 1,
+          "range_id": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-fc6c-75b2-bde6-0c6f7fe678ab",
+      "observer_name": "direct_unassigned_receiver_probe",
+      "sink_sequence": 31,
+      "sink_unix_ns": 1794514877563899372
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38367",
+        "attempt_id": "01a1d16b-fc7b-7fd0-af25-55077f650574",
+        "bytes_written": 0,
+        "caller": "n0",
+        "decoded_frame": {
+          "caller_node_id": "n0",
+          "cluster_id": "native-operator-cli",
+          "destination_node_id": "n4",
+          "protocol_version": 28,
+          "request": {
+            "ApplicationEvent": {
+              "operation": {
+                "after": null,
+                "limit": 1,
+                "namespace": "items",
+                "operation": "scan"
+              },
+              "range_epoch": 1,
+              "range_id": 1
+            }
+          },
+          "request_id": 3
+        },
+        "destination": "n4",
+        "elapsed_ns": 328555,
+        "error_chain": [],
+        "journal_sequence": 10,
+        "may_have_dispatched": false,
+        "operation": "event_scan",
+        "phase": "request_frame_before_dispatch",
+        "phase_unix_ns": 1794514877564189269,
+        "raw_frame_bytes": 264,
+        "raw_frame_sha256": "f6f67b7d73a7b0495668774b2848e4fb86fd3b1444962a6b8bb1937408f1558a",
+        "request_id": 3,
+        "topology_generation": 4
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc7b-7fd0-af25-54fb9ab89248",
+        "request": {
+          "destination": "n4",
+          "operation": {
+            "after": null,
+            "limit": 1,
+            "namespace": "items",
+            "operation": "scan"
+          },
+          "public_operation": "replica_receiver_refusal_probe",
+          "range_epoch": 1,
+          "range_id": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-fc6c-75b2-bde6-0c6f7fe678ab",
+      "observer_name": "direct_unassigned_receiver_probe",
+      "sink_sequence": 32,
+      "sink_unix_ns": 1794514877564259024
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38367",
+        "attempt_id": "01a1d16b-fc7b-7fd0-af25-55077f650574",
+        "bytes_written": 264,
+        "caller": "n0",
+        "decoded_frame": {
+          "actual_native_source": {
+            "abort_protocol_version": 1,
+            "birth_id": "01a1d16b-f520-77e1-a380-3e4787ad6b4f",
+            "birth_sha256": "48659327681fe8975e7ff04393e512ee46b594a6657f17620c1f64b9deeb2293",
+            "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+            "node_incarnation": 1,
+            "version": 1,
+            "writer_enforcement_version": 1
+          },
+          "cluster_id": "native-operator-cli",
+          "protocol_version": 28,
+          "request_id": 3,
+          "response": {
+            "Err": {
+              "code": "cluster_data_operation_failed",
+              "message": "cluster error: registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required"
+            }
+          },
+          "source_node_id": "n4"
+        },
+        "destination": "n4",
+        "elapsed_ns": 8666104,
+        "error_chain": [],
+        "journal_sequence": 11,
+        "may_have_dispatched": true,
+        "operation": "event_scan",
+        "phase": "response_frame_before_decode",
+        "phase_unix_ns": 1794514877572526668,
+        "raw_frame_bytes": 648,
+        "raw_frame_sha256": "dc21ffcb977b4ada8f91598baaacfc3c427e244f262cd17624b5847b8b6515ca",
+        "request_id": 3,
+        "topology_generation": 4
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc7b-7fd0-af25-54fb9ab89248",
+        "request": {
+          "destination": "n4",
+          "operation": {
+            "after": null,
+            "limit": 1,
+            "namespace": "items",
+            "operation": "scan"
+          },
+          "public_operation": "replica_receiver_refusal_probe",
+          "range_epoch": 1,
+          "range_id": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-fc6c-75b2-bde6-0c6f7fe678ab",
+      "observer_name": "direct_unassigned_receiver_probe",
+      "sink_sequence": 33,
+      "sink_unix_ns": 1794514877572678727
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:38367",
+        "attempt_id": "01a1d16b-fc7b-7fd0-af25-55077f650574",
+        "bytes_written": 264,
+        "caller": "n0",
+        "destination": "n4",
+        "elapsed_ns": 9256745,
+        "error_chain": [
+          "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required"
+        ],
+        "journal_sequence": 12,
+        "may_have_dispatched": true,
+        "operation": "event_scan",
+        "phase": "validated_transport_result_error",
+        "phase_unix_ns": 1794514877573117379,
+        "request_id": 3,
+        "topology_generation": 4
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc7b-7fd0-af25-54fb9ab89248",
+        "request": {
+          "destination": "n4",
+          "operation": {
+            "after": null,
+            "limit": 1,
+            "namespace": "items",
+            "operation": "scan"
+          },
+          "public_operation": "replica_receiver_refusal_probe",
+          "range_epoch": 1,
+          "range_id": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-fc6c-75b2-bde6-0c6f7fe678ab",
+      "observer_name": "direct_unassigned_receiver_probe",
+      "sink_sequence": 34,
+      "sink_unix_ns": 1794514877573166102
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": true,
+      "diagnostic_operation_id": "01a1d16b-fc7b-7fd0-af25-54fb9ab89248",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "classification": "ACTUAL_RECEIVER_REFUSAL",
+        "error_chain": [
+          "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required"
+        ]
+      },
+      "sink_sequence": 35,
+      "sink_unix_ns": 1794514877573403049
+    },
+    {
+      "context_is_protocol_business_id": false,
+      "diagnostic_operation_id": "01a1d16b-fc85-7633-b48e-7b864d912879",
+      "kind": "logical_request_intent",
+      "request": {
+        "eventual_health_gate_ms": 10000,
+        "key": "ack-before-fifth-registry-refresh",
+        "namespace": "items",
+        "phase": "strict_after_fifth",
+        "public_operation": "get_strong",
+        "request_timeout_ms": 2000,
+        "round": 1
+      },
+      "sink_sequence": 36,
+      "sink_unix_ns": 1794514877573634368
+    },
+    {
+      "actual": {
+        "address": null,
+        "attempt_id": "01a1d16b-fc85-7633-b48e-7bb179c0170a",
+        "bytes_written": 0,
+        "caller": "n0",
+        "destination": "n0",
+        "elapsed_ns": 341,
+        "error_chain": [],
+        "journal_sequence": 9,
+        "may_have_dispatched": false,
+        "operation": "native_event_get",
+        "phase": "invoked",
+        "phase_unix_ns": 1794514877573854240,
+        "request_id": null,
+        "topology_generation": null
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc85-7633-b48e-7b864d912879",
+        "request": {
+          "eventual_health_gate_ms": 10000,
+          "key": "ack-before-fifth-registry-refresh",
+          "namespace": "items",
+          "phase": "strict_after_fifth",
+          "public_operation": "get_strong",
+          "request_timeout_ms": 2000,
+          "round": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 37,
+      "sink_unix_ns": 1794514877573887710
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:44271",
+        "attempt_id": "01a1d16b-fc85-7633-b48e-7bb179c0170a",
+        "bytes_written": 0,
+        "caller": "n0",
+        "decoded_frame": {
+          "caller_node_id": "n0",
+          "cluster_id": "native-operator-cli",
+          "destination_node_id": "n0",
+          "protocol_version": 28,
+          "request": {
+            "NativeEventGet": {
+              "budget_ms": 999,
+              "business_request_id": "01a1d16b-fc85-7633-b48e-7b930da7b70f",
+              "challenge": "01a1d16b-fc85-7633-b48e-7bab87a6972b",
+              "key": "ack-before-fifth-registry-refresh",
+              "mode": "strong",
+              "namespace": "items",
+              "range_epoch": 1,
+              "range_id": 4,
+              "version": 1
+            }
+          },
+          "request_id": 3
+        },
+        "destination": "n0",
+        "elapsed_ns": 347164,
+        "error_chain": [],
+        "journal_sequence": 10,
+        "may_have_dispatched": false,
+        "operation": "native_event_get",
+        "phase": "request_frame_before_dispatch",
+        "phase_unix_ns": 1794514877574201082,
+        "raw_frame_bytes": 404,
+        "raw_frame_sha256": "ff799fe4c218677cca33c4cb41f57b1637c9f2b41fd2abaa1bfd856bb006e369",
+        "request_id": 3,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc85-7633-b48e-7b864d912879",
+        "request": {
+          "eventual_health_gate_ms": 10000,
+          "key": "ack-before-fifth-registry-refresh",
+          "namespace": "items",
+          "phase": "strict_after_fifth",
+          "public_operation": "get_strong",
+          "request_timeout_ms": 2000,
+          "round": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 38,
+      "sink_unix_ns": 1794514877574291869
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:44271",
+        "attempt_id": "01a1d16b-fc85-7633-b48e-7bb179c0170a",
+        "bytes_written": 404,
+        "caller": "n0",
+        "decoded_frame": {
+          "actual_native_source": {
+            "abort_protocol_version": 1,
+            "birth_id": "01a1d16b-e621-79e0-9b94-4c699894cfc4",
+            "birth_sha256": "f5e6910d7c79e4d160dd9663f576c2d217c96de0a35b7b48e96406314bdeb40b",
+            "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+            "node_incarnation": 1,
+            "version": 1,
+            "writer_enforcement_version": 1
+          },
+          "cluster_id": "native-operator-cli",
+          "protocol_version": 28,
+          "request_id": 3,
+          "response": {
+            "Ok": {
+              "NativeEventGet": {
+                "business_request_id": "01a1d16b-fc85-7633-b48e-7b930da7b70f",
+                "challenge": "01a1d16b-fc85-7633-b48e-7bab87a6972b",
+                "result": {
+                  "audit": {
+                    "business_request_id": "01a1d16b-fc85-7633-b48e-7b930da7b70f",
+                    "challenge": "01a1d16b-fc85-7633-b48e-7bab87a6972b",
+                    "final_metadata_context_id": "01a1d16b-fd47-7771-baf8-31f64f46aba5",
+                    "final_metadata_generation": 4,
+                    "final_metadata_read_index": 4,
+                    "final_metadata_term": 1,
+                    "first_metadata_context_id": "01a1d16b-fcaf-77f0-8006-a0217b25b5ad",
+                    "logical_genesis_sha256": "a088a57b6028328cdea630db2a2aeabdd15c9553de78389e8d286b3c591be6ed",
+                    "logical_history_sha256": "9c860d9a1e980c956fadca665a42633ebd8d0e46eaf39716314e56b4580f24da",
+                    "range_epoch": 1,
+                    "range_id": 4,
+                    "range_index": 1,
+                    "snapshot_sequence": 1,
+                    "target_local_visibility_db_sequence": 1
+                  },
+                  "kind": "value",
+                  "route": {
+                    "generation": 4,
+                    "leader": "n0",
+                    "range_epoch": 1,
+                    "range_id": 4
+                  },
+                  "value": {
+                    "presence": "present",
+                    "value": {
+                      "entire": "external ACK precedes fifth stage",
+                      "nested": [
+                        17,
+                        null,
+                        {
+                          "retained": true
+                        }
+                      ]
+                    }
+                  }
+                },
+                "version": 1
+              }
+            }
+          },
+          "source_node_id": "n0"
+        },
+        "destination": "n0",
+        "elapsed_ns": 248545396,
+        "error_chain": [],
+        "journal_sequence": 11,
+        "may_have_dispatched": true,
+        "operation": "native_event_get",
+        "phase": "response_frame_before_decode",
+        "phase_unix_ns": 1794514877822398584,
+        "raw_frame_bytes": 1412,
+        "raw_frame_sha256": "c12cb8406d3a0f3ee104c3ffa502967a7339abe5d021cb8dd0a3ee524b48e12f",
+        "request_id": 3,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc85-7633-b48e-7b864d912879",
+        "request": {
+          "eventual_health_gate_ms": 10000,
+          "key": "ack-before-fifth-registry-refresh",
+          "namespace": "items",
+          "phase": "strict_after_fifth",
+          "public_operation": "get_strong",
+          "request_timeout_ms": 2000,
+          "round": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 39,
+      "sink_unix_ns": 1794514877822782343
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:44271",
+        "attempt_id": "01a1d16b-fc85-7633-b48e-7bb179c0170a",
+        "bytes_written": 404,
+        "caller": "n0",
+        "destination": "n0",
+        "elapsed_ns": 258670104,
+        "error_chain": [],
+        "journal_sequence": 12,
+        "may_have_dispatched": true,
+        "operation": "native_event_get",
+        "phase": "validated_transport_result_ok",
+        "phase_unix_ns": 1794514877832523242,
+        "request_id": 3,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fc85-7633-b48e-7b864d912879",
+        "request": {
+          "eventual_health_gate_ms": 10000,
+          "key": "ack-before-fifth-registry-refresh",
+          "namespace": "items",
+          "phase": "strict_after_fifth",
+          "public_operation": "get_strong",
+          "request_timeout_ms": 2000,
+          "round": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 40,
+      "sink_unix_ns": 1794514877832629903
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": true,
+      "diagnostic_operation_id": "01a1d16b-fc85-7633-b48e-7b864d912879",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "classification": "STRONG_SUCCESS",
+        "presence": "present",
+        "value": {
+          "entire": "external ACK precedes fifth stage",
+          "nested": [
+            17,
+            null,
+            {
+              "retained": true
+            }
+          ]
+        }
+      },
+      "sink_sequence": 41,
+      "sink_unix_ns": 1794514877834181758
+    },
+    {
+      "context_is_protocol_business_id": false,
+      "diagnostic_operation_id": "01a1d16b-fd8a-74c3-8c1f-5670489185bb",
+      "kind": "logical_request_intent",
+      "request": {
+        "key": "fresh-ack-after-fifth-registry-addition",
+        "namespace": "items",
+        "payload_sha256": "329927017ed48a141d882f3d14f6e3b874b210dc6aa21cdaeeee0017977bc9ea",
+        "phase": "strict_after_fifth",
+        "public_operation": "append",
+        "request_timeout_ms": 2000,
+        "round": 1,
+        "value": {
+          "empty": {},
+          "nested": [
+            null,
+            {
+              "unchanged_data_assignment": true
+            }
+          ],
+          "whole": "new external ACK after registry addition"
+        }
+      },
+      "sink_sequence": 42,
+      "sink_unix_ns": 1794514877834550274
+    },
+    {
+      "actual": {
+        "address": null,
+        "attempt_id": "01a1d16b-fd8b-7541-8512-9024f739805e",
+        "bytes_written": 0,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 1272,
+        "error_chain": [],
+        "journal_sequence": 13,
+        "may_have_dispatched": false,
+        "operation": "event_append",
+        "phase": "invoked",
+        "phase_unix_ns": 1794514877835193514,
+        "request_id": null,
+        "topology_generation": null
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fd8a-74c3-8c1f-5670489185bb",
+        "request": {
+          "key": "fresh-ack-after-fifth-registry-addition",
+          "namespace": "items",
+          "payload_sha256": "329927017ed48a141d882f3d14f6e3b874b210dc6aa21cdaeeee0017977bc9ea",
+          "phase": "strict_after_fifth",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "round": 1,
+          "value": {
+            "empty": {},
+            "nested": [
+              null,
+              {
+                "unchanged_data_assignment": true
+              }
+            ],
+            "whole": "new external ACK after registry addition"
+          }
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 43,
+      "sink_unix_ns": 1794514877835267796
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:34845",
+        "attempt_id": "01a1d16b-fd8b-7541-8512-9024f739805e",
+        "bytes_written": 0,
+        "caller": "n0",
+        "decoded_frame": {
+          "caller_node_id": "n0",
+          "cluster_id": "native-operator-cli",
+          "destination_node_id": "n2",
+          "protocol_version": 28,
+          "request": {
+            "ApplicationEvent": {
+              "operation": {
+                "key": "fresh-ack-after-fifth-registry-addition",
+                "namespace": "items",
+                "operation": "append",
+                "value": {
+                  "empty": {},
+                  "nested": [
+                    null,
+                    {
+                      "unchanged_data_assignment": true
+                    }
+                  ],
+                  "whole": "new external ACK after registry addition"
+                }
+              },
+              "range_epoch": 1,
+              "range_id": 2
+            }
+          },
+          "request_id": 4
+        },
+        "destination": "n2",
+        "elapsed_ns": 425542,
+        "error_chain": [],
+        "journal_sequence": 14,
+        "may_have_dispatched": false,
+        "operation": "event_append",
+        "phase": "request_frame_before_dispatch",
+        "phase_unix_ns": 1794514877835617953,
+        "raw_frame_bytes": 414,
+        "raw_frame_sha256": "de819d8439c8f321466f68dcad93f4701c0c4d75ff7a8a9a73d8f9d2de0e4e4b",
+        "request_id": 4,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fd8a-74c3-8c1f-5670489185bb",
+        "request": {
+          "key": "fresh-ack-after-fifth-registry-addition",
+          "namespace": "items",
+          "payload_sha256": "329927017ed48a141d882f3d14f6e3b874b210dc6aa21cdaeeee0017977bc9ea",
+          "phase": "strict_after_fifth",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "round": 1,
+          "value": {
+            "empty": {},
+            "nested": [
+              null,
+              {
+                "unchanged_data_assignment": true
+              }
+            ],
+            "whole": "new external ACK after registry addition"
+          }
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 44,
+      "sink_unix_ns": 1794514877835723523
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:34845",
+        "attempt_id": "01a1d16b-fd8b-7541-8512-9024f739805e",
+        "bytes_written": 414,
+        "caller": "n0",
+        "decoded_frame": {
+          "actual_native_source": {
+            "abort_protocol_version": 1,
+            "birth_id": "01a1d16b-e620-7f93-ba97-56a937f0d49a",
+            "birth_sha256": "2007ad09419548b963d708729d7ecd3a143d4b35e4aa8a402be0265d52d32813",
+            "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+            "node_incarnation": 1,
+            "version": 1,
+            "writer_enforcement_version": 1
+          },
+          "cluster_id": "native-operator-cli",
+          "protocol_version": 28,
+          "request_id": 4,
+          "response": {
+            "Ok": {
+              "ApplicationEvent": {
+                "inserted": true,
+                "result": "appended"
+              }
+            }
+          },
+          "source_node_id": "n2"
+        },
+        "destination": "n2",
+        "elapsed_ns": 491963586,
+        "error_chain": [],
+        "journal_sequence": 15,
+        "may_have_dispatched": true,
+        "operation": "event_append",
+        "phase": "response_frame_before_decode",
+        "phase_unix_ns": 1794514878327155266,
+        "raw_frame_bytes": 478,
+        "raw_frame_sha256": "b5d15d55c388ab3f163c91490b8b0a25124ef9e4ecfb356f9af5dc7edeefc172",
+        "request_id": 4,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fd8a-74c3-8c1f-5670489185bb",
+        "request": {
+          "key": "fresh-ack-after-fifth-registry-addition",
+          "namespace": "items",
+          "payload_sha256": "329927017ed48a141d882f3d14f6e3b874b210dc6aa21cdaeeee0017977bc9ea",
+          "phase": "strict_after_fifth",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "round": 1,
+          "value": {
+            "empty": {},
+            "nested": [
+              null,
+              {
+                "unchanged_data_assignment": true
+              }
+            ],
+            "whole": "new external ACK after registry addition"
+          }
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 45,
+      "sink_unix_ns": 1794514878327386755
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:34845",
+        "attempt_id": "01a1d16b-fd8b-7541-8512-9024f739805e",
+        "bytes_written": 414,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 492726936,
+        "error_chain": [],
+        "journal_sequence": 16,
+        "may_have_dispatched": true,
+        "operation": "event_append",
+        "phase": "validated_transport_result_ok",
+        "phase_unix_ns": 1794514878327919278,
+        "request_id": 4,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-fd8a-74c3-8c1f-5670489185bb",
+        "request": {
+          "key": "fresh-ack-after-fifth-registry-addition",
+          "namespace": "items",
+          "payload_sha256": "329927017ed48a141d882f3d14f6e3b874b210dc6aa21cdaeeee0017977bc9ea",
+          "phase": "strict_after_fifth",
+          "public_operation": "append",
+          "request_timeout_ms": 2000,
+          "round": 1,
+          "value": {
+            "empty": {},
+            "nested": [
+              null,
+              {
+                "unchanged_data_assignment": true
+              }
+            ],
+            "whole": "new external ACK after registry addition"
+          }
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 46,
+      "sink_unix_ns": 1794514878327973320
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": true,
+      "diagnostic_operation_id": "01a1d16b-fd8a-74c3-8c1f-5670489185bb",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "classification": "USER_ACK",
+        "inserted": true
+      },
+      "sink_sequence": 47,
+      "sink_unix_ns": 1794514878328812765
+    },
+    {
+      "context_is_protocol_business_id": false,
+      "diagnostic_operation_id": "01a1d16b-ff79-7f11-ab6b-05b2c2763cfd",
+      "kind": "logical_request_intent",
+      "request": {
+        "key": "fresh-ack-after-fifth-registry-addition",
+        "namespace": "items",
+        "phase": "strict_fresh_ack_read",
+        "public_operation": "get_strong",
+        "request_timeout_ms": 2000,
+        "round": 1
+      },
+      "sink_sequence": 48,
+      "sink_unix_ns": 1794514878329079677
+    },
+    {
+      "actual": {
+        "address": null,
+        "attempt_id": "01a1d16b-ff79-7f11-ab6b-05edfa915fee",
+        "bytes_written": 0,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 1152,
+        "error_chain": [],
+        "journal_sequence": 17,
+        "may_have_dispatched": false,
+        "operation": "native_event_get",
+        "phase": "invoked",
+        "phase_unix_ns": 1794514878329363826,
+        "request_id": null,
+        "topology_generation": null
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-ff79-7f11-ab6b-05b2c2763cfd",
+        "request": {
+          "key": "fresh-ack-after-fifth-registry-addition",
+          "namespace": "items",
+          "phase": "strict_fresh_ack_read",
+          "public_operation": "get_strong",
+          "request_timeout_ms": 2000,
+          "round": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 49,
+      "sink_unix_ns": 1794514878329404207
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:34845",
+        "attempt_id": "01a1d16b-ff79-7f11-ab6b-05edfa915fee",
+        "bytes_written": 0,
+        "caller": "n0",
+        "decoded_frame": {
+          "caller_node_id": "n0",
+          "cluster_id": "native-operator-cli",
+          "destination_node_id": "n2",
+          "protocol_version": 28,
+          "request": {
+            "NativeEventGet": {
+              "budget_ms": 999,
+              "business_request_id": "01a1d16b-ff79-7f11-ab6b-05c62f951545",
+              "challenge": "01a1d16b-ff79-7f11-ab6b-05d74a5feb65",
+              "key": "fresh-ack-after-fifth-registry-addition",
+              "mode": "strong",
+              "namespace": "items",
+              "range_epoch": 1,
+              "range_id": 2,
+              "version": 1
+            }
+          },
+          "request_id": 5
+        },
+        "destination": "n2",
+        "elapsed_ns": 300624,
+        "error_chain": [],
+        "journal_sequence": 18,
+        "may_have_dispatched": false,
+        "operation": "native_event_get",
+        "phase": "request_frame_before_dispatch",
+        "phase_unix_ns": 1794514878329663407,
+        "raw_frame_bytes": 410,
+        "raw_frame_sha256": "dd8ae10044528cf1f328954d3bad2dfc6f1db20395de3bc12f2955294e9965b8",
+        "request_id": 5,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-ff79-7f11-ab6b-05b2c2763cfd",
+        "request": {
+          "key": "fresh-ack-after-fifth-registry-addition",
+          "namespace": "items",
+          "phase": "strict_fresh_ack_read",
+          "public_operation": "get_strong",
+          "request_timeout_ms": 2000,
+          "round": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 50,
+      "sink_unix_ns": 1794514878329755226
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:34845",
+        "attempt_id": "01a1d16b-ff79-7f11-ab6b-05edfa915fee",
+        "bytes_written": 410,
+        "caller": "n0",
+        "decoded_frame": {
+          "actual_native_source": {
+            "abort_protocol_version": 1,
+            "birth_id": "01a1d16b-e620-7f93-ba97-56a937f0d49a",
+            "birth_sha256": "2007ad09419548b963d708729d7ecd3a143d4b35e4aa8a402be0265d52d32813",
+            "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+            "node_incarnation": 1,
+            "version": 1,
+            "writer_enforcement_version": 1
+          },
+          "cluster_id": "native-operator-cli",
+          "protocol_version": 28,
+          "request_id": 5,
+          "response": {
+            "Ok": {
+              "NativeEventGet": {
+                "business_request_id": "01a1d16b-ff79-7f11-ab6b-05c62f951545",
+                "challenge": "01a1d16b-ff79-7f11-ab6b-05d74a5feb65",
+                "result": {
+                  "audit": {
+                    "business_request_id": "01a1d16b-ff79-7f11-ab6b-05c62f951545",
+                    "challenge": "01a1d16b-ff79-7f11-ab6b-05d74a5feb65",
+                    "final_metadata_context_id": "01a1d16c-003e-7f93-89ae-b9c2e1165590",
+                    "final_metadata_generation": 4,
+                    "final_metadata_read_index": 4,
+                    "final_metadata_term": 1,
+                    "first_metadata_context_id": "01a1d16b-ff9b-7d30-9e9f-c17c750085df",
+                    "logical_genesis_sha256": "c46f86eba5f4abe9708e0c3f55e13cdf9065cdd4ea5dc62f9a378a42ae0aea73",
+                    "logical_history_sha256": "9614c222d67851d1e5dd8d2fd6a9218cf92c33414098df17857534838092d8ff",
+                    "range_epoch": 1,
+                    "range_id": 2,
+                    "range_index": 1,
+                    "snapshot_sequence": 2,
+                    "target_local_visibility_db_sequence": 2
+                  },
+                  "kind": "value",
+                  "route": {
+                    "generation": 4,
+                    "leader": "n2",
+                    "range_epoch": 1,
+                    "range_id": 2
+                  },
+                  "value": {
+                    "presence": "present",
+                    "value": {
+                      "empty": {},
+                      "nested": [
+                        null,
+                        {
+                          "unchanged_data_assignment": true
+                        }
+                      ],
+                      "whole": "new external ACK after registry addition"
+                    }
+                  }
+                },
+                "version": 1
+              }
+            }
+          },
+          "source_node_id": "n2"
+        },
+        "destination": "n2",
+        "elapsed_ns": 258533034,
+        "error_chain": [],
+        "journal_sequence": 19,
+        "may_have_dispatched": true,
+        "operation": "native_event_get",
+        "phase": "response_frame_before_decode",
+        "phase_unix_ns": 1794514878587895047,
+        "raw_frame_bytes": 1443,
+        "raw_frame_sha256": "7077bc418ee4b7417f9d72a174b8b8dc584ab79d1cbc13136a249642357adc35",
+        "request_id": 5,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-ff79-7f11-ab6b-05b2c2763cfd",
+        "request": {
+          "key": "fresh-ack-after-fifth-registry-addition",
+          "namespace": "items",
+          "phase": "strict_fresh_ack_read",
+          "public_operation": "get_strong",
+          "request_timeout_ms": 2000,
+          "round": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 51,
+      "sink_unix_ns": 1794514878588249871
+    },
+    {
+      "actual": {
+        "address": "127.0.0.1:34845",
+        "attempt_id": "01a1d16b-ff79-7f11-ab6b-05edfa915fee",
+        "bytes_written": 410,
+        "caller": "n0",
+        "destination": "n2",
+        "elapsed_ns": 259743909,
+        "error_chain": [],
+        "journal_sequence": 20,
+        "may_have_dispatched": true,
+        "operation": "native_event_get",
+        "phase": "validated_transport_result_ok",
+        "phase_unix_ns": 1794514878589106483,
+        "request_id": 5,
+        "topology_generation": 1
+      },
+      "kind": "actual_rpc_phase",
+      "logical_context": {
+        "diagnostic_operation_id": "01a1d16b-ff79-7f11-ab6b-05b2c2763cfd",
+        "request": {
+          "key": "fresh-ack-after-fifth-registry-addition",
+          "namespace": "items",
+          "phase": "strict_fresh_ack_read",
+          "public_operation": "get_strong",
+          "request_timeout_ms": 2000,
+          "round": 1
+        }
+      },
+      "observer_instance_id": "01a1d16b-f1aa-74e0-a0e6-775fce523c11",
+      "observer_name": "same_public_gateway",
+      "sink_sequence": 52,
+      "sink_unix_ns": 1794514878589161015
+    },
+    {
+      "any_actual_rpc_may_have_dispatched": true,
+      "diagnostic_operation_id": "01a1d16b-ff79-7f11-ab6b-05b2c2763cfd",
+      "durable_outcome_inferred_from_error": false,
+      "kind": "logical_public_reply",
+      "outcome": {
+        "classification": "STRONG_SUCCESS",
+        "presence": "present",
+        "value": {
+          "empty": {},
+          "nested": [
+            null,
+            {
+              "unchanged_data_assignment": true
+            }
+          ],
+          "whole": "new external ACK after registry addition"
+        }
+      },
+      "sink_sequence": 53,
+      "sink_unix_ns": 1794514878589928522
+    },
+    {
+      "bootstrap_raw_frame_covered": false,
+      "kind": "fixture_case_finished",
+      "no_global_wire_or_healthy_postjoin_claim": true,
+      "scope": "strict_registry_health_probes_complete_no_success_implied",
+      "sink_sequence": 54,
+      "sink_unix_ns": 1794514878768376625,
+      "trace_fenced": false
+    }
+  ],
+  "source": "aac6192c2b034e1f2e4c88a16fd84bcd94e0bf6b",
+  "stopped_metadata_states": [
+    {
+      "commit_index": 5,
+      "current_term": 2,
+      "leader_id": "n4",
+      "native_store_id": "01a1d16b-5c1e-7c72-bc85-3f0f4a5ab191",
+      "role": "follower",
+      "root": "db0",
+      "topology_generation": 4,
+      "voted_for": "n4"
+    },
+    {
+      "commit_index": 5,
+      "current_term": 2,
+      "leader_id": "n4",
+      "native_store_id": "01a1d16b-5c6a-7d43-863f-7ffe02ea8660",
+      "role": "follower",
+      "root": "db1",
+      "topology_generation": 4,
+      "voted_for": "n4"
+    },
+    {
+      "commit_index": 5,
+      "current_term": 2,
+      "leader_id": "n4",
+      "native_store_id": "01a1d16b-5cb0-7fb2-aa65-65ff0dd955ae",
+      "role": "follower",
+      "root": "db2",
+      "topology_generation": 4,
+      "voted_for": "n4"
+    },
+    {
+      "commit_index": 5,
+      "current_term": 2,
+      "leader_id": "n4",
+      "native_store_id": "01a1d16b-5cf8-7561-9cb1-77eed4eb5441",
+      "role": "follower",
+      "root": "db3",
+      "topology_generation": 4,
+      "voted_for": "n4"
+    },
+    {
+      "commit_index": 5,
+      "current_term": 2,
+      "leader_id": "n4",
+      "native_store_id": "01a1d16b-6456-7861-bd28-ef1f753a09bf",
+      "role": "leader",
+      "root": "db4",
+      "topology_generation": 4,
+      "voted_for": "n4"
+    }
+  ],
+  "strict_journal_bytes": 85752,
+  "strict_journal_path": "rpc-journals/client-01a1d16b-ec4a-7fc2-a51d-b81f57a13802/journal.jsonl",
+  "strict_journal_sha256": "cb462ab6ee3d9ed73183c78a246993efa0beff11550ed7ebfa87dc222e83177f",
+  "strict_stdout_ledger": [
+    {
+      "execution_identity": {
+        "binary_bytes": 751406136,
+        "binary_scope": "actual CARGO_BIN_EXE_bicdb bytes read before process/startup/ACK phase; not a published release",
+        "binary_sha256": "35c3b103e1a54d6aee1c10ec9bbc597a995429ecc96879a44c1ebc14363361df",
+        "source": "aac6192c2b034e1f2e4c88a16fd84bcd94e0bf6b",
+        "source_authority": "BICDB_TEST_SOURCE_SHA runtime environment; not option_env or runtime git lookup",
+        "source_available": true,
+        "test_package_version": "1.0.489-beta"
+      },
+      "pids": [
+        18970,
+        18971,
+        18972,
+        18973
+      ],
+      "stage": "initial_four"
+    },
+    {
+      "node": "n0",
+      "reply": {
+        "data_serving": false,
+        "error": "cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\"n1\"): \"cluster error: cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\", ClusterNodeId(\"n2\"): \"cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\"}",
+        "host": {
+          "data_refusal": "metadata-only or pending DATA host: no successful application admission is installed",
+          "data_serving": false,
+          "initial_data": {
+            "cleanup_quarantined_owners": 0,
+            "dispatcher_published": false,
+            "ranges": [
+              {
+                "epoch": 1,
+                "leader_admission_observed": false,
+                "local_leader": false,
+                "range_id": 2
+              },
+              {
+                "epoch": 1,
+                "leader_admission_observed": false,
+                "local_leader": false,
+                "range_id": 3
+              },
+              {
+                "epoch": 1,
+                "leader_admission_observed": false,
+                "local_leader": true,
+                "range_id": 4
+              }
+            ],
+            "receiver_listening": true,
+            "registry_refresh_last_attempt": null,
+            "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+            "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+            "writer_binding_diagnostic": {
+              "actual_verified_registry_extension": {
+                "publication_pending": false,
+                "scope": "retained same-open verified audit DATA; not role or Ready",
+                "verified_extension": null
+              },
+              "current_database_hook_slot_not_relocked": true,
+              "identity_from_status_dto_is_not_authority": true,
+              "observed_binding_lifetime_live": true,
+              "observed_binding_liveness_error": null,
+              "observed_bound_authority_matches_retained_coordinator": true,
+              "observed_bound_registration_active": true,
+              "observed_bound_registration_generation": "01a1d16b-ec99-7920-b055-dfa87598adfc",
+              "observed_weak_directory_alive": true,
+              "persisted_policy_checksum_sha256": "dcd811dee0d634a3c3018b33321602763f6246376acf1cb2447fd86d320cd8be",
+              "persisted_policy_coordinator_id": "01a1d16b-ec97-7303-a442-872691e7c87a",
+              "persisted_policy_database_open_incarnation": "d97893c1-cbb1-40d3-9c6c-1c658c2b9a3b",
+              "persisted_policy_range_store_open_id": "01a1d16b-e661-7433-b25a-1ba51636ab71",
+              "persisted_policy_registration_generation": "01a1d16b-ec99-7920-b055-dfa87598adfc",
+              "retained_owner_coordinator_id": "01a1d16b-ec97-7303-a442-872691e7c87a",
+              "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission"
+            },
+            "writer_policy_current": true
+          },
+          "last_caught_up_learner_store_id": null,
+          "last_enrolled_learner": null,
+          "last_metadata_maintenance": {
+            "error": null,
+            "installed_through_index": null,
+            "node": null,
+            "receiver_store_id": null,
+            "stage": "idle_or_backoff"
+          },
+          "last_metadata_promotion": null,
+          "metadata": {
+            "cluster_id": "native-operator-cli",
+            "commit_index": 1,
+            "current_term": 1,
+            "last_log_index": 1,
+            "last_log_term": 1,
+            "leader_id": "n0",
+            "learners": [],
+            "node_id": "n0",
+            "role": "leader",
+            "topology_generation": 1,
+            "voted_for": "n0",
+            "voters": [
+              "n0",
+              "n1",
+              "n2",
+              "n3"
+            ]
+          },
+          "node_id": "n0",
+          "phase": "initial_data_opening",
+          "version": 1
+        },
+        "process_id": 18970,
+        "sequence": 5,
+        "version": 1
+      },
+      "stage": "initial_data_action"
+    },
+    {
+      "node": "n1",
+      "reply": {
+        "data_serving": false,
+        "error": "cluster error: range recovery: cluster error: native range read observation: distinct matching current-voter read majority unavailable; failed probes: {ClusterNodeId(\"n2\"): \"cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\", ClusterNodeId(\"n3\"): \"cluster error: cluster node n3 rejected RPC cluster_data_operation_failed: cluster error: native metadata control listener grants CONFIG/metadata endpoints only\"}",
+        "host": {
+          "data_refusal": "metadata-only or pending DATA host: no successful application admission is installed",
+          "data_serving": false,
+          "initial_data": {
+            "cleanup_quarantined_owners": 0,
+            "dispatcher_published": false,
+            "ranges": [
+              {
+                "epoch": 1,
+                "leader_admission_observed": false,
+                "local_leader": true,
+                "range_id": 1
+              },
+              {
+                "epoch": 1,
+                "leader_admission_observed": false,
+                "local_leader": false,
+                "range_id": 3
+              },
+              {
+                "epoch": 1,
+                "leader_admission_observed": false,
+                "local_leader": false,
+                "range_id": 4
+              }
+            ],
+            "receiver_listening": true,
+            "registry_refresh_last_attempt": null,
+            "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+            "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+            "writer_binding_diagnostic": {
+              "actual_verified_registry_extension": {
+                "publication_pending": false,
+                "scope": "retained same-open verified audit DATA; not role or Ready",
+                "verified_extension": null
+              },
+              "current_database_hook_slot_not_relocked": true,
+              "identity_from_status_dto_is_not_authority": true,
+              "observed_binding_lifetime_live": true,
+              "observed_binding_liveness_error": null,
+              "observed_bound_authority_matches_retained_coordinator": true,
+              "observed_bound_registration_active": true,
+              "observed_bound_registration_generation": "01a1d16b-ed30-7d21-8e12-2dead005ce6e",
+              "observed_weak_directory_alive": true,
+              "persisted_policy_checksum_sha256": "777e9d0d01bdc8788e4227cf7dc1179ecbf6d7d2ec879bcf0fce0c51c0a30cdd",
+              "persisted_policy_coordinator_id": "01a1d16b-ed2e-7072-83da-faee109712dc",
+              "persisted_policy_database_open_incarnation": "b8d173f4-304f-4781-b422-cd767624d099",
+              "persisted_policy_range_store_open_id": "01a1d16b-e663-7c22-b067-5c68f91eebce",
+              "persisted_policy_registration_generation": "01a1d16b-ed30-7d21-8e12-2dead005ce6e",
+              "retained_owner_coordinator_id": "01a1d16b-ed2e-7072-83da-faee109712dc",
+              "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission"
+            },
+            "writer_policy_current": true
+          },
+          "last_caught_up_learner_store_id": null,
+          "last_enrolled_learner": null,
+          "last_metadata_maintenance": null,
+          "last_metadata_promotion": null,
+          "metadata": {
+            "cluster_id": "native-operator-cli",
+            "commit_index": 1,
+            "current_term": 1,
+            "last_log_index": 1,
+            "last_log_term": 1,
+            "leader_id": "n0",
+            "learners": [],
+            "node_id": "n1",
+            "role": "follower",
+            "topology_generation": 1,
+            "voted_for": "n0",
+            "voters": [
+              "n0",
+              "n1",
+              "n2",
+              "n3"
+            ]
+          },
+          "node_id": "n1",
+          "phase": "initial_data_opening",
+          "version": 1
+        },
+        "process_id": 18971,
+        "sequence": 4,
+        "version": 1
+      },
+      "stage": "initial_data_action"
+    },
+    {
+      "node": "n2",
+      "reply": {
+        "data_serving": true,
+        "error": null,
+        "host": {
+          "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported",
+          "data_serving": true,
+          "initial_data": {
+            "cleanup_quarantined_owners": 0,
+            "dispatcher_published": true,
+            "ranges": [
+              {
+                "epoch": 1,
+                "leader_admission_observed": false,
+                "local_leader": false,
+                "range_id": 1
+              },
+              {
+                "epoch": 1,
+                "leader_admission_observed": true,
+                "local_leader": true,
+                "range_id": 2
+              },
+              {
+                "epoch": 1,
+                "leader_admission_observed": false,
+                "local_leader": false,
+                "range_id": 4
+              }
+            ],
+            "receiver_listening": true,
+            "registry_refresh_last_attempt": null,
+            "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+            "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+            "writer_binding_diagnostic": {
+              "actual_verified_registry_extension": {
+                "publication_pending": false,
+                "scope": "retained same-open verified audit DATA; not role or Ready",
+                "verified_extension": null
+              },
+              "current_database_hook_slot_not_relocked": true,
+              "identity_from_status_dto_is_not_authority": true,
+              "observed_binding_lifetime_live": true,
+              "observed_binding_liveness_error": null,
+              "observed_bound_authority_matches_retained_coordinator": true,
+              "observed_bound_registration_active": true,
+              "observed_bound_registration_generation": "01a1d16b-edd3-7272-bd3c-5a1b1c8cbbe7",
+              "observed_weak_directory_alive": true,
+              "persisted_policy_checksum_sha256": "e8bb69f83ffa4b9f222e0184d36566186bba6e5b97eece02cb09da740c843426",
+              "persisted_policy_coordinator_id": "01a1d16b-edd1-7503-b53e-3abcb4933685",
+              "persisted_policy_database_open_incarnation": "2087b3fd-5551-4428-8c92-545b673b6aeb",
+              "persisted_policy_range_store_open_id": "01a1d16b-e668-7be1-b7f5-15af691d275b",
+              "persisted_policy_registration_generation": "01a1d16b-edd3-7272-bd3c-5a1b1c8cbbe7",
+              "retained_owner_coordinator_id": "01a1d16b-edd1-7503-b53e-3abcb4933685",
+              "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission"
+            },
+            "writer_policy_current": true
+          },
+          "last_caught_up_learner_store_id": null,
+          "last_enrolled_learner": null,
+          "last_metadata_maintenance": null,
+          "last_metadata_promotion": null,
+          "metadata": {
+            "cluster_id": "native-operator-cli",
+            "commit_index": 1,
+            "current_term": 1,
+            "last_log_index": 1,
+            "last_log_term": 1,
+            "leader_id": "n0",
+            "learners": [],
+            "node_id": "n2",
+            "role": "follower",
+            "topology_generation": 1,
+            "voted_for": "n0",
+            "voters": [
+              "n0",
+              "n1",
+              "n2",
+              "n3"
+            ]
+          },
+          "node_id": "n2",
+          "phase": "initial_data",
+          "version": 1
+        },
+        "process_id": 18972,
+        "sequence": 4,
+        "version": 1
+      },
+      "stage": "initial_data_action"
+    },
+    {
+      "node": "n3",
+      "reply": {
+        "data_serving": true,
+        "error": null,
+        "host": {
+          "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported",
+          "data_serving": true,
+          "initial_data": {
+            "cleanup_quarantined_owners": 0,
+            "dispatcher_published": true,
+            "ranges": [
+              {
+                "epoch": 1,
+                "leader_admission_observed": false,
+                "local_leader": false,
+                "range_id": 1
+              },
+              {
+                "epoch": 1,
+                "leader_admission_observed": false,
+                "local_leader": false,
+                "range_id": 2
+              },
+              {
+                "epoch": 1,
+                "leader_admission_observed": true,
+                "local_leader": true,
+                "range_id": 3
+              }
+            ],
+            "receiver_listening": true,
+            "registry_refresh_last_attempt": null,
+            "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+            "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+            "writer_binding_diagnostic": {
+              "actual_verified_registry_extension": {
+                "publication_pending": false,
+                "scope": "retained same-open verified audit DATA; not role or Ready",
+                "verified_extension": null
+              },
+              "current_database_hook_slot_not_relocked": true,
+              "identity_from_status_dto_is_not_authority": true,
+              "observed_binding_lifetime_live": true,
+              "observed_binding_liveness_error": null,
+              "observed_bound_authority_matches_retained_coordinator": true,
+              "observed_bound_registration_active": true,
+              "observed_bound_registration_generation": "01a1d16b-eee3-72c0-8c75-fea5c4cd8756",
+              "observed_weak_directory_alive": true,
+              "persisted_policy_checksum_sha256": "cf6ec46f5c902eb8713ebb225001329d5d2c57298b7ca8fe07f4deaf57ed12f1",
+              "persisted_policy_coordinator_id": "01a1d16b-eee1-7461-8b21-4dbdcdaf3f96",
+              "persisted_policy_database_open_incarnation": "def4d3ad-3563-4d4c-a479-7e15fe9d44ef",
+              "persisted_policy_range_store_open_id": "01a1d16b-e666-73c3-a4fd-450e3798267f",
+              "persisted_policy_registration_generation": "01a1d16b-eee3-72c0-8c75-fea5c4cd8756",
+              "retained_owner_coordinator_id": "01a1d16b-eee1-7461-8b21-4dbdcdaf3f96",
+              "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission"
+            },
+            "writer_policy_current": true
+          },
+          "last_caught_up_learner_store_id": null,
+          "last_enrolled_learner": null,
+          "last_metadata_maintenance": null,
+          "last_metadata_promotion": null,
+          "metadata": {
+            "cluster_id": "native-operator-cli",
+            "commit_index": 1,
+            "current_term": 1,
+            "last_log_index": 1,
+            "last_log_term": 1,
+            "leader_id": "n0",
+            "learners": [],
+            "node_id": "n3",
+            "role": "follower",
+            "topology_generation": 1,
+            "voted_for": "n0",
+            "voters": [
+              "n0",
+              "n1",
+              "n2",
+              "n3"
+            ]
+          },
+          "node_id": "n3",
+          "phase": "initial_data",
+          "version": 1
+        },
+        "process_id": 18973,
+        "sequence": 4,
+        "version": 1
+      },
+      "stage": "initial_data_action"
+    },
+    {
+      "node": "n0",
+      "reply": {
+        "data_serving": true,
+        "error": null,
+        "host": {
+          "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported",
+          "data_serving": true,
+          "initial_data": {
+            "cleanup_quarantined_owners": 0,
+            "dispatcher_published": true,
+            "ranges": [
+              {
+                "epoch": 1,
+                "leader_admission_observed": false,
+                "local_leader": false,
+                "range_id": 2
+              },
+              {
+                "epoch": 1,
+                "leader_admission_observed": false,
+                "local_leader": false,
+                "range_id": 3
+              },
+              {
+                "epoch": 1,
+                "leader_admission_observed": true,
+                "local_leader": true,
+                "range_id": 4
+              }
+            ],
+            "receiver_listening": true,
+            "registry_refresh_last_attempt": null,
+            "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+            "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+            "writer_binding_diagnostic": {
+              "actual_verified_registry_extension": {
+                "publication_pending": false,
+                "scope": "retained same-open verified audit DATA; not role or Ready",
+                "verified_extension": null
+              },
+              "current_database_hook_slot_not_relocked": true,
+              "identity_from_status_dto_is_not_authority": true,
+              "observed_binding_lifetime_live": true,
+              "observed_binding_liveness_error": null,
+              "observed_bound_authority_matches_retained_coordinator": true,
+              "observed_bound_registration_active": true,
+              "observed_bound_registration_generation": "01a1d16b-ec99-7920-b055-dfa87598adfc",
+              "observed_weak_directory_alive": true,
+              "persisted_policy_checksum_sha256": "dcd811dee0d634a3c3018b33321602763f6246376acf1cb2447fd86d320cd8be",
+              "persisted_policy_coordinator_id": "01a1d16b-ec97-7303-a442-872691e7c87a",
+              "persisted_policy_database_open_incarnation": "d97893c1-cbb1-40d3-9c6c-1c658c2b9a3b",
+              "persisted_policy_range_store_open_id": "01a1d16b-e661-7433-b25a-1ba51636ab71",
+              "persisted_policy_registration_generation": "01a1d16b-ec99-7920-b055-dfa87598adfc",
+              "retained_owner_coordinator_id": "01a1d16b-ec97-7303-a442-872691e7c87a",
+              "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission"
+            },
+            "writer_policy_current": true
+          },
+          "last_caught_up_learner_store_id": null,
+          "last_enrolled_learner": null,
+          "last_metadata_maintenance": {
+            "error": null,
+            "installed_through_index": null,
+            "node": null,
+            "receiver_store_id": null,
+            "stage": "idle_or_backoff"
+          },
+          "last_metadata_promotion": null,
+          "metadata": {
+            "cluster_id": "native-operator-cli",
+            "commit_index": 1,
+            "current_term": 1,
+            "last_log_index": 1,
+            "last_log_term": 1,
+            "leader_id": "n0",
+            "learners": [],
+            "node_id": "n0",
+            "role": "leader",
+            "topology_generation": 1,
+            "voted_for": "n0",
+            "voters": [
+              "n0",
+              "n1",
+              "n2",
+              "n3"
+            ]
+          },
+          "node_id": "n0",
+          "phase": "initial_data",
+          "version": 1
+        },
+        "process_id": 18970,
+        "sequence": 6,
+        "version": 1
+      },
+      "stage": "initial_data_action"
+    },
+    {
+      "node": "n1",
+      "reply": {
+        "data_serving": true,
+        "error": null,
+        "host": {
+          "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported",
+          "data_serving": true,
+          "initial_data": {
+            "cleanup_quarantined_owners": 0,
+            "dispatcher_published": true,
+            "ranges": [
+              {
+                "epoch": 1,
+                "leader_admission_observed": true,
+                "local_leader": true,
+                "range_id": 1
+              },
+              {
+                "epoch": 1,
+                "leader_admission_observed": false,
+                "local_leader": false,
+                "range_id": 3
+              },
+              {
+                "epoch": 1,
+                "leader_admission_observed": false,
+                "local_leader": false,
+                "range_id": 4
+              }
+            ],
+            "receiver_listening": true,
+            "registry_refresh_last_attempt": null,
+            "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+            "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+            "writer_binding_diagnostic": {
+              "actual_verified_registry_extension": {
+                "publication_pending": false,
+                "scope": "retained same-open verified audit DATA; not role or Ready",
+                "verified_extension": null
+              },
+              "current_database_hook_slot_not_relocked": true,
+              "identity_from_status_dto_is_not_authority": true,
+              "observed_binding_lifetime_live": true,
+              "observed_binding_liveness_error": null,
+              "observed_bound_authority_matches_retained_coordinator": true,
+              "observed_bound_registration_active": true,
+              "observed_bound_registration_generation": "01a1d16b-ed30-7d21-8e12-2dead005ce6e",
+              "observed_weak_directory_alive": true,
+              "persisted_policy_checksum_sha256": "777e9d0d01bdc8788e4227cf7dc1179ecbf6d7d2ec879bcf0fce0c51c0a30cdd",
+              "persisted_policy_coordinator_id": "01a1d16b-ed2e-7072-83da-faee109712dc",
+              "persisted_policy_database_open_incarnation": "b8d173f4-304f-4781-b422-cd767624d099",
+              "persisted_policy_range_store_open_id": "01a1d16b-e663-7c22-b067-5c68f91eebce",
+              "persisted_policy_registration_generation": "01a1d16b-ed30-7d21-8e12-2dead005ce6e",
+              "retained_owner_coordinator_id": "01a1d16b-ed2e-7072-83da-faee109712dc",
+              "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission"
+            },
+            "writer_policy_current": true
+          },
+          "last_caught_up_learner_store_id": null,
+          "last_enrolled_learner": null,
+          "last_metadata_maintenance": null,
+          "last_metadata_promotion": null,
+          "metadata": {
+            "cluster_id": "native-operator-cli",
+            "commit_index": 1,
+            "current_term": 1,
+            "last_log_index": 1,
+            "last_log_term": 1,
+            "leader_id": "n0",
+            "learners": [],
+            "node_id": "n1",
+            "role": "follower",
+            "topology_generation": 1,
+            "voted_for": "n0",
+            "voters": [
+              "n0",
+              "n1",
+              "n2",
+              "n3"
+            ]
+          },
+          "node_id": "n1",
+          "phase": "initial_data",
+          "version": 1
+        },
+        "process_id": 18971,
+        "sequence": 5,
+        "version": 1
+      },
+      "stage": "initial_data_action"
+    },
+    {
+      "binding": {
+        "actual_verified_registry_extension": {
+          "publication_pending": false,
+          "scope": "retained same-open verified audit DATA; not role or Ready",
+          "verified_extension": null
+        },
+        "current_database_hook_slot_not_relocked": true,
+        "identity_from_status_dto_is_not_authority": true,
+        "observed_binding_lifetime_live": true,
+        "observed_binding_liveness_error": null,
+        "observed_bound_authority_matches_retained_coordinator": true,
+        "observed_bound_registration_active": true,
+        "observed_bound_registration_generation": "01a1d16b-ec99-7920-b055-dfa87598adfc",
+        "observed_weak_directory_alive": true,
+        "persisted_policy_checksum_sha256": "dcd811dee0d634a3c3018b33321602763f6246376acf1cb2447fd86d320cd8be",
+        "persisted_policy_coordinator_id": "01a1d16b-ec97-7303-a442-872691e7c87a",
+        "persisted_policy_database_open_incarnation": "d97893c1-cbb1-40d3-9c6c-1c658c2b9a3b",
+        "persisted_policy_range_store_open_id": "01a1d16b-e661-7433-b25a-1ba51636ab71",
+        "persisted_policy_registration_generation": "01a1d16b-ec99-7920-b055-dfa87598adfc",
+        "retained_owner_coordinator_id": "01a1d16b-ec97-7303-a442-872691e7c87a",
+        "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission"
+      },
+      "command_success": true,
+      "metadata": {
+        "cluster_id": "native-operator-cli",
+        "commit_index": 1,
+        "current_term": 1,
+        "last_log_index": 1,
+        "last_log_term": 1,
+        "leader_id": "n0",
+        "learners": [],
+        "node_id": "n0",
+        "role": "leader",
+        "topology_generation": 1,
+        "voted_for": "n0",
+        "voters": [
+          "n0",
+          "n1",
+          "n2",
+          "n3"
+        ]
+      },
+      "node": "n0",
+      "phase": "before_fifth",
+      "reply_error": null,
+      "stage": "readonly_retained_writer_binding"
+    },
+    {
+      "binding": {
+        "actual_verified_registry_extension": {
+          "publication_pending": false,
+          "scope": "retained same-open verified audit DATA; not role or Ready",
+          "verified_extension": null
+        },
+        "current_database_hook_slot_not_relocked": true,
+        "identity_from_status_dto_is_not_authority": true,
+        "observed_binding_lifetime_live": true,
+        "observed_binding_liveness_error": null,
+        "observed_bound_authority_matches_retained_coordinator": true,
+        "observed_bound_registration_active": true,
+        "observed_bound_registration_generation": "01a1d16b-ed30-7d21-8e12-2dead005ce6e",
+        "observed_weak_directory_alive": true,
+        "persisted_policy_checksum_sha256": "777e9d0d01bdc8788e4227cf7dc1179ecbf6d7d2ec879bcf0fce0c51c0a30cdd",
+        "persisted_policy_coordinator_id": "01a1d16b-ed2e-7072-83da-faee109712dc",
+        "persisted_policy_database_open_incarnation": "b8d173f4-304f-4781-b422-cd767624d099",
+        "persisted_policy_range_store_open_id": "01a1d16b-e663-7c22-b067-5c68f91eebce",
+        "persisted_policy_registration_generation": "01a1d16b-ed30-7d21-8e12-2dead005ce6e",
+        "retained_owner_coordinator_id": "01a1d16b-ed2e-7072-83da-faee109712dc",
+        "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission"
+      },
+      "command_success": true,
+      "metadata": {
+        "cluster_id": "native-operator-cli",
+        "commit_index": 1,
+        "current_term": 1,
+        "last_log_index": 1,
+        "last_log_term": 1,
+        "leader_id": "n0",
+        "learners": [],
+        "node_id": "n1",
+        "role": "follower",
+        "topology_generation": 1,
+        "voted_for": "n0",
+        "voters": [
+          "n0",
+          "n1",
+          "n2",
+          "n3"
+        ]
+      },
+      "node": "n1",
+      "phase": "before_fifth",
+      "reply_error": null,
+      "stage": "readonly_retained_writer_binding"
+    },
+    {
+      "binding": {
+        "actual_verified_registry_extension": {
+          "publication_pending": false,
+          "scope": "retained same-open verified audit DATA; not role or Ready",
+          "verified_extension": null
+        },
+        "current_database_hook_slot_not_relocked": true,
+        "identity_from_status_dto_is_not_authority": true,
+        "observed_binding_lifetime_live": true,
+        "observed_binding_liveness_error": null,
+        "observed_bound_authority_matches_retained_coordinator": true,
+        "observed_bound_registration_active": true,
+        "observed_bound_registration_generation": "01a1d16b-edd3-7272-bd3c-5a1b1c8cbbe7",
+        "observed_weak_directory_alive": true,
+        "persisted_policy_checksum_sha256": "e8bb69f83ffa4b9f222e0184d36566186bba6e5b97eece02cb09da740c843426",
+        "persisted_policy_coordinator_id": "01a1d16b-edd1-7503-b53e-3abcb4933685",
+        "persisted_policy_database_open_incarnation": "2087b3fd-5551-4428-8c92-545b673b6aeb",
+        "persisted_policy_range_store_open_id": "01a1d16b-e668-7be1-b7f5-15af691d275b",
+        "persisted_policy_registration_generation": "01a1d16b-edd3-7272-bd3c-5a1b1c8cbbe7",
+        "retained_owner_coordinator_id": "01a1d16b-edd1-7503-b53e-3abcb4933685",
+        "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission"
+      },
+      "command_success": true,
+      "metadata": {
+        "cluster_id": "native-operator-cli",
+        "commit_index": 1,
+        "current_term": 1,
+        "last_log_index": 1,
+        "last_log_term": 1,
+        "leader_id": "n0",
+        "learners": [],
+        "node_id": "n2",
+        "role": "follower",
+        "topology_generation": 1,
+        "voted_for": "n0",
+        "voters": [
+          "n0",
+          "n1",
+          "n2",
+          "n3"
+        ]
+      },
+      "node": "n2",
+      "phase": "before_fifth",
+      "reply_error": null,
+      "stage": "readonly_retained_writer_binding"
+    },
+    {
+      "binding": {
+        "actual_verified_registry_extension": {
+          "publication_pending": false,
+          "scope": "retained same-open verified audit DATA; not role or Ready",
+          "verified_extension": null
+        },
+        "current_database_hook_slot_not_relocked": true,
+        "identity_from_status_dto_is_not_authority": true,
+        "observed_binding_lifetime_live": true,
+        "observed_binding_liveness_error": null,
+        "observed_bound_authority_matches_retained_coordinator": true,
+        "observed_bound_registration_active": true,
+        "observed_bound_registration_generation": "01a1d16b-eee3-72c0-8c75-fea5c4cd8756",
+        "observed_weak_directory_alive": true,
+        "persisted_policy_checksum_sha256": "cf6ec46f5c902eb8713ebb225001329d5d2c57298b7ca8fe07f4deaf57ed12f1",
+        "persisted_policy_coordinator_id": "01a1d16b-eee1-7461-8b21-4dbdcdaf3f96",
+        "persisted_policy_database_open_incarnation": "def4d3ad-3563-4d4c-a479-7e15fe9d44ef",
+        "persisted_policy_range_store_open_id": "01a1d16b-e666-73c3-a4fd-450e3798267f",
+        "persisted_policy_registration_generation": "01a1d16b-eee3-72c0-8c75-fea5c4cd8756",
+        "retained_owner_coordinator_id": "01a1d16b-eee1-7461-8b21-4dbdcdaf3f96",
+        "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission"
+      },
+      "command_success": true,
+      "metadata": {
+        "cluster_id": "native-operator-cli",
+        "commit_index": 1,
+        "current_term": 1,
+        "last_log_index": 1,
+        "last_log_term": 1,
+        "leader_id": "n0",
+        "learners": [],
+        "node_id": "n3",
+        "role": "follower",
+        "topology_generation": 1,
+        "voted_for": "n0",
+        "voters": [
+          "n0",
+          "n1",
+          "n2",
+          "n3"
+        ]
+      },
+      "node": "n3",
+      "phase": "before_fifth",
+      "reply_error": null,
+      "stage": "readonly_retained_writer_binding"
+    },
+    {
+      "key": "ack-before-fifth-registry-refresh",
+      "logical_operation_id": "01a1d16b-f1aa-74e0-a0e6-7769f84c4359",
+      "namespace": "items",
+      "stage": "attempt_before_fifth",
+      "value": {
+        "entire": "external ACK precedes fifth stage",
+        "nested": [
+          17,
+          null,
+          {
+            "retained": true
+          }
+        ]
+      }
+    },
+    {
+      "acknowledged": true,
+      "error": null,
+      "key": "ack-before-fifth-registry-refresh",
+      "logical_operation_id": "01a1d16b-f1aa-74e0-a0e6-7769f84c4359",
+      "stage": "reply_before_fifth",
+      "value": {
+        "entire": "external ACK precedes fifth stage",
+        "nested": [
+          17,
+          null,
+          {
+            "retained": true
+          }
+        ]
+      }
+    },
+    {
+      "key": "ack-before-fifth-registry-refresh",
+      "logical_operation_id": "01a1d16b-f31b-77b3-9894-e1eae9df6ebb",
+      "present": true,
+      "stage": "strong_before_fifth",
+      "value": {
+        "entire": "external ACK precedes fifth stage",
+        "nested": [
+          17,
+          null,
+          {
+            "retained": true
+          }
+        ]
+      }
+    },
+    {
+      "stage": "same_owned_fifth_receiver",
+      "status": {
+        "data_serving": false,
+        "error": null,
+        "host": {
+          "birth_bound": true,
+          "birth_id": "01a1d16b-f520-77e1-a380-3e4787ad6b4f",
+          "birth_sha256": "48659327681fe8975e7ff04393e512ee46b594a6657f17620c1f64b9deeb2293",
+          "data_serving": false,
+          "last_metadata_maintenance": null,
+          "last_metadata_promotion": null,
+          "metadata": {
+            "cluster_id": "native-operator-cli",
+            "commit_index": 4,
+            "current_term": 1,
+            "last_log_index": 4,
+            "last_log_term": 1,
+            "leader_id": "n0",
+            "learners": [],
+            "node_id": "n4",
+            "role": "follower",
+            "topology_generation": 4,
+            "voted_for": null,
+            "voters": [
+              "n0",
+              "n1",
+              "n2",
+              "n3",
+              "n4"
+            ]
+          },
+          "metadata_control_owned": true,
+          "metadata_listener_owned": true,
+          "metadata_role": "voter",
+          "metadata_store_id": "01a1d16b-f786-7411-ac74-74773dc46226",
+          "namespace_ids": [
+            [
+              "__bic_cluster_events",
+              "8f681f55-02c4-4d2b-adfe-4faf100e250c"
+            ],
+            [
+              "items",
+              "576b7a70-d68f-4e5f-9748-15037c56758d"
+            ]
+          ],
+          "node_id": "n4",
+          "phase": "owned_metadata_voter",
+          "replica_receiver": {
+            "birth_id": "01a1d16b-f520-77e1-a380-3e4787ad6b4f",
+            "birth_sha256": "48659327681fe8975e7ff04393e512ee46b594a6657f17620c1f64b9deeb2293",
+            "data_serving": false,
+            "database_incarnation": "6a8d04d3-337b-4c38-a11e-035b5dde53d3",
+            "metadata_store_id": "01a1d16b-f786-7411-ac74-74773dc46226",
+            "next_required_gates": [
+              "native_placement_controller",
+              "authenticated_native_image_joint_wire",
+              "actual_image_joint_open_and_writer_admission"
+            ],
+            "range_readiness": "UNKNOWN: no assigned image/native materialization or serving proof",
+            "range_store_open_id": "01a1d16b-f530-7be3-af46-9a1e317f95be",
+            "receiver_ready": true,
+            "stopping": false,
+            "writer_admission": "not installed by replica-only owner"
+          },
+          "schema_sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b",
+          "version": 1
+        },
+        "process_id": 19331,
+        "sequence": 0,
+        "version": 1
+      }
+    },
+    {
+      "after": {
+        "applied_rebalance_plans": [],
+        "cluster_id": "native-operator-cli",
+        "format_version": 2,
+        "generation": 4,
+        "hash_version": 1,
+        "history": [
+          {
+            "actor": "n0",
+            "at_ms": 10,
+            "generation": 1,
+            "summary": "cluster initialized"
+          },
+          {
+            "actor": "n0",
+            "at_ms": 1794514875404,
+            "generation": 2,
+            "summary": "node n4 joined as metadata Learner"
+          },
+          {
+            "actor": "n0",
+            "at_ms": 1794514876868,
+            "generation": 4,
+            "summary": "node n4 promoted to metadata voter"
+          }
+        ],
+        "next_range_id": 5,
+        "next_relocation_id": 1,
+        "next_replica_id": 14,
+        "nodes": {
+          "n0": {
+            "address": "127.0.0.1:44271",
+            "capacity_bytes": 1073741824,
+            "id": "n0",
+            "incarnation": 1,
+            "joined_at_ms": 10,
+            "labels": {
+              "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+            },
+            "last_heartbeat_ms": 10,
+            "lifecycle": "active",
+            "native_store_birth_v1": {
+              "abort_protocol_version": 1,
+              "birth_id": "01a1d16b-e621-79e0-9b94-4c699894cfc4",
+              "birth_sha256": "f5e6910d7c79e4d160dd9663f576c2d217c96de0a35b7b48e96406314bdeb40b",
+              "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+              "node_incarnation": 1,
+              "version": 1,
+              "writer_enforcement_version": 1
+            },
+            "tls_certificate_sha256": "a2111cbf340405f3b842a74002083c60e68bdffaaf1204b719419a130b5929b7",
+            "used_bytes": 0
+          },
+          "n1": {
+            "address": "127.0.0.1:37361",
+            "capacity_bytes": 1073741824,
+            "id": "n1",
+            "incarnation": 1,
+            "joined_at_ms": 10,
+            "labels": {
+              "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+            },
+            "last_heartbeat_ms": 10,
+            "lifecycle": "active",
+            "native_store_birth_v1": {
+              "abort_protocol_version": 1,
+              "birth_id": "01a1d16b-e620-7ea2-8edb-b1199cd2c1ff",
+              "birth_sha256": "1267a130b0a10e5da55cd01e72e9b94c03abc5388e5134628fcb808f08e58b9a",
+              "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+              "node_incarnation": 1,
+              "version": 1,
+              "writer_enforcement_version": 1
+            },
+            "tls_certificate_sha256": "fe2faf0b91b403c0b720d65b2ebadf5591cada3cf5184fa577626f36d6677159",
+            "used_bytes": 0
+          },
+          "n2": {
+            "address": "127.0.0.1:34845",
+            "capacity_bytes": 1073741824,
+            "id": "n2",
+            "incarnation": 1,
+            "joined_at_ms": 10,
+            "labels": {
+              "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+            },
+            "last_heartbeat_ms": 10,
+            "lifecycle": "active",
+            "native_store_birth_v1": {
+              "abort_protocol_version": 1,
+              "birth_id": "01a1d16b-e620-7f93-ba97-56a937f0d49a",
+              "birth_sha256": "2007ad09419548b963d708729d7ecd3a143d4b35e4aa8a402be0265d52d32813",
+              "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+              "node_incarnation": 1,
+              "version": 1,
+              "writer_enforcement_version": 1
+            },
+            "tls_certificate_sha256": "779a795890b85796414491c69da1fd68deeb38eaf01c60fbfc6c3ae69480e9b6",
+            "used_bytes": 0
+          },
+          "n3": {
+            "address": "127.0.0.1:45911",
+            "capacity_bytes": 1073741824,
+            "id": "n3",
+            "incarnation": 1,
+            "joined_at_ms": 10,
+            "labels": {
+              "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+            },
+            "last_heartbeat_ms": 10,
+            "lifecycle": "active",
+            "native_store_birth_v1": {
+              "abort_protocol_version": 1,
+              "birth_id": "01a1d16b-e622-7852-8798-54533db36b4d",
+              "birth_sha256": "4257ee2c13a8677c3c41b65c9c2faf950a1052c7b3c22e4556abf951247a6b37",
+              "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+              "node_incarnation": 1,
+              "version": 1,
+              "writer_enforcement_version": 1
+            },
+            "tls_certificate_sha256": "31bfd578fc5c413db9afadb7ab9542eb92364552b224006a834ebdcedbf501ea",
+            "used_bytes": 0
+          },
+          "n4": {
+            "address": "127.0.0.1:38367",
+            "capacity_bytes": 1099511627776,
+            "id": "n4",
+            "incarnation": 1,
+            "joined_at_ms": 1794514875404,
+            "labels": {
+              "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+            },
+            "last_heartbeat_ms": 1794514875404,
+            "lifecycle": "active",
+            "native_store_birth_v1": {
+              "abort_protocol_version": 1,
+              "birth_id": "01a1d16b-f520-77e1-a380-3e4787ad6b4f",
+              "birth_sha256": "48659327681fe8975e7ff04393e512ee46b594a6657f17620c1f64b9deeb2293",
+              "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+              "node_incarnation": 1,
+              "version": 1,
+              "writer_enforcement_version": 1
+            },
+            "tls_certificate_sha256": "67fa61c30edd85ce58654fc6a25ce4209625da8a02b85c252b4bbbb54fca35ab",
+            "used_bytes": 0
+          }
+        },
+        "range_image_bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+        "ranges": {
+          "0": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": 4611686018427387904,
+            "epoch": 1,
+            "id": 1,
+            "leader": "n1",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 5,
+                "node_id": "n1",
+                "role": "voter"
+              },
+              {
+                "id": 9,
+                "node_id": "n2",
+                "role": "voter"
+              },
+              {
+                "id": 13,
+                "node_id": "n3",
+                "role": "voter"
+              }
+            ],
+            "start_token": 0
+          },
+          "13835058055282163712": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": null,
+            "epoch": 1,
+            "id": 4,
+            "leader": "n0",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 4,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 8,
+                "node_id": "n1",
+                "role": "voter"
+              },
+              {
+                "id": 12,
+                "node_id": "n2",
+                "role": "voter"
+              }
+            ],
+            "start_token": 13835058055282163712
+          },
+          "4611686018427387904": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": 9223372036854775808,
+            "epoch": 1,
+            "id": 2,
+            "leader": "n2",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 2,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 6,
+                "node_id": "n2",
+                "role": "voter"
+              },
+              {
+                "id": 10,
+                "node_id": "n3",
+                "role": "voter"
+              }
+            ],
+            "start_token": 4611686018427387904
+          },
+          "9223372036854775808": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": 13835058055282163712,
+            "epoch": 1,
+            "id": 3,
+            "leader": "n3",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 3,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 7,
+                "node_id": "n3",
+                "role": "voter"
+              },
+              {
+                "id": 11,
+                "node_id": "n1",
+                "role": "voter"
+              }
+            ],
+            "start_token": 9223372036854775808
+          }
+        },
+        "relocations": {},
+        "replication_factor": 3
+      },
+      "before": {
+        "applied_rebalance_plans": [],
+        "cluster_id": "native-operator-cli",
+        "format_version": 2,
+        "generation": 1,
+        "hash_version": 1,
+        "history": [
+          {
+            "actor": "n0",
+            "at_ms": 10,
+            "generation": 1,
+            "summary": "cluster initialized"
+          }
+        ],
+        "next_range_id": 5,
+        "next_relocation_id": 1,
+        "next_replica_id": 14,
+        "nodes": {
+          "n0": {
+            "address": "127.0.0.1:44271",
+            "capacity_bytes": 1073741824,
+            "id": "n0",
+            "incarnation": 1,
+            "joined_at_ms": 10,
+            "labels": {
+              "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+            },
+            "last_heartbeat_ms": 10,
+            "lifecycle": "active",
+            "native_store_birth_v1": {
+              "abort_protocol_version": 1,
+              "birth_id": "01a1d16b-e621-79e0-9b94-4c699894cfc4",
+              "birth_sha256": "f5e6910d7c79e4d160dd9663f576c2d217c96de0a35b7b48e96406314bdeb40b",
+              "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+              "node_incarnation": 1,
+              "version": 1,
+              "writer_enforcement_version": 1
+            },
+            "tls_certificate_sha256": "a2111cbf340405f3b842a74002083c60e68bdffaaf1204b719419a130b5929b7",
+            "used_bytes": 0
+          },
+          "n1": {
+            "address": "127.0.0.1:37361",
+            "capacity_bytes": 1073741824,
+            "id": "n1",
+            "incarnation": 1,
+            "joined_at_ms": 10,
+            "labels": {
+              "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+            },
+            "last_heartbeat_ms": 10,
+            "lifecycle": "active",
+            "native_store_birth_v1": {
+              "abort_protocol_version": 1,
+              "birth_id": "01a1d16b-e620-7ea2-8edb-b1199cd2c1ff",
+              "birth_sha256": "1267a130b0a10e5da55cd01e72e9b94c03abc5388e5134628fcb808f08e58b9a",
+              "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+              "node_incarnation": 1,
+              "version": 1,
+              "writer_enforcement_version": 1
+            },
+            "tls_certificate_sha256": "fe2faf0b91b403c0b720d65b2ebadf5591cada3cf5184fa577626f36d6677159",
+            "used_bytes": 0
+          },
+          "n2": {
+            "address": "127.0.0.1:34845",
+            "capacity_bytes": 1073741824,
+            "id": "n2",
+            "incarnation": 1,
+            "joined_at_ms": 10,
+            "labels": {
+              "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+            },
+            "last_heartbeat_ms": 10,
+            "lifecycle": "active",
+            "native_store_birth_v1": {
+              "abort_protocol_version": 1,
+              "birth_id": "01a1d16b-e620-7f93-ba97-56a937f0d49a",
+              "birth_sha256": "2007ad09419548b963d708729d7ecd3a143d4b35e4aa8a402be0265d52d32813",
+              "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+              "node_incarnation": 1,
+              "version": 1,
+              "writer_enforcement_version": 1
+            },
+            "tls_certificate_sha256": "779a795890b85796414491c69da1fd68deeb38eaf01c60fbfc6c3ae69480e9b6",
+            "used_bytes": 0
+          },
+          "n3": {
+            "address": "127.0.0.1:45911",
+            "capacity_bytes": 1073741824,
+            "id": "n3",
+            "incarnation": 1,
+            "joined_at_ms": 10,
+            "labels": {
+              "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+            },
+            "last_heartbeat_ms": 10,
+            "lifecycle": "active",
+            "native_store_birth_v1": {
+              "abort_protocol_version": 1,
+              "birth_id": "01a1d16b-e622-7852-8798-54533db36b4d",
+              "birth_sha256": "4257ee2c13a8677c3c41b65c9c2faf950a1052c7b3c22e4556abf951247a6b37",
+              "bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+              "node_incarnation": 1,
+              "version": 1,
+              "writer_enforcement_version": 1
+            },
+            "tls_certificate_sha256": "31bfd578fc5c413db9afadb7ab9542eb92364552b224006a834ebdcedbf501ea",
+            "used_bytes": 0
+          }
+        },
+        "range_image_bootstrap_id": "01a1d16b-e5da-7613-97f5-9f92e2bd44dc",
+        "ranges": {
+          "0": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": 4611686018427387904,
+            "epoch": 1,
+            "id": 1,
+            "leader": "n1",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 5,
+                "node_id": "n1",
+                "role": "voter"
+              },
+              {
+                "id": 9,
+                "node_id": "n2",
+                "role": "voter"
+              },
+              {
+                "id": 13,
+                "node_id": "n3",
+                "role": "voter"
+              }
+            ],
+            "start_token": 0
+          },
+          "13835058055282163712": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": null,
+            "epoch": 1,
+            "id": 4,
+            "leader": "n0",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 4,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 8,
+                "node_id": "n1",
+                "role": "voter"
+              },
+              {
+                "id": 12,
+                "node_id": "n2",
+                "role": "voter"
+              }
+            ],
+            "start_token": 13835058055282163712
+          },
+          "4611686018427387904": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": 9223372036854775808,
+            "epoch": 1,
+            "id": 2,
+            "leader": "n2",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 2,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 6,
+                "node_id": "n2",
+                "role": "voter"
+              },
+              {
+                "id": 10,
+                "node_id": "n3",
+                "role": "voter"
+              }
+            ],
+            "start_token": 4611686018427387904
+          },
+          "9223372036854775808": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": 13835058055282163712,
+            "epoch": 1,
+            "id": 3,
+            "leader": "n3",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 3,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 7,
+                "node_id": "n3",
+                "role": "voter"
+              },
+              {
+                "id": 11,
+                "node_id": "n1",
+                "role": "voter"
+              }
+            ],
+            "start_token": 9223372036854775808
+          }
+        },
+        "relocations": {},
+        "replication_factor": 3
+      },
+      "stage": "actual_before_after_configuration"
+    },
+    {
+      "error": null,
+      "expected": {
+        "entire": "external ACK precedes fifth stage",
+        "nested": [
+          17,
+          null,
+          {
+            "retained": true
+          }
+        ]
+      },
+      "health_receipt_elapsed_ns": 259934857,
+      "logical_operation_id": "01a1d16b-fc85-7633-b48e-7b864d912879",
+      "present": true,
+      "round": 1,
+      "stage": "strict_old_ack_read",
+      "success": true,
+      "value": {
+        "entire": "external ACK precedes fifth stage",
+        "nested": [
+          17,
+          null,
+          {
+            "retained": true
+          }
+        ]
+      },
+      "within_health_receipt_budget": true
+    },
+    {
+      "key": "fresh-ack-after-fifth-registry-addition",
+      "logical_operation_id": "01a1d16b-fd8a-74c3-8c1f-5670489185bb",
+      "round": 1,
+      "stage": "strict_fresh_append_intent",
+      "value": {
+        "empty": {},
+        "nested": [
+          null,
+          {
+            "unchanged_data_assignment": true
+          }
+        ],
+        "whole": "new external ACK after registry addition"
+      }
+    },
+    {
+      "acknowledged": true,
+      "classification": "EXTERNAL_ACK",
+      "error": null,
+      "health_receipt_elapsed_ns": 754710492,
+      "inserted": true,
+      "key": "fresh-ack-after-fifth-registry-addition",
+      "logical_operation_id": "01a1d16b-fd8a-74c3-8c1f-5670489185bb",
+      "round": 1,
+      "stage": "strict_fresh_append_reply",
+      "value": {
+        "empty": {},
+        "nested": [
+          null,
+          {
+            "unchanged_data_assignment": true
+          }
+        ],
+        "whole": "new external ACK after registry addition"
+      },
+      "within_health_receipt_budget": true
+    },
+    {
+      "error": null,
+      "expected": {
+        "empty": {},
+        "nested": [
+          null,
+          {
+            "unchanged_data_assignment": true
+          }
+        ],
+        "whole": "new external ACK after registry addition"
+      },
+      "health_receipt_elapsed_ns": 1015797325,
+      "logical_operation_id": "01a1d16b-ff79-7f11-ab6b-05b2c2763cfd",
+      "round": 1,
+      "stage": "strict_fresh_ack_read_reply",
+      "success": true,
+      "value": {
+        "empty": {},
+        "nested": [
+          null,
+          {
+            "unchanged_data_assignment": true
+          }
+        ],
+        "whole": "new external ACK after registry addition"
+      },
+      "within_health_receipt_budget": true
+    },
+    {
+      "children": [
+        {
+          "node": "n0",
+          "pid": 18970,
+          "running": true
+        },
+        {
+          "node": "n1",
+          "pid": 18971,
+          "running": true
+        },
+        {
+          "node": "n2",
+          "pid": 18972,
+          "running": true
+        },
+        {
+          "node": "n3",
+          "pid": 18973,
+          "running": true
+        },
+        {
+          "node": "n4",
+          "pid": 19331,
+          "running": true
+        }
+      ],
+      "restarted": false,
+      "running_is_not_readiness": true,
+      "stage": "same_five_owned_children_after_health_gate"
+    },
+    {
+      "binding": {
+        "actual_verified_registry_extension": {
+          "publication_pending": false,
+          "scope": "retained same-open verified audit DATA; not role or Ready",
+          "verified_extension": {
+            "metadata_context_id": "01a1d16b-fa84-7d13-8135-de2eef45c1b5",
+            "metadata_read_index": 4,
+            "metadata_term": 1,
+            "metadata_voters": [
+              "n0",
+              "n1",
+              "n2",
+              "n3",
+              "n4"
+            ],
+            "native_audit_sha256": "10f1e8460620e6a1bcc0f32f1eabf4eef8a5fa8e32addffa1b1ebd6be4be89ec",
+            "sequence": 1
+          }
+        },
+        "current_database_hook_slot_not_relocked": true,
+        "identity_from_status_dto_is_not_authority": true,
+        "observed_binding_lifetime_live": true,
+        "observed_binding_liveness_error": null,
+        "observed_bound_authority_matches_retained_coordinator": true,
+        "observed_bound_registration_active": true,
+        "observed_bound_registration_generation": "01a1d16b-ec99-7920-b055-dfa87598adfc",
+        "observed_weak_directory_alive": true,
+        "persisted_policy_checksum_sha256": "dcd811dee0d634a3c3018b33321602763f6246376acf1cb2447fd86d320cd8be",
+        "persisted_policy_coordinator_id": "01a1d16b-ec97-7303-a442-872691e7c87a",
+        "persisted_policy_database_open_incarnation": "d97893c1-cbb1-40d3-9c6c-1c658c2b9a3b",
+        "persisted_policy_range_store_open_id": "01a1d16b-e661-7433-b25a-1ba51636ab71",
+        "persisted_policy_registration_generation": "01a1d16b-ec99-7920-b055-dfa87598adfc",
+        "retained_owner_coordinator_id": "01a1d16b-ec97-7303-a442-872691e7c87a",
+        "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission"
+      },
+      "command_success": true,
+      "metadata": {
+        "cluster_id": "native-operator-cli",
+        "commit_index": 4,
+        "current_term": 1,
+        "last_log_index": 4,
+        "last_log_term": 1,
+        "leader_id": "n0",
+        "learners": [],
+        "node_id": "n0",
+        "role": "leader",
+        "topology_generation": 4,
+        "voted_for": "n0",
+        "voters": [
+          "n0",
+          "n1",
+          "n2",
+          "n3",
+          "n4"
+        ]
+      },
+      "node": "n0",
+      "phase": "after_health_gate",
+      "reply_error": null,
+      "stage": "readonly_retained_writer_binding"
+    },
+    {
+      "binding": {
+        "actual_verified_registry_extension": {
+          "publication_pending": false,
+          "scope": "retained same-open verified audit DATA; not role or Ready",
+          "verified_extension": {
+            "metadata_context_id": "01a1d16b-fa2a-76d2-b826-4834d103b9e0",
+            "metadata_read_index": 4,
+            "metadata_term": 1,
+            "metadata_voters": [
+              "n0",
+              "n1",
+              "n2",
+              "n3",
+              "n4"
+            ],
+            "native_audit_sha256": "f13c6242c46b70ea89826d3512ab1f28a35b3c3c6e00d2a61d0a2d2d0f148006",
+            "sequence": 1
+          }
+        },
+        "current_database_hook_slot_not_relocked": true,
+        "identity_from_status_dto_is_not_authority": true,
+        "observed_binding_lifetime_live": true,
+        "observed_binding_liveness_error": null,
+        "observed_bound_authority_matches_retained_coordinator": true,
+        "observed_bound_registration_active": true,
+        "observed_bound_registration_generation": "01a1d16b-ed30-7d21-8e12-2dead005ce6e",
+        "observed_weak_directory_alive": true,
+        "persisted_policy_checksum_sha256": "777e9d0d01bdc8788e4227cf7dc1179ecbf6d7d2ec879bcf0fce0c51c0a30cdd",
+        "persisted_policy_coordinator_id": "01a1d16b-ed2e-7072-83da-faee109712dc",
+        "persisted_policy_database_open_incarnation": "b8d173f4-304f-4781-b422-cd767624d099",
+        "persisted_policy_range_store_open_id": "01a1d16b-e663-7c22-b067-5c68f91eebce",
+        "persisted_policy_registration_generation": "01a1d16b-ed30-7d21-8e12-2dead005ce6e",
+        "retained_owner_coordinator_id": "01a1d16b-ed2e-7072-83da-faee109712dc",
+        "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission"
+      },
+      "command_success": true,
+      "metadata": {
+        "cluster_id": "native-operator-cli",
+        "commit_index": 4,
+        "current_term": 1,
+        "last_log_index": 4,
+        "last_log_term": 1,
+        "leader_id": "n0",
+        "learners": [],
+        "node_id": "n1",
+        "role": "follower",
+        "topology_generation": 4,
+        "voted_for": "n0",
+        "voters": [
+          "n0",
+          "n1",
+          "n2",
+          "n3",
+          "n4"
+        ]
+      },
+      "node": "n1",
+      "phase": "after_health_gate",
+      "reply_error": null,
+      "stage": "readonly_retained_writer_binding"
+    },
+    {
+      "binding": {
+        "actual_verified_registry_extension": {
+          "publication_pending": false,
+          "scope": "retained same-open verified audit DATA; not role or Ready",
+          "verified_extension": {
+            "metadata_context_id": "01a1d16b-fa67-70e2-b4b1-9ea3c40f02d7",
+            "metadata_read_index": 4,
+            "metadata_term": 1,
+            "metadata_voters": [
+              "n0",
+              "n1",
+              "n2",
+              "n3",
+              "n4"
+            ],
+            "native_audit_sha256": "37d89e9e88caa8129a043f56b3fce3a4428fee5ff7ae3fbe56edbc09e124e322",
+            "sequence": 1
+          }
+        },
+        "current_database_hook_slot_not_relocked": true,
+        "identity_from_status_dto_is_not_authority": true,
+        "observed_binding_lifetime_live": true,
+        "observed_binding_liveness_error": null,
+        "observed_bound_authority_matches_retained_coordinator": true,
+        "observed_bound_registration_active": true,
+        "observed_bound_registration_generation": "01a1d16b-edd3-7272-bd3c-5a1b1c8cbbe7",
+        "observed_weak_directory_alive": true,
+        "persisted_policy_checksum_sha256": "e8bb69f83ffa4b9f222e0184d36566186bba6e5b97eece02cb09da740c843426",
+        "persisted_policy_coordinator_id": "01a1d16b-edd1-7503-b53e-3abcb4933685",
+        "persisted_policy_database_open_incarnation": "2087b3fd-5551-4428-8c92-545b673b6aeb",
+        "persisted_policy_range_store_open_id": "01a1d16b-e668-7be1-b7f5-15af691d275b",
+        "persisted_policy_registration_generation": "01a1d16b-edd3-7272-bd3c-5a1b1c8cbbe7",
+        "retained_owner_coordinator_id": "01a1d16b-edd1-7503-b53e-3abcb4933685",
+        "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission"
+      },
+      "command_success": true,
+      "metadata": {
+        "cluster_id": "native-operator-cli",
+        "commit_index": 4,
+        "current_term": 1,
+        "last_log_index": 4,
+        "last_log_term": 1,
+        "leader_id": "n0",
+        "learners": [],
+        "node_id": "n2",
+        "role": "follower",
+        "topology_generation": 4,
+        "voted_for": "n0",
+        "voters": [
+          "n0",
+          "n1",
+          "n2",
+          "n3",
+          "n4"
+        ]
+      },
+      "node": "n2",
+      "phase": "after_health_gate",
+      "reply_error": null,
+      "stage": "readonly_retained_writer_binding"
+    },
+    {
+      "binding": {
+        "actual_verified_registry_extension": {
+          "publication_pending": false,
+          "scope": "retained same-open verified audit DATA; not role or Ready",
+          "verified_extension": {
+            "metadata_context_id": "01a1d16b-fa34-7bd3-a8c0-71e46f044b40",
+            "metadata_read_index": 4,
+            "metadata_term": 1,
+            "metadata_voters": [
+              "n0",
+              "n1",
+              "n2",
+              "n3",
+              "n4"
+            ],
+            "native_audit_sha256": "271b19a166e00c99573cabfd2d67405a8ee06b97a05d4c5ad7c286a1281d99eb",
+            "sequence": 1
+          }
+        },
+        "current_database_hook_slot_not_relocked": true,
+        "identity_from_status_dto_is_not_authority": true,
+        "observed_binding_lifetime_live": true,
+        "observed_binding_liveness_error": null,
+        "observed_bound_authority_matches_retained_coordinator": true,
+        "observed_bound_registration_active": true,
+        "observed_bound_registration_generation": "01a1d16b-eee3-72c0-8c75-fea5c4cd8756",
+        "observed_weak_directory_alive": true,
+        "persisted_policy_checksum_sha256": "cf6ec46f5c902eb8713ebb225001329d5d2c57298b7ca8fe07f4deaf57ed12f1",
+        "persisted_policy_coordinator_id": "01a1d16b-eee1-7461-8b21-4dbdcdaf3f96",
+        "persisted_policy_database_open_incarnation": "def4d3ad-3563-4d4c-a479-7e15fe9d44ef",
+        "persisted_policy_range_store_open_id": "01a1d16b-e666-73c3-a4fd-450e3798267f",
+        "persisted_policy_registration_generation": "01a1d16b-eee3-72c0-8c75-fea5c4cd8756",
+        "retained_owner_coordinator_id": "01a1d16b-eee1-7461-8b21-4dbdcdaf3f96",
+        "scope": "diagnostic retained binding only; not linearizable Ready/role or a permission"
+      },
+      "command_success": true,
+      "metadata": {
+        "cluster_id": "native-operator-cli",
+        "commit_index": 4,
+        "current_term": 1,
+        "last_log_index": 4,
+        "last_log_term": 1,
+        "leader_id": "n0",
+        "learners": [],
+        "node_id": "n3",
+        "role": "follower",
+        "topology_generation": 4,
+        "voted_for": "n0",
+        "voters": [
+          "n0",
+          "n1",
+          "n2",
+          "n3",
+          "n4"
+        ]
+      },
+      "node": "n3",
+      "phase": "after_health_gate",
+      "reply_error": null,
+      "stage": "readonly_retained_writer_binding"
+    },
+    {
+      "data_move": "not_attempted",
+      "fifth_data_serving": false,
+      "fresh_ack": true,
+      "fresh_ack_read": true,
+      "health_gate_scope": "original API receipt monotonic budget; no hard OS or diagnostic-fsync wall bound",
+      "health_limit_ns": 10000000000,
+      "healthy_triple_receipt_ns": 1015797325,
+      "observed_false_absence": false,
+      "observed_wrong_value": false,
+      "old_ack_read": true,
+      "rounds": 1,
+      "scope": "unchanged assignments require actual bounded healthy existing read AND fresh ACK",
+      "stage": "strict_registry_addition_terminal"
+    }
+  ]
+}

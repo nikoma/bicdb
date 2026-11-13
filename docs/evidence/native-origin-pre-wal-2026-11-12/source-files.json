@@ -1,0 +1,46 @@
+{
+  "source": "721c329de4196aeef96604642c439fe7d8ddb0bf",
+  "scope": "selected fault/fixture source only; not full runtime reconstruction or build attestation",
+  "files": [
+    {
+      "path": "crates/bicdb-core/src/db.rs",
+      "bytes": 1400896,
+      "sha256": "2c8d042c8c108de03130261c2fa381485737d4948fcc0b487f2287e8c4e42e20"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native.rs",
+      "bytes": 91373,
+      "sha256": "f976dea89cb4adbfa94c39239fe9da4ee1570eb3dd4c42fadb87fcf6318ecd70"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/certified_prefix.rs",
+      "bytes": 49756,
+      "sha256": "3e7f22d741769652f888a6b474dd2c12eb8c1d7c8118ca38f13518c4da6c7921"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/certified_prefix/origin_fault.rs",
+      "bytes": 13605,
+      "sha256": "705234a20122a3caec3baf2ceb4b2193dbb2ef69e005e1b0cdd70c04bd9d2d42"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/spatial_paged.rs",
+      "bytes": 143568,
+      "sha256": "7e1780042d410f9792202cc883b7aae5281b2c2371d09890e7ad3ed2b5d9b7b3"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport.rs",
+      "bytes": 312844,
+      "sha256": "06a19a1cdd7da79e4139322fdc7c79f7849400fdda5ce9df3e2bc55c591cf7b9"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests.rs",
+      "bytes": 18370,
+      "sha256": "6dd62aea87532982bfa17e44fcc45b3086c2bd85b390378bba72ace84717b2d6"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/origin_pre_wal_fault_tests.rs",
+      "bytes": 27293,
+      "sha256": "75d177ff4061f5b5f02c7bf261827be4802edf395738f30fec3df6e57dc68aca"
+    }
+  ]
+}

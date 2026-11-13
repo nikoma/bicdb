@@ -1479,3 +1479,105 @@ pub(crate) fn enable_decimal_predicate_comparison_v1(root: &Path) -> Result<()> 
         .insert(DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG.into());
     persist_metadata(root, &metadata, true)
 }
+
+#[cfg(test)]
+pub(crate) fn semantic_reader_test_activations() -> [(&'static str, fn(&Path) -> Result<()>); 6] {
+    [
+        (
+            NATIVE_IMMUTABLE_FACTS_FEATURE_FLAG,
+            enable_native_immutable_facts,
+        ),
+        (
+            NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG,
+            enable_native_fact_projection_contracts,
+        ),
+        (
+            EXACT_PROPORTIONAL_INTERVALS_FEATURE_FLAG,
+            enable_exact_proportional_intervals,
+        ),
+        (
+            EXACT_DECIMAL_LIST_SUM_FEATURE_FLAG,
+            enable_exact_decimal_list_sum,
+        ),
+        (
+            DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG,
+            enable_decimal_predicate_comparison_v1,
+        ),
+        (
+            APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG,
+            enable_application_unique_scope,
+        ),
+    ]
+}
+
+#[cfg(test)]
+mod mutation_reader_contract_tests {
+    use super::*;
+    use crate::{BicDb, DbConfig, Record};
+
+    #[test]
+    fn implemented_mutation_reader_requirements_survive_capture_and_two_reopens() {
+        for (flag, activate) in semantic_reader_test_activations() {
+            for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+                let root = tempfile::tempdir().unwrap();
+                let config = DbConfig::default()
+                    .with_fsync(true)
+                    .with_storage_mode(mode)
+                    .with_paged_buffer_pool_bytes(8 * 1024 * 1024);
+                let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+                db.create_collection("ack").unwrap();
+                db.insert(
+                    "ack",
+                    Record::new("one")
+                        .with_metadata(serde_json::json!({"payload":"independent-ack"})),
+                )
+                .unwrap();
+                let hash = db
+                    .get("ack", "one")
+                    .unwrap()
+                    .unwrap()
+                    .content_hash()
+                    .unwrap();
+                activate(root.path()).unwrap();
+                assert!(read_or_legacy_metadata(root.path())
+                    .unwrap()
+                    .feature_flags
+                    .contains(flag));
+                let sequence = db.last_commit_seq();
+                assert!(
+                    required_reader_features(root.path())
+                        .unwrap()
+                        .iter()
+                        .any(|f| f == flag),
+                    "active semantic reader {flag} was omitted from the Native contract"
+                );
+                assert_eq!(db.last_commit_seq(), sequence);
+                assert_eq!(
+                    db.get("ack", "one")
+                        .unwrap()
+                        .unwrap()
+                        .content_hash()
+                        .unwrap(),
+                    hash
+                );
+                db.close().unwrap();
+                for _ in 0..2 {
+                    let db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+                    assert!(required_reader_features(root.path())
+                        .unwrap()
+                        .iter()
+                        .any(|f| f == flag));
+                    assert_eq!(
+                        db.get("ack", "one")
+                            .unwrap()
+                            .unwrap()
+                            .content_hash()
+                            .unwrap(),
+                        hash
+                    );
+                    db.close().unwrap();
+                }
+            }
+        }
+    }
+}

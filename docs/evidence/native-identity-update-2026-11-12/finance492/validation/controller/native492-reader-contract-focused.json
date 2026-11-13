@@ -1,0 +1,89 @@
+{
+  "label": "native492-reader-contract-focused",
+  "source": "2403deefde68869c15f02b73d40406ffdfb50148",
+  "base": "fdac8c7691ed0458497096999c590a2aee092f18",
+  "repo": "/root/bicdb-native-identity-delivery",
+  "scope": "Fix actual2reader-baseline failures onfinance/API492candidate; retain6implementedfinance/mutationsemanticrequirements, exclude localstorage/authorityflags and unsupportedSQLrename. ActualNative formatactivation/ACKhash/seq/tworeopens and bindingstaleness. Additionalexistingformat+bindings controls. SourceAPIissuers/grants/SQLauthority/version17checks at5fab separatelyunchangedcode; allbroad/recovery/application/mainmerge qualification stillrequired. Originalassertions/waitsunchanged;P2off/no spend.",
+  "continue_on_failure": true,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "mutation_reader_contract_tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "current_semantic_reader_requirements",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "range_image_bindings::tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "format::",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-native492-reader-contract-baseline"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-native492-reader-contract-baseline.json",
+      "equals": {
+        "source": "fdac8c7691ed0458497096999c590a2aee092f18",
+        "status": "failed"
+      }
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

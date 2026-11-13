@@ -168,6 +168,47 @@ impl BicDb {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn current_semantic_reader_requirements_invalidate_captured_bindings() {
+        for (flag, activate) in format::semantic_reader_test_activations() {
+            let root = tempfile::tempdir().unwrap();
+            let db = populated(root.path());
+            let before = db.capture_range_image_bindings().unwrap();
+            let hash = db
+                .get("items", "row-0000")
+                .unwrap()
+                .unwrap()
+                .content_hash()
+                .unwrap();
+            let sequence = db.last_commit_seq();
+            let namespace = db.local_namespace_identity("items").unwrap();
+            activate(root.path()).unwrap();
+            assert!(
+                db.validate_range_image_bindings(&before).is_err(),
+                "{flag}: old capture remained usable after a semantic requirement changed"
+            );
+            let after = db.capture_range_image_bindings().unwrap();
+            assert!(after.reader_features().iter().any(|f| f == flag));
+            for local in [
+                format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
+                format::RANGE_IMAGE_INSTALL_FEATURE_FLAG,
+                format::SERVER_PAGED_FEATURE_FLAG,
+            ] {
+                assert!(!after.reader_features().iter().any(|f| f == local));
+            }
+            assert_eq!(db.last_commit_seq(), sequence);
+            assert_eq!(db.local_namespace_identity("items").unwrap(), namespace);
+            assert_eq!(
+                db.get("items", "row-0000")
+                    .unwrap()
+                    .unwrap()
+                    .content_hash()
+                    .unwrap(),
+                hash
+            );
+        }
+    }
+
     use super::*;
     use crate::distribution_range_mutation::RangeMutationAuthority;
     use crate::{DistributionConfig, DistributionStore};

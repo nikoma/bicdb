@@ -43,6 +43,7 @@ pub(super) enum SourceCase {
     TargetFinalImageCanceled,
     TargetFinalImageCorrupt,
     TargetFinalImageWithoutScan,
+    TargetFinalImageHistorical,
     RemoteConstraintCapture,
     RemoteOldCollectorExpiredObservation,
     RemoteOldCollectorUnrelatedAdvance,
@@ -1269,6 +1270,7 @@ pub(super) fn exercise(
                     | SourceCase::TargetFinalImageCanceled
                     | SourceCase::TargetFinalImageCorrupt
                     | SourceCase::TargetFinalImageWithoutScan
+                    | SourceCase::TargetFinalImageHistorical
             ) {
                 target_final_image_tests::exercise(
                     case,

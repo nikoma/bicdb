@@ -130,6 +130,61 @@ pub(super) struct RegisteredCompletedRows {
     pub(super) content_sha256: String,
     pub(super) last_actual_target_b: Option<u64>,
 }
+/// Immutable publication DATA copied from the actual committed row header.
+/// Deserialization alone creates no complete-row capability or writer grant.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct ArchivedRegisteredRows {
+    header: RowHeader,
+}
+impl ArchivedRegisteredRows {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn require_historical(
+        &self,
+        db: &BicDb,
+        manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
+        seal: &crate::distribution_range_image::LocalRangeImageSealV1,
+        intent: &str,
+        generation: Uuid,
+        xid: u64,
+        sha: &str,
+        last_b: Option<u64>,
+    ) -> Result<()> {
+        let h = &self.header;
+        h.validate()?;
+        if !h.complete
+            || h.attempt != manifest.target_attempt
+            || h.history_generation != generation
+            || h.manifest_sha256 != manifest.checksum_sha256
+            || h.intent_sha256 != intent
+            || h.native_xid != xid
+            || h.checksum_sha256 != sha
+            || h.last_actual_target_b != last_b
+            || h.cursor.collection_index() != manifest.collections.len()
+            || h.cursor.after_key().is_some()
+            || h.cursor.step() != seal.steps
+            || h.chain != seal.wire_chain_sha256
+            || h.records != seal.record_count
+            || h.bytes != seal.serialized_record_bytes
+            || h.source_min_b.unwrap_or(manifest.source_reserved_b) != seal.min_snapshot_db_sequence
+            || h.source_max_b.unwrap_or(manifest.source_reserved_b) != seal.max_snapshot_db_sequence
+            || (h.records > 0 && last_b.is_none())
+            || db
+                .paged_records
+                .as_ref()
+                .ok_or_else(|| invalid("Registered archived rows page store absent"))?
+                .store()
+                .transactions()
+                .status(xid)
+                != bicdb_page::TxStatus::Committed
+        {
+            return Err(invalid(
+                "Registered immutable published row header differs from final binding",
+            ));
+        }
+        Ok(())
+    }
+}
 impl NativeRegisteredRemoteImageInstallation {
     pub(super) fn completed_rows(
         &mut self,
@@ -663,6 +718,20 @@ mod cuts {
 #[cfg(test)]
 pub(crate) use cuts::install as test_registered_remote_row_wal_cut;
 impl BicDb {
+    pub(super) fn archive_registered_completed_rows(
+        &self,
+        attempt: Uuid,
+        xid: u64,
+        sha: &str,
+    ) -> Result<ArchivedRegisteredRows> {
+        self.require_registered_completed_rows_point(attempt, xid, sha)?;
+        let header = self
+            .read_native_range_image_record(&row_key(attempt))?
+            .ok_or_else(|| {
+                invalid("Registered actual completed rows disappeared before archive")
+            })?;
+        Ok(ArchivedRegisteredRows { header })
+    }
     pub(super) fn require_registered_completed_rows_point(
         &self,
         attempt: Uuid,

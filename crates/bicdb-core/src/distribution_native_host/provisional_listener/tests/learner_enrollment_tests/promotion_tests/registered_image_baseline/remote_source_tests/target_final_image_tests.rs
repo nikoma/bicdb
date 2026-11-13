@@ -31,6 +31,14 @@ fn native_registered_fifth_remote_final_image_actual_post_wal_cancel_reconciles_
         Some(SourceCase::TargetFinalImageCanceled),
     );
 }
+#[test]
+fn native_registered_fifth_remote_final_image_actual_historical_integrity_uses_immutable_header_archive(
+) {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::TargetFinalImageHistorical),
+    );
+}
 #[allow(clippy::too_many_arguments)]
 fn advance(
     control: &mut NativeMetadataControlHost,
@@ -300,6 +308,38 @@ pub(super) fn exercise(
     assert_eq!(owner_after["history"], owner_before["history"]);
     assert_eq!(owner_after["rows"], owner_before["rows"]);
     assert_eq!(factory.database.read().current_commit_seq(), original_b);
+    {
+        let mf = source.manifest();
+        let db = factory.database.read();
+        let native = db
+            .native_recovery_admission(
+                &mf.cluster_id,
+                mf.bootstrap_id,
+                &mf.target_id,
+                mf.target_birth.node_incarnation(),
+            )
+            .unwrap();
+        let historical = db
+            .read_registered_final_image_integrity(&native, &pointer)
+            .unwrap();
+        assert_eq!(historical.pointer(), pointer);
+        assert_eq!(historical.range_index(), mf.range_index);
+        assert_eq!(historical.logical_genesis_sha256(), mf.h0);
+        assert_eq!(historical.logical_history_sha256(), mf.h);
+        historical.require_current(&db, &native).unwrap();
+        let mut wrong = pointer.clone();
+        wrong.checksum_sha256.replace_range(
+            0..1,
+            if pointer.checksum_sha256.starts_with('0') {
+                "1"
+            } else {
+                "0"
+            },
+        );
+        assert!(db
+            .read_registered_final_image_integrity(&native, &wrong)
+            .is_err());
+    }
     if let Some(canceled) = canceled {
         assert_eq!(
             canceled["final_image"]["record"],
@@ -308,6 +348,56 @@ pub(super) fn exercise(
         assert_eq!(
             canceled["final_image"]["actual_commit_returned"],
             owner_after["final_image"]["actual_commit_returned"]
+        );
+    }
+    if matches!(case, SourceCase::TargetFinalImageHistorical) {
+        factory
+            .database
+            .read()
+            .test_registered_remote_remove_mutable_headers(pointer.attempt_id)
+            .unwrap();
+        let mf = source.manifest();
+        let historical_pointer = {
+            let db = factory.database.read();
+            let native = db
+                .native_recovery_admission(
+                    &mf.cluster_id,
+                    mf.bootstrap_id,
+                    &mf.target_id,
+                    mf.target_birth.node_incarnation(),
+                )
+                .unwrap();
+            let historical = db
+                .read_registered_final_image_integrity(&native, &pointer)
+                .unwrap();
+            historical.require_current(&db, &native).unwrap();
+            assert_eq!(historical.range_index(), mf.range_index);
+            assert_eq!(
+                serde_json::to_value(historical.target_namespace_ids()).unwrap(),
+                owner_after["final_image"]["record"]["namespaces"]
+            );
+            historical.pointer()
+        };
+        let error = advance(
+            control,
+            client,
+            &source,
+            plan,
+            provider,
+            actor,
+            output,
+            journal,
+            Operation::PublishFinalImage,
+            false,
+        )
+        .unwrap_err();
+        evidence(&output.join("registered-final-image-historical-integrity.json"),&serde_json::json!({"pointer":pointer,"historical_pointer":historical_pointer,
+            "current_resume_error":error.to_string(),"actual_mutable_header_removal":true,"immutable_full_header_archive_retained":true,
+            "no_original_A_or_cold_resume_reconstruction":true,"no_native_floor_or_serving":true})).unwrap();
+        assert_eq!(historical_pointer, pointer);
+        assert!(
+            error.to_string().contains("history header absent"),
+            "{error}"
         );
     }
 }

@@ -61,7 +61,16 @@ pub(super) fn finished_seal(
             "Registered target verification needs actual authenticated Finished frame",
         ));
     };
-    let mf = context.point.preflight().source().manifest();
+    require_seal_manifest(seal, context.point.preflight().source().manifest())?;
+    context.point.require_live()?;
+    Ok(seal.clone())
+}
+/// Integrity constraints on immutable published DATA only. Live producers
+/// separately require the actual authenticated frame and original A context.
+pub(super) fn require_seal_manifest(
+    seal: &LocalRangeImageSealV1,
+    mf: &crate::distribution_range_image::NativeRemoteImageManifestV1,
+) -> Result<()> {
     let history_count = mf
         .range_index
         .checked_add(1)
@@ -98,8 +107,7 @@ pub(super) fn finished_seal(
             "Registered authenticated Finished seal differs from actual original manifest",
         ));
     }
-    context.point.require_live()?;
-    Ok(seal.clone())
+    Ok(())
 }
 pub(super) fn actual_indexes(db: &BicDb) -> Result<Vec<IndexDefinition>> {
     let mut definitions = db.index_definitions();
@@ -339,6 +347,33 @@ impl NativeRegisteredRemoteImageInstallation {
 
 #[cfg(test)]
 impl BicDb {
+    /// Deliberately remove mutable progress after final publication. Historical
+    /// integrity must use its immutable embedded archives; current resume fails.
+    pub(crate) fn test_registered_remote_remove_mutable_headers(
+        &self,
+        attempt: Uuid,
+    ) -> Result<()> {
+        let _journal = self.try_native_image_journal()?;
+        self.in_paged_transaction(|paged, xid| {
+            for key in [
+                format!("registered-remote-image/{attempt}/history"),
+                format!("registered-remote-image/{attempt}/rows"),
+            ] {
+                if !paged
+                    .store()
+                    .delete(xid, &native_key(&key))
+                    .map_err(|e| BicDbError::PagedStorage(e.to_string()))?
+                {
+                    return Err(invalid(
+                        "actual mutable header removal control missing record",
+                    ));
+                }
+            }
+            Ok(())
+        })?
+        .ok_or_else(|| invalid("actual mutable header removal page store absent"))?;
+        Ok(())
+    }
     /// Deliberate physical corruption control, not a row writer grant. The
     /// independent verifier must read storage rather than trust import hashes.
     pub(crate) fn test_registered_remote_remove_physical_row(

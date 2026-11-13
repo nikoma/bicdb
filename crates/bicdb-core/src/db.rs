@@ -130,6 +130,14 @@ pub(crate) use range_image_native::{
     NativeWriterHostState, RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
     StagedNativeHistoryProof,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::{
+    HistoricalRegisteredFinalImage, NativeRegisteredRemoteFinalImageReceipt,
+    NativeRegisteredRemoteHistoryProgress, NativeRegisteredRemoteHistoryProof,
+    NativeRegisteredRemoteImageContext, NativeRegisteredRemoteImageInstallation,
+    NativeRegisteredRemoteImageOperation, NativeRegisteredRemoteImageProgress,
+    NativeRegisteredRemoteRowProgress, NativeRegisteredRemoteVerificationProgress,
+};
 pub(crate) use range_image_native::{
     NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,
     NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
@@ -148,14 +156,6 @@ pub(crate) use range_image_native::{
 };
 pub(crate) use range_image_native::{
     NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,
-};
-#[cfg(feature = "tls-replication")]
-pub(crate) use range_image_native::{
-    NativeRegisteredRemoteFinalImageReceipt, NativeRegisteredRemoteHistoryProgress,
-    NativeRegisteredRemoteHistoryProof, NativeRegisteredRemoteImageContext,
-    NativeRegisteredRemoteImageInstallation, NativeRegisteredRemoteImageOperation,
-    NativeRegisteredRemoteImageProgress, NativeRegisteredRemoteRowProgress,
-    NativeRegisteredRemoteVerificationProgress,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::{

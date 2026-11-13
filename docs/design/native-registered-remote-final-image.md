@@ -68,6 +68,33 @@ the matching native history/anchor contract, and retain outcome custody through
 that new invariant boundary. Remote NEW, durable decision, Open/release,
 source-stream closure and OLD cleanup remain separate actual producers.
 
+The source-only successor uses protected final record version 2. It embeds the
+full actual audited HistoryHeader and complete committed RowHeader in the same
+retained bytes and native CURRENT/archive transaction. There is no default from
+missing archives; provisional version-1 records from the earlier source-only
+leaf cannot be treated as complete version-2 evidence.
+
+`db.read_registered_final_image_integrity(native, pointer)` returns a distinct
+opaque `HistoricalRegisteredFinalImage` from actual DB-root reads only. It
+requires exact CURRENT/archive bytes, checksums, committed native transaction
+proof, healthy recovery, actual stable birth/cluster/bootstrap/node/restore and
+persistent protected catalogue UUID. It validates the embedded immutable full
+history/row headers, their original committed native xids, complete/audited
+hashes, wire/count/seal bindings and actual immutable history endpoints R/H0/H.
+It never relies on mutable current history or row headers remaining present.
+
+This is lower-bound publication integrity, not current complete-image freshness.
+It deliberately does not compare original DB-open, current schema/namespace set,
+current image generations, target visibility/durability watermarks or a live
+source frame/role/A grant. The published target namespace UUID set remains
+immutable returned DATA for comparison with a later base publication; recreating
+a current namespace cannot silently make an irreversible historical R disappear.
+The live final producer and `receipt.require_current` retain all their strict
+original-owner and freshness checks. This historical reader creates no current
+owner, cold continuation, mutation, adoption or Serving permission, and errors
+never mean an absent/zero native floor. A future anchor consumer must separately
+validate its own same-transaction publication archive and base binding.
+
 Source captures and OLD owners still retain their cap-eight bounds. This final
 receipt neither drops the source read pin nor releases permanent OLD/Frozen
 ownership. Cold reconstruction, unknown-row resolution, populated Assigned
@@ -75,13 +102,14 @@ second-range movement, controller integration and physical qualification remain
 open. Bounded raw-row steps do not establish bounded filesystem I/O or physical
 RTO; the existing service mutex and native journal still cover native fsync.
 
-Four source selectors under `native_registered_fifth_remote_final_image_actual_`
+Five source selectors under `native_registered_fifth_remote_final_image_actual_`
 exercise the real fifth receiver and original actual source frames:
 
 - `independent_scan_and_native_receipt`
 - `refuses_without_independent_target_scan`
 - `missing_physical_row_is_not_hidden_by_import_hash`
 - `post_wal_cancel_reconciles_same_xid`
+- `historical_integrity_uses_immutable_header_archive`
 
 These reuse the genuine local-OLD-seeded wire fixture, not a completed remote
 NEW/decision/release campaign. The corruption control deliberately deletes an
@@ -91,3 +119,7 @@ actual caller after native final commit, retains its original xid/bytes and
 reconciles through a fresh bounded request. Evidence is saved before final
 assertions and retains the original outer Manifest/frame journal. No test in
 this batch is claimed as passed, hardware power loss or production qualification.
+The historical control removes the actual mutable progress headers after final
+publication. It requires historical integrity to survive using immutable
+archives while the live owner refuses further finalization. It does not simulate
+cold process reconstruction or prove a Serving recovery path.

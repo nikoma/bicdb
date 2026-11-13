@@ -14,7 +14,8 @@ mod verification;
 #[cfg(test)]
 pub(crate) use final_publication::test_registered_remote_final_image_after_wal;
 pub(crate) use final_publication::{
-    NativeRegisteredRemoteFinalImagePointer, NativeRegisteredRemoteFinalImageReceipt,
+    HistoricalRegisteredFinalImage, NativeRegisteredRemoteFinalImagePointer,
+    NativeRegisteredRemoteFinalImageReceipt,
 };
 #[cfg(test)]
 pub(crate) use rows::test_registered_remote_row_wal_cut;

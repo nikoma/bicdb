@@ -28,8 +28,10 @@ struct Record {
     proposal: NativeRegisteredRemoteProposalPointer,
     history_generation: Uuid,
     history_header_sha256: String,
+    history_header: HistoryHeader,
     rows_native_xid: u64,
     rows_header_sha256: String,
+    rows_header: rows::ArchivedRegisteredRows,
     last_applied_target_b: Option<u64>,
     verification_generation: Uuid,
     target_reserved_b: u64,
@@ -48,7 +50,7 @@ impl Record {
         let mut r = self.clone();
         r.checksum_sha256.clear();
         Ok(hex::encode(sha2::Sha256::digest(bounded_json(
-            &("registered-remote-final-image-v1", r),
+            &("registered-remote-final-image-v2", r),
             MAX_NATIVE_RECEIPT_BYTES,
         )?)))
     }
@@ -63,7 +65,8 @@ impl Record {
         self.manifest.require_shape()?;
         self.proposal.validate()?;
         self.pointer().validate()?;
-        if self.version != 1
+        self.history_header.validate()?;
+        if self.version != 2
             || self.attempt.is_nil()
             || self.attempt != self.manifest.target_attempt
             || self.range != self.manifest.capture_range.id
@@ -106,6 +109,7 @@ impl Record {
         context: &NativeRegisteredRemoteImageContext<'_>,
     ) -> Result<()> {
         self.validate()?;
+        self.require_published_history(db)?;
         context.require_current(db)?;
         let preflight = context.point.preflight();
         let history = db.read_registered_remote_history(self.attempt)?;
@@ -148,6 +152,74 @@ impl Record {
         )?;
         context.require_current(db)
     }
+    /// Immutable publication constraints. This deliberately does not consult
+    /// mutable current stage/row headers, current namespace/schema/image
+    /// generations, original DB-open or any request/Serving grant.
+    fn require_published_history(&self, db: &BicDb) -> Result<()> {
+        self.validate()?;
+        verification::require_seal_manifest(&self.source_seal, &self.manifest)?;
+        let h = &self.history_header;
+        if h.attempt != self.attempt
+            || h.range != self.range
+            || h.birth != self.target_birth.birth_id()
+            || h.generation != self.history_generation
+            || h.checksum_sha256 != self.history_header_sha256
+            || h.manifest_sha256 != self.manifest.checksum_sha256
+            || h.intent_sha256 != self.intent_sha256
+            || h.proposal != self.proposal
+            || h.range_index != self.manifest.range_index
+            || h.h0 != self.manifest.h0
+            || h.h != self.manifest.h
+            || h.source_receipt != self.manifest.source_native_receipt
+            || h.session != self.manifest.handoff_session
+            || h.nonce != self.manifest.nonce
+            || !h.audited
+            || !h.cursor.complete()
+            || h.verified != self.source_seal.history_entries
+            || h.cursor.step() != self.source_seal.history_steps
+            || h.wire_chain != self.source_seal.history_wire_chain_sha256
+            || h.head.as_deref() != Some(self.manifest.h.as_str())
+            || h.audit_head.as_deref() != Some(self.manifest.h.as_str())
+            || db
+                .paged_records
+                .as_ref()
+                .ok_or_else(|| invalid("Registered published history page store absent"))?
+                .store()
+                .transactions()
+                .status(h.native_xid)
+                != bicdb_page::TxStatus::Committed
+        {
+            return Err(invalid(
+                "Registered immutable published history differs from final binding",
+            ));
+        }
+        for (index, hash) in [
+            (0, self.manifest.h0.as_str()),
+            (self.manifest.range_index, self.manifest.h.as_str()),
+        ] {
+            let entry = db.read_native_history_entry(self.range, self.history_generation, index)?;
+            entry.validate_shape()?;
+            if entry.range_id != self.range
+                || entry.index != index
+                || entry.commitment_sha256 != hash
+                || (index == 0 && entry.outcome != NativeLogicalHistoryOutcomeV1::Genesis)
+            {
+                return Err(invalid(
+                    "Registered immutable published history endpoint changed",
+                ));
+            }
+        }
+        self.rows_header.require_historical(
+            db,
+            &self.manifest,
+            &self.source_seal,
+            &self.intent_sha256,
+            self.history_generation,
+            self.rows_native_xid,
+            &self.rows_header_sha256,
+            self.last_applied_target_b,
+        )
+    }
     fn require_verified(&self, proof: &VerifiedRegisteredTargetContents) -> Result<()> {
         if self.verification_generation != proof.generation
             || self.target_reserved_b != proof.target_reserved_b
@@ -173,6 +245,101 @@ impl Record {
 /// floor. Later adoption must consume this alongside actual original custody.
 pub(crate) struct NativeRegisteredRemoteFinalImageReceipt {
     record: Record,
+}
+/// Lower-bound publication integrity from a real DB-root read, never a
+/// current image, resumed owner, row mutation, adoption or Serving capability.
+pub(crate) struct HistoricalRegisteredFinalImage {
+    record: Record,
+}
+impl std::fmt::Debug for HistoricalRegisteredFinalImage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HistoricalRegisteredFinalImage")
+            .field("pointer", &self.pointer())
+            .finish_non_exhaustive()
+    }
+}
+impl HistoricalRegisteredFinalImage {
+    pub(crate) fn pointer(&self) -> NativeRegisteredRemoteFinalImagePointer {
+        self.record.pointer()
+    }
+    pub(crate) fn manifest(&self) -> &NativeRemoteImageManifestV1 {
+        &self.record.manifest
+    }
+    pub(crate) fn source_seal(&self) -> &LocalRangeImageSealV1 {
+        &self.record.source_seal
+    }
+    pub(crate) fn history_generation(&self) -> Uuid {
+        self.record.history_generation
+    }
+    pub(crate) fn range_index(&self) -> u64 {
+        self.record.manifest.range_index
+    }
+    pub(crate) fn logical_genesis_sha256(&self) -> &str {
+        &self.record.manifest.h0
+    }
+    pub(crate) fn logical_history_sha256(&self) -> &str {
+        &self.record.manifest.h
+    }
+    pub(crate) fn image_root_sha256(&self) -> &str {
+        &self.record.source_seal.image_root_sha256
+    }
+    pub(crate) fn record_count(&self) -> u64 {
+        self.record.source_seal.record_count
+    }
+    pub(crate) fn serialized_record_bytes(&self) -> u64 {
+        self.record.source_seal.serialized_record_bytes
+    }
+    pub(crate) fn target_reserved_b(&self) -> u64 {
+        self.record.target_reserved_b
+    }
+    pub(crate) fn target_min_scan_b(&self) -> u64 {
+        self.record.target_min_scan_b
+    }
+    pub(crate) fn image_generations(&self) -> (Uuid, Uuid) {
+        self.record.image_generations
+    }
+    pub(crate) fn target_birth(&self) -> &crate::distribution::NativeStoreBirthV1 {
+        &self.record.target_birth
+    }
+    pub(crate) fn target_namespace_ids(&self) -> &[(String, Uuid)] {
+        &self.record.namespaces
+    }
+    pub(crate) fn target_catalogue_id(&self) -> Uuid {
+        self.record.catalogue_id
+    }
+    pub(crate) fn intent_sha256(&self) -> &str {
+        &self.record.intent_sha256
+    }
+    pub(crate) fn proposal(&self) -> &NativeRegisteredRemoteProposalPointer {
+        &self.record.proposal
+    }
+    pub(crate) fn history_header_sha256(&self) -> &str {
+        &self.record.history_header_sha256
+    }
+    pub(crate) fn rows_header_sha256(&self) -> &str {
+        &self.record.rows_header_sha256
+    }
+    pub(crate) fn rows_native_xid(&self) -> u64 {
+        self.record.rows_native_xid
+    }
+    pub(crate) fn index_definitions(&self) -> &[IndexDefinition] {
+        &self.record.index_definitions
+    }
+    pub(crate) fn require_current(
+        &self,
+        db: &BicDb,
+        native: &NativeRecoveryAdmission,
+    ) -> Result<()> {
+        let actual = db.read_registered_final_image_integrity(native, &self.pointer())?;
+        if bounded_json(&actual.record, MAX_NATIVE_RECEIPT_BYTES)?
+            != bounded_json(&self.record, MAX_NATIVE_RECEIPT_BYTES)?
+        {
+            return Err(invalid(
+                "Registered historical final image protected binding changed",
+            ));
+        }
+        Ok(())
+    }
 }
 impl std::fmt::Debug for NativeRegisteredRemoteFinalImageReceipt {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -306,7 +473,7 @@ impl RegisteredFinalPublication {
             ));
         }
         let record = Record {
-            version: 1,
+            version: 2,
             manifest: pf.source().manifest().clone(),
             source_seal: proof.seal.clone(),
             attempt: context.scope.attempt_id(),
@@ -322,8 +489,14 @@ impl RegisteredFinalPublication {
             proposal: context.fence.protected_proposal().clone(),
             history_generation: proof.history_generation,
             history_header_sha256: proof.history_header_sha256.clone(),
+            history_header: db.read_registered_remote_history(context.scope.attempt_id())?,
             rows_native_xid: proof.rows.native_xid,
             rows_header_sha256: proof.rows.header_sha256.clone(),
+            rows_header: db.archive_registered_completed_rows(
+                context.scope.attempt_id(),
+                proof.rows.native_xid,
+                &proof.rows.header_sha256,
+            )?,
             last_applied_target_b: proof.rows.last_actual_target_b,
             verification_generation: proof.generation,
             target_reserved_b: proof.target_reserved_b,
@@ -470,6 +643,60 @@ fn read_actual(
     }
     context.require_current(db)?;
     Ok(NativeRegisteredRemoteFinalImageReceipt { record })
+}
+impl BicDb {
+    /// Read only immutable protected publication evidence at this actual DB
+    /// root. A new native admission may inspect a historical floor, but this
+    /// cannot reconstruct the old A lease/current image or authorize resume.
+    pub(crate) fn read_registered_final_image_integrity(
+        &self,
+        native: &NativeRecoveryAdmission,
+        pointer: &NativeRegisteredRemoteFinalImagePointer,
+    ) -> Result<HistoricalRegisteredFinalImage> {
+        native.require_current(self)?;
+        pointer.validate()?;
+        self.check_recovery_state()?;
+        if !crate::format::native_registered_remote_image_active(self.data_path())? {
+            return Err(invalid(
+                "Registered historical final-image reader fence absent",
+            ));
+        }
+        let record: Record = self
+            .read_native_range_image_record(&current(pointer.attempt_id))?
+            .ok_or_else(|| invalid("Registered historical final CURRENT absent"))?;
+        let archived: Record = self
+            .read_native_range_image_record(&archive(pointer.attempt_id, pointer.native_page_xid))?
+            .ok_or_else(|| invalid("Registered historical final immutable archive absent"))?;
+        record.validate()?;
+        archived.validate()?;
+        if record.pointer() != *pointer
+            || archived.pointer() != *pointer
+            || bounded_json(&record, MAX_NATIVE_RECEIPT_BYTES)?
+                != bounded_json(&archived, MAX_NATIVE_RECEIPT_BYTES)?
+            || record.target_birth
+                != crate::distribution::NativeStoreBirthV1::from_actual_native(native)?
+            || record.manifest.cluster_id != *native.cluster_id()
+            || record.manifest.bootstrap_id != native.bootstrap_id()
+            || record.manifest.target_id != *native.local_node_id()
+            || record.manifest.target_birth.node_incarnation() != native.local_member_incarnation()
+            || record.manifest.restore.as_ref() != native.restore_activation()
+            || self.native_abort_catalogue_store_id()? != Some(record.catalogue_id)
+            || self
+                .paged_records
+                .as_ref()
+                .ok_or_else(|| invalid("Registered historical final page store absent"))?
+                .store()
+                .transactions()
+                .status(record.native_page_xid)
+                != bicdb_page::TxStatus::Committed
+        {
+            return Err(invalid("Registered historical final-image native identity or exact committed publication differs"));
+        }
+        record.require_published_history(self)?;
+        native.require_current(self)?;
+        self.check_recovery_state()?;
+        Ok(HistoricalRegisteredFinalImage { record })
+    }
 }
 impl NativeRegisteredRemoteImageInstallation {
     pub(crate) fn final_image_receipt(

@@ -165,6 +165,34 @@ mod client {
             parking_lot::Mutex<std::collections::BTreeMap<ClusterNodeId, std::time::Instant>>,
     }
 
+    /// Keep the actual routed operation separate from later discovery failures.
+    /// A write whose outcome is unknown stays uncertain until a real success;
+    /// a later refusal cannot prove that earlier attempt rolled back.
+    #[derive(Default)]
+    struct EventOperationError(Option<crate::BicDbError>);
+    impl EventOperationError {
+        fn write_failed(&mut self, error: crate::BicDbError) {
+            if !matches!(
+                self.0.as_ref(),
+                Some(crate::BicDbError::CommitOutcomeUnknown { .. })
+                    | Some(crate::BicDbError::RpcEvidenceFailure {
+                        may_have_dispatched: true,
+                        ..
+                    })
+            ) {
+                self.0 = Some(error);
+            }
+        }
+        fn read_failed(&mut self, error: crate::BicDbError) {
+            self.0 = Some(error);
+        }
+        fn take_or(&mut self, fallback: crate::BicDbError) -> crate::BicDbError {
+            self.0.take().unwrap_or(fallback)
+        }
+    }
+    #[cfg(test)]
+    mod error_retention_tests;
+
     impl ClusterEventClient {
         pub fn new(config: &DistributionConfig, topology: ClusterTopology) -> Result<Self> {
             let topology = Arc::new(RwLock::new(topology));
@@ -310,8 +338,11 @@ mod client {
             let cancellation =
                 crate::CancellationToken::uncancelable().child_with_deadline(deadline);
             let mut last_error = invalid("event cluster request failed");
+            let mut operation_error = EventOperationError::default();
             for attempt in 0..5 {
-                self.transport.require_rpc_evidence_current()?;
+                self.transport
+                    .require_rpc_evidence_current()
+                    .map_err(|error| operation_error.take_or(error))?;
                 if std::time::Instant::now() >= deadline {
                     break;
                 }
@@ -320,18 +351,22 @@ mod client {
                         std::time::Duration::from_millis(100 << (attempt - 1))
                             .min(deadline.saturating_duration_since(std::time::Instant::now())),
                     );
-                    // A discovery outage during an election consumes a retry,
-                    // rather than aborting the remaining request budget. Invalid
-                    // or conflicting topologies still propagate through `?`.
-                    if !self.refresh_members_until(deadline)? {
-                        last_error = invalid("no event cluster member is reachable");
-                        continue;
+                    // Discovery retains its stop/retry policy. Its RPC errors
+                    // remain in the opt-in transport journal; they do not replace
+                    // an actual operation error or downgrade an unknown write.
+                    match self.refresh_members_until(deadline) {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            last_error = invalid("no event cluster member is reachable");
+                            continue;
+                        }
+                        Err(error) => return Err(operation_error.take_or(error)),
                     }
                 }
                 if std::time::Instant::now() >= deadline {
                     break;
                 }
-                let (destination, request) = {
+                let (destination, request) = (|| -> Result<_> {
                     let topology = self.topology.read();
                     let range = if let Some(id) = scan_range {
                         topology
@@ -343,15 +378,16 @@ mod client {
                             .ok_or_else(|| invalid("missing event point key"))?;
                         topology.range_for_key(CLUSTER_EVENTS_COLLECTION, &id)?
                     };
-                    (
+                    Ok((
                         range.leader.clone(),
                         ClusterEventRequest {
                             range_id: range.id,
                             range_epoch: range.epoch,
                             operation: operation.clone(),
                         },
-                    )
-                };
+                    ))
+                })()
+                .map_err(|error| operation_error.take_or(error))?;
                 // Reserve part of the remaining budget for route discovery
                 // after a silent old leader. Otherwise every new request can
                 // exhaust its whole budget on the same stale route forever.
@@ -364,11 +400,13 @@ mod client {
                     request,
                 ) {
                     Ok(response) => return Ok(response),
-                    Err(error) => last_error = error,
+                    Err(error) => operation_error.write_failed(error),
                 }
             }
-            self.transport.require_rpc_evidence_current()?;
-            Err(last_error)
+            self.transport
+                .require_rpc_evidence_current()
+                .map_err(|error| operation_error.take_or(error))?;
+            Err(operation_error.take_or(last_error))
         }
 
         fn get_request(
@@ -387,27 +425,40 @@ mod client {
             let mut hint: Option<NativeEventRoute> = None;
             let mut retry_after = std::time::Duration::from_millis(50);
             let mut last = invalid("typed event Get unavailable");
+            let mut operation_error = EventOperationError::default();
             // A finite bound plus the SAME absolute request deadline. Typed
             // route/unavailable results never become a successful empty row.
             for attempt in 0..128 {
-                self.transport.require_rpc_evidence_current()?;
-                parent.check()?;
+                self.transport
+                    .require_rpc_evidence_current()
+                    .map_err(|error| operation_error.take_or(error))?;
+                parent
+                    .check()
+                    .map_err(|error| operation_error.take_or(error))?;
                 if attempt > 0 {
                     let until = (std::time::Instant::now() + retry_after).min(deadline);
                     while std::time::Instant::now() < until {
-                        parent.check()?;
+                        parent
+                            .check()
+                            .map_err(|error| operation_error.take_or(error))?;
                         std::thread::sleep(
                             until
                                 .saturating_duration_since(std::time::Instant::now())
                                 .min(std::time::Duration::from_millis(5)),
                         );
                     }
-                    if !self.refresh_members_until(deadline)? {
-                        last = invalid("no member reached during typed Get discovery");
-                        continue;
+                    match self.refresh_members_until(deadline) {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            last = invalid("no member reached during typed Get discovery");
+                            continue;
+                        }
+                        Err(error) => return Err(operation_error.take_or(error)),
                     }
                 }
-                parent.check()?;
+                parent
+                    .check()
+                    .map_err(|error| operation_error.take_or(error))?;
                 let (destination, range_id, range_epoch) = {
                     let topology = self.topology.read();
                     let current = topology.range_for_key(CLUSTER_EVENTS_COLLECTION, &id)?;
@@ -455,7 +506,7 @@ mod client {
                             NativeEventGetResult::Redirect { route, .. } => {
                                 hint = Some(route);
                                 retry_after = std::time::Duration::from_millis(25);
-                                last=invalid("typed event Get redirected; original request deadline retained");
+                                operation_error.read_failed(invalid("typed event Get redirected; original request deadline retained"));
                             }
                             NativeEventGetResult::Unavailable {
                                 code,
@@ -473,16 +524,16 @@ mod client {
                                 retry_after = std::time::Duration::from_millis(
                                     retry_after_ms.max(backoff).clamp(5, 250),
                                 );
-                                last = invalid(&format!(
+                                operation_error.read_failed(invalid(&format!(
                                     "typed event Get unavailable ({code:?}): {detail}"
-                                ));
+                                )));
                             }
                         }
                     }
-                    Err(error) => last = error,
+                    Err(error) => operation_error.read_failed(error),
                 }
             }
-            Err(last)
+            Err(operation_error.take_or(last))
         }
 
         /// Return true for a newly committed event, false for an identical

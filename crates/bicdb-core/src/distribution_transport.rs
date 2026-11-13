@@ -7654,6 +7654,7 @@ mod tests {
 #[cfg(test)]
 mod event_client_retry_tests {
     use super::*;
+    mod error_preservation_tests;
     use std::time::Instant;
 
     struct Observed {

@@ -131,8 +131,26 @@ pub(super) fn run<
             && still_frozen["records"][&fourth].is_null(),
         "ordinary APP unexpectedly materialized/unfroze target before actual debt producer",
     )?;
+    // Every real ACK, including a same-value update whose API says
+    // inserted=false, can consume a native command slot. Retain ALL actual
+    // commands through the actual current source head, never assume four
+    // logical value names imply exactly four native commands.
+    let source_head = {
+        let db = f.hosts[0].seed.database.read();
+        db.current_native_range_source_lineage(range.id)?
+            .range_index()
+    };
+    journal.append(
+        serde_json::json!({"kind":"actual_complete_source_head_after_fourth_logical_ACK",
+        "elapsed_ns":start.elapsed().as_nanos(),"actual_native_head":source_head,
+        "same_value_ACKs_are_not_dropped_or_reclassified":true}),
+    )?;
+    check(
+        source_head >= 4,
+        "required actual native R3/R4 command coverage not established",
+    )?;
     let mut commands = vec![original_ack.clone(), original_unknown.clone()];
-    for index in [3, 4] {
+    for index in 3..=source_head {
         let actual = f.hosts[0]
             ._service
             .lock()
@@ -149,8 +167,8 @@ pub(super) fn run<
         let db = f.hosts[0].seed.database.read();
         let lineage = db.current_native_range_source_lineage(range.id)?;
         check(
-            lineage.range_index() == 4,
-            "actual origin must have nativeR4",
+            lineage.range_index() == source_head,
+            "actual source head changed during full retained-command proof",
         )?;
         for command in &commands {
             db.require_native_command_materialized(&lineage, command)?;
@@ -194,8 +212,8 @@ pub(super) fn run<
             .as_ref()
             .and_then(|s| s.hot_recovery_last_attempt.as_ref())
             .is_some_and(|d| {
-                d["actual_progress"]["n2"]["actual_remote_native_cut"] == 4
-                    && d["actual_progress"]["n2"]["actual_source_native_cut"] == 4
+                d["actual_progress"]["n2"]["actual_remote_native_cut"] == source_head
+                    && d["actual_progress"]["n2"]["actual_source_native_cut"] == source_head
                     && d["replica_debt_pending"]
                         .as_array()
                         .is_some_and(|nodes| !nodes.iter().any(|n| n == "n2"))
@@ -205,7 +223,7 @@ pub(super) fn run<
             "elapsed_ns":elapsed,"actual":observation.as_ref().ok(),"error":observation.as_ref().err().map(ToString::to_string),
             "actual_controller":controller,"controller_recorded_physical_catchup":controller_recorded}))?;
         if let Ok(actual) = observation {
-            let exact = actual["native_R"] == 4
+            let exact = actual["native_R"] == source_head
                 && actual["H0"] == source["H0"]
                 && actual["H"] == source["H"]
                 && actual["records"] == source["records"]
@@ -213,7 +231,8 @@ pub(super) fn run<
                 && actual["actual_open"]["actual_current_open_valid"] == true;
             if exact && controller_recorded && elapsed <= 20_000_000_000 {
                 // These immutable history leaves, not row equality/rawCQ,
-                // establish both R3 and R4 were actually materialized here.
+                // establish R3, R4 and EVERY later actually committed no-op/
+                // update command were physically materialized here.
                 let db = f.hosts[2].seed.database.read();
                 let lineage = db.current_native_range_source_lineage(range.id)?;
                 for command in &commands {
@@ -251,6 +270,7 @@ pub(super) fn run<
                 )?;
                 let receipt = serde_json::json!({"required_actual_follower_R3_R4_convergence":true,
                     "separate_replica_clock_receipt_ns":receipt_elapsed,"first_public_20s_receipt_ns":first_public_receipt_ns,
+                    "actual_complete_native_head":source_head,"all_materialized_command_indexes":commands.iter().map(|c|c.index).collect::<Vec<_>>(),
                     "actual":actual,"same_target_store_open":actual_reply_loss["actual_reply"]["store_open_id"],
                     "controller":origin_control.initial_data_status(&budget(50)).ok(),
                     "no_manual_tick_or_recovery":true,"not_fault_RTO_or_physical_qualification":true});

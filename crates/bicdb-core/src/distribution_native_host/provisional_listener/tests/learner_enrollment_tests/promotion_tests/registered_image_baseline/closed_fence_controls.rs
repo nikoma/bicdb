@@ -12,6 +12,7 @@ pub(super) enum Case {
     SinkCanceled,
     SinkIoUnknown,
     ActualInvalidation,
+    UnprivilegedInitiator,
 }
 #[allow(clippy::too_many_arguments)]
 pub(super) fn run(
@@ -113,6 +114,32 @@ pub(super) fn run(
     let mut sink_report = None;
     let mut foreign_report = None;
     let error = match case {
+        Case::UnprivilegedInitiator => {
+            // This member is genuinely TLS-authenticated, but is neither
+            // metadata leader nor this range's leader. Reusing correlation
+            // DATA from the valid operation cannot authorize its new RPC.
+            let caller = clients[3].local_metadata_read_participant();
+            assert_eq!(caller.node_id(), &node(3));
+            assert_ne!(caller.node_id(), &range.leader);
+            assert_ne!(caller.node_id(), &node(0));
+            let error = clients[3]
+                .recovery_epoch_fence_observation(
+                    &node(4),
+                    &RecoveryEpochFenceRequest {
+                        scope: scope.clone(),
+                        budget_ms: 4000,
+                    },
+                    &parent,
+                )
+                .unwrap_err();
+            assert!(
+                error.to_string().contains(
+                    "metadata recovery-role identity, purpose or committed configuration changed"
+                ),
+                "unprivileged real RPC did not reach the expected role refusal: {error}"
+            );
+            error
+        }
         Case::Ingress => {
             // Exact existing generic/older code path remains closed despite
             // persisted Active fences. This is not an old-binary execution.
@@ -441,4 +468,9 @@ control!(
 control!(
     native_registered_fifth_closed_fence_actual_durable_invalidation_is_not_unknown_absence,
     ActualInvalidation
+);
+
+control!(
+    native_registered_fifth_closed_fence_actual_nonleader_rpc_initiator_refused,
+    UnprivilegedInitiator
 );

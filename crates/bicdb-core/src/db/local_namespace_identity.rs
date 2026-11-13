@@ -29,6 +29,23 @@ impl BicDb {
     pub fn activate_local_namespace_identity_v1(&mut self) -> Result<usize> {
         self.ensure_writable("activate local namespace identity")?;
         self.check_catalog_recovery_quiescent()?;
+        self.assign_local_namespace_identities()
+    }
+
+    /// The same activation for a host whose own live transaction is about to
+    /// change the catalog. Only that pending transaction may exist; any other
+    /// pending transaction or foreign row lock still refuses, exactly as live
+    /// catalog undo does.
+    pub fn activate_local_namespace_identity_for_owner_v1(
+        &mut self,
+        owner: &Transaction,
+    ) -> Result<usize> {
+        self.ensure_writable("activate local namespace identity")?;
+        self.check_catalog_undo_owner(owner)?;
+        self.assign_local_namespace_identities()
+    }
+
+    fn assign_local_namespace_identities(&mut self) -> Result<usize> {
         validate_catalog(&self.collections(), self.local_namespace_identity_active)?;
         if let Err(error) = format::enable_local_namespace_identity(&self.path) {
             self.fence_durability("namespace_identity.format_fence", &error);

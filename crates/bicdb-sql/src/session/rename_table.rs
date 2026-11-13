@@ -68,7 +68,17 @@ pub(super) fn apply(
     // Namespace activation is a trusted initialization operation, never a
     // retroactive assignment to a live/undecided before-image.
     if !session.db_ref().local_namespace_identity_feature_active() {
-        rename_journal::initialize_rename_journal_identities(session.db_mut()?)?;
+        // A database no host initialized may meet its first rename inside
+        // this session's own transaction; that owner alone may be pending.
+        let owner = session.tx.take();
+        let initialized = session.db_mut().and_then(|db| match &owner {
+            Some(owner) => {
+                rename_journal::initialize_rename_journal_identities_for_owner(db, owner)
+            }
+            None => rename_journal::initialize_rename_journal_identities(db),
+        });
+        session.tx = owner;
+        initialized?;
     }
     let explicit = session.tx.is_some();
     let mut implicit_owner = if explicit {

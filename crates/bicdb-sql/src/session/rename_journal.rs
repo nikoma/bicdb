@@ -149,6 +149,20 @@ fn storage_for(db: &BicDb, name: &str) -> Result<(String, uuid::Uuid)> {
 /// SQL DDL intent. Core's quiescence check does not inspect these SQL journals.
 /// Never assign an identity retroactively to an unresolved legacy before-image.
 pub fn initialize_rename_journal_identities(db: &mut BicDb) -> Result<usize> {
+    initialize_identities(db, None)
+}
+
+/// The same initialization for a rename inside the session's own open
+/// transaction on a database no host initialized. Core admits only that one
+/// pending transaction; every other check is unchanged.
+pub(super) fn initialize_rename_journal_identities_for_owner(
+    db: &mut BicDb,
+    owner: &Transaction,
+) -> Result<usize> {
+    initialize_identities(db, Some(owner))
+}
+
+fn initialize_identities(db: &mut BicDb, owner: Option<&Transaction>) -> Result<usize> {
     db.check_recovery_state()?;
     if super::recycle_bin_journal::has_pending_recovery(db)? {
         return Err(invalid(
@@ -168,7 +182,10 @@ pub fn initialize_rename_journal_identities(db: &mut BicDb) -> Result<usize> {
         }
         return Ok(0);
     }
-    Ok(db.activate_local_namespace_identity_v1()?)
+    Ok(match owner {
+        Some(owner) => db.activate_local_namespace_identity_for_owner_v1(owner)?,
+        None => db.activate_local_namespace_identity_v1()?,
+    })
 }
 
 fn image_id(header: &Header, index: u64) -> String {

@@ -1049,7 +1049,9 @@ impl ApplicationRuntime {
                 }
             }
         }
-        if let Err(error) = build_routes(&mut next) {
+        if let Err(error) = build_routes(&mut next)
+            .and_then(|_| self.validate_catalog_application_invariants(&next, "activated"))
+        {
             stop_supervisor_sets(prepared);
             return Err(self.compensate_schema_batch(&schema_receipts, error));
         }
@@ -1147,7 +1149,9 @@ impl ApplicationRuntime {
             ..candidate.as_ref().clone()
         });
         let previous_snapshot = next.packages.insert(name.clone(), activated.clone());
-        if let Err(error) = build_routes(&mut next) {
+        if let Err(error) = build_routes(&mut next)
+            .and_then(|_| self.validate_catalog_application_invariants(&next, "activated"))
+        {
             prepared_supervisors.stop();
             return Err(self.compensate_schema(&schema_receipt, error));
         }
@@ -1269,7 +1273,9 @@ impl ApplicationRuntime {
                 versions.pop_front();
             }
         }
-        if let Err(error) = build_routes(&mut next) {
+        if let Err(error) = build_routes(&mut next)
+            .and_then(|_| self.validate_catalog_application_invariants(&next, "rollback"))
+        {
             prepared_supervisors.stop();
             return Err(error);
         }
@@ -2806,11 +2812,15 @@ impl ApplicationRuntime {
         self.restore_active_snapshot_with_supervisors(true)
     }
 
-    /// Validate a restored signed catalog before exposing routes or workers.
+    /// Validate the complete planned signed catalog before exposing routes or workers.
     /// Older binaries may have admitted invalid local history when unrelated
     /// backfills hid an invariant's dependencies. Ordinary reads can omit full
     /// rescans only after this explicit, zero-write admission has succeeded.
-    fn validate_restored_application_invariants(&self, catalog: &RuntimeCatalog) -> Result<()> {
+    fn validate_catalog_application_invariants(
+        &self,
+        catalog: &RuntimeCatalog,
+        phase: &str,
+    ) -> Result<()> {
         let db = self.db.read();
         for (name, snapshot) in &catalog.packages {
             let application = snapshot
@@ -2820,7 +2830,7 @@ impl ApplicationRuntime {
                 .as_deref()
                 .ok_or_else(|| {
                     AppRuntimeError::InvalidPackage(
-                        "restored snapshot lacks its signed application manifest".into(),
+                        "catalog snapshot lacks its signed application manifest".into(),
                     )
                 })?;
             let validators = lower_carrier_invariants(application)?;
@@ -2833,7 +2843,7 @@ impl ApplicationRuntime {
             }
             transaction.commit().map_err(|error| {
                 AppRuntimeError::NotReady(format!(
-                    "restored application `{name}` failed existing-data invariant admission: {error}"
+                    "{phase} application `{name}` failed existing-data invariant admission: {error}"
                 ))
             })?;
         }
@@ -2913,7 +2923,7 @@ impl ApplicationRuntime {
                 }),
             );
         }
-        self.validate_restored_application_invariants(&catalog)?;
+        self.validate_catalog_application_invariants(&catalog, "restored")?;
         *self.active.write() = Arc::new(catalog);
         *self.staged.write() = staged;
         *self.history.lock().expect("package history poisoned") = history;

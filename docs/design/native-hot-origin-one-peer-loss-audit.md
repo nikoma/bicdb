@@ -154,7 +154,7 @@ must preserve actual durable continuation/original caller semantics. These
 fault controls and any majority-aware producer change require separate review;
 no implementation or HA/physical qualification follows from this design.
 
-## Test-only witness source checkpoint
+## Historical test-only witness source checkpoint
 
 A successor based on `ca8383ef36190c6c69cc8853cd51dd7803c7cc52` implements
 only the proposed scheduling seam and required test, with no production

@@ -2191,6 +2191,10 @@ const NATIVE_VOTER_STALL_COOLDOWN: Duration = Duration::from_secs(5);
 /// A failed voter exchange at least this long is a stall, not a fast refusal.
 const NATIVE_VOTER_STALL_THRESHOLD: Duration = Duration::from_millis(1000);
 const MAX_NATIVE_VOTER_STALL_HINTS: usize = 64;
+/// Bounded repeats (25 ms apart) of a certified voter's busy refusal of the
+/// native apply instruction: about 300 ms, the span of one receiver-side
+/// recovery or replica-continuation step that holds its range context.
+const NATIVE_APPLY_BUSY_ATTEMPTS: u32 = 13;
 
 // Bounded by active range admissions. This is a callback handoff, not durable
 // recovery evidence: durable certificate states remain in each replica log.
@@ -3934,7 +3938,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                     // command behind until the next write, and every strong
                     // read needing it would be unavailable meanwhile. Repeat
                     // only that authenticated transient refusal, briefly.
-                    for attempt in 0..3u32 {
+                    for attempt in 0..NATIVE_APPLY_BUSY_ATTEMPTS {
                         let Err(error) = transport.apply_native_origin(
                             voter,
                             &command,
@@ -3949,10 +3953,13 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                             command.range_id, command.index
                         );
                         let transient = matches!(&error, BicDbError::Cluster(message) if message.contains("busy"));
-                        if !transient || attempt == 2 || apply_budget.check().is_err() {
+                        if !transient
+                            || attempt + 1 == NATIVE_APPLY_BUSY_ATTEMPTS
+                            || apply_budget.check().is_err()
+                        {
                             break;
                         }
-                        std::thread::sleep(Duration::from_millis(20));
+                        std::thread::sleep(Duration::from_millis(25));
                     }
                 });
             }

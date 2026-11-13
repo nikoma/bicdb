@@ -2054,6 +2054,19 @@ pub enum SqlError {
 }
 
 impl SqlError {
+    /// Native authorization failures retain their typed origin through diagnostic
+    /// wrappers. A routine raising SQLSTATE 42501 is not an authorization origin.
+    pub fn is_native_authorization_denied(&self) -> bool {
+        match self {
+            Self::BicDb(BicDbError::Authorization(_) | BicDbError::MutationDenied(_)) => true,
+            Self::WithNotices { error, .. } => error.is_native_authorization_denied(),
+            Self::OracleContext { inner, .. } | Self::Rethrown(inner) => {
+                inner.is_native_authorization_denied()
+            }
+            _ => false,
+        }
+    }
+
     pub fn is_application_transaction_control_denied(&self) -> bool {
         match self {
             Self::ApplicationTransactionControlDenied => true,

@@ -6039,11 +6039,14 @@ pub(crate) fn now_ms() -> i64 {
         .unwrap_or_default()
 }
 
-/// Translate only errors with an unforgeable native application-control origin.
+/// Translate only errors with an unforgeable native application-control or
+/// authorization origin.
 /// A routine raising SQLSTATE 22023/42501/2D000 or copying the message stays on its
 /// existing SQL error path.
 fn exact_units_sql_application_error(error: &SqlError) -> Option<AppRuntimeError> {
-    if error.is_exact_units_capability_denied() || error.is_application_transaction_control_denied()
+    if error.is_exact_units_capability_denied()
+        || error.is_application_transaction_control_denied()
+        || error.is_native_authorization_denied()
     {
         Some(AppRuntimeError::CapabilityDenied(error.to_string()))
     } else {

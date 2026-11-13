@@ -27,6 +27,15 @@ const MAX_IDLE_RANGE_SCAN: usize = 64;
 /// sender's nearly exhausted attempt budget. Its socket timeout says nothing
 /// about the peer, which answered the previous phase of the same job.
 const MIN_UNSTARVED_PEER_IO_MS: u64 = 1000;
+/// A phase producer is not started with less than this left in the attempt:
+/// it could not finish, and the time it would burn is better spent by the
+/// immediately following attempt, which resumes at the same retained phase.
+const MIN_PHASE_START_MS: u64 = 1000;
+/// Pacing between attempts. While every led range was last seen admitted and
+/// nothing is retained, the attempt is a few memory reads, so a new actual
+/// origin Pending is noticed quickly; any real work keeps the longer pacing.
+const QUIET_PACING: Duration = Duration::from_millis(100);
+const WORK_PACING: Duration = Duration::from_millis(500);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Phase {
     Fence,
@@ -70,6 +79,9 @@ pub(super) struct NativeHotRecoveryMaintenance {
     #[cfg(test)]
     debt_schedule_test: Mutex<()>,
     last: Mutex<Option<serde_json::Value>>,
+    // Scheduling hint only: the last attempt found every scanned led range
+    // admitted and had no retained job, candidate or replica obligation.
+    quiet: AtomicBool,
     stopping: AtomicBool,
     process: OnceLock<CancellationToken>,
     worker: Mutex<Option<JoinHandle<()>>>,
@@ -103,6 +115,7 @@ impl NativeHotRecoveryMaintenance {
             #[cfg(test)]
             debt_schedule_test: Mutex::new(()),
             last: Mutex::new(None),
+            quiet: AtomicBool::new(false),
             stopping: AtomicBool::new(false),
             process: OnceLock::new(),
             worker: Mutex::new(None),
@@ -149,8 +162,9 @@ impl NativeHotRecoveryMaintenance {
                 let action=token.child_with_deadline(Instant::now()+Duration::from_secs(5));
                 let outcome=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||owner.tick(&action)));
                 if outcome.is_err(){owner.record(serde_json::json!({"phase":"panic","scope":"owned exact job retained; no recovered grant","remaining_ms":0}));}
+                let pacing=if owner.quiet.load(Ordering::Acquire){QUIET_PACING}else{WORK_PACING};
                 drop(owner);
-                while token.check().is_ok() && start.elapsed()<Duration::from_millis(500) {std::thread::sleep(Duration::from_millis(5));}
+                while token.check().is_ok() && start.elapsed()<pacing {std::thread::sleep(Duration::from_millis(5));}
             }
         }).map_err(|e|invalid(&format!("hot DATA worker spawn failed: {e}")))?);
         self.live(process)
@@ -299,6 +313,9 @@ impl NativeHotRecoveryMaintenance {
         // cadence below.
         let first = state.cursor % ranges.len();
         let mut selected = None;
+        // Any path below that does or may do real work clears this first.
+        self.quiet.store(false, Ordering::Release);
+        let mut quiet = ranges.len() <= MAX_IDLE_RANGE_SCAN;
         for offset in 0..ranges.len().min(MAX_IDLE_RANGE_SCAN) {
             let at = (first + offset) % ranges.len();
             let range = (*ranges[at]).clone();
@@ -322,6 +339,7 @@ impl NativeHotRecoveryMaintenance {
             // A session whose every follower was last observed activated and
             // at the actual source cut, with no retained veto, has no such
             // obligation left: only that one may be retired below.
+            quiet = false;
             if state
                 .replica_debts
                 .get(&range.id)
@@ -387,6 +405,9 @@ impl NativeHotRecoveryMaintenance {
                 if let Some(debt) = state.replica_debts.get_mut(&range.id) {
                     return self.run_replica_debt(debt, parent);
                 }
+            }
+            if quiet && state.replica_debts.is_empty() {
+                self.quiet.store(true, Ordering::Release);
             }
             return Ok(());
         };
@@ -473,6 +494,9 @@ impl NativeHotRecoveryMaintenance {
                     return Err(invalid(
                         "hot recovery retains an unresolved actual peer semantic veto",
                     ));
+                }
+                if Self::remaining(&phase_parent)? < MIN_PHASE_START_MS {
+                    return Err(crate::BicDbError::QueryTimedOut);
                 }
                 let fresh = self.fresh_role(&job.range, job.scope.recovery_nonce, &phase_parent)?;
                 if job.replica_binding.is_none() {
@@ -584,6 +608,11 @@ impl NativeHotRecoveryMaintenance {
                 continue;
             }
             let budget_ms = Self::remaining(&phase_parent)?;
+            if budget_ms < MIN_PHASE_START_MS {
+                // Not a peer statement and not progress: resume this same
+                // retained phase/recipient in the next attempt.
+                return Err(crate::BicDbError::QueryTimedOut);
+            }
             let io_ms = if origin {
                 budget_ms
             } else if job.phase == Phase::Fence {

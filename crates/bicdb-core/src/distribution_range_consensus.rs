@@ -2641,7 +2641,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         let range_epoch = fence.range_epoch;
         let range = self
             .topology
-            .read()
+            .read_recursive()
             .range_by_id(range_id)
             .filter(|range| range.epoch == range_epoch)
             .cloned()
@@ -2851,7 +2851,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         self.recover_leader_tail(range, &voters, authority)?;
         let still_current = self
             .topology
-            .read()
+            .read_recursive()
             .range_by_id(range.id)
             .is_some_and(|current| {
                 current.epoch == range.epoch && current.leader == self.local_node_id
@@ -3929,8 +3929,31 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 // The actual QQ exists before any authenticated native
                 // instruction. A lost materialization reply is not rollback.
                 let _ = voter_fan_out(&apply_targets, true, |voter| {
-                    let _ =
-                        transport.apply_native_origin(voter, &command, certificate, apply_budget);
+                    // A follower that is momentarily busy (its own recovery
+                    // context or latch) would otherwise stay one certified
+                    // command behind until the next write, and every strong
+                    // read needing it would be unavailable meanwhile. Repeat
+                    // only that authenticated transient refusal, briefly.
+                    for attempt in 0..3u32 {
+                        let Err(error) = transport.apply_native_origin(
+                            voter,
+                            &command,
+                            certificate,
+                            apply_budget,
+                        ) else {
+                            break;
+                        };
+                        #[cfg(test)]
+                        eprintln!(
+                            "NATIVE_ORIGIN_APPLY_UNACKED voter={voter} range={} index={} attempt={attempt} error={error}",
+                            command.range_id, command.index
+                        );
+                        let transient = matches!(&error, BicDbError::Cluster(message) if message.contains("busy"));
+                        if !transient || attempt == 2 || apply_budget.check().is_err() {
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_millis(20));
+                    }
                 });
             }
             Some(NativeRangeAcknowledgementEvidence {

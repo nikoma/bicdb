@@ -169,7 +169,7 @@ impl TcpClusterRelocationTransport {
     ) -> Result<String> {
         parent.check()?;
         let (address, active, pending, birth) = {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             let node = topology
                 .nodes
                 .get(destination)

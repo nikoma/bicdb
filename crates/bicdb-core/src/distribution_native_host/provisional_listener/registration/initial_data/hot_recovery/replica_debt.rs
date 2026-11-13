@@ -302,6 +302,10 @@ impl NativeHotRecoveryMaintenance {
             {
                 debt.retry_after
                     .insert(node.clone(), Instant::now() + Duration::from_secs(10));
+            } else if local_source_transient(error) {
+                // This ORIGIN's own momentarily busy latch or in-flight
+                // native command is not a statement by the follower. The
+                // obligation stays pending and is retried; no veto, no skip.
             } else if !matches!(
                 error,
                 crate::BicDbError::QueryCanceled | crate::BicDbError::QueryTimedOut
@@ -327,6 +331,20 @@ impl NativeHotRecoveryMaintenance {
         // leave a lagging follower without another user request to repair it.
         result
     }
+}
+
+/// Exact refusals produced only by this origin's own source-side checks
+/// before or between peer exchanges. A peer's refusal always arrives wrapped
+/// in its authenticated RPC rejection and can never equal one of these.
+fn local_source_transient(error: &crate::BicDbError) -> bool {
+    matches!(error, crate::BicDbError::Cluster(message) if matches!(
+        message.as_str(),
+        "hot replica source service busy"
+            | "hot replica source DB busy"
+            | "hot replica source topology busy"
+            | "hot suffix topology busy"
+            | "native range image: unfinished native command; source range image unavailable"
+    ))
 }
 
 #[cfg(test)]

@@ -28,6 +28,11 @@ fn prefix_key(range: RangeId) -> String {
 }
 
 const MAX_NATIVE_COMMAND_SCOPES: usize = 65_536;
+/// The native journal is also held, briefly, by every serving read scope and
+/// by source-side replica continuation. A command whose quorum decision is
+/// already irrevocable must wait a bounded time for such a holder instead of
+/// turning a lost latch race into an unknown commit outcome and a recovery.
+const NATIVE_COMMAND_JOURNAL_WAIT: std::time::Duration = std::time::Duration::from_millis(250);
 #[derive(Debug)]
 struct NativeCommandScope {
     lease: Uuid,
@@ -931,7 +936,7 @@ impl BicDb {
             .validate(intent.range().id, authority)?;
         let _journal = self
             .native_range_image_journal
-            .try_lock()
+            .try_lock_for(NATIVE_COMMAND_JOURNAL_WAIT)
             .ok_or_else(|| invalid("native journal busy; retry before decision"))?;
         let lineage = self.current_native_range_source_lineage(intent.range().id)?;
         intent.validate_native_base(&lineage)?;
@@ -1055,7 +1060,7 @@ impl BicDb {
     ) -> Result<()> {
         let _journal = self
             .native_range_image_journal
-            .try_lock()
+            .try_lock_for(NATIVE_COMMAND_JOURNAL_WAIT)
             .ok_or_else(|| invalid("native journal busy after apply"))?;
         let mut record = self.require_native_pending(pending, receipt, authority)?;
         #[cfg(test)]
@@ -1107,7 +1112,7 @@ impl BicDb {
         let intent = proof.intent();
         let _journal = self
             .native_range_image_journal
-            .try_lock()
+            .try_lock_for(NATIVE_COMMAND_JOURNAL_WAIT)
             .ok_or_else(|| invalid("native journal busy after certification"))?;
         let record = self.require_native_pending(pending, receipt, authority)?;
         if intent.scope_sha256() != pending.intent.scope_sha256()

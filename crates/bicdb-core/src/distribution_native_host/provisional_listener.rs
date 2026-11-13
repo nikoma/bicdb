@@ -181,7 +181,8 @@ impl NativeInitialConsensusLaunch {
         if network.dev_localhost_plaintext {
             return Err(invalid("initial consensus needs pinned mutual TLS"));
         }
-        let address: std::net::SocketAddr = self.topology.read().nodes[&self.seed.spec.node_id]
+        let address: std::net::SocketAddr = self.topology.read_recursive().nodes
+            [&self.seed.spec.node_id]
             .address
             .parse()
             .map_err(|_| invalid("initial consensus needs numeric planned address"))?;

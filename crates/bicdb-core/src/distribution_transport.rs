@@ -1380,7 +1380,7 @@ fn handle_cluster_data_connection(
                 .observe(&peer, learner_request.clone(), &token)
                 .map(ClusterDataResponse::NativeLearnerBirth);
         }
-        let topology_guard = topology.read();
+        let topology_guard = topology.read_recursive();
         let caller = topology_guard.nodes.get(&request.caller_node_id);
         authorize_cluster_data_caller(
             &request.caller_node_id,
@@ -1556,7 +1556,7 @@ fn handle_cluster_data_connection(
             let caller = authenticated_caller.as_ref().ok_or_else(|| {
                 transport_error("initial preparation requires actual pinned TLS caller")
             })?;
-            provider.require_initial_observer_identity(&topology.read())?;
+            provider.require_initial_observer_identity(&topology.read_recursive())?;
             let cancellation =
                 CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
             return provider.initial_preparation_exchange(caller,request,&cancellation).map(|reply|match reply {
@@ -2174,7 +2174,7 @@ fn require_local_schema_compatibility(
     range_id: RangeId,
 ) -> Result<()> {
     let (required, pending_target, advertised, advertised_pending, bootstrap_claim, node_id) = {
-        let topology = published_topology.read();
+        let topology = published_topology.read_recursive();
         let range = topology
             .range_by_id(range_id)
             .ok_or_else(|| transport_error(format!("unknown range {range_id}")))?;
@@ -2361,7 +2361,7 @@ fn validate_relocation_controller_caller(
         )));
     }
 
-    let topology = published_topology.read();
+    let topology = published_topology.read_recursive();
     if status.topology_generation != topology.generation {
         return Err(transport_error(format!(
             "metadata leader {caller_node_id} has consensus topology generation {}, but the data plane has published generation {}",
@@ -2447,7 +2447,7 @@ fn dispatch_cluster_data_request(
                 )
             };
             let range = {
-                let topology = published_topology.read();
+                let topology = published_topology.read_recursive();
                 topology
                     .range_by_id(request.range_id)
                     .filter(|range| {
@@ -2481,7 +2481,7 @@ fn dispatch_cluster_data_request(
             range_id,
             range_epoch,
         } => {
-            let topology = published_topology.read();
+            let topology = published_topology.read_recursive();
             let range = topology
                 .range_by_id(range_id)
                 .filter(|range| range.epoch == range_epoch)
@@ -2512,7 +2512,7 @@ fn dispatch_cluster_data_request(
             bundle,
         } => {
             {
-                let topology = published_topology.read();
+                let topology = published_topology.read_recursive();
                 let current = topology
                     .range_by_id(range.id)
                     .filter(|current| current.epoch == range.epoch)
@@ -2571,7 +2571,7 @@ fn dispatch_cluster_data_request(
                 )));
             }
             let local_node_id = service.lock().node_id().clone();
-            let topology = published_topology.read();
+            let topology = published_topology.read_recursive();
             let local_node = topology.nodes.get(&local_node_id).ok_or_else(|| {
                 transport_error("cluster schema staging destination is not a member")
             })?;
@@ -2609,7 +2609,7 @@ fn dispatch_cluster_data_request(
                 )));
             }
             let local_node_id = service.lock().node_id().clone();
-            let topology = published_topology.read();
+            let topology = published_topology.read_recursive();
             let consensus_voters = status.voters.iter().cloned().collect::<BTreeSet<_>>();
             if status.topology_generation != topology.generation
                 || consensus_voters != topology.metadata_voters()
@@ -2652,7 +2652,7 @@ fn dispatch_cluster_data_request(
                 )));
             }
             let local_node_id = service.lock().node_id().clone();
-            let topology = published_topology.read();
+            let topology = published_topology.read_recursive();
             let consensus_voters = status.voters.iter().cloned().collect::<BTreeSet<_>>();
             if status.topology_generation != topology.generation
                 || consensus_voters != topology.metadata_voters()
@@ -2755,7 +2755,7 @@ fn dispatch_cluster_data_request(
             durable_commit_sequence,
             max_commit_frames,
         } => Ok(ClusterDataResponse::CatchUpBatch({
-            if published_topology.read().range_by_id(range.id) != Some(&range) {
+            if published_topology.read_recursive().range_by_id(range.id) != Some(&range) {
                 return Err(transport_error(
                     "catch-up export descriptor is stale or forged",
                 ));
@@ -3256,7 +3256,7 @@ fn dispatch_cluster_data_request(
                 ));
             }
             if &node.id != caller_node_id {
-                let topology = published_topology.read();
+                let topology = published_topology.read_recursive();
                 if !topology.is_metadata_voter(caller_node_id) {
                     return Err(transport_error(
                         "a bootstrap caller may register only its own learner identity",
@@ -4045,7 +4045,7 @@ impl TcpClusterRelocationTransport {
             )?)
         };
         let caller_incarnation = {
-            let topology = topology.read();
+            let topology = topology.read_recursive();
             topology.validate()?;
             if topology.cluster_id != cluster_id {
                 return Err(transport_error(format!(
@@ -4226,7 +4226,7 @@ impl TcpClusterRelocationTransport {
         cancellation.check()?;
         let expected_enforced_store = self
             .topology
-            .read()
+            .read_recursive()
             .nodes
             .get(destination)
             .and_then(|node| node.native_store_birth_v1.as_ref())
@@ -4252,7 +4252,7 @@ impl TcpClusterRelocationTransport {
             crate::distribution_native_read::NativeEventGetResult::LegacyValue { .. }
         ) && self
             .topology
-            .read()
+            .read_recursive()
             .nodes
             .get(destination)
             .and_then(|n| n.native_store_birth_v1.as_ref())
@@ -4293,7 +4293,7 @@ impl TcpClusterRelocationTransport {
     ) -> Result<ClusterSchemaStageReceipt> {
         signed_bundle.bundle.verify()?;
         {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             let node = topology.nodes.get(node_id).ok_or_else(|| {
                 transport_error(format!(
                     "cluster schema staging destination {node_id} is not a member"
@@ -4340,7 +4340,7 @@ impl TcpClusterRelocationTransport {
             ));
         }
         {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             if !topology.nodes.contains_key(node_id) {
                 return Err(transport_error(format!(
                     "cluster schema activation destination {node_id} is not a member"
@@ -4385,7 +4385,7 @@ impl TcpClusterRelocationTransport {
     ) -> Result<ClusterSchemaFinalizationReceipt> {
         activation.validate_completion_for_node(node_id)?;
         {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             let node = topology.nodes.get(node_id).ok_or_else(|| {
                 transport_error(format!(
                     "cluster schema finalization destination {node_id} is not a member"

@@ -22,7 +22,7 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
         self.require_strong_point_runtime(runtime)?;
         let ranges = self
             .topology
-            .read()
+            .read_recursive()
             .ranges
             .values()
             .map(crate::distribution_native_read::canonical_range)

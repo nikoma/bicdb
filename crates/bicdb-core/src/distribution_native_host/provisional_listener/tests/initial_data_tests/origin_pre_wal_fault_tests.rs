@@ -100,6 +100,23 @@ impl crate::ClusterRpcEvidenceObserver for Journal {
         )
     }
 }
+/// Start never waits on the service/metadata latches: an actual peer RPC
+/// persisting under them yields a retryable busy refusal. Like the operator
+/// loop, retry only that refusal, for a bounded time.
+fn start_owned_supervisor(
+    control: &NativeMetadataControlHost,
+    parent: &CancellationToken,
+) -> Result<crate::distribution_native_host::NativeMetadataSupervisor> {
+    let retry = budget(5000);
+    loop {
+        match control.start_automatic_metadata(parent) {
+            Err(error) if error.to_string().contains("busy") && retry.check().is_ok() => {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            other => return other,
+        }
+    }
+}
 fn check(ok: bool, reason: &str) -> Result<()> {
     if ok {
         Ok(())
@@ -537,7 +554,7 @@ fn native_initial_data_actual_rpc_post_admission_fault_requires_autonomous_tail_
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
         open_data(&mut controls)?;
         for control in &controls {
-            supervisors.push(control.start_automatic_metadata(&process_parent)?);
+            supervisors.push(start_owned_supervisor(control, &process_parent)?);
         }
         run(&f, &mut controls, &configs, &journal, &output)
     }));

@@ -1,0 +1,135 @@
+{
+  "source_revision": "3ee40c19b44affa0a481a66b278ded3af817e910",
+  "package_version": "1.0.488-beta",
+  "status": "CLI_COHORT_FAILED_RECEIVER_CASE_PASSED",
+  "core": {
+    "run": 43262614352,
+    "job": 131337645351,
+    "passed": 3,
+    "failed": 0,
+    "filtered": 913,
+    "seconds": 2.28,
+    "raw_sha256": "0d35656d8afccbedaca28556409913c562195b0a5fcc94943ee14ba26e1ad5af"
+  },
+  "cli": {
+    "run": 43262683104,
+    "job": 131337870637,
+    "passed": 4,
+    "failed": 1,
+    "seconds": 79.87,
+    "raw_sha256": "620630305bc999b9ba4095ea679efb640592fa23114d8d04d9c000059df872a5",
+    "failed_test": "initial_data_tests::native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value",
+    "failure_location": "initial_data_tests.rs:254",
+    "failure_error": "cluster error: no event cluster member is reachable"
+  },
+  "cases": [
+    {
+      "name": "initial_data_tests::native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value",
+      "result": "FAILED"
+    },
+    {
+      "name": "native_metadata_operator_actual_cli_four_process_startup_registration_and_data_refusal",
+      "result": "PASS"
+    },
+    {
+      "name": "native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_voter",
+      "result": "PASS"
+    },
+    {
+      "name": "promoted_cold_tests::native_metadata_operator_actual_cli_automatic_promoted_voter_kill_reopen_same_root",
+      "result": "PASS"
+    },
+    {
+      "name": "replica_receiver_tests::native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner_no_data_grant",
+      "result": "PASS"
+    }
+  ],
+  "executable": {
+    "source": "3ee40c19b44affa0a481a66b278ded3af817e910",
+    "source_available": true,
+    "source_authority": "BICDB_TEST_SOURCE_SHA runtime environment; not option_env or runtime git lookup",
+    "test_package_version": "1.0.488-beta",
+    "binary_sha256": "9d13261e50cd1b7526736a9f2344ec932ab14047c7f6e0591d61cf11d189e703",
+    "binary_bytes": 750173072,
+    "binary_scope": "actual CARGO_BIN_EXE_bicdb bytes read before process/startup/ACK phase; not a published release"
+  },
+  "ledger": {
+    "total_stdout_records": 28,
+    "failed_case_saved_file_records": 15,
+    "receiver_case_stdout_records": 13,
+    "failed_case_attempts": 3,
+    "failed_case_user_acks": 1,
+    "failed_case_full_strong_replies": 1,
+    "json_null": "NO_USER_ACK_DURABLE_OUTCOME_UNKNOWN",
+    "empty_object": "NOT_REACHED",
+    "receiver_before_fifth_user_ack": true,
+    "receiver_before_fifth_strong_full_value": true,
+    "receiver_after_fifth": "QUERY_TIMEOUT_UNAVAILABLE_NOT_HEALTHY_CONTINUITY",
+    "postfailure_first_ack_reconciliation": "NOT_ESTABLISHED"
+  },
+  "custody": {
+    "artifact_id": 13965697314,
+    "zip_bytes": 92073518,
+    "zip_sha256": "92901d8d7dfeb372461a9afc7fc7858432f96ec1785f58c1b045ea87b5f1d832",
+    "manifest_sha256": "c42946732dde932a03eda16c9ae4ec58071f22fb9ddbbc33064e974ee93cf38d",
+    "allowlisted_files": 26,
+    "allowlisted_bytes": 58126,
+    "all_four_children_alive_before_test_cleanup": true,
+    "full_database_or_page_wal_retained": false,
+    "range_write_catalogue_retained": false,
+    "no_engine_open": true,
+    "archived_tracked_source": {
+      "artifact_path": "tracked-source.tar.gz",
+      "bytes": 92028772,
+      "sha256": "7685c49d3e2e736b154c5049531d9af44e72da8d7bfd5596bb59a20d54df906e",
+      "retained_in_private_zip_only": true
+    }
+  },
+  "offline_routes": [
+    {
+      "key": "external-first-ack",
+      "range_id": 4,
+      "epoch": 1,
+      "leader": "n0",
+      "voters": [
+        "n0",
+        "n1",
+        "n2"
+      ]
+    },
+    {
+      "key": "external-json-null",
+      "range_id": 1,
+      "epoch": 1,
+      "leader": "n1",
+      "voters": [
+        "n1",
+        "n2",
+        "n3"
+      ]
+    }
+  ],
+  "source_files": [
+    {
+      "repository_path": "crates/bicdb-cli/tests/native_metadata_operator_cli/initial_data_tests.rs",
+      "bundle_path": "source/crates/bicdb-cli/tests/native_metadata_operator_cli/initial_data_tests.rs",
+      "sha256": "eebb7c5d5fb2c51969283d3eb199b24fa75cf7b4dd861e2378ff70ba2385b6e9"
+    },
+    {
+      "repository_path": "crates/bicdb-cli/tests/native_metadata_operator_cli/replica_receiver_tests.rs",
+      "bundle_path": "source/crates/bicdb-cli/tests/native_metadata_operator_cli/replica_receiver_tests.rs",
+      "sha256": "6cdb0c2e52959718f7042196eed57c6c23332c7772ce044feeba5dcb64d60982"
+    },
+    {
+      "repository_path": "crates/bicdb-core/src/distribution_events.rs",
+      "bundle_path": "source/crates/bicdb-core/src/distribution_events.rs",
+      "sha256": "d9fc231645f203040dac03173fb6f11a6001ce7ab1d9b94dbe3c77bbad9f88f5"
+    }
+  ],
+  "limits": [
+    "No null-write durable reconciliation from diagnostic metadata.",
+    "No successful healthy ACK/Strong continuity after fifth join proved.",
+    "No native image/joint wire, automatic range move, five-node DATA, VM or Azure-cause qualification.",
+    "Old gateway postjoin timeout is not a permanently acceptable availability outcome."
+  ]
+}

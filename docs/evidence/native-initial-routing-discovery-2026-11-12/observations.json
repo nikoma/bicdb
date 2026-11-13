@@ -1,0 +1,1881 @@
+{
+  "source": "26cdaa87c446ca35542ec816b29f069d57f47242",
+  "run_id": 43284689289,
+  "job_id": 131414888059,
+  "raw_log_sha256": "22f68ce30e613ed6a18b28f47aca47d6437e9b2fce1f4d02ff71dbf628a6bb67",
+  "artifact_id": 13973124819,
+  "artifact_sha256": "67dd7d3b211a3dd311a435e40c835add6a571516b8b0dd799479ded52320346c",
+  "artifact_bytes": 49085,
+  "file_inventory": [
+    {
+      "path": "fault-state/initial-data-held-discovery-01a1d122-8705-7332-a930-7b33e6323958/audit.jsonl",
+      "bytes": 9257,
+      "sha256": "6ff2aa765c877723f49a4d550c3a2e130d8cd3c9bdcd1e3f269dfe1dce65c571"
+    },
+    {
+      "path": "rustc.txt",
+      "bytes": 196,
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    {
+      "path": "fault-state/initial-data-held-discovery-01a1d122-8705-7332-a930-7b33e6323958/rpc.jsonl",
+      "bytes": 91735,
+      "sha256": "85cee8795027835ab3782c1d48549ca56e38353e55792be7a920b5ea639f7e51"
+    },
+    {
+      "path": "selected-tests.log",
+      "bytes": 245285,
+      "sha256": "cb67fbb847876facba54ae3b1ff4eb1d6be438b181cd59c6f1d0d007a3fb5fb5"
+    },
+    {
+      "path": "source-revision.txt",
+      "bytes": 41,
+      "sha256": "5ccae98da9d652e6a22e2fd3f1b982a52ebc39b184d0deba429c40b339968085"
+    },
+    {
+      "path": "tests.log",
+      "bytes": 248774,
+      "sha256": "680ff944e9da928f2c32ceefaecd7810457725707b5377645860e2a77cd7e271"
+    }
+  ],
+  "audit": [
+    {
+      "declared_fixture_precondition": "actual initial metadata election n0",
+      "members": 3,
+      "phase": "begin",
+      "real_tls": true,
+      "rf": 3,
+      "scope": "same-process actual INITIAL owners; no CLI/failure-cause/HA qualification",
+      "source_sha": "26cdaa87c446ca35542ec816b29f069d57f47242"
+    },
+    {
+      "key": "initial-discovery-n0-0",
+      "leader": "n0",
+      "phase": "business_ack1",
+      "value": {
+        "first": "actual acknowledged value",
+        "nested": [
+          null,
+          17
+        ]
+      }
+    },
+    {
+      "business": "01a1d122-90b7-7200-ab5a-bdd1b10e8d43",
+      "error_chain": null,
+      "ok": true,
+      "phase": "held_metadata_acquisition_result"
+    },
+    {
+      "all_actual_service_latches_held": 3,
+      "business": "01a1d122-90b7-7200-ab5a-bdd1b10e8d43",
+      "committed_topology": {
+        "applied_rebalance_plans": [],
+        "cluster_id": "native-bootstrap-actual-tls",
+        "format_version": 2,
+        "generation": 1,
+        "hash_version": 1,
+        "history": [
+          {
+            "actor": "n0",
+            "at_ms": 10,
+            "generation": 1,
+            "summary": "cluster initialized"
+          }
+        ],
+        "next_range_id": 5,
+        "next_relocation_id": 1,
+        "next_replica_id": 13,
+        "nodes": {
+          "n0": {
+            "address": "127.0.0.1:44333",
+            "capacity_bytes": 1073741824,
+            "id": "n0",
+            "incarnation": 1,
+            "joined_at_ms": 10,
+            "labels": {
+              "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+            },
+            "last_heartbeat_ms": 10,
+            "lifecycle": "active",
+            "native_store_birth_v1": {
+              "abort_protocol_version": 1,
+              "birth_id": "01a1d122-7f2b-75a1-82bf-412c3b970d7d",
+              "birth_sha256": "2776c4c3447cd952f23c651fc014603bdcf7d4d2322c06c8ba557d398ec91984",
+              "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+              "node_incarnation": 1,
+              "version": 1,
+              "writer_enforcement_version": 1
+            },
+            "tls_certificate_sha256": "15574b329543ecb146fe291665b152322307ec757969e3be5d5d9b76bc33e9f2",
+            "used_bytes": 0
+          },
+          "n1": {
+            "address": "127.0.0.1:43775",
+            "capacity_bytes": 1073741824,
+            "id": "n1",
+            "incarnation": 1,
+            "joined_at_ms": 10,
+            "labels": {
+              "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+            },
+            "last_heartbeat_ms": 10,
+            "lifecycle": "active",
+            "native_store_birth_v1": {
+              "abort_protocol_version": 1,
+              "birth_id": "01a1d122-7fcf-7b80-a911-8ebb2707baee",
+              "birth_sha256": "cad49c5419cfc2ea8a5030d1bb26a8a30441c97eba08b8cee636fe901de727dd",
+              "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+              "node_incarnation": 1,
+              "version": 1,
+              "writer_enforcement_version": 1
+            },
+            "tls_certificate_sha256": "a7049091aaf72d30c5e204b70b838c0e8203be65549eb9c3697282855e9caf16",
+            "used_bytes": 0
+          },
+          "n2": {
+            "address": "127.0.0.1:36025",
+            "capacity_bytes": 1073741824,
+            "id": "n2",
+            "incarnation": 1,
+            "joined_at_ms": 10,
+            "labels": {
+              "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+            },
+            "last_heartbeat_ms": 10,
+            "lifecycle": "active",
+            "native_store_birth_v1": {
+              "abort_protocol_version": 1,
+              "birth_id": "01a1d122-804a-7ee2-b85e-36a0f82735c6",
+              "birth_sha256": "917c0ac01ed791c804ff85204535b6dd181a8b19176b205a85d255ba9beb9daf",
+              "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+              "node_incarnation": 1,
+              "version": 1,
+              "writer_enforcement_version": 1
+            },
+            "tls_certificate_sha256": "d80613f76490321e5de008c9afd3dc7ea703e0401982eaa02e4c754fd2a47646",
+            "used_bytes": 0
+          }
+        },
+        "range_image_bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+        "ranges": {
+          "0": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": 4611686018427387904,
+            "epoch": 1,
+            "id": 1,
+            "leader": "n1",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 1,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 5,
+                "node_id": "n1",
+                "role": "voter"
+              },
+              {
+                "id": 9,
+                "node_id": "n2",
+                "role": "voter"
+              }
+            ],
+            "start_token": 0
+          },
+          "13835058055282163712": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": null,
+            "epoch": 1,
+            "id": 4,
+            "leader": "n0",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 4,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 8,
+                "node_id": "n2",
+                "role": "voter"
+              },
+              {
+                "id": 12,
+                "node_id": "n1",
+                "role": "voter"
+              }
+            ],
+            "start_token": 13835058055282163712
+          },
+          "4611686018427387904": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": 9223372036854775808,
+            "epoch": 1,
+            "id": 2,
+            "leader": "n2",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 2,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 6,
+                "node_id": "n2",
+                "role": "voter"
+              },
+              {
+                "id": 10,
+                "node_id": "n1",
+                "role": "voter"
+              }
+            ],
+            "start_token": 4611686018427387904
+          },
+          "9223372036854775808": {
+            "approximate_bytes": 0,
+            "approximate_qps": 0,
+            "end_token": 13835058055282163712,
+            "epoch": 1,
+            "id": 3,
+            "leader": "n0",
+            "placement": {
+              "distinct_failure_domains": [],
+              "required_node_labels": {}
+            },
+            "replicas": [
+              {
+                "id": 3,
+                "node_id": "n0",
+                "role": "voter"
+              },
+              {
+                "id": 7,
+                "node_id": "n1",
+                "role": "voter"
+              },
+              {
+                "id": 11,
+                "node_id": "n2",
+                "role": "voter"
+              }
+            ],
+            "start_token": 9223372036854775808
+          }
+        },
+        "relocations": {},
+        "replication_factor": 3
+      },
+      "context": "01a1d122-90c2-7481-99e1-1d871f0bdc8f",
+      "metadata_leader": "n0",
+      "phase": "held_metadata_qq",
+      "read_index": 1,
+      "term": 1
+    },
+    {
+      "error_chain": null,
+      "ok": true,
+      "phase": "held_public_refresh",
+      "rpc_record_end": 20,
+      "rpc_record_start": 8
+    },
+    {
+      "error_chain": [
+        "cluster error: cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: initial native DATA refuses generic snapshot/import/repair/cleanup and unsupported operations"
+      ],
+      "phase": "held_explicit_fetch_topology_refusal"
+    },
+    {
+      "business": "01a1d122-9131-7233-b685-7cca5428184b",
+      "error_chain": null,
+      "ok": true,
+      "phase": "held_post_metadata_acquisition_result"
+    },
+    {
+      "business": "01a1d122-9131-7233-b685-7cca5428184b",
+      "context": "01a1d122-913a-71c3-95b8-8727c0b6bf50",
+      "metadata_leader": "n0",
+      "phase": "held_metadata_qq_after_refresh",
+      "read_index": 1,
+      "term": 1
+    },
+    {
+      "key": "initial-discovery-n1-5",
+      "leader": "n1",
+      "phase": "business_ack2_after_release",
+      "value": null
+    },
+    {
+      "after": [
+        {
+          "cleanup_quarantined_owners": 0,
+          "dispatcher_published": true,
+          "ranges": [
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 1
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 2
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 3
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 4
+            }
+          ],
+          "receiver_listening": true,
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "writer_policy_current": true
+        },
+        {
+          "cleanup_quarantined_owners": 0,
+          "dispatcher_published": true,
+          "ranges": [
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 1
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 2
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 3
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 4
+            }
+          ],
+          "receiver_listening": true,
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "writer_policy_current": true
+        },
+        {
+          "cleanup_quarantined_owners": 0,
+          "dispatcher_published": true,
+          "ranges": [
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 1
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 2
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 3
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 4
+            }
+          ],
+          "receiver_listening": true,
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "writer_policy_current": true
+        }
+      ],
+      "before": [
+        {
+          "cleanup_quarantined_owners": 0,
+          "dispatcher_published": true,
+          "ranges": [
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 1
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 2
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 3
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 4
+            }
+          ],
+          "receiver_listening": true,
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "writer_policy_current": true
+        },
+        {
+          "cleanup_quarantined_owners": 0,
+          "dispatcher_published": true,
+          "ranges": [
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 1
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 2
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 3
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 4
+            }
+          ],
+          "receiver_listening": true,
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "writer_policy_current": true
+        },
+        {
+          "cleanup_quarantined_owners": 0,
+          "dispatcher_published": true,
+          "ranges": [
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 1
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": true,
+              "local_leader": true,
+              "range_id": 2
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 3
+            },
+            {
+              "epoch": 1,
+              "leader_admission_observed": false,
+              "local_leader": false,
+              "range_id": 4
+            }
+          ],
+          "receiver_listening": true,
+          "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+          "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+          "writer_policy_current": true
+        }
+      ],
+      "both_exact_strong_values_verified": true,
+      "business_acks": 2,
+      "phase": "healthy_after_release",
+      "topology_unchanged": true
+    },
+    {
+      "held_discovery_should_succeed": true,
+      "owners_stopped": true,
+      "phase": "acceptance"
+    }
+  ],
+  "held_bootstrap_successes": [
+    {
+      "attempt_id": "01a1d122-90cf-7982-9e56-e28f5b6f74e9",
+      "request_id": 3,
+      "destination": "n0",
+      "address": "127.0.0.1:44333",
+      "topology_generation": 1,
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n0",
+        "request_id": 3,
+        "request": "FetchBootstrapSnapshot"
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n0",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+          "birth_id": "01a1d122-7f2b-75a1-82bf-412c3b970d7d",
+          "birth_sha256": "2776c4c3447cd952f23c651fc014603bdcf7d4d2322c06c8ba557d398ec91984",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 3,
+        "response": {
+          "Ok": {
+            "BootstrapSnapshot": {
+              "topology": {
+                "format_version": 2,
+                "hash_version": 1,
+                "cluster_id": "native-bootstrap-actual-tls",
+                "range_image_bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+                "generation": 1,
+                "replication_factor": 3,
+                "nodes": {
+                  "n0": {
+                    "id": "n0",
+                    "address": "127.0.0.1:44333",
+                    "tls_certificate_sha256": "15574b329543ecb146fe291665b152322307ec757969e3be5d5d9b76bc33e9f2",
+                    "incarnation": 1,
+                    "native_store_birth_v1": {
+                      "version": 1,
+                      "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+                      "birth_id": "01a1d122-7f2b-75a1-82bf-412c3b970d7d",
+                      "birth_sha256": "2776c4c3447cd952f23c651fc014603bdcf7d4d2322c06c8ba557d398ec91984",
+                      "node_incarnation": 1,
+                      "writer_enforcement_version": 1,
+                      "abort_protocol_version": 1
+                    },
+                    "lifecycle": "active",
+                    "labels": {
+                      "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+                    },
+                    "capacity_bytes": 1073741824,
+                    "used_bytes": 0,
+                    "joined_at_ms": 10,
+                    "last_heartbeat_ms": 10
+                  },
+                  "n1": {
+                    "id": "n1",
+                    "address": "127.0.0.1:43775",
+                    "tls_certificate_sha256": "a7049091aaf72d30c5e204b70b838c0e8203be65549eb9c3697282855e9caf16",
+                    "incarnation": 1,
+                    "native_store_birth_v1": {
+                      "version": 1,
+                      "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+                      "birth_id": "01a1d122-7fcf-7b80-a911-8ebb2707baee",
+                      "birth_sha256": "cad49c5419cfc2ea8a5030d1bb26a8a30441c97eba08b8cee636fe901de727dd",
+                      "node_incarnation": 1,
+                      "writer_enforcement_version": 1,
+                      "abort_protocol_version": 1
+                    },
+                    "lifecycle": "active",
+                    "labels": {
+                      "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+                    },
+                    "capacity_bytes": 1073741824,
+                    "used_bytes": 0,
+                    "joined_at_ms": 10,
+                    "last_heartbeat_ms": 10
+                  },
+                  "n2": {
+                    "id": "n2",
+                    "address": "127.0.0.1:36025",
+                    "tls_certificate_sha256": "d80613f76490321e5de008c9afd3dc7ea703e0401982eaa02e4c754fd2a47646",
+                    "incarnation": 1,
+                    "native_store_birth_v1": {
+                      "version": 1,
+                      "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+                      "birth_id": "01a1d122-804a-7ee2-b85e-36a0f82735c6",
+                      "birth_sha256": "917c0ac01ed791c804ff85204535b6dd181a8b19176b205a85d255ba9beb9daf",
+                      "node_incarnation": 1,
+                      "writer_enforcement_version": 1,
+                      "abort_protocol_version": 1
+                    },
+                    "lifecycle": "active",
+                    "labels": {
+                      "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+                    },
+                    "capacity_bytes": 1073741824,
+                    "used_bytes": 0,
+                    "joined_at_ms": 10,
+                    "last_heartbeat_ms": 10
+                  }
+                },
+                "ranges": {
+                  "0": {
+                    "id": 1,
+                    "start_token": 0,
+                    "end_token": 4611686018427387904,
+                    "epoch": 1,
+                    "replicas": [
+                      {
+                        "id": 1,
+                        "node_id": "n0",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 5,
+                        "node_id": "n1",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 9,
+                        "node_id": "n2",
+                        "role": "voter"
+                      }
+                    ],
+                    "leader": "n1",
+                    "approximate_bytes": 0,
+                    "approximate_qps": 0,
+                    "placement": {
+                      "required_node_labels": {},
+                      "distinct_failure_domains": []
+                    }
+                  },
+                  "4611686018427387904": {
+                    "id": 2,
+                    "start_token": 4611686018427387904,
+                    "end_token": 9223372036854775808,
+                    "epoch": 1,
+                    "replicas": [
+                      {
+                        "id": 2,
+                        "node_id": "n0",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 6,
+                        "node_id": "n2",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 10,
+                        "node_id": "n1",
+                        "role": "voter"
+                      }
+                    ],
+                    "leader": "n2",
+                    "approximate_bytes": 0,
+                    "approximate_qps": 0,
+                    "placement": {
+                      "required_node_labels": {},
+                      "distinct_failure_domains": []
+                    }
+                  },
+                  "9223372036854775808": {
+                    "id": 3,
+                    "start_token": 9223372036854775808,
+                    "end_token": 13835058055282163712,
+                    "epoch": 1,
+                    "replicas": [
+                      {
+                        "id": 3,
+                        "node_id": "n0",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 7,
+                        "node_id": "n1",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 11,
+                        "node_id": "n2",
+                        "role": "voter"
+                      }
+                    ],
+                    "leader": "n0",
+                    "approximate_bytes": 0,
+                    "approximate_qps": 0,
+                    "placement": {
+                      "required_node_labels": {},
+                      "distinct_failure_domains": []
+                    }
+                  },
+                  "13835058055282163712": {
+                    "id": 4,
+                    "start_token": 13835058055282163712,
+                    "end_token": null,
+                    "epoch": 1,
+                    "replicas": [
+                      {
+                        "id": 4,
+                        "node_id": "n0",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 8,
+                        "node_id": "n2",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 12,
+                        "node_id": "n1",
+                        "role": "voter"
+                      }
+                    ],
+                    "leader": "n0",
+                    "approximate_bytes": 0,
+                    "approximate_qps": 0,
+                    "placement": {
+                      "required_node_labels": {},
+                      "distinct_failure_domains": []
+                    }
+                  }
+                },
+                "next_range_id": 5,
+                "next_replica_id": 13,
+                "next_relocation_id": 1,
+                "relocations": {},
+                "applied_rebalance_plans": [],
+                "history": [
+                  {
+                    "generation": 1,
+                    "at_ms": 10,
+                    "actor": "n0",
+                    "summary": "cluster initialized"
+                  }
+                ]
+              },
+              "config_template": {
+                "enabled": true,
+                "cluster_id": "native-bootstrap-actual-tls",
+                "range_image_bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+                "node_id": "n0",
+                "node_address": "127.0.0.1:44333",
+                "node_tls_certificate_sha256": "15574b329543ecb146fe291665b152322307ec757969e3be5d5d9b76bc33e9f2",
+                "node_incarnation": 1,
+                "node_capacity_bytes": 1073741824,
+                "replication_factor": 3,
+                "initial_ranges": 4,
+                "default_placement": {
+                  "required_node_labels": {},
+                  "distinct_failure_domains": []
+                },
+                "suspect_after_ms": 5000,
+                "dead_after_ms": 15000,
+                "topology_history_limit": 64,
+                "metadata_election_timeout_ms": 1500,
+                "metadata_heartbeat_interval_ms": 300,
+                "transport": {
+                  "connect_timeout_ms": 200,
+                  "io_timeout_ms": 1500,
+                  "max_frame_bytes": 4194304,
+                  "max_inbound_connections": 8,
+                  "dev_localhost_plaintext": false,
+                  "tls": {
+                    "cert_path": "/tmp/.tmpcsChri/n0.pem",
+                    "key_path": "/tmp/.tmpcsChri/n0.key",
+                    "ca_path": "/tmp/.tmpcsChri/ca.pem",
+                    "require_client_cert": true,
+                    "dev_localhost_plaintext": false
+                  }
+                }
+              },
+              "metadata_leader_id": "n0"
+            }
+          }
+        }
+      }
+    },
+    {
+      "attempt_id": "01a1d122-90e9-7ec0-b69f-6f27b4bcb44d",
+      "request_id": 4,
+      "destination": "n1",
+      "address": "127.0.0.1:43775",
+      "topology_generation": 1,
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n1",
+        "request_id": 4,
+        "request": "FetchBootstrapSnapshot"
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n1",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+          "birth_id": "01a1d122-7fcf-7b80-a911-8ebb2707baee",
+          "birth_sha256": "cad49c5419cfc2ea8a5030d1bb26a8a30441c97eba08b8cee636fe901de727dd",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 4,
+        "response": {
+          "Ok": {
+            "BootstrapSnapshot": {
+              "topology": {
+                "format_version": 2,
+                "hash_version": 1,
+                "cluster_id": "native-bootstrap-actual-tls",
+                "range_image_bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+                "generation": 1,
+                "replication_factor": 3,
+                "nodes": {
+                  "n0": {
+                    "id": "n0",
+                    "address": "127.0.0.1:44333",
+                    "tls_certificate_sha256": "15574b329543ecb146fe291665b152322307ec757969e3be5d5d9b76bc33e9f2",
+                    "incarnation": 1,
+                    "native_store_birth_v1": {
+                      "version": 1,
+                      "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+                      "birth_id": "01a1d122-7f2b-75a1-82bf-412c3b970d7d",
+                      "birth_sha256": "2776c4c3447cd952f23c651fc014603bdcf7d4d2322c06c8ba557d398ec91984",
+                      "node_incarnation": 1,
+                      "writer_enforcement_version": 1,
+                      "abort_protocol_version": 1
+                    },
+                    "lifecycle": "active",
+                    "labels": {
+                      "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+                    },
+                    "capacity_bytes": 1073741824,
+                    "used_bytes": 0,
+                    "joined_at_ms": 10,
+                    "last_heartbeat_ms": 10
+                  },
+                  "n1": {
+                    "id": "n1",
+                    "address": "127.0.0.1:43775",
+                    "tls_certificate_sha256": "a7049091aaf72d30c5e204b70b838c0e8203be65549eb9c3697282855e9caf16",
+                    "incarnation": 1,
+                    "native_store_birth_v1": {
+                      "version": 1,
+                      "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+                      "birth_id": "01a1d122-7fcf-7b80-a911-8ebb2707baee",
+                      "birth_sha256": "cad49c5419cfc2ea8a5030d1bb26a8a30441c97eba08b8cee636fe901de727dd",
+                      "node_incarnation": 1,
+                      "writer_enforcement_version": 1,
+                      "abort_protocol_version": 1
+                    },
+                    "lifecycle": "active",
+                    "labels": {
+                      "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+                    },
+                    "capacity_bytes": 1073741824,
+                    "used_bytes": 0,
+                    "joined_at_ms": 10,
+                    "last_heartbeat_ms": 10
+                  },
+                  "n2": {
+                    "id": "n2",
+                    "address": "127.0.0.1:36025",
+                    "tls_certificate_sha256": "d80613f76490321e5de008c9afd3dc7ea703e0401982eaa02e4c754fd2a47646",
+                    "incarnation": 1,
+                    "native_store_birth_v1": {
+                      "version": 1,
+                      "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+                      "birth_id": "01a1d122-804a-7ee2-b85e-36a0f82735c6",
+                      "birth_sha256": "917c0ac01ed791c804ff85204535b6dd181a8b19176b205a85d255ba9beb9daf",
+                      "node_incarnation": 1,
+                      "writer_enforcement_version": 1,
+                      "abort_protocol_version": 1
+                    },
+                    "lifecycle": "active",
+                    "labels": {
+                      "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+                    },
+                    "capacity_bytes": 1073741824,
+                    "used_bytes": 0,
+                    "joined_at_ms": 10,
+                    "last_heartbeat_ms": 10
+                  }
+                },
+                "ranges": {
+                  "0": {
+                    "id": 1,
+                    "start_token": 0,
+                    "end_token": 4611686018427387904,
+                    "epoch": 1,
+                    "replicas": [
+                      {
+                        "id": 1,
+                        "node_id": "n0",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 5,
+                        "node_id": "n1",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 9,
+                        "node_id": "n2",
+                        "role": "voter"
+                      }
+                    ],
+                    "leader": "n1",
+                    "approximate_bytes": 0,
+                    "approximate_qps": 0,
+                    "placement": {
+                      "required_node_labels": {},
+                      "distinct_failure_domains": []
+                    }
+                  },
+                  "4611686018427387904": {
+                    "id": 2,
+                    "start_token": 4611686018427387904,
+                    "end_token": 9223372036854775808,
+                    "epoch": 1,
+                    "replicas": [
+                      {
+                        "id": 2,
+                        "node_id": "n0",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 6,
+                        "node_id": "n2",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 10,
+                        "node_id": "n1",
+                        "role": "voter"
+                      }
+                    ],
+                    "leader": "n2",
+                    "approximate_bytes": 0,
+                    "approximate_qps": 0,
+                    "placement": {
+                      "required_node_labels": {},
+                      "distinct_failure_domains": []
+                    }
+                  },
+                  "9223372036854775808": {
+                    "id": 3,
+                    "start_token": 9223372036854775808,
+                    "end_token": 13835058055282163712,
+                    "epoch": 1,
+                    "replicas": [
+                      {
+                        "id": 3,
+                        "node_id": "n0",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 7,
+                        "node_id": "n1",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 11,
+                        "node_id": "n2",
+                        "role": "voter"
+                      }
+                    ],
+                    "leader": "n0",
+                    "approximate_bytes": 0,
+                    "approximate_qps": 0,
+                    "placement": {
+                      "required_node_labels": {},
+                      "distinct_failure_domains": []
+                    }
+                  },
+                  "13835058055282163712": {
+                    "id": 4,
+                    "start_token": 13835058055282163712,
+                    "end_token": null,
+                    "epoch": 1,
+                    "replicas": [
+                      {
+                        "id": 4,
+                        "node_id": "n0",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 8,
+                        "node_id": "n2",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 12,
+                        "node_id": "n1",
+                        "role": "voter"
+                      }
+                    ],
+                    "leader": "n0",
+                    "approximate_bytes": 0,
+                    "approximate_qps": 0,
+                    "placement": {
+                      "required_node_labels": {},
+                      "distinct_failure_domains": []
+                    }
+                  }
+                },
+                "next_range_id": 5,
+                "next_replica_id": 13,
+                "next_relocation_id": 1,
+                "relocations": {},
+                "applied_rebalance_plans": [],
+                "history": [
+                  {
+                    "generation": 1,
+                    "at_ms": 10,
+                    "actor": "n0",
+                    "summary": "cluster initialized"
+                  }
+                ]
+              },
+              "config_template": {
+                "enabled": true,
+                "cluster_id": "native-bootstrap-actual-tls",
+                "range_image_bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+                "node_id": "n1",
+                "node_address": "127.0.0.1:43775",
+                "node_tls_certificate_sha256": "a7049091aaf72d30c5e204b70b838c0e8203be65549eb9c3697282855e9caf16",
+                "node_incarnation": 1,
+                "node_capacity_bytes": 1073741824,
+                "replication_factor": 3,
+                "initial_ranges": 4,
+                "default_placement": {
+                  "required_node_labels": {},
+                  "distinct_failure_domains": []
+                },
+                "suspect_after_ms": 5000,
+                "dead_after_ms": 15000,
+                "topology_history_limit": 64,
+                "metadata_election_timeout_ms": 1500,
+                "metadata_heartbeat_interval_ms": 300,
+                "transport": {
+                  "connect_timeout_ms": 200,
+                  "io_timeout_ms": 1500,
+                  "max_frame_bytes": 4194304,
+                  "max_inbound_connections": 8,
+                  "dev_localhost_plaintext": false,
+                  "tls": {
+                    "cert_path": "/tmp/.tmpcsChri/n1.pem",
+                    "key_path": "/tmp/.tmpcsChri/n1.key",
+                    "ca_path": "/tmp/.tmpcsChri/ca.pem",
+                    "require_client_cert": true,
+                    "dev_localhost_plaintext": false
+                  }
+                }
+              },
+              "metadata_leader_id": "n0"
+            }
+          }
+        }
+      }
+    },
+    {
+      "attempt_id": "01a1d122-9103-7d82-8443-b37ac506438b",
+      "request_id": 5,
+      "destination": "n2",
+      "address": "127.0.0.1:36025",
+      "topology_generation": 1,
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n2",
+        "request_id": 5,
+        "request": "FetchBootstrapSnapshot"
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n2",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+          "birth_id": "01a1d122-804a-7ee2-b85e-36a0f82735c6",
+          "birth_sha256": "917c0ac01ed791c804ff85204535b6dd181a8b19176b205a85d255ba9beb9daf",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 5,
+        "response": {
+          "Ok": {
+            "BootstrapSnapshot": {
+              "topology": {
+                "format_version": 2,
+                "hash_version": 1,
+                "cluster_id": "native-bootstrap-actual-tls",
+                "range_image_bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+                "generation": 1,
+                "replication_factor": 3,
+                "nodes": {
+                  "n0": {
+                    "id": "n0",
+                    "address": "127.0.0.1:44333",
+                    "tls_certificate_sha256": "15574b329543ecb146fe291665b152322307ec757969e3be5d5d9b76bc33e9f2",
+                    "incarnation": 1,
+                    "native_store_birth_v1": {
+                      "version": 1,
+                      "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+                      "birth_id": "01a1d122-7f2b-75a1-82bf-412c3b970d7d",
+                      "birth_sha256": "2776c4c3447cd952f23c651fc014603bdcf7d4d2322c06c8ba557d398ec91984",
+                      "node_incarnation": 1,
+                      "writer_enforcement_version": 1,
+                      "abort_protocol_version": 1
+                    },
+                    "lifecycle": "active",
+                    "labels": {
+                      "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+                    },
+                    "capacity_bytes": 1073741824,
+                    "used_bytes": 0,
+                    "joined_at_ms": 10,
+                    "last_heartbeat_ms": 10
+                  },
+                  "n1": {
+                    "id": "n1",
+                    "address": "127.0.0.1:43775",
+                    "tls_certificate_sha256": "a7049091aaf72d30c5e204b70b838c0e8203be65549eb9c3697282855e9caf16",
+                    "incarnation": 1,
+                    "native_store_birth_v1": {
+                      "version": 1,
+                      "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+                      "birth_id": "01a1d122-7fcf-7b80-a911-8ebb2707baee",
+                      "birth_sha256": "cad49c5419cfc2ea8a5030d1bb26a8a30441c97eba08b8cee636fe901de727dd",
+                      "node_incarnation": 1,
+                      "writer_enforcement_version": 1,
+                      "abort_protocol_version": 1
+                    },
+                    "lifecycle": "active",
+                    "labels": {
+                      "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+                    },
+                    "capacity_bytes": 1073741824,
+                    "used_bytes": 0,
+                    "joined_at_ms": 10,
+                    "last_heartbeat_ms": 10
+                  },
+                  "n2": {
+                    "id": "n2",
+                    "address": "127.0.0.1:36025",
+                    "tls_certificate_sha256": "d80613f76490321e5de008c9afd3dc7ea703e0401982eaa02e4c754fd2a47646",
+                    "incarnation": 1,
+                    "native_store_birth_v1": {
+                      "version": 1,
+                      "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+                      "birth_id": "01a1d122-804a-7ee2-b85e-36a0f82735c6",
+                      "birth_sha256": "917c0ac01ed791c804ff85204535b6dd181a8b19176b205a85d255ba9beb9daf",
+                      "node_incarnation": 1,
+                      "writer_enforcement_version": 1,
+                      "abort_protocol_version": 1
+                    },
+                    "lifecycle": "active",
+                    "labels": {
+                      "bicdb.schema.sha256": "dbf787e4836cc8c39299bce6b74940e28a847b560c54f9038385090cfd65756b"
+                    },
+                    "capacity_bytes": 1073741824,
+                    "used_bytes": 0,
+                    "joined_at_ms": 10,
+                    "last_heartbeat_ms": 10
+                  }
+                },
+                "ranges": {
+                  "0": {
+                    "id": 1,
+                    "start_token": 0,
+                    "end_token": 4611686018427387904,
+                    "epoch": 1,
+                    "replicas": [
+                      {
+                        "id": 1,
+                        "node_id": "n0",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 5,
+                        "node_id": "n1",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 9,
+                        "node_id": "n2",
+                        "role": "voter"
+                      }
+                    ],
+                    "leader": "n1",
+                    "approximate_bytes": 0,
+                    "approximate_qps": 0,
+                    "placement": {
+                      "required_node_labels": {},
+                      "distinct_failure_domains": []
+                    }
+                  },
+                  "4611686018427387904": {
+                    "id": 2,
+                    "start_token": 4611686018427387904,
+                    "end_token": 9223372036854775808,
+                    "epoch": 1,
+                    "replicas": [
+                      {
+                        "id": 2,
+                        "node_id": "n0",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 6,
+                        "node_id": "n2",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 10,
+                        "node_id": "n1",
+                        "role": "voter"
+                      }
+                    ],
+                    "leader": "n2",
+                    "approximate_bytes": 0,
+                    "approximate_qps": 0,
+                    "placement": {
+                      "required_node_labels": {},
+                      "distinct_failure_domains": []
+                    }
+                  },
+                  "9223372036854775808": {
+                    "id": 3,
+                    "start_token": 9223372036854775808,
+                    "end_token": 13835058055282163712,
+                    "epoch": 1,
+                    "replicas": [
+                      {
+                        "id": 3,
+                        "node_id": "n0",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 7,
+                        "node_id": "n1",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 11,
+                        "node_id": "n2",
+                        "role": "voter"
+                      }
+                    ],
+                    "leader": "n0",
+                    "approximate_bytes": 0,
+                    "approximate_qps": 0,
+                    "placement": {
+                      "required_node_labels": {},
+                      "distinct_failure_domains": []
+                    }
+                  },
+                  "13835058055282163712": {
+                    "id": 4,
+                    "start_token": 13835058055282163712,
+                    "end_token": null,
+                    "epoch": 1,
+                    "replicas": [
+                      {
+                        "id": 4,
+                        "node_id": "n0",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 8,
+                        "node_id": "n2",
+                        "role": "voter"
+                      },
+                      {
+                        "id": 12,
+                        "node_id": "n1",
+                        "role": "voter"
+                      }
+                    ],
+                    "leader": "n0",
+                    "approximate_bytes": 0,
+                    "approximate_qps": 0,
+                    "placement": {
+                      "required_node_labels": {},
+                      "distinct_failure_domains": []
+                    }
+                  }
+                },
+                "next_range_id": 5,
+                "next_replica_id": 13,
+                "next_relocation_id": 1,
+                "relocations": {},
+                "applied_rebalance_plans": [],
+                "history": [
+                  {
+                    "generation": 1,
+                    "at_ms": 10,
+                    "actor": "n0",
+                    "summary": "cluster initialized"
+                  }
+                ]
+              },
+              "config_template": {
+                "enabled": true,
+                "cluster_id": "native-bootstrap-actual-tls",
+                "range_image_bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+                "node_id": "n2",
+                "node_address": "127.0.0.1:36025",
+                "node_tls_certificate_sha256": "d80613f76490321e5de008c9afd3dc7ea703e0401982eaa02e4c754fd2a47646",
+                "node_incarnation": 1,
+                "node_capacity_bytes": 1073741824,
+                "replication_factor": 3,
+                "initial_ranges": 4,
+                "default_placement": {
+                  "required_node_labels": {},
+                  "distinct_failure_domains": []
+                },
+                "suspect_after_ms": 5000,
+                "dead_after_ms": 15000,
+                "topology_history_limit": 64,
+                "metadata_election_timeout_ms": 1500,
+                "metadata_heartbeat_interval_ms": 300,
+                "transport": {
+                  "connect_timeout_ms": 200,
+                  "io_timeout_ms": 1500,
+                  "max_frame_bytes": 4194304,
+                  "max_inbound_connections": 8,
+                  "dev_localhost_plaintext": false,
+                  "tls": {
+                    "cert_path": "/tmp/.tmpcsChri/n2.pem",
+                    "key_path": "/tmp/.tmpcsChri/n2.key",
+                    "ca_path": "/tmp/.tmpcsChri/ca.pem",
+                    "require_client_cert": true,
+                    "dev_localhost_plaintext": false
+                  }
+                }
+              },
+              "metadata_leader_id": "n0"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "actual_business_wire": [
+    {
+      "attempt_id": "01a1d122-8d3f-77b3-bf5d-8874c39f3a5c",
+      "request_id": 1,
+      "destination": "n0",
+      "operation": "event_append",
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n0",
+        "request_id": 1,
+        "request": {
+          "ApplicationEvent": {
+            "range_id": 3,
+            "range_epoch": 1,
+            "operation": {
+              "operation": "append",
+              "namespace": "items",
+              "key": "initial-discovery-n0-0",
+              "value": {
+                "first": "actual acknowledged value",
+                "nested": [
+                  null,
+                  17
+                ]
+              }
+            }
+          }
+        }
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n0",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+          "birth_id": "01a1d122-7f2b-75a1-82bf-412c3b970d7d",
+          "birth_sha256": "2776c4c3447cd952f23c651fc014603bdcf7d4d2322c06c8ba557d398ec91984",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 1,
+        "response": {
+          "Ok": {
+            "ApplicationEvent": {
+              "result": "appended",
+              "inserted": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "attempt_id": "01a1d122-8f78-77b2-88b8-d35454321127",
+      "request_id": 2,
+      "destination": "n0",
+      "operation": "native_event_get",
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n0",
+        "request_id": 2,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-8f78-77b2-88b8-d330bb35842a",
+            "challenge": "01a1d122-8f78-77b2-88b8-d3400e2517e2",
+            "range_id": 3,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "initial-discovery-n0-0",
+            "budget_ms": 999
+          }
+        }
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n0",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+          "birth_id": "01a1d122-7f2b-75a1-82bf-412c3b970d7d",
+          "birth_sha256": "2776c4c3447cd952f23c651fc014603bdcf7d4d2322c06c8ba557d398ec91984",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 2,
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-8f78-77b2-88b8-d330bb35842a",
+              "challenge": "01a1d122-8f78-77b2-88b8-d3400e2517e2",
+              "result": {
+                "kind": "value",
+                "value": {
+                  "presence": "present",
+                  "value": {
+                    "first": "actual acknowledged value",
+                    "nested": [
+                      null,
+                      17
+                    ]
+                  }
+                },
+                "route": {
+                  "generation": 1,
+                  "range_id": 3,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "audit": {
+                  "business_request_id": "01a1d122-8f78-77b2-88b8-d330bb35842a",
+                  "challenge": "01a1d122-8f78-77b2-88b8-d3400e2517e2",
+                  "range_id": 3,
+                  "range_epoch": 1,
+                  "range_index": 1,
+                  "logical_genesis_sha256": "650e1c9731ba32ae425c6a933b462be0ce3a430462ca1aa8fb9a99ed606f43b3",
+                  "logical_history_sha256": "9ebec2e650b66604d6e2b0e821b79650a4e4f43baabeab35c15bfd9b4d4ba016",
+                  "target_local_visibility_db_sequence": 1,
+                  "snapshot_sequence": 1,
+                  "first_metadata_context_id": "01a1d122-8f9c-72b1-b3d0-c7cff5487095",
+                  "final_metadata_context_id": "01a1d122-9067-75e2-a5e7-02103a53bed7",
+                  "final_metadata_generation": 1,
+                  "final_metadata_term": 1,
+                  "final_metadata_read_index": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "attempt_id": "01a1d122-914c-79c2-9805-d9dc9f0dc7c2",
+      "request_id": 6,
+      "destination": "n1",
+      "operation": "event_append",
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n1",
+        "request_id": 6,
+        "request": {
+          "ApplicationEvent": {
+            "range_id": 1,
+            "range_epoch": 1,
+            "operation": {
+              "operation": "append",
+              "namespace": "items",
+              "key": "initial-discovery-n1-5",
+              "value": null
+            }
+          }
+        }
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n1",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+          "birth_id": "01a1d122-7fcf-7b80-a911-8ebb2707baee",
+          "birth_sha256": "cad49c5419cfc2ea8a5030d1bb26a8a30441c97eba08b8cee636fe901de727dd",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 6,
+        "response": {
+          "Ok": {
+            "ApplicationEvent": {
+              "result": "appended",
+              "inserted": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "attempt_id": "01a1d122-9365-71d3-b380-704592788fff",
+      "request_id": 7,
+      "destination": "n1",
+      "operation": "native_event_get",
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n1",
+        "request_id": 7,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-9365-71d3-b380-70266295ce2e",
+            "challenge": "01a1d122-9365-71d3-b380-7039824f0141",
+            "range_id": 1,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "initial-discovery-n1-5",
+            "budget_ms": 999
+          }
+        }
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n1",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+          "birth_id": "01a1d122-7fcf-7b80-a911-8ebb2707baee",
+          "birth_sha256": "cad49c5419cfc2ea8a5030d1bb26a8a30441c97eba08b8cee636fe901de727dd",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 7,
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-9365-71d3-b380-70266295ce2e",
+              "challenge": "01a1d122-9365-71d3-b380-7039824f0141",
+              "result": {
+                "kind": "value",
+                "value": {
+                  "presence": "present",
+                  "value": null
+                },
+                "route": {
+                  "generation": 1,
+                  "range_id": 1,
+                  "range_epoch": 1,
+                  "leader": "n1"
+                },
+                "audit": {
+                  "business_request_id": "01a1d122-9365-71d3-b380-70266295ce2e",
+                  "challenge": "01a1d122-9365-71d3-b380-7039824f0141",
+                  "range_id": 1,
+                  "range_epoch": 1,
+                  "range_index": 1,
+                  "logical_genesis_sha256": "1d93fe98e2db029e4df6c69bfc120194c27c479781342212efbebdb77d760b6b",
+                  "logical_history_sha256": "bea6363e9e8599a2cf05218b343a088fc80e9e227125d3966fb5113bee6c346b",
+                  "target_local_visibility_db_sequence": 2,
+                  "snapshot_sequence": 2,
+                  "first_metadata_context_id": "01a1d122-937b-7bb0-9377-23ac105f27bc",
+                  "final_metadata_context_id": "01a1d122-945a-7a41-95c6-2f727210240e",
+                  "final_metadata_generation": 1,
+                  "final_metadata_term": 1,
+                  "final_metadata_read_index": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "attempt_id": "01a1d122-94ae-76f3-8369-abd1fca1d867",
+      "request_id": 8,
+      "destination": "n0",
+      "operation": "native_event_get",
+      "request_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "caller_node_id": "n0",
+        "destination_node_id": "n0",
+        "request_id": 8,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-94ae-76f3-8369-abb724455ea1",
+            "challenge": "01a1d122-94ae-76f3-8369-abcff35f7d3e",
+            "range_id": 3,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "initial-discovery-n0-0",
+            "budget_ms": 999
+          }
+        }
+      },
+      "response_envelope": {
+        "protocol_version": 28,
+        "cluster_id": "native-bootstrap-actual-tls",
+        "source_node_id": "n0",
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-7eff-73b1-aee6-1ce708204e98",
+          "birth_id": "01a1d122-7f2b-75a1-82bf-412c3b970d7d",
+          "birth_sha256": "2776c4c3447cd952f23c651fc014603bdcf7d4d2322c06c8ba557d398ec91984",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "request_id": 8,
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-94ae-76f3-8369-abb724455ea1",
+              "challenge": "01a1d122-94ae-76f3-8369-abcff35f7d3e",
+              "result": {
+                "kind": "value",
+                "value": {
+                  "presence": "present",
+                  "value": {
+                    "first": "actual acknowledged value",
+                    "nested": [
+                      null,
+                      17
+                    ]
+                  }
+                },
+                "route": {
+                  "generation": 1,
+                  "range_id": 3,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "audit": {
+                  "business_request_id": "01a1d122-94ae-76f3-8369-abb724455ea1",
+                  "challenge": "01a1d122-94ae-76f3-8369-abcff35f7d3e",
+                  "range_id": 3,
+                  "range_epoch": 1,
+                  "range_index": 1,
+                  "logical_genesis_sha256": "650e1c9731ba32ae425c6a933b462be0ce3a430462ca1aa8fb9a99ed606f43b3",
+                  "logical_history_sha256": "9ebec2e650b66604d6e2b0e821b79650a4e4f43baabeab35c15bfd9b4d4ba016",
+                  "target_local_visibility_db_sequence": 1,
+                  "snapshot_sequence": 2,
+                  "first_metadata_context_id": "01a1d122-94d4-7cb1-a3be-1b804eb6c932",
+                  "final_metadata_context_id": "01a1d122-95b4-7ab3-8698-5c64bfd80048",
+                  "final_metadata_generation": 1,
+                  "final_metadata_term": 1,
+                  "final_metadata_read_index": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "actual_result": {
+    "passed": 3,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 933,
+    "seconds": 5.93
+  },
+  "all_target_consumer_job": 131414845527,
+  "all_target_consumer": "success",
+  "native_database_or_tls_roots_archived": false,
+  "negative_scope": "actual wrong service+stopped owner; retained old actual Store/writer+TLS revoked-slot refusal+restore ABA; assertions passed, no separate per-negative DB custody",
+  "server_diagnostics": {
+    "io error: unexpected end of file": 27,
+    "io error: Broken pipe (os error 32)": 7
+  },
+  "original_3ee_causality": "not_established",
+  "baseline_original_red": {
+    "source": "05979463ef312fc1128a42903f908de0189c2a63",
+    "run_id": 43278532377,
+    "job_id": 131393398627
+  },
+  "all_target_raw_log_sha256": "2d024f92d4eeb135a18c862312cae2faef43c3a06601a2de79a2c82f24c10231",
+  "all_target_raw_log_bytes": 2462140,
+  "all_target_job_status": {
+    "id": 131414845527,
+    "run_id": 43284689289,
+    "workflow_name": "tests",
+    "head_branch": "ci/native-initial-routing-discovery-489",
+    "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43284689289",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOUimcAs8AAAAemO9oVw",
+    "head_sha": "26cdaa87c446ca35542ec816b29f069d57f47242",
+    "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/131414845527",
+    "html_url": "https://github.com/nikoma/bicdb/actions/runs/43284689289/job/131414845527",
+    "status": "completed",
+    "conclusion": "success",
+    "created_at": "2026-11-12T18:54:36Z",
+    "started_at": "2026-11-12T18:54:38Z",
+    "completed_at": "2026-11-12T19:10:03Z",
+    "name": "Community-only workspace compiles, tests included",
+    "steps": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 1,
+        "started_at": "2026-11-12T18:54:39Z",
+        "completed_at": "2026-11-12T18:54:40Z"
+      },
+      {
+        "name": "Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 2,
+        "started_at": "2026-11-12T18:54:40Z",
+        "completed_at": "2026-11-12T18:54:45Z"
+      },
+      {
+        "name": "Run dtolnay/rust-toolchain@stable",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 3,
+        "started_at": "2026-11-12T18:54:45Z",
+        "completed_at": "2026-11-12T18:54:56Z"
+      },
+      {
+        "name": "Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 4,
+        "started_at": "2026-11-12T18:54:56Z",
+        "completed_at": "2026-11-12T18:55:06Z"
+      },
+      {
+        "name": "cargo check --workspace --all-targets",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 5,
+        "started_at": "2026-11-12T18:55:06Z",
+        "completed_at": "2026-11-12T19:08:19Z"
+      },
+      {
+        "name": "Workflow consumer compiles without Core defaults",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 6,
+        "started_at": "2026-11-12T19:08:19Z",
+        "completed_at": "2026-11-12T19:09:47Z"
+      },
+      {
+        "name": "Post Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 11,
+        "started_at": "2026-11-12T19:09:47Z",
+        "completed_at": "2026-11-12T19:09:59Z"
+      },
+      {
+        "name": "Post Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 12,
+        "started_at": "2026-11-12T19:09:59Z",
+        "completed_at": "2026-11-12T19:09:59Z"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 13,
+        "started_at": "2026-11-12T19:09:59Z",
+        "completed_at": "2026-11-12T19:09:59Z"
+      }
+    ],
+    "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/131414845527",
+    "labels": [
+      "ubuntu-latest"
+    ],
+    "runner_id": 1000022674,
+    "runner_name": "GitHub Actions 1000022674",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  }
+}

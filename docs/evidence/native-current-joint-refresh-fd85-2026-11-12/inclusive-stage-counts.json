@@ -1,0 +1,422 @@
+{
+  "source_revision": "fd85a24392abf8a273479f8637e040523c053109",
+  "stages": [
+    {
+      "count": 246,
+      "incomplete": 0,
+      "max_us": 57,
+      "node": "n1",
+      "stage": "refresh-admission-health-storage-reader-flags",
+      "sum_us": 6645
+    },
+    {
+      "count": 246,
+      "incomplete": 0,
+      "max_us": 375,
+      "node": "n1",
+      "stage": "refresh-admission-actual-birth",
+      "sum_us": 76824
+    },
+    {
+      "count": 492,
+      "incomplete": 0,
+      "max_us": 417,
+      "node": "n1",
+      "stage": "refresh-admission-one-genesis-validation",
+      "sum_us": 147137
+    },
+    {
+      "count": 246,
+      "incomplete": 0,
+      "max_us": 722,
+      "node": "n1",
+      "stage": "refresh-admission-all-genesis-inventory",
+      "sum_us": 149003
+    },
+    {
+      "count": 246,
+      "incomplete": 0,
+      "max_us": 774,
+      "node": "n1",
+      "stage": "refresh-admission-ready-marker-and-all-initial-ranges",
+      "sum_us": 158459
+    },
+    {
+      "count": 246,
+      "incomplete": 0,
+      "max_us": 1134,
+      "node": "n1",
+      "stage": "refresh-admission-total",
+      "sum_us": 243863
+    },
+    {
+      "count": 4,
+      "incomplete": 0,
+      "max_us": 69443,
+      "node": "n1",
+      "stage": "refresh-source-lineage-construct-native-point",
+      "sum_us": 276007
+    },
+    {
+      "count": 10,
+      "incomplete": 0,
+      "max_us": 52125,
+      "node": "n1",
+      "stage": "refresh-lineage-native-birth-anchor-prefix-joint",
+      "sum_us": 518186
+    },
+    {
+      "count": 10,
+      "incomplete": 0,
+      "max_us": 318,
+      "node": "n1",
+      "stage": "refresh-lineage-all-namespace-catalog-and-generations",
+      "sum_us": 2821
+    },
+    {
+      "count": 10,
+      "incomplete": 0,
+      "max_us": 43,
+      "node": "n1",
+      "stage": "refresh-lineage-namespace-UID-schema-readers",
+      "sum_us": 331
+    },
+    {
+      "count": 4,
+      "incomplete": 0,
+      "max_us": 52467,
+      "node": "n1",
+      "stage": "refresh-source-lineage-first-full-contract",
+      "sum_us": 208936
+    },
+    {
+      "count": 4,
+      "incomplete": 0,
+      "max_us": 52211,
+      "node": "n1",
+      "stage": "refresh-source-lineage-second-contract-and-pending",
+      "sum_us": 208433
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 191218,
+      "node": "n1",
+      "stage": "refresh-joint-factory-native-journal-scope-and-catalogue",
+      "sum_us": 191218
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 3966,
+      "node": "n1",
+      "stage": "refresh-joint-factory-local-closure-and-binding",
+      "sum_us": 3966
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 191406,
+      "node": "n1",
+      "stage": "refresh-joint-fact-native-bridge-point-and-archive",
+      "sum_us": 191406
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 1082,
+      "node": "n1",
+      "stage": "refresh-joint-fact-local-original-closure",
+      "sum_us": 1082
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 1416,
+      "node": "n1",
+      "stage": "refresh-joint-fact-original-writer-database-binding",
+      "sum_us": 1416
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 193939,
+      "node": "n1",
+      "stage": "refresh-joint-factory-final-fact-current",
+      "sum_us": 193939
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 394057,
+      "node": "n1",
+      "stage": "refresh-joint-fact-constructor",
+      "sum_us": 394057
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 192,
+      "node": "n1",
+      "stage": "refresh-joint-original-writer-and-all-archived-floors",
+      "sum_us": 192
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 394472,
+      "node": "n1",
+      "stage": "refresh-current-joint-fact-and-original-archives",
+      "sum_us": 394472
+    },
+    {
+      "count": 2,
+      "incomplete": 0,
+      "max_us": 1013,
+      "node": "n1",
+      "stage": "refresh-owned-pin-admission-and-gate",
+      "sum_us": 1993
+    },
+    {
+      "count": 2,
+      "incomplete": 0,
+      "max_us": 52409,
+      "node": "n1",
+      "stage": "refresh-owned-full-physical-lineage",
+      "sum_us": 104511
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 53118,
+      "node": "n1",
+      "stage": "refresh-owned-native-pin-and-physical-lineage",
+      "sum_us": 53118
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 291,
+      "node": "n1",
+      "stage": "refresh-current-role-durable-scope-point",
+      "sum_us": 291
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 53392,
+      "node": "n1",
+      "stage": "refresh-serving-owned-materialization",
+      "sum_us": 53392
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 172869,
+      "node": "n1",
+      "stage": "refresh-serving-actual-current-lineage",
+      "sum_us": 172869
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 1002,
+      "node": "n1",
+      "stage": "refresh-serving-admission-mint",
+      "sum_us": 1002
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 173877,
+      "node": "n1",
+      "stage": "refresh-serving-receipt-full-current",
+      "sum_us": 173877
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 401168,
+      "node": "n1",
+      "stage": "refresh-exact-native-serving-readback-total",
+      "sum_us": 401168
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 1028,
+      "node": "n1",
+      "stage": "refresh-return-boundary-actual-native-pin",
+      "sum_us": 1028
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 1318,
+      "node": "n1",
+      "stage": "refresh-return-boundary-scope-binding-original-writer",
+      "sum_us": 1318
+    },
+    {
+      "count": 111,
+      "incomplete": 0,
+      "max_us": 56,
+      "node": "n2",
+      "stage": "refresh-admission-health-storage-reader-flags",
+      "sum_us": 3054
+    },
+    {
+      "count": 111,
+      "incomplete": 0,
+      "max_us": 361,
+      "node": "n2",
+      "stage": "refresh-admission-actual-birth",
+      "sum_us": 34757
+    },
+    {
+      "count": 222,
+      "incomplete": 0,
+      "max_us": 356,
+      "node": "n2",
+      "stage": "refresh-admission-one-genesis-validation",
+      "sum_us": 66762
+    },
+    {
+      "count": 111,
+      "incomplete": 0,
+      "max_us": 699,
+      "node": "n2",
+      "stage": "refresh-admission-all-genesis-inventory",
+      "sum_us": 67668
+    },
+    {
+      "count": 111,
+      "incomplete": 0,
+      "max_us": 738,
+      "node": "n2",
+      "stage": "refresh-admission-ready-marker-and-all-initial-ranges",
+      "sum_us": 72087
+    },
+    {
+      "count": 111,
+      "incomplete": 0,
+      "max_us": 1107,
+      "node": "n2",
+      "stage": "refresh-admission-total",
+      "sum_us": 110920
+    },
+    {
+      "count": 2,
+      "incomplete": 0,
+      "max_us": 69976,
+      "node": "n2",
+      "stage": "refresh-source-lineage-construct-native-point",
+      "sum_us": 139041
+    },
+    {
+      "count": 4,
+      "incomplete": 0,
+      "max_us": 52594,
+      "node": "n2",
+      "stage": "refresh-lineage-native-birth-anchor-prefix-joint",
+      "sum_us": 207417
+    },
+    {
+      "count": 4,
+      "incomplete": 0,
+      "max_us": 313,
+      "node": "n2",
+      "stage": "refresh-lineage-all-namespace-catalog-and-generations",
+      "sum_us": 1200
+    },
+    {
+      "count": 4,
+      "incomplete": 0,
+      "max_us": 55,
+      "node": "n2",
+      "stage": "refresh-lineage-namespace-UID-schema-readers",
+      "sum_us": 147
+    },
+    {
+      "count": 2,
+      "incomplete": 0,
+      "max_us": 52970,
+      "node": "n2",
+      "stage": "refresh-source-lineage-first-full-contract",
+      "sum_us": 104549
+    },
+    {
+      "count": 2,
+      "incomplete": 0,
+      "max_us": 52733,
+      "node": "n2",
+      "stage": "refresh-source-lineage-second-contract-and-pending",
+      "sum_us": 104437
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 193317,
+      "node": "n2",
+      "stage": "refresh-joint-factory-native-journal-scope-and-catalogue",
+      "sum_us": 193317
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 3915,
+      "node": "n2",
+      "stage": "refresh-joint-factory-local-closure-and-binding",
+      "sum_us": 3915
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 189558,
+      "node": "n2",
+      "stage": "refresh-joint-fact-native-bridge-point-and-archive",
+      "sum_us": 189558
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 1062,
+      "node": "n2",
+      "stage": "refresh-joint-fact-local-original-closure",
+      "sum_us": 1062
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 1377,
+      "node": "n2",
+      "stage": "refresh-joint-fact-original-writer-database-binding",
+      "sum_us": 1377
+    },
+    {
+      "count": 1,
+      "incomplete": 0,
+      "max_us": 192036,
+      "node": "n2",
+      "stage": "refresh-joint-factory-final-fact-current",
+      "sum_us": 192036
+    },
+    {
+      "count": 1,
+      "incomplete": 1,
+      "max_us": 394153,
+      "node": "n2",
+      "stage": "refresh-joint-fact-constructor",
+      "sum_us": 394153
+    },
+    {
+      "count": 1,
+      "incomplete": 1,
+      "max_us": 394306,
+      "node": "n2",
+      "stage": "refresh-current-joint-fact-and-original-archives",
+      "sum_us": 394306
+    }
+  ],
+  "warning": "nested spans are INCLUSIVE; sums overlap and are not disjoint totals"
+}

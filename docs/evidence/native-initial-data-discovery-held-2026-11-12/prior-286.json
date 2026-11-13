@@ -1,0 +1,81 @@
+{
+  "source": "286ca38a86cdd175b1430b9d9570456eb94b916c",
+  "run_id": 43276644122,
+  "job_id": 131386760357,
+  "raw_bytes": 1604718,
+  "raw_sha256": "232fc5cdc1273c129d9e9c9082f41bad6212dc4302be7b0ab3c213e758ca461d",
+  "artifact_id": 13972080317,
+  "archive_sha256": "bcad7bd7bf749e4d4a65d5c95dcbaf8650a32b4f40e475135cbfe6743f14a338",
+  "files": [
+    {
+      "path": "fault-state/initial-data-held-discovery-01a1d0f7-26f6-7211-ae55-07ece641ad8f/rpc.jsonl",
+      "bytes": 12088,
+      "sha256": "62e59f7fd2e034efa51819ec3cd2c6613db1e3c92a405d69d99b744663151dbe"
+    },
+    {
+      "path": "rustc.txt",
+      "bytes": 196,
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    {
+      "path": "fault-state/initial-data-held-discovery-01a1d0f7-26f6-7211-ae55-07ece641ad8f/audit.jsonl",
+      "bytes": 683,
+      "sha256": "3ce91817054bcc358c41221a391a72baa1c22480ed042b4344423e82d9002893"
+    },
+    {
+      "path": "selected-tests.log",
+      "bytes": 244916,
+      "sha256": "4edd233467ab71aadb8b4458cae96e0e97b3f44d2e22e853ed785edc25efc374"
+    },
+    {
+      "path": "source-revision.txt",
+      "bytes": 41,
+      "sha256": "6e241311d0810d8e8ed30866124d3283780c2811add0559f8f66f0d3fa94a141"
+    },
+    {
+      "path": "tests.log",
+      "bytes": 246238,
+      "sha256": "39ae037a3fb88fb671a38cf6b4af19e57911d166d6905016e82194173875c554"
+    }
+  ],
+  "audit": [
+    {
+      "declared_fixture_precondition": "actual initial metadata election n0",
+      "members": 3,
+      "phase": "begin",
+      "real_tls": true,
+      "rf": 3,
+      "scope": "same-process actual INITIAL owners; no CLI/failure-cause/HA qualification",
+      "source_sha": "286ca38a86cdd175b1430b9d9570456eb94b916c"
+    },
+    {
+      "key": "initial-discovery-n0-0",
+      "leader": "n0",
+      "phase": "business_ack1",
+      "value": {
+        "first": "actual acknowledged value",
+        "nested": [
+          null,
+          17
+        ]
+      }
+    },
+    {
+      "business": "01a1d0f7-2d7a-7800-94cd-0edc703165de",
+      "error_chain": [
+        "cluster error: cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata RPC destination differs from actual native birth/incarnation"
+      ],
+      "ok": false,
+      "phase": "held_metadata_acquisition_result"
+    }
+  ],
+  "result": {
+    "passed": 0,
+    "failed": 1,
+    "ignored": 0,
+    "filtered": 931,
+    "seconds": 2.88
+  },
+  "failure_phase": "first actual held-service HostMQ prerequisite; metadata expected native destination mismatch; NO discovery refresh reached",
+  "native_db_or_tls_roots_archived": false
+}

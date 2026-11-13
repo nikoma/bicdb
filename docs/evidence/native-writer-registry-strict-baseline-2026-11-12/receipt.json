@@ -1,0 +1,91 @@
+{
+  "source": "1d3976f9f8011f3ac7411494aa0dfb432763ce78",
+  "package_version": "1.0.489-beta",
+  "run": 43282887768,
+  "cli_job": 131408621456,
+  "checks_job": 131408563373,
+  "cli_passed": 5,
+  "cli_failed": 1,
+  "cli_seconds": 84.04,
+  "strict_test_reached_final_assertion": true,
+  "strict_health_success": false,
+  "checks": "workspace all-target and isolated no-default consumer passed; not runtime qualification",
+  "cli_raw_sha256": "44fe0b35fa2f320ed6a59ec4378b6a0595fe45fdbdfb55218a44aec3129558c7",
+  "checks_raw_sha256": "69e67f14125fef4fccf8c8248de24b4387849bc8d736ed7f11512f5af76e2d18",
+  "journals": [
+    {
+      "name": "initial-data",
+      "original_path": "rpc-journals/client-01a1d121-8e7d-76e2-9278-6ef5cba63803/journal.jsonl",
+      "raw_sha256": "b4af42d7987ba799ddc3ffe12964d8dd93638b714ffa17f7701816aa8223ec43",
+      "raw_bytes": 2441902,
+      "records": 524,
+      "fixture_root": "/tmp/.tmpMFjPNf",
+      "test": "initial_data_tests::native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value"
+    },
+    {
+      "name": "receiver-prerequisite",
+      "original_path": "rpc-journals/client-01a1d122-2803-7101-b4e9-cd06c3f28145/journal.jsonl",
+      "raw_sha256": "ce3d9aa33ee2df09965ec9407b4305d5b2ee0ce84918aaf55fa53f72c8471f69",
+      "raw_bytes": 1030441,
+      "records": 208,
+      "fixture_root": "/tmp/.tmpB84VoR",
+      "test": "replica_receiver_tests::native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner_no_data_grant"
+    },
+    {
+      "name": "strict-registry",
+      "original_path": "rpc-journals/client-01a1d122-7245-7191-b5f6-3ea3d14d5e01/journal.jsonl",
+      "raw_sha256": "49bcdf2b0af089e57a7a7acdd874af1356a7e7be1d81ab3bd03ad2f15a5beccc",
+      "raw_bytes": 3208763,
+      "records": 587,
+      "fixture_root": "/tmp/.tmpAbo7k0",
+      "test": "writer_registry_refresh_baseline::native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_and_fresh_ack"
+    }
+  ],
+  "sources": [
+    {
+      "path": "crates/bicdb-cli/tests/native_metadata_operator_cli/writer_registry_refresh_baseline.rs",
+      "file": "source/writer_registry_refresh_baseline.rs",
+      "sha256": "30cc53603a549b83e90e7f4c713aa4a452ff1bd5b680e5f378279a6d30fa568e"
+    },
+    {
+      "path": "crates/bicdb-cli/tests/native_metadata_operator_cli/replica_receiver_tests.rs",
+      "file": "source/replica_receiver_tests.rs",
+      "sha256": "ad40f656fe41d16f8c83cee9d8f241437fe37045bb6099849bd3e68785f9226b"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment.rs",
+      "file": "source/writer_enrollment.rs",
+      "sha256": "9bc8efe066cd6f864ff8f9a9166a8d57db9de26ef579b7e29cfcc29291451b30"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data.rs",
+      "file": "source/initial_data.rs",
+      "sha256": "7eb42d3137d6cbaf8877f1b0682f10b7b60e1b2c949407d4a7999dfbf8e6d125"
+    },
+    {
+      "path": "crates/bicdb-cli/tests/native_metadata_operator_cli/database_custody.py",
+      "file": "source/database_custody.py",
+      "sha256": "8f6b053c4063435be3dee728fb38a7a24dd8f32d07cd89799933f15e9bbd0b75"
+    }
+  ],
+  "private_artifacts": [
+    {
+      "id": 13975445150,
+      "bytes": 93032244,
+      "sha256": "2900bd7e2e45bc58670a59340779a10d7cdf1c2de78eca5da83e8af72bc67632"
+    },
+    {
+      "id": 13974438448,
+      "bytes": 124664,
+      "sha256": "951a16b683926c59126d85a97651efba0e0d714155d4dc1ab483d818d452c7b1"
+    }
+  ],
+  "db_manifest_sha256": "919990aa4020154427e271788478811e79a6e7fa0ac581bf69dfd75c14840234",
+  "db_regular_files": 96,
+  "db_directories_in_manifest": 40,
+  "db_logical_file_bytes": 2275560,
+  "bootstrap_setup_raw_covered": false,
+  "engine_replay_or_ack_reconciliation_performed": false,
+  "original_3ee_reclassified": false,
+  "strict_gate_limit": "10s round-admission gate, unchanged2s API budget; no final receipt-monotonic hard10s success claim on this frozen source"
+}

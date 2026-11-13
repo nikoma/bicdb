@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "sequence": 4,
+  "process_id": 16243,
+  "host": {
+    "version": 1,
+    "node_id": "n2",
+    "phase": "initial_data",
+    "metadata": {
+      "cluster_id": "native-operator-cli",
+      "node_id": "n2",
+      "role": "follower",
+      "current_term": 1,
+      "voted_for": "n0",
+      "leader_id": "n0",
+      "commit_index": 1,
+      "last_log_index": 1,
+      "last_log_term": 1,
+      "topology_generation": 1,
+      "voters": [
+        "n0",
+        "n1",
+        "n2",
+        "n3"
+      ],
+      "learners": []
+    },
+    "last_enrolled_learner": null,
+    "last_caught_up_learner_store_id": null,
+    "last_metadata_maintenance": null,
+    "last_metadata_promotion": null,
+    "initial_data": {
+      "receiver_listening": true,
+      "writer_policy_current": true,
+      "dispatcher_published": true,
+      "strong_readiness": "request-scoped fresh MQ/data QQ/MVCC/final MQ; publication is not readiness",
+      "replica_readiness": "actual policy/native/refusal checks at every replica RPC",
+      "ranges": [
+        {
+          "range_id": 1,
+          "epoch": 1,
+          "local_leader": false,
+          "leader_admission_observed": false
+        },
+        {
+          "range_id": 2,
+          "epoch": 1,
+          "local_leader": true,
+          "leader_admission_observed": true
+        },
+        {
+          "range_id": 4,
+          "epoch": 1,
+          "local_leader": false,
+          "leader_admission_observed": false
+        }
+      ],
+      "cleanup_quarantined_owners": 0
+    },
+    "data_serving": true,
+    "data_refusal": "initial native point DATA only; Strong readiness is request-scoped; SQL/scan/placement/joint operations unsupported"
+  },
+  "error": null,
+  "data_serving": true
+}

@@ -1,0 +1,70 @@
+{
+  "compile_checks": "all-target and isolated consumer passed at exact source",
+  "core_job_id": 131393411593,
+  "files": {
+    "github-core-job.log.gz": {
+      "bytes": 244315,
+      "sha256": "ed2dac19e2d5414ed480141e5406d4f693495be7c2a73092a5b099352d144995"
+    },
+    "inclusive-stage-counts.json": {
+      "bytes": 9581,
+      "sha256": "6a6fae60cf4af55807f4fd30880b45b20e49c9cbb1e502022b577065e67a903f"
+    },
+    "rustc.txt": {
+      "bytes": 196,
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    "selected-tests.log.gz": {
+      "bytes": 18995,
+      "sha256": "81af4d1360aa15431b2da6391762082a1047e3b5f18b95960d043f97827940cd"
+    },
+    "source-from-main488.patch.gz": {
+      "bytes": 1003085,
+      "sha256": "84a11dcba7e646aa9fd0abe4b98e360132f5daedc5cd9930ef8c307f1cbe6fe1"
+    },
+    "source-inputs.json.gz": {
+      "bytes": 179929,
+      "sha256": "b24a9528c812051950b4a798778d2e0164e613665c70cf76989ccb269df28790"
+    },
+    "source-revision.txt": {
+      "bytes": 41,
+      "sha256": "5f7faa9427cf879015422859850682daf6ade1fff7e1f8e4c5e4f0b56e3273e7"
+    },
+    "tests.log.gz": {
+      "bytes": 53566,
+      "sha256": "239d56ab649280bf79b1bc8e69efa1df96341140f5aab5697f7c0e90ebca0a92"
+    }
+  },
+  "private_custody": {
+    "artifact_id": 13971054152,
+    "atomic_powerloss_snapshot_or_replay_verified": false,
+    "engine_reopened": false,
+    "manifest_sha256": "b74f2a0b1c1bc10722b6293c7c16d144596d33eb101cb14d1c6b027c0144a9df",
+    "source_revision": "fd85a24392abf8a273479f8637e040523c053109",
+    "status": "captured_observed_stable_with_live_engine_owners",
+    "verified_bytes": 6100203,
+    "verified_files": 82,
+    "zip_sha256": "c33eaee85c576a437d6e52dd54c052f56752d3b9b16e9139e646ce95bece2b74"
+  },
+  "public_base_revision": "d1d816afe0446b2a614c38004738d3d1c8bbc547",
+  "result": {
+    "activation_ack4_strong_r4_reached": false,
+    "classification": "FAILED_FULL_RECOVERY_AFTER_N1_COMPLETED_FROZEN_REPLY_AND_N2_COMPLETION_REPLY_UNCERTAINTY",
+    "elapsed_seconds": 83.78,
+    "failed": 1,
+    "filtered_out": 932,
+    "ignored": 0,
+    "n1_complete_reply_returned": true,
+    "n1_original_budget_remaining_ms": 226,
+    "n2_catalogue_fsync_original_budget_remaining_ms": 39,
+    "n3_complete_attempted": false,
+    "passed": 0
+  },
+  "run_id": 43278537440,
+  "source_input_bytes": 44499788,
+  "source_input_files": 2370,
+  "source_revision": "fd85a24392abf8a273479f8637e040523c053109",
+  "source_scope": "complete selected workspace build inputs reconstructed from public main488; not an all-repository documentation snapshot or a built binary",
+  "source_version": "1.0.489-beta",
+  "timing_warning": "detail stages are nested/inclusive; do not add overlapping totals; instrumentation adds overhead"
+}

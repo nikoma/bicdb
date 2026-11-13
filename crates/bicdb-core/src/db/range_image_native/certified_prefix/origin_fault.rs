@@ -7,14 +7,21 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{OnceLock, Weak};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ProbeMode {
+    InjectBeforeWal,
+    ObserveOnly,
+}
 #[derive(Debug)]
 struct AdmissionObservation {
+    elapsed_ns: u128,
     transaction_id: u64,
     ticket_command_id: String,
     ticket_authority: String,
 }
 #[derive(Debug)]
 struct CoreObservation {
+    elapsed_ns: u128,
     result: &'static str,
     error: Option<String>,
     unknown_sequence: Option<u64>,
@@ -22,6 +29,9 @@ struct CoreObservation {
 }
 #[derive(Debug)]
 pub(crate) struct NativeOriginFaultProbe {
+    mode: ProbeMode,
+    span_started: OnceLock<std::time::Instant>,
+    span_elapsed_ns: OnceLock<u128>,
     database_incarnation: String,
     actual_open: Weak<()>,
     range_id: RangeId,
@@ -39,6 +49,9 @@ pub(crate) struct NativeOriginFaultProbe {
     diagnostic_integrity_error: AtomicBool,
 }
 impl NativeOriginFaultProbe {
+    pub(crate) fn app_span_ended(&self) -> bool {
+        self.span_ended.load(Ordering::Acquire)
+    }
     /// Call only from the external test after dropping engine guards. This
     /// projection is diagnostic DATA; it cannot authorize any engine action.
     pub(crate) fn snapshot(&self) -> serde_json::Value {
@@ -53,6 +66,10 @@ impl NativeOriginFaultProbe {
         let core = self.core.get();
         serde_json::json!({
             "scope":"cfg(test) actual receiver observations only; no authority",
+            "mode":format!("{:?}",self.mode),
+            "actual_span_elapsed_ns":self.span_elapsed_ns.get().copied().or_else(||self.span_started.get().map(|s|s.elapsed().as_nanos())),
+            "actual_admission_elapsed_ns":admission.map(|f|f.elapsed_ns),
+            "actual_Core_return_elapsed_ns":core.map(|f|f.elapsed_ns),
             "database_open_incarnation":self.database_incarnation,
             "actual_open_alive":self.actual_open.upgrade().is_some(),
             "requested_range_id":self.range_id,
@@ -160,6 +177,10 @@ impl NativeOriginAppSpan {
         if probe
             .core
             .set(CoreObservation {
+                elapsed_ns: probe
+                    .span_started
+                    .get()
+                    .map_or(0, |s| s.elapsed().as_nanos()),
                 result: result_kind,
                 error,
                 unknown_sequence: sequence,
@@ -188,6 +209,12 @@ impl Drop for NativeOriginAppSpan {
         ACTIVE.with(|slot| {
             slot.replace(self.previous.take());
         });
+        let _ = probe.span_elapsed_ns.set(
+            probe
+                .span_started
+                .get()
+                .map_or(0, |s| s.elapsed().as_nanos()),
+        );
         probe.span_ended.store(true, Ordering::Release);
     }
 }
@@ -198,6 +225,23 @@ impl BicDb {
         range_id: RangeId,
         namespace: &str,
         key: &str,
+    ) -> Result<NativeOriginFaultArm> {
+        self.test_register_native_origin_probe(range_id, namespace, key, ProbeMode::InjectBeforeWal)
+    }
+    pub(crate) fn test_observe_native_origin_attempt(
+        &self,
+        range_id: RangeId,
+        namespace: &str,
+        key: &str,
+    ) -> Result<NativeOriginFaultArm> {
+        self.test_register_native_origin_probe(range_id, namespace, key, ProbeMode::ObserveOnly)
+    }
+    fn test_register_native_origin_probe(
+        &self,
+        range_id: RangeId,
+        namespace: &str,
+        key: &str,
+        mode: ProbeMode,
     ) -> Result<NativeOriginFaultArm> {
         let record_id = crate::cluster_event_record_id(namespace, key)?;
         let mut registry = self
@@ -212,6 +256,9 @@ impl BicDb {
             return Err(invalid("test origin fault already armed"));
         }
         let probe = Arc::new(NativeOriginFaultProbe {
+            mode,
+            span_started: OnceLock::new(),
+            span_elapsed_ns: OnceLock::new(),
             database_incarnation: self.incarnation.clone(),
             actual_open: self.native_metadata_owner_open_lifetime(),
             range_id,
@@ -272,6 +319,13 @@ impl BicDb {
             probe.armed.store(false, Ordering::Release);
             return None;
         }
+        if probe.span_started.set(std::time::Instant::now()).is_err() {
+            probe
+                .diagnostic_integrity_error
+                .store(true, Ordering::Release);
+            probe.armed.store(false, Ordering::Release);
+            return None;
+        }
         let active = Active { probe, span_id };
         let previous = ACTIVE.with(|slot| slot.replace(Some(active.clone())));
         Some(NativeOriginAppSpan {
@@ -318,6 +372,10 @@ impl BicDb {
         if probe
             .admission
             .set(AdmissionObservation {
+                elapsed_ns: probe
+                    .span_started
+                    .get()
+                    .map_or(0, |s| s.elapsed().as_nanos()),
                 transaction_id: transaction.id().0,
                 ticket_command_id: ticket.command_id.clone(),
                 ticket_authority: ticket.authority.clone(),
@@ -327,6 +385,9 @@ impl BicDb {
             probe
                 .diagnostic_integrity_error
                 .store(true, Ordering::Release);
+            return false;
+        }
+        if probe.mode == ProbeMode::ObserveOnly {
             return false;
         }
         probe.fired.store(true, Ordering::Release);
@@ -342,7 +403,7 @@ pub(in crate::db) fn test_record_origin_release(
         return;
     };
     let probe = &active.probe;
-    if !probe.fired.load(Ordering::Acquire) {
+    if !probe.fired.load(Ordering::Acquire) && probe.mode != ProbeMode::ObserveOnly {
         return;
     }
     if probe.span_id.get() == Some(&active.span_id)

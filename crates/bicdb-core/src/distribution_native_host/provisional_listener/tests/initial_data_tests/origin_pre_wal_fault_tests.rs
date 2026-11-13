@@ -237,7 +237,7 @@ fn run(
     let next_value =
         serde_json::json!({"next":"requires autonomous native tail recovery","nested":[true,null]});
     check(
-        append(journal, &client, &old, &old_value)?,
+        initial_append_observation::append(f, journal, &client, &range, &old, &old_value)?,
         "first external ACK missing",
     )?;
     check(
@@ -615,3 +615,5 @@ fn native_initial_data_origin_fault_arm_drop_revokes_retained_probe_without_eras
 }
 
 mod one_peer_loss_tests;
+
+mod initial_append_observation;

@@ -678,3 +678,39 @@ not rewrite format metadata, strip other flags or open the original native DB.
 Current Core evidence is still path-only; hosted teardown loses the actual db2
 unless a separate bounded, all-owners-stopped custody producer succeeds. It must
 copy only the actual recorded db2 data path, never the fixture's TLS ancestors.
+
+### Initial APP uncertainty observation (test-only, source not executed)
+
+The composed 9b source produced three first-APP failures before any injected
+fault: two incomplete timed-out APP replies followed by an actual authenticated
+record-lock conflict. The a4bc lost-Prepare case instead contains three timed-out
+APP attempts, six successful discovery attempts and no authenticated lock-conflict
+reply. Its original API noACK arrived at 2,000,065,074ns. Neither case establishes
+a transaction cleanup defect or rollback; sender timeout can outlive server work.
+Original failed assertions, source identities, complete journals and uncertainty
+classifications remain unchanged. Native DB/binary custody was not retained.
+
+The diagnostic successor adds an ObserveOnly mode to the existing actual-open,
+weakly registered test probe. It never injects an error, marks a fault fired,
+clears a lock or grants authority. Immutable once-published facts retain the
+first actual APP span/ticket/Core result/release/normal handler EXIT and their
+monotonic elapsed times. Polling uses an Acquire terminal marker without an
+observation mutex or repeated JSON construction. Arm Drop still revokes exactly
+its own registration without waiting. Production code is unchanged: the entire
+probe module and both caller changes are test-only.
+
+Only the first old-value APP in the original runner and child scenario runner
+uses the wrapper. It invokes the original public APP helper exactly once with
+the original two-second per-RPC/attempt setting and records its unaltered result.
+Only an error receives a separate bounded six-second post-API diagnostic wait;
+this is neither a retry nor an extension of that request. Best-effort actual
+command/native-prefix/full-record inspection uses try-borrows after dropping the
+service guard; row presence/catalogue state alone is explicitly not a native
+materialization proof. Diagnostic failure is reported separately and never
+erases an established API ACK or changes noACK into rollback/success.
+
+This is a declared observational delta to the previously byte-identical original
+test body: one old-value call substitution plus its child module declaration.
+The fault, health gates, assertions, retry policy and request budgets are not
+changed. Historical 721/8334 and composed 9b/a4bc execution receipts are immutable.
+No local build or new hosted execution qualifies these diagnostics yet.

@@ -115,7 +115,7 @@ fn run_one_peer_loss(
         serde_json::json!({"next":"requires autonomous native tail recovery","nested":[true,null]});
     *stage = "actual_old_ack_and_strong_with_controller_held";
     check(
-        append(journal, &client, &old, &old_value)?,
+        super::initial_append_observation::append(f, journal, &client, &range, &old, &old_value)?,
         "first external ACK missing",
     )?;
     check(

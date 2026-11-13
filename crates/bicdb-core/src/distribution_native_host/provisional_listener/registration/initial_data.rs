@@ -48,6 +48,9 @@ pub(crate) struct NativeInitialDataAdmission {
     service: Weak<Mutex<ClusterDataNodeService>>,
     runtime: Weak<RangeRecoveryRuntime>,
     writer: Arc<NativeWriterHostState>,
+    // Captured from the actual original service when this DATA owner is
+    // constructed. Readonly OLD observations cannot replace its DB open.
+    database: crate::distribution_data::ClusterServiceOpenGuard,
     root: PathBuf,
     store_open: Uuid,
     // Actual service SLOT identity, not merely a live removed Store/old ID.
@@ -69,6 +72,7 @@ impl NativeInitialDataAdmission {
         {
             return Err(invalid("initial DATA owner is stopping or ended"));
         }
+        self.database.require_live()?;
         self.store_slot.require_live()?;
         if self.store_slot.id() != self.store_open {
             return Err(invalid("initial DATA actual Store slot/open differs"));
@@ -322,6 +326,7 @@ impl NativeInitialDataHost {
                 service: Arc::downgrade(&self.initial.service),
                 runtime: Arc::downgrade(runtime),
                 writer,
+                database: service.listener_open_guard(),
                 root,
                 store_open: service.native_initial_listener_store_open_id(),
                 store_slot: service.native_replica_listener_store_open_guard(),

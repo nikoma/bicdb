@@ -42,7 +42,6 @@ impl NativeUnassignedLearnerFactory {
                 range.required_schema_sha256(&topology.nodes)
                     != Some(self.manifest.schema_sha256.as_str())
             })
-            || db.commit_admission_ready()
         {
             return Err(invalid(
                 "assigned CLOSED receiver original DB/birth/schema/no-writer differs",
@@ -53,16 +52,7 @@ impl NativeUnassignedLearnerFactory {
         if db.current_commit_seq() != 0 || !db.native_abort_slot_inventory()?.is_empty() {
             return Err(invalid("assigned CLOSED initial receiver has protected business obligations; populated continuation unsupported"));
         }
-        for range in topology.ranges.values() {
-            let point = db.native_range_prefix_observation(range.id)?;
-            if point.native_applied_index.is_some()
-                || point.pending_command_index.is_some()
-                || point.materialized_pending_index.is_some()
-                || point.invalidated
-            {
-                return Err(invalid("assigned CLOSED initial receiver has an existing native domain; no floor reset"));
-            }
-        }
+        db.require_original_registered_receiver_domain(&native)?;
         db.check_recovery_state()?;
         observed.require_live_request(business)
     }

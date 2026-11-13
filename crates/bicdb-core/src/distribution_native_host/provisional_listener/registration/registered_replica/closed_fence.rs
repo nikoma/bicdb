@@ -85,7 +85,7 @@ impl NativeRegisteredReplicaAdmission {
         Ok(result)
     }
 }
-impl NativeAssignedRegisteredClosedFence<'_> {
+impl<'op> NativeAssignedRegisteredClosedFence<'op> {
     #[cfg(test)]
     pub(crate) fn test_old_cold_context_refusal(
         &self,
@@ -224,7 +224,9 @@ impl NativeAssignedRegisteredClosedFence<'_> {
     pub(crate) fn with_original_hook_persist<R>(
         &self,
         db: &BicDb,
-        operation: impl FnOnce() -> Result<R>,
+        operation: impl for<'scope> FnOnce(
+            &crate::db::NativeRegisteredClosedPersistScope<'scope, 'op>,
+        ) -> Result<R>,
     ) -> Result<R> {
         self.admission
             .original_hook
@@ -238,10 +240,29 @@ impl NativeAssignedRegisteredClosedFence<'_> {
         }
         self.require_live()
     }
+    pub(crate) fn require_database_store_under_persist(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        scope: &crate::db::NativeRegisteredClosedPersistScope<'_, '_>,
+    ) -> Result<()> {
+        scope.require_capability(self, db)?;
+        self.require_database_facts(db)?;
+        if store.native_writer_store_open_id() != self.admission.store.id() {
+            return Err(invalid(
+                "registered CLOSED persistence actual Store changed",
+            ));
+        }
+        scope.require_capability(self, db)
+    }
     pub(crate) fn require_database(&self, db: &BicDb) -> Result<()> {
         self.require_live()?;
-        self.admission.database.require_database(db)?;
         self.admission.original_hook.require_current(db)?;
+        self.require_database_facts(db)
+    }
+    fn require_database_facts(&self, db: &BicDb) -> Result<()> {
+        self.require_live()?;
+        self.admission.database.require_database(db)?;
         self.admission.store.require_live()?;
         if db.incarnation_id() != self.admission.database_incarnation {
             return Err(invalid(

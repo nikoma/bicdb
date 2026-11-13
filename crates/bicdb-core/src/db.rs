@@ -97,6 +97,8 @@ pub(crate) use range_image_native::rf3_fixture::{
     ActualNativeRf3Fixture, ActualNativeRf3RpcObservation,
 };
 pub(crate) use range_image_native::NativeInitialDataGenesis;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeRegisteredClosedPersistScope;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
     FreshNativeCatalogueBootstrap, FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard,

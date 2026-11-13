@@ -120,3 +120,55 @@ Persist may block in the underlying OS fsync; original checks after it can
 refuse the reply without undoing the durable refusal. No hard I/O bound or
 stalled-range isolation is claimed. The current full-goal gates and all earlier
 failed evidence stay separate from this first fence producer.
+
+
+## Corrected sink and UNKNOWN-domain successor (source only)
+
+Independent review blocked `40e82a949` before any build: its generic persist
+still required a writer, and its diagnostic `invalidated` prerequisite rejected
+the actual unassigned target. Neither was an executed producer result.
+
+The refusal sink now stages the SAME existing Active record fields separately
+from persistence. Ordinary `persist_with` retains its exact writer checks. A
+separate private sink requires a real HRTB !Send borrowed actual admission/hook
+scope. Full original cap/DB/Store/root/fsync/format/loaded-custody/native record,
+Frozen, role and caller checks surround actual write+fsync. Actual current-file
+readback verifies envelope checksum and the complete updated catalogue before
+return. Hook lookup is validated through the held actual guard, never a caller
+skip flag, avoiding recursive hook reads. The uncertainty flag is set before
+this sink and cleared only after its checked exit. Any I/O or post-write guard
+error retains the in-memory/durable refusal and uncertainty; no older catalogue
+is restored. Exact live same-operation re-fsync is supported, not lease renewal.
+
+Absence of lineage and durable invalidation share the existing diagnostic
+`invalidated=true`; it is no longer mistaken for a trusted no-domain predicate.
+A DB-private check under the actual native journal requires the actual original
+no-INITIAL-ranges birth and READY's matching birth/empty genesis inventory. It
+then scans only the protected native namespace, bounded to the four known
+original records: birth, READY, Registered metadata identity and abort-catalogue
+identity. All must exist. Any other native record conservatively refuses,
+including range/global invalidation, install marker/base, prefix/pending,
+history, serving or slot controls. This is combined with the actual protected
+Registered proof, original namespaces/schema/open/registration and Store slot;
+it is not a grant from absent counters. The reply and generic diagnostic stay
+UNKNOWN/invalidated with None floor; no R0 is fabricated. Populated-domain
+continuation remains unsupported and needs its own obligation-preserving proof.
+
+Nine distinct controls now follow the unchanged actual two-range prerequisite.
+Additional controls perform real file+directory fsync followed by original
+caller cancellation, and real fsync followed by injected I/O uncertainty. Both
+require actual write reach, original live-at-write deadlines and checksum-verified
+memory/disk refusal equality; only scope provenance may change, with every
+native/row/slot/UID/B fact unchanged. The I/O case requires exact re-fsync using
+the SAME original still-live cap/role/caller, and the canceled case never refreshes
+its proof. The Store restoration control invokes the actual mutation producer
+and proves its write callback was not reached. Finally, the real production
+invalidation producer writes an actual durable marker under the actual journal;
+the otherwise-live protected Registered owner must then refuse precisely at
+native-domain validation. No fabricated DTO/marker or relaxed diagnostic is used.
+
+Actual generic sink bytes, default witness and deadlines remain unchanged apart
+from private common record-field extraction. Scope construction performs no
+metadata/network operation, native journal reads are nonwaiting, and no callback
+contains engine reentry/network. These are source controls only, not executed
+results, hard I/O bounds, old-binary qualification or assigned cold support.

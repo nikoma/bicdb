@@ -71,3 +71,34 @@ impl ClusterDataNodeService {
         })
     }
 }
+
+#[cfg(test)]
+impl ClusterDataNodeService {
+    pub(crate) fn test_registered_closed_sink(
+        &mut self,
+        capability: &NativeAssignedRegisteredClosedFence<'_>,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        parent: &crate::CancellationToken,
+        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+    ) -> Result<()> {
+        parent.check()?;
+        self.range_mutations
+            .validate_quiescent_frozen(capability.scope().range_id, frozen)?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        let role = capability.role();
+        let native = db.native_recovery_admission(
+            role.cluster_id(),
+            role.bootstrap_id(),
+            role.local_node_id(),
+            role.local_member_incarnation(),
+        )?;
+        native.require_current(&db)?;
+        let store = self.range_writes.current_mut();
+        db.with_assigned_closed_writer_exclusion(capability, || {
+            store.test_registered_closed_sink(&db, &native, capability, frozen, write)
+        })
+    }
+    pub(crate) fn test_registered_closed_persistence_state(&self) -> Result<serde_json::Value> {
+        self.range_writes.test_registered_closed_persistence_state()
+    }
+}

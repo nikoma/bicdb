@@ -1305,6 +1305,15 @@ impl RangeWriteStore {
         scope: &RecoveryFenceScope,
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
     ) -> Result<()> {
+        self.install_recovery_fence_record(role, native, scope);
+        self.persist_recovery_catalog_with(write)
+    }
+    fn install_recovery_fence_record(
+        &mut self,
+        role: &RecoveryRoleAdmission,
+        native: &NativeRecoveryAdmission,
+        scope: &RecoveryFenceScope,
+    ) {
         self.native_activated_opens.remove(&scope.range_id);
         let log = self
             .catalog
@@ -1356,9 +1365,8 @@ impl RangeWriteStore {
                 retired_nonces,
             },
         );
-        // Retain this refusal on any rename/directory-sync ambiguity. Retrying
-        // always re-fsyncs before any fresh quorum acknowledgment is issued.
-        self.persist_recovery_catalog_with(write)
+        // Caller retains this refusal through any rename/directory-sync or
+        // post-write guard ambiguity; no rollback over uncertainty is allowed.
     }
     pub(crate) fn require_recovery_scope(
         &self,

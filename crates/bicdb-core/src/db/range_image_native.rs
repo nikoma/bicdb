@@ -28,7 +28,10 @@ mod history_stage;
 pub(crate) use history_stage::ClosedImageOriginalWriter;
 mod installed_anchor;
 mod native_read;
+mod registered_receiver_domain;
 mod writer_enrollment;
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeRegisteredClosedPersistScope;
 pub(crate) use writer_enrollment::{
     InstalledNativeWriterHostGuard, NativeRegisteredReceiverHook, NativeWriterHostState,
 };

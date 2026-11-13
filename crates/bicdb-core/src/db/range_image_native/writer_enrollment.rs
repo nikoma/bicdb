@@ -290,25 +290,74 @@ impl NativeRegisteredReceiverHook {
         self.require_borrowed(database, &hook)
     }
     #[cfg(feature = "tls-replication")]
-    pub(crate) fn with_persist<R>(
+    pub(crate) fn with_persist<'op, R>(
         &self,
         database: &BicDb,
-        capability: &crate::distribution_native_host::NativeAssignedRegisteredClosedFence<'_>,
-        operation: impl FnOnce() -> Result<R>,
+        capability: &crate::distribution_native_host::NativeAssignedRegisteredClosedFence<'op>,
+        operation: impl for<'scope> FnOnce(
+            &NativeRegisteredClosedPersistScope<'scope, 'op>,
+        ) -> Result<R>,
     ) -> Result<R> {
-        // This guard also excludes generic install/clear (which do not take
-        // serializable_commit_admission). Do not recursively inspect the hook
-        // inside the callback: it performs ONLY the actual raw refusal persist.
+        let admission = database
+            .serializable_commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("registered CLOSED admission busy at actual sink"))?;
         let hook = database
             .commit_admission
             .try_read()
-            .ok_or_else(|| invalid("registered receiver hook busy before persist"))?;
-        self.require_borrowed(database, &hook)?;
-        capability.require_live()?;
-        let result = operation()?;
-        self.require_borrowed(database, &hook)?;
-        capability.require_live()?;
+            .ok_or_else(|| invalid("registered CLOSED hook busy at actual sink"))?;
+        let scope = NativeRegisteredClosedPersistScope {
+            database,
+            capability,
+            original: self,
+            hook,
+            _admission: admission,
+            _local: std::marker::PhantomData,
+        };
+        scope.require_capability(capability, database)?;
+        let result = operation(&scope)?;
+        scope.require_capability(capability, database)?;
         Ok(result)
+    }
+}
+
+/// Actual borrowed original-hook exclusion. Constructor and guards are private;
+/// HRTB callback cannot return this !Send scope or a reusable checked permit.
+#[cfg(feature = "tls-replication")]
+pub(crate) struct NativeRegisteredClosedPersistScope<'scope, 'op> {
+    database: &'scope BicDb,
+    capability: &'scope crate::distribution_native_host::NativeAssignedRegisteredClosedFence<'op>,
+    original: &'scope NativeRegisteredReceiverHook,
+    hook:
+        parking_lot::RwLockReadGuard<'scope, crate::db::commit_admission_hook::CommitAdmissionSlot>,
+    _admission: parking_lot::RwLockReadGuard<'scope, ()>,
+    _local: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+#[cfg(feature = "tls-replication")]
+impl NativeRegisteredClosedPersistScope<'_, '_> {
+    pub(crate) fn require_capability(
+        &self,
+        capability: &crate::distribution_native_host::NativeAssignedRegisteredClosedFence<'_>,
+        database: &BicDb,
+    ) -> Result<()> {
+        if !std::ptr::eq(database, self.database) || !std::ptr::eq(capability, self.capability) {
+            return Err(invalid(
+                "registered CLOSED persistence scope changed actual DB/capability",
+            ));
+        }
+        self.original.require_borrowed(database, &self.hook)?;
+        database.require_never_installed_receiver_writer_records()?;
+        capability.require_live()
+    }
+    pub(crate) fn require_current(
+        &self,
+        database: &BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<()> {
+        self.require_capability(self.capability, database)?;
+        self.capability
+            .require_database_store_under_persist(database, store, self)?;
+        self.require_capability(self.capability, database)
     }
 }
 

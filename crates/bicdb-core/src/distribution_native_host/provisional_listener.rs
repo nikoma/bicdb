@@ -18,7 +18,9 @@ pub use registration::NativeRegisteredReplicaReceiverStatus;
 #[cfg(test)]
 pub(crate) use registration::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
 pub(crate) use registration::{
-    NativeAssignedRegisteredClosedFence, NativeRegisteredReplicaAdmission,
+    NativeAssignedDataAdmission, NativeAssignedDataPolicyOrigin,
+    NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission,
+    NativeRegisteredReplicaAdmission,
 };
 pub(crate) use registration::{
     NativeInitialDataAdmission, NativeInitialOldStep, NativeMetadataControlHost,

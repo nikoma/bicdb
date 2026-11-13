@@ -597,7 +597,9 @@ pub use provisional_listener::{NativeInitialDataRangeStatus, NativeInitialDataSt
 pub use provisional_listener::NativeRegisteredReplicaReceiverStatus;
 #[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::{
-    NativeAssignedRegisteredClosedFence, NativeRegisteredReplicaAdmission,
+    NativeAssignedDataAdmission, NativeAssignedDataPolicyOrigin,
+    NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission,
+    NativeRegisteredReplicaAdmission,
 };
 
 #[cfg(all(test, feature = "tls-replication"))]

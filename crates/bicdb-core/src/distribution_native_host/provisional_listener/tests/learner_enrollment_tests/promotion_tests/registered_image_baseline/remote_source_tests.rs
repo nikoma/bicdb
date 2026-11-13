@@ -40,6 +40,11 @@ pub(super) enum SourceCase {
     TargetImageRowsPostWalCanceled,
     TargetImageRowsApplyFailed,
     RemoteConstraintCapture,
+    RemoteOldCollectorExpiredObservation,
+    RemoteOldCollectorUnrelatedAdvance,
+    RemoteOldCollectorPlanChanged,
+    RemoteOldCollectorDonorRevoked,
+    RemoteOldCollectorCallerCanceled,
 }
 #[test]
 fn native_registered_fifth_remote_source_actual_tls_history_rows_seal_local_old_seed() {
@@ -78,6 +83,41 @@ fn native_registered_fifth_remote_old_constraint_only_guarded_capture_is_not_clo
         Some(SourceCase::RemoteConstraintCapture),
     );
 }
+#[test]
+fn native_registered_fifth_remote_old_collector_actual_fresh_final_mq_after_observation_expiry() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::RemoteOldCollectorExpiredObservation),
+    );
+}
+#[test]
+fn native_registered_fifth_remote_old_collector_actual_unrelated_metadata_advance_is_allowed() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::RemoteOldCollectorUnrelatedAdvance),
+    );
+}
+#[test]
+fn native_registered_fifth_remote_old_collector_actual_selected_plan_phase_change_refuses() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::RemoteOldCollectorPlanChanged),
+    );
+}
+#[test]
+fn native_registered_fifth_remote_old_collector_actual_original_donor_revocation_refuses() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::RemoteOldCollectorDonorRevoked),
+    );
+}
+#[test]
+fn native_registered_fifth_remote_old_collector_actual_original_caller_cancellation_refuses() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::RemoteOldCollectorCallerCanceled),
+    );
+}
 // The later target-history/row cases exercise the actual production remote
 // collector. Local OLD API cases retain their original finite issuance
 // contract and are deliberately not switched to this lane.
@@ -91,6 +131,11 @@ pub(super) fn uses_actual_remote_old_seed(case: SourceCase) -> bool {
             | SourceCase::TargetImageRowsPreWalCanceled
             | SourceCase::TargetImageRowsPostWalCanceled
             | SourceCase::TargetImageRowsApplyFailed
+            | SourceCase::RemoteOldCollectorExpiredObservation
+            | SourceCase::RemoteOldCollectorUnrelatedAdvance
+            | SourceCase::RemoteOldCollectorPlanChanged
+            | SourceCase::RemoteOldCollectorDonorRevoked
+            | SourceCase::RemoteOldCollectorCallerCanceled
     )
 }
 fn actual_role(
@@ -330,21 +375,24 @@ fn frame(
         }
     }
 }
+#[allow(clippy::too_many_arguments)]
 fn remote_old_seed(
-    fault_after_native: bool,
+    case: SourceCase,
     controls: &[NativeMetadataControlHost],
     clients: &[Arc<TcpClusterRelocationTransport>],
     services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
+    metadata: &[Arc<Mutex<crate::MetadataConsensusStore>>],
     plan: &Arc<NativeJointHandoffPlan>,
     process: &CancellationToken,
     output: &std::path::Path,
     journal: &mut Vec<serde_json::Value>,
-) -> (
+) -> Option<(
     usize,
     crate::distribution_range_image::NativeRetainedRemoteImageSource,
     Instant,
-) {
+)> {
     use crate::distribution_range_handoff::{NativeRemoteOldOperationV1, NativeRemoteOldRequestV1};
+    let fault_after_native = matches!(case, SourceCase::RemoteOldRetainedNative);
     let mut last_closed = Instant::now();
     for (ordinal, recipient) in plan.old_members().keys().enumerate() {
         let native_fault = fault_after_native && ordinal == 0;
@@ -576,8 +624,94 @@ fn remote_old_seed(
     }));
     evidence(&output.join("remote-old-ledger.json"), journal).unwrap();
     let parent = budget(5000);
-    let result =
-        controls[source].collect_initial_remote_old_at_actual_donor(plan.old_range().id, &parent);
+    let mut boundary_observation = serde_json::Value::Null;
+    let collector_control = matches!(
+        case,
+        SourceCase::RemoteOldCollectorExpiredObservation
+            | SourceCase::RemoteOldCollectorUnrelatedAdvance
+            | SourceCase::RemoteOldCollectorPlanChanged
+            | SourceCase::RemoteOldCollectorDonorRevoked
+            | SourceCase::RemoteOldCollectorCallerCanceled
+    );
+    let result = if collector_control {
+        controls[source].test_collect_initial_remote_old_at_actual_donor(
+            plan.old_range().id,
+            &parent,
+            |original_own, original_business, frames| {
+                parent.check()?;
+                for frame in frames {
+                    frame.require_request_live()?;
+                }
+                boundary_observation = serde_json::json!({
+                    "original_context_id":original_own.context_id(),
+                    "original_term":original_own.term(),
+                    "original_read_index":original_own.read_index(),
+                    "case":format!("{case:?}"),
+                    "actual_observe_fetch_completed":true,
+                    "actual_observe_frames":frames.iter().map(|f|f.reply()).collect::<Vec<_>>(),
+                    "original_frame_requests_live_at_fetch":true,
+                });
+                match case {
+                    SourceCase::RemoteOldCollectorExpiredObservation => {
+                        while Instant::now() <= original_own.deadline() {
+                            parent.check()?;
+                            std::thread::sleep(Duration::from_millis(5));
+                        }
+                        assert!(original_own
+                            .require_live_request(original_business)
+                            .is_err());
+                        boundary_observation["original_metadata_authority_expired"] = true.into();
+                    }
+                    SourceCase::RemoteOldCollectorUnrelatedAdvance
+                    | SourceCase::RemoteOldCollectorPlanChanged => {
+                        let mut next = metadata[0].lock().committed_topology().clone();
+                        if matches!(case, SourceCase::RemoteOldCollectorPlanChanged) {
+                            next.relocations
+                                .get_mut(&plan.promise().relocation_id)
+                                .unwrap()
+                                .phase = crate::distribution::RelocationPhase::SnapshotCopying;
+                        } else {
+                            next.ranges
+                                .values_mut()
+                                .find(|r| r.id != plan.old_range().id)
+                                .unwrap()
+                                .approximate_qps += 1;
+                        }
+                        next.generation += 1;
+                        next.validate()?;
+                        let entry = metadata[0].lock().propose_topology(next.clone())?;
+                        controls[0].heartbeat(&parent)?;
+                        controls[0].heartbeat(&parent)?;
+                        for actual in metadata {
+                            let store = actual.lock();
+                            assert!(store.status().commit_index >= entry.index);
+                            assert_eq!(store.committed_topology(), &next);
+                        }
+                        boundary_observation["actual_committed_metadata_index"] =
+                            entry.index.into();
+                        boundary_observation["actual_committed_topology"] =
+                            serde_json::to_value(&next).unwrap();
+                    }
+                    SourceCase::RemoteOldCollectorDonorRevoked => {
+                        services[source]
+                            .lock()
+                            .database()
+                            .read()
+                            .clear_commit_admission();
+                        boundary_observation["actual_original_writer_hook_revoked"] = true.into();
+                    }
+                    SourceCase::RemoteOldCollectorCallerCanceled => {
+                        parent.cancel();
+                        boundary_observation["actual_original_caller_canceled"] = true.into();
+                    }
+                    _ => unreachable!(),
+                }
+                Ok(())
+            },
+        )
+    } else {
+        controls[source].collect_initial_remote_old_at_actual_donor(plan.old_range().id, &parent)
+    };
     let native_after = plan
         .old_members()
         .keys()
@@ -601,22 +735,91 @@ fn remote_old_seed(
     journal[collect_index]["exact_error"] =
         serde_json::to_value(result.as_ref().err().map(ToString::to_string)).unwrap();
     journal[collect_index]["native_after"] = serde_json::to_value(&native_after).unwrap();
+    journal[collect_index]["actual_boundary_observation"] = boundary_observation.clone();
+    if let Ok(actual) = &result {
+        journal[collect_index]["actual_collector"] =
+            actual.test_actual_collector_evidence().clone();
+    }
     journal[collect_index]["native_receipts_unchanged"] =
         serde_json::json!(native_after == native_before);
     evidence(&output.join("remote-old-ledger.json"), journal).unwrap();
     assert_eq!(
         native_after, native_before,
-        "readonly collection preserves exact native xids/bytes"
+        "readonly collection preserves all native record fields, xids and checksums"
     );
+    if matches!(
+        case,
+        SourceCase::RemoteOldCollectorPlanChanged
+            | SourceCase::RemoteOldCollectorDonorRevoked
+            | SourceCase::RemoteOldCollectorCallerCanceled
+    ) {
+        let error = result
+            .err()
+            .expect("actual boundary invalidation must refuse OLD certificate");
+        match case {
+            SourceCase::RemoteOldCollectorPlanChanged => assert!(
+                error.to_string().contains("selected phase changed"),
+                "{error}"
+            ),
+            SourceCase::RemoteOldCollectorDonorRevoked => assert!(
+                error.to_string().contains("registration") || error.to_string().contains("writer"),
+                "{error}"
+            ),
+            SourceCase::RemoteOldCollectorCallerCanceled => {
+                assert!(matches!(error, BicDbError::QueryCanceled), "{error}")
+            }
+            _ => unreachable!(),
+        }
+        return None;
+    }
     let actual = result.unwrap();
     assert_eq!(actual.selected_source_id(), &donor);
+    if collector_control {
+        let final_evidence = actual.test_actual_collector_evidence();
+        assert_ne!(
+            final_evidence["final_context_id"],
+            boundary_observation["original_context_id"]
+        );
+        assert!(
+            final_evidence["final_term"].as_u64().unwrap()
+                >= boundary_observation["original_term"].as_u64().unwrap()
+        );
+        assert!(
+            final_evidence["final_read_index"].as_u64().unwrap()
+                >= boundary_observation["original_read_index"]
+                    .as_u64()
+                    .unwrap()
+        );
+        assert_eq!(
+            final_evidence["actual_observe_frames"]
+                .as_array()
+                .unwrap()
+                .len(),
+            plan.old_members().len()
+        );
+        if matches!(case, SourceCase::RemoteOldCollectorUnrelatedAdvance) {
+            let committed = boundary_observation["actual_committed_metadata_index"]
+                .as_u64()
+                .unwrap();
+            assert!(
+                committed
+                    > boundary_observation["original_read_index"]
+                        .as_u64()
+                        .unwrap()
+            );
+            assert!(final_evidence["final_read_index"].as_u64().unwrap() >= committed);
+        }
+        // Collector controls stop at the actual certificate; they do not
+        // publish a source image or start target installation.
+        return None;
+    }
     let mut actual = Some(actual);
     let retained = controls[source]
         .retain_initial_image_from_remote_old(&mut actual, Uuid::now_v7(), &parent)
         .unwrap();
     assert!(actual.is_none());
     parent.check().unwrap();
-    (source, retained, expiry_bound)
+    Some((source, retained, expiry_bound))
 }
 #[allow(clippy::too_many_arguments)]
 fn constraint_capture_control(
@@ -830,16 +1033,25 @@ pub(super) fn exercise(
                 "target_row_fault_not_yet_exercised":true,
             }));
             evidence(&output.join("remote-old-ledger.json"), &journal).unwrap();
-            remote_old_seed(
-                matches!(case, SourceCase::RemoteOldRetainedNative),
+            let seed = remote_old_seed(
+                case,
                 controls,
                 clients,
                 services,
+                metadata,
                 &plan,
                 process,
                 output,
                 &mut journal,
-            )
+            );
+            let Some(seed) = seed else {
+                assert_eq!(
+                    state(&factory.database, pending, &node(4), ranges).unwrap(),
+                    target_before
+                );
+                return;
+            };
+            seed
         } else {
             let old_indices = plan
                 .old_members()

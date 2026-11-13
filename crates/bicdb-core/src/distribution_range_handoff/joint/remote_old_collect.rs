@@ -24,6 +24,8 @@ pub(crate) struct NativeRemoteOldCutCertificate {
     facts: BTreeMap<ClusterNodeId, NativeJointMaterializedFacts>,
     digest: String,
     cut: Option<CertifiedRangeImageCut>,
+    #[cfg(test)]
+    actual_collector_evidence: serde_json::Value,
 }
 #[derive(Debug)]
 pub(crate) struct NativeRemoteOldImageProof {
@@ -158,6 +160,9 @@ impl NativeRemoteOldRound {
     }
     pub(crate) fn finish(self) -> Result<NativeRemoteOldCutCertificate> {
         self.require_live()?;
+        for frame in self.peers.values() {
+            frame.require_request_live()?;
+        }
         let plan = self.source.plan().clone();
         // This does NOT silently ignore an unavailable or unresolved minority.
         // A separately sealed minority-constraint lane is still required.
@@ -248,6 +253,19 @@ impl NativeRemoteOldRound {
             restore_activation: self.own.restore_activation(self.business)?.cloned(),
         };
         self.require_live()?;
+        for frame in self.peers.values() {
+            frame.require_request_live()?;
+        }
+        #[cfg(test)]
+        let actual_collector_evidence = serde_json::json!({
+            "final_context_id":self.own.context_id(),
+            "final_business":self.business,
+            "final_term":self.own.term(),
+            "final_read_index":self.own.read_index(),
+            "final_topology_generation":self.own.committed_topology(self.business)?.generation,
+            "actual_observe_frames":self.peers.values().map(|frame|frame.reply()).collect::<Vec<_>>(),
+            "projection_is_not_authority":true,
+        });
         Ok(NativeRemoteOldCutCertificate {
             source: self.source,
             plan,
@@ -256,10 +274,16 @@ impl NativeRemoteOldRound {
             facts,
             digest,
             cut: Some(cut),
+            #[cfg(test)]
+            actual_collector_evidence,
         })
     }
 }
 impl NativeRemoteOldCutCertificate {
+    #[cfg(test)]
+    pub(crate) fn test_actual_collector_evidence(&self) -> &serde_json::Value {
+        &self.actual_collector_evidence
+    }
     pub(crate) fn plan(&self) -> Arc<NativeJointHandoffPlan> {
         self.plan.clone()
     }

@@ -600,6 +600,22 @@ impl NativeMetadataControlHost {
             .ok_or_else(|| invalid("actual initial donor absent"))?
             .collect_remote_old_at_actual_donor(range, parent)
     }
+    #[cfg(test)]
+    pub(crate) fn test_collect_initial_remote_old_at_actual_donor(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+        after_fetch: impl FnOnce(
+            &HostMetadataReadObservation,
+            Uuid,
+            &[crate::distribution_transport::AuthenticatedNativeRemoteOldFrame],
+        ) -> Result<()>,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteOldCutCertificate> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual initial donor absent"))?
+            .test_collect_remote_old_at_actual_donor(range, parent, after_fetch)
+    }
     pub(crate) fn retain_initial_image_from_remote_old(
         &self,
         old: &mut Option<crate::distribution_range_handoff::NativeRemoteOldCutCertificate>,

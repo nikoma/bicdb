@@ -128,8 +128,9 @@ fixture additionally selects a nonleader that is not the retiring source.
 Every observed native floor, committed/pending command and ancestry constraint
 remains mandatory in the production collector. Unknown closure refuses the
 certificate. Before/after native records are retained for every OLD member;
-read-only collection must preserve their exact bytes and native transaction
-identities. The original source acknowledgment ledger and target assertions
+read-only collection must preserve every projected field, including protected
+checksums and native transaction identities. These JSON comparisons do not
+independently hash the encoded page-value bytes. The original source acknowledgment ledger and target assertions
 are unchanged.
 
 This is a caller correction to exercise the genuine production remote lane.
@@ -140,3 +141,33 @@ budget can be shortened by the actual listener's finite network deadline;
 the shared TLS fixture currently configures 1,500 ms per exchange. The changed
 fixtures require fresh runtime validation; source inspection is not a passing
 fault test or physical qualification result.
+
+
+## Fresh authority at the production remote collector's final boundary
+
+The production donor now fetches all original authenticated bounded Observe
+frames before acquiring the final collector's fresh OWN. The observation-phase
+OWN is not renewed or used as final authority after expiry. Each original frame
+retains its original request token; record and both finish boundaries require
+that token to remain live. Expired/canceled frames cannot be reconstructed from
+their reply DATA. The actual donor/source process and native closure are checked
+before and after the final round.
+
+The final fresh OWN must satisfy the existing full selected-plan/native-member
+contract: exact selected range/configuration, session/nonce, old/new identities
+and births, target, source schema and restore activation. Selected relocation
+phase must equal the observation-phase phase, and term/index cannot regress.
+Unrelated committed metadata changes are allowed by the existing plan validator;
+there is no new equality check on the entire topology, topology generation or
+read index. A phase/configuration change refuses the cut, without another Close
+or native transaction.
+
+Five new actual TLS fixture controls are source-only at this revision. They
+intend to expire the observation-phase MQ while keeping original Observe callers
+live, commit an unrelated range QPS change, commit a selected relocation phase
+change, revoke the original donor's actual writer hook, and cancel the original
+collector caller. They run the same real post-fetch collector path. Success
+controls require a distinct fresh final context and all actual OLD frames;
+negative controls require no certificate. All compare every actual native OLD
+record before and after. They stop before source image publication or target
+installation. None has been compiled or executed for this changed source yet.

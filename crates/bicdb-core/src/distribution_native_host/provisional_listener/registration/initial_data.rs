@@ -479,6 +479,20 @@ impl NativeInitialDataHost {
         range: crate::RangeId,
         parent: &CancellationToken,
     ) -> Result<crate::distribution_range_handoff::NativeRemoteOldCutCertificate> {
+        self.collect_remote_old_at_actual_donor_inner(range, parent, |_, _, _| Ok(()))
+    }
+    // The callback is a source-test seam at the actual post-fetch boundary.
+    // It holds no engine/MStore lock and cannot replace any frame or grant.
+    fn collect_remote_old_at_actual_donor_inner(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+        after_fetch: impl FnOnce(
+            &HostMetadataReadObservation,
+            Uuid,
+            &[crate::distribution_transport::AuthenticatedNativeRemoteOldFrame],
+        ) -> Result<()>,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteOldCutCertificate> {
         use crate::distribution_range_handoff::{
             NativeRemoteOldOperationV1, NativeRemoteOldRequestV1, NativeRemoteOldRound,
         };
@@ -502,7 +516,19 @@ impl NativeInitialDataHost {
             Duration::from_secs(5),
             &token,
         )?;
-        let mut round = NativeRemoteOldRound::begin(actual, own, business, &token)?;
+        // This first fresh OWN binds the observation phase, not the final
+        // collector lifetime. Retain only necessary monotonic/phase DATA;
+        // unrelated range metadata changes need not invalidate this cut.
+        plan.require_source_host_metadata(&own, business, actual.node_id())?;
+        let started_term = own.term();
+        let started_index = own.read_index();
+        let started_phase = own
+            .committed_topology(business)?
+            .relocations
+            .get(&plan.promise().relocation_id)
+            .ok_or_else(|| invalid("remote OLD observation phase disappeared"))?
+            .phase;
+        let mut frames = Vec::with_capacity(plan.old_members().len());
         for node in plan.old_members().keys() {
             token.check()?;
             let business = Uuid::now_v7();
@@ -523,16 +549,81 @@ impl NativeInitialDataHost {
                 business,
                 remaining.as_millis().min(4000).max(1) as u64,
             )?;
-            let actual = self
+            let frame = self
                 .initial
                 .transport
                 .request_remote_native_old(node, &plan, &request, &own, &token)?;
-            round.record(actual)?;
+            frame.require_request_live()?;
+            frames.push(frame);
+        }
+        after_fetch(&own, business, &frames)?;
+        token.check()?;
+        self.admission_for_old_step()?.require_live()?;
+        self.image_sources
+            .as_ref()
+            .ok_or_else(|| invalid("actual donor source process absent after OLD fetch"))?
+            .require_original_process()?;
+        actual.require_current()?;
+        for frame in &frames {
+            frame.require_request_live()?;
+        }
+        let remaining = token
+            .deadline()
+            .unwrap()
+            .checked_duration_since(Instant::now())
+            .ok_or(BicDbError::QueryTimedOut)?;
+        // Fresh final authority is acquired AFTER the bounded remote reads.
+        // None of their original request tokens or authenticated owners is
+        // reissued or relabeled. A canceled/expired frame still refuses below.
+        let final_business = Uuid::now_v7();
+        let final_own = self.initial.transport.acquire_host_metadata_observation(
+            &leader,
+            final_business,
+            remaining,
+            &token,
+        )?;
+        plan.require_source_host_metadata(&final_own, final_business, actual.node_id())?;
+        let final_phase = final_own
+            .committed_topology(final_business)?
+            .relocations
+            .get(&plan.promise().relocation_id)
+            .ok_or_else(|| invalid("remote OLD final Pending phase disappeared"))?
+            .phase;
+        if final_own.term() < started_term
+            || final_own.read_index() < started_index
+            || final_phase != started_phase
+        {
+            return Err(invalid(
+                "remote OLD final metadata regressed or selected phase changed",
+            ));
+        }
+        let mut round =
+            NativeRemoteOldRound::begin(actual.clone(), final_own, final_business, &token)?;
+        for frame in frames {
+            round.record(frame)?;
         }
         let result = round.finish()?;
+        actual.require_current()?;
         self.admission_for_old_step()?.require_live()?;
+        self.image_sources
+            .as_ref()
+            .ok_or_else(|| invalid("actual donor source process absent after OLD cut"))?
+            .require_original_process()?;
         token.check()?;
         Ok(result)
+    }
+    #[cfg(test)]
+    pub(super) fn test_collect_remote_old_at_actual_donor(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+        after_fetch: impl FnOnce(
+            &HostMetadataReadObservation,
+            Uuid,
+            &[crate::distribution_transport::AuthenticatedNativeRemoteOldFrame],
+        ) -> Result<()>,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteOldCutCertificate> {
+        self.collect_remote_old_at_actual_donor_inner(range, parent, after_fetch)
     }
     pub(super) fn retain_remote_image_from_remote_old(
         &self,

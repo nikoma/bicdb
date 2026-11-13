@@ -180,6 +180,27 @@ fn native_metadata_registration_four_process_commands_commit_exact_learner() {
     )
     .unwrap();
     let range = committed.ranges.values().next().unwrap();
+    // The registration is committed by an old-voter QUORUM (3 of 4): the
+    // leader stops replicating at the commit and each later read round returns
+    // at its own quorum, so one follower may legitimately still lack the entry
+    // or its commit index. Nothing in these manually stepped processes runs
+    // the automatic supervisor, so drive the leader's ordinary full heartbeat
+    // (every active peer, awaited) before requiring all four local views.
+    for round in 0..5 {
+        sequences[0] += 1;
+        step(&mut processes, 0, sequences[0], "heartbeat-control");
+        let lagging = (0..4)
+            .filter(|index| {
+                !client
+                    .fetch_snapshot(&node(*index), &committed.nodes[&node(*index)].address)
+                    .is_ok_and(|snapshot| snapshot.topology.nodes.get(&node(4)) == Some(&target))
+            })
+            .collect::<Vec<_>>();
+        eprintln!("NATIVE_METADATA_REGISTRATION_CONVERGENCE round={round} lagging={lagging:?}");
+        if lagging.is_empty() {
+            break;
+        }
+    }
     for index in 0..4 {
         let snapshot = client
             .fetch_snapshot(&node(index), &committed.nodes[&node(index)].address)

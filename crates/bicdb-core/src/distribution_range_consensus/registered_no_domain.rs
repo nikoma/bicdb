@@ -1,4 +1,5 @@
 //! Exact actual selected catalogue absence; never a synthetic R=0 progress.
+use super::recovery_state::RecoveryFencePhase;
 use super::*;
 
 pub(crate) struct NativeRegisteredRangeCatalogueAbsence {

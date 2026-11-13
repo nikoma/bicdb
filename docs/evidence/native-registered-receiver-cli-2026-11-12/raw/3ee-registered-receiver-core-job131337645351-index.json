@@ -1,0 +1,127 @@
+{
+  "source_revision": "3ee40c19b44affa0a481a66b278ded3af817e910",
+  "requested_source": "3ee40c19b44affa0a481a66b278ded3af817e910",
+  "authoritative_source_verified": true,
+  "run_id": 43262614352,
+  "job_id": 131337645351,
+  "job_name": "Focused Core library (native_registered_replica_receiver_)",
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "captured_at_utc": "2026-11-12T16:54:41.333244+00:00",
+  "raw_bytes": 1606666,
+  "raw_sha256": "0d35656d8afccbedaca28556409913c562195b0a5fcc94943ee14ba26e1ad5af",
+  "compressed_file": "3ee-registered-receiver-core-job131337645351.log.gz",
+  "compressed_sha256": "49f970f03324f4e1b83f130a8c5844d646ed1a29f4143841906333c285cc1630",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-12T16:54:11.8888037Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 913 filtered out; finished in 2.28s"
+  ],
+  "failure_context": [],
+  "test_observations": [
+    {
+      "line": 16434,
+      "test": "distribution_data::range_write_slot::tests::native_registered_replica_receiver_store_slot_ended_store_refuses",
+      "result": "ok"
+    },
+    {
+      "line": 16435,
+      "test": "distribution_data::range_write_slot::tests::native_registered_replica_receiver_store_slot_rejects_retained_old_object",
+      "result": "ok"
+    },
+    {
+      "line": 16436,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::replica_receiver_tests::native_registered_replica_receiver_actual_tls_preserves_owner_and_refuses_blank_app_strong",
+      "result": "ok"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-12T16:48:15Z",
+      "completed_at": "2026-11-12T16:48:17Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-12T16:48:17Z",
+      "completed_at": "2026-11-12T16:48:22Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-12T16:48:22Z",
+      "completed_at": "2026-11-12T16:48:23Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-12T16:48:23Z",
+      "completed_at": "2026-11-12T16:48:33Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-12T16:48:33Z",
+      "completed_at": "2026-11-12T16:52:34Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-12T16:52:34Z",
+      "completed_at": "2026-11-12T16:54:09Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-11-12T16:54:09Z",
+      "completed_at": "2026-11-12T16:54:11Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-12T16:54:11Z",
+      "completed_at": "2026-11-12T16:54:12Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 15,
+      "started_at": "2026-11-12T16:54:12Z",
+      "completed_at": "2026-11-12T16:54:22Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-12T16:54:22Z",
+      "completed_at": "2026-11-12T16:54:22Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-12T16:54:22Z",
+      "completed_at": "2026-11-12T16:54:22Z"
+    }
+  ]
+}

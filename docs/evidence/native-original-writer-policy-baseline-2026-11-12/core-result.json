@@ -1,0 +1,48 @@
+{
+  "run_id": 43314169894,
+  "job_id": 131517781459,
+  "source_revision": "11f5b4b222f4bd84d1f3870dbd59da11ee8cd17c",
+  "raw_bytes": 1604891,
+  "raw_sha256": "7c8e22f73ff6b93871f2b79deb11cf56158225cde5fa3268e97a5f53b82c1799",
+  "gzip_bytes": 181601,
+  "engine_opened": false,
+  "selected_lines": [
+    "2026-11-12T21:53:34.4807210Z \u001b[1m\u001b[33mwarning\u001b[0m\u001b[1m: constant `MAX_CAPTURE_WAIT` is never used\u001b[0m",
+    "2026-11-12T21:53:34.4807576Z \u001b[1m\u001b[94m36\u001b[0m \u001b[1m\u001b[94m|\u001b[0m const MAX_CAPTURE_WAIT: Duration = Duration::from_secs(300);",
+    "2026-11-12T21:55:13.0051453Z RETAINED_NATIVE_JOINT_ROOT=/tmp/.tmpFlq3Lv",
+    "2026-11-12T21:55:13.0051673Z RETAINED_NATIVE_JOINT_METADATA_ROOT=/tmp/.tmp2SGKmv",
+    "2026-11-12T21:55:13.0053011Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_policy_baseline_tests::native_joint_policy_original_writer_reaches_actual_decision_without_reinstall_baseline' (7413) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests/post_joint_no_data_tests.rs:36:71:",
+    "2026-11-12T21:55:13.0056145Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpFlq3Lv",
+    "2026-11-12T21:55:13.0056370Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmp2SGKmv",
+    "2026-11-12T21:55:13.0057879Z test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 951 filtered out; finished in 2.12s"
+  ],
+  "runtime_result": {
+    "passed": 0,
+    "failed": 1,
+    "ignored": 0,
+    "filtered": 951,
+    "duration_seconds": 2.12
+  },
+  "test_compiled_and_listed": true,
+  "selected_tests": 1,
+  "earliest_failure": {
+    "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests/post_joint_no_data_tests.rs",
+    "line": 36,
+    "operation": "diagnostic snapshot current_native_range_source_lineage unwrap",
+    "error": "native range image: no trusted native anchor; image repair required"
+  },
+  "intended_image_rowgrant_refusal_observed": false,
+  "global_joint_decision_observed": false,
+  "fault_custody": {
+    "artifact_id": 13986884384,
+    "manifest_sha256": "edb1a871a28d8d786401a6159ee3435fc53272d5c217fa6acc70dc9a48e69024",
+    "files_verified": 75,
+    "manifest_files": 75,
+    "verified_bytes": 2515198,
+    "missing": [],
+    "mismatch": [],
+    "status": "captured_observed_stable_with_live_engine_owners",
+    "atomic_powerloss_or_replay_verified": false
+  },
+  "scope": "Diagnostic snapshot fails before image grant/transfer or joint global decision; intended DATA policy gate not dynamically reached."
+}

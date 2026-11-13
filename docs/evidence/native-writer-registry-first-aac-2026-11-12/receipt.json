@@ -1,0 +1,228 @@
+{
+  "actual_counts": {
+    "cli": {
+      "failed": 1,
+      "filtered": 0,
+      "passed": 5,
+      "seconds": 65.89
+    },
+    "registry": {
+      "failed": 1,
+      "filtered": 940,
+      "passed": 4,
+      "seconds": 6.47
+    },
+    "schema": {
+      "failed": 0,
+      "filtered": 944,
+      "passed": 1,
+      "seconds": 2.68
+    }
+  },
+  "artifacts": [
+    {
+      "bytes": 98197632,
+      "id": 13981575889,
+      "private_filename": "13981575889.zip",
+      "sha256": "6785428ed7c5fc35b8b2f32f824e20cfd875cf26067ac61754ef0bc8d76f714e"
+    },
+    {
+      "bytes": 98639,
+      "id": 13981795545,
+      "private_filename": "13981795545.zip",
+      "sha256": "9f692512b265231a9bd22234b12455fa3995ea8c2fad1e222448199458f800e9"
+    },
+    {
+      "bytes": 40868,
+      "id": 13981185241,
+      "private_filename": "artifact13981185241.zip",
+      "sha256": "8262c9907afd62a372e78e38cb42a88c0844440e1eae52f861f5f89b9e32a4d2"
+    },
+    {
+      "bytes": 40281,
+      "id": 13979952486,
+      "private_filename": "artifact13979952486.zip",
+      "sha256": "201f4df3ed579953a8bede2346560b35cf156dcbd36d2e2c4c92f1aaf6286347"
+    }
+  ],
+  "checks": [
+    {
+      "compressed_file": "aac-registry-refresh-controls-first-job131457525202.log.gz",
+      "job_conclusion": "failure",
+      "job_id": 131457525202,
+      "job_name": "Focused Core library (native_initial_data_registry_)",
+      "raw_bytes": 1610621,
+      "raw_sha256": "ae5750db61755136a6aef1eae86d358c7b0789518d48f6b2b69bf9b9271ff07c",
+      "run_id": 43296887408,
+      "source_revision": "aac6192c2b034e1f2e4c88a16fd84bcd94e0bf6b",
+      "test_summaries": [
+        "2026-11-12T20:12:15.9779347Z test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 940 filtered out; finished in 6.47s"
+      ]
+    },
+    {
+      "compressed_file": "aac-learner-schema-controls-first-job131457557639.log.gz",
+      "job_conclusion": "success",
+      "job_id": 131457557639,
+      "job_name": "Focused Core library (native_registered_learner_schema_)",
+      "raw_bytes": 1608264,
+      "raw_sha256": "a2739d0f5217e568591acb32ef937232ba032a9dfd21c1ac0bb1c8c4469dba34",
+      "run_id": 43296897267,
+      "source_revision": "aac6192c2b034e1f2e4c88a16fd84bcd94e0bf6b",
+      "test_summaries": [
+        "2026-11-12T20:12:55.8150215Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 944 filtered out; finished in 2.68s"
+      ]
+    },
+    {
+      "compressed_file": "aac-registry-refresh-cli-first-job131457578487.log.gz",
+      "job_conclusion": "failure",
+      "job_id": 131457578487,
+      "job_name": "Focused CLI integration (native_metadata_operator_cli)",
+      "raw_bytes": 2192294,
+      "raw_sha256": "a622a72b78ccb49f9e9bf8027f064df1b90408b73280b275b4b4fc57e72eae6f",
+      "run_id": 43296905362,
+      "source_revision": "aac6192c2b034e1f2e4c88a16fd84bcd94e0bf6b",
+      "test_summaries": [
+        "2026-11-12T20:21:18.8025551Z test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 65.89s"
+      ]
+    },
+    {
+      "compressed_file": "aac-registry-alltargets-terminal-job131457463832.log.gz",
+      "job_conclusion": "success",
+      "job_id": 131457463832,
+      "job_name": "Community-only workspace compiles, tests included",
+      "raw_bytes": 2473307,
+      "raw_sha256": "07353990b867df898d34b68186f270d9bccb89ff78c42125be9080e74f95f811",
+      "run_id": 43296887408,
+      "source_revision": "aac6192c2b034e1f2e4c88a16fd84bcd94e0bf6b",
+      "test_summaries": []
+    },
+    {
+      "compressed_file": "aac-schema-alltargets-terminal-job131457493463.log.gz",
+      "job_conclusion": "success",
+      "job_id": 131457493463,
+      "job_name": "Community-only workspace compiles, tests included",
+      "raw_bytes": 2473282,
+      "raw_sha256": "a0d5d04b8070b52493c5f7bf7813312492c8902180889fade564332977247452",
+      "run_id": 43296897267,
+      "source_revision": "aac6192c2b034e1f2e4c88a16fd84bcd94e0bf6b",
+      "test_summaries": []
+    },
+    {
+      "compressed_file": "aac-cli-alltargets-terminal-job131457521015.log.gz",
+      "job_conclusion": "success",
+      "job_id": 131457521015,
+      "job_name": "Community-only workspace compiles, tests included",
+      "raw_bytes": 2473193,
+      "raw_sha256": "b627bfb6b10ea69a43d051b995b7199afbb088654326bc8b3f93a705b9f19540",
+      "run_id": 43296905362,
+      "source_revision": "aac6192c2b034e1f2e4c88a16fd84bcd94e0bf6b",
+      "test_summaries": []
+    }
+  ],
+  "execution_identity": {
+    "binary_bytes": 751406136,
+    "binary_scope": "actual CARGO_BIN_EXE_bicdb bytes read before process/startup/ACK phase; not a published release",
+    "binary_sha256": "35c3b103e1a54d6aee1c10ec9bbc597a995429ecc96879a44c1ebc14363361df",
+    "source": "aac6192c2b034e1f2e4c88a16fd84bcd94e0bf6b",
+    "source_authority": "BICDB_TEST_SOURCE_SHA runtime environment; not option_env or runtime git lookup",
+    "source_available": true,
+    "test_package_version": "1.0.489-beta"
+  },
+  "failed_fixture_custody": {
+    "complete": true,
+    "data_ack_fixture_roots_retained": false,
+    "database_files": 96,
+    "database_logical_bytes": 1505406,
+    "database_manifest_path": "database-failure-ac267792-a9f8-4aa8-923a-c0b2e8b5f798/manifest.json",
+    "database_manifest_sha256": "fdeca73b35545a3fe9bb60bdf5254b505959e752fc6b9dd6fa84f94d770f8bc0",
+    "diagnostic_files": 32,
+    "diagnostics_manifest_path": "failure-diagnostics/native-operator-cli-01a1d16b-67dd-76b0-ac14-98f87f7a2cef/manifest.json",
+    "diagnostics_manifest_sha256": "788acf765818f99b845b46df40f49642ae7d3e0c8bf79c77642811329277b1e5",
+    "directory_entries": 40,
+    "engine_open_or_replay": false,
+    "private_verification_file": "aac-cli-terminal-custody-verification.json",
+    "private_verification_sha256": "0ed8ee9d89394797deb836099b6e2de4747c620350e84d938d14c66bc8a46da7",
+    "roots": [
+      "/tmp/.tmpce5nHG/db0",
+      "/tmp/.tmpce5nHG/db1",
+      "/tmp/.tmpce5nHG/db2",
+      "/tmp/.tmpce5nHG/db3",
+      "/tmp/.tmpce5nHG/db4"
+    ],
+    "status": "COPIED_STOPPED_OWNED_ROOTS"
+  },
+  "journals": [
+    {
+      "bytes": 2341682,
+      "classifications": {
+        "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY": 1,
+        "NO_SUCCESSFUL_READ_NO_ABSENCE": 1,
+        "NO_USER_ACK_DURABLE_OUTCOME_UNKNOWN": 1,
+        "STRONG_SUCCESS": 5,
+        "USER_ACK": 3
+      },
+      "completed": true,
+      "fixture_root": "/tmp/.tmpUL0YZc",
+      "path": "rpc-journals/client-01a1d16b-3115-7be1-855b-db6ac7c1f4c0/journal.jsonl",
+      "records": 504,
+      "sha256": "cbf221fbd99fc55bc02cbac22b13deb8a1692475b11bc477923d4639752facf8",
+      "test": "initial_data_tests::native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value",
+      "trace_fenced": false
+    },
+    {
+      "bytes": 67027,
+      "classifications": {
+        "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY": 2,
+        "ACTUAL_RECEIVER_REFUSAL": 3,
+        "STRONG_SUCCESS": 2,
+        "USER_ACK": 1
+      },
+      "completed": true,
+      "fixture_root": "/tmp/.tmpx2qG3p",
+      "path": "rpc-journals/client-01a1d16b-ab84-7df0-9b23-e1cfce66dbdb/journal.jsonl",
+      "records": 42,
+      "sha256": "182ef61e008af136b63036c3d2e1ecd35b769d18c918db163fed4116a8183c0e",
+      "test": "replica_receiver_tests::native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner_no_data_grant",
+      "trace_fenced": false
+    },
+    {
+      "bytes": 85752,
+      "classifications": {
+        "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY": 2,
+        "ACTUAL_RECEIVER_REFUSAL": 3,
+        "STRONG_SUCCESS": 3,
+        "USER_ACK": 2
+      },
+      "completed": true,
+      "fixture_root": "/tmp/.tmp9cb39T",
+      "path": "rpc-journals/client-01a1d16b-ec4a-7fc2-a51d-b81f57a13802/journal.jsonl",
+      "records": 54,
+      "sha256": "cb462ab6ee3d9ed73183c78a246993efa0beff11550ed7ebfa87dc222e83177f",
+      "test": "writer_registry_refresh_baseline::native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_and_fresh_ack",
+      "trace_fenced": false
+    }
+  ],
+  "limits": [
+    "in-process/local CI processes and actual mTLS; no VM or physical qualification",
+    "no DATA placement move or fifth DATA Serving",
+    "bootstrap raw frame coverage false; EventClient observer not whole-cluster wire ledger",
+    "historical source evidence and diagnostics are not new authority",
+    "primary ACK remains ACK if supplemental diagnostics fail; error never proves rollback",
+    "failed metadata fixture DBs cannot reconcile passed DATA fixture ACKs",
+    "no original Azure cause attribution, source publication, binary release, deployment or main delivery claim"
+  ],
+  "original_strict_baseline": {
+    "classification": "unchanged FAILED5/1 strict registry refusal; never replaced by this follow-up",
+    "cli_job_id": 131408621456,
+    "run_id": 43282887768,
+    "source": "1d3976f9f8011f3ac7411494aa0dfb432763ce78"
+  },
+  "private_archive_directory": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-registry-refresh-aac6192c",
+  "private_raw_directory": "/tmp/bicdb-native-foundations-ci",
+  "source": "aac6192c2b034e1f2e4c88a16fd84bcd94e0bf6b",
+  "source_package_version": "1.0.489-beta",
+  "unexecuted_test_successors": [
+    "794fd5ad3f16e21e07c641bb9635910ffb6d274a",
+    "90f36d9a3"
+  ]
+}

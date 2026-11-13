@@ -1,0 +1,55 @@
+{
+  "source": "56f9a3c999fba329c349d3e6dda664dcfb64e4c6",
+  "classification": "FAILED_COMPILATION_NO_SELECTED_TESTS_EXECUTED",
+  "jobs": [
+    {
+      "source_revision": "56f9a3c999fba329c349d3e6dda664dcfb64e4c6",
+      "run_id": 43301067134,
+      "job_id": 131472125317,
+      "job_name": "Focused Core library (distribution_native_host::)",
+      "job_conclusion": "failure",
+      "raw_bytes": 965024,
+      "raw_sha256": "d13e6853f5ef1e4f73014178b2c574d61586fd9600d41d243a7a60cac3d4cd2c",
+      "compressed_file": "56f-host-registry-first-job131472125317.log.gz",
+      "test_summaries": []
+    },
+    {
+      "source_revision": "56f9a3c999fba329c349d3e6dda664dcfb64e4c6",
+      "run_id": 43301074482,
+      "job_id": 131472153960,
+      "job_name": "Focused Core library (native_ready_actual_tls_both_matching_peer_attempts_expire_without_counting_or_mutation)",
+      "job_conclusion": "failure",
+      "raw_bytes": 966108,
+      "raw_sha256": "37e5ef2b2925178dea7cfe0fd320194510f8faf4d0f44dce389633d425e51cbf",
+      "compressed_file": "56f-ready-expiry-first-job131472153960.log.gz",
+      "test_summaries": []
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "E0599",
+      "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/expired_ready_delivery_tests.rs",
+      "line": 184,
+      "expression": "db.scan(\"items\")"
+    },
+    {
+      "code": "E0599",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/owned_validation_wait_tests.rs",
+      "line": 53,
+      "expression": "db.scan(\"items\")"
+    },
+    {
+      "code": "E0599",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/owned_validation_wait_tests.rs",
+      "line": 140,
+      "expression": "db.scan(\"items\")"
+    }
+  ],
+  "correction_source_only": "626736598093281a440ca500794846f9373bcb4c",
+  "runtime_results_for_correction": "not established by these receipts",
+  "limits": [
+    "No selected test list, runtime pass, assertion failure, production defect or authority failure inferred.",
+    "Separate CLI and workspace jobs were left running; this receipt records only the two completed Core jobs.",
+    "Earlier aac runtime results remain at their own exact source."
+  ]
+}

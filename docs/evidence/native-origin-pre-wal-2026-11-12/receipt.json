@@ -1,0 +1,62 @@
+{
+  "source": "721c329de4196aeef96604642c439fe7d8ddb0bf",
+  "source_version": "1.0.489-beta",
+  "run": 43325316433,
+  "classification": "FAILED_REQUIRED_AUTONOMOUS_RECOVERY",
+  "core": {
+    "job": 131556248799,
+    "passed": 1,
+    "failed": 1,
+    "ignored": 0,
+    "filtered": 957,
+    "seconds": 26.04
+  },
+  "compile": {
+    "job": 131556196584,
+    "all_targets": "SUCCESS",
+    "isolated_no_default_consumer": "SUCCESS"
+  },
+  "artifact": {
+    "id": 13991484311,
+    "bytes": 211301,
+    "sha256": "8528db4cb8a55a32eca222a1c695f120370edc8b996db6b3c50b8905e68e66a8"
+  },
+  "actual_terminal": {
+    "actual_public_api_user_ack": false,
+    "bounded_autonomous_repair_and_next_ack": false,
+    "ever_next_user_ack": false,
+    "first_actual_origin_error": {
+      "actual_core_error": "commit outcome unknown: commit_seq=none transaction_id=11 incarnation=8dae5b3e-55de-40bc-a8b2-908f34efebfd: native distributed command was admitted before the local attempt failed: cluster error: injected native post-admission/pre-WAL rejection; durable certificate/pending state is preserved for recovery; do not assume it committed or rolled back. Reopen the database, then re-read the operation's result: it has no commit sequence, and the page store's recovery kept it only if its commit record reached the disk",
+      "actual_open_alive": true,
+      "actual_ticket_authority": "range-quorum-v2:r3",
+      "actual_ticket_command_id": "01a1d203-ef53-7341-85a5-e6bac0e8fcfc",
+      "actual_transaction_id": 11,
+      "app_span_ended": true,
+      "armed": false,
+      "claimed": true,
+      "core_result": "commit_outcome_unknown",
+      "database_open_incarnation": "8dae5b3e-55de-40bc-a8b2-908f34efebfd",
+      "diagnostic_integrity_error": false,
+      "fired": true,
+      "normal_app_handler_exit": true,
+      "panicked": false,
+      "release_callback_ok": true,
+      "release_callback_returned": true,
+      "requested_range_id": 3,
+      "requested_record_id": "items/origin-injected-unknown-1",
+      "scope": "cfg(test) actual receiver observations only; no authority",
+      "unknown_sequence": null,
+      "unknown_transaction_id": 11
+    },
+    "first_origin_unknown_is_not_rollback": true,
+    "health_elapsed_ns": 15333465020,
+    "health_limit_ns": 20000000000,
+    "no_manual_recovery_or_counter_reset": true,
+    "physical_qualification": false,
+    "rounds": 2
+  },
+  "native_DB_custody": false,
+  "published_binary_or_deployment": false,
+  "physical_qualified": false,
+  "original_56f_cause_established": false
+}

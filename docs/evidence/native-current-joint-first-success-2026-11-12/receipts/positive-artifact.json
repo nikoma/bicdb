@@ -1,0 +1,17 @@
+{
+  "run_id": 43319425823,
+  "job_id": 131535932600,
+  "source_revision": "eedf23d58e236cf62d61366349ad4de3bd52373b",
+  "artifact_id": 13990062815,
+  "zip_sha256": "61570cc1b547858e4a5426ed2dcd0f125aff9c2783b34ef8c9ab75888b85dbc2",
+  "zip_bytes": 216181,
+  "files": [
+    "rustc.txt",
+    "source-revision.txt",
+    "selected-tests.log",
+    "tests.log"
+  ],
+  "artifact_source_revision": "eedf23d58e236cf62d61366349ad4de3bd52373b",
+  "fault_state_files": [],
+  "engine_opened_or_replayed": false
+}

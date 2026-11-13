@@ -1,0 +1,77 @@
+{
+  "artifact_id": 13989698674,
+  "manifests": [
+    {
+      "atomic_powerloss_snapshot_or_replay_verified": false,
+      "engine_reopened": false,
+      "ledger_records": 2,
+      "manifest_sha256": "ad8569abb2da459c6365dd467a5350d332a195cd477c4e16e6d72a6702e6da63",
+      "path": "fault-state/native-joint-cut-01a1d1e3-6bcd-7543-8924-7d0263760bea/manifest.json",
+      "phases": {
+        "n1": {},
+        "n2": {},
+        "n3": {
+          "1": "Active"
+        }
+      },
+      "status": "captured_observed_stable_with_live_engine_owners",
+      "verified_bytes": 4677766,
+      "verified_files": 75
+    },
+    {
+      "atomic_powerloss_snapshot_or_replay_verified": false,
+      "engine_reopened": false,
+      "ledger_records": 2,
+      "manifest_sha256": "bd4deb897f443e37ab43315dee4c7be3d4baaf260b8bf5d75fdc35e056eac8b5",
+      "path": "fault-state/native-joint-cut-01a1d1e3-6cd8-7eb2-9bd2-eb561d25901c/manifest.json",
+      "phases": {
+        "n1": {},
+        "n2": {},
+        "n3": {
+          "1": "Active"
+        }
+      },
+      "status": "captured_observed_stable_with_live_engine_owners",
+      "verified_bytes": 4677766,
+      "verified_files": 75
+    },
+    {
+      "atomic_powerloss_snapshot_or_replay_verified": false,
+      "engine_reopened": false,
+      "ledger_records": 2,
+      "manifest_sha256": "1ed2a3f1a27b0670b6d8a3c48e8363431389cb5deee344da1f6329184f4b3b51",
+      "path": "fault-state/native-joint-cut-01a1d1e3-6f54-7981-92ea-34927e5b4955/manifest.json",
+      "phases": {
+        "n1": {},
+        "n2": {},
+        "n3": {
+          "1": "Active"
+        }
+      },
+      "status": "captured_observed_stable_with_live_engine_owners",
+      "verified_bytes": 4677766,
+      "verified_files": 75
+    },
+    {
+      "atomic_powerloss_snapshot_or_replay_verified": false,
+      "engine_reopened": false,
+      "ledger_records": 2,
+      "manifest_sha256": "61cc24e335f43ac02401ebb4fd08fe5fe2142fcd58c04da81fa6f5fb8c9a522e",
+      "path": "fault-state/native-joint-cut-01a1d1e3-7135-7773-adf8-7d99e97af8bc/manifest.json",
+      "phases": {
+        "n1": {},
+        "n2": {},
+        "n3": {
+          "1": "Active"
+        }
+      },
+      "status": "captured_observed_stable_with_live_engine_owners",
+      "verified_bytes": 4677766,
+      "verified_files": 75
+    }
+  ],
+  "source_revision": "eedf23d58e236cf62d61366349ad4de3bd52373b",
+  "verified_bytes": 18711064,
+  "verified_files": 300,
+  "zip_sha256": "27ec0d1a8a6d212f04e6e611ec6af098ffc228b25639ec21977cf62ee0c08665"
+}

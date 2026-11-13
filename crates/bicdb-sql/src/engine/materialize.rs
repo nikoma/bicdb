@@ -1278,7 +1278,7 @@ impl<'db> SqlEngine<'db> {
                 .filter(|function| is_aggregate_function(function)),
         );
         // The relation column environment (a schema load per relation) is only
-        // needed to type an `avg` argument; every other statement skips it.
+        // needed only for the guarded aggregates; other statements skip it.
         let mut env: Option<Vec<RelationColumns>> = None;
         for function in functions {
             let raw_name = object_name(&function.name)?.to_ascii_lowercase();
@@ -1286,7 +1286,9 @@ impl<'db> SqlEngine<'db> {
             if name == "bicdb_exact_sum_units" {
                 self.require_exact_decimal_units()?;
                 let aggregate = crate::eval::ExactUnitsAggregate::from_function(&function)?;
-                let columns = self.from_relation_columns(&select.from)?;
+                let columns = env.get_or_insert_with(|| {
+                    self.from_relation_columns(&select.from).unwrap_or_default()
+                });
                 aggregate.validate_type(|value| self.infer_env_expr_type(value, &columns))?;
                 continue;
             }

@@ -254,3 +254,132 @@ pub fn nearest_native_display_ratio_value(arguments: &[Value]) -> Result<Value> 
         "derived rate exceeds all supported native Decimal scales",
     ))
 }
+
+/// Round one nonnegative rational directly to the greatest native Decimal scale
+/// that fits. Every candidate is recomputed from the exact rational, never a
+/// previously rounded candidate or a narrow intermediate product.
+fn nearest_native_ratio(
+    numerator: &BigInt,
+    denominator: &BigInt,
+    operation: &str,
+) -> Result<Value> {
+    let ten = BigInt::from(10u8);
+    for scale in (0..=28u32).rev() {
+        let coefficient = half_even_ratio(&(numerator * ten.pow(scale)), denominator);
+        if coefficient.bits() <= 96 {
+            return decimal_from_units(coefficient, scale, operation);
+        }
+    }
+    Err(invalid(
+        operation,
+        "exact ratio exceeds all supported native Decimal scales",
+    ))
+}
+
+/// `(String C, String Q, Decimal q, Int p, Int s) -> Decimal` for the explicitly
+/// versioned default stock domain. p,s are 0..28; approved currency proration's
+/// narrower domain and rounding remain unchanged. C,Q <2^254 and admitted native
+/// q at precision <=28 bound C*q_atoms below 2^444. The candidate numerator with
+/// maximum native output scaling stays below 2^538. BigInt, not U256, is needed.
+pub fn exact_prorate_native_units_value(arguments: &[Value]) -> Result<Value> {
+    let operation = "exact native unit proration";
+    if arguments.len() != 5 {
+        return Err(invalid(operation, "requires exactly five scalar arguments"));
+    }
+    let total = unsigned_units(&arguments[0], operation, "total cost units")?;
+    let quantity = unsigned_units(&arguments[1], operation, "remaining quantity atoms")?;
+    let operated = crate::json_decimal_exact(&arguments[2]).ok_or_else(|| {
+        invalid(
+            operation,
+            "operated quantity requires an exact native Decimal",
+        )
+    })?;
+    let precision = int_scale(&arguments[3], 28, operation, "quantity precision")?;
+    let scale = int_scale(&arguments[4], 28, operation, "cost unit scale")?;
+    if quantity == BigInt::from(0u8) || operated <= Decimal::ZERO {
+        return Err(invalid(
+            operation,
+            "remaining quantity and operated quantity must be positive",
+        ));
+    }
+    let operated_atoms = decimal_units(operated, precision, operation)?;
+    if operated_atoms > quantity {
+        return Err(invalid(
+            operation,
+            "operated quantity exceeds remaining quantity",
+        ));
+    }
+    // Full depletion is an identity, not a rounding opportunity. Rounding an
+    // unrepresentable wide C here could leave residual cost at zero quantity.
+    if operated_atoms == quantity {
+        return decimal_from_units(total, scale, operation);
+    }
+    // Validate the complete basis even for zero C. Partial issues round the exact
+    // final rational once; no native multiplication/division intermediate exists.
+    let numerator = &total * operated_atoms;
+    let denominator = quantity * BigInt::from(10u8).pow(scale);
+    let amount = nearest_native_ratio(&numerator, &denominator, operation)?;
+    let admitted = crate::json_decimal_exact(&amount)
+        .ok_or_else(|| invalid(operation, "final amount is not an exact native Decimal"))?;
+    // A wide C can lie between native representable values. Nearest rounding
+    // must not issue more than the exact available cost. Compare rationals at a
+    // common power, not by demanding an output integral at the input unit scale:
+    // s=0,C=1,Q=3,q=1 legitimately has a fractional native result.
+    let issued_common = BigInt::from(admitted.mantissa()) * BigInt::from(10u8).pow(scale);
+    let available_common = total * BigInt::from(10u8).pow(admitted.scale());
+    if issued_common > available_common {
+        return Err(invalid(
+            operation,
+            "rounded amount exceeds the exact available cost",
+        ));
+    }
+    Ok(amount)
+}
+
+/// `(String C, String Q, Int p, Int s) -> Decimal`, p,s in 0..28. This separate
+/// default-domain display leaf grants no financial/source authority and does not
+/// change the approved display leaf or ordinary native `/`.
+pub fn nearest_native_full_display_ratio_value(arguments: &[Value]) -> Result<Value> {
+    let operation = "nearest full native display ratio";
+    if arguments.len() != 4 {
+        return Err(invalid(operation, "requires exactly four scalar arguments"));
+    }
+    let total = unsigned_units(&arguments[0], operation, "total cost units")?;
+    let quantity = unsigned_units(&arguments[1], operation, "quantity atoms")?;
+    let precision = int_scale(&arguments[2], 28, operation, "quantity precision")?;
+    let scale = int_scale(&arguments[3], 28, operation, "cost unit scale")?;
+    if quantity == BigInt::from(0u8) {
+        return Err(invalid(operation, "quantity atoms must be positive"));
+    }
+    let ten = BigInt::from(10u8);
+    nearest_native_ratio(
+        &(total * ten.pow(precision)),
+        &(quantity * ten.pow(scale)),
+        operation,
+    )
+}
+
+/// Six actual Int64 limbs, highest first, each in [0,10^14), to canonical
+/// unsigned units <2^254. This pure codec establishes no source/tenant/order or
+/// financial authority. Native callers must independently prove authentic limbs.
+pub fn exact_units_from_limbs_value(arguments: &[Value]) -> Result<Value> {
+    let operation = "exact units from limbs";
+    if arguments.len() != 6 {
+        return Err(invalid(operation, "requires exactly six Int64 limbs"));
+    }
+    const BASE: i64 = 100_000_000_000_000;
+    let mut units = BigInt::from(0u8);
+    for argument in arguments {
+        let limb = argument
+            .as_i64()
+            .ok_or_else(|| invalid(operation, "each limb requires an exact Int64"))?;
+        if !(0..BASE).contains(&limb) {
+            return Err(invalid(operation, "each limb must be 0..10^14 exclusive"));
+        }
+        units = units * BASE + limb;
+    }
+    if units.bits() > MAX_UNITS_BITS {
+        return Err(invalid(operation, "units magnitude must be below 2^254"));
+    }
+    Ok(Value::String(units.to_string()))
+}

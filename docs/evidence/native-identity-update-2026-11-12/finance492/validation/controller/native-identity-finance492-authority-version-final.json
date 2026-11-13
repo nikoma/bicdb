@@ -1,0 +1,56 @@
+{
+  "label": "native-identity-finance492-authority-version-final",
+  "source": "2403deefde68869c15f02b73d40406ffdfb50148",
+  "source_ref": "refs/bicdb-proof/native-finance492-authority-version-2403deef",
+  "base": "fdac8c7691ed0458497096999c590a2aee092f18",
+  "repo": "/root/bicdb-native-identity-delivery",
+  "scope": "Exactcurrent492candidate postsemanticcapture, finalSQLauthorityandpackageversionidentity; completedCorefulland38/8/10independentrecoveryseparatelyqualified. No productionCLI/release/deployment orfullapp/HAclaim;no P2promotion/spend.",
+  "commands": [
+    [
+      "python3",
+      "scripts/bump-version.py",
+      "--check"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "mutation_authority",
+      "--test",
+      "version_identity",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-native-identity-finance492-validation"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-native-identity-finance492-validation.json",
+      "equals": {
+        "source": "2403deefde68869c15f02b73d40406ffdfb50148",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock",
+  "allow_isolated_builds": [
+    {
+      "pid": 3016627,
+      "start_ticks": 165848412,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ]
+}

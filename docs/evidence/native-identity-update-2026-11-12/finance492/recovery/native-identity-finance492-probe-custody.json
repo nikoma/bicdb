@@ -1,0 +1,8 @@
+{
+  "source": "2403deefde68869c15f02b73d40406ffdfb50148",
+  "status": "probe_built",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/2403deefde68869c15f02b73d40406ffdfb50148/native_identity_crash_probe",
+  "binary_sha256": "fd1c88d04014ec8913194efdd23956a1c910da5d1a03168d9585d10bc8d6e592",
+  "source_version": "1.0.492-beta",
+  "scope": "Explicit current492candidate probe build succeeded; finance main490+issuer tracking+implementedreader capture, no privateSQLpartition/rename. Qualification probe, notCLI/release/deploy or passing test result."
+}

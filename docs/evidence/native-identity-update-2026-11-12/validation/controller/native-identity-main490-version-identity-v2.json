@@ -1,0 +1,53 @@
+{
+  "label": "native-identity-main490-version-identity-v2",
+  "source": "6cafd400844f0dc11200afed52ab2f015009ecf2",
+  "base": "b9394418bdf9d87864c2c12d6fe81bb7d4039d53",
+  "repo": "/root/bicdb-native-identity-delivery",
+  "scope": "Exactcandidate1.0.490-beta versionidentity andpackage/lock/current-source synchronization; afterfullCore/SQLauthority batch. No productioncodechanges, no CLI/release/deployment implied. Use unchangedcode results separatelysource-scoped.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "python3",
+      "scripts/bump-version.py",
+      "--check"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "version_identity",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-native-identity-main490-validation"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-native-identity-main490-validation.json",
+      "equals": {
+        "source": "6cafd400844f0dc11200afed52ab2f015009ecf2",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "allow_isolated_builds": [
+    {
+      "pid": 1506585,
+      "start_ticks": 164894300,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

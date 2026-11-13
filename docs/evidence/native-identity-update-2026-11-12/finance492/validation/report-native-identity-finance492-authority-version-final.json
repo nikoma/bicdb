@@ -1,0 +1,42 @@
+{
+  "source": "2403deefde68869c15f02b73d40406ffdfb50148",
+  "scope": "Exactcurrent492candidate postsemanticcapture, finalSQLauthorityandpackageversionidentity; completedCorefulland38/8/10independentrecoveryseparatelyqualified. No productionCLI/release/deployment orfullapp/HAclaim;no P2promotion/spend.",
+  "started_unix": 1794526952.5726318,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794526952.572781,
+      "exit": 0,
+      "finished_unix": 1794526952.6711142
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "mutation_authority",
+        "--test",
+        "version_identity",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794526952.6713383,
+      "exit": 0,
+      "finished_unix": 1794527129.8468146
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794527129.8471656
+}

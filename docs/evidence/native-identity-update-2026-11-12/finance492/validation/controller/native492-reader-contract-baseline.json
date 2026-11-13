@@ -1,0 +1,57 @@
+{
+  "label": "native492-reader-contract-baseline",
+  "source": "fdac8c7691ed0458497096999c590a2aee092f18",
+  "base": "5fab7f47be70b935afdbd2d68dfcdbdfc688d9ec",
+  "repo": "/root/bicdb-native-identity-delivery",
+  "scope": "Test-only overqualified5fab API492/currentfinance490 runtime. RealNative flagactivators forfourfinance+Decimal/appunique mustsurvive readonlyreader capture and invalidateactualNativeimagebindings, keepACKhash/seq/localnamespace. Failureevidence retained; only modes/flagsactuallyreached claimed. No futureSQLrename/portableorigin/legacylogicalpropagation/HA/app readiness asserted. Originalassertions/waits intact.",
+  "continue_on_failure": true,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "mutation_reader_contract_tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "current_semantic_reader_requirements",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-native-identity-finance492-focused"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-native-identity-finance492-focused.json",
+      "equals": {
+        "source": "5fab7f47be70b935afdbd2d68dfcdbdfc688d9ec",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

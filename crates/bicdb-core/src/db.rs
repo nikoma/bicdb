@@ -8,6 +8,7 @@ mod exact_decimal_sum;
 mod native_calendar;
 use exact_decimal_sum::ExactDecimalSum;
 mod local_namespace_identity;
+mod mutation_identity;
 mod native_wal_apply;
 pub use deferred_materialize::DeferredMaterializeStats;
 pub(crate) use native_wal_apply::admission_mutations_sha256;

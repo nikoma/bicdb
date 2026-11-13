@@ -1,0 +1,47 @@
+{
+  "report-native-identity-main490-validation.json": {
+    "stored_as": "report-native-identity-main490-validation.json",
+    "raw_bytes": 3642,
+    "raw_sha256": "169ea0235bf8d97ee9f08d43300877200965b22c33f23dd173905e149135951b"
+  },
+  "report-native-identity-main490-canonical-Core.json": {
+    "stored_as": "report-native-identity-main490-canonical-Core.json",
+    "raw_bytes": 56051,
+    "raw_sha256": "8e4c78df0cf3baf1dc7c6108e6c1f2cfa90616ffb9f8af4b5b746793114dede0"
+  },
+  "report-native-identity-main490-version-identity-v2.json": {
+    "stored_as": "report-native-identity-main490-version-identity-v2.json",
+    "raw_bytes": 1030,
+    "raw_sha256": "d6e8c509416b6663591e86620dfc1747dde4c0e49261b96b73614fdfd373ba23"
+  },
+  "tc-step-native-identity-main490-validation.log": {
+    "stored_as": "tc-step-native-identity-main490-validation.log.gz",
+    "raw_bytes": 1792843,
+    "raw_sha256": "8ac80a2858e0a0195aad3bdd05caaf7cfede03139d3881368aa5490cace981a7"
+  },
+  "tc-step-native-identity-main490-version-identity-v2.log": {
+    "stored_as": "tc-step-native-identity-main490-version-identity-v2.log.gz",
+    "raw_bytes": 292537,
+    "raw_sha256": "3125939377e0563380ea9febb127b4a26c19a9b8cb6cf2673b451a521a8a1b7c"
+  },
+  "host-control/native490-version-queued-refresh.json": {
+    "stored_as": "host-control/native490-version-queued-refresh.json",
+    "raw_bytes": 436,
+    "raw_sha256": "936910b1df00ebf7e1cab1126d4aead7a3f076a65e68edbfcb2e135da0090bc7"
+  },
+  "controller/canonical-native490-core-results.py": {
+    "stored_as": "controller/canonical-native490-core-results.py",
+    "raw_bytes": 2630,
+    "raw_sha256": "bc49eee1d8c13a8fea2653deb77202319c82ccc34348e4a2addf42ea65359bf2"
+  },
+  "controller/native-identity-main490-validation.json": {
+    "stored_as": "controller/native-identity-main490-validation.json",
+    "raw_bytes": 3485,
+    "raw_sha256": "a20294a856dec1b45726b2c526e8f0cfb20215f4d6098dcbf245b09f8eb535f9"
+  },
+  "controller/native-identity-main490-version-identity-v2.json": {
+    "stored_as": "controller/native-identity-main490-version-identity-v2.json",
+    "raw_bytes": 1499,
+    "raw_sha256": "212b61264c405349664a8f19972b608a7559fa0cf7e3b66e9d2c33bc86133553"
+  }
+}

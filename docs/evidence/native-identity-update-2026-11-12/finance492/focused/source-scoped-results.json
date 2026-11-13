@@ -1,0 +1,241 @@
+{
+  "recorded_unix": 1794524971.3491528,
+  "scope": "Focused checks only on each exact source. Baseline failures retained; no later broad/application/HA qualification inferred. Telemetry removed only from derived parsing; original raw bytes hashed and retained.",
+  "results": [
+    {
+      "label": "native-identity-finance492-focused",
+      "source": "5fab7f47be70b935afdbd2d68dfcdbdfc688d9ec",
+      "status": "focused_passed",
+      "step_exits": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "passed_invocations": 17,
+      "failed_invocations": 0,
+      "distinct_passed_names": 17,
+      "names_observed": [
+        [
+          "db::mutation_identity::issuer_tests::identity_update_never_mutates_an_immutable_native_fact_even_for_its_owner",
+          "ok"
+        ],
+        [
+          "db::mutation_identity::issuer_tests::identity_update_retains_both_native_write_issuers_and_rollback_removes_them",
+          "ok"
+        ],
+        [
+          "append_only_and_commit_validators_fail_before_commit",
+          "ok"
+        ],
+        [
+          "audit_required_mutations_fail_closed_and_publish_durable_evidence",
+          "ok"
+        ],
+        [
+          "broker_outbox_publishes_only_committed_work_and_recovery_deduplicates",
+          "ok"
+        ],
+        [
+          "failed_identity_update_restores_source_locks_audit_and_capability_budget",
+          "ok"
+        ],
+        [
+          "fixed_snapshot_insert_identity_preserves_signed_authority_after_a_peer_delete",
+          "ok"
+        ],
+        [
+          "fixed_snapshot_insert_identity_releases_locks_on_a_failed_batch",
+          "ok"
+        ],
+        [
+          "identity_update_cannot_use_a_caller_snapshot_to_override_native_preimage_versions",
+          "ok"
+        ],
+        [
+          "identity_update_refuses_a_destination_committed_after_its_snapshot",
+          "ok"
+        ],
+        [
+          "identity_update_uses_one_scoped_update_and_preserves_native_policy_checks",
+          "ok"
+        ],
+        [
+          "mutation_grants_authorize_read_committed_update_and_delete_rechecks",
+          "ok"
+        ],
+        [
+          "protected_mutations_require_and_consume_exact_native_grants",
+          "ok"
+        ],
+        [
+          "transactional_catalog_rename_does_not_widen_native_mutation_grants",
+          "ok"
+        ],
+        [
+          "sql_and_pgwire_style_sessions_cannot_bypass_native_mutation_authority",
+          "ok"
+        ],
+        [
+          "default_sql_identity_is_bicdb_first_and_truthful",
+          "ok"
+        ],
+        [
+          "host_compatibility_override_never_changes_bicdb_identity",
+          "ok"
+        ]
+      ]
+    },
+    {
+      "label": "native492-reader-contract-baseline",
+      "source": "fdac8c7691ed0458497096999c590a2aee092f18",
+      "status": "failed",
+      "step_exits": [
+        101,
+        101
+      ],
+      "summaries": [
+        {
+          "status": "FAILED",
+          "passed": 0,
+          "failed": 1,
+          "ignored": 0
+        },
+        {
+          "status": "FAILED",
+          "passed": 0,
+          "failed": 1,
+          "ignored": 0
+        }
+      ],
+      "passed_invocations": 0,
+      "failed_invocations": 2,
+      "distinct_passed_names": 0,
+      "names_observed": []
+    },
+    {
+      "label": "native492-reader-contract-focused",
+      "source": "2403deefde68869c15f02b73d40406ffdfb50148",
+      "status": "focused_passed",
+      "step_exits": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "passed_invocations": 14,
+      "failed_invocations": 0,
+      "distinct_passed_names": 12,
+      "names_observed": [
+        [
+          "format::mutation_reader_contract_tests::implemented_mutation_reader_requirements_survive_capture_and_two_reopens",
+          "ok"
+        ],
+        [
+          "db::range_image_bindings::tests::current_semantic_reader_requirements_invalidate_captured_bindings",
+          "ok"
+        ],
+        [
+          "db::range_image_bindings::tests::current_semantic_reader_requirements_invalidate_captured_bindings",
+          "ok"
+        ],
+        [
+          "db::range_image_bindings::tests::range_image_bindings_reject_schema_roundtrip_and_new_backing",
+          "ok"
+        ],
+        [
+          "db::range_image_bindings::tests::range_image_gate_rejects_bare_frozen_copy_and_requires_owned_controlled_scope",
+          "ok"
+        ],
+        [
+          "db::range_image_bindings::tests::range_image_scan_budget_advances_over_nonmatching_keys_and_preserves_all_rows",
+          "ok"
+        ],
+        [
+          "format::local_identity_format_tests::namespace_identity_all_format_writers_share_canonical_root_lock",
+          "ok"
+        ],
+        [
+          "format::local_identity_format_tests::namespace_identity_concurrent_capability_and_flush_writers_preserve_all_flags",
+          "ok"
+        ],
+        [
+          "format::local_identity_format_tests::namespace_identity_does_not_advertise_unknown_native_readers",
+          "ok"
+        ],
+        [
+          "format::local_identity_format_tests::namespace_identity_metadata_replacements_keep_sticky_fences_durable",
+          "ok"
+        ],
+        [
+          "format::mutation_reader_contract_tests::implemented_mutation_reader_requirements_survive_capture_and_two_reopens",
+          "ok"
+        ],
+        [
+          "fts_format::tests::generation_v2_remains_readable_after_v3_publication",
+          "ok"
+        ],
+        [
+          "fts_format::tests::sealed_filter_terms_are_stable_and_validate_input",
+          "ok"
+        ],
+        [
+          "fts_format::tests::stored_text_round_trips_and_is_bounded",
+          "ok"
+        ]
+      ]
+    }
+  ]
+}

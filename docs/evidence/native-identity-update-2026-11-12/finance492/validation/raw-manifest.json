@@ -1,0 +1,57 @@
+{
+  "report-native-identity-finance492-validation.json": {
+    "stored_as": "report-native-identity-finance492-validation.json",
+    "raw_bytes": 3031,
+    "raw_sha256": "fc175c5eb7fa6f0fc645df802958fc0df959d4c3d9ed9012eafed8723f035c38"
+  },
+  "report-native-identity-finance492-canonical-Core.json": {
+    "stored_as": "report-native-identity-finance492-canonical-Core.json",
+    "raw_bytes": 56129,
+    "raw_sha256": "b0e05d97e143434f188f90f2b7ccb38422dd48794fe899fe54df01046a6c199d"
+  },
+  "tc-step-native-identity-finance492-validation.log": {
+    "stored_as": "tc-step-native-identity-finance492-validation.log.gz",
+    "raw_bytes": 1210455,
+    "raw_sha256": "3d7371d0c600c36293f3e433102537603771c125df086f66b9768c38315be3f1"
+  },
+  "report-native-identity-finance492-authority-version-final.json": {
+    "stored_as": "report-native-identity-finance492-authority-version-final.json",
+    "raw_bytes": 1103,
+    "raw_sha256": "98248623df9e8d2762f57e91f2be5a4fd16ffae5c8d29b59378a3145b39cec1c"
+  },
+  "tc-step-native-identity-finance492-authority-version-final.log": {
+    "stored_as": "tc-step-native-identity-finance492-authority-version-final.log.gz",
+    "raw_bytes": 300803,
+    "raw_sha256": "6bbf61483b3690b5cd82a18447e0c8a38557c82a28f8cb6f045246a0c1715db3"
+  },
+  "controller/canonical-native-finance492-core-results.py": {
+    "stored_as": "controller/canonical-native-finance492-core-results.py",
+    "raw_bytes": 2680,
+    "raw_sha256": "33ef7706122e3043a2ba7e6c22ae00c453f0837f310f09a2745927d2cc5d3a72"
+  },
+  "controller/native-identity-finance492-validation.json": {
+    "stored_as": "controller/native-identity-finance492-validation.json",
+    "raw_bytes": 3280,
+    "raw_sha256": "a5331f859bafef5ca323fb4e0099ddbaa515d475aa40efb5b5be0960adb53c8a"
+  },
+  "controller/native-identity-finance492-authority-version-final.json": {
+    "stored_as": "controller/native-identity-finance492-authority-version-final.json",
+    "raw_bytes": 1625,
+    "raw_sha256": "bc62fcf97541a29b229b849fedb04957c187d3578b23bc9d2f4d4d18b3313c3a"
+  },
+  "controller/native-identity-finance492-focused.json": {
+    "stored_as": "controller/native-identity-finance492-focused.json",
+    "raw_bytes": 2182,
+    "raw_sha256": "e5e6497b3f8d287c1e84cb3b88136b20e19016efabb50c47810f7a6aa7756f37"
+  },
+  "controller/native492-reader-contract-baseline.json": {
+    "stored_as": "controller/native492-reader-contract-baseline.json",
+    "raw_bytes": 1696,
+    "raw_sha256": "f486cf87d669ddc85947ecb45876ef3343d8b57a375feb73a5ac62366d7930b4"
+  },
+  "controller/native492-reader-contract-focused.json": {
+    "stored_as": "controller/native492-reader-contract-focused.json",
+    "raw_bytes": 2289,
+    "raw_sha256": "f3d30f0f70636f83cfd0ee78a73abfeccda08a5e507b774eeb66258123ba0e2d"
+  }
+}

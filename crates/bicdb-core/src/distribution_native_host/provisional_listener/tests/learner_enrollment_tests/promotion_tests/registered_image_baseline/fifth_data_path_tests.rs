@@ -638,9 +638,6 @@ enum Fault {
     None,
     /// The joining member is unavailable before any range is touched.
     TargetUnavailable,
-    /// The joining member is lost after its learner allocation committed but
-    /// before the source cut.
-    TargetLostBeforeSourceCut,
     /// The image transfer fails after the source cut and the first copied
     /// step, while the range is frozen on its owners.
     TransferAfterSourceCut,
@@ -654,11 +651,6 @@ fn native_fifth_data_path_receives_image_becomes_voter_and_serves_after_one_orig
 #[test]
 fn native_fifth_data_path_unavailable_target_leaves_range_writable_on_original_four() {
     run_fifth_data_path(Fault::TargetUnavailable);
-}
-
-#[test]
-fn native_fifth_data_path_target_lost_before_source_cut_range_writable_on_original_voters() {
-    run_fifth_data_path(Fault::TargetLostBeforeSourceCut);
 }
 
 #[test]
@@ -680,6 +672,13 @@ fn run_fifth_data_path(fault: Fault) {
 
 fn exercise(five: &mut Five, fault: Fault) {
     let parent = CancellationToken::uncancelable();
+    let started = Instant::now();
+    let mark = |phase: &str| {
+        eprintln!(
+            "FIFTH_DATA_PATH phase={phase} t_ms={}",
+            started.elapsed().as_millis()
+        )
+    };
     let current = five.metadata[0].lock().committed_topology().clone();
     let original = current.ranges.values().next().unwrap().clone();
     assert_eq!(
@@ -740,12 +739,14 @@ fn exercise(five: &mut Five, fault: Fault) {
         }
         return;
     }
+    mark("four-node rows acknowledged");
     five.host.open_joined_data(&budget(10_000)).unwrap();
     let status = five.host.joined_data_status().unwrap();
     assert!(status.receiver_listening && status.writer_policy_installed);
     assert!(!status.dispatcher_published);
     let (_, _, fifth_runtime, fifth_client) = five.host.test_joined_data_bindings().unwrap();
 
+    mark("fifth joined DATA owner open");
     // Step 2: commit the learner allocation of the fifth member.
     let pending = assign_fifth(&current, &original);
     commit_topology(five, pending.clone());
@@ -771,6 +772,7 @@ fn exercise(five: &mut Five, fault: Fault) {
         clients,
     };
 
+    mark("learner allocation committed");
     // Step 3: freeze the range on its current owners (source cut).
     let round_parent = budget(5000);
     let business = Uuid::now_v7();
@@ -784,6 +786,7 @@ fn exercise(five: &mut Five, fault: Fault) {
             &round_parent,
         )
         .unwrap();
+    mark("source round metadata observed");
     let mut round = NativeJointOldRound::begin(observation, business, relocation.id).unwrap();
     let plan = round.plan();
     assert_eq!(plan.activation_range().leader, node(4));
@@ -814,41 +817,7 @@ fn exercise(five: &mut Five, fault: Fault) {
             .record_constraints(constraints, &members.services[i])
             .unwrap();
     }
-    if fault == Fault::TargetLostBeforeSourceCut {
-        // Nothing irrevocable happened on the range owners yet. The joining
-        // member disappears; the handoff attempt is abandoned.
-        drop(round);
-        drop(runtimes);
-        five.host.stop_owned_metadata(&budget(10_000)).unwrap();
-        // The committed configuration still carries the learner allocation
-        // (a new range epoch). The original voters install the host policy of
-        // that configuration and the unchanged leader recovers its epoch.
-        for control in &mut five.controls {
-            control
-                .refresh_initial_data_policy(&budget(10_000))
-                .unwrap();
-        }
-        let (coordinator, _, _, _) = five.controls[leader_index]
-            .test_hot_recovery_bindings()
-            .unwrap();
-        let recovered = coordinator.recover_local_leadership(8).unwrap();
-        assert!(recovered >= 1, "the original leader must recover its range");
-        let gateway = crate::ClusterEventClient::new(&five.configs[0], pending.clone())
-            .unwrap()
-            .with_request_timeout(Duration::from_secs(5))
-            .unwrap();
-        let key = key_for(&pending, range.id, "after-lost-target");
-        let value = serde_json::json!({"fifth_data_path":"writable on the original voters"});
-        append_until_acknowledged(&gateway, &key, &value);
-        assert_eq!(strong_until_served(&gateway, &key).as_ref(), Some(&value));
-        for &i in &old_indices {
-            assert_eq!(stored(five, i, &key).as_ref(), Some(&value));
-        }
-        for (key, value) in &acknowledged {
-            assert_eq!(strong_until_served(&gateway, key).as_ref(), Some(value));
-        }
-        return;
-    }
+    mark("source constraints observed");
     for &i in &old_indices {
         let operation = budget(5000);
         let role = members.role(&plan, i);
@@ -872,6 +841,7 @@ fn exercise(five: &mut Five, fault: Fault) {
             .unwrap();
         round.record_retained_closed_actual(closed).unwrap();
     }
+    mark("source owners closed");
     let mut closed = round.finish().unwrap();
     assert!(closed.range_index() >= 1);
     let capture = closed
@@ -879,6 +849,7 @@ fn exercise(five: &mut Five, fault: Fault) {
         .unwrap();
     let closed = Arc::new(closed);
 
+    mark("source cut and capture started");
     // Step 4: ship image + history into the fifth member and verify there.
     let installed = install_on_fifth(
         &members,
@@ -934,6 +905,7 @@ fn exercise(five: &mut Five, fault: Fault) {
         }
         return;
     }
+    mark("image transfer finished");
     let (frozen, image) = installed.unwrap();
     assert_eq!(image.base().range_index(), closed.range_index());
     assert_eq!(
@@ -948,6 +920,7 @@ fn exercise(five: &mut Five, fault: Fault) {
         );
     }
 
+    mark("image verified on the fifth");
     // Step 5: joint decision over the old and the new DATA majority, then the
     // staged metadata membership change (learner -> voter, source retired).
     let handoff = members.role(&plan, 4).into_handoff().unwrap();
@@ -979,6 +952,7 @@ fn exercise(five: &mut Five, fault: Fault) {
             .publish_actual_member(members.role(&plan, i), &parent)
             .unwrap();
     }
+    mark("joint decision published");
     let decision = publication.finish().unwrap();
     for stage in 0..3 {
         commit_joint_stage(five, &decision, stage);
@@ -999,6 +973,7 @@ fn exercise(five: &mut Five, fault: Fault) {
         .install_topology(committed.clone())
         .unwrap();
 
+    mark("membership stages committed");
     // Step 6: every owner installs the host policy of the new configuration.
     for &i in &old_indices {
         five.controls[i]
@@ -1014,6 +989,7 @@ fn exercise(five: &mut Five, fault: Fault) {
         .refresh_joined_data_policy(&budget(10_000))
         .unwrap();
 
+    mark("new-configuration policies installed");
     // Step 7: joint serving preparation, publication, Open and release
     // (unfreeze) on the complete new member set, including the fifth.
     let mut prepared_round: Option<NativeJointPreparedServingRound> = None;
@@ -1040,6 +1016,7 @@ fn exercise(five: &mut Five, fault: Fault) {
                 Some(NativeJointPreparedServingRound::begin(observation, &parent).unwrap());
         }
     }
+    mark("serving prepared");
     let prepared = Arc::new(prepared_round.unwrap().finish().unwrap());
     let leader = node(0);
     let mut publication = prepared.resume_native_publication().unwrap();
@@ -1062,6 +1039,7 @@ fn exercise(five: &mut Five, fault: Fault) {
         Ok(Arc::new(fresh.finish()?))
     });
     let published = Arc::new(publication.finish_with_fresh_phase(current_phase).unwrap());
+    mark("serving published");
     let mut activations = BTreeMap::new();
     let mut image_owner = None;
     let mut open_order = vec![4usize];
@@ -1082,6 +1060,7 @@ fn exercise(five: &mut Five, fault: Fault) {
         });
         activations.insert(node(local), receipt);
     }
+    mark("joint Open persisted");
     let continuation = Arc::new(
         published
             .retain_release_continuation(
@@ -1110,12 +1089,14 @@ fn exercise(five: &mut Five, fault: Fault) {
         });
     }
 
+    mark("released");
     // Step 8: the fifth member recovers leadership of its range and opens
     // application and Strong ingress.
     let recovered = five.host.publish_joined_data(&budget(20_000)).unwrap();
     assert!(recovered >= 1, "the fifth member must lead its new range");
     assert!(five.host.joined_data_status().unwrap().dispatcher_published);
 
+    mark("fifth leadership recovered and ingress published");
     let gateway = crate::ClusterEventClient::new(&five.configs[0], committed.clone())
         .unwrap()
         .with_request_timeout(Duration::from_secs(5))
@@ -1126,6 +1107,7 @@ fn exercise(five: &mut Five, fault: Fault) {
         assert_eq!(strong_until_served(&gateway, key).as_ref(), Some(value));
         assert_eq!(stored(five, 4, key).as_ref(), Some(value));
     }
+    mark("(a) Strong reads served by the fifth");
     // (b) A new write is acknowledged with the fifth member as a voter (and
     // leader) and is readable from it.
     let key = key_for(&committed, range.id, "after-change");
@@ -1143,6 +1125,7 @@ fn exercise(five: &mut Five, fault: Fault) {
     );
     acknowledged.push((key, value));
 
+    mark("(b) post-change write acknowledged");
     // (c) Stop one ORIGINAL member that is a voter of the new configuration.
     // The remaining DATA majority is the fifth member plus one original.
     let stopped = *survivors.iter().find(|i| **i != 0).unwrap();

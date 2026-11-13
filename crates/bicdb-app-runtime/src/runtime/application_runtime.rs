@@ -801,13 +801,21 @@ impl ApplicationRuntime {
                 MutationPolicy::grants_required().append_only(),
             )?;
         }
+        let active = Arc::new(RwLock::new(Arc::new(RuntimeCatalog::default())));
+        let catalog_admission = Arc::new(CatalogAdmission::default());
+        services.invariant_registry = Some(Arc::new(RuntimeInvariantProvider::new(
+            Arc::clone(&active),
+            Arc::clone(&catalog_admission),
+        )));
+        services.invariant_package_sha256 = None;
         let runtime = Self {
             db,
             config,
             verifier,
             services,
             staged: RwLock::new(BTreeMap::new()),
-            active: RwLock::new(Arc::new(RuntimeCatalog::default())),
+            active,
+            catalog_admission,
             lifecycle: Mutex::new(()),
             history: Mutex::new(BTreeMap::new()),
             supervisors: Mutex::new(BTreeMap::new()),
@@ -906,6 +914,7 @@ impl ApplicationRuntime {
     }
 
     pub fn activate(&self, application: &str) -> Result<ApplicationReadiness> {
+        let _catalog_admission = self.catalog_admission.enter_lifecycle()?;
         let _lifecycle = self
             .lifecycle
             .lock()
@@ -925,6 +934,7 @@ impl ApplicationRuntime {
         &self,
         applications: &[String],
     ) -> Result<BTreeMap<String, ApplicationReadiness>> {
+        let _catalog_admission = self.catalog_admission.enter_lifecycle()?;
         if applications.is_empty() {
             return Err(AppRuntimeError::InvalidPackage(
                 "batch activation requires at least one application".to_string(),
@@ -958,6 +968,7 @@ impl ApplicationRuntime {
             generation: current.generation.saturating_add(1),
             packages: current.packages.clone(),
             routes: BTreeMap::new(),
+            native_invariants: Arc::from([]),
         };
         for (name, candidate) in &candidates {
             projected.packages.insert(name.clone(), candidate.clone());
@@ -1015,6 +1026,7 @@ impl ApplicationRuntime {
             generation: projected.generation,
             packages: current.packages.clone(),
             routes: BTreeMap::new(),
+            native_invariants: Arc::from([]),
         };
         let mut next_history = self
             .history
@@ -1097,6 +1109,7 @@ impl ApplicationRuntime {
             generation: current.generation.saturating_add(1),
             packages: current.packages.clone(),
             routes: BTreeMap::new(),
+            native_invariants: Arc::from([]),
         };
         projected.packages.insert(name.clone(), candidate.clone());
         validate_application_module_catalog(&projected)?;
@@ -1124,6 +1137,7 @@ impl ApplicationRuntime {
             generation: current.generation.saturating_add(1),
             packages: current.packages.clone(),
             routes: BTreeMap::new(),
+            native_invariants: Arc::from([]),
         };
         let activated = Arc::new(PackageSnapshot {
             generation: next.generation,
@@ -1180,6 +1194,7 @@ impl ApplicationRuntime {
     }
 
     pub fn upgrade(&self, package: ApplicationPackage) -> Result<ApplicationReadiness> {
+        let _catalog_admission = self.catalog_admission.enter_lifecycle()?;
         let _lifecycle = self
             .lifecycle
             .lock()
@@ -1191,6 +1206,7 @@ impl ApplicationRuntime {
     }
 
     pub fn rollback(&self, application: &str) -> Result<ApplicationReadiness> {
+        let _catalog_admission = self.catalog_admission.enter_lifecycle()?;
         let _lifecycle = self
             .lifecycle
             .lock()
@@ -1219,6 +1235,7 @@ impl ApplicationRuntime {
             generation: current.generation.saturating_add(1),
             packages: current.packages.clone(),
             routes: BTreeMap::new(),
+            native_invariants: Arc::from([]),
         };
         projected.packages.insert(name.clone(), previous.clone());
         validate_application_module_catalog(&projected)?;
@@ -1236,6 +1253,7 @@ impl ApplicationRuntime {
             generation: current.generation.saturating_add(1),
             packages: current.packages.clone(),
             routes: BTreeMap::new(),
+            native_invariants: Arc::from([]),
         };
         let rollback = Arc::new(PackageSnapshot {
             generation: next.generation,
@@ -1281,6 +1299,7 @@ impl ApplicationRuntime {
     }
 
     pub fn disable(&self, application: &str) -> Result<()> {
+        let _catalog_admission = self.catalog_admission.enter_lifecycle()?;
         let _lifecycle = self
             .lifecycle
             .lock()
@@ -1298,12 +1317,25 @@ impl ApplicationRuntime {
                 "required application `{application}` cannot be disabled"
             )));
         }
+        let owner = current.packages.get(&name).expect("active package checked");
+        let application_manifest = owner
+            .package
+            .manifest
+            .application
+            .as_deref()
+            .expect("verified application package");
+        if !application_manifest.invariants.is_empty() {
+            return Err(AppRuntimeError::CapabilityDenied(format!(
+                "application `{application}` owns native invariants for retained resources and cannot be disabled without an explicit resource-retirement plan"
+            )));
+        }
         ensure_application_module_can_disable(&current, &name)?;
         ensure_no_active_dependents(&current, &name)?;
         let mut next = RuntimeCatalog {
             generation: current.generation.saturating_add(1),
             packages: current.packages.clone(),
             routes: BTreeMap::new(),
+            native_invariants: Arc::from([]),
         };
         let mut next_history = self
             .history
@@ -1672,7 +1704,7 @@ impl ApplicationRuntime {
             &db,
             Arc::clone(&snapshot.manifest),
             actor.clone(),
-            self.services.clone(),
+            self.services_for_snapshot(&snapshot),
         )?;
         let result = execute_resource_operation_with_mutation_hook(
             &mut host,
@@ -1811,7 +1843,7 @@ impl ApplicationRuntime {
             &database,
             Arc::clone(&plan.manifest),
             actor,
-            self.services.clone(),
+            self.services_for_snapshot(&snapshot),
         )?;
         let mut host = CapabilityApplicationProgramHost::from_plan(&mut capability_host, plan);
         let result = execute_application_program(program, callable, globals, arguments, &mut host);
@@ -2064,7 +2096,7 @@ impl ApplicationRuntime {
                 &database,
                 Arc::clone(&plan.manifest),
                 execution_actor.clone(),
-                self.services.clone(),
+                self.services_for_snapshot(&snapshot),
             )?;
             let mut host = CapabilityApplicationProgramHost::from_plan(&mut capability_host, plan)
                 .with_test_http(&callback);
@@ -2154,7 +2186,7 @@ impl ApplicationRuntime {
             &database,
             Arc::clone(&plan.manifest),
             actor.clone(),
-            self.services.clone(),
+            self.services_for_snapshot(&snapshot),
         )?;
         let mut host = CapabilityApplicationProgramHost::from_plan(&mut capability, plan);
         let body_field = |name: &str| {
@@ -2314,7 +2346,7 @@ impl ApplicationRuntime {
             &database,
             Arc::clone(&plan.manifest),
             actor,
-            self.services.clone(),
+            self.services_for_snapshot(&snapshot),
         )?;
         let mut program_host =
             CapabilityApplicationProgramHost::from_plan(&mut capability_host, plan);
@@ -2426,7 +2458,7 @@ impl ApplicationRuntime {
             &database,
             Arc::clone(&plan.manifest),
             actor,
-            self.services.clone(),
+            self.services_for_snapshot(&snapshot),
         )?;
         let mut program_host =
             CapabilityApplicationProgramHost::from_plan(&mut capability_host, plan);
@@ -2553,7 +2585,7 @@ impl ApplicationRuntime {
             &db,
             Arc::clone(&snapshot.manifest),
             actor.clone(),
-            self.services.clone(),
+            self.services_for_snapshot(&snapshot),
         )?;
         let result = module
             .invoke_with_host(&invocation, Box::new(host))
@@ -2756,7 +2788,7 @@ impl ApplicationRuntime {
             &db,
             Arc::clone(&snapshot.manifest),
             actor,
-            self.services.clone(),
+            self.services_for_snapshot(&snapshot),
         )?;
         crate::script_workflow::execute_script_handler(
             &javascript,
@@ -2812,6 +2844,7 @@ impl ApplicationRuntime {
         &self,
         start_supervisors: bool,
     ) -> Result<()> {
+        let _catalog_admission = self.catalog_admission.enter_lifecycle()?;
         let path = self
             .config
             .package_root
@@ -2827,6 +2860,7 @@ impl ApplicationRuntime {
             generation: persisted.generation,
             packages: BTreeMap::new(),
             routes: BTreeMap::new(),
+            native_invariants: Arc::from([]),
         };
         for (name, package_ref) in persisted.packages {
             catalog.packages.insert(
@@ -3374,7 +3408,7 @@ impl ApplicationRuntime {
             apply_migration_transformations(
                 &mut db,
                 &snapshot.package.manifest,
-                self.services.clone(),
+                self.schema_services(),
                 &mut receipt,
             )?;
             schema_failure_point(
@@ -3657,6 +3691,21 @@ impl ApplicationRuntime {
         readiness
     }
 
+    fn services_for_snapshot(&self, snapshot: &PackageSnapshot) -> InvocationServices {
+        let mut services = self.services.clone();
+        services.invariant_package_sha256 = Some(snapshot.package_hash.clone());
+        services
+    }
+
+    // Migration encryption helpers do not execute guest transactions. Existing
+    // explicit schema admission audits remain authoritative under the lifecycle gate.
+    fn schema_services(&self) -> InvocationServices {
+        let mut services = self.services.clone();
+        services.invariant_registry = None;
+        services.invariant_package_sha256 = None;
+        services
+    }
+
     pub(crate) fn prepare_supervisors(&self, snapshot: &PackageSnapshot) -> Result<SupervisorSet> {
         let application = snapshot.package.manifest.application.as_deref().unwrap();
         let mut supervisors = SupervisorSet::default();
@@ -3678,7 +3727,7 @@ impl ApplicationRuntime {
                 self.db.clone(),
                 module()?,
                 manifest.clone(),
-                self.services.clone(),
+                self.services_for_snapshot(&snapshot),
                 worker.clone(),
                 self.config.node_id.clone(),
             )?;
@@ -3705,7 +3754,7 @@ impl ApplicationRuntime {
                 self.db.clone(),
                 handler,
                 manifest.clone(),
-                self.services.clone(),
+                self.services_for_snapshot(&snapshot),
                 schedule.clone(),
                 plan,
                 self.config.node_id.clone(),
@@ -3909,7 +3958,7 @@ impl ApplicationRuntime {
             db,
             Arc::new(restricted),
             actor,
-            self.services.clone(),
+            self.services_for_snapshot(&callee),
             call.trace,
             call.transaction
                 .map(|transaction| unsafe { transaction.pointer() }),

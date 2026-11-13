@@ -208,6 +208,9 @@ pub struct InvocationServices {
     pub max_runtime_cache_entries: usize,
     pub deterministic_clock_ms: Option<Arc<std::sync::atomic::AtomicI64>>,
     pub deterministic_random_seed: Option<Arc<Mutex<u64>>>,
+    // Server-only authority. Neither field is part of the application ABI.
+    pub(crate) invariant_registry: Option<Arc<crate::runtime::RuntimeInvariantProvider>>,
+    pub(crate) invariant_package_sha256: Option<String>,
 }
 
 impl std::fmt::Debug for InvocationServices {
@@ -262,6 +265,8 @@ impl InvocationServices {
             max_runtime_cache_entries: 100_000,
             deterministic_clock_ms: None,
             deterministic_random_seed: None,
+            invariant_registry: None,
+            invariant_package_sha256: None,
         }
     }
 
@@ -452,6 +457,7 @@ pub struct CapabilityHost {
     extension: Arc<ExtensionManifest>,
     actor: ActorContext,
     services: InvocationServices,
+    invariant_context: Option<Arc<crate::runtime::RuntimeInvariantContext>>,
     transactions: BTreeMap<HostHandle, Transaction>,
     borrowed_transactions: BTreeMap<HostHandle, NonNull<Transaction>>,
     transaction_identities: BTreeMap<HostHandle, Arc<HostTransactionIdentity>>,
@@ -565,12 +571,32 @@ impl CapabilityHost {
                 "capability host requires an ABI v2 application manifest".to_string(),
             ));
         }
+        let invariant_context = match &services.invariant_registry {
+            Some(provider) => {
+                let package_hash =
+                    services
+                        .invariant_package_sha256
+                        .as_deref()
+                        .ok_or_else(|| {
+                            AppRuntimeError::NotReady(
+                                "runtime invocation lacks its verified package identity".into(),
+                            )
+                        })?;
+                Some(Arc::new(
+                    provider.acquire(&extension.identity.name, package_hash)?,
+                ))
+            }
+            // Standalone trusted Rust hosts retain their explicit manifest
+            // contract. ApplicationRuntime always configures the provider.
+            None => None,
+        };
         let mut host = Self {
             db: NonNull::from(db),
             service_trace,
             extension,
             actor,
             services,
+            invariant_context,
             transactions: BTreeMap::new(),
             borrowed_transactions: BTreeMap::new(),
             transaction_identities: BTreeMap::new(),
@@ -599,9 +625,13 @@ impl CapabilityHost {
             None
         };
         if let Some(handle) = transaction_handle {
-            for validator in lower_carrier_invariants(host.application())? {
-                host.transaction_mut(handle)?
-                    .register_mutation_commit_validator(validator)?;
+            if let Some(context) = host.invariant_context.clone() {
+                context.attach(host.transaction_mut(handle)?)?;
+            } else {
+                for validator in lower_carrier_invariants(host.application())? {
+                    host.transaction_mut(handle)?
+                        .register_mutation_commit_validator(validator)?;
+                }
             }
         }
         Ok((host, transaction_handle))
@@ -2069,8 +2099,12 @@ impl CapabilityHost {
                 // session and never outlives the synchronous invocation.
                 let mut transaction = unsafe { self.db.as_ref() }
                     .begin_application_transaction_with_isolation(actor, isolation)?;
-                for validator in lower_carrier_invariants(self.application())? {
-                    transaction.register_mutation_commit_validator(validator)?;
+                if let Some(context) = &self.invariant_context {
+                    context.attach(&mut transaction)?;
+                } else {
+                    for validator in lower_carrier_invariants(self.application())? {
+                        transaction.register_mutation_commit_validator(validator)?;
+                    }
                 }
                 let handle = self.next_transaction_handle();
                 let identity = HostTransactionIdentity::capture(&transaction)?;

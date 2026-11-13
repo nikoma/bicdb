@@ -967,6 +967,7 @@ pub(crate) fn build_routes(catalog: &mut RuntimeCatalog) -> Result<()> {
             }
         }
     }
+    catalog.native_invariants = invariant_registry::prepare_native_invariant_bundles(catalog)?;
     Ok(())
 }
 

@@ -5,7 +5,7 @@ use crate::distribution_range_handoff::{
     NativeJointHandoffPlan, NativeJointHandoffRuntime, NativeJointOldRound,
 };
 use crate::distribution_range_image::{
-    NativeRemoteImageManifestV1, NativeRemoteImageSourceOperationV1 as Op,
+    NativeRemoteImageFact, NativeRemoteImageManifestV1, NativeRemoteImageSourceOperationV1 as Op,
     NativeRemoteImageSourcePayloadV1 as Payload, NativeRemoteImageSourceRequestV1,
     RangeImageCursorV1, RangeImageHistoryCursorV1,
 };
@@ -156,6 +156,7 @@ pub(super) fn exercise(
     let mut journal = Vec::new();
     let mut retained_sources = Vec::new();
     let mut retained_runtimes = Vec::new();
+    let mut retained_remote_facts: Vec<NativeRemoteImageFact> = Vec::new();
     for (original, acknowledged) in ranges.iter().zip(ledger) {
         let range = pending.range_by_id(original.id).unwrap();
         let relocation = pending
@@ -299,6 +300,11 @@ pub(super) fn exercise(
                 "{refused}"
             );
         } else {
+            let remote_fact = NativeRemoteImageFact::from_actual_manifest(actual).unwrap();
+            assert_eq!(
+                remote_fact.manifest().checksum_sha256,
+                manifest.checksum_sha256
+            );
             let mut history = RangeImageHistoryCursorV1::default();
             loop {
                 let actual = frame(
@@ -312,7 +318,13 @@ pub(super) fn exercise(
                     &mut journal,
                 )
                 .unwrap();
-                let Payload::History(step) = &actual.reply().payload else {
+                let actual = remote_fact.bind_step(actual).unwrap();
+                actual.require_request_live().unwrap();
+                assert_eq!(
+                    actual.source().manifest().checksum_sha256,
+                    manifest.checksum_sha256
+                );
+                let Payload::History(step) = actual.payload().unwrap() else {
                     panic!("actual history reply expected")
                 };
                 history = step.next_cursor.clone();
@@ -334,7 +346,8 @@ pub(super) fn exercise(
                     &mut journal,
                 )
                 .unwrap();
-                let Payload::Rows(step) = &actual.reply().payload else {
+                let actual = remote_fact.bind_step(actual).unwrap();
+                let Payload::Rows(step) = actual.payload().unwrap() else {
                     panic!("actual rows reply expected")
                 };
                 // Genuine retry with its own bounded request must return the
@@ -363,6 +376,30 @@ pub(super) fn exercise(
                     );
                 }
                 cursor = step.next_cursor.clone();
+                // This is another real authenticated reply, never a forged
+                // DTO. It cannot start a Manifest fact; for range two it also
+                // cannot be rebound to range one's retained issued fact.
+                if let Some(previous) = retained_remote_facts.last() {
+                    let error = previous.bind_step(duplicate).err().expect(
+                        "actual other-range frame must not bind to first issued source cut",
+                    );
+                    assert!(
+                        error
+                            .to_string()
+                            .contains("differs from actual issued Manifest/session"),
+                        "{error}"
+                    );
+                } else {
+                    let error = NativeRemoteImageFact::from_actual_manifest(duplicate)
+                        .err()
+                        .expect("real Rows response cannot construct a Manifest fact");
+                    assert!(
+                        error
+                            .to_string()
+                            .contains("requires an actual Manifest response"),
+                        "{error}"
+                    );
+                }
                 if step.complete {
                     break;
                 }
@@ -372,12 +409,15 @@ pub(super) fn exercise(
                 "full acknowledged value must actually cross TLS"
             );
             let actual = frame(target, &manifest, Op::Finish, output, &mut journal).unwrap();
-            let Payload::Finished(seal) = &actual.reply().payload else {
+            let actual = remote_fact.bind_step(actual).unwrap();
+            let Payload::Finished(seal) = actual.payload().unwrap() else {
                 panic!("real complete source seal expected")
             };
             assert_eq!(seal.record_count, records.len() as u64);
             assert_eq!(seal.range_index, 1);
             assert_eq!(seal.history_entries, 2);
+            drop(actual);
+            retained_remote_facts.push(remote_fact);
         }
         for (i, original_guard) in original_writers.iter().enumerate() {
             assert!(Arc::ptr_eq(

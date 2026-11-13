@@ -281,6 +281,73 @@ fn native_birth_untrusted_snapshot_and_commit_metadata_cannot_adopt_or_retrofit_
 }
 
 #[test]
+fn native_birth_schema_refresh_keeps_existing_allocation_and_native_ack() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let source_root = tempfile::tempdir().unwrap();
+        let target_root = tempfile::tempdir().unwrap();
+        let cfg = config(mode);
+        let mut source = BicDb::open_with_config(source_root.path(), cfg.clone()).unwrap();
+        enable(&mut source);
+        source.create_collection("items").unwrap();
+        source
+            .set_collection_mesh_sync_enabled("items", true)
+            .unwrap();
+        let source_birth = source.native_collection_birth_id("items").unwrap();
+        let bundle = source.cluster_schema_bundle().unwrap();
+        assert!(bundle
+            .collections
+            .iter()
+            .all(|meta| meta.native_backing_birth_id.is_none()));
+        let mut target = BicDb::open_with_config(target_root.path(), cfg.clone()).unwrap();
+        enable(&mut target);
+        target.create_collection("items").unwrap();
+        target.create_collection("__bicdb_birth_ACK").unwrap();
+        target
+            .insert(
+                "__bicdb_birth_ACK",
+                Record::new("independent").with_metadata(json!({"value": 97})),
+            )
+            .unwrap();
+        let ack = target
+            .get("__bicdb_birth_ACK", "independent")
+            .unwrap()
+            .unwrap()
+            .content_hash()
+            .unwrap();
+        let local_birth = target.native_collection_birth_id("items").unwrap();
+        let namespace = target.local_namespace_identity("items").unwrap();
+        assert!(local_birth.is_some());
+        assert_ne!(local_birth, source_birth);
+        assert!(target.install_cluster_schema_bundle(&bundle).unwrap());
+        assert_eq!(
+            target.native_collection_birth_id("items").unwrap(),
+            local_birth
+        );
+        assert_eq!(target.local_namespace_identity("items").unwrap(), namespace);
+        assert!(meta(&target, "items").mesh_sync_enabled);
+        assert!(!target.install_cluster_schema_bundle(&bundle).unwrap());
+        target.close().unwrap();
+        for _ in 0..2 {
+            let target = BicDb::open_with_config(target_root.path(), cfg.clone()).unwrap();
+            assert_eq!(
+                target.native_collection_birth_id("items").unwrap(),
+                local_birth
+            );
+            assert_eq!(
+                target
+                    .get("__bicdb_birth_ACK", "independent")
+                    .unwrap()
+                    .unwrap()
+                    .content_hash()
+                    .unwrap(),
+                ack
+            );
+            target.close().unwrap();
+        }
+    }
+}
+
+#[test]
 fn native_birth_flag_only_restart_is_future_only_and_damaged_catalogs_refuse() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();

@@ -51,6 +51,8 @@ mod native_apply;
 mod native_durability;
 mod native_joint_handoff;
 mod native_writer;
+#[cfg(feature = "tls-replication")]
+mod registered_closed_fence;
 pub(crate) use native_durability::ClusterServiceOpenGuard;
 use native_durability::{checked_database_read, checked_database_write, ServiceStoragePolicy};
 pub(crate) use native_joint_handoff::{

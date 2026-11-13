@@ -5,6 +5,9 @@ use crate::db::NativeRecoveryAdmission;
 use crate::distribution_consensus::MetadataRecoveryRolePurpose;
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 
+#[cfg(feature = "tls-replication")]
+mod registered_closed;
+
 pub(super) const MAX_RECOVERY_FENCES: usize = 65_536;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -903,6 +906,9 @@ impl RangeWriteStore {
     }
     pub(crate) fn preflight_recovery_nonce(&self, scope: &RecoveryFenceScope) -> Result<()> {
         self.require_no_image_install(scope.range_id)?;
+        self.preflight_recovery_nonce_fields(scope)
+    }
+    fn preflight_recovery_nonce_fields(&self, scope: &RecoveryFenceScope) -> Result<()> {
         scope.validate()?;
         if let Some(old) = self.catalog.recovery_fences.get(&scope.range_id) {
             if scope.range_epoch < old.scope.range_epoch
@@ -963,6 +969,9 @@ impl RangeWriteStore {
     ) -> Result<()> {
         self.require_durable_recovery_catalog()?;
         self.require_no_image_install(scope.range_id)?;
+        self.require_active_recovery_scope_record(scope)
+    }
+    fn require_active_recovery_scope_record(&self, scope: &RecoveryFenceScope) -> Result<()> {
         let saved = self
             .catalog
             .recovery_fences
@@ -1189,6 +1198,14 @@ impl RangeWriteStore {
         }
         self.require_no_image_install(scope.range_id)?;
         self.preflight_recovery_nonce(scope)?;
+        self.preflight_recovery_fence_constraints(role, native, scope)
+    }
+    fn preflight_recovery_fence_constraints(
+        &self,
+        role: &RecoveryRoleAdmission,
+        native: &NativeRecoveryAdmission,
+        scope: &RecoveryFenceScope,
+    ) -> Result<()> {
         self.require_native_recovery_identity(role, native)?;
         scope.require_role(role)?;
         if self.catalog.backup_fences.contains_key(&scope.range_id) {
@@ -1291,6 +1308,24 @@ impl RangeWriteStore {
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
     ) -> Result<()> {
         self.preflight_recovery_fence(role, native, scope)?;
+        self.persist_recovery_fence_record(role, native, scope, write)
+    }
+    fn persist_recovery_fence_record(
+        &mut self,
+        role: &RecoveryRoleAdmission,
+        native: &NativeRecoveryAdmission,
+        scope: &RecoveryFenceScope,
+        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+    ) -> Result<()> {
+        self.install_recovery_fence_record(role, native, scope);
+        self.persist_recovery_catalog_with(write)
+    }
+    fn install_recovery_fence_record(
+        &mut self,
+        role: &RecoveryRoleAdmission,
+        native: &NativeRecoveryAdmission,
+        scope: &RecoveryFenceScope,
+    ) {
         self.native_activated_opens.remove(&scope.range_id);
         let log = self
             .catalog
@@ -1342,9 +1377,8 @@ impl RangeWriteStore {
                 retired_nonces,
             },
         );
-        // Retain this refusal on any rename/directory-sync ambiguity. Retrying
-        // always re-fsyncs before any fresh quorum acknowledgment is issued.
-        self.persist_recovery_catalog_with(write)
+        // Caller retains this refusal through any rename/directory-sync or
+        // post-write guard ambiguity; no rollback over uncertainty is allowed.
     }
     pub(crate) fn require_recovery_scope(
         &self,

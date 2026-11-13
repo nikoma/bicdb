@@ -8,6 +8,9 @@ use crate::distribution_native_host::NativeUnassignedLearnerFactory;
 use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use std::sync::Weak;
 
+mod closed_fence;
+pub(crate) use closed_fence::NativeAssignedRegisteredClosedFence;
+
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct NativeRegisteredReplicaReceiverStatus {
     pub receiver_ready: bool,
@@ -33,6 +36,10 @@ pub(crate) struct NativeRegisteredReplicaAdmission {
     database_incarnation: String,
     birth_id: Uuid,
     birth_sha256: String,
+    backend: Weak<NativeMetadataControlBackend>,
+    factory: Weak<NativeUnassignedLearnerFactory>,
+    original_hook: crate::db::NativeRegisteredReceiverHook,
+    closed_fence_ready: Weak<AtomicBool>,
 }
 impl NativeRegisteredReplicaAdmission {
     pub(crate) fn require_live(&self) -> Result<()> {
@@ -75,6 +82,7 @@ pub(super) struct NativeRegisteredReplicaReceiver {
     runtime: Arc<RangeRecoveryRuntime>,
     admission: Arc<NativeRegisteredReplicaAdmission>,
     life: Arc<AtomicBool>,
+    closed_fence_ready: Arc<AtomicBool>,
     old_listener: Option<ClusterDataServerHandle>,
     drained: Option<DrainedClusterDataListener>,
     listener: Option<ClusterDataServerHandle>,
@@ -82,6 +90,7 @@ pub(super) struct NativeRegisteredReplicaReceiver {
 }
 impl Drop for NativeRegisteredReplicaReceiver {
     fn drop(&mut self) {
+        self.closed_fence_ready.store(false, Ordering::Release);
         self.life.store(false, Ordering::Release);
         for listener in [&self.old_listener, &self.listener].into_iter().flatten() {
             listener.request_shutdown();
@@ -124,7 +133,7 @@ impl NativeRegisteredReplicaReceiver {
             metadata.observe_owned_native_metadata_member(observed, business, parent)?
         };
         factory.require_owned_metadata_member(&proof, observed, business, network)?;
-        let (database_incarnation, birth_id, birth_sha256) = {
+        let (database_incarnation, birth_id, birth_sha256, original_hook) = {
             let service = backend
                 .service
                 .try_lock()
@@ -160,6 +169,7 @@ impl NativeRegisteredReplicaReceiver {
                 db.incarnation_id().to_string(),
                 native.birth_id(),
                 native.birth_sha256().to_string(),
+                db.capture_registered_receiver_hook()?,
             )
         };
         {
@@ -181,6 +191,7 @@ impl NativeRegisteredReplicaReceiver {
             .with_participant_transport(backend.transport.clone()),
         );
         let life = Arc::new(AtomicBool::new(true));
+        let closed_fence_ready = Arc::new(AtomicBool::new(false));
         let admission = Arc::new(NativeRegisteredReplicaAdmission {
             service: Arc::downgrade(&backend.service),
             runtime: Arc::downgrade(&runtime),
@@ -191,6 +202,10 @@ impl NativeRegisteredReplicaReceiver {
             database_incarnation,
             birth_id,
             birth_sha256,
+            backend: Arc::downgrade(&backend),
+            factory: Arc::downgrade(factory),
+            original_hook,
+            closed_fence_ready: Arc::downgrade(&closed_fence_ready),
         });
         admission.require_listener(&backend.service, &runtime)?;
         parent.check()?;
@@ -200,6 +215,7 @@ impl NativeRegisteredReplicaReceiver {
             runtime,
             admission,
             life,
+            closed_fence_ready,
             old_listener: None,
             drained: None,
             listener: None,
@@ -217,6 +233,9 @@ impl NativeRegisteredReplicaReceiver {
         }
         self.admission.require_live()?;
         if self.listener.is_some() {
+            parent.check()?;
+            self.admission.require_live()?;
+            self.closed_fence_ready.store(true, Ordering::Release);
             return Ok(());
         }
         if self.drained.is_none() {
@@ -267,7 +286,9 @@ impl NativeRegisteredReplicaReceiver {
             )?,
         );
         parent.check()?;
-        self.admission.require_live()
+        self.admission.require_live()?;
+        self.closed_fence_ready.store(true, Ordering::Release);
+        Ok(())
     }
     pub(super) fn is_running(&self) -> bool {
         !self.stopping && self.listener.is_some()
@@ -297,6 +318,7 @@ impl NativeRegisteredReplicaReceiver {
     }
     pub(super) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
         self.stopping = true;
+        self.closed_fence_ready.store(false, Ordering::Release);
         self.life.store(false, Ordering::Release);
         if let Some(listener) = self.listener.as_mut() {
             listener.stop_and_drain(parent)?;
@@ -359,5 +381,24 @@ impl NativeMetadataControlHost {
     }
     pub(in crate::distribution_native_host) fn has_replica_receiver(&self) -> bool {
         self.replica.is_some()
+    }
+}
+
+#[cfg(test)]
+impl NativeMetadataControlHost {
+    pub(in crate::distribution_native_host) fn test_registered_receiver_parts(
+        &self,
+    ) -> Result<(
+        Arc<NativeRegisteredReplicaAdmission>,
+        Arc<RangeRecoveryRuntime>,
+    )> {
+        let receiver = self
+            .replica
+            .as_ref()
+            .ok_or_else(|| invalid("actual receiver absent"))?;
+        receiver
+            .admission
+            .require_listener(&receiver.backend.service, &receiver.runtime)?;
+        Ok((receiver.admission.clone(), receiver.runtime.clone()))
     }
 }

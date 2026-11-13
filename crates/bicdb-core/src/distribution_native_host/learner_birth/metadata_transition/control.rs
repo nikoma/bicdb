@@ -140,3 +140,19 @@ impl NativeUnassignedLearnerHost {
             .map(Option::flatten)
     }
 }
+
+#[cfg(test)]
+impl NativeUnassignedLearnerHost {
+    pub(in crate::distribution_native_host) fn test_registered_receiver_parts(
+        &self,
+    ) -> Result<(
+        Arc<crate::distribution_native_host::NativeRegisteredReplicaAdmission>,
+        Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>,
+    )> {
+        self.metadata_transition
+            .control
+            .as_ref()
+            .ok_or_else(|| invalid("actual metadata control absent"))?
+            .test_registered_receiver_parts()
+    }
+}

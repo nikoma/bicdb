@@ -11,9 +11,11 @@ use std::time::Instant;
 
 mod initial_data;
 mod registered_replica;
-pub(crate) use registered_replica::NativeRegisteredReplicaAdmission;
 use registered_replica::NativeRegisteredReplicaReceiver;
 pub use registered_replica::NativeRegisteredReplicaReceiverStatus;
+pub(crate) use registered_replica::{
+    NativeAssignedRegisteredClosedFence, NativeRegisteredReplicaAdmission,
+};
 mod maintenance;
 pub(crate) use initial_data::NativeInitialDataAdmission;
 use initial_data::NativeInitialDataHost;

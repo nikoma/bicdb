@@ -9,6 +9,7 @@ use crate::ClusterSchemaBundle;
 use std::fs::File;
 use std::io::Read;
 
+mod assigned_closed;
 mod registered_catchup;
 
 const MANIFEST: &str = "native-unassigned-learner.json";

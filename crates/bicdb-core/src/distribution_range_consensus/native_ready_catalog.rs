@@ -83,6 +83,22 @@ impl RangeWriteStore {
         frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
     ) -> Result<RecoveryImageHistoryObligationsV1> {
         self.require_persisted_recovery_scope(scope)?;
+        let result = self.observe_recovery_image_obligations_body(db, native, scope, frozen)?;
+        self.require_persisted_recovery_scope(scope)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("response-image-obligations-ok");
+        // FENCE_TRACE_END
+        Ok(result)
+    }
+    pub(super) fn observe_recovery_image_obligations_body(
+        &self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        scope: &RecoveryFenceScope,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+    ) -> Result<RecoveryImageHistoryObligationsV1> {
 
         // FENCE_TRACE_BEGIN
         #[cfg(test)]
@@ -207,12 +223,6 @@ impl RangeWriteStore {
         crate::distribution_range_recovery::fence_trace::mark("response-irreversible-inventory-ok");
         // FENCE_TRACE_END
         observed.require_shape(scope, &self.progress(scope.range_id))?;
-        self.require_persisted_recovery_scope(scope)?;
-
-        // FENCE_TRACE_BEGIN
-        #[cfg(test)]
-        crate::distribution_range_recovery::fence_trace::mark("response-image-obligations-ok");
-        // FENCE_TRACE_END
         Ok(observed)
     }
     /// Compaction may remove a command payload while the durable current-

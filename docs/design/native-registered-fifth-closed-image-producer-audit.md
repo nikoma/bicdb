@@ -84,3 +84,85 @@ Remote kernel/session admission and durable cold/resume reissue therefore remain
 separate missing producers. The full goal still requires all-range population,
 real NEW native quorum/open, target next ACK/full Strong, ordinary movement and
 fault self-healing; a receiver fence or local image component cannot substitute.
+
+## Frozen test-only baseline shape
+
+`promotion_tests/registered_image_baseline.rs` adds the single focused selector
+`native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_baseline`.
+It reuses `EnrollmentFixture` and its genuine birth/owned-ACK promotion producers,
+then opens the existing registered receiver **before** DATA assignment. Only the
+four retained actual INITIAL launches become DATA hosts; the fifth factory stays
+`initial_ranges=[]`, with no installed writer and UNKNOWN per-range native point.
+The four original writer guards are retained from before the two source ACKs
+through both actual Pending range assignments and target fence attempts.
+
+The test separately proves the current OWN HostMQ/protected Registered member
+identity against its SAME actual DB and rechecks its store. The existing
+metadata-only factory validator must still refuse data placement. This is not
+permission to ignore that validator in production. A new actual target provider
+wraps the SAME owned metadata backend for fresh request-scope production; the
+target's actual registered listener/runtime independently acquires and validates
+its own recipient witness when the genuine TLS fence request arrives.
+
+API ACK/error and complete payload are fsynced before native-row inspection;
+each actual fence error, original caller/role remaining budget, target snapshot
+and owner identity are retained before the final required-success assertion.
+Two safe refusals therefore remain **RED**, not a passing recovery test. Source
+full ACK records are reconciled again, with original writer guards checked at
+both boundaries. There is no OLD closed-data quorum or source image capture in
+this earliest-fence baseline; these later actual image producers remain required.
+
+The test attempts bounded raw custody of all five actual DB roots, including
+their nested owned metadata, while all five real metadata/service/DB/native
+journal guards remain held. Acquisitions are nonwaiting, credential-like files
+and symlinks refuse, copies/fsyncs/hash inventories are bounded and checked, and
+custody failure is explicit. Listeners are **not** claimed drained; live-owner
+observed stability is not an atomic power-loss/replay proof. Original roots stay
+retained even on failure. Cleanup errors are recorded without replacing the
+original failure. All of this is test source only; no local compilation or
+baseline execution is claimed.
+
+The two baseline ranges are both assigned while this SAME fifth is still
+unmaterialized. This does not qualify reusing it for a second image after the
+first image has advanced local B or acquired permanent slot/promise history.
+That continuation cannot rely on `B==0` or the old factory's no-business guard:
+it must prove actual already-installed per-range native history and keep those
+other-range obligations while admitting only the exact new CLOSED range. No
+legitimate target writer-start/promise can currently be manufactured merely to
+test a nonempty fifth domain: APP is refused and the earlier fence is missing.
+Those tests need the corresponding genuine producers, not raw fixture edits.
+
+
+## Pre-execution review corrections to the test-only baseline
+
+The reviewed `3d34ce0c7` baseline has not compiled or executed. Its successor
+corrects a concrete Rust privacy issue with a `cfg(test)` opaque DB-owned custody
+guard. The wrapper privately retains the actual nonwaiting journal guard, is
+non-cloneable and thread-affine, and exposes no native accessor, predicate,
+mutation method or authority. Production journal visibility stays unchanged.
+
+Each APP now fsyncs logical intent before the public API: logical ID, collection,
+key, deterministic record ID, full payload and JSON hash, actual API caller,
+expected routing leader/address, actual configuration and original timeout. The
+linked outcome records the actual boolean/error and unknown effect on error
+before native-row inspection. Each fence similarly fsyncs intent before its
+original five-second acquisition, then links the genuine scope/challenge,
+original parent and role deadlines and actual reply/error. Monotonic deadline
+coordinates are relative to a recorded test-local clock origin, not wall time.
+These records are logical API evidence, not a raw-wire trace, and hashes do not
+become proof or grants. Scoped intent IO stays inside the original budget;
+original role/caller checks follow it before dispatch. No token is renewed.
+
+The initial blank-state assertion is separate from each attempt's fresh
+prestate. A successful first fence therefore remains present in the second
+attempt's before/after comparison. Both genuine required-success assertions and
+all original native/raw/identity/policy/ACK checks remain. Failed fence replies
+remain unknown effect until those actual comparisons; no absence is inferred.
+
+The factory path is captured before timed work. Post-failure evidence needs no
+blocking DB read. Terminal/cleanup/partial-copy writes are best effort and their
+errors are reported separately; they cannot replace the original required
+baseline panic. A primary success still fails if evidence/cleanup/custody fails.
+Completed partial-copy entries are retained where possible and explicitly lack
+a verified whole-inventory claim. This remains source review only, with the
+same original 2s/4s/5s request/acquisition budgets and no local build or replay.

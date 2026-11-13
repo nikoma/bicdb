@@ -14,8 +14,10 @@ mod registration;
 pub(crate) use learner_enrollment::NativeLearnerMetadataEnrollment;
 pub(crate) use metadata_startup::NativeInitialWriterEnrollment;
 pub(in crate::distribution_native_host) use registration::NativeMetadataMaintenanceReport;
-pub(crate) use registration::NativeRegisteredReplicaAdmission;
 pub use registration::NativeRegisteredReplicaReceiverStatus;
+pub(crate) use registration::{
+    NativeAssignedRegisteredClosedFence, NativeRegisteredReplicaAdmission,
+};
 pub(crate) use registration::{
     NativeInitialDataAdmission, NativeMetadataControlHost, NativeMetadataRegistrationController,
 };

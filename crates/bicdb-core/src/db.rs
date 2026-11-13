@@ -87,6 +87,8 @@ pub(crate) use native_joint_activation::{
 };
 mod commit_admission_hook;
 mod native_recovery_ready;
+#[cfg(test)]
+mod native_test_custody;
 mod range_image_native;
 pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisibilitySequence};
 pub(crate) use range_image_native::abort_history::NativeNoEffectIntentRecord;
@@ -95,6 +97,8 @@ pub(crate) use range_image_native::rf3_fixture::{
     ActualNativeRf3Fixture, ActualNativeRf3RpcObservation,
 };
 pub(crate) use range_image_native::NativeInitialDataGenesis;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeRegisteredClosedPersistScope;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
     FreshNativeCatalogueBootstrap, FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard,
@@ -103,8 +107,9 @@ pub(crate) use range_image_native::{
     NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
     NativeLogicalHistoryStepV1, NativeRangeInstallSafety, NativeRangePendingApply,
     NativeRangePrefixObservation, NativeRecoveredServingReceipt, NativeRecoveryAbortedReceipt,
-    NativeRecoveryAdmission, NativeRecoveryAppliedReceipt, NativeWriterHostState,
-    RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage, StagedNativeHistoryProof,
+    NativeRecoveryAdmission, NativeRecoveryAppliedReceipt, NativeRegisteredReceiverHook,
+    NativeWriterHostState, RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
+    StagedNativeHistoryProof,
 };
 pub(crate) use range_image_native::{
     NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,

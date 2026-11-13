@@ -22,6 +22,8 @@ mod native_ready_quorum;
 mod normal_apply;
 mod participants;
 #[cfg(feature = "tls-replication")]
+mod registered_closed;
+#[cfg(feature = "tls-replication")]
 mod strong_point_read;
 
 const MAX_CONTEXTS: usize = 4;

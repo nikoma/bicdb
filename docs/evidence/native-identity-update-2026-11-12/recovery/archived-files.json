@@ -1,0 +1,1022 @@
+{
+  "S3/native-identity-main490-probe-custody.json": {
+    "bytes": 424,
+    "sha256": "1c87a853d7ecbb65809fd982471bb67c834a3b57baa1fd59e848aa85e315681e"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-control-ACK.json": {
+    "bytes": 183,
+    "sha256": "3d252c2a3264c9e675e09982955bd1ce27de8731b81254b69bd54745c55e9507"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-control-apply.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-control-apply.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-control-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-control-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "380a7dc16d1cfaab439e38f0bf4c7a1d898e5bfb452d2664e6b377ae64992885"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-one-shot-transaction_log_sync-failure.json": {
+    "bytes": 1253,
+    "sha256": "c9e37e03556c24c1914e7e2f629fed0ec804a72586ebe5a813b35cc86568e70b"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-one-shot-transaction_log_sync-failure.stderr": {
+    "bytes": 374,
+    "sha256": "6d64b915c9db09c0405e679f1abab97e78cfed0e39d511757c99870abb710f17"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-one-shot-transaction_log_sync-failure.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-one-shot-transaction_log_sync-verify.stderr": {
+    "bytes": 548,
+    "sha256": "4a39fc1ac538ef0681bb891933cc2060151f1be76fef478cfd882f3941ec2ddc"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-one-shot-transaction_log_sync-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-one-shot-transaction_log_write-failure.json": {
+    "bytes": 1256,
+    "sha256": "3a5010110809fab31db6d8f795ed3d99bbb1f890d7a11995fa3548ed37dc4ac2"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-one-shot-transaction_log_write-failure.stderr": {
+    "bytes": 375,
+    "sha256": "4033f24eb831ca1df794cdab37e0c57863dce0597c45663f3506c4ac943fe3aa"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-one-shot-transaction_log_write-failure.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-one-shot-transaction_log_write-verify.stderr": {
+    "bytes": 550,
+    "sha256": "e63ef89b9634cad3a528057f6390e536add6dfc75b886a1ff95a39868b4e4b78"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-one-shot-transaction_log_write-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-persistent-transaction_log_sync-failure.json": {
+    "bytes": 1259,
+    "sha256": "68104ef6c4026c491f87908bbe9f4fad674e60afc3888e620ebbfa14b371a10c"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-persistent-transaction_log_sync-failure.stderr": {
+    "bytes": 376,
+    "sha256": "4fc6940e8fd3bfb66154177a9d9eacc2278a18d044c125f6cb27f67a5cf447b8"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-persistent-transaction_log_sync-failure.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-persistent-transaction_log_sync-verify.stderr": {
+    "bytes": 552,
+    "sha256": "17e0a397c8b863a4cd0b564754c7a73edbe74d0de1e879b0e7f88603e963ca74"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-persistent-transaction_log_sync-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-persistent-transaction_log_write-failure.json": {
+    "bytes": 1262,
+    "sha256": "c650f856afd0c302d2b22b2f90701bbd4bd9f17e07943d938223a78c575c43ac"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-persistent-transaction_log_write-failure.stderr": {
+    "bytes": 377,
+    "sha256": "30be8c86ed892e9682542cf38d2c94fb9c687b3172edde15e1e4dd9f9f1743ea"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-persistent-transaction_log_write-failure.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-persistent-transaction_log_write-verify.stderr": {
+    "bytes": 554,
+    "sha256": "ee2d6057fad165147f82759da981ed6c4d423fcc317a1815b01064b3479a8f63"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-persistent-transaction_log_write-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-commit_after_broker_publish-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-commit_after_broker_publish-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-commit_after_broker_publish-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-commit_after_broker_publish-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "4e322abc8c9d5ad55208f7250ed444789b1ce3405443fba8502d51a8914735e2"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-commit_before_broker_publish-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-commit_before_broker_publish-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-commit_before_broker_publish-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-commit_before_broker_publish-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "6512658132f64b5457a0c27ced1f46dd0b82fe2f21b6f3577862bb61ee6eaf0a"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-identity_after_ack-1-ACK.json": {
+    "bytes": 183,
+    "sha256": "c0ad70b72bcec01589c5e34c014dffc466e05b424e1cd4e24cf7a93673e35d4e"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-identity_after_ack-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-identity_after_ack-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-identity_after_ack-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-identity_after_ack-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "5089b797266668781901317d001165e565a2a795a86bf0a11fc1fe1e0b033705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-identity_after_commit-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-identity_after_commit-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-identity_after_commit-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-identity_after_commit-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "9ada30f21a2988905f59f885a4793cee1d144f24b69a27c89adc569c5084c758"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-identity_after_staging-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-identity_after_staging-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-identity_after_staging-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-identity_after_staging-1-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-transaction_log_sync-1-cut.stderr": {
+    "bytes": 85,
+    "sha256": "17005adc3a732070867d374f1a9b455caacd941029607ebaea2e44286900f72c"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-transaction_log_sync-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-transaction_log_sync-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-transaction_log_sync-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "9d07433d85addef1faa4d9db97c23ec4fa80f110bd9c11a13e10ae756635ea14"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-transaction_log_write-1-cut.stderr": {
+    "bytes": 86,
+    "sha256": "5680ab2e829d22a86b9ba6ed13bfee7f6d034498d9de55f676cd9c228f72d3ac"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-transaction_log_write-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-transaction_log_write-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-process-transaction_log_write-1-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-seed.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-seed.stdout": {
+    "bytes": 213,
+    "sha256": "fe81da350caf965d1a88e3170052271ae00affdd368ce5e5dd4cb0a3379dc35a"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-seed/original-ACK.json": {
+    "bytes": 588,
+    "sha256": "c358f50132f950cc22265a59a10bd3fe8b2c0ae1768050a943d6809b1017de52"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-commit_after_broker_publish-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-commit_after_broker_publish-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-commit_after_broker_publish-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-commit_after_broker_publish-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "418da74c907728935f7192676fb62dc4a73b20b2bd90540c910dcc609c53f441"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-commit_before_broker_publish-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-commit_before_broker_publish-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-commit_before_broker_publish-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-commit_before_broker_publish-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "51c79d68b58c4637ddd4db06f437aae7ef765031bd10be00dbbe264061cc5769"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-identity_after_ack-1-ACK.json": {
+    "bytes": 183,
+    "sha256": "8ae622f5383ea7ed4b4f3d2089bed6af8e658463de58552f75f9681ec2287fbb"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-identity_after_ack-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-identity_after_ack-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-identity_after_ack-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-identity_after_ack-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "d41289cb30c71b0c952693c0ddfb088a39b29351104219a933ea9b62de7bf89f"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-identity_after_commit-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-identity_after_commit-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-identity_after_commit-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-identity_after_commit-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "62cda729d970fa8e1b6a29e8ecbe7727b535875b8398c8dfd2e84381547ab508"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-identity_after_staging-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-identity_after_staging-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-identity_after_staging-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-identity_after_staging-1-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-transaction_log_sync-1-cut.stderr": {
+    "bytes": 85,
+    "sha256": "17005adc3a732070867d374f1a9b455caacd941029607ebaea2e44286900f72c"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-transaction_log_sync-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-transaction_log_sync-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-transaction_log_sync-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "75d6e28d5b99693f10e8fa6e5ef77d3c53b7d3a4fa00681e183cc61aabb9f451"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-transaction_log_write-1-cut.stderr": {
+    "bytes": 86,
+    "sha256": "5680ab2e829d22a86b9ba6ed13bfee7f6d034498d9de55f676cd9c228f72d3ac"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-transaction_log_write-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-transaction_log_write-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/embedded_memory-volatile-transaction_log_write-1-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/result.json": {
+    "bytes": 288002,
+    "sha256": "ab7085b3cfacd55da663705861d6dd7656333f84eba280ee34b93f2b2e301a7d"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-control-ACK.json": {
+    "bytes": 183,
+    "sha256": "e36b825cfa19cfcb527f893e851d00dd5f72b4d06fe664f32ecd3c4ad8ddfa59"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-control-apply.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-control-apply.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-control-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-control-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "9ef1476540bd6df7d84a87244fc402672171627c1872b527ea749adf6db0f038"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-one-shot-transaction_log_sync-failure.json": {
+    "bytes": 1244,
+    "sha256": "ec252db3bb9b0ce37ebef837a29428342a3426c8ab847c649c460c77de577749"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-one-shot-transaction_log_sync-failure.stderr": {
+    "bytes": 371,
+    "sha256": "33ad07b7f9e6bc90038513dc28b92a1627fe504f5c545faabbeae517f5147d9b"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-one-shot-transaction_log_sync-failure.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-one-shot-transaction_log_sync-verify.stderr": {
+    "bytes": 542,
+    "sha256": "2ff42deb6bebb4cefbe7ab2af81a26c06fc95fac00d86dde4324e0ea27a3f3dc"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-one-shot-transaction_log_sync-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-one-shot-transaction_log_write-failure.json": {
+    "bytes": 1247,
+    "sha256": "eb98f38a8dc68fbc60b19b67912365d781d177fbc74c356da0d204a5dca28d99"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-one-shot-transaction_log_write-failure.stderr": {
+    "bytes": 372,
+    "sha256": "ebd00e49676f77aa7b61a67619c47831b15c624c59012a2faf421d30d5b45fd5"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-one-shot-transaction_log_write-failure.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-one-shot-transaction_log_write-verify.stderr": {
+    "bytes": 544,
+    "sha256": "2a7cb99e3d339c74a2cfb05213f183130491172c0b50f9d85bbf0858dd9ab8db"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-one-shot-transaction_log_write-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-persistent-transaction_log_sync-failure.json": {
+    "bytes": 1250,
+    "sha256": "97afcf67105885f207f0ef658d726503363fed0e9af56a08a24e02f0b7bf820e"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-persistent-transaction_log_sync-failure.stderr": {
+    "bytes": 373,
+    "sha256": "41537a489d8c080d1a917ba591712d2e00f542756d7cc5e77c0bd823dda6874d"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-persistent-transaction_log_sync-failure.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-persistent-transaction_log_sync-verify.stderr": {
+    "bytes": 546,
+    "sha256": "b0942ab6457f568ae5d830ccd9989b477f718c75b566d1feaf93ff98a30d398d"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-persistent-transaction_log_sync-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-persistent-transaction_log_write-failure.json": {
+    "bytes": 1253,
+    "sha256": "5626760a7eb3df31459d7f058257baeab3c4b6c7dbb7867e78a26cd589320208"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-persistent-transaction_log_write-failure.stderr": {
+    "bytes": 374,
+    "sha256": "7ed1f5c5dba595d72a02aaeb37370b3e4116dd9647b84296270b66cc5d3b9ddd"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-persistent-transaction_log_write-failure.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-persistent-transaction_log_write-verify.stderr": {
+    "bytes": 548,
+    "sha256": "19751342eb481cb16d48c615940f272d3630e82115317e7851beb1d430b41bd8"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-persistent-transaction_log_write-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_broker_publish-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_broker_publish-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_broker_publish-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_broker_publish-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "a6922da9fa57c2d71ced59c0c00a281b014c2a84e5bf1999cfcaf0f67ce4ceee"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_marker-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_marker-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_marker-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_marker-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "810f4330189d7b163fff755d857f24126232c42f83e85d40e067c49c7ff2c400"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_page_apply-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_page_apply-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_page_apply-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_page_apply-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "2969357b1a6a02bfc12ac0a32b33679be1ee41de18fa85a8a29765fdec774bee"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_sync_publish-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_sync_publish-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_sync_publish-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_sync_publish-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "93d332e1d9a831698d8a9046a61675e5b355baf0be0a2a5acbfaede389a021fa"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_txlog_durable-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_txlog_durable-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_txlog_durable-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_after_txlog_durable-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "c36685b86b36330f5951bce5129abbbcb1e35ff097e9145b255f06b63877f02e"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_before_broker_publish-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_before_broker_publish-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_before_broker_publish-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_before_broker_publish-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "abe466293e936cfe5168f8aeb46f532dbf0d516e08cf8f7af5c14a0e9077942c"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_before_decision-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_before_decision-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_before_decision-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-commit_before_decision-1-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-identity_after_ack-1-ACK.json": {
+    "bytes": 183,
+    "sha256": "727e771ce7e3e51c8aae697d63e3e67f7cfdb9650b586eaf044b7fb5b49a9998"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-identity_after_ack-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-identity_after_ack-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-identity_after_ack-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-identity_after_ack-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "4a095aa26baa4ea163f7e6fe7e2fe81f3e0fe699c12607ed7f22d45f904cee66"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-identity_after_commit-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-identity_after_commit-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-identity_after_commit-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-identity_after_commit-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "30437a3b0652497a1e61785b7da1e9be7b32ed6998d53e4e2875e6243789e445"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-identity_after_staging-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-identity_after_staging-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-identity_after_staging-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-identity_after_staging-1-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-transaction_log_sync-1-cut.stderr": {
+    "bytes": 85,
+    "sha256": "17005adc3a732070867d374f1a9b455caacd941029607ebaea2e44286900f72c"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-transaction_log_sync-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-transaction_log_sync-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-transaction_log_sync-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "d80a86f7a22b9a2d655c44bd93a572e5cd1c82682ae5525d366df81c1f105c76"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-transaction_log_write-1-cut.stderr": {
+    "bytes": 86,
+    "sha256": "5680ab2e829d22a86b9ba6ed13bfee7f6d034498d9de55f676cd9c228f72d3ac"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-transaction_log_write-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-transaction_log_write-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-process-transaction_log_write-1-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-seed.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-seed.stdout": {
+    "bytes": 213,
+    "sha256": "fe81da350caf965d1a88e3170052271ae00affdd368ce5e5dd4cb0a3379dc35a"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-seed/original-ACK.json": {
+    "bytes": 588,
+    "sha256": "c358f50132f950cc22265a59a10bd3fe8b2c0ae1768050a943d6809b1017de52"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_broker_publish-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_broker_publish-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_broker_publish-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_broker_publish-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "7b398b6212535f3e897c541314c8a072c7d6db757b0b517ffc85ecb575e6ae56"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_marker-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_marker-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_marker-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_marker-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "801e8ca9eacf7a217d2b2e3c079bf218019140f9e60254a3edbe348f2b763a18"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_page_apply-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_page_apply-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_page_apply-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_page_apply-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "5ed013affaad2127887a5a2e608c2265ecfe7989ec4cd8bbde1f492e74e84747"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_sync_publish-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_sync_publish-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_sync_publish-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_sync_publish-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "708679135b379bf58e99b266c59dbbef0fb6b99df3ac08e0602b0c0a7dff9207"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_txlog_durable-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_txlog_durable-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_txlog_durable-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_after_txlog_durable-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "a8392bd6644f56c557c76562f4c22cb31de641e671905dc9ae505e466da8a8d6"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_before_broker_publish-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_before_broker_publish-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_before_broker_publish-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_before_broker_publish-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "10586e58632c66ad0444abd45a7fdb62e1ca25e74b18bde6125b125d56857013"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_before_decision-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_before_decision-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_before_decision-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-commit_before_decision-1-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-identity_after_ack-1-ACK.json": {
+    "bytes": 183,
+    "sha256": "53d0d4b058e146d6f14f88d901415278476609751f0b4f548e2e88a38293e55a"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-identity_after_ack-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-identity_after_ack-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-identity_after_ack-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-identity_after_ack-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "da386bfb04a8e95b2dcceef90ef8128a7b0e749777249a9c274e5decc0be36e9"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-identity_after_commit-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-identity_after_commit-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-identity_after_commit-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-identity_after_commit-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "ed5771898dba03bd82fd93a0010ffebefe9d1328def20a3de6efbbeb561dd975"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-identity_after_staging-1-cut.stderr": {
+    "bytes": 31,
+    "sha256": "3cc74dc4f882a1f7ff6ad7523879c3676698e1b1ab7a0810c6e9ab448cc9a705"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-identity_after_staging-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-identity_after_staging-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-identity_after_staging-1-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-transaction_log_sync-1-cut.stderr": {
+    "bytes": 85,
+    "sha256": "17005adc3a732070867d374f1a9b455caacd941029607ebaea2e44286900f72c"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-transaction_log_sync-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-transaction_log_sync-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-transaction_log_sync-1-verify.stdout": {
+    "bytes": 3855,
+    "sha256": "a1f0445f1694fd056355a62705733785aecfcf9dafaf79934590dad5dcc24598"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-transaction_log_write-1-cut.stderr": {
+    "bytes": 86,
+    "sha256": "5680ab2e829d22a86b9ba6ed13bfee7f6d034498d9de55f676cd9c228f72d3ac"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-transaction_log_write-1-cut.stdout": {
+    "bytes": 65,
+    "sha256": "054ab7f9552ed8618b177e6fd4ec1e2e2dd1449f96a1bb47a8bd92c8cc8683b3"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-transaction_log_write-1-verify.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-recovery-6cafd400/server_paged-volatile-transaction_log_write-1-verify.stdout": {
+    "bytes": 1125,
+    "sha256": "2042aa364fca24ec58acdde26800bbc0eed1f7ec455a5fd01e13ac7c12caa957"
+  },
+  "S3/native-identity-main490-recovery.log": {
+    "bytes": 1915,
+    "sha256": "5315405339466a264292789d690e5f21ac030acb52a8e4f322436b873aa5d4c8"
+  },
+  "S3/native-identity-main490-vm-6cafd400/embedded_memory-identity_after_ack/cut.console": {
+    "bytes": 480,
+    "sha256": "02bdadabe3725c53bc822fe0946d9f78e4c98f276fb2917bb54ec08c2f5ab112"
+  },
+  "S3/native-identity-main490-vm-6cafd400/embedded_memory-identity_after_ack/external-witness.json": {
+    "bytes": 461,
+    "sha256": "f54f40b5574b90a6bc6c4dab3ad13d829b5f136ad214885652bf0760a7351057"
+  },
+  "S3/native-identity-main490-vm-6cafd400/embedded_memory-identity_after_ack/verify.console": {
+    "bytes": 4076,
+    "sha256": "3b0d8e2181b3c90439a425ba7d70987f37cbe3bf8ec248d91815ff8617182943"
+  },
+  "S3/native-identity-main490-vm-6cafd400/embedded_memory-identity_after_commit/cut.console": {
+    "bytes": 283,
+    "sha256": "f4e82486ffee8720bacb6c0f103cd59733cc1c8552c9728cb57f0f8d8e75a416"
+  },
+  "S3/native-identity-main490-vm-6cafd400/embedded_memory-identity_after_commit/external-witness.json": {
+    "bytes": 277,
+    "sha256": "0923acc8afa6f46ae5a1b75133d4cf4da0a1a171c4ba34f155aa8de37bc56cdd"
+  },
+  "S3/native-identity-main490-vm-6cafd400/embedded_memory-identity_after_commit/verify.console": {
+    "bytes": 4076,
+    "sha256": "ad71fd74587265c4ee66e3b4dcb33aa7c999290338502a44f685a678296ff32a"
+  },
+  "S3/native-identity-main490-vm-6cafd400/embedded_memory-transaction_log_sync/cut.console": {
+    "bytes": 282,
+    "sha256": "2095ba939a9fb4493595028edcd310294687b6275cca499f82c3ba3f3c345590"
+  },
+  "S3/native-identity-main490-vm-6cafd400/embedded_memory-transaction_log_sync/external-witness.json": {
+    "bytes": 275,
+    "sha256": "5e36f0aecb21594af8e62a8baad919bd563f3f65afea6a3b31c7284d667da06e"
+  },
+  "S3/native-identity-main490-vm-6cafd400/embedded_memory-transaction_log_sync/verify.console": {
+    "bytes": 4076,
+    "sha256": "94eb9b31f6932fcf974b18184705ff080be8f0c5fe808bbe6d14c241f27dc041"
+  },
+  "S3/native-identity-main490-vm-6cafd400/embedded_memory-transaction_log_write/cut.console": {
+    "bytes": 283,
+    "sha256": "e55218273007b17544e85723a5b29395eb5e4c5ace9d21180908cbc03319945f"
+  },
+  "S3/native-identity-main490-vm-6cafd400/embedded_memory-transaction_log_write/external-witness.json": {
+    "bytes": 277,
+    "sha256": "ba72e7b2dc993c636e712e309cbf19ce8edefc1db4083754d7611e3031b3a079"
+  },
+  "S3/native-identity-main490-vm-6cafd400/embedded_memory-transaction_log_write/verify.console": {
+    "bytes": 1346,
+    "sha256": "9d3a67711d1bb08807369b17915e8304d7a8da1e0190bd33e952b4db2b5c49a9"
+  },
+  "S3/native-identity-main490-vm-6cafd400/initroot/init": {
+    "bytes": 1451,
+    "sha256": "7f1794796d1544ab87eaf64881ab715c79f0ed2fd6cc9213ce36aa7bdf7508e0"
+  },
+  "S3/native-identity-main490-vm-6cafd400/qemu.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-vm-6cafd400/qemu.stdout": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "S3/native-identity-main490-vm-6cafd400/result.json": {
+    "bytes": 70663,
+    "sha256": "85f82b6125ecf7a41f8182a76d2abb827631ae24595a635b11db8f79fd6cd05c"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-identity_after_ack/cut.console": {
+    "bytes": 480,
+    "sha256": "60c0f1a8a99e62c518bf8a673381d475ccc50cc2471cf1a10e4fdb0bfc573952"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-identity_after_ack/external-witness.json": {
+    "bytes": 458,
+    "sha256": "a44997977a6a6ae226c9dda26d60c79bf2c6dc52998702b438240c745edc4185"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-identity_after_ack/verify.console": {
+    "bytes": 4076,
+    "sha256": "cb4a58b9c31c0f5bf6729ee6ef978219e0c299732e11a29cc7fc902657a51a17"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-identity_after_commit/cut.console": {
+    "bytes": 283,
+    "sha256": "9beb1c2451ad175b31380a2b7079f9ef4d5c8848032cd55760b7b08441229f2e"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-identity_after_commit/external-witness.json": {
+    "bytes": 274,
+    "sha256": "435894381cba442950c2c7b1bd3ce8be24caf4ff3336a210e6df0a3672f9182d"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-identity_after_commit/verify.console": {
+    "bytes": 4076,
+    "sha256": "02904352960833c2e7be25110ebab0797601722a3e36add0cffbfda426324ee2"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-page_log_sync/cut.console": {
+    "bytes": 275,
+    "sha256": "f7fb26e2433dd136fb6d0651dcd10ea4e6c40d5cd35dba253cf32d8a87eb56df"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-page_log_sync/external-witness.json": {
+    "bytes": 258,
+    "sha256": "8fe4c244642f3de689e72606022d4c95ca46f42a4a01148c5b1c0e99fe08b5b5"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-page_log_sync/verify.console": {
+    "bytes": 4076,
+    "sha256": "c3d906b85d27287f8fcf4e035768c5cdc8bd120c6f2960239b1122a789784257"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-page_log_write/cut.console": {
+    "bytes": 276,
+    "sha256": "2212890c41bda98130e28467938d68fabe4b8f6145b8ba8b044a04577de96118"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-page_log_write/external-witness.json": {
+    "bytes": 260,
+    "sha256": "880f7cbb3afa6e8129bf6d0b5d9dcc9388bcb21ae990b3906aa7b11b0d9fed8a"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-page_log_write/verify.console": {
+    "bytes": 4076,
+    "sha256": "d314480da232208877db3dd025ab3ff44676d2aee1169988b8776ae97c30ec95"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-transaction_log_sync/cut.console": {
+    "bytes": 282,
+    "sha256": "7c1b4065591266178aaf5289c5236aa5df45a74101835b7192463530cd5382ce"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-transaction_log_sync/external-witness.json": {
+    "bytes": 271,
+    "sha256": "976b102aaf77fa09de2d042616fd6eba7ec38bd7e7c95bdfc67910aa8cd27910"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-transaction_log_sync/verify.console": {
+    "bytes": 4076,
+    "sha256": "0e35b4149374d013aaad01584e60f65eac5d87ce1abfeb4e5c5f54cdd66a84c4"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-transaction_log_write/cut.console": {
+    "bytes": 283,
+    "sha256": "5d016ec9513b70fa345a17fc0b177b1a6eb1b0244c33ede6dbe9dd45f5277002"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-transaction_log_write/external-witness.json": {
+    "bytes": 274,
+    "sha256": "b21f6e94e36b8962add0d2d466054c5e2db74c2c35fb58af569d12f6681d8f85"
+  },
+  "S3/native-identity-main490-vm-6cafd400/server_paged-transaction_log_write/verify.console": {
+    "bytes": 1346,
+    "sha256": "11138f0b05268dcab063b4d7e1d17461884875b5122aeed2ab90395c82dbda64"
+  },
+  "S3/native-identity-main490-vm.log": {
+    "bytes": 2807,
+    "sha256": "e7edde0eb4f105020830ce9f83635d395e63881e9573dbc0e17d593c57e89d8f"
+  },
+  "S3/report-native-identity-main490-process-IO-VM-independent.json": {
+    "bytes": 1146,
+    "sha256": "de147ac0e6df333e514ca3775ef6726b0e0cd5d1030593f5357e96ab8922b11b"
+  },
+  "controller/native-identity-main490-validation.json": {
+    "bytes": 3485,
+    "sha256": "a20294a856dec1b45726b2c526e8f0cfb20215f4d6098dcbf245b09f8eb535f9"
+  },
+  "controller/run-native-identity-main490-vm.py": {
+    "bytes": 12557,
+    "sha256": "da7048127fa924d36354ac63acf72bfe37fcf47720d5179e096abdb80ef62a82"
+  },
+  "controller/run-native-identity-recovery.py": {
+    "bytes": 9586,
+    "sha256": "c6c1470ac61a8a48c49ff34d079ccf25fe1aea94b6a2205900ef2b68e5f995fe"
+  },
+  "controller/verify-native-identity-recovery.py": {
+    "bytes": 11095,
+    "sha256": "b99e2d3a44d455fc5620fcb5c75c98306b3686c8d5dad4effb89f7c14567c307"
+  }
+}

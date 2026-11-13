@@ -1,0 +1,13 @@
+{
+  "unit": "bicdb-native-identity-main490-version-identity",
+  "main_pid": 1627222,
+  "descendants": [
+    1627222,
+    1627224,
+    2143925,
+    1627225
+  ],
+  "status": "queued_only_no_tests_started",
+  "reason": "Refresh exact compiler birth allowance after independent std lane advanced Core to SQL; old allowed438823 is gone. No observation timeout or failed validation caused this change.",
+  "recorded_unix": 1794518449.313743
+}

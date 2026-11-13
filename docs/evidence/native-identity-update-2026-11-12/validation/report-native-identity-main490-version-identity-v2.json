@@ -1,0 +1,39 @@
+{
+  "source": "6cafd400844f0dc11200afed52ab2f015009ecf2",
+  "scope": "Exactcandidate1.0.490-beta versionidentity andpackage/lock/current-source synchronization; afterfullCore/SQLauthority batch. No productioncodechanges, no CLI/release/deployment implied. Use unchangedcode results separatelysource-scoped.",
+  "started_unix": 1794518451.372938,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794518451.3731291,
+      "exit": 0,
+      "finished_unix": 1794518451.4431212
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "version_identity",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794518451.443323,
+      "exit": 0,
+      "finished_unix": 1794518460.930464
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794518460.932057
+}

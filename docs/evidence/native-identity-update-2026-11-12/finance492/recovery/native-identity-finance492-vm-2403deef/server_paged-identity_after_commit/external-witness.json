@@ -1,0 +1,1 @@
+{"mode": "server_paged", "site": "identity.after_commit", "owned_qemu_pid": 2069934, "guest_witness": {"site": "identity.after_commit"}, "tx_started": {"native_tx_id": 4, "new_id": "4", "old_id": "2"}, "acknowledged": false, "ack": null, "observed_unix": 1794525362.5005858}

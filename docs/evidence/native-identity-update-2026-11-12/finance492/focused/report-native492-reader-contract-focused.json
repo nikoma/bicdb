@@ -1,0 +1,93 @@
+{
+  "source": "2403deefde68869c15f02b73d40406ffdfb50148",
+  "scope": "Fix actual2reader-baseline failures onfinance/API492candidate; retain6implementedfinance/mutationsemanticrequirements, exclude localstorage/authorityflags and unsupportedSQLrename. ActualNative formatactivation/ACKhash/seq/tworeopens and bindingstaleness. Additionalexistingformat+bindings controls. SourceAPIissuers/grants/SQLauthority/version17checks at5fab separatelyunchangedcode; allbroad/recovery/application/mainmerge qualification stillrequired. Originalassertions/waitsunchanged;P2off/no spend.",
+  "started_unix": 1794524660.622894,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "mutation_reader_contract_tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794524660.6233985,
+      "exit": 0,
+      "finished_unix": 1794524719.2786973
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "current_semantic_reader_requirements",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794524719.2789626,
+      "exit": 0,
+      "finished_unix": 1794524719.925056
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "range_image_bindings::tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794524719.9252493,
+      "exit": 0,
+      "finished_unix": 1794524720.6344109
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "format::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794524720.6347024,
+      "exit": 0,
+      "finished_unix": 1794524721.8217943
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794524721.8220172
+}

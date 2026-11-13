@@ -2354,7 +2354,7 @@ pub enum SqlErrorField {
 
 fn bicdb_error_sqlstate(error: &BicDbError) -> &'static str {
     match error {
-        BicDbError::Authorization(_) => "42501",
+        BicDbError::Authorization(_) | BicDbError::MutationDenied(_) => "42501",
         BicDbError::QueryMemoryLimit(_) => "53200",
         BicDbError::CollectionNotFound(_) => "42P01",
         BicDbError::CollectionAlreadyExists(_) => "42P07",

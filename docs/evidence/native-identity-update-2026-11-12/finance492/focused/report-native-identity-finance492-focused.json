@@ -1,0 +1,84 @@
+{
+  "source": "5fab7f47be70b935afdbd2d68dfcdbdfc688d9ec",
+  "scope": "Version492 candidate over actual finance/owner main490702f; HA491 alreadystaged byotherowner, no reused491 and mainmerge mustwaitactual491+freshnextpatch verification. Adapt identityUPDATEtoAuthorizedMutation retainingissueronbothphysicalwrites; addtrueNativeissuer/rollback/ACKreopen andimmutablefactownernegative checks. Prior4906cafd/52f8 qualificationhistoricalonly. Focused tests, notfinalmain/fullCore/recovery/application/HA/release/deployment qualification. Originalassertions/waits preserved;goalactive/P2off/no newcloudspend.",
+  "started_unix": 1794523519.9981606,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794523519.9983149,
+      "exit": 0,
+      "finished_unix": 1794523520.0557008
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "mutation_identity::issuer_tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794523520.0558918,
+      "exit": 0,
+      "finished_unix": 1794523595.0598593
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "mutation_grants",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794523595.0600798,
+      "exit": 0,
+      "finished_unix": 1794523644.9714859
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "mutation_authority",
+        "--test",
+        "version_identity",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794523644.9716985,
+      "exit": 0,
+      "finished_unix": 1794523836.313425
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794523836.3136203
+}

@@ -1,0 +1,51 @@
+{
+  "source": "fdac8c7691ed0458497096999c590a2aee092f18",
+  "scope": "Test-only overqualified5fab API492/currentfinance490 runtime. RealNative flagactivators forfourfinance+Decimal/appunique mustsurvive readonlyreader capture and invalidateactualNativeimagebindings, keepACKhash/seq/localnamespace. Failureevidence retained; only modes/flagsactuallyreached claimed. No futureSQLrename/portableorigin/legacylogicalpropagation/HA/app readiness asserted. Originalassertions/waits intact.",
+  "started_unix": 1794524368.2354076,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "mutation_reader_contract_tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794524368.235536,
+      "exit": 101,
+      "finished_unix": 1794524425.0420396
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "current_semantic_reader_requirements",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794524425.0422447,
+      "exit": 101,
+      "finished_unix": 1794524425.3244798
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794524425.324835
+}

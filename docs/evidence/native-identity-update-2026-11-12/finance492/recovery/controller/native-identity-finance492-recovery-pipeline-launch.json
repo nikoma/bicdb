@@ -1,0 +1,37 @@
+{
+  "source": "2403deefde68869c15f02b73d40406ffdfb50148",
+  "files": {
+    "run-native-identity-finance492-recovery.py": {
+      "sha256": "d417f8eeaad003452dab633b17d824aa62795338f4c0961dafc398f912709b57",
+      "bytes": 9673
+    },
+    "run-native-identity-finance492-vm.py": {
+      "sha256": "01184cd78d0b44a7768396d73b6b16713967285dbc9b1d9f21af650a6e20342a",
+      "bytes": 12597
+    },
+    "verify-native-identity-finance492-recovery.py": {
+      "sha256": "b7adc78d016164ed63d04cf5b9c473594fec9b8d1aab6986be62ee8bdd359d2f",
+      "bytes": 11128
+    },
+    "run-native-identity-finance492-recovery-pipeline.py": {
+      "sha256": "57fda03907f0c490612adc5d87b26366505e02486335bf7ebcb6d046ff89c9c9",
+      "bytes": 2717
+    }
+  },
+  "unit": "bicdb-native-identity-finance492-recovery-pipeline",
+  "submitted_unix": 1794524924.4576,
+  "command": [
+    "systemd-run",
+    "--unit=bicdb-native-identity-finance492-recovery-pipeline",
+    "--property=MemoryMax=6G",
+    "--property=MemoryHigh=5G",
+    "--property=MemorySwapMax=0",
+    "--property=CPUQuota=100%",
+    "--property=LimitCORE=0",
+    "--working-directory=/root/bicdb-durability-s3",
+    "/bin/bash",
+    "-c",
+    "/root/bicdb-durability-s3/codex-monitored-v2.sh /usr/bin/python3 /root/bicdb-durability-s3/host-control/run-native-identity-finance492-recovery-pipeline.py > /root/bicdb-durability-s3/native-identity-finance492-recovery-pipeline.log 2>&1"
+  ],
+  "status": "submitted_waiting_application_and_probe"
+}

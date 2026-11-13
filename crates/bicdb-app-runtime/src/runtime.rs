@@ -7,6 +7,9 @@ pub(crate) use scheduling::*;
 mod schema_defs;
 pub(crate) use schema_defs::*;
 mod application_runtime;
+mod invariant_registry;
+use invariant_registry::{CatalogAdmission, NativeInvariantBundle};
+pub(crate) use invariant_registry::{RuntimeInvariantContext, RuntimeInvariantProvider};
 mod unique_scope;
 pub use unique_scope::{OfflineUniqueScopeTransition, UniqueScopeEnvelope, UniqueScopeOutcome};
 mod http_transaction;
@@ -433,6 +436,7 @@ struct RuntimeCatalog {
     generation: u64,
     packages: BTreeMap<String, Arc<PackageSnapshot>>,
     routes: BTreeMap<(String, String), String>,
+    native_invariants: Arc<[NativeInvariantBundle]>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -524,7 +528,8 @@ pub struct ApplicationRuntime {
     verifier: PackageVerifier,
     services: InvocationServices,
     staged: RwLock<BTreeMap<String, Arc<PackageSnapshot>>>,
-    active: RwLock<Arc<RuntimeCatalog>>,
+    active: Arc<RwLock<Arc<RuntimeCatalog>>>,
+    catalog_admission: Arc<CatalogAdmission>,
     lifecycle: Mutex<()>,
     history: Mutex<BTreeMap<String, VecDeque<Arc<PackageSnapshot>>>>,
     supervisors: Mutex<BTreeMap<String, SupervisorSet>>,

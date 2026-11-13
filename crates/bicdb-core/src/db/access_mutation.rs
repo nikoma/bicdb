@@ -898,6 +898,7 @@ impl BicDb {
             native_write_issuers: Mutex::new(BTreeMap::new()),
             next_mutation_grant: 1,
             commit_validators: Vec::new(),
+            mutation_invariant_bundles: BTreeMap::new(),
             validate_existing_application_invariants: false,
             isolation: TransactionIsolation::ReadCommitted,
             serializable_generation_snapshot: HashMap::new(),

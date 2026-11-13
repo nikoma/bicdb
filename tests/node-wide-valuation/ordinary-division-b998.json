@@ -1,0 +1,1084 @@
+{
+  "scope": "Captured ordinary positive native Decimal division compatibility evidence; no wide-input equivalence or new Core implementation execution claim.",
+  "native_sha256": "f4f181b6a1f0d40fe3bb379b32f9258725c8cbb4b51b43f5b3fc3e2673af5d37",
+  "compiler_sha256": "897a322195795aed70a31d30979e02c8f034311db6e102f017939b87539a4d51",
+  "source_results_sha256": "4ed5fb0cb07e1ac8965d1be8752afb9387b0feaafd6a4c8bc81091c13e3c5e5e",
+  "synthetic_oidc": true,
+  "no_production_account": true,
+  "cases": [
+    {
+      "numerator": "0",
+      "denominator": "0",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal division by zero is not allowed"
+      }
+    },
+    {
+      "numerator": "0",
+      "denominator": "1",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0",
+      "denominator": "2",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0",
+      "denominator": "3",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0",
+      "denominator": "4",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0",
+      "denominator": "5",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0",
+      "denominator": "7",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0",
+      "denominator": "9",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0",
+      "denominator": "0.01",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0",
+      "denominator": "0.05",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0",
+      "denominator": "0.0000000000000000000000000001",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0",
+      "denominator": "79228162514264337593543950335",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0",
+      "denominator": "79228162514264337593543950334",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "1",
+      "denominator": "0",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal division by zero is not allowed"
+      }
+    },
+    {
+      "numerator": "1",
+      "denominator": "1",
+      "status": 200,
+      "value": "1"
+    },
+    {
+      "numerator": "1",
+      "denominator": "2",
+      "status": 200,
+      "value": "0.50"
+    },
+    {
+      "numerator": "1",
+      "denominator": "3",
+      "status": 200,
+      "value": "0.3333333333333333333333333333"
+    },
+    {
+      "numerator": "1",
+      "denominator": "4",
+      "status": 200,
+      "value": "0.25"
+    },
+    {
+      "numerator": "1",
+      "denominator": "5",
+      "status": 200,
+      "value": "0.20"
+    },
+    {
+      "numerator": "1",
+      "denominator": "7",
+      "status": 200,
+      "value": "0.1428571428571428571428571429"
+    },
+    {
+      "numerator": "1",
+      "denominator": "9",
+      "status": 200,
+      "value": "0.1111111111111111111111111111"
+    },
+    {
+      "numerator": "1",
+      "denominator": "0.01",
+      "status": 200,
+      "value": "100"
+    },
+    {
+      "numerator": "1",
+      "denominator": "0.05",
+      "status": 200,
+      "value": "20"
+    },
+    {
+      "numerator": "1",
+      "denominator": "0.0000000000000000000000000001",
+      "status": 200,
+      "value": "10000000000000000000000000000"
+    },
+    {
+      "numerator": "1",
+      "denominator": "79228162514264337593543950335",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "1",
+      "denominator": "79228162514264337593543950334",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "2",
+      "denominator": "0",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal division by zero is not allowed"
+      }
+    },
+    {
+      "numerator": "2",
+      "denominator": "1",
+      "status": 200,
+      "value": "2"
+    },
+    {
+      "numerator": "2",
+      "denominator": "2",
+      "status": 200,
+      "value": "1"
+    },
+    {
+      "numerator": "2",
+      "denominator": "3",
+      "status": 200,
+      "value": "0.6666666666666666666666666667"
+    },
+    {
+      "numerator": "2",
+      "denominator": "4",
+      "status": 200,
+      "value": "0.50"
+    },
+    {
+      "numerator": "2",
+      "denominator": "5",
+      "status": 200,
+      "value": "0.40"
+    },
+    {
+      "numerator": "2",
+      "denominator": "7",
+      "status": 200,
+      "value": "0.2857142857142857142857142857"
+    },
+    {
+      "numerator": "2",
+      "denominator": "9",
+      "status": 200,
+      "value": "0.2222222222222222222222222222"
+    },
+    {
+      "numerator": "2",
+      "denominator": "0.01",
+      "status": 200,
+      "value": "200"
+    },
+    {
+      "numerator": "2",
+      "denominator": "0.05",
+      "status": 200,
+      "value": "40"
+    },
+    {
+      "numerator": "2",
+      "denominator": "0.0000000000000000000000000001",
+      "status": 200,
+      "value": "20000000000000000000000000000"
+    },
+    {
+      "numerator": "2",
+      "denominator": "79228162514264337593543950335",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "2",
+      "denominator": "79228162514264337593543950334",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "3",
+      "denominator": "0",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal division by zero is not allowed"
+      }
+    },
+    {
+      "numerator": "3",
+      "denominator": "1",
+      "status": 200,
+      "value": "3"
+    },
+    {
+      "numerator": "3",
+      "denominator": "2",
+      "status": 200,
+      "value": "1.50"
+    },
+    {
+      "numerator": "3",
+      "denominator": "3",
+      "status": 200,
+      "value": "1"
+    },
+    {
+      "numerator": "3",
+      "denominator": "4",
+      "status": 200,
+      "value": "0.75"
+    },
+    {
+      "numerator": "3",
+      "denominator": "5",
+      "status": 200,
+      "value": "0.60"
+    },
+    {
+      "numerator": "3",
+      "denominator": "7",
+      "status": 200,
+      "value": "0.4285714285714285714285714286"
+    },
+    {
+      "numerator": "3",
+      "denominator": "9",
+      "status": 200,
+      "value": "0.3333333333333333333333333333"
+    },
+    {
+      "numerator": "3",
+      "denominator": "0.01",
+      "status": 200,
+      "value": "300"
+    },
+    {
+      "numerator": "3",
+      "denominator": "0.05",
+      "status": 200,
+      "value": "60"
+    },
+    {
+      "numerator": "3",
+      "denominator": "0.0000000000000000000000000001",
+      "status": 200,
+      "value": "30000000000000000000000000000"
+    },
+    {
+      "numerator": "3",
+      "denominator": "79228162514264337593543950335",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "3",
+      "denominator": "79228162514264337593543950334",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "4",
+      "denominator": "0",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal division by zero is not allowed"
+      }
+    },
+    {
+      "numerator": "4",
+      "denominator": "1",
+      "status": 200,
+      "value": "4"
+    },
+    {
+      "numerator": "4",
+      "denominator": "2",
+      "status": 200,
+      "value": "2"
+    },
+    {
+      "numerator": "4",
+      "denominator": "3",
+      "status": 200,
+      "value": "1.3333333333333333333333333333"
+    },
+    {
+      "numerator": "4",
+      "denominator": "4",
+      "status": 200,
+      "value": "1"
+    },
+    {
+      "numerator": "4",
+      "denominator": "5",
+      "status": 200,
+      "value": "0.80"
+    },
+    {
+      "numerator": "4",
+      "denominator": "7",
+      "status": 200,
+      "value": "0.5714285714285714285714285714"
+    },
+    {
+      "numerator": "4",
+      "denominator": "9",
+      "status": 200,
+      "value": "0.4444444444444444444444444444"
+    },
+    {
+      "numerator": "4",
+      "denominator": "0.01",
+      "status": 200,
+      "value": "400"
+    },
+    {
+      "numerator": "4",
+      "denominator": "0.05",
+      "status": 200,
+      "value": "80"
+    },
+    {
+      "numerator": "4",
+      "denominator": "0.0000000000000000000000000001",
+      "status": 200,
+      "value": "40000000000000000000000000000"
+    },
+    {
+      "numerator": "4",
+      "denominator": "79228162514264337593543950335",
+      "status": 200,
+      "value": "0.0000000000000000000000000001"
+    },
+    {
+      "numerator": "4",
+      "denominator": "79228162514264337593543950334",
+      "status": 200,
+      "value": "0.0000000000000000000000000001"
+    },
+    {
+      "numerator": "5",
+      "denominator": "0",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal division by zero is not allowed"
+      }
+    },
+    {
+      "numerator": "5",
+      "denominator": "1",
+      "status": 200,
+      "value": "5"
+    },
+    {
+      "numerator": "5",
+      "denominator": "2",
+      "status": 200,
+      "value": "2.50"
+    },
+    {
+      "numerator": "5",
+      "denominator": "3",
+      "status": 200,
+      "value": "1.6666666666666666666666666667"
+    },
+    {
+      "numerator": "5",
+      "denominator": "4",
+      "status": 200,
+      "value": "1.25"
+    },
+    {
+      "numerator": "5",
+      "denominator": "5",
+      "status": 200,
+      "value": "1"
+    },
+    {
+      "numerator": "5",
+      "denominator": "7",
+      "status": 200,
+      "value": "0.7142857142857142857142857143"
+    },
+    {
+      "numerator": "5",
+      "denominator": "9",
+      "status": 200,
+      "value": "0.5555555555555555555555555556"
+    },
+    {
+      "numerator": "5",
+      "denominator": "0.01",
+      "status": 200,
+      "value": "500"
+    },
+    {
+      "numerator": "5",
+      "denominator": "0.05",
+      "status": 200,
+      "value": "100"
+    },
+    {
+      "numerator": "5",
+      "denominator": "0.0000000000000000000000000001",
+      "status": 200,
+      "value": "50000000000000000000000000000"
+    },
+    {
+      "numerator": "5",
+      "denominator": "79228162514264337593543950335",
+      "status": 200,
+      "value": "0.0000000000000000000000000001"
+    },
+    {
+      "numerator": "5",
+      "denominator": "79228162514264337593543950334",
+      "status": 200,
+      "value": "0.0000000000000000000000000001"
+    },
+    {
+      "numerator": "7",
+      "denominator": "0",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal division by zero is not allowed"
+      }
+    },
+    {
+      "numerator": "7",
+      "denominator": "1",
+      "status": 200,
+      "value": "7"
+    },
+    {
+      "numerator": "7",
+      "denominator": "2",
+      "status": 200,
+      "value": "3.50"
+    },
+    {
+      "numerator": "7",
+      "denominator": "3",
+      "status": 200,
+      "value": "2.3333333333333333333333333333"
+    },
+    {
+      "numerator": "7",
+      "denominator": "4",
+      "status": 200,
+      "value": "1.75"
+    },
+    {
+      "numerator": "7",
+      "denominator": "5",
+      "status": 200,
+      "value": "1.40"
+    },
+    {
+      "numerator": "7",
+      "denominator": "7",
+      "status": 200,
+      "value": "1"
+    },
+    {
+      "numerator": "7",
+      "denominator": "9",
+      "status": 200,
+      "value": "0.7777777777777777777777777778"
+    },
+    {
+      "numerator": "7",
+      "denominator": "0.01",
+      "status": 200,
+      "value": "700"
+    },
+    {
+      "numerator": "7",
+      "denominator": "0.05",
+      "status": 200,
+      "value": "140"
+    },
+    {
+      "numerator": "7",
+      "denominator": "0.0000000000000000000000000001",
+      "status": 200,
+      "value": "70000000000000000000000000000"
+    },
+    {
+      "numerator": "7",
+      "denominator": "79228162514264337593543950335",
+      "status": 200,
+      "value": "0.0000000000000000000000000001"
+    },
+    {
+      "numerator": "7",
+      "denominator": "79228162514264337593543950334",
+      "status": 200,
+      "value": "0.0000000000000000000000000001"
+    },
+    {
+      "numerator": "9",
+      "denominator": "0",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal division by zero is not allowed"
+      }
+    },
+    {
+      "numerator": "9",
+      "denominator": "1",
+      "status": 200,
+      "value": "9"
+    },
+    {
+      "numerator": "9",
+      "denominator": "2",
+      "status": 200,
+      "value": "4.50"
+    },
+    {
+      "numerator": "9",
+      "denominator": "3",
+      "status": 200,
+      "value": "3"
+    },
+    {
+      "numerator": "9",
+      "denominator": "4",
+      "status": 200,
+      "value": "2.25"
+    },
+    {
+      "numerator": "9",
+      "denominator": "5",
+      "status": 200,
+      "value": "1.80"
+    },
+    {
+      "numerator": "9",
+      "denominator": "7",
+      "status": 200,
+      "value": "1.2857142857142857142857142857"
+    },
+    {
+      "numerator": "9",
+      "denominator": "9",
+      "status": 200,
+      "value": "1"
+    },
+    {
+      "numerator": "9",
+      "denominator": "0.01",
+      "status": 200,
+      "value": "900"
+    },
+    {
+      "numerator": "9",
+      "denominator": "0.05",
+      "status": 200,
+      "value": "180"
+    },
+    {
+      "numerator": "9",
+      "denominator": "0.0000000000000000000000000001",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal arithmetic overflowed the supported range"
+      }
+    },
+    {
+      "numerator": "9",
+      "denominator": "79228162514264337593543950335",
+      "status": 200,
+      "value": "0.0000000000000000000000000001"
+    },
+    {
+      "numerator": "9",
+      "denominator": "79228162514264337593543950334",
+      "status": 200,
+      "value": "0.0000000000000000000000000001"
+    },
+    {
+      "numerator": "0.01",
+      "denominator": "0",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal division by zero is not allowed"
+      }
+    },
+    {
+      "numerator": "0.01",
+      "denominator": "1",
+      "status": 200,
+      "value": "0.01"
+    },
+    {
+      "numerator": "0.01",
+      "denominator": "2",
+      "status": 200,
+      "value": "0.0050"
+    },
+    {
+      "numerator": "0.01",
+      "denominator": "3",
+      "status": 200,
+      "value": "0.0033333333333333333333333333"
+    },
+    {
+      "numerator": "0.01",
+      "denominator": "4",
+      "status": 200,
+      "value": "0.0025"
+    },
+    {
+      "numerator": "0.01",
+      "denominator": "5",
+      "status": 200,
+      "value": "0.0020"
+    },
+    {
+      "numerator": "0.01",
+      "denominator": "7",
+      "status": 200,
+      "value": "0.0014285714285714285714285714"
+    },
+    {
+      "numerator": "0.01",
+      "denominator": "9",
+      "status": 200,
+      "value": "0.0011111111111111111111111111"
+    },
+    {
+      "numerator": "0.01",
+      "denominator": "0.01",
+      "status": 200,
+      "value": "1"
+    },
+    {
+      "numerator": "0.01",
+      "denominator": "0.05",
+      "status": 200,
+      "value": "0.20"
+    },
+    {
+      "numerator": "0.01",
+      "denominator": "0.0000000000000000000000000001",
+      "status": 200,
+      "value": "100000000000000000000000000"
+    },
+    {
+      "numerator": "0.01",
+      "denominator": "79228162514264337593543950335",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0.01",
+      "denominator": "79228162514264337593543950334",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0.05",
+      "denominator": "0",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal division by zero is not allowed"
+      }
+    },
+    {
+      "numerator": "0.05",
+      "denominator": "1",
+      "status": 200,
+      "value": "0.05"
+    },
+    {
+      "numerator": "0.05",
+      "denominator": "2",
+      "status": 200,
+      "value": "0.0250"
+    },
+    {
+      "numerator": "0.05",
+      "denominator": "3",
+      "status": 200,
+      "value": "0.0166666666666666666666666667"
+    },
+    {
+      "numerator": "0.05",
+      "denominator": "4",
+      "status": 200,
+      "value": "0.0125"
+    },
+    {
+      "numerator": "0.05",
+      "denominator": "5",
+      "status": 200,
+      "value": "0.01"
+    },
+    {
+      "numerator": "0.05",
+      "denominator": "7",
+      "status": 200,
+      "value": "0.0071428571428571428571428571"
+    },
+    {
+      "numerator": "0.05",
+      "denominator": "9",
+      "status": 200,
+      "value": "0.0055555555555555555555555556"
+    },
+    {
+      "numerator": "0.05",
+      "denominator": "0.01",
+      "status": 200,
+      "value": "5"
+    },
+    {
+      "numerator": "0.05",
+      "denominator": "0.05",
+      "status": 200,
+      "value": "1"
+    },
+    {
+      "numerator": "0.05",
+      "denominator": "0.0000000000000000000000000001",
+      "status": 200,
+      "value": "500000000000000000000000000"
+    },
+    {
+      "numerator": "0.05",
+      "denominator": "79228162514264337593543950335",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0.05",
+      "denominator": "79228162514264337593543950334",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0.0000000000000000000000000001",
+      "denominator": "0",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal division by zero is not allowed"
+      }
+    },
+    {
+      "numerator": "0.0000000000000000000000000001",
+      "denominator": "1",
+      "status": 200,
+      "value": "0.0000000000000000000000000001"
+    },
+    {
+      "numerator": "0.0000000000000000000000000001",
+      "denominator": "2",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0.0000000000000000000000000001",
+      "denominator": "3",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0.0000000000000000000000000001",
+      "denominator": "4",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0.0000000000000000000000000001",
+      "denominator": "5",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0.0000000000000000000000000001",
+      "denominator": "7",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0.0000000000000000000000000001",
+      "denominator": "9",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0.0000000000000000000000000001",
+      "denominator": "0.01",
+      "status": 200,
+      "value": "0.00000000000000000000000001"
+    },
+    {
+      "numerator": "0.0000000000000000000000000001",
+      "denominator": "0.05",
+      "status": 200,
+      "value": "0.000000000000000000000000002"
+    },
+    {
+      "numerator": "0.0000000000000000000000000001",
+      "denominator": "0.0000000000000000000000000001",
+      "status": 200,
+      "value": "1"
+    },
+    {
+      "numerator": "0.0000000000000000000000000001",
+      "denominator": "79228162514264337593543950335",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "0.0000000000000000000000000001",
+      "denominator": "79228162514264337593543950334",
+      "status": 200,
+      "value": "0"
+    },
+    {
+      "numerator": "79228162514264337593543950335",
+      "denominator": "0",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal division by zero is not allowed"
+      }
+    },
+    {
+      "numerator": "79228162514264337593543950335",
+      "denominator": "1",
+      "status": 200,
+      "value": "79228162514264337593543950335"
+    },
+    {
+      "numerator": "79228162514264337593543950335",
+      "denominator": "2",
+      "status": 200,
+      "value": "39614081257132168796771975168"
+    },
+    {
+      "numerator": "79228162514264337593543950335",
+      "denominator": "3",
+      "status": 200,
+      "value": "26409387504754779197847983445"
+    },
+    {
+      "numerator": "79228162514264337593543950335",
+      "denominator": "4",
+      "status": 200,
+      "value": "19807040628566084398385987584"
+    },
+    {
+      "numerator": "79228162514264337593543950335",
+      "denominator": "5",
+      "status": 200,
+      "value": "15845632502852867518708790067"
+    },
+    {
+      "numerator": "79228162514264337593543950335",
+      "denominator": "7",
+      "status": 200,
+      "value": "11318308930609191084791992905"
+    },
+    {
+      "numerator": "79228162514264337593543950335",
+      "denominator": "9",
+      "status": 200,
+      "value": "8803129168251593065949327815"
+    },
+    {
+      "numerator": "79228162514264337593543950335",
+      "denominator": "0.01",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal arithmetic overflowed the supported range"
+      }
+    },
+    {
+      "numerator": "79228162514264337593543950335",
+      "denominator": "0.05",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal arithmetic overflowed the supported range"
+      }
+    },
+    {
+      "numerator": "79228162514264337593543950335",
+      "denominator": "0.0000000000000000000000000001",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal arithmetic overflowed the supported range"
+      }
+    },
+    {
+      "numerator": "79228162514264337593543950335",
+      "denominator": "79228162514264337593543950335",
+      "status": 200,
+      "value": "1"
+    },
+    {
+      "numerator": "79228162514264337593543950335",
+      "denominator": "79228162514264337593543950334",
+      "status": 200,
+      "value": "1.000000000000000000000"
+    },
+    {
+      "numerator": "79228162514264337593543950334",
+      "denominator": "0",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal division by zero is not allowed"
+      }
+    },
+    {
+      "numerator": "79228162514264337593543950334",
+      "denominator": "1",
+      "status": 200,
+      "value": "79228162514264337593543950334"
+    },
+    {
+      "numerator": "79228162514264337593543950334",
+      "denominator": "2",
+      "status": 200,
+      "value": "39614081257132168796771975167"
+    },
+    {
+      "numerator": "79228162514264337593543950334",
+      "denominator": "3",
+      "status": 200,
+      "value": "26409387504754779197847983445"
+    },
+    {
+      "numerator": "79228162514264337593543950334",
+      "denominator": "4",
+      "status": 200,
+      "value": "19807040628566084398385987584"
+    },
+    {
+      "numerator": "79228162514264337593543950334",
+      "denominator": "5",
+      "status": 200,
+      "value": "15845632502852867518708790067"
+    },
+    {
+      "numerator": "79228162514264337593543950334",
+      "denominator": "7",
+      "status": 200,
+      "value": "11318308930609191084791992905"
+    },
+    {
+      "numerator": "79228162514264337593543950334",
+      "denominator": "9",
+      "status": 200,
+      "value": "8803129168251593065949327815"
+    },
+    {
+      "numerator": "79228162514264337593543950334",
+      "denominator": "0.01",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal arithmetic overflowed the supported range"
+      }
+    },
+    {
+      "numerator": "79228162514264337593543950334",
+      "denominator": "0.05",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal arithmetic overflowed the supported range"
+      }
+    },
+    {
+      "numerator": "79228162514264337593543950334",
+      "denominator": "0.0000000000000000000000000001",
+      "status": 400,
+      "error": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal arithmetic overflowed the supported range"
+      }
+    },
+    {
+      "numerator": "79228162514264337593543950334",
+      "denominator": "79228162514264337593543950335",
+      "status": 200,
+      "value": "1.000000000000000000000"
+    },
+    {
+      "numerator": "79228162514264337593543950334",
+      "denominator": "79228162514264337593543950334",
+      "status": 200,
+      "value": "1"
+    }
+  ]
+}

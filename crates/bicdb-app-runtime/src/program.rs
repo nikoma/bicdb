@@ -1223,6 +1223,29 @@ impl Evaluator<'_> {
             })
         };
         match target {
+            "finance.sum_units" => {
+                if values.len() != 2 || arguments.iter().any(|argument| argument.0.is_some()) {
+                    return Err(AppRuntimeError::InvalidRequest(
+                        "exact Decimal units sum requires a positional Decimal list and Int scale"
+                            .into(),
+                    ));
+                }
+                let items = values[0].as_array().ok_or_else(|| {
+                    AppRuntimeError::InvalidRequest(
+                        "exact Decimal units sum requires a list".into(),
+                    )
+                })?;
+                if items.len() > bicdb_core::MAX_EXACT_DECIMAL_LIST_SUM_ITEMS {
+                    return Err(AppRuntimeError::InvalidRequest(
+                        "exact Decimal units sum exceeds its bounded element count".into(),
+                    ));
+                }
+                for _ in items {
+                    self.step()?;
+                }
+                bicdb_core::exact_decimal_sum_units_value(&values)
+                    .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string()))
+            }
             "query.decimal_sum" => {
                 if values.len() != 1 || arguments[0].0.is_some() {
                     return Err(AppRuntimeError::InvalidRequest(
@@ -1533,6 +1556,12 @@ impl Evaluator<'_> {
             | "finance.round_money"
             | "finance.round"
             | "finance.proportional_interval"
+            | "finance.prorate_units"
+            | "finance.display_ratio_units"
+            | "finance.prorate_native_units"
+            | "finance.display_native_ratio_units"
+            | "finance.units_from_limbs"
+            | "finance.native_ratio_representable_units"
             | "finance.abs"
             | "finance.tax_exclusive"
             | "finance.tax_inclusive"
@@ -2780,6 +2809,22 @@ fn carrier_finance(target: &str, values: &[Value]) -> Result<Value> {
             finance_scale(second()?, target)?,
         ))),
         "finance.proportional_interval" => bicdb_core::exact_proportional_interval_value(values)
+            .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string())),
+        "finance.prorate_units" => bicdb_core::exact_prorate_units_value(values)
+            .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string())),
+        "finance.display_ratio_units" => bicdb_core::nearest_native_display_ratio_value(values)
+            .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string())),
+        "finance.prorate_native_units" => bicdb_core::exact_prorate_native_units_value(values)
+            .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string())),
+        "finance.display_native_ratio_units" => {
+            bicdb_core::nearest_native_full_display_ratio_value(values)
+                .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string()))
+        }
+        "finance.native_ratio_representable_units" => {
+            bicdb_core::native_ratio_representable_units_value(values)
+                .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string()))
+        }
+        "finance.units_from_limbs" => bicdb_core::exact_units_from_limbs_value(values)
             .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string())),
         "finance.abs" => {
             let value = decimal(first()?, target)?;

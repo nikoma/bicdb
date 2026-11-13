@@ -56,6 +56,15 @@ request/response sizes and deadlines. Secrets require an explicit plaintext
 read declaration. Retry requests cannot run inside a transaction or be followed
 by more host calls.
 
+JavaScript HTTP handlers preserve the class of an unhandled native host error
+using the exact exception object created for that call. Authorization denials,
+domain errors and commit conflicts therefore keep their native HTTP classes.
+The native origin is held outside JavaScript properties and JSON. Copying an
+error message, SQLSTATE or property cannot assign a native class; catching a
+host error and returning normally remains normal script control flow. Rethrowing
+the original error retains its class. Transaction cleanup preserves the original
+failure even when commit has already consumed its handle.
+
 `execute_script_delivery` loads the pinned version, clamps execution to the
 delivery lease and fresh actor deadline, then acknowledges completion or
 durably schedules a retry using BicDB's broker. Settlement checks the exact

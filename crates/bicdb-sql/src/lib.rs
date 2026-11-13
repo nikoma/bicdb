@@ -64,6 +64,27 @@ use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, SqlError>;
 
+/// Detect direct exact-unit aggregate use without interpreting text inside SQL
+/// strings, comments or dollar-quoted routine bodies. Runtime execution also
+/// checks the trusted application feature context of nested queries.
+pub fn requires_exact_decimal_units_feature(sql: &str) -> Result<bool> {
+    let tokens = Tokenizer::new(&PostgreSqlDialect {}, sql)
+        .tokenize()
+        .map_err(|error| SqlError::InvalidSql(error.to_string()))?;
+    let mut tokens = tokens
+        .iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_)))
+        .peekable();
+    while let Some(token) = tokens.next() {
+        if matches!(token, Token::Word(word) if word.value.eq_ignore_ascii_case("bicdb_exact_sum_units"))
+            && matches!(tokens.peek(), Some(Token::LParen))
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 mod aggregate_evaluation;
 mod boolean_parse;
 mod builtin_signatures;
@@ -1919,6 +1940,19 @@ pub enum SqlError {
     #[error("invalid SQL: {0}")]
     InvalidSql(String),
 
+    /// Typed origin: SQL roles, GUCs and raised SQLSTATEs cannot mint an
+    /// application's signed exact-unit feature allowance.
+    #[error("signed application requires the exact_decimal_units feature")]
+    ExactUnitsCapabilityDenied,
+
+    #[error("transaction control is not permitted inside a host-owned application transaction")]
+    ApplicationTransactionControlDenied,
+
+    /// Domain failure from the exact-unit leaf, distinct from arbitrary SQL
+    /// routines which may raise the same SQLSTATE or copy its message.
+    #[error("{0}")]
+    ExactUnitsParameter(String),
+
     #[error("{0}")]
     InvalidTextRepresentation(String),
 
@@ -2020,6 +2054,52 @@ pub enum SqlError {
 }
 
 impl SqlError {
+    /// Native authorization failures retain their typed origin through diagnostic
+    /// wrappers. A routine raising SQLSTATE 42501 is not an authorization origin.
+    pub fn is_native_authorization_denied(&self) -> bool {
+        match self {
+            Self::BicDb(BicDbError::Authorization(_) | BicDbError::MutationDenied(_)) => true,
+            Self::WithNotices { error, .. } => error.is_native_authorization_denied(),
+            Self::OracleContext { inner, .. } | Self::Rethrown(inner) => {
+                inner.is_native_authorization_denied()
+            }
+            _ => false,
+        }
+    }
+
+    pub fn is_application_transaction_control_denied(&self) -> bool {
+        match self {
+            Self::ApplicationTransactionControlDenied => true,
+            Self::WithNotices { error, .. } => error.is_application_transaction_control_denied(),
+            Self::OracleContext { inner, .. } | Self::Rethrown(inner) => {
+                inner.is_application_transaction_control_denied()
+            }
+            _ => false,
+        }
+    }
+
+    pub fn is_exact_units_capability_denied(&self) -> bool {
+        match self {
+            Self::ExactUnitsCapabilityDenied => true,
+            Self::WithNotices { error, .. } => error.is_exact_units_capability_denied(),
+            Self::OracleContext { inner, .. } | Self::Rethrown(inner) => {
+                inner.is_exact_units_capability_denied()
+            }
+            _ => false,
+        }
+    }
+
+    pub fn exact_units_parameter_message(&self) -> Option<&str> {
+        match self {
+            Self::ExactUnitsParameter(message) => Some(message),
+            Self::WithNotices { error, .. } => error.exact_units_parameter_message(),
+            Self::OracleContext { inner, .. } | Self::Rethrown(inner) => {
+                inner.exact_units_parameter_message()
+            }
+            _ => None,
+        }
+    }
+
     /// Internal request to retry a statement with an exclusive database lease.
     /// Notices and diagnostic context must preserve this control signal; SQL
     /// exception handlers must not interpret it as a user-visible failure.
@@ -2175,6 +2255,9 @@ impl SqlError {
             Self::InvalidTransactionState { .. } => "25P01",
             Self::RaisedException { sqlstate, .. } => sqlstate,
             Self::InvalidSql(_) => "42601",
+            Self::ExactUnitsCapabilityDenied => "42501",
+            Self::ApplicationTransactionControlDenied => "2D000",
+            Self::ExactUnitsParameter(_) => "22023",
             Self::InvalidTextRepresentation(_) => "22P02",
             Self::DataException { sqlstate, .. } => sqlstate,
             Self::ResourceLimit { sqlstate, .. } => sqlstate,

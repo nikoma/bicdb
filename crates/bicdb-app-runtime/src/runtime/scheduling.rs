@@ -51,6 +51,25 @@ pub(crate) fn start_schedule(
                     std::thread::sleep(Duration::from_millis(10));
                     continue;
                 }
+                // Catalog transitions defer before any durable occurrence is
+                // claimed, so admission cannot consume an occurrence attempt.
+                let catalog_context =
+                    match services.acquire_runtime_invariant_context(&manifest.identity.name) {
+                        Ok(context) => context,
+                        Err(AppRuntimeError::NotReady(_)) => {
+                            std::thread::sleep(Duration::from_millis(25));
+                            continue;
+                        }
+                        Err(error) => {
+                            thread_healthy.store(false, Ordering::Release);
+                            eprintln!(
+                                "bicdb: schedule `{}` admission failed: {error}",
+                                schedule.name
+                            );
+                            std::thread::sleep(Duration::from_millis(100));
+                            continue;
+                        }
+                    };
                 let now_ms = crate::host::now_ms();
                 let lease_ms = i64::try_from(manifest.limits.timeout_ms)
                     .unwrap_or(i64::MAX)
@@ -81,6 +100,7 @@ pub(crate) fn start_schedule(
                     }
                 };
                 let Some(claim) = claim else {
+                    drop(catalog_context);
                     std::thread::sleep(Duration::from_millis(10));
                     continue;
                 };
@@ -91,12 +111,16 @@ pub(crate) fn start_schedule(
                 let execution_schedule = schedule.clone();
                 let execution_health = thread_healthy.clone();
                 let execution_claim = claim.clone();
+                let execution_catalog_context = catalog_context.clone();
                 let spawn = std::thread::Builder::new()
                     .name(format!(
                         "bicdb-schedule-run-{}-{}",
                         schedule.name, claim.scheduled_for_ms
                     ))
                     .spawn(move || {
+                        // Retain the pre-claim catalog through execution and
+                        // durable completion, including failure recording.
+                        let _catalog_context = execution_catalog_context;
                         let result = execute_schedule_occurrence(
                             &execution_db,
                             &execution_module,

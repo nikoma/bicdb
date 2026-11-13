@@ -11,7 +11,7 @@ use bicdb_core::{
     NativeCommitValidator, NativeInvariantAggregateFunction, NativeInvariantBinaryOperator,
     NativeInvariantDefinition, NativeInvariantExpression, NativeInvariantKind,
     NativeInvariantUnaryOperator, NativeInvariantValueType, PublishOptions, Record,
-    SecurityContext, Transaction, TransactionIsolation, TransactionRollbackMark,
+    SecurityContext, Transaction, TransactionIsolation, TransactionRollbackMark, TxState,
 };
 use bicdb_extension::abi_v2::{
     ActorContext, AggregateSpec, ApplicationAggregateFunctionV1, ApplicationCallKindV1,
@@ -30,7 +30,7 @@ use bicdb_extension::abi_v2::{
 };
 use bicdb_extension::host::ApplicationHost;
 use bicdb_extension::{ExtensionCapability, ExtensionManifest};
-use bicdb_sql::{decode_typed_storage_json, SqlSession, SqlValue};
+use bicdb_sql::{decode_typed_storage_json, SqlError, SqlSession, SqlValue};
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
@@ -208,6 +208,9 @@ pub struct InvocationServices {
     pub max_runtime_cache_entries: usize,
     pub deterministic_clock_ms: Option<Arc<std::sync::atomic::AtomicI64>>,
     pub deterministic_random_seed: Option<Arc<Mutex<u64>>>,
+    // Server-only authority. Neither field is part of the application ABI.
+    pub(crate) invariant_registry: Option<Arc<crate::runtime::RuntimeInvariantProvider>>,
+    pub(crate) invariant_package_sha256: Option<String>,
 }
 
 impl std::fmt::Debug for InvocationServices {
@@ -233,6 +236,25 @@ impl std::fmt::Debug for InvocationServices {
 }
 
 impl InvocationServices {
+    pub(crate) fn acquire_runtime_invariant_context(
+        &self,
+        application: &str,
+    ) -> Result<Option<Arc<crate::runtime::RuntimeInvariantContext>>> {
+        match &self.invariant_registry {
+            Some(provider) => {
+                let package_hash = self.invariant_package_sha256.as_deref().ok_or_else(|| {
+                    AppRuntimeError::NotReady(
+                        "runtime invocation lacks its verified package identity".into(),
+                    )
+                })?;
+                Ok(Some(Arc::new(provider.acquire(application, package_hash)?)))
+            }
+            // Standalone trusted Rust hosts retain their explicit manifest
+            // contract. ApplicationRuntime always configures the provider.
+            None => Ok(None),
+        }
+    }
+
     pub fn new(
         secrets: Arc<dyn SecretProvider>,
         egress: Arc<dyn EgressProvider>,
@@ -262,6 +284,8 @@ impl InvocationServices {
             max_runtime_cache_entries: 100_000,
             deterministic_clock_ms: None,
             deterministic_random_seed: None,
+            invariant_registry: None,
+            invariant_package_sha256: None,
         }
     }
 
@@ -351,6 +375,40 @@ struct Savepoint {
 }
 
 #[derive(Clone)]
+struct HostTransactionIdentity {
+    native_id: u64,
+    actor: MutationActor,
+    isolation: TransactionIsolation,
+}
+
+impl HostTransactionIdentity {
+    fn capture(transaction: &Transaction) -> Result<Self> {
+        if transaction.state() != TxState::Pending {
+            return Err(AppRuntimeError::CapabilityDenied(
+                "application transaction is no longer pending".into(),
+            ));
+        }
+        let actor = transaction.mutation_actor().cloned().ok_or_else(|| {
+            AppRuntimeError::CapabilityDenied(
+                "application transaction has no trusted mutation actor".into(),
+            )
+        })?;
+        Ok(Self {
+            native_id: transaction.id().0,
+            actor,
+            isolation: transaction.isolation(),
+        })
+    }
+
+    fn matches(&self, transaction: &Transaction) -> bool {
+        transaction.state() == TxState::Pending
+            && transaction.id().0 == self.native_id
+            && transaction.mutation_actor() == Some(&self.actor)
+            && transaction.isolation() == self.isolation
+    }
+}
+
+#[derive(Clone)]
 struct GrantBinding {
     transaction: HostHandle,
     grant: MutationGrantId,
@@ -418,8 +476,10 @@ pub struct CapabilityHost {
     extension: Arc<ExtensionManifest>,
     actor: ActorContext,
     services: InvocationServices,
+    invariant_context: Option<Arc<crate::runtime::RuntimeInvariantContext>>,
     transactions: BTreeMap<HostHandle, Transaction>,
     borrowed_transactions: BTreeMap<HostHandle, NonNull<Transaction>>,
+    transaction_identities: BTreeMap<HostHandle, Arc<HostTransactionIdentity>>,
     savepoints: BTreeMap<HostHandle, Savepoint>,
     grants: BTreeMap<HostHandle, GrantBinding>,
     deliveries: BTreeMap<HostHandle, DeliveryBinding>,
@@ -530,14 +590,18 @@ impl CapabilityHost {
                 "capability host requires an ABI v2 application manifest".to_string(),
             ));
         }
+        let invariant_context =
+            services.acquire_runtime_invariant_context(&extension.identity.name)?;
         let mut host = Self {
             db: NonNull::from(db),
             service_trace,
             extension,
             actor,
             services,
+            invariant_context,
             transactions: BTreeMap::new(),
             borrowed_transactions: BTreeMap::new(),
+            transaction_identities: BTreeMap::new(),
             savepoints: BTreeMap::new(),
             grants: BTreeMap::new(),
             deliveries: BTreeMap::new(),
@@ -550,15 +614,26 @@ impl CapabilityHost {
             observations: 0,
             observation_bytes: 0,
         };
-        let transaction_handle = transaction.map(|transaction| {
+        let transaction_handle = if let Some(transaction) = transaction {
+            // Safety: the synchronous parent service call owns this slot for
+            // the entire borrowed invocation, exactly as for transaction_mut.
+            let identity = HostTransactionIdentity::capture(unsafe { transaction.as_ref() })?;
             let handle = host.next_transaction_handle();
             host.borrowed_transactions.insert(handle, transaction);
-            handle
-        });
+            host.transaction_identities
+                .insert(handle, Arc::new(identity));
+            Some(handle)
+        } else {
+            None
+        };
         if let Some(handle) = transaction_handle {
-            for validator in lower_carrier_invariants(host.application())? {
-                host.transaction_mut(handle)?
-                    .register_mutation_commit_validator(validator)?;
+            if let Some(context) = host.invariant_context.clone() {
+                context.attach(host.transaction_mut(handle)?)?;
+            } else {
+                for validator in lower_carrier_invariants(host.application())? {
+                    host.transaction_mut(handle)?
+                        .register_mutation_commit_validator(validator)?;
+                }
             }
         }
         Ok((host, transaction_handle))
@@ -1863,6 +1938,29 @@ impl CapabilityHost {
     }
 
     fn transaction_mut(&mut self, handle: HostHandle) -> Result<&mut Transaction> {
+        let Some(identity) = self.transaction_identities.get(&handle).cloned() else {
+            self.poison_transaction(handle)?;
+            return Err(AppRuntimeError::CapabilityDenied(
+                "forged, expired, or cross-invocation transaction handle".into(),
+            ));
+        };
+        let valid = self
+            .transaction_slot_mut_unchecked(handle)
+            .is_ok_and(|transaction| identity.matches(transaction));
+        if !valid {
+            self.poison_transaction(handle)?;
+            return Err(AppRuntimeError::CapabilityDenied(
+                "application transaction identity, actor, isolation or pending state changed"
+                    .into(),
+            ));
+        }
+        self.transaction_slot_mut_unchecked(handle)
+    }
+
+    /// Only checked access, the trusted SQL ownership swap, and terminal cleanup
+    /// may access a slot without validating its captured application identity.
+    /// In particular an ordinary placeholder must never escape as a host TX.
+    fn transaction_slot_mut_unchecked(&mut self, handle: HostHandle) -> Result<&mut Transaction> {
         if let Some(transaction) = self.transactions.get_mut(&handle) {
             return Ok(transaction);
         }
@@ -1881,6 +1979,23 @@ impl CapabilityHost {
             })
     }
 
+    fn poison_transaction(&mut self, handle: HostHandle) -> Result<()> {
+        // Abort the actual shared slot before unlinking our borrowed pointer:
+        // removing only the callee handle would leave its parent's placeholder
+        // reusable after a caught error. Never allocate a replacement here.
+        let cleanup = match self.transaction_slot_mut_unchecked(handle) {
+            Ok(transaction) if transaction.state() == TxState::Pending => {
+                transaction.abort_in_place().map_err(AppRuntimeError::from)
+            }
+            _ => Ok(()),
+        };
+        self.transactions.remove(&handle);
+        self.borrowed_transactions.remove(&handle);
+        self.transaction_identities.remove(&handle);
+        self.remove_transaction_resources();
+        cleanup
+    }
+
     pub(crate) fn transaction_isolation(
         &mut self,
         handle: HostHandle,
@@ -1888,7 +2003,8 @@ impl CapabilityHost {
         Ok(self.transaction_mut(handle)?.isolation())
     }
 
-    fn grant(&self, transaction: HostHandle, handle: HostHandle) -> Result<MutationGrantId> {
+    fn grant(&mut self, transaction: HostHandle, handle: HostHandle) -> Result<MutationGrantId> {
+        self.transaction_mut(transaction)?;
         self.grants
             .get(&handle)
             .filter(|binding| binding.transaction == transaction)
@@ -1985,20 +2101,29 @@ impl CapabilityHost {
                 // session and never outlives the synchronous invocation.
                 let mut transaction = unsafe { self.db.as_ref() }
                     .begin_application_transaction_with_isolation(actor, isolation)?;
-                for validator in lower_carrier_invariants(self.application())? {
-                    transaction.register_mutation_commit_validator(validator)?;
+                if let Some(context) = &self.invariant_context {
+                    context.attach(&mut transaction)?;
+                } else {
+                    for validator in lower_carrier_invariants(self.application())? {
+                        transaction.register_mutation_commit_validator(validator)?;
+                    }
                 }
                 let handle = self.next_transaction_handle();
+                let identity = HostTransactionIdentity::capture(&transaction)?;
                 self.transactions.insert(handle, transaction);
+                self.transaction_identities
+                    .insert(handle, Arc::new(identity));
                 Ok(HostValue::Handle(handle))
             }
             Request::Commit { transaction } => {
+                let identity =
+                    HostTransactionIdentity::capture(self.transaction_mut(transaction)?)?;
                 let transaction = self.transactions.remove(&transaction).ok_or_else(|| {
                     AppRuntimeError::CapabilityDenied(
                         "forged or expired transaction handle".to_string(),
                     )
                 })?;
-                self.remove_transaction_resources(transaction.id().0);
+                self.remove_transaction_resources();
                 let transaction = if transaction.has_deferred_hooks() {
                     let database = unsafe { self.db.as_ref() };
                     let mut session = SqlSession::new_shared_secure(
@@ -2007,18 +2132,45 @@ impl CapabilityHost {
                     )
                     .with_deferred_commit()
                     .with_pending_transaction(transaction)
+                    .with_application_exact_decimal_units(
+                        self.application()
+                            .required_features
+                            .contains(&ApplicationFeature::ExactDecimalUnits),
+                    )
                     .with_signed_application_security_guc_compatibility();
-                    session.fire_deferred_row_triggers().map_err(|error| {
-                        AppRuntimeError::Invocation(format!(
-                            "deferred SQL validation failed (SQLSTATE {}): {error}",
-                            error.sqlstate()
-                        ))
-                    })?;
-                    session.take_pending_transaction().ok_or_else(|| {
+                    let execution = session.fire_deferred_row_triggers();
+                    let restored = session.take_pending_transaction();
+                    let valid = restored.as_ref().is_some_and(|tx| identity.matches(tx));
+                    if !valid {
+                        if let Some(mut transaction) = restored {
+                            if transaction.state() == TxState::Pending {
+                                transaction.abort_in_place()?;
+                            }
+                        }
+                        return Err(AppRuntimeError::Invocation(
+                            "deferred SQL validation lost or replaced its owning transaction"
+                                .into(),
+                        ));
+                    }
+                    let transaction = restored.ok_or_else(|| {
                         AppRuntimeError::Invocation(
                             "deferred SQL validation consumed its transaction".into(),
                         )
-                    })?
+                    })?;
+                    if let Err(error) = execution {
+                        // Recover ownership before mapping the error. Failed
+                        // deferred validation must not retain partial writes.
+                        transaction.rollback()?;
+                        return Err(exact_units_sql_application_error(&error).unwrap_or_else(
+                            || {
+                                AppRuntimeError::Invocation(format!(
+                                    "deferred SQL validation failed (SQLSTATE {}): {error}",
+                                    error.sqlstate()
+                                ))
+                            },
+                        ));
+                    }
+                    transaction
                 } else {
                     transaction
                 };
@@ -2026,12 +2178,13 @@ impl CapabilityHost {
                 Ok(HostValue::Unit)
             }
             Request::Rollback { transaction } => {
+                self.transaction_mut(transaction)?;
                 let transaction = self.transactions.remove(&transaction).ok_or_else(|| {
                     AppRuntimeError::CapabilityDenied(
                         "forged or expired transaction handle".to_string(),
                     )
                 })?;
-                self.remove_transaction_resources(transaction.id().0);
+                self.remove_transaction_resources();
                 transaction.rollback()?;
                 Ok(HostValue::Unit)
             }
@@ -2072,6 +2225,7 @@ impl CapabilityHost {
                 transaction,
                 savepoint,
             } => {
+                self.transaction_mut(transaction)?;
                 if self
                     .savepoints
                     .get(&savepoint)
@@ -2096,11 +2250,18 @@ impl CapabilityHost {
         }
     }
 
-    fn remove_transaction_resources(&mut self, _transaction_id: u64) {
+    fn remove_transaction_resources(&mut self) {
         // Handles are bound by the public transaction handle, which has already
         // been removed. Retaining their tiny map entries would still allow
         // probing, so invalidate every handle whose transaction disappeared.
-        let active = self.transactions.keys().copied().collect::<BTreeSet<_>>();
+        let active = self
+            .transactions
+            .keys()
+            .chain(self.borrowed_transactions.keys())
+            .copied()
+            .collect::<BTreeSet<_>>();
+        self.transaction_identities
+            .retain(|handle, _| active.contains(handle));
         self.savepoints
             .retain(|_, savepoint| active.contains(&savepoint.transaction));
         self.grants
@@ -2425,29 +2586,55 @@ impl CapabilityHost {
             database_pointer.as_ref()
         };
         let placeholder = database.begin_transaction()?;
-        let active = std::mem::replace(self.transaction_mut(transaction)?, placeholder);
+        let identity = HostTransactionIdentity::capture(self.transaction_mut(transaction)?)?;
+        let active = std::mem::replace(
+            self.transaction_slot_mut_unchecked(transaction)?,
+            placeholder,
+        );
         let security = raw_sql_security_context(&self.actor);
         let mut session = SqlSession::new_shared_secure(database, security)
             .with_deferred_commit()
             .with_pending_transaction(active)
+            .with_application_exact_decimal_units(
+                self.application()
+                    .required_features
+                    .contains(&ApplicationFeature::ExactDecimalUnits),
+            )
             .with_positional_parameters(parameters)
             .with_signed_application_security_guc_compatibility()
             .with_signed_mutation_grants(signed_mutation_grants);
         let execution = session.execute(&statement.sql);
-        let restored = session.take_pending_transaction().ok_or_else(|| {
-            AppRuntimeError::Invocation(format!(
-                "raw SQL `{}` consumed its owning transaction",
+        let restored = session.take_pending_transaction();
+        if !restored.as_ref().is_some_and(|tx| identity.matches(tx)) {
+            let cleanup = self.poison_transaction(transaction);
+            if let Some(mut restored) = restored {
+                if restored.state() == TxState::Pending {
+                    restored.abort_in_place()?;
+                }
+            }
+            cleanup?;
+            return Err(AppRuntimeError::Invocation(format!(
+                "raw SQL `{}` lost or replaced its owning transaction",
                 statement.id
-            ))
+            )));
+        }
+        let restored = restored.ok_or_else(|| {
+            AppRuntimeError::Invocation("validated SQL transaction is unavailable".into())
         })?;
-        let placeholder = std::mem::replace(self.transaction_mut(transaction)?, restored);
-        placeholder.rollback()?;
+        let placeholder =
+            std::mem::replace(self.transaction_slot_mut_unchecked(transaction)?, restored);
+        if let Err(error) = placeholder.rollback() {
+            self.poison_transaction(transaction)?;
+            return Err(error.into());
+        }
         let result = execution.map_err(|error| {
-            AppRuntimeError::Invocation(format!(
-                "raw SQL `{}` failed (SQLSTATE {}): {error}",
-                statement.id,
-                error.sqlstate()
-            ))
+            exact_units_sql_application_error(&error).unwrap_or_else(|| {
+                AppRuntimeError::Invocation(format!(
+                    "raw SQL `{}` failed (SQLSTATE {}): {error}",
+                    statement.id,
+                    error.sqlstate()
+                ))
+            })
         })?;
         raw_sql_result(statement, result)
     }
@@ -3631,7 +3818,11 @@ impl CapabilityHost {
             transaction_requested: transaction.is_some(),
             database: InvocationDatabase { pointer: self.db },
             transaction: propagated_transaction,
-        })?;
+        });
+        if let Some(handle) = transaction {
+            self.transaction_mut(handle)?;
+        }
+        let result = result?;
         Ok(HostValue::Json(result))
     }
 
@@ -5848,6 +6039,23 @@ pub(crate) fn now_ms() -> i64 {
         .unwrap_or_default()
 }
 
+/// Translate only errors with an unforgeable native application-control or
+/// authorization origin.
+/// A routine raising SQLSTATE 22023/42501/2D000 or copying the message stays on its
+/// existing SQL error path.
+fn exact_units_sql_application_error(error: &SqlError) -> Option<AppRuntimeError> {
+    if error.is_exact_units_capability_denied()
+        || error.is_application_transaction_control_denied()
+        || error.is_native_authorization_denied()
+    {
+        Some(AppRuntimeError::CapabilityDenied(error.to_string()))
+    } else {
+        error
+            .exact_units_parameter_message()
+            .map(|message| AppRuntimeError::InvalidRequest(message.to_string()))
+    }
+}
+
 fn raw_sql_security_context(actor: &ActorContext) -> SecurityContext {
     let subject = actor
         .user_id
@@ -6353,6 +6561,58 @@ fn lower_carrier_invariant_expression(
             )?),
             value_type: native_invariant_value_type((*left_type).or(*right_type).or(*value_type)),
         },
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            arguments,
+            ..
+        } if target == "finance.units_from_limbs" => {
+            let lowered = arguments
+                .iter()
+                .map(|argument| {
+                    lower_carrier_invariant_expression(
+                        application,
+                        subject_resource,
+                        bindings,
+                        &argument.value,
+                    )
+                    .map(Box::new)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            NativeInvariantExpression::UnitsFromLimbs {
+                arguments: lowered.try_into().map_err(|_| {
+                    AppRuntimeError::InvalidPackage(
+                        "native unit formatter requires exactly six actual Int operands".into(),
+                    )
+                })?,
+            }
+        }
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            arguments,
+            ..
+        } if target == "finance.native_ratio_representable_units" => {
+            let lowered = arguments
+                .iter()
+                .map(|argument| {
+                    lower_carrier_invariant_expression(
+                        application,
+                        subject_resource,
+                        bindings,
+                        &argument.value,
+                    )
+                    .map(Box::new)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            NativeInvariantExpression::NativeRatioRepresentableUnits {
+                arguments: lowered.try_into().map_err(|_| {
+                    AppRuntimeError::InvalidPackage(
+                        "native ratio predicate requires String/String/Int/Int operands".into(),
+                    )
+                })?,
+            }
+        }
         ApplicationExpressionV1::Call {
             kind: ApplicationCallKindV1::Builtin,
             target,

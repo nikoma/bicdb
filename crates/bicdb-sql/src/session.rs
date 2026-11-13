@@ -1046,6 +1046,9 @@ pub struct SqlSession<'db> {
     pub(crate) snapshot_floor: u64,
     pub(crate) _marker: PhantomData<&'db BicDb>,
     pub(crate) security_context: Option<SecurityContext>,
+    /// None is ordinary operator SQL; Some is an immutable signed application
+    /// decision supplied by the host, never a user-settable SQL setting.
+    pub(crate) app_exact_decimal_units: Option<bool>,
     pub(crate) runtime: Option<Arc<dyn SqlSessionRuntime>>,
     pub(crate) cancellation: CancellationToken,
     pub(crate) fts_limits: bicdb_core::FtsQueryLimits,
@@ -1575,7 +1578,7 @@ impl GucAssignmentTargets {
             && self.gucs.iter().any(|key| {
                 matches!(
                     key.as_str(),
-                    "transaction_isolation" | "transaction_deferrable"
+                    "transaction_isolation" | "transaction_read_only" | "transaction_deferrable"
                 )
             })
     }
@@ -2415,6 +2418,7 @@ impl<'db> SqlSession<'db> {
             snapshot_floor: 0,
             _marker: PhantomData,
             security_context,
+            app_exact_decimal_units: None,
             runtime: None,
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
@@ -2535,6 +2539,13 @@ impl<'db> SqlSession<'db> {
         self
     }
 
+    /// Bind the current signed application's declared feature. This Rust-only
+    /// allowance is independent of SQL roles, GUCs and transaction ownership.
+    pub fn with_application_exact_decimal_units(mut self, allowed: bool) -> Self {
+        self.app_exact_decimal_units = Some(allowed);
+        self
+    }
+
     pub fn with_session_gucs(mut self, session_gucs: HashMap<String, String>) -> Self {
         self.session_gucs = Arc::new(session_gucs);
         self.rebind_trusted_security_settings();
@@ -2650,6 +2661,61 @@ impl<'db> SqlSession<'db> {
     /// routine call the caller's (see `parent_tx`).
     pub(crate) fn read_tx(&self) -> Option<&Transaction> {
         self.tx.as_ref().or(self.parent_tx)
+    }
+
+    /// The native transaction's trusted mutation actor identifies an owning
+    /// application invocation. SQL roles, GUCs and routine/view execution cannot
+    /// change it. Only the host may finish that transaction; ordinary operator
+    /// SQL transactions retain their existing control semantics.
+    pub(crate) fn require_local_transaction_control(&self) -> Result<()> {
+        if self.has_host_owned_transaction() {
+            return Err(SqlError::ApplicationTransactionControlDenied);
+        }
+        Ok(())
+    }
+
+    fn has_host_owned_transaction(&self) -> bool {
+        // A routine's local slot must not hide its application-owned parent.
+        self.tx
+            .as_ref()
+            .is_some_and(|tx| tx.mutation_actor().is_some())
+            || self
+                .parent_tx
+                .is_some_and(|tx| tx.mutation_actor().is_some())
+    }
+
+    fn require_local_transaction_setting_control(&self, setting: &str) -> Result<()> {
+        if matches!(
+            setting,
+            "transaction_isolation" | "transaction_read_only" | "transaction_deferrable"
+        ) {
+            self.require_local_transaction_control()?;
+        }
+        Ok(())
+    }
+
+    fn require_local_transaction_set_control(&self, set: &Set) -> Result<()> {
+        if !self.has_host_owned_transaction() {
+            return Ok(());
+        }
+        match set {
+            Set::SetTransaction { session: false, .. } => self.require_local_transaction_control(),
+            Set::SingleAssignment { variable, .. } => self
+                .require_local_transaction_setting_control(
+                    &object_name(variable)?.to_ascii_lowercase(),
+                ),
+            Set::MultipleAssignments { assignments } => {
+                // Preflight every name before any assignment in the statement.
+                for assignment in assignments {
+                    self.require_local_transaction_setting_control(
+                        &object_name(&assignment.name)?.to_ascii_lowercase(),
+                    )?;
+                }
+                Ok(())
+            }
+            // Session defaults apply to future local transactions only.
+            _ => Ok(()),
+        }
     }
 
     /// Takes the pending (uncommitted) transaction produced by a deferred
@@ -2869,6 +2935,9 @@ impl<'db> SqlSession<'db> {
         targets: GucAssignmentTargets,
         apply: impl FnOnce(&mut Self) -> Result<()>,
     ) -> Result<()> {
+        if targets.is_current_transaction_mode() {
+            self.require_local_transaction_control()?;
+        }
         let previous_gucs = self.session_gucs.clone();
         let previous_settings = self.settings;
         let local = local
@@ -3928,6 +3997,22 @@ impl<'db> SqlSession<'db> {
     }
 
     fn execute_parsed_statement_in_sql(&mut self, statement: &Statement) -> Result<SqlResult> {
+        if let Statement::Set(set) = statement {
+            self.require_local_transaction_set_control(set)?;
+        }
+        if matches!(
+            statement,
+            Statement::StartTransaction { .. }
+                | Statement::Commit { .. }
+                | Statement::Rollback {
+                    savepoint: None,
+                    ..
+                }
+        ) {
+            // Refuse before snapshots, hooks, state changes or transaction
+            // extraction. ROLLBACK TO/SAVEPOINT/RELEASE remain local operations.
+            self.require_local_transaction_control()?;
+        }
         self.ensure_read_only_statement(statement)?;
         self.acquire_postgres_statement_snapshot(|| {
             postgres_execution_requires_snapshot(&statement.to_string())
@@ -4024,6 +4109,7 @@ impl<'db> SqlSession<'db> {
     }
 
     fn finish_chained_transaction(&mut self, commit: bool) -> Result<SqlResult> {
+        self.require_local_transaction_control()?;
         let tx = self
             .tx
             .as_ref()
@@ -4088,6 +4174,9 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn commit(&mut self) -> Result<SqlResult> {
+        // Also guard internal commit entry points reached through nested CALL
+        // and dynamic SQL, before deferred hooks or any durable effect.
+        self.require_local_transaction_control()?;
         if self.oracle_autonomous && !self.pending_notifications.is_empty() {
             return Err(SqlError::Unsupported(
                 "independent notification delivery is not implemented".into(),
@@ -5008,6 +5097,7 @@ impl<'db> SqlSession<'db> {
     }
 
     fn apply_transaction_modes(&mut self, modes: &[TransactionMode]) -> Result<()> {
+        self.require_local_transaction_control()?;
         let oracle_preview = oracle::preview_routine_language_enabled(self.db_ref())?;
         let level = modes.iter().find_map(|mode| match mode {
             TransactionMode::IsolationLevel(level) => Some(level),
@@ -5105,6 +5195,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_set(&mut self, set: &Set) -> Result<SqlResult> {
+        self.require_local_transaction_set_control(set)?;
         match set {
             Set::SetTransaction {
                 modes,
@@ -5657,6 +5748,7 @@ impl<'db> SqlSession<'db> {
             normalize_object_name(raw)
         };
         let targets = GucAssignmentTargets::setting(&setting);
+        self.require_local_transaction_setting_control(&setting)?;
         if targets.is_current_transaction_mode()
             && !oracle::preview_routine_language_enabled(self.db_ref())?
         {

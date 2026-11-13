@@ -1,0 +1,1280 @@
+{
+  "scope": "Actual existing multiply-first source expression capture only. Not new Core execution or ERP stock qualification.",
+  "native": {
+    "binary": "/opt/walknorth-erp-modernization/private/native490-carrier93-inputs/artifacts/bicdb-1.0.490-beta-b9987763",
+    "sha256": "f4f181b6a1f0d40fe3bb379b32f9258725c8cbb4b51b43f5b3fc3e2673af5d37"
+  },
+  "compiler": {
+    "binary": "/opt/walknorth-erp-modernization/private/native490-carrier93-inputs/artifacts/carrier-2.3.93-344c65f3",
+    "sha256": "897a322195795aed70a31d30979e02c8f034311db6e102f017939b87539a4d51"
+  },
+  "package_sha256": "5870496ae41b12908b34c916cde286be422663970323af170092eaae9be8f7f4",
+  "evidence_archive_sha256": "d038f95730181e966e12f20ad4141df01768aafc16cf16333174c920819cfc8d",
+  "captures": [
+    {
+      "input": {
+        "carrying": "0",
+        "on_hand": "4",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0",
+        "on_hand": "3",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0",
+        "on_hand": "3",
+        "operated": "2"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0",
+        "on_hand": "1",
+        "operated": "0.25"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0",
+        "on_hand": "0.1",
+        "operated": "0.05"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "79228162514264337593543950334"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0",
+        "on_hand": "0.000000000001",
+        "operated": "0.000000000001"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0.01",
+        "on_hand": "4",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.0025"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.0025"
+    },
+    {
+      "input": {
+        "carrying": "0.01",
+        "on_hand": "3",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.0033333333333333333333333333"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.0033333333333333333333333333"
+    },
+    {
+      "input": {
+        "carrying": "0.01",
+        "on_hand": "3",
+        "operated": "2"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.0066666666666666666666666667"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.0066666666666666666666666667"
+    },
+    {
+      "input": {
+        "carrying": "0.01",
+        "on_hand": "1",
+        "operated": "0.25"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.0025"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.0025"
+    },
+    {
+      "input": {
+        "carrying": "0.01",
+        "on_hand": "0.1",
+        "operated": "0.05"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.005"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.005"
+    },
+    {
+      "input": {
+        "carrying": "0.01",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0.01",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "79228162514264337593543950334"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.010000000000000000000"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.01"
+    },
+    {
+      "input": {
+        "carrying": "0.01",
+        "on_hand": "0.000000000001",
+        "operated": "0.000000000001"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.01"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.01"
+    },
+    {
+      "input": {
+        "carrying": "0.1",
+        "on_hand": "4",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.025"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.025"
+    },
+    {
+      "input": {
+        "carrying": "0.1",
+        "on_hand": "3",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.0333333333333333333333333333"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.0333333333333333333333333333"
+    },
+    {
+      "input": {
+        "carrying": "0.1",
+        "on_hand": "3",
+        "operated": "2"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.0666666666666666666666666667"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.0666666666666666666666666667"
+    },
+    {
+      "input": {
+        "carrying": "0.1",
+        "on_hand": "1",
+        "operated": "0.25"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.025"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.025"
+    },
+    {
+      "input": {
+        "carrying": "0.1",
+        "on_hand": "0.1",
+        "operated": "0.05"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.05"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.05"
+    },
+    {
+      "input": {
+        "carrying": "0.1",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0.1",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "79228162514264337593543950334"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.100000000000000000000"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.1"
+    },
+    {
+      "input": {
+        "carrying": "0.1",
+        "on_hand": "0.000000000001",
+        "operated": "0.000000000001"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.1"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.1"
+    },
+    {
+      "input": {
+        "carrying": "1",
+        "on_hand": "4",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.25"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.25"
+    },
+    {
+      "input": {
+        "carrying": "1",
+        "on_hand": "3",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.3333333333333333333333333333"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.3333333333333333333333333333"
+    },
+    {
+      "input": {
+        "carrying": "1",
+        "on_hand": "3",
+        "operated": "2"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.6666666666666666666666666667"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.6666666666666666666666666667"
+    },
+    {
+      "input": {
+        "carrying": "1",
+        "on_hand": "1",
+        "operated": "0.25"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.25"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.25"
+    },
+    {
+      "input": {
+        "carrying": "1",
+        "on_hand": "0.1",
+        "operated": "0.05"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.5"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.5"
+    },
+    {
+      "input": {
+        "carrying": "1",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "1",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "79228162514264337593543950334"
+      },
+      "status": 200,
+      "body": {
+        "value": "1.000000000000000000000"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "1"
+    },
+    {
+      "input": {
+        "carrying": "1",
+        "on_hand": "0.000000000001",
+        "operated": "0.000000000001"
+      },
+      "status": 200,
+      "body": {
+        "value": "1"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "1"
+    },
+    {
+      "input": {
+        "carrying": "3",
+        "on_hand": "4",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.75"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.75"
+    },
+    {
+      "input": {
+        "carrying": "3",
+        "on_hand": "3",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "1"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "1"
+    },
+    {
+      "input": {
+        "carrying": "3",
+        "on_hand": "3",
+        "operated": "2"
+      },
+      "status": 200,
+      "body": {
+        "value": "2"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "2"
+    },
+    {
+      "input": {
+        "carrying": "3",
+        "on_hand": "1",
+        "operated": "0.25"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.75"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.75"
+    },
+    {
+      "input": {
+        "carrying": "3",
+        "on_hand": "0.1",
+        "operated": "0.05"
+      },
+      "status": 200,
+      "body": {
+        "value": "1.5"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "1.5"
+    },
+    {
+      "input": {
+        "carrying": "3",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "3",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "79228162514264337593543950334"
+      },
+      "status": 400,
+      "body": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal arithmetic overflowed the supported range"
+      },
+      "classification": "new_domain_old_product_overflow",
+      "rational_expected": "3"
+    },
+    {
+      "input": {
+        "carrying": "3",
+        "on_hand": "0.000000000001",
+        "operated": "0.000000000001"
+      },
+      "status": 200,
+      "body": {
+        "value": "3"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "3"
+    },
+    {
+      "input": {
+        "carrying": "10",
+        "on_hand": "4",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "2.50"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "2.5"
+    },
+    {
+      "input": {
+        "carrying": "10",
+        "on_hand": "3",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "3.3333333333333333333333333333"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "3.3333333333333333333333333333"
+    },
+    {
+      "input": {
+        "carrying": "10",
+        "on_hand": "3",
+        "operated": "2"
+      },
+      "status": 200,
+      "body": {
+        "value": "6.6666666666666666666666666667"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "6.6666666666666666666666666667"
+    },
+    {
+      "input": {
+        "carrying": "10",
+        "on_hand": "1",
+        "operated": "0.25"
+      },
+      "status": 200,
+      "body": {
+        "value": "2.50"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "2.5"
+    },
+    {
+      "input": {
+        "carrying": "10",
+        "on_hand": "0.1",
+        "operated": "0.05"
+      },
+      "status": 200,
+      "body": {
+        "value": "5.0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "5"
+    },
+    {
+      "input": {
+        "carrying": "10",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.0000000000000000000000000001"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.0000000000000000000000000001"
+    },
+    {
+      "input": {
+        "carrying": "10",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "79228162514264337593543950334"
+      },
+      "status": 400,
+      "body": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal arithmetic overflowed the supported range"
+      },
+      "classification": "new_domain_old_product_overflow",
+      "rational_expected": "10"
+    },
+    {
+      "input": {
+        "carrying": "10",
+        "on_hand": "0.000000000001",
+        "operated": "0.000000000001"
+      },
+      "status": 200,
+      "body": {
+        "value": "10"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "10"
+    },
+    {
+      "input": {
+        "carrying": "9007199254740993",
+        "on_hand": "4",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "2251799813685248.25"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "2251799813685248.25"
+    },
+    {
+      "input": {
+        "carrying": "9007199254740993",
+        "on_hand": "3",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "3002399751580331"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "3002399751580331"
+    },
+    {
+      "input": {
+        "carrying": "9007199254740993",
+        "on_hand": "3",
+        "operated": "2"
+      },
+      "status": 200,
+      "body": {
+        "value": "6004799503160662"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "6004799503160662"
+    },
+    {
+      "input": {
+        "carrying": "9007199254740993",
+        "on_hand": "1",
+        "operated": "0.25"
+      },
+      "status": 200,
+      "body": {
+        "value": "2251799813685248.25"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "2251799813685248.25"
+    },
+    {
+      "input": {
+        "carrying": "9007199254740993",
+        "on_hand": "0.1",
+        "operated": "0.05"
+      },
+      "status": 200,
+      "body": {
+        "value": "4503599627370496.5"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "4503599627370496.5"
+    },
+    {
+      "input": {
+        "carrying": "9007199254740993",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.000000000000113686837721616"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.000000000000113686837721616"
+    },
+    {
+      "input": {
+        "carrying": "9007199254740993",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "79228162514264337593543950334"
+      },
+      "status": 400,
+      "body": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal arithmetic overflowed the supported range"
+      },
+      "classification": "new_domain_old_product_overflow",
+      "rational_expected": "9007199254740993"
+    },
+    {
+      "input": {
+        "carrying": "9007199254740993",
+        "on_hand": "0.000000000001",
+        "operated": "0.000000000001"
+      },
+      "status": 200,
+      "body": {
+        "value": "9007199254740993"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "9007199254740993"
+    },
+    {
+      "input": {
+        "carrying": "79228162514264337593543950335",
+        "on_hand": "4",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "19807040628566084398385987584"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "19807040628566084398385987584"
+    },
+    {
+      "input": {
+        "carrying": "79228162514264337593543950335",
+        "on_hand": "3",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "26409387504754779197847983445"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "26409387504754779197847983445"
+    },
+    {
+      "input": {
+        "carrying": "79228162514264337593543950335",
+        "on_hand": "3",
+        "operated": "2"
+      },
+      "status": 400,
+      "body": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal arithmetic overflowed the supported range"
+      },
+      "classification": "new_domain_old_product_overflow",
+      "rational_expected": "52818775009509558395695966890"
+    },
+    {
+      "input": {
+        "carrying": "79228162514264337593543950335",
+        "on_hand": "1",
+        "operated": "0.25"
+      },
+      "status": 200,
+      "body": {
+        "value": "19807040628566084398385987584"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "19807040628566084398385987584"
+    },
+    {
+      "input": {
+        "carrying": "79228162514264337593543950335",
+        "on_hand": "0.1",
+        "operated": "0.05"
+      },
+      "status": 200,
+      "body": {
+        "value": "39614081257132168796771975168"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "39614081257132168796771975168"
+    },
+    {
+      "input": {
+        "carrying": "79228162514264337593543950335",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "1"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "1"
+    },
+    {
+      "input": {
+        "carrying": "79228162514264337593543950335",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "79228162514264337593543950334"
+      },
+      "status": 400,
+      "body": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal arithmetic overflowed the supported range"
+      },
+      "classification": "new_domain_old_product_overflow",
+      "rational_expected": "79228162514264337593543950334"
+    },
+    {
+      "input": {
+        "carrying": "79228162514264337593543950335",
+        "on_hand": "0.000000000001",
+        "operated": "0.000000000001"
+      },
+      "status": 200,
+      "body": {
+        "value": "79228162514264337593543950335"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "79228162514264337593543950335"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000003",
+        "on_hand": "4",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.0000000000000000000000000001"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.0000000000000000000000000001"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000003",
+        "on_hand": "3",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.0000000000000000000000000001"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.0000000000000000000000000001"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000003",
+        "on_hand": "3",
+        "operated": "2"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.0000000000000000000000000002"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.0000000000000000000000000002"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000003",
+        "on_hand": "1",
+        "operated": "0.25"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.0000000000000000000000000001"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.0000000000000000000000000001"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000003",
+        "on_hand": "0.1",
+        "operated": "0.05"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "corrected_old_rounded_product",
+      "rational_expected": "0.0000000000000000000000000002"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000003",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000003",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "79228162514264337593543950334"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.0000000000000000000000000003"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.0000000000000000000000000003"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000003",
+        "on_hand": "0.000000000001",
+        "operated": "0.000000000001"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.0000000000000000000000000003"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0.0000000000000000000000000003"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000001",
+        "on_hand": "0.1",
+        "operated": "0.05"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000001",
+        "on_hand": "0.1",
+        "operated": "0.01"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000001",
+        "on_hand": "0.2",
+        "operated": "0.1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000001",
+        "on_hand": "0.000000000001",
+        "operated": "0.0000000000005"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000003",
+        "on_hand": "0.1",
+        "operated": "0.01"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000003",
+        "on_hand": "0.2",
+        "operated": "0.1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "corrected_old_rounded_product",
+      "rational_expected": "0.0000000000000000000000000002"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000003",
+        "on_hand": "0.000000000001",
+        "operated": "0.0000000000005"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "corrected_old_rounded_product",
+      "rational_expected": "0.0000000000000000000000000002"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000005",
+        "on_hand": "0.1",
+        "operated": "0.05"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "corrected_old_rounded_product",
+      "rational_expected": "0.0000000000000000000000000002"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000005",
+        "on_hand": "0.1",
+        "operated": "0.01"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "0"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000005",
+        "on_hand": "0.2",
+        "operated": "0.1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "corrected_old_rounded_product",
+      "rational_expected": "0.0000000000000000000000000002"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000005",
+        "on_hand": "0.000000000001",
+        "operated": "0.0000000000005"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "corrected_old_rounded_product",
+      "rational_expected": "0.0000000000000000000000000002"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000007",
+        "on_hand": "0.1",
+        "operated": "0.05"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "corrected_old_rounded_product",
+      "rational_expected": "0.0000000000000000000000000004"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000007",
+        "on_hand": "0.1",
+        "operated": "0.01"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "corrected_old_rounded_product",
+      "rational_expected": "0.0000000000000000000000000001"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000007",
+        "on_hand": "0.2",
+        "operated": "0.1"
+      },
+      "status": 200,
+      "body": {
+        "value": "0.0000000000000000000000000005"
+      },
+      "classification": "corrected_old_rounded_product",
+      "rational_expected": "0.0000000000000000000000000004"
+    },
+    {
+      "input": {
+        "carrying": "0.0000000000000000000000000007",
+        "on_hand": "0.000000000001",
+        "operated": "0.0000000000005"
+      },
+      "status": 200,
+      "body": {
+        "value": "0"
+      },
+      "classification": "corrected_old_rounded_product",
+      "rational_expected": "0.0000000000000000000000000004"
+    },
+    {
+      "input": {
+        "carrying": "79228162514264337593543950335",
+        "on_hand": "4",
+        "operated": "2"
+      },
+      "status": 400,
+      "body": {
+        "code": "invalid_request",
+        "message": "invalid request: BicDB application Decimal arithmetic overflowed the supported range"
+      },
+      "classification": "new_domain_old_product_overflow",
+      "rational_expected": "39614081257132168796771975168"
+    },
+    {
+      "input": {
+        "carrying": "79228162514264337593543950335",
+        "on_hand": "79228162514264337593543950335",
+        "operated": "79228162514264337593543950335"
+      },
+      "status": 200,
+      "body": {
+        "value": "79228162514264337593543950335"
+      },
+      "classification": "ordinary_agreement",
+      "rational_expected": "79228162514264337593543950335"
+    },
+    {
+      "input": {
+        "carrying": "0",
+        "on_hand": "0",
+        "operated": "0"
+      },
+      "status": 400,
+      "body": {
+        "code": "erp_stock_cost_basis_invalid",
+        "message": "Use a positive available stock basis and nonnegative reconciled value.",
+        "message_key": "runtime.errors.erp_stock_cost_basis_invalid.5d8bef4c32b6e3ed",
+        "parameters": {},
+        "request_id": "9bafa0c1-d61f-4d24-bddf-ee001abe7bdd"
+      },
+      "classification": "invalid_basis",
+      "rational_expected": null
+    },
+    {
+      "input": {
+        "carrying": "0",
+        "on_hand": "0",
+        "operated": "1"
+      },
+      "status": 400,
+      "body": {
+        "code": "erp_stock_cost_basis_invalid",
+        "message": "Use a positive available stock basis and nonnegative reconciled value.",
+        "message_key": "runtime.errors.erp_stock_cost_basis_invalid.5d8bef4c32b6e3ed",
+        "parameters": {},
+        "request_id": "a90368bf-62ba-4442-b23b-bcdf16c478df"
+      },
+      "classification": "invalid_basis",
+      "rational_expected": null
+    },
+    {
+      "input": {
+        "carrying": "0",
+        "on_hand": "1",
+        "operated": "2"
+      },
+      "status": 400,
+      "body": {
+        "code": "erp_stock_cost_basis_invalid",
+        "message": "Use a positive available stock basis and nonnegative reconciled value.",
+        "message_key": "runtime.errors.erp_stock_cost_basis_invalid.5d8bef4c32b6e3ed",
+        "parameters": {},
+        "request_id": "f26a0dcb-2eb9-47e7-b2bf-c67d2bb45f62"
+      },
+      "classification": "invalid_basis",
+      "rational_expected": null
+    },
+    {
+      "input": {
+        "carrying": "1",
+        "on_hand": "1",
+        "operated": "0"
+      },
+      "status": 400,
+      "body": {
+        "code": "erp_stock_cost_basis_invalid",
+        "message": "Use a positive available stock basis and nonnegative reconciled value.",
+        "message_key": "runtime.errors.erp_stock_cost_basis_invalid.5d8bef4c32b6e3ed",
+        "parameters": {},
+        "request_id": "69168494-055d-4451-8499-fba0d9a8d997"
+      },
+      "classification": "invalid_basis",
+      "rational_expected": null
+    },
+    {
+      "input": {
+        "carrying": "-1",
+        "on_hand": "1",
+        "operated": "1"
+      },
+      "status": 400,
+      "body": {
+        "code": "erp_stock_cost_basis_invalid",
+        "message": "Use a positive available stock basis and nonnegative reconciled value.",
+        "message_key": "runtime.errors.erp_stock_cost_basis_invalid.5d8bef4c32b6e3ed",
+        "parameters": {},
+        "request_id": "1995ea7e-98b9-4623-a9c1-3b5e5b64a797"
+      },
+      "classification": "invalid_basis",
+      "rational_expected": null
+    },
+    {
+      "input": {
+        "carrying": "1",
+        "on_hand": "-1",
+        "operated": "1"
+      },
+      "status": 400,
+      "body": {
+        "code": "erp_stock_cost_basis_invalid",
+        "message": "Use a positive available stock basis and nonnegative reconciled value.",
+        "message_key": "runtime.errors.erp_stock_cost_basis_invalid.5d8bef4c32b6e3ed",
+        "parameters": {},
+        "request_id": "5af936ad-d0d1-4818-8749-19cb8ef649f1"
+      },
+      "classification": "invalid_basis",
+      "rational_expected": null
+    }
+  ]
+}

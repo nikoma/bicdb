@@ -386,6 +386,7 @@ impl<'db> SqlSession<'db> {
             self.runtime.clone(),
             self.cancellation.clone(),
             self.fts_limits,
+            self.app_exact_decimal_units,
         )
         .with_routine_host(Some(&SESSION_ROUTINE_HOST))
         .with_oracle_output(self.oracle_output.clone())
@@ -2867,12 +2868,13 @@ impl<'db> SqlSession<'db> {
         {
             return Ok(value);
         }
-        if let Some(value) = eval_db_catalog_function_value(
+        if let Some(value) = eval_db_catalog_function_value_with_engine(
             self.db_ref(),
             &name,
             &args,
             self.read_tx().map(Transaction::visibility_watermark),
             Some(&self.session_gucs),
+            Some(&self.sql_engine()),
         )? {
             return Ok(value);
         }
@@ -3557,6 +3559,8 @@ impl<'db> SqlSession<'db> {
                 "set_config name must be text".to_string(),
             ));
         };
+        let setting = setting.to_ascii_lowercase();
+        self.require_local_transaction_setting_control(&setting)?;
         let value = self
             .eval_session_expr(args.get(1).expect("validated argument count"))?
             .to_cell();
@@ -3567,7 +3571,6 @@ impl<'db> SqlSession<'db> {
                 "set_config is_local must be boolean".to_string(),
             ));
         };
-        let setting = setting.to_ascii_lowercase();
         if is_protected_security_setting(&setting)
             && self.signed_application_security_guc_compatibility
         {
@@ -3670,6 +3673,7 @@ impl<'db> SqlSession<'db> {
         session.runtime = engine.runtime.clone();
         session.cancellation = engine.cancellation.clone();
         session.fts_limits = engine.fts_limits;
+        session.app_exact_decimal_units = engine.app_exact_decimal_units;
         session
     }
 

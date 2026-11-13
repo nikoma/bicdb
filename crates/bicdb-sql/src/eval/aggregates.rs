@@ -133,6 +133,7 @@ pub(crate) enum Aggregate {
     CountAll,
     CountField(FieldRef, bool),
     Sum(FieldRef, bool, bool),
+    ExactSumUnits(ExactUnitsAggregate, FieldRef),
     Avg(FieldRef, bool),
     Min(FieldRef, Option<String>),
     Max(FieldRef, Option<String>),
@@ -203,6 +204,12 @@ impl Aggregate {
         }
         let distinct = function_args_are_distinct(function);
         match name.as_str() {
+            "bicdb_exact_sum_units" => {
+                let aggregate = ExactUnitsAggregate::from_function(function)?;
+                aggregate.validate_type(|expr| projected_expr_pg_type(expr, schema))?;
+                let field = schema_projected_field(FieldRef::from_expr(&aggregate.value)?, schema);
+                Ok(Self::ExactSumUnits(aggregate, field))
+            }
             "count" => {
                 if is_count_star(function) {
                     Ok(Self::CountAll)
@@ -361,6 +368,7 @@ impl Aggregate {
             Self::RegressionSlope(_) => "regr_slope".to_string(),
             Self::CountAll | Self::CountField(_, _) => "count".to_string(),
             Self::Sum(_, _, _) => "sum".to_string(),
+            Self::ExactSumUnits(_, _) => "bicdb_exact_sum_units".to_string(),
             Self::Avg(_, _) => "avg".to_string(),
             Self::Min(_, _) => "min".to_string(),
             Self::Max(_, _) => "max".to_string(),
@@ -453,6 +461,9 @@ impl Aggregate {
                 } else {
                     sum_aggregate_values(values)
                 }
+            }
+            Self::ExactSumUnits(aggregate, field) => {
+                aggregate.evaluate(records, |record, _| field.value(record))
             }
             Self::Avg(field, distinct) => {
                 average_aggregate_values(record_aggregate_values(records, field, *distinct, false)?)
@@ -1117,6 +1128,7 @@ pub(crate) fn aggregate_result_pg_type(
         ),
         Aggregate::RegressionSlope(_) => Some("float8".to_string()),
         Aggregate::CountAll | Aggregate::CountField(_, _) => Some("int8".to_string()),
+        Aggregate::ExactSumUnits(_, _) => Some("text".to_string()),
         Aggregate::Min(field, _) | Aggregate::Max(field, _) => field_pg_type(field, schema),
         Aggregate::BoolAnd(_, _) | Aggregate::BoolOr(_, _) => Some("bool".to_string()),
         Aggregate::StringAgg { .. } => Some("text".to_string()),

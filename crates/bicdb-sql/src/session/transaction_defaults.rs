@@ -89,6 +89,7 @@ impl SqlSessionGucState {
 
 impl SqlSession<'_> {
     pub(super) fn validate_transaction_deferrability(&self) -> Result<()> {
+        self.require_local_transaction_control()?;
         if self
             .tx
             .as_ref()

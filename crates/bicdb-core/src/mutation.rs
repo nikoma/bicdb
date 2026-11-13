@@ -323,6 +323,14 @@ pub enum NativeInvariantExpression {
     ProportionalInterval {
         arguments: [Box<NativeInvariantExpression>; 6],
     },
+    /// Exact representability of a validated rational native display rate.
+    NativeRatioRepresentableUnits {
+        arguments: [Box<NativeInvariantExpression>; 4],
+    },
+    /// Canonical atom text from six strictly validated Int64 limb operands.
+    UnitsFromLimbs {
+        arguments: [Box<NativeInvariantExpression>; 6],
+    },
     Unary {
         operator: NativeInvariantUnaryOperator,
         value: Box<NativeInvariantExpression>,

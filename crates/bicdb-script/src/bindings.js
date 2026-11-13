@@ -20,7 +20,10 @@ const db = Object.freeze({
       call("db.commit", []);
       return result;
     } catch (error) {
-      call("db.rollback", []);
+      // Commit may already have consumed and aborted its transaction. Cleanup
+      // must not replace the original invariant/capability failure in that case.
+      // The trusted host still owns terminal cleanup of every pending handle.
+      try { call("db.rollback", []); } catch (_) {}
       throw error;
     }
   },

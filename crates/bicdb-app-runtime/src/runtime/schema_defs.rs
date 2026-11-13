@@ -370,6 +370,20 @@ pub(crate) fn remove_applied_migrations(db: &mut BicDb, ids: &[String]) -> Resul
 
 pub(crate) fn validate_runtime_profile(package: &ApplicationPackage) -> Result<()> {
     let application = package.manifest.application.as_deref().unwrap();
+    if !application
+        .required_features
+        .contains(&bicdb_extension::abi_v2::ApplicationFeature::ExactDecimalUnits)
+    {
+        for statement in &application.raw_sql {
+            if bicdb_sql::requires_exact_decimal_units_feature(&statement.sql)
+                .map_err(|error| AppRuntimeError::InvalidPackage(error.to_string()))?
+            {
+                return Err(AppRuntimeError::InvalidPackage(
+                    "bicdb_exact_sum_units requires signed exact_decimal_units feature".into(),
+                ));
+            }
+        }
+    }
     for route in &application.routes {
         let carrier_realtime = application.realtime.iter().any(|contract| {
             ["negotiate", "poll", "sse", "ws"]
@@ -953,6 +967,7 @@ pub(crate) fn build_routes(catalog: &mut RuntimeCatalog) -> Result<()> {
             }
         }
     }
+    catalog.native_invariants = invariant_registry::prepare_native_invariant_bundles(catalog)?;
     Ok(())
 }
 

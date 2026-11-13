@@ -428,6 +428,28 @@ mod after_commit {
 }
 #[cfg(test)]
 impl BicDb {
+    pub(crate) fn test_registered_joint_decision_record_evidence(
+        &self,
+        range: crate::RangeId,
+        candidate_sha: &str,
+    ) -> Result<serde_json::Value> {
+        if candidate_sha.len() != 64 || !candidate_sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(invalid("test exact decision candidate hash invalid"));
+        }
+        let _journal = self.try_native_image_journal()?;
+        let pointer =
+            self.read_native_range_image_record::<NativeJointDecisionRecord>(&key(range))?;
+        let archive = self.read_native_range_image_record::<NativeJointDecisionRecord>(
+            &archive_key(range, candidate_sha),
+        )?;
+        for record in pointer.iter().chain(archive.iter()) {
+            record.validate()?;
+        }
+        Ok(
+            serde_json::json!({"range":range,"candidate_sha256":candidate_sha,
+            "actual_pointer":pointer,"actual_candidate_archive":archive,"is_permission":false}),
+        )
+    }
     pub(crate) fn test_registered_joint_decision_before_put(cut: Box<dyn FnOnce()>) -> impl Drop {
         before_put::install(cut)
     }

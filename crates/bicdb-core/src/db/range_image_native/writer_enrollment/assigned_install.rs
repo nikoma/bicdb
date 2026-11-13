@@ -548,6 +548,12 @@ impl NativeAssignedWriterInstallAttempt {
                     policy,
                     &candidate,
                 )?;
+                #[cfg(test)]
+                if matches!(origin, FirstPolicyOrigin::Registered(_)) {
+                    // Actual native audit/readback and physical publication slots
+                    // exist; the short metadata version guard is NOT held yet.
+                    registered_before_hook::fire();
+                }
                 let retired;
                 {
                     let version = origin.publication_version_guard()?;
@@ -619,5 +625,46 @@ impl BicDb {
         cut: Box<dyn FnOnce()>,
     ) -> impl Drop {
         registered_after_native_commit::install(cut)
+    }
+}
+
+#[cfg(test)]
+mod registered_before_hook {
+    use std::cell::RefCell;
+    type Cut = Box<dyn FnOnce()>;
+    thread_local! {static CUT:RefCell<Option<Cut>>=const {RefCell::new(None)};}
+    pub(crate) struct Guard(Option<Cut>);
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            CUT.with(|cut| {
+                cut.replace(self.0.take());
+            });
+        }
+    }
+    pub(crate) fn install(cut: Cut) -> Guard {
+        Guard(CUT.with(|slot| slot.replace(Some(cut))))
+    }
+    pub(super) fn fire() {
+        if let Some(cut) = CUT.with(|slot| slot.borrow_mut().take()) {
+            cut();
+        }
+    }
+}
+#[cfg(test)]
+impl BicDb {
+    pub(crate) fn test_actual_registered_hook_evidence(&self) -> Result<serde_json::Value> {
+        let hook = self
+            .commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("test actual registered hook busy"))?;
+        Ok(
+            serde_json::json!({"registration_generation":hook.registration().generation(),
+            "registration_active":hook.registration().is_active(),"authority_present":hook.is_some(),
+            "native_writer_record":hook.native_writer().map(|writer|&writer.record),
+            "is_permission":false}),
+        )
+    }
+    pub(crate) fn test_registered_first_policy_before_hook(cut: Box<dyn FnOnce()>) -> impl Drop {
+        registered_before_hook::install(cut)
     }
 }

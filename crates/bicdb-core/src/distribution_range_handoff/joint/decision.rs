@@ -478,6 +478,11 @@ impl NativeJointPreparedDecision {
     }
 }
 impl NativeJointDecisionPublicationRound {
+    /// Actual local collection contents; no independent vote or authority.
+    #[cfg(test)]
+    pub(crate) fn test_actual_durable_member_ids(&self) -> Vec<ClusterNodeId> {
+        self.durable.keys().cloned().collect()
+    }
     pub(crate) fn publish_actual_member(
         &mut self,
         role: RecoveryRoleAdmission,

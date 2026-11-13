@@ -21,6 +21,9 @@ pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
             | SourceCase::TargetHotDataReplyLost
             | SourceCase::TargetHotDataFirstCallerExpired
             | SourceCase::TargetHotDataFollower
+            | SourceCase::TargetHotDecisionTermBeforePut
+            | SourceCase::TargetHotDecisionTermAfterCommit
+            | SourceCase::TargetHotFirstPolicyTermBeforeHook
     )
 }
 #[test]
@@ -399,6 +402,38 @@ pub(in super::super) fn exercise(
         let request = budget(5000);
         let role = actual_role(&provider, &actor, &plan, local, &request);
         let (mq, business) = own(client, &request);
+        if i == 4 && local_term_tests::is_decision_control(case) {
+            let before = local_term_tests::snapshot(target_control, factory, pending, ranges);
+            let (callback, mutation) =
+                local_term_tests::mutation(metadata[i].clone(), request.clone(), output);
+            let cut: Box<dyn std::any::Any> =
+                if matches!(case, SourceCase::TargetHotDecisionTermBeforePut) {
+                    Box::new(BicDb::test_registered_joint_decision_before_put(callback))
+                } else {
+                    Box::new(BicDb::test_registered_joint_decision_after_commit(callback))
+                };
+            let result = operation(
+                output,
+                &mut ledger,
+                "actual_registered_decision_after_local_term_change",
+                || decision.publish_actual_owned_member(role, mq, business, &request),
+            );
+            drop(cut);
+            local_term_tests::finish_decision(
+                case,
+                mutation,
+                result,
+                original.test_decision_attempt_evidence(),
+                factory,
+                selected,
+                decision.test_actual_durable_member_ids(),
+                before,
+                local_term_tests::snapshot(target_control, factory, pending, ranges),
+                acknowledged,
+                output,
+            );
+            return;
+        }
         if i == 4
             && matches!(
                 case,
@@ -646,6 +681,33 @@ pub(in super::super) fn exercise(
                 .acquire_local_writer_policy(&all_clients[i], &node(0))
                 .unwrap(),
         );
+        if i == 4 && matches!(case, SourceCase::TargetHotFirstPolicyTermBeforeHook) {
+            let before = local_term_tests::snapshot(target_control, factory, &current, ranges);
+            let request = budget(5000);
+            let (callback, mutation) =
+                local_term_tests::mutation(metadata[i].clone(), request.clone(), output);
+            let cut = BicDb::test_registered_first_policy_before_hook(callback);
+            let result = operation(
+                output,
+                &mut ledger,
+                "actual_first_policy_local_term_change_before_hook",
+                || {
+                    target_control
+                        .install_registered_serving_data_policy(selected, admission, &request)
+                },
+            );
+            drop(cut);
+            local_term_tests::finish_policy(
+                mutation,
+                result,
+                target_control.test_registered_first_policy_evidence(),
+                before,
+                local_term_tests::snapshot(target_control, factory, &current, ranges),
+                acknowledged,
+                output,
+            );
+            return;
+        }
         if i == 4 {
             data_tests::install_first_policy(
                 case,
@@ -727,3 +789,5 @@ pub(in super::super) fn exercise(
 }
 
 mod data_tests;
+
+mod local_term_tests;

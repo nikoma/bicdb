@@ -312,6 +312,35 @@ impl MetadataConsensusStore {
     pub(super) fn finish_publication_version_initialization(&self) -> Result<()> {
         self.publication_version.finish_initialization()
     }
+    /// Read-only test evidence; never a native/publication permission.
+    #[cfg(test)]
+    pub(crate) fn test_actual_publication_version_evidence(&self) -> Result<serde_json::Value> {
+        let version = self
+            .publication_version
+            .state
+            .try_read()
+            .ok_or_else(|| metadata_error("test actual metadata version busy"))?;
+        let gate = serde_json::json!({"actual_open":self.publication_version.actual_open,
+            "generation":version.generation,"ready":version.ready,"failed":version.failed,
+            "initializing":version.initializing,"durable_generation":version.durable_generation,
+            "active_operations":version.operations.len()});
+        drop(version);
+        let path = self.root.join(DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE);
+        if fs::metadata(&path)?.len() > 8 * 1024 * 1024 {
+            return Err(metadata_error(
+                "test metadata state exceeds bounded evidence limit",
+            ));
+        }
+        let bytes = fs::read(&path)?;
+        let durable: MetadataConsensusEnvelope = serde_json::from_slice(&bytes)?;
+        Ok(serde_json::json!({"status":self.status(),"version":gate,
+            "durable_state_file_bytes":bytes.len(),
+            "durable_state_file_sha256":hex::encode(Sha256::digest(&bytes)),
+            "durable_state_term":durable.state.current_term,
+            "durable_state_checksum":durable.checksum_sha256,
+            "durable_state_checksum_valid":state_checksum(&durable.state)?==durable.checksum_sha256,
+            "is_permission":false}))
+    }
 }
 #[cfg(test)]
 mod tests {

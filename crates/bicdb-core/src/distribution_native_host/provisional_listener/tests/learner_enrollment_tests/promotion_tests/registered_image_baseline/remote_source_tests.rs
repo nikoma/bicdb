@@ -79,6 +79,9 @@ pub(super) enum SourceCase {
     TargetHotDataReplyLost,
     TargetHotDataFirstCallerExpired,
     TargetHotDataFollower,
+    TargetHotDecisionTermBeforePut,
+    TargetHotDecisionTermAfterCommit,
+    TargetHotFirstPolicyTermBeforeHook,
 }
 #[test]
 fn native_registered_fifth_remote_source_actual_tls_history_rows_seal_local_old_seed() {

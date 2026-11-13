@@ -152,3 +152,36 @@ Authenticated remote phase adapters, automatic lifecycle/controller discovery,
 second populated range adoption, cold resume, production SQL transparency and
 physical post-convergence capacity qualification remain open. The historical
 Azure scale-out qualification remains failed.
+
+## Actual local term-change controls (separate source-only successor)
+
+Three additional `native_registered_fifth_remote_hot_local_term_` selectors
+are written, uncompiled and unexecuted. They use the actual selected target
+`MetadataConsensusStore::observe_remote_term` API: before the first native
+DECISION put, after its actual commit before a usable vote, and after FIRST
+native audit/readback and physical slot preparation before the final hook gate.
+A cfgtest-only FIRST seam executes outside the short version guard.
+
+An independent actor thread performs the mutation in the separate owned
+metadata state directory. It neither acquires the service/DB/native journal
+nor invents a cancellation or new leader. The callback and actor retain the
+same original finite caller; the test adds no request budget. Every mutation
+intent and actual reply/error remains in an ordered logical trace, including
+evidence-write errors. The trace retains actual term, actual-open identity,
+version generation/readiness/poison state and persisted metadata file hash,
+term and checksum validation before and after the operation.
+
+The controls require successful actual higher-term persistence and the exact
+stale-version refusal. A callback not reached, failed mutation, expired caller,
+missing physical snapshot or a different error fails this narrower gate. Native
+candidate bytes/hash/xid and actual abort/commit outcome, physical native
+pointer/archive readback, unchanged original receiver-hook registration,
+counted-vote contents, full data rows and policy/Joined status are retained
+before assertions. The post-commit record is preserved without rollback or a
+replacement transaction; FIRST must retain its original NativeReadBack attempt
+without publishing the hook.
+
+These are known local-staleness controls. They do not establish a distributed
+metadata lease, partition safety, actual new-leader behavior, cold continuation,
+operator controller convergence, physical scale-out or production qualification.
+The genuine partition/new-leader APP/Strong cohort remains separately open.

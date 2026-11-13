@@ -29,6 +29,52 @@ impl NativeRegisteredRemoteImageIntent {
     pub(crate) fn sha256(&self) -> Result<String> {
         self.intent.sha256()
     }
+    /// Readonly DATA recheck after the lexical NoDomain value has ended.
+    /// The caller must independently validate its actual owned native/catalogue
+    /// preflight under the unique original Runtime freeze. This method neither
+    /// reconstructs NoDomain nor acquires Runtime/MStore/native-journal locks.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn require_prepared_constraints(
+        &self,
+        store: &RangeWriteStore,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        bindings: &crate::db::RangeImageDbBindings,
+        source: &NativeRemoteImageStep<'_>,
+        role: &HandoffRoleAdmission,
+        original_frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        source.require_request_live()?;
+        native.require_current(db)?;
+        self.intent.validate()?;
+        require_intent_live_role(
+            &self.intent,
+            &NativeImageInstallRole::CommittedHandoff(role),
+        )?;
+        db.validate_range_image_bindings(bindings)?;
+        db.range_mutation_gate()
+            .validate_quiescent_frozen(self.range_id(), original_frozen)?;
+        if store.open_id != self.store_open
+            || self.database_incarnation != db.incarnation_id()
+            || db.data_path().canonicalize()? != store.root.canonicalize()?
+            || db.native_abort_catalogue_store_id()? != Some(self.catalogue)
+            || original_frozen.owner() != self.original_freeze_owner
+            || source.source().manifest().checksum_sha256 != self.source_manifest_sha256
+            || source.source().manifest().target_attempt != self.attempt_id()
+            || native.cluster_id() != &self.intent.cluster_id
+            || native.bootstrap_id() != self.intent.bootstrap_id
+            || native.local_node_id() != &self.intent.target_node_id
+            || native.local_member_incarnation() != self.intent.target_member_incarnation
+            || native.birth_id() != self.intent.target_birth_id
+            || native.birth_sha256() != self.intent.target_birth_sha256
+            || bindings.namespace_ids() != self.intent.target_namespace_ids
+        {
+            return Err(range_write_error(
+                "Registered remote prepared constraint identities changed",
+            ));
+        }
+        source.require_request_live()
+    }
     /// Rebuild from the same actual point rather than accepting a stored DTO
     /// as renewed permission. This is valid only BEFORE native publication.
     pub(crate) fn require_preflight_current(

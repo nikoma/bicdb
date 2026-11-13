@@ -581,6 +581,7 @@ impl RangeWriteStore {
         drop(pin);
         let controlled = gate.try_controlled_mutation(frozen)?;
         gate.validate(range, &RangeMutationAuthority::Controlled(&controlled))?;
+        writer_domain.require_current(database, self, data.activation_range())?;
         let state = self
             .catalog
             .native_joint_handoffs
@@ -599,7 +600,6 @@ impl RangeWriteStore {
         }
         // Retiring the exact adopted image refusal and recording the new
         // CLOSED activation happen in the SAME fsynced catalogue publication.
-        writer_domain.require_current(database, self, data.activation_range())?;
         self.recovery_persistence_uncertain = true;
         state.serving_activation = Some(candidate.clone());
         self.catalog

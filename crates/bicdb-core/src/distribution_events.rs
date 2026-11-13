@@ -152,6 +152,82 @@ mod client {
     use parking_lot::RwLock;
     use std::sync::Arc;
 
+    /// What one bounded discovery round established. Only `Unanswered` says
+    /// anything about the members: `Interrupted` means the caller's own
+    /// deadline ended the round before every member had been asked, which is
+    /// a statement about the remaining budget and never about reachability.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Discovery {
+        Observed,
+        Unanswered,
+        Interrupted,
+    }
+
+    /// Outcome of waiting on the attempts of one request that are in flight.
+    enum Waited {
+        Answered(ClusterEventResponse),
+        /// The attempt the caller is waiting for ended with an error.
+        Failed,
+        /// The wait ended first; the attempt is still in flight.
+        Pending,
+    }
+
+    /// Attempts of ONE request that were dispatched and have not reported.
+    /// Reaching the end of an attempt's slice of the budget only lets the
+    /// request go on to discovery and the next attempt; it does not hang up
+    /// on a member that accepted the request and is still executing it.
+    struct InFlight {
+        replies: std::sync::mpsc::Receiver<(usize, Result<ClusterEventResponse>)>,
+        attempts: Vec<(usize, crate::CancellationToken)>,
+    }
+
+    impl InFlight {
+        /// Wait until `until` for an answer from any attempt, or for the
+        /// error of attempt `awaited`. Errors of other attempts are recorded
+        /// and the wait continues.
+        fn wait(
+            &mut self,
+            awaited: Option<usize>,
+            until: std::time::Instant,
+            last_error: &mut BicDbError,
+        ) -> Waited {
+            loop {
+                if self.attempts.is_empty() {
+                    return Waited::Pending;
+                }
+                let remaining = until.saturating_duration_since(std::time::Instant::now());
+                let (attempt, reply) = match self.replies.recv_timeout(remaining) {
+                    Ok(reply) => reply,
+                    Err(_) => return Waited::Pending,
+                };
+                self.attempts.retain(|(id, _)| *id != attempt);
+                match reply {
+                    Ok(response) => return Waited::Answered(response),
+                    Err(error) => {
+                        *last_error = error;
+                        if awaited == Some(attempt) {
+                            return Waited::Failed;
+                        }
+                    }
+                }
+            }
+        }
+
+        /// Stop listening. One attempt at a time, so two ending exchanges
+        /// never record their diagnostics concurrently. Every attempt thread
+        /// reports exactly once; a cancelled socket exchange ends within its
+        /// polling interval and a connect within its own slice.
+        fn hang_up(&mut self) {
+            while let Some((_, token)) = self.attempts.first() {
+                token.cancel();
+                match self.replies.recv() {
+                    Ok((attempt, _)) => self.attempts.retain(|(id, _)| *id != attempt),
+                    Err(_) => break,
+                }
+            }
+        }
+    }
+
     /// Trusted host-side client. Membership certificates stay with this host;
     /// never provide them, this client, or arbitrary namespaces to guest code.
     pub struct ClusterEventClient {
@@ -216,14 +292,16 @@ mod client {
         }
 
         fn refresh_until(&self, deadline: std::time::Instant) -> Result<()> {
-            if self.refresh_members_until(deadline)? {
-                Ok(())
-            } else {
-                Err(invalid("no event cluster member is reachable"))
+            match self.refresh_members_until(deadline)? {
+                Discovery::Observed => Ok(()),
+                Discovery::Unanswered => Err(invalid("no event cluster member is reachable")),
+                Discovery::Interrupted => Err(invalid(
+                    "event cluster discovery did not finish within the request budget",
+                )),
             }
         }
 
-        fn refresh_members_until(&self, deadline: std::time::Instant) -> Result<bool> {
+        fn refresh_members_until(&self, deadline: std::time::Instant) -> Result<Discovery> {
             self.transport.require_rpc_evidence_current()?;
             let cancellation =
                 crate::CancellationToken::uncancelable().child_with_deadline(deadline);
@@ -246,8 +324,12 @@ mod client {
             };
             members.sort_by_key(|member| silent.contains(member));
             let mut observed = false;
+            // True only while every member asked so far had its whole
+            // exchange inside the caller's deadline.
+            let mut complete = true;
             for member in members {
                 if std::time::Instant::now() >= deadline {
+                    complete = false;
                     break;
                 }
                 if observed && silent.contains(&member) {
@@ -282,15 +364,29 @@ mod client {
                     self.transport.install_topology(topology)?;
                     observed = true;
                     self.silent_members.lock().remove(&member);
-                } else if member_started.elapsed() >= std::time::Duration::from_millis(500) {
-                    self.silent_members.lock().insert(
-                        member.clone(),
-                        std::time::Instant::now() + std::time::Duration::from_secs(10),
-                    );
+                } else {
+                    if std::time::Instant::now() >= deadline {
+                        // This member's exchange was cut short by the
+                        // caller's deadline: that does not show the member
+                        // to be unreachable.
+                        complete = false;
+                    }
+                    if member_started.elapsed() >= std::time::Duration::from_millis(500) {
+                        self.silent_members.lock().insert(
+                            member.clone(),
+                            std::time::Instant::now() + std::time::Duration::from_secs(10),
+                        );
+                    }
                 }
             }
             self.transport.require_rpc_evidence_current()?;
-            Ok(observed)
+            Ok(if observed {
+                Discovery::Observed
+            } else if complete {
+                Discovery::Unanswered
+            } else {
+                Discovery::Interrupted
+            })
         }
 
         fn request(
@@ -309,6 +405,39 @@ mod client {
             let deadline = std::time::Instant::now() + self.request_timeout;
             let cancellation =
                 crate::CancellationToken::uncancelable().child_with_deadline(deadline);
+            std::thread::scope(|scope| {
+                let (reports, replies) = std::sync::mpsc::channel();
+                let mut in_flight = InFlight {
+                    replies,
+                    attempts: Vec::new(),
+                };
+                let result = self.request_attempts(
+                    scope,
+                    &cancellation,
+                    deadline,
+                    &operation,
+                    scan_range,
+                    &reports,
+                    &mut in_flight,
+                );
+                // Every RPC of this request ends before the request returns.
+                drop(reports);
+                in_flight.hang_up();
+                result
+            })
+        }
+
+        #[allow(clippy::too_many_arguments)]
+        fn request_attempts<'scope, 'env>(
+            &'env self,
+            scope: &'scope std::thread::Scope<'scope, 'env>,
+            cancellation: &crate::CancellationToken,
+            deadline: std::time::Instant,
+            operation: &ClusterEventOperation,
+            scan_range: Option<RangeId>,
+            reports: &std::sync::mpsc::Sender<(usize, Result<ClusterEventResponse>)>,
+            in_flight: &mut InFlight,
+        ) -> Result<ClusterEventResponse> {
             let mut last_error = invalid("event cluster request failed");
             for attempt in 0..5 {
                 self.transport.require_rpc_evidence_current()?;
@@ -316,16 +445,39 @@ mod client {
                     break;
                 }
                 if attempt > 0 {
+                    let now = std::time::Instant::now();
+                    let pause = std::time::Duration::from_millis(100 << (attempt - 1))
+                        .min(deadline.saturating_duration_since(now));
+                    // An earlier attempt that is still executing may answer
+                    // during the pause; a pause with nothing in flight is the
+                    // plain backoff.
+                    if let Waited::Answered(response) =
+                        in_flight.wait(None, now + pause, &mut last_error)
+                    {
+                        return Ok(response);
+                    }
                     std::thread::sleep(
-                        std::time::Duration::from_millis(100 << (attempt - 1))
-                            .min(deadline.saturating_duration_since(std::time::Instant::now())),
+                        (now + pause).saturating_duration_since(std::time::Instant::now()),
                     );
                     // A discovery outage during an election consumes a retry,
                     // rather than aborting the remaining request budget. Invalid
                     // or conflicting topologies still propagate through `?`.
-                    if !self.refresh_members_until(deadline)? {
-                        last_error = invalid("no event cluster member is reachable");
-                        continue;
+                    let discovery = self.refresh_members_until(deadline)?;
+                    if let Waited::Answered(response) =
+                        in_flight.wait(None, std::time::Instant::now(), &mut last_error)
+                    {
+                        return Ok(response);
+                    }
+                    match discovery {
+                        Discovery::Observed => {}
+                        Discovery::Unanswered => {
+                            last_error = invalid("no event cluster member is reachable");
+                            continue;
+                        }
+                        // The budget ended the round. Keep the error of the
+                        // last actual attempt: no member was shown to be
+                        // unreachable.
+                        Discovery::Interrupted => break,
                     }
                 }
                 if std::time::Instant::now() >= deadline {
@@ -355,17 +507,49 @@ mod client {
                 // Reserve part of the remaining budget for route discovery
                 // after a silent old leader. Otherwise every new request can
                 // exhaust its whole budget on the same stale route forever.
+                // The slice bounds how long this request WAITS on the route
+                // before asking the other members, and how long the attempt
+                // may spend connecting. It does not hang up on a member that
+                // accepted the request: a leader that is alive and still
+                // committing answers this same attempt, instead of having
+                // its work abandoned and repeated by a retry that then has
+                // even less of the budget.
                 let now = std::time::Instant::now();
-                let attempt_cancellation = cancellation
-                    .child_with_deadline(now + deadline.saturating_duration_since(now) / 2);
-                match self.transport.application_event_cancellable(
-                    &attempt_cancellation,
-                    &destination,
-                    request,
-                ) {
-                    Ok(response) => return Ok(response),
-                    Err(error) => last_error = error,
+                let slice_end = now + deadline.saturating_duration_since(now) / 2;
+                let token = cancellation.child();
+                let exchange = {
+                    let token = token.clone();
+                    let reports = reports.clone();
+                    move || {
+                        let reply = self.transport.application_event_listening(
+                            &token,
+                            slice_end,
+                            &destination,
+                            request,
+                        );
+                        let _ = reports.send((attempt, reply));
+                    }
+                };
+                match std::thread::Builder::new()
+                    .name("event-request-attempt".into())
+                    .spawn_scoped(scope, exchange)
+                {
+                    Ok(_) => in_flight.attempts.push((attempt, token)),
+                    Err(error) => {
+                        last_error = error.into();
+                        continue;
+                    }
                 }
+                if let Waited::Answered(response) =
+                    in_flight.wait(Some(attempt), slice_end, &mut last_error)
+                {
+                    return Ok(response);
+                }
+            }
+            // The attempts are spent or the budget is nearly so. Whatever is
+            // still in flight may yet answer inside the caller's deadline.
+            if let Waited::Answered(response) = in_flight.wait(None, deadline, &mut last_error) {
+                return Ok(response);
             }
             self.transport.require_rpc_evidence_current()?;
             Err(last_error)
@@ -402,9 +586,15 @@ mod client {
                                 .min(std::time::Duration::from_millis(5)),
                         );
                     }
-                    if !self.refresh_members_until(deadline)? {
-                        last = invalid("no member reached during typed Get discovery");
-                        continue;
+                    match self.refresh_members_until(deadline)? {
+                        Discovery::Observed => {}
+                        Discovery::Unanswered => {
+                            last = invalid("no member reached during typed Get discovery");
+                            continue;
+                        }
+                        // The budget ended the round; keep the last actual
+                        // typed result instead of reporting unreachability.
+                        Discovery::Interrupted => continue,
                     }
                 }
                 parent.check()?;

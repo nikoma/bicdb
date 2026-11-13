@@ -841,7 +841,7 @@ fn run_case(scenario: Scenario) {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
         open_data(&mut controls)?;
         for control in &controls {
-            supervisors.push(control.start_automatic_metadata(&process_parent)?);
+            supervisors.push(start_owned_supervisor(control, &process_parent)?);
         }
         run_one_peer_loss(
             &f,

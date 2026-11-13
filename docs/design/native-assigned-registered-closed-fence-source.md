@@ -172,3 +172,38 @@ from private common record-field extraction. Scope construction performs no
 metadata/network operation, native journal reads are nonwaiting, and no callback
 contains engine reentry/network. These are source controls only, not executed
 results, hard I/O bounds, old-binary qualification or assigned cold support.
+
+
+## First executed successor: required producer passes, suite remains failed
+
+Root composed the exact reviewed source as
+`da56e489a34c1776e97a4ea089c1f250215cf8dc` (tree identical to `11e7c87ead`).
+Run 43351805110, Core job 131644446840, selected ten distinct tests and
+finished **9 passed / 1 failed**, 980 filtered, in 17.87 seconds. The original
+genuine fifth required case passed, as did eight adversarial controls. The
+workspace all-target and isolated consumer compile job passed; formatting and
+repository checks passed. The whole workflow remains **failed**.
+
+The foreign database control failed only because its expected error strings
+did not include the actual earlier birth/bootstrap/local-member identity gate.
+The observed exact error was `native range image: native recovery
+birth/bootstrap/local member binding mismatch`, returned as `BicDbError::Cluster`
+by the protected reader before capability lookup. It was not a successful foreign
+mutation. That failed execution did not reach the later control assertions.
+
+The test-only successor requires precisely that variant and full detail, records
+the actual foreign INITIAL writer database, rejects pointer/birth aliasing, and
+compares complete foreign native/raw/rows/slots/open/B/schema/namespace/catalogue
+state before and after refusal. Existing target invariance and original
+caller/role lifetime checks remain. No runtime predicate, original required
+witness, generic ingress, budget or authority producer is changed. The original
+9/1 result is retained independently; this correction still requires execution.
+
+The first run's full raw Core log SHA-256 is
+`1466c4cbbfadfa2ee9c2994690e3c418464db22fea5a5e463a73e26e82300a44`.
+Private original artifact 14004955628 is 2,390,349 bytes with SHA-256
+`57732a282f49f5e0204d81c06521ac4cdaed96abf7bd07c39d6e5d9f08899664`.
+It was exported and hash-verified outside the hosted runner, without extraction
+or replay. Native pages, TLS and signing material remain private. Neither the
+passing fence prerequisite nor any control establishes image transfer, target
+APP/Strong, automatic placement, fault-safe rebalance or physical qualification.

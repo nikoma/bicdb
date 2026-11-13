@@ -111,6 +111,7 @@ pub(super) fn run(
     parent.check().unwrap();
     capability.require_live().unwrap();
     let mut sink_report = None;
+    let mut foreign_report = None;
     let error = match case {
         Case::Ingress => {
             // Exact existing generic/older code path remains closed despite
@@ -142,17 +143,36 @@ pub(super) fn run(
             error
         }
         Case::Foreign => {
+            let foreign_database = foreign
+                .try_lock()
+                .expect("actual foreign service busy before control")
+                .database();
+            assert!(!Arc::ptr_eq(&foreign_database, &factory.database));
+            let foreign_before = state(&foreign_database, pending, &node(0), ranges).unwrap();
+            assert_ne!(foreign_before["birth"], before["birth"]);
+            assert_eq!(foreign_before["writer_installed"], true);
             let error = foreign
                 .try_lock()
                 .expect("actual foreign service busy in control")
                 .preflight_registered_closed_fence(&capability, &parent)
                 .unwrap_err();
+            // The actual receiver validates its birth/local-member binding
+            // before looking up the Registered capability. A foreign INITIAL
+            // DB therefore refuses at this earlier, stricter identity gate.
             assert!(
-                error.to_string().contains("another actual")
-                    || error.to_string().contains("another database")
-                    || error.to_string().contains("actual DB"),
-                "{error}"
+                matches!(&error, BicDbError::Cluster(detail)
+                if detail == "native range image: native recovery birth/bootstrap/local member binding mismatch"),
+                "unexpected foreign-database refusal: {error}"
             );
+            let foreign_after = state(&foreign_database, pending, &node(0), ranges).unwrap();
+            assert_eq!(
+                foreign_before, foreign_after,
+                "foreign refusal changed actual native/raw/rows/slots/UID/birth"
+            );
+            foreign_report = Some(serde_json::json!({
+                "before":foreign_before,"after":foreign_after,
+                "actual_initial_foreign_database_unchanged":true,
+                "refusal_boundary":"actual native birth/bootstrap/local-member admission before capability lookup"}));
             error
         }
         Case::Canceled => {
@@ -372,7 +392,7 @@ pub(super) fn run(
     reports.push(serde_json::json!({"control":format!("{case:?}"),"reached_genuine_valid_capability":reached_valid_capability,
         "actual_catalogue_format":actual_format,"wire_version":crate::distribution::CLUSTER_DATA_PROTOCOL_VERSION,
         "scope":scope,"error":error.to_string(),"before":before,"after":after,
-        "original_parent_canceled":matches!(case,Case::Canceled|Case::SinkCanceled),"actual_sink_cut":sink_report,"not_old_binary_execution":true,
+        "original_parent_canceled":matches!(case,Case::Canceled|Case::SinkCanceled),"actual_sink_cut":sink_report,"actual_foreign_database":foreign_report,"not_old_binary_execution":true,
         "all_earlier_required_real_tls_fences_and_original_source_acks_passed":true}));
     evidence(&output.join("closed-fence-controls.json"), reports).unwrap();
 }

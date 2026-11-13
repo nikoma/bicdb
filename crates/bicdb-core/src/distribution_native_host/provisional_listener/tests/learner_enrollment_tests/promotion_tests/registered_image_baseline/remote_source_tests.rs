@@ -31,6 +31,9 @@ pub(super) enum SourceCase {
     TargetProposalBeforeCanceled,
     TargetProposalBeforeHookRevoked,
     TargetProposalReaderFenceRetry,
+    TargetInstalling,
+    TargetInstallingPostCanceled,
+    TargetInstallingDirSyncRetry,
     RemoteConstraintCapture,
 }
 #[test]
@@ -1075,6 +1078,28 @@ pub(super) fn exercise(
             finished_ranges.insert(original.id);
             if matches!(
                 case,
+                SourceCase::TargetInstalling
+                    | SourceCase::TargetInstallingPostCanceled
+                    | SourceCase::TargetInstallingDirSyncRetry
+            ) {
+                target_installing_tests::exercise(
+                    case,
+                    target_control,
+                    target,
+                    remote_fact.clone(),
+                    &actual,
+                    &plan,
+                    &MetadataReadProvider::new(target_metadata.clone(), target.clone()).unwrap(),
+                    &actor,
+                    factory,
+                    pending,
+                    ranges,
+                    output,
+                );
+                return;
+            }
+            if matches!(
+                case,
                 SourceCase::TargetProposal
                     | SourceCase::TargetProposalPostCanceled
                     | SourceCase::TargetProposalBeforeCanceled
@@ -1233,6 +1258,7 @@ pub(super) fn exercise(
         "real_target_namespaces":factory.database.read().capture_range_image_bindings().unwrap().namespace_ids(),
     })).unwrap();
 }
+mod target_installing_tests;
 mod target_no_domain_tests;
 mod target_proposal_tests;
 mod target_transfer_tests;

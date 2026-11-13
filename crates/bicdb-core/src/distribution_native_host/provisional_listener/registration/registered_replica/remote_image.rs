@@ -95,6 +95,47 @@ impl NativeRegisteredReplicaAdmission {
         frozen: &'request FrozenRangeMutationPermit,
         parent: &'request CancellationToken,
     ) -> Result<NativeRegisteredRemoteImageStep<'request>> {
+        self.observe_remote_image_step_inner(frame, role, own, business, frozen, parent, None)
+    }
+    /// The opaque retained publication permits only retrying its exact
+    /// original/candidate catalogue. It cannot be supplied as a DTO or boolean.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn observe_remote_installing_request<'request>(
+        &'request self,
+        frame: &'request NativeRemoteImageStep<'request>,
+        role: HandoffRoleAdmission,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        frozen: &'request FrozenRangeMutationPermit,
+        parent: &'request CancellationToken,
+        publication: &crate::distribution_range_consensus::NativeRegisteredRemoteInstallingPublication,
+        preflight: &super::remote_attempt::NativeRegisteredRemoteInstallPreflight,
+    ) -> Result<NativeRegisteredRemoteTransferRequest> {
+        let step = self.observe_remote_image_step_inner(
+            frame,
+            role,
+            own,
+            business,
+            frozen,
+            parent,
+            Some((publication, preflight)),
+        )?;
+        Ok(step.into_transfer_request())
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn observe_remote_image_step_inner<'request>(
+        &'request self,
+        frame: &'request NativeRemoteImageStep<'request>,
+        role: HandoffRoleAdmission,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        frozen: &'request FrozenRangeMutationPermit,
+        parent: &'request CancellationToken,
+        retained: Option<(
+            &crate::distribution_range_consensus::NativeRegisteredRemoteInstallingPublication,
+            &super::remote_attempt::NativeRegisteredRemoteInstallPreflight,
+        )>,
+    ) -> Result<NativeRegisteredRemoteImageStep<'request>> {
         parent.check()?;
         frame.require_request_live()?;
         role.role().require_own_host_metadata(&own, business)?;
@@ -150,7 +191,11 @@ impl NativeRegisteredReplicaAdmission {
             db.require_registered_remote_image_writer_absence(&self.original_hook)?;
             db.range_mutation_gate()
                 .validate_quiescent_frozen(plan.old_range().id, frozen)?;
-            actual.require_native_catalog_database(&db)?;
+            if let Some((publication, preflight)) = retained {
+                actual.require_retained_registered_remote_catalogue(&db, publication, preflight)?;
+            } else {
+                actual.require_native_catalog_database(&db)?;
+            }
             let native = db.native_recovery_admission(
                 role.role().cluster_id(),
                 role.role().bootstrap_id(),
@@ -197,7 +242,12 @@ impl NativeRegisteredReplicaAdmission {
             let db = database
                 .try_read()
                 .ok_or_else(|| invalid("remote image target DB changed before return"))?;
-            actual.require_registered_remote_image_step(&step, &db)?;
+            if let Some((publication, preflight)) = retained {
+                actual.require_retained_registered_remote_catalogue(&db, publication, preflight)?;
+                step.require_database_store_identity(&db, preflight.catalogue().store_open_id())?;
+            } else {
+                actual.require_registered_remote_image_step(&step, &db)?;
+            }
         }
         step.require_metadata_current()?;
         Ok(step)
@@ -332,6 +382,11 @@ impl NativeRegisteredRemoteImageStep<'_> {
     /// admission still needs a separate verified no-domain/Installing proof
     /// and complete staged history; this method cannot supply either.
     pub(crate) fn require_database_store(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
+        self.require_database_store_identity(db, store.native_writer_store_open_id())?;
+        db.require_native_writer_catalogue_custody(store)?;
+        self.require_live()
+    }
+    fn require_database_store_identity(&self, db: &BicDb, actual_store_open: Uuid) -> Result<()> {
         self.require_source()?;
         self.original.database.require_database(db)?;
         self.member.require_database(db)?;
@@ -341,7 +396,7 @@ impl NativeRegisteredRemoteImageStep<'_> {
         db.validate_range_image_bindings(&self.bindings)?;
         let bindings = &self.bindings;
         let source = self.source().manifest();
-        if self.original.store.id() != store.native_writer_store_open_id()
+        if self.original.store.id() != actual_store_open
             || self.original.database_incarnation != db.incarnation_id()
             || db.native_abort_catalogue_store_id()? != Some(self.catalogue)
             || bindings.schema_sha256() != source.schema_sha256
@@ -356,7 +411,6 @@ impl NativeRegisteredRemoteImageStep<'_> {
                 "remote image target changed original DB/Store/UID/catalogue",
             ));
         }
-        db.require_native_writer_catalogue_custody(store)?;
         self.require_live()
     }
     /// Never call this while holding target service/DB/native-journal guards.

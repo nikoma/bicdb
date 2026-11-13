@@ -9,6 +9,7 @@ use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 use crate::distribution_range_recovery::{
     HandoffRoleAdmission, RegisteredRemoteImageInstallFreeze,
 };
+mod remote_installing;
 
 pub(crate) struct NativeRegisteredRemoteInstallPreflight {
     original: Arc<NativeRegisteredReplicaAdmission>,
@@ -23,6 +24,8 @@ pub(super) struct NativeRegisteredRemoteInstallAttempt {
     preflight: Arc<NativeRegisteredRemoteInstallPreflight>,
     lease: Option<RegisteredRemoteImageInstallFreeze>,
     proposal: Option<crate::db::NativeRegisteredRemoteProposalPublication>,
+    installing:
+        Option<crate::distribution_range_consensus::NativeRegisteredRemoteInstallingPublication>,
 }
 /// Original host-only construction, borrowing its actual A lease and fresh
 /// request. Neither a DTO nor a missing native prefix constructs this point.
@@ -33,6 +36,9 @@ pub(crate) struct NativeRegisteredRemoteProposalPoint<'a> {
     frame: &'a NativeRemoteImageStep<'a>,
 }
 impl NativeRegisteredRemoteProposalPoint<'_> {
+    pub(crate) fn preflight_arc(&self) -> &Arc<NativeRegisteredRemoteInstallPreflight> {
+        self.preflight
+    }
     /// Necessary actual original boundary after the separate sink changes its
     /// own catalogue candidate. The sink must verify that exact new state.
     pub(crate) fn require_original_boundary(
@@ -288,6 +294,7 @@ impl NativeMetadataControlHost {
             "actual_owner":actual.lease.as_ref().map(|l|l.as_frozen().owner()),
             "source":actual.preflight.source().manifest().checksum_sha256,
             "proposal":actual.proposal.as_ref().map(|publication|publication.test_outcome()),
+            "installing":actual.installing.as_ref().map(|publication|publication.test_outcome()),
             "retained":true,"lease_present":actual.lease.is_some()}))
     }
     /// Capture real readonly facts, retain this exact attempt, then transfer
@@ -388,6 +395,7 @@ impl NativeMetadataControlHost {
                 preflight: preflight.clone(),
                 lease: None,
                 proposal: None,
+                installing: None,
             }
         });
         let lease = receiver.runtime.transfer_registered_remote_install(

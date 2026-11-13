@@ -65,6 +65,8 @@ pub(crate) use image_install_certification::{
 use image_install_certification::{InstallingCertifications, INSTALLING_CERTIFICATION_FORMAT};
 mod image_install_resume;
 mod image_install_state;
+pub(crate) use image_install_state::NativeRegisteredRemoteProposalPointer;
+use image_install_state::REGISTERED_IMAGE_INSTALL_CATALOG_FORMAT;
 mod image_proposal_state;
 pub(crate) use image_install_resume::CurrentImageInstallingAdmission;
 use image_proposal_state::IMAGE_PROPOSAL_CATALOG_FORMAT;
@@ -105,11 +107,17 @@ pub(crate) use sparse_certification::{
 };
 use sparse_certification::{SparseDecisions, SPARSE_HISTORY_CATALOG_FORMAT};
 mod image_install_fence;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use image_install_fence::test_registered_remote_installing_after_fsync;
 #[cfg(feature = "tls-replication")]
 pub(crate) use image_install_fence::NativeRegisteredRemoteImageIntent;
 pub(crate) use image_install_fence::{
     NativeImageInstallRole, NativeImageInstallTransferPreflight, TargetImageInstallFence,
     UntouchedNativeImageTransferReturn,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use image_install_fence::{
+    NativeRegisteredRemoteInstallingFence, NativeRegisteredRemoteInstallingPublication,
 };
 use recovery_state::RecoveryFenceRecord;
 pub(crate) use recovery_state::{
@@ -176,6 +184,7 @@ const KNOWN_RANGE_WRITE_CATALOG_FORMATS: &[u32] = &[
     NATIVE_JOINT_HANDOFF_CATALOG_FORMAT,
     NATIVE_ABORT_CATALOG_FORMAT,
     CURRENT_JOINT_CATALOG_FORMAT,
+    REGISTERED_IMAGE_INSTALL_CATALOG_FORMAT,
 ];
 
 // Recognizing a format is not a phase, writer or recovery grant. Each caller
@@ -1004,6 +1013,17 @@ impl RangeWriteStore {
         {
             return Err(range_write_error(
                 "protected proposal catalog lacks its mandatory native reader fence",
+            ));
+        }
+        if (catalog.format_version == REGISTERED_IMAGE_INSTALL_CATALOG_FORMAT
+            || catalog
+                .image_install_intents
+                .values()
+                .any(|i| i.registered_proposal.is_some()))
+            && !crate::format::native_registered_remote_proposal_active(&root)?
+        {
+            return Err(range_write_error(
+                "Registered install catalogue lacks its mandatory native reader fence",
             ));
         }
         if catalog.native_joint_handoffs.is_some()

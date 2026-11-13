@@ -1,6 +1,7 @@
 //! Exact retained Registered Installing proposal. No rows or catalogue grant.
 use super::*;
 use crate::distribution_native_host::NativeRegisteredRemoteProposalPoint;
+pub(crate) use crate::distribution_range_consensus::NativeRegisteredRemoteProposalPointer;
 use crate::distribution_range_consensus::RangeWriteStore;
 use crate::distribution_range_image::NativeRemoteImageManifestV1;
 use sha2::{Digest, Sha256};
@@ -14,13 +15,6 @@ fn archive(id: Uuid, xid: u64) -> String {
 }
 fn digest(s: &str) -> bool {
     s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit())
-}
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct NativeRegisteredRemoteProposalPointer {
-    pub(crate) attempt_id: Uuid,
-    pub(crate) native_page_xid: u64,
-    pub(crate) checksum_sha256: String,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

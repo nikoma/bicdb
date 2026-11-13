@@ -52,9 +52,11 @@ use crate::distribution_metadata_read_provider::{
 };
 mod evidence;
 pub use evidence::{ClusterRpcEvidence, ClusterRpcEvidenceLimits, ClusterRpcEvidenceObserver};
+mod assigned_data_listener;
 mod host_metadata;
 mod initial_birth;
 mod initial_data_listener;
+pub(crate) use assigned_data_listener::start_cluster_assigned_closed_data_server;
 pub(crate) use initial_data_listener::start_cluster_initial_native_data_server;
 mod registered_replica_listener;
 pub(crate) use registered_replica_listener::start_cluster_registered_replica_server;
@@ -62,6 +64,7 @@ pub(crate) use registered_replica_listener::start_cluster_registered_replica_ser
 enum NativeDataListenerMode {
     Initial(Arc<crate::distribution_native_host::NativeInitialDataAdmission>),
     RegisteredReplica(Arc<crate::distribution_native_host::NativeRegisteredReplicaAdmission>),
+    AssignedClosed(Arc<crate::distribution_native_host::NativeAssignedDataAdmission>),
 }
 impl NativeDataListenerMode {
     fn require_listener(
@@ -72,6 +75,7 @@ impl NativeDataListenerMode {
         match self {
             Self::Initial(admission) => admission.require_listener(service, runtime),
             Self::RegisteredReplica(admission) => admission.require_listener(service, runtime),
+            Self::AssignedClosed(admission) => admission.require_listener(service, runtime),
         }
     }
 }
@@ -1264,6 +1268,10 @@ fn handle_cluster_data_connection(
         Some(NativeDataListenerMode::RegisteredReplica(admission)) => Some(admission),
         _ => None,
     };
+    let assigned_closed = match native_mode {
+        Some(NativeDataListenerMode::AssignedClosed(admission)) => Some(admission),
+        _ => None,
+    };
     let response = (|| {
         if request.protocol_version != CLUSTER_DATA_PROTOCOL_VERSION {
             return Err(transport_error(format!(
@@ -1376,6 +1384,9 @@ fn handle_cluster_data_connection(
             replica.require_live()?;
             registered_replica_listener::require_request(&request.request)?;
         }
+        if let Some(assigned) = assigned_closed {
+            assigned_data_listener::require_request(assigned, &request.request)?;
+        }
         if initial_consensus_only
             && native_mode.is_none()
             && native_metadata_control.is_none()
@@ -1466,7 +1477,11 @@ fn handle_cluster_data_connection(
                     // registered receiver bootstrap keep their original path.
                     let snapshot = match initial_data {
                         Some(admission) => provider.bootstrap_initial_data(admission, &token),
-                        None => provider.bootstrap(&token),
+                        None => match assigned_closed {
+                            Some(admission)=>provider.bootstrap_data_owner(
+                                &crate::distribution_native_host::NativeDataOwnerAdmission::Assigned(admission.clone()),&token),
+                            None=>provider.bootstrap(&token),
+                        },
                     };
                     return snapshot.map(ClusterDataResponse::BootstrapSnapshot);
                 }

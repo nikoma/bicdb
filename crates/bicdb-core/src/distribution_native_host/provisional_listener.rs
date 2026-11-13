@@ -16,7 +16,9 @@ pub(crate) use metadata_startup::NativeInitialWriterEnrollment;
 pub(in crate::distribution_native_host) use registration::NativeMetadataMaintenanceReport;
 pub use registration::NativeRegisteredReplicaReceiverStatus;
 pub(crate) use registration::{
-    NativeAssignedRegisteredClosedFence, NativeRegisteredReplicaAdmission,
+    NativeAssignedDataAdmission, NativeAssignedDataPolicyOrigin,
+    NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission,
+    NativeRegisteredReplicaAdmission,
 };
 pub(crate) use registration::{
     NativeInitialDataAdmission, NativeMetadataControlHost, NativeMetadataRegistrationController,

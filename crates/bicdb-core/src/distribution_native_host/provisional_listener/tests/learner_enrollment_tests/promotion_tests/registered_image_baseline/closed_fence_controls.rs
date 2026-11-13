@@ -12,6 +12,7 @@ pub(super) enum Case {
     SinkCanceled,
     SinkIoUnknown,
     ActualInvalidation,
+    AssignedWithoutImage,
 }
 #[allow(clippy::too_many_arguments)]
 pub(super) fn run(
@@ -113,6 +114,32 @@ pub(super) fn run(
     let mut sink_report = None;
     let mut foreign_report = None;
     let error = match case {
+        Case::AssignedWithoutImage => {
+            // This actual read also refuses any CURRENT/PREVIOUS protected
+            // native policy; absence is not inferred from the hook flag.
+            let original_hook = factory
+                .database
+                .read()
+                .capture_registered_receiver_hook()
+                .unwrap();
+            let frozen = runtime.test_retained_registered_freeze(&scope).unwrap();
+            let error = host
+                .install_assigned_closed_data_policy(
+                    crate::distribution_data::NativeJointServingLease::Survivor(frozen),
+                    &parent,
+                )
+                .unwrap_err();
+            assert!(
+                matches!(&error,BicDbError::Cluster(detail)
+                if detail=="native host bootstrap: Assigned DATA owner requires a real target Image lease"),
+                "{error}"
+            );
+            let database = factory.database.read();
+            original_hook.require_current(&database).unwrap();
+            database.capture_registered_receiver_hook().unwrap();
+            assert!(!database.commit_admission_ready());
+            error
+        }
         Case::Ingress => {
             // Exact existing generic/older code path remains closed despite
             // persisted Active fences. This is not an old-binary execution.
@@ -441,4 +468,8 @@ control!(
 control!(
     native_registered_fifth_closed_fence_actual_durable_invalidation_is_not_unknown_absence,
     ActualInvalidation
+);
+control!(
+    native_registered_fifth_closed_fence_actual_assigned_policy_requires_image,
+    AssignedWithoutImage
 );

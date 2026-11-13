@@ -9,12 +9,18 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+mod assigned_data;
 mod initial_data;
+pub(crate) use assigned_data::NativeAssignedDataAdmission;
+use assigned_data::NativeAssignedDataHost;
+mod data_owner;
+pub(crate) use data_owner::NativeDataOwnerAdmission;
 mod registered_replica;
 use registered_replica::NativeRegisteredReplicaReceiver;
 pub use registered_replica::NativeRegisteredReplicaReceiverStatus;
 pub(crate) use registered_replica::{
-    NativeAssignedRegisteredClosedFence, NativeRegisteredReplicaAdmission,
+    NativeAssignedDataPolicyOrigin, NativeAssignedRegisteredClosedFence,
+    NativeRegisteredReplicaAdmission,
 };
 mod maintenance;
 pub(crate) use initial_data::NativeInitialDataAdmission;
@@ -135,7 +141,19 @@ impl NativeMetadataRegistrationController {
     /// quorum/readiness/write grant or cached schema authority is returned.
     pub(crate) fn bootstrap_initial_data(
         &self,
-        admission: &NativeInitialDataAdmission,
+        admission: &Arc<NativeInitialDataAdmission>,
+        parent: &CancellationToken,
+    ) -> Result<ClusterBootstrapSnapshot> {
+        self.bootstrap_data_owner(
+            &NativeDataOwnerAdmission::Initial(admission.clone()),
+            parent,
+        )
+    }
+    /// Routing DATA only for either actual retained owner. No role or current
+    /// read/write permission is derived from this common necessary fence.
+    pub(crate) fn bootstrap_data_owner(
+        &self,
+        admission: &NativeDataOwnerAdmission,
         parent: &CancellationToken,
     ) -> Result<ClusterBootstrapSnapshot> {
         parent.check()?;
@@ -376,6 +394,7 @@ pub(crate) struct NativeMetadataControlHost {
     data: Option<NativeInitialDataHost>,
     data_process: std::sync::OnceLock<CancellationToken>,
     replica: Option<NativeRegisteredReplicaReceiver>,
+    assigned: Option<NativeAssignedDataHost>,
     old_listener: Option<ClusterDataServerHandle>,
     drained: Option<DrainedClusterDataListener>,
     controller: Option<Arc<NativeMetadataRegistrationController>>,
@@ -397,6 +416,7 @@ impl NativeMetadataControlHost {
             data: None,
             data_process: std::sync::OnceLock::new(),
             replica: None,
+            assigned: None,
             old_listener: Some(listener),
             drained: None,
             controller: None,
@@ -416,6 +436,7 @@ impl NativeMetadataControlHost {
             data: None,
             data_process: std::sync::OnceLock::new(),
             replica: None,
+            assigned: None,
             old_listener: Some(listener),
             drained: None,
             controller: None,
@@ -426,6 +447,10 @@ impl NativeMetadataControlHost {
     }
     pub(in crate::distribution_native_host) fn is_running(&self) -> bool {
         self.listener.is_some()
+            || self
+                .assigned
+                .as_ref()
+                .is_some_and(|owner| owner.is_running())
             || self.data.as_ref().is_some_and(|data| data.is_running())
             || self
                 .replica
@@ -705,6 +730,9 @@ impl NativeMetadataControlHost {
         self.backend.heartbeat(parent)
     }
     pub(crate) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
+        if let Some(assigned) = self.assigned.as_mut() {
+            assigned.stop(parent)?;
+        }
         if let Some(replica) = self.replica.as_mut() {
             replica.stop(parent)?;
         }

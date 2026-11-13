@@ -1,6 +1,37 @@
 //! Existing Registered member control transition; never a fresh-voter factory.
 use super::*;
 impl NativeUnassignedLearnerHost {
+    pub(in crate::distribution_native_host) fn install_assigned_closed_data_policy(
+        &mut self,
+        image: crate::distribution_data::NativeJointServingLease,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.metadata_transition
+            .control
+            .as_mut()
+            .ok_or_else(|| invalid("actual Registered metadata control absent"))?
+            .install_assigned_closed_data_policy(image, parent)
+    }
+    pub(in crate::distribution_native_host) fn advance_assigned_closed_data_policy(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.metadata_transition
+            .control
+            .as_mut()
+            .ok_or_else(|| invalid("actual retained Assigned control absent"))?
+            .advance_assigned_closed_data_policy(parent)
+    }
+    pub(in crate::distribution_native_host) fn take_assigned_joint_image_lease(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_data::NativeJointServingLease> {
+        self.metadata_transition
+            .control
+            .as_mut()
+            .ok_or_else(|| invalid("actual retained Assigned control absent"))?
+            .take_assigned_joint_image_lease(parent)
+    }
     pub(in crate::distribution_native_host) fn metadata_control_owned(&self) -> bool {
         self.metadata_transition
             .control

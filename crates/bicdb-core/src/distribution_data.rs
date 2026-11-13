@@ -48,9 +48,13 @@ mod hot_recovery;
 mod native_abort;
 mod native_activation;
 mod native_apply;
+#[cfg(feature = "tls-replication")]
+mod native_assigned_policy;
 mod native_durability;
 mod native_joint_handoff;
 mod native_writer;
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_assigned_policy::NativeAssignedImagePolicyEvidence;
 #[cfg(feature = "tls-replication")]
 mod registered_closed_fence;
 pub(crate) use native_durability::ClusterServiceOpenGuard;

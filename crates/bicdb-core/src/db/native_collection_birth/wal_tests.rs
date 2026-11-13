@@ -30,7 +30,6 @@ fn retained_write_contract_after_name_reuse(live: bool) {
         db.activate_local_namespace_identity_v1().unwrap();
         db.activate_native_collection_birth_v1().unwrap();
         db.create_collection("items").unwrap();
-        db.set_collection_mesh_sync_enabled("items", true).unwrap();
         db.create_collection("independent").unwrap();
         let row = Record::new("old_ACK").with_metadata(json!({"owner":"original"}));
         db.insert("items", row.clone()).unwrap();
@@ -53,21 +52,24 @@ fn retained_write_contract_after_name_reuse(live: bool) {
             .content_hash()
             .unwrap();
         db.rename_collection("items", "kept").unwrap();
-        db.create_collection("items").unwrap();
+        db.create_timeseries_collection("items").unwrap();
         assert_ne!(
             db.native_collection_birth_id("items").unwrap(),
             original_birth
         );
-        assert!(
-            !db.collections()
+        assert_eq!(
+            db.collections()
                 .into_iter()
                 .find(|m| m.name == "items")
                 .unwrap()
-                .mesh_sync_enabled
+                .mode,
+            CollectionMode::TimeSeries
         );
         db.insert(
             "items",
-            Record::new("new_ACK").with_metadata(json!({"owner":"replacement"})),
+            Record::new("new_ACK")
+                .with_metadata(json!({"owner":"replacement"}))
+                .with_timestamp(1),
         )
         .unwrap();
         for reopen in [false, true, true] {

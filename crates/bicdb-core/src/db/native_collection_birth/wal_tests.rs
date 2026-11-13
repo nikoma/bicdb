@@ -137,6 +137,99 @@ fn native_birth_retained_live_export_does_not_rebind_old_writes_to_reused_names(
 }
 
 #[test]
+fn native_birth_wal_recovery_refuses_changed_allocation_pairs_before_replaying_rows() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        for change_birth in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let cfg = config(mode.clone());
+            let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            db.sync_quorum().hold("changed-native-pair-control", 0);
+            db.activate_local_namespace_identity_v1().unwrap();
+            db.activate_native_collection_birth_v1().unwrap();
+            db.activate_native_wal_backing_capture_v1().unwrap();
+            db.create_collection("items").unwrap();
+            db.insert(
+                "items",
+                Record::new("old_ACK").with_metadata(json!({"owner":"original"})),
+            )
+            .unwrap();
+            let old_hash = db
+                .get("items", "old_ACK")
+                .unwrap()
+                .unwrap()
+                .content_hash()
+                .unwrap();
+            db.rename_collection("items", "kept").unwrap();
+            db.create_collection("items").unwrap();
+            db.insert(
+                "items",
+                Record::new("new_ACK").with_metadata(json!({"owner":"replacement"})),
+            )
+            .unwrap();
+            let new_hash = db
+                .get("items", "new_ACK")
+                .unwrap()
+                .unwrap()
+                .content_hash()
+                .unwrap();
+            db.close().unwrap();
+            let path = root.path().join(DEFAULT_COLLECTION_CATALOG);
+            let original = fs::read(&path).unwrap();
+            let mut corrupted: Value = serde_json::from_slice(&original).unwrap();
+            let kept = corrupted["collections"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|m| m["name"] == "kept")
+                .unwrap();
+            let field = if change_birth {
+                "native_backing_birth_id"
+            } else {
+                "local_namespace_id"
+            };
+            kept[field] = Value::String(Uuid::new_v4().to_string());
+            fs::write(&path, serde_json::to_vec_pretty(&corrupted).unwrap()).unwrap();
+            let error = BicDb::open_with_config(root.path(), cfg.clone()).unwrap_err();
+            assert!(
+                matches!(error, BicDbError::FormatCompatibility(_)),
+                "{error}"
+            );
+            assert!(
+                error.to_string().contains(if change_birth {
+                    "changed local backing birth"
+                } else {
+                    "changed local namespace identity"
+                }),
+                "{error}"
+            );
+            fs::write(&path, original).unwrap();
+            for _ in 0..2 {
+                let db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+                assert_eq!(
+                    db.get("kept", "old_ACK")
+                        .unwrap()
+                        .unwrap()
+                        .content_hash()
+                        .unwrap(),
+                    old_hash
+                );
+                assert_eq!(
+                    db.get("items", "new_ACK")
+                        .unwrap()
+                        .unwrap()
+                        .content_hash()
+                        .unwrap(),
+                    new_hash
+                );
+                assert!(db.get("items", "old_ACK").unwrap().is_none());
+                assert!(db.get("kept", "new_ACK").unwrap().is_none());
+                db.close().unwrap();
+            }
+        }
+    }
+}
+
+#[test]
 fn native_birth_wal_capture_never_exports_failed_io_beyond_the_durable_prefix() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         for site in ["transaction_log.write", "transaction_log.sync"] {

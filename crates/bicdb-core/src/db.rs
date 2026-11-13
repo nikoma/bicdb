@@ -102,6 +102,8 @@ pub(crate) use range_image_native::NativeAssignedWriterInstallAttempt;
 pub(crate) use range_image_native::NativeInitialDataGenesis;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredClosedPersistScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeRegisteredNoDomainScope;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
     FreshNativeCatalogueBootstrap, FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard,

@@ -45,9 +45,13 @@ use current_joint_recovery::{CurrentJointRecoveryState, CURRENT_JOINT_CATALOG_FO
 #[cfg(test)]
 pub(crate) use native_prefix::test_validate_ordinary_native_intent;
 mod native_image_ready;
+#[cfg(feature = "tls-replication")]
+mod registered_no_domain;
 pub(crate) use native_image_base::NativeImageCatalogueAdoptionReceipt;
 use native_image_base::{NativeImageCatalogueBase, NATIVE_IMAGE_CATALOG_FORMAT};
 pub(crate) use native_image_ready::FinalizedNativeImageCatalogueObservation;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_no_domain::NativeRegisteredRangeCatalogueAbsence;
 mod image_install_obligations;
 pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;
 mod image_replacement_handover;

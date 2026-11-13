@@ -6,6 +6,24 @@ impl BicDb {
         native: &NativeRecoveryAdmission,
     ) -> Result<()> {
         let journal = self.try_native_image_journal()?;
+        self.require_original_registered_receiver_domain_with_journal(native, &journal)
+    }
+    pub(super) fn require_original_registered_receiver_domain_with_journal(
+        &self,
+        native: &NativeRecoveryAdmission,
+        journal: &NativeImageJournalGuard<'_>,
+    ) -> Result<()> {
+        self.require_original_registered_receiver_birth_with_journal(native, journal)?;
+        // This is the complete protected native namespace, not user rows and
+        // not the lossy prefix diagnostic. Any unknown/historical native fact
+        // is conservative refusal, including a durable invalidation marker.
+        self.require_original_registered_receiver_inventory()
+    }
+    pub(super) fn require_original_registered_receiver_birth_with_journal(
+        &self,
+        native: &NativeRecoveryAdmission,
+        journal: &NativeImageJournalGuard<'_>,
+    ) -> Result<()> {
         journal.require_database(self)?;
         native.require_current(self)?;
         let birth = self
@@ -28,9 +46,9 @@ impl BicDb {
                 "registered receiver is not the original no-INITIAL-range/native domain",
             ));
         }
-        // This is the complete protected native namespace, not user rows and
-        // not the lossy prefix diagnostic. Any unknown/historical native fact
-        // is conservative refusal, including a durable invalidation marker.
+        self.check_recovery_state()
+    }
+    fn require_original_registered_receiver_inventory(&self) -> Result<()> {
         let paged = self
             .paged_records
             .as_ref()

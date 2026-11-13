@@ -16,6 +16,10 @@ pub(crate) use data_domains::{
     NativeWriterServingDomainPublication,
 };
 mod joint_domain;
+#[cfg(feature = "tls-replication")]
+mod registered_no_domain;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_no_domain::NativeRegisteredNoDomainScope;
 mod registry_refresh;
 #[cfg(feature = "tls-replication")]
 pub(crate) use assigned_install::NativeAssignedWriterInstallAttempt;
@@ -617,6 +621,9 @@ impl BicDb {
     }
     fn require_never_installed_receiver_writer_records(&self) -> Result<()> {
         let _journal = self.try_native_image_journal()?;
+        self.require_never_installed_receiver_writer_records_point()
+    }
+    fn require_never_installed_receiver_writer_records_point(&self) -> Result<()> {
         if self
             .read_native_range_image_record::<NativeWriterPolicyRecord>(POLICY_POINTER)?
             .is_some()

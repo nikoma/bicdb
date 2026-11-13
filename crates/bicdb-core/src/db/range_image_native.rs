@@ -34,6 +34,8 @@ mod writer_enrollment;
 pub(crate) use writer_enrollment::NativeAssignedWriterInstallAttempt;
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredClosedPersistScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeRegisteredNoDomainScope;
 pub(crate) use writer_enrollment::{
     InstalledNativeWriterHostGuard, NativeRegisteredReceiverHook, NativeWriterHostState,
 };

@@ -23,7 +23,7 @@ pub(crate) use registration::{
 pub(crate) use registration::{
     NativeAssignedDataAdmission, NativeAssignedDataPolicyOrigin,
     NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission, NativeRegisteredRemoteImageStep,
-    NativeRegisteredReplicaAdmission,
+    NativeRegisteredReplicaAdmission, NativeRegisteredSelectedRangeNoDomain,
 };
 pub(crate) use registration::{
     NativeInitialDataAdmission, NativeInitialOldStep, NativeMetadataControlHost,

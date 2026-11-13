@@ -34,8 +34,13 @@ unit tests retain typed unknown-outcome fields through a later operation
 refusal plus refresh failure or timeout. These are routing/error unit tests,
 not real database commits, authenticated native admission or HA qualification.
 
-The leaf has passed formatting, diff and version consistency checks only; it
-has not been compiled or run. Existing retry-test assertions are unchanged.
+Exact runtime `8352e3d6bcf30ca5d03576a0ef70f98cc4244fec` passed hosted run
+43528329600: all 12 selected tests passed in 2.67 s, including six new
+regressions and six existing retry tests. Workspace/all-targets and the workflow
+consumer compiled. The source remains 1.0.500-beta for this qualification leaf;
+this does not imply a source merge, release binary or deployment. See
+[retained SDK evidence](../evidence/event-client-error-preservation-8352-2026-11-13/).
+Existing retry-test assertions are unchanged.
 The earlier foreign process/CLI first-ACK failures remain failed evidence;
 this observability correction does not establish their cause or fix a
 production recovery, failover or scaling guarantee.

@@ -1,0 +1,46 @@
+{
+  "format_version": 1,
+  "source": "8352e3d6bcf30ca5d03576a0ef70f98cc4244fec",
+  "source_version": "1.0.500-beta",
+  "base_main500": "a06e09336c70fecbc38232d677c330984959388f",
+  "run": 43528329600,
+  "core_job": 132239531943,
+  "workspace_job": 132239499719,
+  "artifact": 14085989657,
+  "artifact_sha256": "9ead8d3d2f9f3f92fe97979b80ab3f348569f653d6e23fad37b3f59b8f8dd1c2",
+  "artifact_bytes": 42672,
+  "members": [
+    {
+      "path": "rustc.txt",
+      "bytes": 196,
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    {
+      "path": "selected-tests.log",
+      "bytes": 253267,
+      "sha256": "75d777bd9b3915a2e3e1189868ef17f7948bb6b58c075a0ef45cd82b65be6bf2"
+    },
+    {
+      "path": "source-revision.txt",
+      "bytes": 41,
+      "sha256": "df3d7626cba071dbcd9db7bd4674cbb6a7d066fddf35482874084f4b882aab84"
+    },
+    {
+      "path": "tests.log",
+      "bytes": 254862,
+      "sha256": "45154241478147e9669c74c5484f530dfab62dd43e5c63a354d6b58e2ec7d457"
+    }
+  ],
+  "selected_count": 12,
+  "passed": 12,
+  "failed": 0,
+  "new_regressions_passed": 6,
+  "existing_retry_tests_passed": 6,
+  "seconds": 2.67,
+  "filtered_out": 1081,
+  "unit_TCP_mock_scope_only": true,
+  "runtime_custody_present": false,
+  "complete_original_artifact_included": true,
+  "production_qualified": false,
+  "source_patch_sha256": "b09d1bcb539060dd5e4a6d293a8cccb67644f25d0da169c5926957a55e5f53a8"
+}

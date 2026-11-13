@@ -214,6 +214,7 @@ impl BicDb {
 
         let mut writes: FxHashMap<u64, Vec<TxWrite>> = FxHashMap::default();
         let mut audit: FxHashMap<u64, Vec<Event>> = FxHashMap::default();
+        let mut native_backings_by_tx = FxHashMap::default();
         // commit_seq -> (tx_id, timestamp)
         let mut commits: BTreeMap<u64, (u64, i64)> = BTreeMap::new();
         let mut tx_of_seq: FxHashMap<u64, u64> = FxHashMap::default();
@@ -243,12 +244,14 @@ impl BicDb {
                     tx_id,
                     timestamp,
                     commit_seq,
+                    native_backings,
                 } => {
                     if commit_seq <= target {
                         new_anchor = Some((*start, *end));
                     }
                     if commit_seq > cursor.sent_seq && commit_seq <= target {
                         commits.insert(commit_seq, (tx_id.0, timestamp));
+                        native_backings_by_tx.insert(tx_id.0, native_backings);
                         tx_of_seq.insert(commit_seq, tx_id.0);
                     } else {
                         writes.remove(&tx_id.0);
@@ -257,6 +260,7 @@ impl BicDb {
                 TxFrame::Abort { tx_id, .. } => {
                     writes.remove(&tx_id.0);
                     audit.remove(&tx_id.0);
+                    native_backings_by_tx.remove(&tx_id.0);
                     commits.retain(|_, (committed, _)| *committed != tx_id.0);
                 }
                 TxFrame::Begin { .. }
@@ -287,13 +291,16 @@ impl BicDb {
             else {
                 break;
             };
+            let native_backings = native_backings_by_tx.remove(&tx_id).unwrap_or_default();
             let tx_writes = tx_writes
                 .iter()
                 .map(|write| {
-                    let collection_meta = self
-                        .collections
-                        .get(&write.collection)
-                        .map(|state| state.read().meta.clone());
+                    let collection_meta =
+                        native_backings.get(&write.collection).cloned().or_else(|| {
+                            self.collections
+                                .get(&write.collection)
+                                .map(|state| state.read().meta.clone())
+                        });
                     tx_write_to_replication_write(collection_meta, write)
                 })
                 .collect::<Result<Vec<_>>>()?;
@@ -311,7 +318,8 @@ impl BicDb {
             } else {
                 frame
             };
-            out.push(frame.with_required_reader_features(reader_features.clone())?);
+            let frame = frame.with_required_reader_features(reader_features.clone())?;
+            out.push(self.capture_native_wal_export(frame, native_backings)?);
             sent = seq;
         }
         cursor.sent_seq = sent;

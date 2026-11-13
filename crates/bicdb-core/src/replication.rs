@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
 
@@ -197,6 +198,21 @@ pub struct CommitFrame {
     pub compressed: bool,
     pub encryption_metadata: Option<Vec<u8>>,
     pub checksum: [u8; 32],
+    /// In-process capture from actual retained Native WAL. Serialization
+    /// discards it. It is not peer authentication or an import/recovery grant.
+    #[serde(skip)]
+    pub native_wal_capture: Option<NativeWalWriteCapture>,
+}
+
+/// Opaque write-time allocation data from a Native exporter. A decoded JSON
+/// frame or copied `CollectionMeta` cannot construct this capture. Cloning a
+/// capture onto changed frame bytes fails its checksum binding. A separate
+/// authenticated source-root/import producer is still required for recovery.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeWalWriteCapture {
+    frame_checksum: [u8; 32],
+    source_open_incarnation: String,
+    backings: BTreeMap<String, CollectionMeta>,
 }
 
 impl CommitFrame {
@@ -224,6 +240,7 @@ impl CommitFrame {
             compressed: false,
             encryption_metadata: None,
             checksum: [0; 32],
+            native_wal_capture: None,
         };
         frame.checksum = frame.calculate_checksum();
         frame
@@ -233,6 +250,34 @@ impl CommitFrame {
         let mut hasher = Sha256::new();
         hasher.update(self.checksum_payload());
         hasher.finalize().into()
+    }
+
+    pub(crate) fn with_native_wal_capture(
+        mut self,
+        source_open_incarnation: &str,
+        backings: BTreeMap<String, CollectionMeta>,
+    ) -> Self {
+        self.native_wal_capture = Some(NativeWalWriteCapture {
+            frame_checksum: self.checksum,
+            source_open_incarnation: source_open_incarnation.to_owned(),
+            backings,
+        });
+        self
+    }
+
+    pub(crate) fn captured_native_wal_backings(
+        &self,
+    ) -> Result<Option<&BTreeMap<String, CollectionMeta>>> {
+        let Some(capture) = &self.native_wal_capture else {
+            return Ok(None);
+        };
+        self.verify_checksum()?;
+        if capture.source_open_incarnation.is_empty() || capture.frame_checksum != self.checksum {
+            return Err(replication_error(
+                "Native WAL capture does not bind this frame",
+            ));
+        }
+        Ok(Some(&capture.backings))
     }
 
     pub fn verify_checksum(&self) -> Result<()> {

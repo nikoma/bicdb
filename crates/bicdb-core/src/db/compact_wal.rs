@@ -264,6 +264,7 @@ mod tests {
                 tx_id: TransactionId(10),
                 timestamp: 9877,
                 commit_seq: 1,
+                native_backings: BTreeMap::new(),
             })
             .unwrap(),
         );

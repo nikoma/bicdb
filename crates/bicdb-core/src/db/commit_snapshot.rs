@@ -114,6 +114,7 @@ impl BicDb {
         {
             return Ok(Vec::new());
         }
+        let native_backings = self.capture_native_wal_backings(writes)?;
         let prepared = match prepared {
             PreparedWal::PlainFrames { count, mut bytes }
                 if count == writes.len() && !self.encryption.is_enabled() =>
@@ -149,6 +150,7 @@ impl BicDb {
                         tx_id,
                         timestamp,
                         commit_seq,
+                        native_backings: &native_backings,
                     },
                 )?;
                 return Ok(bytes);
@@ -191,6 +193,7 @@ impl BicDb {
             tx_id,
             timestamp,
             commit_seq,
+            native_backings: &native_backings,
         })?);
         storage::encode_frames_to_bytes(
             &self.tx_log_path(),

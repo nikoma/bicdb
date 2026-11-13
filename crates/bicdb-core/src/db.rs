@@ -14,6 +14,7 @@ use exact_decimal_sum::ExactDecimalSum;
 mod local_namespace_identity;
 mod mutation_identity;
 mod native_collection_birth;
+mod native_wal_backings;
 mod sql_partition_execution;
 pub use sql_partition_execution::CollectionCacheStamp;
 mod native_wal_apply;
@@ -7768,6 +7769,10 @@ pub(crate) enum TxFrame {
         // Defaults to 0 for transaction logs written before commit sequencing.
         #[serde(default)]
         commit_seq: u64,
+        /// Actual local allocation contracts captured by this Native decision.
+        /// Empty for legacy/unborn backings, never inferred during replay.
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        native_backings: BTreeMap<String, CollectionMeta>,
     },
     #[serde(rename = "tx_commit_materialized")]
     CommitMaterialized {
@@ -7824,6 +7829,8 @@ struct TxFrameWire {
     len: Option<usize>,
     #[serde(default)]
     commit_seq: u64,
+    #[serde(default)]
+    native_backings: BTreeMap<String, CollectionMeta>,
 }
 
 fn decode_tx_frame(payload: &[u8]) -> Result<TxFrame> {
@@ -7876,6 +7883,7 @@ fn decode_tx_frame(payload: &[u8]) -> Result<TxFrame> {
             tx_id: wire.tx_id,
             timestamp: wire.timestamp.ok_or_else(|| missing("timestamp"))?,
             commit_seq: wire.commit_seq,
+            native_backings: native_wal_backings::validated(wire.native_backings)?,
         },
         TxFrameKind::TxCommitMaterialized => TxFrame::CommitMaterialized {
             tx_id: wire.tx_id,
@@ -8319,6 +8327,8 @@ enum TxFrameRef<'a> {
         tx_id: TransactionId,
         timestamp: i64,
         commit_seq: u64,
+        #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+        native_backings: &'a BTreeMap<String, CollectionMeta>,
     },
 }
 
@@ -9142,6 +9152,7 @@ struct RetainedReplicationCommit {
     timestamp: i64,
     writes: Vec<ReplicationWrite>,
     audit_events: Vec<Event>,
+    native_backings: BTreeMap<String, CollectionMeta>,
 }
 
 fn tx_write_to_replication_write(
@@ -10619,6 +10630,11 @@ impl BicDb {
             format_capabilities.contains(format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG);
         let native_collection_birth_active =
             format_capabilities.contains(format::NATIVE_COLLECTION_BIRTH_FEATURE_FLAG);
+        if tx_recovery.requires_native_collection_birth && !native_collection_birth_active {
+            return Err(BicDbError::FormatCompatibility(
+                "Native WAL backing identities require the collection birth format fence".into(),
+            ));
+        }
         let sql_partition_execution_v1_active =
             format_capabilities.contains(format::SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG);
         local_namespace_identity::validate_catalog(&metas, local_namespace_identity_active)?;
@@ -12298,7 +12314,8 @@ impl BicDb {
                 } else {
                     frame
                 };
-                frame.with_required_reader_features(reader_features.clone())
+                let frame = frame.with_required_reader_features(reader_features.clone())?;
+                self.capture_native_wal_export(frame, commit.native_backings)
             })
             .collect::<Result<Vec<_>>>()?)
     }
@@ -12458,6 +12475,7 @@ impl BicDb {
         )?;
         let mut writes: BTreeMap<u64, Vec<TxWrite>> = BTreeMap::new();
         let mut audit: BTreeMap<u64, Vec<Event>> = BTreeMap::new();
+        let mut native_backings_by_tx = BTreeMap::new();
         let mut commits: Vec<(u64, u64, i64)> = Vec::new();
         for (_, _, payload) in frames {
             let tx_frame = decode_tx_frame(&payload)?;
@@ -12480,9 +12498,11 @@ impl BicDb {
                     tx_id,
                     timestamp,
                     commit_seq,
+                    native_backings,
                 } => {
                     if commit_seq <= through_seq {
                         commits.push((commit_seq, tx_id.0, timestamp));
+                        native_backings_by_tx.insert(tx_id.0, native_backings);
                     } else {
                         writes.remove(&tx_id.0);
                         audit.remove(&tx_id.0);
@@ -12491,6 +12511,7 @@ impl BicDb {
                 TxFrame::Abort { tx_id, .. } => {
                     writes.remove(&tx_id.0);
                     audit.remove(&tx_id.0);
+                    native_backings_by_tx.remove(&tx_id.0);
                     commits.retain(|(_, committed_tx_id, _)| *committed_tx_id != tx_id.0);
                 }
                 TxFrame::Truncate { tx_id, len } => {
@@ -12509,13 +12530,16 @@ impl BicDb {
         let mut retained = Vec::with_capacity(commits.len());
         for (commit_seq, tx_id, timestamp) in commits {
             let tx_writes = writes.remove(&tx_id).unwrap_or_default();
+            let native_backings = native_backings_by_tx.remove(&tx_id).unwrap_or_default();
             let writes = tx_writes
                 .iter()
                 .map(|write| {
-                    let collection_meta = self
-                        .collections
-                        .get(&write.collection)
-                        .map(|state| state.read().meta.clone());
+                    let collection_meta =
+                        native_backings.get(&write.collection).cloned().or_else(|| {
+                            self.collections
+                                .get(&write.collection)
+                                .map(|state| state.read().meta.clone())
+                        });
                     tx_write_to_replication_write(collection_meta, write)
                 })
                 .collect::<Result<Vec<_>>>()?;
@@ -12525,6 +12549,7 @@ impl BicDb {
                 timestamp,
                 writes,
                 audit_events: audit.remove(&tx_id).unwrap_or_default(),
+                native_backings,
             });
         }
         Ok(retained)
@@ -21205,6 +21230,7 @@ struct TxRecovery {
     commit_seq_by_tx: BTreeMap<u64, u64>,
     next_tx_id: u64,
     last_commit_seq: u64,
+    requires_native_collection_birth: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -21348,6 +21374,7 @@ fn recover_transaction_log(
     let mut commit_seq_by_tx: BTreeMap<u64, u64> = BTreeMap::new();
     let mut max_tx = 0_u64;
     let mut max_commit_seq = 0_u64;
+    let mut requires_native_collection_birth = false;
 
     // Stream the WAL independently of the record-segment read mode. Preserve
     // torn-tail repair, without retaining every raw frame beside decoded rows.
@@ -21405,8 +21432,12 @@ fn recover_transaction_log(
                 states.entry(tx_id.0).or_insert(TxState::Pending);
             }
             TxFrame::Commit {
-                tx_id, commit_seq, ..
+                tx_id,
+                commit_seq,
+                native_backings,
+                ..
             } => {
+                requires_native_collection_birth |= !native_backings.is_empty();
                 max_tx = max_tx.max(tx_id.0);
                 max_commit_seq = max_commit_seq.max(commit_seq);
                 commit_seq_by_tx.insert(tx_id.0, commit_seq);
@@ -21463,6 +21494,7 @@ fn recover_transaction_log(
         commit_seq_by_tx,
         next_tx_id: max_tx.saturating_add(1).max(1),
         last_commit_seq: max_commit_seq,
+        requires_native_collection_birth,
     })
 }
 
@@ -31895,6 +31927,7 @@ mod index_maintenance_tests {
                     tx_id,
                     timestamp: 1234,
                     commit_seq: 1,
+                    native_backings: BTreeMap::new(),
                 },
             ] {
                 storage::append_frame(
@@ -32050,11 +32083,13 @@ mod index_maintenance_tests {
             tx_id,
             timestamp: 999,
             commit_seq: 42,
+            native_backings: BTreeMap::new(),
         };
         let borrowed_commit = TxFrameRef::Commit {
             tx_id,
             timestamp: 999,
             commit_seq: 42,
+            native_backings: &BTreeMap::new(),
         };
         assert_eq!(
             serde_json::to_vec(&owned_commit).unwrap(),
@@ -32194,6 +32229,7 @@ mod index_maintenance_tests {
                 tx_id,
                 timestamp: 100,
                 commit_seq: 0,
+                native_backings: BTreeMap::new(),
             },
         ] {
             storage::append_frame(

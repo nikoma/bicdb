@@ -145,6 +145,15 @@ pub(crate) struct NativeRegisteredRemoteRowTransactionGrant {
     mutations_sha256: String,
     logical: Arc<parking_lot::Mutex<LogicalOutcome>>,
 }
+impl std::fmt::Debug for NativeRegisteredRemoteRowTransactionGrant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NativeRegisteredRemoteRowTransactionGrant")
+            .field("range", &self.range.id)
+            .field("attempt", &self.intent.attempt)
+            .field("transaction_id", &self.transaction_id)
+            .finish_non_exhaustive()
+    }
+}
 impl NativeRegisteredRemoteRowTransactionGrant {
     /// Actual inner logical-WAL success, before crash/apply/materialization.
     /// Outcome custody only: this cannot admit row progress or Serving.

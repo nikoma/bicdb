@@ -105,6 +105,8 @@ pub(crate) use sparse_certification::{
 };
 use sparse_certification::{SparseDecisions, SPARSE_HISTORY_CATALOG_FORMAT};
 mod image_install_fence;
+#[cfg(feature = "tls-replication")]
+pub(crate) use image_install_fence::NativeRegisteredRemoteImageIntent;
 pub(crate) use image_install_fence::{
     NativeImageInstallRole, NativeImageInstallTransferPreflight, TargetImageInstallFence,
     UntouchedNativeImageTransferReturn,

@@ -12,6 +12,11 @@ use crate::distribution_range_recovery::{HandoffRoleAdmission, RecoveryRoleAdmis
 
 use super::image_install_state::{ImageInstallIntent, MAX_INSTALL_INTENTS};
 
+#[cfg(feature = "tls-replication")]
+mod registered_remote;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote::NativeRegisteredRemoteImageIntent;
+
 fn canonical_range(range: &RangeDescriptor) -> RangeDescriptor {
     let mut range = range.clone();
     range.approximate_bytes = 0;

@@ -5,6 +5,7 @@ import {spawn} from 'node:child_process';
 import {createServer} from 'node:http';
 import {createServer as netServer} from 'node:net';
 import {createHash,generateKeyPairSync,sign,randomUUID} from 'node:crypto';
+import {qualifyColdCopy,assertColdCopySourceUnchanged} from '../node-cold-copy-adoption/adopt.mjs';
 const config=JSON.parse(fs.readFileSync(process.argv[2]));
 const native=config.native.path,nativeSHA=config.native.sha256;
 const sha=file=>createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -39,7 +40,7 @@ const barrier=createServer(async(req,res)=>{
 await new Promise(r=>barrier.listen(0,'127.0.0.1',r));
 durable('integration.json',{version:1,http:[{application:pins.application,provider:'LockBarrier',base_url:'http://127.0.0.1:'+barrier.address().port,healthcheck_path:'/health',healthcheck_statuses:[200],allow_insecure_http:true,allow_private_networks:true}]});
 let database=out+'/database';
-const args=()=>['app','--integration-config',out+'/integration.json','--trusted-key',pins.keyId+'='+key,database];
+const args=(store=database)=>['app','--integration-config',out+'/integration.json','--trusted-key',pins.keyId+'='+key,store];
 async function cli(name,argv){const chunks=[],child=spawn(native,argv);child.stdout.on('data',b=>chunks.push(b));child.stderr.on('data',b=>chunks.push(b));const code=await new Promise((r,j)=>{child.once('error',j);child.once('exit',r);});const result={name,argv,code,output:Buffer.concat(chunks).toString()};commands.push(result);durable('commands.json',commands);assert.equal(code,0,JSON.stringify(result));}
 const pair=generateKeyPairSync('rsa',{modulusLength:2048});
 durable('jwks.json',{keys:[{...pair.publicKey.export({format:'jwk'}),kid:'row-lock-private',alg:'RS256',use:'sig'}]});
@@ -84,6 +85,6 @@ try{
  await cli('install signed source fixture',[...args(),'install',artifact]);await start();await authorizationControls();
  for(const isolation of ['read_committed','repeatable_read','serializable'])await contention(isolation,'initial');await ownPendingControls();
  const crashed=new Promise(r=>server.once('exit',r));server.kill('SIGKILL');await crashed;await start();await recoveryReads('SIGKILL');for(const isolation of ['read_committed','repeatable_read','serializable'])await contention(isolation,'after-SIGKILL');
- await stop();const cold=out+'/cold';fs.cpSync(database,cold,{recursive:true,errorOnExist:true,force:false});database=cold;await start();await recoveryReads('cold');for(const isolation of ['read_committed','repeatable_read','serializable'])await contention(isolation,'after-cold');await stop();
+ await stop();const cold=out+'/cold';const custody=await qualifyColdCopy({native:config.native,source:database,target:cold,evidence:out+'/cold-custody',closedSource:{pid:server.pid,exitCode:server.exitCode,signalCode:server.signalCode},openArgs:db=>[...args(db),'list']});database=cold;await start();await recoveryReads('cold');for(const isolation of ['read_committed','repeatable_read','serializable'])await contention(isolation,'after-cold');await stop();await assertColdCopySourceUnchanged(custody);
  durable('qualification.json',{passed:issues.length===0,native:{path:native,sha256:nativeSHA},source:pins.sourceSHA256,artifact:pins.sha256,cases,issues,knownRows:knownRows.length,ERPStoresTouched:false,AuthAccountsChanged:false,mainAccountUntouched:true,RustTests:false,scope:'Actual native source locking API; snapshot conflicts precede callbacks, RC fresh read, authorization/tenant refusal, own pending insert/write, SIGKILL and cold restore; no stock-timeout causality claim'});if(issues.length)process.exitCode=2;console.log('Evidence '+out+' issues '+issues.length);
 }finally{await Promise.allSettled([...activeRequests]);await stop();if(holderResponse)holderResponse.destroy();await new Promise(r=>barrier.close(r));fs.writeFileSync(out+'/server.log',Buffer.concat(logs));}

@@ -40,3 +40,10 @@ any occur; a final409 alone cannot turn the original498 defect into a pass.
 Node/source generation or execution against an old binary never qualifies a
 new binary. This regression makes no claim that stock timeout causality or a
 whole financial deployment has been resolved.
+
+Cold recovery uses the shared [custody helper](../node-cold-copy-adoption/README.md)
+after the source process has actually exited. It calls official `adopt-copy`
+before opening the target. Inactive `NotRequired` is valid with unchanged full
+trees; active stores require custody refusal/adoption/idempotency controls.
+The original source stays closed at its original path, and full source hashes
+are checked again after all original copied-runtime assertions.

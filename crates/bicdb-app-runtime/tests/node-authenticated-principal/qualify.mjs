@@ -8,6 +8,7 @@ import {spawn} from 'node:child_process';
 import {createHash,generateKeyPairSync,sign} from 'node:crypto';
 import {createServer} from 'node:net';
 import {subjects} from './vectors.mjs';
+import {qualifyColdCopy,assertColdCopySourceUnchanged} from '../node-cold-copy-adoption/adopt.mjs';
 const config=JSON.parse(await fs.readFile(process.argv[2]));
 const out=path.resolve(process.argv[3]);
 await fs.mkdir(out,{recursive:false,mode:0o700});
@@ -87,8 +88,8 @@ try{
   const alternate={tenant_id:'tenant-b/零',workspace_id:'workspace-b/α'};
   assert.deepEqual(await record('verified alternate tenant/workspace preserved',request('/sdk-principal/current',alternate)),expected('00042',alternate));
   await stop('SIGKILL');await start();await identityCases('SIGKILL restart');await stop();
-  const cold=out+'/cold';await fs.cp(database,cold,{recursive:true,errorOnExist:true,force:false});database=cold;
-  await start();await identityCases('closed store cold copy');await stop();
+  const cold=out+'/cold';const custody=await qualifyColdCopy({native:config.native,source:database,target:cold,evidence:out+'/cold-custody',closedSource:{pid:server.pid,exitCode:server.exitCode,signalCode:server.signalCode},openArgs:db=>[...args(db),'list']});database=cold;
+  await start();await identityCases('officially assessed/adopted closed store cold copy');await stop();await assertColdCopySourceUnchanged(custody);
   await fs.writeFile(out+'/qualification.json',JSON.stringify({passed:true,records:records.length,native:config.native,oldReader:config.oldNative,scope:'Source-authored SDK strict ABI and ordinary-native verified identity, legacy numeric accessor, imported same-transaction effective identity, verifier and route grant refusals, actual SIGKILL/restart and closed-store cold restore',sourceCompilerWorkflowQualified:false,realIssuer:false,Hub:false,AuthAccountsChanged:false,mainAccountUntouched:true},null,2)+'\n');
   console.log('Principal SDK PASS '+records.length+' records '+out);
 }finally{await stop();await fs.writeFile(out+'/server.log',Buffer.concat(logs));}

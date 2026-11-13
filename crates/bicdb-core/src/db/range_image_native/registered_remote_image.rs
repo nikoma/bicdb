@@ -108,6 +108,16 @@ impl<'a> NativeRegisteredRemoteImageContext<'a> {
     ) -> &crate::distribution_native_host::NativeRegisteredRemoteInstallPreflight {
         self.point.preflight()
     }
+    /// Identity constraints from the actual current request, never authority
+    /// reconstructed from numeric IDs. Role/OWN/source checks remain mandatory.
+    pub(in crate::db) fn actual_publication_request_ids(&self) -> (Uuid, Uuid, Uuid, Uuid) {
+        (
+            self.point.request().role().role().context_id(),
+            self.point.request().own().context_id(),
+            self.point.request().business(),
+            self.point.request().member().store_id(),
+        )
+    }
     pub(in crate::db) fn with_owned_base(
         &self,
         base: Arc<crate::db::RegisteredRemoteBaseBoundary>,

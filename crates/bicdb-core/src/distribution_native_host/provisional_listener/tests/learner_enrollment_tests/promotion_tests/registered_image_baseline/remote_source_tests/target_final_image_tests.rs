@@ -563,8 +563,31 @@ pub(super) fn exercise(
         case,
         SourceCase::TargetNativeBaseRoleExpiryBeforePut
             | SourceCase::TargetNativeBaseRoleExpiryAfterCommit
+            | SourceCase::TargetNativeBaseRoleExpiryAfterPut
     ) {
         native_expiry_tests::exercise(
+            case,
+            control,
+            client,
+            &source,
+            plan,
+            provider,
+            actor,
+            factory,
+            pending,
+            ranges,
+            output,
+            journal,
+            acknowledged,
+        );
+    }
+    if matches!(
+        case,
+        SourceCase::TargetNativeBaseAbortSyncFailed
+            | SourceCase::TargetNativeBaseCommitSyncUnknown
+            | SourceCase::TargetNativeBaseAbortBudget
+    ) {
+        native_abort_tests::exercise(
             case,
             control,
             client,
@@ -583,5 +606,6 @@ pub(super) fn exercise(
 }
 
 mod catalogue_tests;
+mod native_abort_tests;
 mod native_base_tests;
 mod native_expiry_tests;

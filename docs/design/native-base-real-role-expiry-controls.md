@@ -1,46 +1,77 @@
-# Registered native-base real authority expiry controls
+# Registered native-base real authority expiry and abort recovery
 
-This test-only leaf starts at `e6b429aebb94fa2e784121c54891e4ea22bb6c8a`
-(unmerged source 1.0.494-beta). It has not been compiled or run. It does not fix
-runtime recovery, explain the original `e1ec` four-case failure, or qualify HA.
-The retained original failed cohort and later diagnostic passes stay separate.
+The original test-only leaf was `34dded55efef6ed989cdf7d141d5751d4f2a2391`
+(unmerged source 1.0.494-beta). Its hosted run 43502925624 passed 1 / failed 1:
+actual before-put Role expiry left owned native xid 21 Aborted with no visible
+base/archive, and a fresh same-A request failed for a missing immutable base
+publication. Actual after-commit Role expiry retained Committed xid 21 and a
+fresh request reconciled that same xid. Those complete original artifacts stay
+unchanged. This does not establish the original `e1ec` timeout's precise cause.
 
-The selector is `native_registered_fifth_remote_native_base_actual_expiry_`.
-Both controls use the original five-second parent budget, actual Role/OWN
-metadata windows and Role → OWN → Finished → host request order. A test cut
-waits for the captured **real original Role deadline**, without cancellation,
-deadline renewal, a fake clock, new metadata authority or engine I/O. Waiting
-also stops on unexpected parent cancellation. The report distinguishes whether
-the intended cut was reached and whether the parent remained live.
+This successor implements bounded same-open native-metadata abort resumption
+and adds safety controls. It has not been compiled or run. Earlier passing
+results do not validate its changed code; HA remains unqualified.
 
-The before-put control fires inside the actual native transaction after the
-original publication has retained its exact bytes, boundary and issued native
-xid, before `owned.require_current` and either native put. The resulting
-transaction outcome is observed through the same live database's native status
-API and exact base/archive keys, with diagnostic errors kept separate. Absence
-alone is not treated as an abort. It then requests a genuine fresh Role, OWN
-and authenticated Finished frame while retaining the original A lease, MF and
-image owner. Its desired acceptance requires that original A can finish after
-a proved same-open abort. The current source appears to retain the aborted
-attempt and refuse for missing committed archive; that is an expected **red
-acceptance regression**, not an accepted recovery contract or runtime finding
-established by an executed test.
+`RegisteredRemoteBasePublication` retains the actual issued native xid and
+request identity before any fallible or liveness check after begin. It retains
+the exact receipt/boundary/bytes before either put and validates the complete
+current final image before writing. A failed allocation without an exact
+boundary stays fenced; it cannot silently allocate again.
 
-The after-commit control uses the existing actual post-WAL commit-return cut.
-It expires the original Role after the native commit has returned, then checks
-that the fresh request reconciles the exact same native xid and receipt. It
-must not allocate another native transaction for a committed owner.
+A replacement requires the original A/process/open/native birth/Store/MStore,
+fresh actual Role and OWN context IDs, and the original source MF, Finished
+frame, protected proposal/Installing/final image, current generations/schema/
+readers/namespace IDs/index definitions and native irreversible preimage.
+Classification holds the actual native exclusion and page writer serialization.
+Core, page and WAL health must pass before and after classification; the
+original privately issued xid must be terminal Aborted, with no commit-return
+or verified base and no visible current base or exact old archive. Status or
+absence alone grants nothing. A clean actual abort after successful metadata
+puts is eligible because the helper completes its structural closure; failed
+abort/put/sync or poisoned health remains fenced.
 
-Both cases write `registered-native-base-real-role-expiry-outcome.json` before
-acceptance assertions. It contains the primary and fresh-request outcomes,
-original and fresh request windows, cut observations, same-open native status,
-base/archive contents, original A, raw catalogue and full local payload mapping.
-The original Manifest/OLD/source-frame journal is preserved separately. A local
-event-record observation is not an ordinary SQL or strong-read Serving claim.
+Before clearing any slot, the producer retains the exact original boundary Arc,
+canonical bytes, original error/request and checked retirement provenance. The
+same-open history is limited to 8 retired attempts and 8 MiB of canonical bytes.
+Each original error must fit 4096 bytes; an oversized error is retained in the
+current owner and refused rather than truncated into a new retirement proof.
+Exhaustion returns a stable budget diagnostic and retains the current attempt;
+there is no eviction. Each genuinely fresh request can create at most one new
+native metadata xid, never reuse an xid or retry a logical row transaction.
+Committed/unknown/in-progress outcomes never reset. Committed reply expiry
+reconciles the same xid. This history grants no cold reconstruction authority.
 
-Unknown native outcomes remain unknown and fenced. These controls never open
-an archived engine, reconstruct a source process, issue a new row transaction,
-change a protocol deadline or grant catalogue adoption, NEW, Open, Ready or
-Serving. Native status observations here are not physical power-loss or cold
-recovery qualification. Any bounded runtime retry after a proved abort remains
-a separate implementation and qualification task.
+The expiry selector is
+`native_registered_fifth_remote_native_base_actual_expiry_`. Its before-put,
+after-successful-first-put and after-commit controls retain the existing 5 s
+parent, actual metadata windows and Role→OWN→Finished→host order. The first
+two wait for the real original Role deadline and require a fresh same-A request
+to finish with a different native xid, retaining the exact old Aborted proof.
+The committed case requires the same xid and zero retired attempts. No fake
+clock, deadline renewal or caller cancellation creates the expiry.
+
+Additional `native_registered_fifth_remote_native_base_actual_` controls arm
+actual `page_log.sync` failures at two distinct cuts: after the first put before
+Role-expired abort/structural closure, and after the last owned-current check
+before the actual native commit. They require sticky unhealthy/unknown refusal
+without replacing the original owner, even after the I/O fault is disarmed.
+The default entry-budget control uses nine actual separately requested healthy
+before-put caller-canceled transactions, then proves refusal before a tenth
+native attempt and retention of all eight old boundaries. The 8 MiB bound is
+enforced in source; this small fixture does not exercise a large-receipt byte
+exhaustion or establish suitable production budget sizing.
+
+Fixed reports `registered-native-base-real-role-expiry-outcome.json` and
+`registered-native-base-abort-recovery-outcome.json` precede acceptance asserts.
+They retain primary/fresh outcomes, original/fresh windows, actual cut and I/O
+counts, health/status, exact boundary/history, A, raw catalogue and payload
+mapping. Diagnostic failures stay separate. The original Manifest/OLD/source
+frame journal is preserved. Event-record observations are not ordinary SQL or
+strong-read Serving proof. New report names need explicit inspection before
+adding them to a public evidence whitelist; raw DB/key custody stays private.
+
+There is no archived-engine open, source-process reconstruction, health reset,
+row reissue, catalogue adoption, NEW, decision, Open, Ready or Serving grant.
+Same-open native outcomes are not cold, physical power-loss, RPO/RTO or
+production qualification. Source retirement, cap-eight source/OLD lifetime
+gates, full 64-range 4→5 convergence and sustained throughput gain remain open.

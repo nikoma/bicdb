@@ -50,6 +50,10 @@ pub(super) enum SourceCase {
     TargetNativeBaseWithoutFinal,
     TargetNativeBaseRoleExpiryBeforePut,
     TargetNativeBaseRoleExpiryAfterCommit,
+    TargetNativeBaseRoleExpiryAfterPut,
+    TargetNativeBaseAbortSyncFailed,
+    TargetNativeBaseCommitSyncUnknown,
+    TargetNativeBaseAbortBudget,
     TargetCatalogueFloor,
     TargetCatalogueFloorMissingBase,
     TargetCatalogueFloorDirSyncRetry,
@@ -157,6 +161,10 @@ pub(super) fn uses_actual_remote_old_seed(case: SourceCase) -> bool {
             | SourceCase::TargetNativeBaseWithoutFinal
             | SourceCase::TargetNativeBaseRoleExpiryBeforePut
             | SourceCase::TargetNativeBaseRoleExpiryAfterCommit
+            | SourceCase::TargetNativeBaseRoleExpiryAfterPut
+            | SourceCase::TargetNativeBaseAbortSyncFailed
+            | SourceCase::TargetNativeBaseCommitSyncUnknown
+            | SourceCase::TargetNativeBaseAbortBudget
             | SourceCase::TargetCatalogueFloor
             | SourceCase::TargetCatalogueFloorMissingBase
             | SourceCase::TargetCatalogueFloorDirSyncRetry
@@ -1302,6 +1310,10 @@ pub(super) fn exercise(
                     | SourceCase::TargetNativeBaseWithoutFinal
                     | SourceCase::TargetNativeBaseRoleExpiryBeforePut
                     | SourceCase::TargetNativeBaseRoleExpiryAfterCommit
+                    | SourceCase::TargetNativeBaseRoleExpiryAfterPut
+                    | SourceCase::TargetNativeBaseAbortSyncFailed
+                    | SourceCase::TargetNativeBaseCommitSyncUnknown
+                    | SourceCase::TargetNativeBaseAbortBudget
                     | SourceCase::TargetCatalogueFloor
                     | SourceCase::TargetCatalogueFloorMissingBase
                     | SourceCase::TargetCatalogueFloorDirSyncRetry

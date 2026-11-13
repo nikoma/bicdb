@@ -10,6 +10,46 @@ use crate::db::{
 fn archive(attempt: Uuid, xid: u64) -> String {
     format!("registered-remote-base/{attempt}/archive/{xid}")
 }
+const MAX_RETIRED_BASE_ATTEMPTS: usize = 8;
+const MAX_RETIRED_BASE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_RETIRED_ERROR_BYTES: usize = 4096;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+struct PublicationRequest {
+    role_context: Uuid,
+    own_context: Uuid,
+    business: Uuid,
+    metadata_store: Uuid,
+}
+impl PublicationRequest {
+    fn actual(context: &NativeRegisteredRemoteImageContext<'_>) -> Result<Self> {
+        let (role_context, own_context, business, metadata_store) =
+            context.actual_publication_request_ids();
+        if [role_context, own_context, business, metadata_store]
+            .iter()
+            .any(Uuid::is_nil)
+        {
+            return Err(invalid("Registered native base request identity missing"));
+        }
+        Ok(Self {
+            role_context,
+            own_context,
+            business,
+            metadata_store,
+        })
+    }
+    fn require_fresh_after(&self, old: &Self) -> Result<()> {
+        if self.metadata_store != old.metadata_store
+            || self.role_context == old.role_context
+            || self.own_context == old.own_context
+        {
+            return Err(invalid(
+                "Registered native base replacement requires genuinely fresh Role and OWN request",
+            ));
+        }
+        Ok(())
+    }
+}
 
 /// Exact original owner's attempted native publication. Fields are private,
 /// with no serde/DTO constructor. Retained BEFORE either native put.
@@ -17,6 +57,7 @@ pub(crate) struct RegisteredRemoteBaseBoundary {
     receipt: NativeInstalledRangeImageReceipt,
     bytes: Vec<u8>,
     database_open: String,
+    request: PublicationRequest,
 }
 impl RegisteredRemoteBaseBoundary {
     pub(crate) fn require_boundary(
@@ -79,6 +120,26 @@ pub(crate) struct RegisteredRemoteBasePublication {
     attempted: Option<Arc<RegisteredRemoteBaseBoundary>>,
     commit_returned: Option<u64>,
     verified: Option<NativeInstalledRangeImageBase>,
+    issued_request: Option<PublicationRequest>,
+    issued_xid: Option<u64>,
+    attempts_issued: u64,
+    puts_started: u8,
+    puts_completed: u8,
+    attempt_error: Option<String>,
+    retired: Vec<RetiredBaseAttempt>,
+    retired_bytes: usize,
+}
+/// Same-open outcome custody only. Exact original Arc/bytes survive retirement;
+/// this is not a cold abort certificate or permission for a logical row write.
+struct RetiredBaseAttempt {
+    boundary: Arc<RegisteredRemoteBaseBoundary>,
+    original_error: String,
+    retiring_request: PublicationRequest,
+    native_store_open: Uuid,
+    birth_id: Uuid,
+    source_manifest_sha256: String,
+    puts_started: u8,
+    puts_completed: u8,
 }
 impl RegisteredRemoteBasePublication {
     pub(crate) fn verified_base(&self) -> Option<&NativeInstalledRangeImageBase> {
@@ -117,10 +178,152 @@ impl RegisteredRemoteBasePublication {
             attempted: None,
             commit_returned: None,
             verified: None,
+            issued_request: None,
+            issued_xid: None,
+            attempts_issued: 0,
+            puts_started: 0,
+            puts_completed: 0,
+            attempt_error: None,
+            retired: Vec::new(),
+            retired_bytes: 0,
         })
     }
     pub(crate) fn boundary(&self) -> Option<Arc<RegisteredRemoteBaseBoundary>> {
         self.attempted.clone()
+    }
+    fn require_healthy(db: &BicDb) -> Result<()> {
+        db.check_recovery_state()?;
+        let paged = db
+            .paged_records
+            .as_ref()
+            .ok_or_else(|| invalid("Registered native base page store absent"))?;
+        paged
+            .store()
+            .durability_health()
+            .check()
+            .map_err(crate::error::durability_error)?;
+        paged
+            .store()
+            .wal()
+            .health()
+            .check()
+            .map_err(crate::error::durability_error)?;
+        db.check_recovery_state()
+    }
+    fn retire_proven_abort(
+        &mut self,
+        db: &BicDb,
+        context: &NativeRegisteredRemoteImageContext<'_>,
+    ) -> Result<()> {
+        let Some(boundary) = self.attempted.as_ref().cloned() else {
+            return Ok(());
+        };
+        if self.commit_returned.is_some() || self.verified.is_some() {
+            return Ok(());
+        }
+        Self::require_healthy(db)?;
+        let paged = db
+            .paged_records
+            .as_ref()
+            .ok_or_else(|| invalid("Registered native base page store absent"))?;
+        // Same order as in_paged_transaction: actual native exclusion is held
+        // by context; this serializes terminal outcome/current-key inspection.
+        let _writer = paged.write_guard();
+        Self::require_healthy(db)?;
+        if paged
+            .store()
+            .transactions()
+            .status(boundary.receipt.native_page_xid)
+            != bicdb_page::TxStatus::Aborted
+        {
+            return Ok(()); // Committed/unknown MUST keep the original owner.
+        }
+        context.require_current(db)?;
+        self.final_image.require_current(db, context)?;
+        let fresh = PublicationRequest::actual(context)?;
+        fresh.require_fresh_after(&boundary.request)?;
+        if boundary.database_open != db.incarnation_id()
+            || boundary.receipt.native_page_xid == 0
+            || self.issued_xid != Some(boundary.receipt.native_page_xid)
+            || self.issued_request.as_ref() != Some(&boundary.request)
+            || self.receipt != boundary.receipt
+            || bounded_json(&boundary.receipt, MAX_NATIVE_RECEIPT_BYTES)? != boundary.bytes
+            || boundary.receipt.attempt_id != context.native_scope().attempt_id()
+            || boundary.receipt.birth_id != context.native_scope().native().birth_id()
+            || self.attempt_error.is_none()
+        {
+            return Err(invalid(
+                "Registered native abort lacks original same-open issued outcome custody",
+            ));
+        }
+        if db
+            .read_native_range_image_record::<serde_json::Value>(&base_key(
+                boundary.receipt.capture_range.id,
+            ))?
+            .is_some()
+            || db
+                .read_native_range_image_record::<serde_json::Value>(&archive(
+                    boundary.receipt.attempt_id,
+                    boundary.receipt.native_page_xid,
+                ))?
+                .is_some()
+        {
+            return Err(invalid("Registered aborted metadata attempt has a visible base/archive; original owner retained"));
+        }
+        context
+            .native_scope()
+            .require_irreversible_install_safety(context.actual_preflight().safety())?;
+        let next_bytes = self
+            .retired_bytes
+            .checked_add(boundary.bytes.len())
+            .ok_or_else(|| invalid("Registered native base abort history byte overflow"))?;
+        if self
+            .attempt_error
+            .as_ref()
+            .is_some_and(|e| e.len() > MAX_RETIRED_ERROR_BYTES)
+        {
+            return Err(invalid("Registered native base abort history error byte bound exceeded; original attempt retained"));
+        }
+        if self.retired.len() >= MAX_RETIRED_BASE_ATTEMPTS || next_bytes > MAX_RETIRED_BASE_BYTES {
+            return Err(invalid("Registered native base proven-abort retry budget exhausted; original attempt retained"));
+        }
+        context.require_current(db)?;
+        self.final_image.require_current(db, context)?;
+        Self::require_healthy(db)?;
+        if paged
+            .store()
+            .transactions()
+            .status(boundary.receipt.native_page_xid)
+            != bicdb_page::TxStatus::Aborted
+        {
+            return Err(invalid(
+                "Registered native abort status changed; original attempt retained",
+            ));
+        }
+        // Retain the EXACT old Arc and provenance BEFORE clearing a slot.
+        self.retired.push(RetiredBaseAttempt {
+            boundary,
+            original_error: self.attempt_error.clone().expect("checked original error"),
+            retiring_request: fresh,
+            native_store_open: context.actual_preflight().catalogue().store_open_id(),
+            birth_id: context.native_scope().native().birth_id(),
+            source_manifest_sha256: context
+                .actual_preflight()
+                .source()
+                .manifest()
+                .checksum_sha256
+                .clone(),
+            puts_started: self.puts_started,
+            puts_completed: self.puts_completed,
+        });
+        self.retired_bytes = next_bytes;
+        self.attempted = None;
+        self.issued_xid = None;
+        self.issued_request = None;
+        self.puts_started = 0;
+        self.puts_completed = 0;
+        self.attempt_error = None;
+        Ok(())
     }
     pub(crate) fn publish(
         &mut self,
@@ -129,27 +332,41 @@ impl RegisteredRemoteBasePublication {
     ) -> Result<NativeRegisteredRemoteImageProgress> {
         context.require_current(db)?;
         self.final_image.require_current(db, context)?;
+        self.retire_proven_abort(db, context)?;
         if self.attempted.is_none() {
+            if self.issued_request.is_some() || self.issued_xid.is_some() {
+                return Err(invalid("Registered native allocation has no exact retained boundary; outcome remains fenced"));
+            }
             context
                 .native_scope()
                 .require_irreversible_install_safety(context.actual_preflight().safety())?;
             let controlled = db
                 .range_mutation_gate()
                 .try_controlled_mutation(context.native_scope().frozen())?;
+            let request = PublicationRequest::actual(context)?;
+            // Check size with the longest possible xid before begin. The
+            // actual issued xid/request is retained immediately on entry.
+            let mut largest = self.receipt.clone();
+            largest.native_page_xid = u64::MAX;
+            largest.checksum_sha256 = largest.checksum()?;
+            bounded_json(&largest, MAX_NATIVE_RECEIPT_BYTES)?;
+            self.issued_request = Some(request.clone());
             let result = db.in_paged_transaction(|paged, xid| {
-                context.require_current(db)?;
-                self.final_image.require_current(db, context)?;
-                let fact = db.read_registered_final_image_integrity(
-                    context.native_scope().native(),
-                    &self.final_image.pointer(),
-                )?;
-                let receipt = receipt_from_final(&fact, xid)?;
+                self.issued_xid = Some(xid);
+                self.attempts_issued = self
+                    .attempts_issued
+                    .checked_add(1)
+                    .ok_or_else(|| invalid("Registered native allocation count overflow"))?;
+                let mut receipt = self.receipt.clone();
+                receipt.native_page_xid = xid;
+                receipt.checksum_sha256 = receipt.checksum()?;
                 receipt.validate()?;
                 let bytes = bounded_json(&receipt, MAX_NATIVE_RECEIPT_BYTES)?;
                 let boundary = Arc::new(RegisteredRemoteBaseBoundary {
                     receipt: receipt.clone(),
                     bytes: bytes.clone(),
                     database_open: db.incarnation_id().into(),
+                    request: request.clone(),
                 });
                 // Original host owns exact bytes+xid BEFORE native mutation.
                 self.receipt = receipt;
@@ -158,17 +375,40 @@ impl RegisteredRemoteBasePublication {
                 before_put_cut::fire();
                 let owned = context.with_owned_base(boundary);
                 owned.require_current(db)?;
+                self.final_image.require_current(db, &owned)?;
+                let fact = db.read_registered_final_image_integrity(
+                    context.native_scope().native(),
+                    &self.final_image.pointer(),
+                )?;
+                if receipt_from_final(&fact, xid)? != self.receipt {
+                    return Err(invalid(
+                        "Registered replacement native template differs from actual final image",
+                    ));
+                }
                 for key in [
                     base_key(self.receipt.capture_range.id),
                     archive(self.receipt.attempt_id, xid),
                 ] {
+                    self.puts_started += 1;
                     paged
                         .store()
                         .put(xid, &native_key(&key), &bytes)
                         .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
+                    self.puts_completed += 1;
+                    #[cfg(test)]
+                    if self.puts_completed == 1 {
+                        after_first_put_cut::fire();
+                    }
+                    owned.require_current(db)?;
                 }
-                owned.require_current(db)
+                owned.require_current(db)?;
+                #[cfg(test)]
+                before_commit_cut::fire();
+                Ok(())
             });
+            if let Err(error) = &result {
+                self.attempt_error = Some(error.to_string());
+            }
             if let Ok(Some(xid)) = &result {
                 self.commit_returned = Some(*xid);
                 if *xid != self.receipt.native_page_xid {
@@ -213,8 +453,31 @@ impl RegisteredRemoteBasePublication {
     }
     #[cfg(test)]
     pub(crate) fn test_state(&self) -> serde_json::Value {
+        let retired = self
+            .retired
+            .iter()
+            .map(|old| {
+                serde_json::json!({
+            "receipt":old.boundary.receipt,"canonical_bytes":old.boundary.bytes,
+            "database_open":old.boundary.database_open,"original_request":old.boundary.request,
+            "original_error":old.original_error,"retiring_request":old.retiring_request,
+            "native_store_open":old.native_store_open,"birth_id":old.birth_id,
+            "source_manifest_sha256":old.source_manifest_sha256,
+            "puts_started":old.puts_started,"puts_completed":old.puts_completed,
+            "same_open_terminal_status":"Aborted","core_page_wal_healthy_at_retirement":true,
+            "cold_abort_certificate":false})
+            })
+            .collect::<Vec<_>>();
         serde_json::json!({"receipt":self.receipt,"attempted":self.attempted.is_some(),
+            "attempted_canonical_bytes":self.attempted.as_ref().map(|b|&b.bytes),
+            "attempted_database_open":self.attempted.as_ref().map(|b|&b.database_open),
             "actual_commit_returned":self.commit_returned,"verified":self.verified.is_some(),
+            "issued_request":self.issued_request,"issued_native_xid":self.issued_xid,
+            "native_attempts_issued":self.attempts_issued,"puts_started":self.puts_started,
+            "puts_completed":self.puts_completed,"attempt_error":self.attempt_error,
+            "retired":retired,"retired_canonical_bytes":self.retired_bytes,
+            "max_retired_attempts":MAX_RETIRED_BASE_ATTEMPTS,"max_retired_canonical_bytes":MAX_RETIRED_BASE_BYTES,
+            "max_retired_error_bytes":MAX_RETIRED_ERROR_BYTES,
             "catalogue_floor_publication_owned_here":false,"serving":false})
     }
 }
@@ -292,6 +555,37 @@ impl BicDb {
         callback: Box<dyn FnOnce()>,
     ) -> impl Drop {
         before_put_cut::arm(callback)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_registered_remote_base_after_first_put(
+        callback: Box<dyn FnOnce()>,
+    ) -> impl Drop {
+        after_first_put_cut::arm(callback)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_registered_remote_base_before_commit(
+        callback: Box<dyn FnOnce()>,
+    ) -> impl Drop {
+        before_commit_cut::arm(callback)
+    }
+    /// Forensic HEALTH/status only, including a fenced handle. No native
+    /// visibility read, health reset, engine open or permission is supplied.
+    #[cfg(test)]
+    pub(crate) fn test_registered_native_health_status(
+        &self,
+        xid: Option<u64>,
+    ) -> serde_json::Value {
+        let paged = self.paged_records.as_ref();
+        serde_json::json!({"database_open":self.incarnation_id(),
+            "core_health":format!("{:?}",self.durability_state()),
+            "core_recovery_error":self.check_recovery_state().err().map(|e|e.to_string()),
+            "page_health":paged.map(|p|format!("{:?}",p.store().durability_health().state())),
+            "page_failure":paged.and_then(|p|p.store().durability_health().failure()),
+            "wal_health":paged.map(|p|format!("{:?}",p.store().wal().health().state())),
+            "wal_failure":paged.and_then(|p|p.store().wal().health().failure()),
+            "requested_own_xid":xid,
+            "native_status_without_health_admission":xid.and_then(|xid|paged.map(|p|format!("{:?}",p.store().transactions().status(xid)))),
+            "authority_granted":false,"engine_reopened":false})
     }
     #[cfg(test)]
     pub(crate) fn test_invalidate_registered_installed_base(
@@ -445,6 +739,52 @@ mod before_put_cut {
     }
     pub(super) fn arm(callback: Box<dyn FnOnce()>) -> Guard {
         CUT.with(|cut| assert!(cut.borrow_mut().replace(callback).is_none()));
+        Guard
+    }
+}
+#[cfg(test)]
+mod after_first_put_cut {
+    use std::cell::RefCell;
+    thread_local! {static CUT:RefCell<Option<Box<dyn FnOnce()>>>=RefCell::new(None);}
+    pub(super) fn fire() {
+        let f = CUT.with(|c| c.borrow_mut().take());
+        if let Some(f) = f {
+            f();
+        }
+    }
+    pub(crate) struct Guard;
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            CUT.with(|c| {
+                c.borrow_mut().take();
+            });
+        }
+    }
+    pub(super) fn arm(f: Box<dyn FnOnce()>) -> Guard {
+        CUT.with(|c| assert!(c.borrow_mut().replace(f).is_none()));
+        Guard
+    }
+}
+#[cfg(test)]
+mod before_commit_cut {
+    use std::cell::RefCell;
+    thread_local! {static CUT:RefCell<Option<Box<dyn FnOnce()>>>=RefCell::new(None);}
+    pub(super) fn fire() {
+        let f = CUT.with(|c| c.borrow_mut().take());
+        if let Some(f) = f {
+            f();
+        }
+    }
+    pub(crate) struct Guard;
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            CUT.with(|c| {
+                c.borrow_mut().take();
+            });
+        }
+    }
+    pub(super) fn arm(f: Box<dyn FnOnce()>) -> Guard {
+        CUT.with(|c| assert!(c.borrow_mut().replace(f).is_none()));
         Guard
     }
 }

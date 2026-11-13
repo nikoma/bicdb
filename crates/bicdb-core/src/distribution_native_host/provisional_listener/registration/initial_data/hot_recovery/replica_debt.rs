@@ -25,9 +25,9 @@ impl ReplicaDebt {
             "recipient_next":self.next.iter().map(|(n,p)|(n.to_string(),format!("{p:?}"))).collect::<BTreeMap<_,_>>(),
             "diagnostic_not_authority":true})
     }
-    /// Every follower was last actually observed activated and at the source
-    /// cut and no refusal is retained: this session owes nothing further.
-    pub(super) fn converged(&self) -> bool {
+    /// Historical observations make this session eligible to ATTEMPT a new
+    /// recovery. They cannot retire its constraints or mint a serving grant.
+    pub(super) fn successor_attempt_eligible(&self) -> bool {
         self.pending.is_empty() && self.semantic_veto.is_empty()
     }
     pub(super) fn from_published(job: Job) -> Self {

@@ -43,6 +43,10 @@ enum Phase {
     Replica,
 }
 struct Job {
+    // Keep the actual prior session's physical-open/progress constraints until
+    // this successor has passed the real native/activation/readQQ publisher.
+    // Cached completion is scheduling data, never retirement authority.
+    prior_session: Option<replica_debt::ReplicaDebt>,
     scope: RecoveryFenceScope,
     command: RangeWriteCommand,
     range: crate::RangeDescriptor,
@@ -327,13 +331,13 @@ impl NativeHotRecoveryMaintenance {
             // Do not discard an older session's frozen/uncaught-up physical
             // obligations when another origin failure appears. A separate
             // completed-decision/new-session dominance producer is required.
-            // A session whose every follower was last observed activated and
-            // at the actual source cut, with no retained veto, has no such
-            // obligation left: only that one may be retired below.
+            // A session whose followers were last observed at the source cut
+            // is eligible for an attempt, not already retired. Keep its actual
+            // owners/constraints through every fallible successor operation.
             if state
                 .replica_debts
                 .get(&range.id)
-                .is_some_and(|debt| !debt.converged())
+                .is_some_and(|debt| !debt.successor_attempt_eligible())
             {
                 state.cursor = (at + 1) % ranges.len();
                 return Err(invalid("new origin recovery with retained replica session debt needs explicit continuation; old debt is preserved"));
@@ -347,12 +351,10 @@ impl NativeHotRecoveryMaintenance {
                 }
             };
             state.cursor = (at + 1) % ranges.len();
-            if let Some(retired) = state.replica_debts.remove(&range.id) {
-                self.record(
-                    retired.diagnostic("converged_session_retired_for_new_actual_origin_pending"),
-                );
-            }
-            if state.jobs.len() + state.replica_debts.len() >= MAX_JOBS {
+            // Replacing this range's slot does not increase the bounded count
+            // of active ranges. Its prior record remains retained in the job.
+            let replacing = usize::from(state.replica_debts.contains_key(&range.id));
+            if state.jobs.len() + state.replica_debts.len() - replacing >= MAX_JOBS {
                 return Err(invalid("hot DATA retained job bound exhausted"));
             }
             #[cfg(test)]
@@ -370,9 +372,14 @@ impl NativeHotRecoveryMaintenance {
             // Actual original origin opens LAST; followers release first.
             members.sort_by_key(|n| *n == self.initial.seed.spec.node_id);
             let recipient_next = members.iter().cloned().map(|n| (n, Phase::Fence)).collect();
+            // No fallible producer follows this custody move before insertion.
+            // Failure of role/scope acquisition above leaves the old map entry
+            // untouched. Later failures keep it in this actual retained job.
+            let prior_session = state.replica_debts.remove(&range.id);
             state.jobs.insert(
                 range.id,
                 Job {
+                    prior_session,
                     scope,
                     command,
                     range: range.clone(),
@@ -422,6 +429,14 @@ impl NativeHotRecoveryMaintenance {
                 .jobs
                 .remove(&range.id)
                 .expect("actual published job retained");
+            if let Some(prior) = &published.prior_session {
+                // This path follows successful publish_hot_native_recovery,
+                // including actual native activation, fresh enrolled readQQ
+                // and final MQ. No cached debt bit alone reaches retirement.
+                self.record(
+                    prior.diagnostic("prior_session_superseded_after_actual_successor_publish"),
+                );
+            }
             // Allocation/data transfer only, after actual quorum publication.
             // Never erase unfinished peer obligations with the ready job.
             state.replica_debts.insert(

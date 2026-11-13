@@ -1,0 +1,167 @@
+{
+  "source_revision": "6c9a8b65131d122970de2e496b5539396b517e65",
+  "requested_source": "6c9a8b65131d122970de2e496b5539396b517e65",
+  "authoritative_source_verified": true,
+  "run_id": 43442628690,
+  "job_id": 131943935960,
+  "job_name": "Focused Core library (native_hot_recovery_)",
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "captured_at_utc": "2026-11-13T14:47:37.075773+00:00",
+  "raw_bytes": 3186193,
+  "raw_sha256": "fca80df04e48bfbd5772a728c04c9b1f923c2d27b5fdd158d126b1573a5a11da",
+  "compressed_file": "job.log.gz",
+  "compressed_sha256": "b2c90d6e24c87ce2bcd9731b96ba60c93f035f104df9689e1ddc8b6de447d7ba",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-13T14:29:10.3974911Z test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 1006 filtered out; finished in 7.53s"
+  ],
+  "failure_context": [],
+  "test_observations": [
+    {
+      "line": 17673,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_finite_open_never_starts_process_worker",
+      "result": "ok"
+    },
+    {
+      "line": 17674,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_cancel_waiter_preserves_actual_other_owner",
+      "result": "ok"
+    },
+    {
+      "line": 17675,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_original_writer_replacement_refuses_without_reserving_or_clearing",
+      "result": "ok"
+    },
+    {
+      "line": 17676,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_activation_rpc_refuses_unprepared_and_wrong_actual_leader",
+      "result": "ok"
+    },
+    {
+      "line": 19337,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::peer_transport_tests::native_hot_recovery_actual_socket_eof_reset_and_authenticated_rejection_are_distinct",
+      "result": "ok"
+    },
+    {
+      "line": 19338,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::peer_transport_tests::native_hot_recovery_actual_socket_blackhole_subrequest_timeout_and_parent_cancel",
+      "result": "ok"
+    },
+    {
+      "line": 19626,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation",
+      "result": "ok"
+    },
+    {
+      "line": 19627,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_queued_read_handoff_and_unrelated_range_progress",
+      "result": "ok"
+    },
+    {
+      "line": 20608,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::peer_transport_tests::native_hot_recovery_completed_fence_simulated_old_reader_refuses_before_receipt_and_after_rewrite",
+      "result": "ok"
+    },
+    {
+      "line": 20876,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::peer_transport_tests::native_hot_recovery_wire30_refuses_actual29_peer_without_catalogue_mutation",
+      "result": "ok"
+    },
+    {
+      "line": 20877,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::peer_transport_tests::native_hot_recovery_completed_materialization_requires_actual_QQ_leader_and_live_parent",
+      "result": "ok"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T14:26:03Z",
+      "completed_at": "2026-11-13T14:26:07Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T14:26:07Z",
+      "completed_at": "2026-11-13T14:26:14Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T14:26:14Z",
+      "completed_at": "2026-11-13T14:26:26Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T14:26:26Z",
+      "completed_at": "2026-11-13T14:26:40Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T14:26:40Z",
+      "completed_at": "2026-11-13T14:27:44Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T14:27:44Z",
+      "completed_at": "2026-11-13T14:29:02Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-11-13T14:29:02Z",
+      "completed_at": "2026-11-13T14:29:10Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T14:29:10Z",
+      "completed_at": "2026-11-13T14:29:12Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 15,
+      "started_at": "2026-11-13T14:29:12Z",
+      "completed_at": "2026-11-13T14:29:12Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T14:29:12Z",
+      "completed_at": "2026-11-13T14:29:12Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T14:29:12Z",
+      "completed_at": "2026-11-13T14:29:12Z"
+    }
+  ]
+}

@@ -1,0 +1,195 @@
+{
+  "source_revision": "ff8f10fdbf6a244ca6dda0c436e3ab8e46b0f4ed",
+  "requested_source": "ff8f10fdbf6a244ca6dda0c436e3ab8e46b0f4ed",
+  "authoritative_source_verified": true,
+  "run_id": 43440151120,
+  "job_id": 131935399494,
+  "job_name": "Focused Core library (origin_pre_wal_fault_tests)",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T14:23:29.531686+00:00",
+  "raw_bytes": 18618670,
+  "raw_sha256": "096fd29af966672ddbea6e9c378d9859f08e135fb5b107120cd809dd4baa401a",
+  "compressed_file": "job.log.gz",
+  "compressed_sha256": "0eac6d2994ee84ceca5fe9e4ab49ebd1c3a874d7270f02aac5433bb974031688",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-13T14:13:54.8516143Z test result: FAILED. 11 passed; 1 failed; 0 ignored; 0 measured; 1005 filtered out; finished in 66.38s"
+  ],
+  "failure_context": [
+    {
+      "line": 68454,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T14:13:54.8514414Z NATIVE_HOT_ONE_PEER_LOSS_EVIDENCE /home/runner/work/_temp/native-core-evidence/fault-state/native-hot-one-peer-loss-01a1d541-529d-79c1-9f29-6ddd9e5e9b08 {\"cleanup_errors\":[],\"kind\":\"test_terminal_after_owned_stop_attempts\",\"no_direct_fixture_recovery_or_reopen\":true,\"no_manual_maintenance_fallback\":true,\"original_root_retained_path_only\":\"/tmp/.tmpDUokgB\",\"portable_native_db_custody\":false,\"primary_error\":\"cluster error: follower did not retain its required actual blocked native/phase cut after publicR3\",\"stage\":\"required_autonomous_health_gate_with_peer_unavailable\"} journal_error=None report_error=None",
+        "2026-11-13T14:13:54.8514421Z",
+        "2026-11-13T14:13:54.8515099Z thread 'distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_fence_reply_requires_automatic_R4_convergence' (8129) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/origin_pre_wal_fault_tests/one_peer_loss_tests.rs:901:27:",
+        "2026-11-13T14:13:54.8515420Z actual one-peer-loss witness failed at required_autonomous_health_gate_with_peer_unavailable: cluster error: follower did not retain its required actual blocked native/phase cut after publicR3",
+        "2026-11-13T14:13:54.8515540Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "2026-11-13T14:13:54.8515543Z",
+        "2026-11-13T14:13:54.8515546Z",
+        "2026-11-13T14:13:54.8515597Z failures:",
+        "2026-11-13T14:13:54.8515982Z     distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_fence_reply_requires_automatic_R4_convergence",
+        "2026-11-13T14:13:54.8515985Z",
+        "2026-11-13T14:13:54.8516143Z test result: FAILED. 11 passed; 1 failed; 0 ignored; 0 measured; 1005 filtered out; finished in 66.38s",
+        "2026-11-13T14:13:54.8516186Z",
+        "2026-11-13T14:13:54.8516609Z error: test failed, to rerun pass `-p bicdb-core --lib`",
+        "2026-11-13T14:13:54.8526623Z ##[error]Process completed with exit code 101.",
+        "2026-11-13T14:13:54.8574376Z ##[group]Run actions/upload-artifact@v4",
+        "2026-11-13T14:13:54.8574431Z with:"
+      ]
+    }
+  ],
+  "test_observations": [
+    {
+      "line": 16017,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_origin_fault_arm_drop_revokes_retained_probe_without_erasing_successor",
+      "result": "ok"
+    },
+    {
+      "line": 21761,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_actual_rpc_post_admission_fault_requires_autonomous_tail_recovery",
+      "result": "ok"
+    },
+    {
+      "line": 23740,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_one_peer_loss_actual_rpc_requires_autonomous_tail_recovery",
+      "result": "ok"
+    },
+    {
+      "line": 26917,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_actual_CQ2_native1_before_fence_requires_automatic_R4_convergence",
+      "result": "ok"
+    },
+    {
+      "line": 28538,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_actual_semantic_rejection_then_socket_loss_retains_veto",
+      "result": "ok"
+    },
+    {
+      "line": 30430,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_blackhole_actual_rpc_requires_autonomous_tail_recovery",
+      "result": "ok"
+    },
+    {
+      "line": 33779,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_completion_reply_requires_fresh_recovery",
+      "result": "ok"
+    },
+    {
+      "line": 33973,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_fence_reply_requires_automatic_R4_convergence",
+      "result": "FAILED"
+    },
+    {
+      "line": 37486,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_origin_completion_reply_requires_fresh_reattest",
+      "result": "ok"
+    },
+    {
+      "line": 37767,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_prepare_reply_requires_automatic_R4_convergence",
+      "result": "ok"
+    },
+    {
+      "line": 40045,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_socket_eof_actual_rpc_requires_autonomous_tail_recovery",
+      "result": "ok"
+    },
+    {
+      "line": 41536,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_second_actual_origin_unknown5_same_owners_requires_ack6_and_full_replica_convergence",
+      "result": "ok"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T14:10:11Z",
+      "completed_at": "2026-11-13T14:10:12Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T14:10:12Z",
+      "completed_at": "2026-11-13T14:10:15Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T14:10:15Z",
+      "completed_at": "2026-11-13T14:10:24Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T14:10:24Z",
+      "completed_at": "2026-11-13T14:10:35Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T14:10:35Z",
+      "completed_at": "2026-11-13T14:11:36Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T14:11:36Z",
+      "completed_at": "2026-11-13T14:12:46Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 7,
+      "started_at": "2026-11-13T14:12:46Z",
+      "completed_at": "2026-11-13T14:13:54Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T14:13:54Z",
+      "completed_at": "2026-11-13T14:13:56Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-13T14:13:56Z",
+      "completed_at": "2026-11-13T14:13:56Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T14:13:56Z",
+      "completed_at": "2026-11-13T14:13:56Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T14:13:56Z",
+      "completed_at": "2026-11-13T14:13:56Z"
+    }
+  ]
+}

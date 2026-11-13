@@ -1,0 +1,162 @@
+{
+  "source_revision": "a9b6a8532751d19cea5b5edafef9fef29c8c9310",
+  "requested_source": "a9b6a8532751d19cea5b5edafef9fef29c8c9310",
+  "authoritative_source_verified": true,
+  "run_id": 43450029882,
+  "job_id": 131969531371,
+  "job_name": "Focused Core library (native_registered_fifth_remote_)",
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "captured_at_utc": "2026-11-13T15:24:37.803547+00:00",
+  "raw_bytes": 4273439,
+  "raw_sha256": "b0e81255b271bab4371b5083c4d13c79fb3b932cc69a76f8683662b53a57ac89",
+  "compressed_file": "job.log.gz",
+  "compressed_sha256": "d665d5d68d0b3784575edaee901ba02afaa6e31e86b76501989c97b954bd23f0",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-13T15:17:42.3179049Z test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 1018 filtered out; finished in 33.60s"
+  ],
+  "failure_context": [],
+  "test_observations": [
+    {
+      "line": 20219,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_source_actual_hook_revoked_after_promise_before_native_wal",
+      "result": "ok"
+    },
+    {
+      "line": 20222,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_constraint_only_guarded_capture_is_not_closed_vote",
+      "result": "ok"
+    },
+    {
+      "line": 21190,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_source_actual_session_cancel_preserves_issued_facts_target_closed",
+      "result": "ok"
+    },
+    {
+      "line": 21495,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_actual_close_fetch_cut_and_source_tls_without_local_quorum",
+      "result": "ok"
+    },
+    {
+      "line": 21677,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_post_native_cancel_retains_outcome_and_exact_fresh_retry",
+      "result": "ok"
+    },
+    {
+      "line": 21680,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_source_actual_tls_history_rows_seal_local_old_seed",
+      "result": "ok"
+    },
+    {
+      "line": 23128,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_no_domain_actual_mstore_term_change_refuses",
+      "result": "ok"
+    },
+    {
+      "line": 23132,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_no_domain_actual_schema_generation_revokes",
+      "result": "ok"
+    },
+    {
+      "line": 23134,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_no_domain_original_hook_aba_refuses",
+      "result": "ok"
+    },
+    {
+      "line": 23137,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_actual_no_domain_preserves_all_state",
+      "result": "ok"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T15:11:23Z",
+      "completed_at": "2026-11-13T15:11:27Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T15:11:27Z",
+      "completed_at": "2026-11-13T15:11:40Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T15:11:40Z",
+      "completed_at": "2026-11-13T15:11:53Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T15:11:53Z",
+      "completed_at": "2026-11-13T15:12:02Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T15:12:02Z",
+      "completed_at": "2026-11-13T15:15:41Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T15:15:41Z",
+      "completed_at": "2026-11-13T15:17:08Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-11-13T15:17:08Z",
+      "completed_at": "2026-11-13T15:17:42Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T15:17:42Z",
+      "completed_at": "2026-11-13T15:17:45Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 15,
+      "started_at": "2026-11-13T15:17:45Z",
+      "completed_at": "2026-11-13T15:17:53Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T15:17:53Z",
+      "completed_at": "2026-11-13T15:17:54Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T15:17:54Z",
+      "completed_at": "2026-11-13T15:17:54Z"
+    }
+  ]
+}

@@ -331,3 +331,81 @@ fn donated_metadata_and_existing_unowned_backing_are_never_adopted() {
         assert_eq!(other.last_applied_commit_seq(), 1);
     }
 }
+
+#[test]
+fn recovery_never_publishes_pending_origin_before_its_wal_rewrite_sync() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("target");
+        let cfg = config(mode.clone(), ReplicationMode::Standby);
+        let mut source = BicDb::open_with_config(
+            root.path().join("source"),
+            config(mode, ReplicationMode::Primary),
+        )
+        .unwrap();
+        source.sync_quorum().hold("origin-history", 0);
+        source
+            .initialize_fresh_primary_replication_origins()
+            .unwrap();
+        source.create_collection("independent").unwrap();
+        let row = Record::new("ACK").with_metadata(json!({"value":89}));
+        source.insert("independent", row.clone()).unwrap();
+        let mut target = BicDb::open_with_config(&path, cfg.clone()).unwrap();
+        ship(&source, &mut target);
+        target.sync_quorum().hold("origin-history", 0);
+        target.persist_standby_slots().unwrap();
+        source.create_collection("items").unwrap();
+        let frames = source
+            .export_replication_frames_since(target.last_applied_commit_seq(), usize::MAX)
+            .unwrap();
+        let fault = bicdb_page::test_faults::arm_io_failure("catalog.write", &path, 2, false);
+        assert!(target.apply_replication_frame(&frames[0]).is_err());
+        drop(fault);
+        let allocated = meta(&target, "items");
+        let generation = allocated
+            .native_imported_backing_origin
+            .as_ref()
+            .unwrap()
+            .generation;
+        let pending =
+            load_catalog(&path.join(DEFAULT_COLLECTION_CATALOG), &target.encryption).unwrap();
+        assert!(super::pending(
+            pending.iter().find(|m| m.name == "items").unwrap()
+        ));
+        let encryption = target.encryption.clone();
+        drop(target);
+        let fault =
+            bicdb_page::test_faults::arm_io_failure("transaction_log.cut_copy", &path, 1, false);
+        assert!(
+            BicDb::open_with_config(&path, cfg.clone()).is_err(),
+            "WAL rewrite fault did not fire"
+        );
+        drop(fault);
+        let catalog = load_catalog(&path.join(DEFAULT_COLLECTION_CATALOG), &encryption).unwrap();
+        assert!(
+            super::pending(catalog.iter().find(|m| m.name == "items").unwrap()),
+            "unverified recovered WAL must not publish completed Native import provenance"
+        );
+        for _ in 0..2 {
+            let target = BicDb::open_with_config(&path, cfg.clone()).unwrap();
+            let completed = meta(&target, "items");
+            let origin = completed.native_imported_backing_origin.as_ref().unwrap();
+            assert!(!origin.pending);
+            assert_eq!(origin.generation, generation);
+            assert_eq!(
+                completed.native_backing_birth_id,
+                allocated.native_backing_birth_id
+            );
+            assert_eq!(
+                target
+                    .get("independent", "ACK")
+                    .unwrap()
+                    .unwrap()
+                    .content_hash()
+                    .unwrap(),
+                row.content_hash().unwrap()
+            );
+            target.close().unwrap();
+        }
+    }
+}

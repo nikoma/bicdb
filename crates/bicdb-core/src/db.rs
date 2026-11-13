@@ -13377,13 +13377,13 @@ impl BicDb {
 
     pub fn create_collection_with_mode(&mut self, name: &str, mode: CollectionMode) -> Result<()> {
         self.ensure_writable("create collection")?;
-        self.check_native_catalog_allocation_publication()?;
         validate_collection_name(name)?;
         if self.collections.contains_key(name) {
             self.finish_native_catalog_allocation(name)?;
             return Ok(());
         }
 
+        self.check_native_catalog_allocation_publication()?;
         let _database_mutation = self.range_mutations.try_enter_database()?;
         self.invalidate_native_range_images_before_mutation(None, "create collection")?;
         let storage_name = self.storage_name_for_new(name);

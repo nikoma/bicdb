@@ -233,6 +233,9 @@ fn actual_wal_eio_leaves_pending_birth_and_retry_publishes_that_same_backing() {
             let row = Record::new("ACK").with_metadata(json!({"value":79}));
             db.insert("independent", row.clone()).unwrap();
             let ack_seq = db.last_commit_seq();
+            // A crash recovery checkpoints before returning a handle. Make
+            // the local consumer's hold durable before the injected EIO.
+            db.persist_standby_slots().unwrap();
             if mode == StorageMode::ServerPaged {
                 format::enable_range_image_install(&path).unwrap();
             }
@@ -252,6 +255,7 @@ fn actual_wal_eio_leaves_pending_birth_and_retry_publishes_that_same_backing() {
             assert!(error.to_string().contains("pending"), "{error}");
             assert!(db.rename_collection("pending", "must_refuse").is_err());
             if mode == StorageMode::ServerPaged {
+                db.schema_compatibility_fingerprint().unwrap();
                 let error = db.capture_range_image_bindings().unwrap_err();
                 assert!(error.to_string().contains("pending"), "{error}");
             }
@@ -295,6 +299,7 @@ fn actual_marker_clear_eio_never_allocates_a_second_birth() {
         db.create_collection("independent").unwrap();
         db.insert("independent", Record::new("ACK")).unwrap();
         let before = db.last_commit_seq();
+        db.persist_standby_slots().unwrap();
         // The catalog log already exists. First catalog sync installs the
         // pending allocation; the second clears it after the WAL decision.
         let fault = bicdb_page::test_faults::arm_io_failure("catalog.dir_sync", &path, 2, false);
@@ -377,6 +382,7 @@ fn asynchronous_reopen_cannot_publish_a_new_allocation_fact() {
         let sequence = db.last_commit_seq();
         let catalog = fs::read(path.join(DEFAULT_COLLECTION_CATALOG)).unwrap();
         assert!(db.activate_native_catalog_allocation_facts_v1().is_err());
+        db.create_collection("items").unwrap();
         let error = db.create_collection("must_refuse").unwrap_err();
         assert!(error.to_string().contains("fsync"), "{error}");
         assert_eq!(db.last_commit_seq(), sequence);

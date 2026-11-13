@@ -70,7 +70,7 @@ impl BicDb {
         }
         if !self.native_catalog_allocation_facts_active || !self.config.fsync {
             return Err(BicDbError::FormatCompatibility(
-                "Native allocation facts have no publisher fence".into(),
+                "Native allocation facts require fsync and their publisher fence".into(),
             ));
         }
         validated(facts.clone())?;
@@ -123,7 +123,7 @@ impl BicDb {
             || self.observe_native_origin_root()?.is_none()
         {
             return Err(BicDbError::InvalidConfig(
-                "Native allocation facts require actual origin and WAL capture".into(),
+                "Native allocation facts require fsync, actual origin and WAL capture".into(),
             ));
         }
         if let Err(error) = format::enable_native_catalog_allocation_facts(&self.path) {
@@ -157,6 +157,7 @@ impl BicDb {
         if !state.meta.native_catalog_allocation_pending {
             return Ok(None);
         }
+        self.check_native_catalog_allocation_publication()?;
         if !self.native_catalog_allocation_logging_active() {
             return Err(BicDbError::Replication(
                 "pending Native creation requires its primary publisher".into(),

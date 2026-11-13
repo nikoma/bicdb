@@ -9,6 +9,7 @@ use crate::distribution_metadata_read_provider::MetadataReadProvider;
 use crate::distribution_native_host::NativeMetadataControlHost;
 use crate::distribution_range_consensus::RecoveryFenceScope;
 use crate::distribution_range_recovery::{RecoveryEpochFenceRequest, RecoveryRoleAdmission};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 mod custody;
@@ -55,6 +56,16 @@ fn state(
         "points":points,"slots":db.native_abort_slot_inventory()?,
         "rows":rows,"raw":raw,"writer_installed":db.commit_admission_ready(),
     }))
+}
+// Intent persistence is mandatory before an API starts. Once an actual API
+// has returned, evidence IO failures remain separate from its primary result.
+fn evidence(path: &std::path::Path, value: &impl serde::Serialize) -> Result<()> {
+    crate::storage::write_atomic(path, &serde_json::to_vec_pretty(value)?, true)
+}
+fn evidence_after(path: &std::path::Path, value: &impl serde::Serialize, errors: &mut Vec<String>) {
+    if let Err(error) = evidence(path, value) {
+        errors.push(format!("{}: {error}", path.display()));
+    }
 }
 fn configuration(
     template: &crate::DistributionConfig,
@@ -215,6 +226,7 @@ fn native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_ba
         .lock()
         .native_replica_listener_store_open_guard();
     let original_birth = factory.actual_birth().clone();
+    let original_factory_path = factory.database.read().data_path().to_path_buf();
     assert_eq!(receiver.birth_id, original_birth.birth_id());
     assert!(!factory.database.read().commit_admission_ready());
     let original_namespaces = factory
@@ -273,6 +285,8 @@ fn native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_ba
     let mut phase = "four_initial_control";
     let mut reports = Vec::new();
     let mut ledger = Vec::new();
+    let mut evidence_errors = Vec::new();
+    let clock_origin = Instant::now();
     let mut metadata_only_refusal = None;
     // Keep the actual original guards outside catch_unwind too: diagnostic
     // capture must not drop them on a partial setup/operation failure.
@@ -315,21 +329,40 @@ fn native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_ba
         for range in &ranges {
             let key = key_in(&current, range.id);
             let value = serde_json::json!({"registered_fifth_source":range.id.get(),"object":{},"nested":[null,17,{"full":"payload"}]});
-            let append = gateway.append("items", &key, value.clone());
-            // Persist the actual API result BEFORE inspecting native rows.
-            // An Err is unknown effect, not evidence of rollback/no Commit.
-            ledger.push(serde_json::json!({"range":range.id,"key":key,"value":value,
-                "actual_api_inserted":append.as_ref().ok(),
-                "actual_api_error":append.as_ref().err().map(|e|e.to_string()),
-                "effect_unknown_on_error":append.is_err()}));
-            crate::storage::write_atomic(
-                &output.join("ack-ledger.json"),
-                &serde_json::to_vec_pretty(&ledger).unwrap(),
-                true,
-            )
-            .unwrap();
-            assert!(append.unwrap());
             let record_id = crate::cluster_event_record_id("items", &key).unwrap();
+            let logical_id = Uuid::now_v7();
+            ledger.push(serde_json::json!({
+                "logical_id":logical_id,"phase":"intent","operation":"ClusterEventClient.append",
+                "range":range.id,"range_epoch":range.epoch,"topology_generation":current.generation,
+                "actual_api_caller":node(0),"actual_api_caller_address":current.nodes[&node(0)].address,
+                "expected_route_leader":range.leader,"expected_route_address":current.nodes[&range.leader].address,
+                "configured_request_timeout_ms":2000,"configured_network":configs[0].transport,
+                "collection":"items","key":key,"record_id":record_id,"value":value,
+                "payload_json_sha256":hex::encode(Sha256::digest(serde_json::to_vec(&value).unwrap())),
+                "configuration":current,"logical_ledger_not_raw_wire":true,
+                "outcome":"not_started","effect_unknown_on_error":false}));
+            evidence(&output.join("ack-ledger.json"), &ledger).unwrap();
+            let append = gateway.append("items", &key, value.clone());
+            // Preserve the actual API error first; failed evidence IO cannot
+            // replace it. Err means unknown effect, never a no-Commit claim.
+            let outcome = ledger.last_mut().unwrap();
+            outcome["phase"] = "reply".into();
+            outcome["outcome"] = if append.is_ok() {
+                "returned"
+            } else {
+                "unknown_effect"
+            }
+            .into();
+            outcome["actual_api_inserted"] = serde_json::to_value(append.as_ref().ok()).unwrap();
+            outcome["actual_api_error"] =
+                serde_json::to_value(append.as_ref().err().map(|e| e.to_string())).unwrap();
+            outcome["effect_unknown_on_error"] = append.is_err().into();
+            evidence_after(
+                &output.join("ack-ledger.json"),
+                &ledger,
+                &mut evidence_errors,
+            );
+            assert!(append.unwrap());
             let leader = (0..4).find(|i| node(*i) == range.leader).unwrap();
             let record = databases[leader]
                 .read()
@@ -339,19 +372,12 @@ fn native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_ba
             assert_eq!(record.metadata, value);
             ledger.last_mut().unwrap()["actual_full_record"] =
                 serde_json::to_value(record).unwrap();
-            crate::storage::write_atomic(
+            evidence_after(
                 &output.join("ack-ledger.json"),
-                &serde_json::to_vec_pretty(&ledger).unwrap(),
-                true,
-            )
-            .unwrap();
+                &ledger,
+                &mut evidence_errors,
+            );
         }
-        crate::storage::write_atomic(
-            &output.join("ack-ledger.json"),
-            &serde_json::to_vec_pretty(&ledger).unwrap(),
-            true,
-        )
-        .unwrap();
         phase = "commit_two_data_learner_assignments";
         let pending = assign_two_ranges(&current, &ranges);
         let entry = metadata[0]
@@ -417,9 +443,9 @@ fn native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_ba
         actual_own.require_live_request(business).unwrap();
         metadata_only_refusal = Some(no_assignment_error.to_string());
         phase = "actual_registered_fifth_fence";
-        let before = state(&factory.database, &pending, &node(4), &ranges).unwrap();
-        assert_eq!(before["writer_installed"], false);
-        for point in before["points"].as_object().unwrap().values() {
+        let initial = state(&factory.database, &pending, &node(4), &ranges).unwrap();
+        assert_eq!(initial["writer_installed"], false);
+        for point in initial["points"].as_object().unwrap().values() {
             assert!(point["native_applied_index"].is_null());
         }
         let mut succeeded = 0;
@@ -441,7 +467,6 @@ fn native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_ba
                 .find(|plan| plan.range_id == original.id)
                 .unwrap();
             let session = relocation.handoff_session.as_ref().unwrap();
-            let parent = budget(5000);
             let actor = clients[(0..4).find(|i| node(*i) == original.leader).unwrap()]
                 .local_metadata_read_participant();
             let business = Uuid::now_v7();
@@ -454,20 +479,51 @@ fn native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_ba
                     nonce: session.nonce,
                 };
             let range = pending.range_by_id(original.id).unwrap();
-            let observed = target_provider
-                .witness_recovery_role(
-                    &actor,
-                    business,
-                    range.id,
-                    range.epoch,
-                    session.nonce,
-                    challenge,
-                    purpose.clone(),
-                    &parent,
+            // This attempt's prestate includes any previous legitimate fence.
+            // Capture it and durable intent BEFORE the original five-second
+            // acquisition begins; no replacement token is created later.
+            let before = state(&factory.database, &pending, &node(4), &ranges).unwrap();
+            let report = reports.len();
+            reports.push(serde_json::json!({
+                "logical_id":Uuid::now_v7(),"operation":"recovery_epoch_fence_observation","phase":"intent",
+                "range":range.id,"range_epoch":range.epoch,"topology_generation":pending.generation,
+                "actual_source":{"node_id":actor.node_id(),"incarnation":actor.member_incarnation(),
+                    "certificate_sha256":actor.certificate_sha256(),"plaintext_loopback":actor.plaintext_loopback()},"source_address":pending.nodes[&range.leader].address,
+                "actual_target":node(4),"target_address":pending.nodes[&node(4)].address,
+                "business_id":business,"recipient_challenge":challenge,"purpose":purpose,
+                "configured_parent_budget_ms":5000,"configured_request_budget_ms":4000,
+                "configured_source_network":f.networks[(0..4).find(|i|node(*i)==range.leader).unwrap()],
+                "configured_target_network":f.networks[4],"configuration":pending,
+                "logical_ledger_not_raw_wire":true,"before":before,
+                "rows_copied":false,"serving_granted":false,"outcome":"not_started"}));
+            evidence(&output.join("fence-ledger.json"), &reports).unwrap();
+            let parent = budget(5000);
+            reports[report]["original_parent_deadline_from_clock_origin_us"] =
+                serde_json::to_value(
+                    parent
+                        .deadline()
+                        .map(|d| d.saturating_duration_since(clock_origin).as_micros()),
                 )
                 .unwrap();
+            let observed = target_provider.witness_recovery_role(
+                &actor,
+                business,
+                range.id,
+                range.epoch,
+                session.nonce,
+                challenge,
+                purpose.clone(),
+                &parent,
+            );
+            reports[report]["role_acquisition_error"] =
+                serde_json::to_value(observed.as_ref().err().map(|e| e.to_string())).unwrap();
+            evidence_after(
+                &output.join("fence-ledger.json"),
+                &reports,
+                &mut evidence_errors,
+            );
             let role = RecoveryRoleAdmission::from_witness(
-                observed,
+                observed.unwrap(),
                 &actor,
                 &node(4),
                 business,
@@ -476,9 +532,27 @@ fn native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_ba
                 session.nonce,
                 challenge,
                 &purpose,
+            );
+            reports[report]["role_admission_error"] =
+                serde_json::to_value(role.as_ref().err().map(|e| e.to_string())).unwrap();
+            evidence_after(
+                &output.join("fence-ledger.json"),
+                &reports,
+                &mut evidence_errors,
+            );
+            let role = role.unwrap();
+            let scope = RecoveryFenceScope::from_role(&role).unwrap();
+            reports[report]["scope"] = serde_json::to_value(&scope).unwrap();
+            reports[report]["original_role_deadline_from_clock_origin_us"] = serde_json::to_value(
+                role.deadline()
+                    .saturating_duration_since(clock_origin)
+                    .as_micros(),
             )
             .unwrap();
-            let scope = RecoveryFenceScope::from_role(&role).unwrap();
+            reports[report]["phase"] = "dispatch".into();
+            evidence(&output.join("fence-ledger.json"), &reports).unwrap();
+            parent.check().unwrap();
+            role.require_live_request().unwrap();
             let sent = Instant::now();
             let response = clients[(0..4).find(|i| node(*i) == range.leader).unwrap()]
                 .recovery_epoch_fence_observation(
@@ -492,16 +566,46 @@ fn native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_ba
             let elapsed = sent.elapsed();
             let caller_live = parent.check();
             let role_live = role.require_live_request();
-            let report = reports.len();
-            reports.push(serde_json::json!({"range":range.id,"scope":scope,
-                "configured_request_budget_ms":4000,"configured_network_io_ms":f.networks[4].io_timeout_ms,
-                "receipt_elapsed_us":elapsed.as_micros(),
-                "original_parent_remaining_ms":parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_millis()),
-                "original_role_remaining_ms":role.deadline().saturating_duration_since(Instant::now()).as_millis(),
-                "actual_reply_ok":response.is_ok(),"actual_error":response.as_ref().err().map(|e|e.to_string()),
-                "caller_error_at_reply":caller_live.as_ref().err().map(|e|e.to_string()),
-                "role_error_at_reply":role_live.as_ref().err().map(|e|e.to_string()),
-                "before":before,"rows_copied":false,"serving_granted":false}));
+            reports[report]["phase"] = "reply".into();
+            reports[report]["outcome"] = if response.is_ok() {
+                "returned"
+            } else {
+                "error_reply_unknown_effect"
+            }
+            .into();
+            reports[report]["receipt_elapsed_us"] =
+                serde_json::to_value(elapsed.as_micros()).unwrap();
+            reports[report]["original_parent_remaining_ms"] = serde_json::to_value(
+                parent
+                    .deadline()
+                    .map(|d| d.saturating_duration_since(Instant::now()).as_millis()),
+            )
+            .unwrap();
+            reports[report]["original_role_remaining_ms"] = serde_json::to_value(
+                role.deadline()
+                    .saturating_duration_since(Instant::now())
+                    .as_millis(),
+            )
+            .unwrap();
+            reports[report]["actual_reply_ok"] = response.is_ok().into();
+            reports[report]["actual_success_observation"] = response.as_ref().ok().map(|actual|serde_json::json!({
+                "scope":actual.scope(),"node_id":actual.node_id(),"member_incarnation":actual.member_incarnation(),
+                "store_open_id":actual.store_open_id(),"native_database_incarnation":actual.native_database_incarnation(),
+                "progress":actual.progress(),"native":actual.native(),"image_history":actual.image_history(),
+                "is_active_recovery":actual.is_active_recovery(),
+                "original_observation_deadline_from_clock_origin_us":actual.deadline().saturating_duration_since(clock_origin).as_micros()
+            })).unwrap_or(serde_json::Value::Null);
+            reports[report]["actual_error"] =
+                serde_json::to_value(response.as_ref().err().map(|e| e.to_string())).unwrap();
+            reports[report]["caller_error_at_reply"] =
+                serde_json::to_value(caller_live.as_ref().err().map(|e| e.to_string())).unwrap();
+            reports[report]["role_error_at_reply"] =
+                serde_json::to_value(role_live.as_ref().err().map(|e| e.to_string())).unwrap();
+            evidence_after(
+                &output.join("fence-ledger.json"),
+                &reports,
+                &mut evidence_errors,
+            );
             caller_live.unwrap();
             role_live.unwrap();
             let after = state(&factory.database, &pending, &node(4), &ranges).unwrap();
@@ -538,6 +642,11 @@ fn native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_ba
             reports[report]["original_role_and_caller_live_at_reply"] = true.into();
             reports[report]["after"] = after;
             reports[report]["receiver"] = serde_json::to_value(status).unwrap();
+            evidence_after(
+                &output.join("fence-ledger.json"),
+                &reports,
+                &mut evidence_errors,
+            );
         }
         for (original, acknowledged) in ranges.iter().zip(&ledger) {
             for (i, guard) in original_writers.iter().enumerate() {
@@ -583,20 +692,30 @@ fn native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_ba
     let terminal = serde_json::json!({"source":std::env::var("BICDB_TEST_SOURCE_SHA").ok(),"package_version":env!("CARGO_PKG_VERSION"),
         "phase":phase,"required_baseline_succeeded":result.is_ok(),"reports":reports,"ack_ledger":ledger,
         "primary_error":primary_error,"existing_metadata_only_validator_refusal":metadata_only_refusal,
-        "original_root":f.root.path(),"factory_root":factory.database.read().data_path(),
+        "original_root":f.root.path(),"factory_root":original_factory_path,
         "initial_ranges":factory.spec.initial_ranges,"original_birth":original_birth,
         "protected_metadata_uuid":protected_metadata_uuid,"store_slot":target_slot.id(),
         "actual_original_writer_guards_retained":original_writers.len(),
-        "custody":captured,"custody_error":capture_error,
+        "custody":captured,"custody_error":capture_error,"evidence_errors_so_far":evidence_errors,
         "old_closed_data_quorum_exercised":false,"source_image_capture_exercised":false,
         "local_image_source_session_wire_not_exercised":true,"no_registered_row_or_new_data_quorum_claim":true});
-    crate::storage::write_atomic(
+    evidence_after(
         &output.join("terminal.json"),
-        &serde_json::to_vec_pretty(&terminal).unwrap(),
-        true,
-    )
-    .unwrap();
-    eprintln!(
+        &terminal,
+        &mut evidence_errors,
+    );
+    if !capture_ok {
+        evidence_after(
+            &output.join("custody-partial.json"),
+            &serde_json::json!({
+            "status":"incomplete","error":capture_error,"partial_destination":output.join("custody"),
+            "manifest_verified":false,"engine_reopened":false}),
+            &mut evidence_errors,
+        );
+    }
+    use std::io::Write as _;
+    let _ = writeln!(
+        std::io::stderr(),
         "ACTUAL_REGISTERED_FIFTH_IMAGE_BASELINE {} {}",
         output.display(),
         terminal
@@ -614,17 +733,34 @@ fn native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_ba
         cleanup.push(error.to_string());
     }
     f.shutdown();
-    crate::storage::write_atomic(
+    evidence_after(
         &output.join("cleanup.json"),
-        &serde_json::to_vec_pretty(&serde_json::json!({"errors":cleanup,
-            "primary_failure_preserved":primary_error,"original_roots_retained":true}))
-        .unwrap(),
-        true,
-    )
-    .unwrap();
+        &serde_json::json!({"errors":cleanup,
+        "primary_failure_preserved":primary_error,"original_roots_retained":true}),
+        &mut evidence_errors,
+    );
+    // IO failures are reported separately; the required baseline's original
+    // panic takes precedence even if the evidence destination has failed.
+    let _ = writeln!(
+        std::io::stderr(),
+        "REGISTERED_FIFTH_EVIDENCE_ERRORS {:?}",
+        evidence_errors
+    );
+    let evidence_errors_value = serde_json::json!({"errors":evidence_errors});
+    if let Err(error) = evidence(&output.join("evidence-errors.json"), &evidence_errors_value) {
+        evidence_errors.push(format!("evidence-errors.json: {error}"));
+        let _ = writeln!(
+            std::io::stderr(),
+            "REGISTERED_FIFTH_FINAL_EVIDENCE_ERROR {error}"
+        );
+    }
     if let Err(panic) = result {
         std::panic::resume_unwind(panic);
     }
+    assert!(
+        evidence_errors.is_empty(),
+        "actual evidence IO failures: {evidence_errors:?}"
+    );
     assert!(
         cleanup.is_empty(),
         "actual baseline cleanup errors: {cleanup:?}"

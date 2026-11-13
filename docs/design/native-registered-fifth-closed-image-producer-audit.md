@@ -131,3 +131,38 @@ other-range obligations while admitting only the exact new CLOSED range. No
 legitimate target writer-start/promise can currently be manufactured merely to
 test a nonempty fifth domain: APP is refused and the earlier fence is missing.
 Those tests need the corresponding genuine producers, not raw fixture edits.
+
+
+## Pre-execution review corrections to the test-only baseline
+
+The reviewed `3d34ce0c7` baseline has not compiled or executed. Its successor
+corrects a concrete Rust privacy issue with a `cfg(test)` opaque DB-owned custody
+guard. The wrapper privately retains the actual nonwaiting journal guard, is
+non-cloneable and thread-affine, and exposes no native accessor, predicate,
+mutation method or authority. Production journal visibility stays unchanged.
+
+Each APP now fsyncs logical intent before the public API: logical ID, collection,
+key, deterministic record ID, full payload and JSON hash, actual API caller,
+expected routing leader/address, actual configuration and original timeout. The
+linked outcome records the actual boolean/error and unknown effect on error
+before native-row inspection. Each fence similarly fsyncs intent before its
+original five-second acquisition, then links the genuine scope/challenge,
+original parent and role deadlines and actual reply/error. Monotonic deadline
+coordinates are relative to a recorded test-local clock origin, not wall time.
+These records are logical API evidence, not a raw-wire trace, and hashes do not
+become proof or grants. Scoped intent IO stays inside the original budget;
+original role/caller checks follow it before dispatch. No token is renewed.
+
+The initial blank-state assertion is separate from each attempt's fresh
+prestate. A successful first fence therefore remains present in the second
+attempt's before/after comparison. Both genuine required-success assertions and
+all original native/raw/identity/policy/ACK checks remain. Failed fence replies
+remain unknown effect until those actual comparisons; no absence is inferred.
+
+The factory path is captured before timed work. Post-failure evidence needs no
+blocking DB read. Terminal/cleanup/partial-copy writes are best effort and their
+errors are reported separately; they cannot replace the original required
+baseline panic. A primary success still fails if evidence/cleanup/custody fails.
+Completed partial-copy entries are retained where possible and explicitly lack
+a verified whole-inventory claim. This remains source review only, with the
+same original 2s/4s/5s request/acquisition budgets and no local build or replay.

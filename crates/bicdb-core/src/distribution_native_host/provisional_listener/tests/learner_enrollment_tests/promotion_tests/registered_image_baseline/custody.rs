@@ -166,7 +166,7 @@ pub(super) fn capture(
     let _journals = db
         .iter()
         .map(|d| {
-            d.try_native_image_journal()
+            d.test_native_custody_journal()
                 .map_err(|e| error(e.to_string()))
         })
         .collect::<io::Result<Vec<_>>>()?;
@@ -189,13 +189,28 @@ pub(super) fn capture(
     let mut total = 0;
     for (i, source) in sources.iter().enumerate() {
         let name = PathBuf::from(format!("node{i}"));
-        copy(
+        if let Err(primary) = copy(
             source,
             &destination.join(&name),
             &name,
             &mut entries,
             &mut total,
-        )?;
+        ) {
+            // Keep the first copy error even if recording partial evidence
+            // also fails. Entries describe completed files only; an unfinished
+            // destination file may exist and is not a verified snapshot.
+            let partial = serde_json::json!({"status":"incomplete_copy",
+                "error":primary.to_string(),"completed_files":entries,"completed_bytes":total,
+                "unfinished_file_may_exist":true,"full_inventory_verified":false});
+            if let Ok(bytes) = serde_json::to_vec_pretty(&partial) {
+                let _ = crate::storage::write_atomic(
+                    &output.join("custody-partial-files.json"),
+                    &bytes,
+                    true,
+                );
+            }
+            return Err(primary);
+        }
     }
     let mut after = BTreeMap::new();
     let mut after_bytes = 0;

@@ -168,6 +168,11 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
         token.check()?;
         scope.require_role(role)?;
         self.require_hot_reservation(held, role)?;
+        #[cfg(test)]
+        eprintln!(
+            "NATIVE_HOT_PUBLISH_STAGE node={} step=1",
+            self.local_node_id
+        );
         runtime.require_point_read_service(&self.local_service, &self.local_node_id)?;
         let remaining = || -> Result<Duration> {
             token.check()?;
@@ -191,9 +196,19 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             &token,
         )?;
         self.require_hot_reservation(held, role)?;
+        #[cfg(test)]
+        eprintln!(
+            "NATIVE_HOT_PUBLISH_STAGE node={} step=2",
+            self.local_node_id
+        );
         let candidate =
             runtime.acquire_native_read_candidate(first, business, Uuid::now_v7(), &token)?;
         self.require_hot_reservation(held, role)?;
+        #[cfg(test)]
+        eprintln!(
+            "NATIVE_HOT_PUBLISH_STAGE node={} step=3",
+            self.local_node_id
+        );
         let collected = {
             let service = loop {
                 token.check()?;
@@ -211,6 +226,11 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
         };
         // No DB/service latch crosses either network boundary.
         self.require_hot_reservation(held, role)?;
+        #[cfg(test)]
+        eprintln!(
+            "NATIVE_HOT_PUBLISH_STAGE node={} step=4",
+            self.local_node_id
+        );
         let final_metadata = self.transport.acquire_metadata_read_observation(
             &metadata_leader,
             business,
@@ -220,6 +240,11 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             &token,
         )?;
         self.require_hot_reservation(held, role)?;
+        #[cfg(test)]
+        eprintln!(
+            "NATIVE_HOT_PUBLISH_STAGE node={} step=5",
+            self.local_node_id
+        );
         let service = loop {
             token.check()?;
             if let Some(s) = self.local_service.try_lock_for(Duration::from_millis(5)) {
@@ -233,6 +258,11 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
         })?;
         host.require_for_coordinator(&db, role.current_range(), self)?;
         self.require_hot_reservation(held, role)?;
+        #[cfg(test)]
+        eprintln!(
+            "NATIVE_HOT_PUBLISH_STAGE node={} step=6",
+            self.local_node_id
+        );
         let topology = self
             .topology
             .try_read()

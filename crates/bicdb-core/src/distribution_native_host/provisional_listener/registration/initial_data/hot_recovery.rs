@@ -426,7 +426,17 @@ impl NativeHotRecoveryMaintenance {
                         "hot recovery retains an unresolved actual peer semantic veto",
                     ));
                 }
+                #[cfg(test)]
+                eprintln!(
+                    "NATIVE_HOT_DATA_STAGE node={{}} stage=publish-begin phase={{:?}}",
+                    self.initial.seed.spec.node_id, job.phase
+                );
                 let fresh = self.fresh_role(&job.range, job.scope.recovery_nonce, &phase_parent)?;
+                #[cfg(test)]
+                eprintln!(
+                    "NATIVE_HOT_DATA_STAGE node={{}} stage=publish-role phase={{:?}}",
+                    self.initial.seed.spec.node_id, job.phase
+                );
                 if job.replica_binding.is_none() {
                     job.replica_binding = Some(self.coordinator.capture_hot_replica_binding(
                         &self.runtime,
@@ -443,6 +453,11 @@ impl NativeHotRecoveryMaintenance {
                     &fresh,
                     &phase_parent,
                 )?;
+                #[cfg(test)]
+                eprintln!(
+                    "NATIVE_HOT_DATA_STAGE node={{}} stage=publish-binding phase={{:?}}",
+                    self.initial.seed.spec.node_id, job.phase
+                );
                 self.coordinator.publish_hot_native_recovery(
                     &self.runtime,
                     &self.host,
@@ -452,13 +467,28 @@ impl NativeHotRecoveryMaintenance {
                     &job.command,
                     &phase_parent,
                 )?;
+                #[cfg(test)]
+                eprintln!(
+                    "NATIVE_HOT_DATA_STAGE node={{}} stage=publish-done phase={{:?}}",
+                    self.initial.seed.spec.node_id, job.phase
+                );
                 return Ok(());
             }
             if job.position == job.members.len() {
                 // This threshold schedules the NEXT real producer. It is NOT
                 // a QQ, role, recovered epoch or admission grant. Original
                 // origin success and all known semantic vetoes are mandatory.
+                #[cfg(test)]
+                eprintln!(
+                    "NATIVE_HOT_DATA_STAGE node={{}} stage=round-end phase={{:?}}",
+                    self.initial.seed.spec.node_id, job.phase
+                );
                 let fresh = self.fresh_role(&job.range, job.scope.recovery_nonce, &phase_parent)?;
+                #[cfg(test)]
+                eprintln!(
+                    "NATIVE_HOT_DATA_STAGE node={{}} stage=round-role phase={{:?}}",
+                    self.initial.seed.spec.node_id, job.phase
+                );
                 job.scope.require_role(&fresh)?;
                 held.require_actual_store_slot()?;
                 if job.phase_observed.len() < job.members.len() / 2 + 1
@@ -583,6 +613,14 @@ impl NativeHotRecoveryMaintenance {
                 job.command.index,
                 Duration::from_millis(io_ms),
                 &phase_parent,
+            );
+            #[cfg(test)]
+            eprintln!(
+                "NATIVE_HOT_DATA_STAGE node={} stage=phase-returned target={} phase={:?} ok={}",
+                self.initial.seed.spec.node_id,
+                node,
+                job.phase,
+                result.is_ok()
             );
             // Expired caller/role or changed original service slot aborts the
             // whole attempt regardless of any shorter peer socket timeout.

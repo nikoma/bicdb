@@ -69,11 +69,18 @@ pub(super) fn advance(
         journal,
     )?)?;
     let native_base = matches!(operation, Operation::PublishNativeBase);
+    let adoption = matches!(operation, Operation::AdoptCatalogueFloor);
+    let adoption_guard = (cancel && adoption).then(|| {
+        let token = parent.clone();
+        crate::distribution_range_consensus::test_registered_remote_adoption_after_fsync(Box::new(
+            move || token.cancel(),
+        ))
+    });
     let base_guard = (cancel && native_base).then(|| {
         let token = parent.clone();
         crate::db::test_registered_remote_base_after_wal(Box::new(move || token.cancel()))
     });
-    let guard = (cancel && !native_base).then(|| {
+    let guard = (cancel && !native_base && !adoption).then(|| {
         let token = parent.clone();
         crate::db::test_registered_remote_final_image_after_wal(Box::new(move || token.cancel()))
     });
@@ -81,6 +88,7 @@ pub(super) fn advance(
         .advance_registered_remote_image(source, &frame, role, own, business, &parent, operation);
     drop(guard);
     drop(base_guard);
+    drop(adoption_guard);
     parent.cancel();
     result
 }
@@ -427,6 +435,19 @@ pub(super) fn exercise(
             output, journal,
         );
     }
+    if matches!(
+        case,
+        SourceCase::TargetCatalogueFloor
+            | SourceCase::TargetCatalogueFloorMissingBase
+            | SourceCase::TargetCatalogueFloorDirSyncRetry
+            | SourceCase::TargetCatalogueFloorCanceled
+    ) {
+        catalogue_tests::exercise(
+            case, control, client, &source, plan, provider, actor, factory, pending, ranges,
+            output, journal,
+        );
+    }
 }
 
+mod catalogue_tests;
 mod native_base_tests;

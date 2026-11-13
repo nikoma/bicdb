@@ -65,6 +65,8 @@ pub(crate) use native_assigned_policy::NativeAssignedImagePolicyEvidence;
 #[cfg(feature = "tls-replication")]
 mod registered_closed_fence;
 #[cfg(feature = "tls-replication")]
+mod registered_remote_catalogue;
+#[cfg(feature = "tls-replication")]
 mod registered_remote_installing;
 pub(crate) use native_durability::ClusterServiceOpenGuard;
 use native_durability::{checked_database_read, checked_database_write, ServiceStoragePolicy};

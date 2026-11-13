@@ -57,6 +57,18 @@ impl NativeRegisteredRemoteProposalPoint<'_> {
         store: &RangeWriteStore,
         scope: &NativeRegisteredRemoteMutationScope<'_>,
     ) -> Result<()> {
+        self.require_original_mutation_owner(db, store, scope)?;
+        db.require_native_writer_catalogue_custody(store)?;
+        self.require_live()
+    }
+    /// Original actual owners only; a dedicated catalogue continuation must
+    /// independently check its exact old/candidate and perform real re-fsync.
+    pub(crate) fn require_original_mutation_owner(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        scope: &NativeRegisteredRemoteMutationScope<'_>,
+    ) -> Result<()> {
         self.require_live()?;
         scope.require_database(db)?;
         self.preflight.original.database.require_database(db)?;
@@ -71,7 +83,6 @@ impl NativeRegisteredRemoteProposalPoint<'_> {
         self.preflight
             .actual
             .require_mutation_identity(db, scope, &self.request.member)?;
-        db.require_native_writer_catalogue_custody(store)?;
         self.require_live()
     }
     pub(crate) fn retain_transaction_request(
@@ -125,6 +136,14 @@ impl NativeMetadataControlHost {
         parent: &CancellationToken,
         operation: crate::db::NativeRegisteredRemoteImageOperation,
     ) -> Result<crate::db::NativeRegisteredRemoteImageProgress> {
+        if matches!(
+            operation,
+            crate::db::NativeRegisteredRemoteImageOperation::AdoptCatalogueFloor
+        ) {
+            return self.adopt_registered_remote_catalogue_floor(
+                source, frame, role, own, business, parent,
+            );
+        }
         parent.check()?;
         if self.assigned.is_some() || self.data.is_some() {
             return Err(invalid(

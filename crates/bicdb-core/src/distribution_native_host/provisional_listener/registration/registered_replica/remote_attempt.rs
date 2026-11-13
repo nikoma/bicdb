@@ -11,6 +11,7 @@ use crate::distribution_range_recovery::{
 };
 mod remote_mutation;
 pub(crate) use remote_mutation::NativeRegisteredRemoteTransactionRequest;
+mod remote_catalogue;
 mod remote_installing;
 
 pub(crate) struct NativeRegisteredRemoteInstallPreflight {
@@ -28,6 +29,8 @@ pub(super) struct NativeRegisteredRemoteInstallAttempt {
     proposal: Option<crate::db::NativeRegisteredRemoteProposalPublication>,
     installing:
         Option<crate::distribution_range_consensus::NativeRegisteredRemoteInstallingPublication>,
+    catalogue_floor:
+        Option<crate::distribution_range_consensus::NativeRegisteredRemoteCataloguePublication>,
 }
 /// Original host-only construction, borrowing its actual A lease and fresh
 /// request. Neither a DTO nor a missing native prefix constructs this point.
@@ -297,6 +300,7 @@ impl NativeMetadataControlHost {
             "source":actual.preflight.source().manifest().checksum_sha256,
             "proposal":actual.proposal.as_ref().map(|publication|publication.test_outcome()),
             "installing":actual.installing.as_ref().map(|publication|publication.test_outcome()),
+            "catalogue_floor":actual.catalogue_floor.as_ref().map(|publication|publication.test_state()),
             "retained":true,"lease_present":actual.lease.is_some()}))
     }
     /// Capture real readonly facts, retain this exact attempt, then transfer
@@ -398,6 +402,7 @@ impl NativeMetadataControlHost {
                 lease: None,
                 proposal: None,
                 installing: None,
+                catalogue_floor: None,
             }
         });
         let lease = receiver.runtime.transfer_registered_remote_install(

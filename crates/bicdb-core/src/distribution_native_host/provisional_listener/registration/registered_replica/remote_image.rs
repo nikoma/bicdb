@@ -38,6 +38,32 @@ pub(crate) struct NativeRegisteredRemoteTransferRequest {
     parent: CancellationToken,
     phase: CancellationToken,
 }
+#[derive(Clone, Copy)]
+enum RetainedRemoteCatalogue<'a> {
+    Installing(
+        &'a crate::distribution_range_consensus::NativeRegisteredRemoteInstallingPublication,
+        &'a super::remote_attempt::NativeRegisteredRemoteInstallPreflight,
+    ),
+    Adoption(
+        &'a crate::distribution_range_consensus::NativeRegisteredRemoteCataloguePublication,
+        &'a super::remote_attempt::NativeRegisteredRemoteInstallPreflight,
+    ),
+}
+impl RetainedRemoteCatalogue<'_> {
+    fn preflight(&self) -> &super::remote_attempt::NativeRegisteredRemoteInstallPreflight {
+        match self {
+            Self::Installing(_, p) | Self::Adoption(_, p) => p,
+        }
+    }
+    fn require(&self, service: &ClusterDataNodeService, db: &BicDb) -> Result<()> {
+        match self {
+            Self::Installing(p, f) => {
+                service.require_retained_registered_remote_catalogue(db, p, f)
+            }
+            Self::Adoption(p, f) => service.require_retained_registered_remote_adoption(db, p, f),
+        }
+    }
+}
 impl NativeRegisteredRemoteTransferRequest {
     pub(crate) fn role(&self) -> &HandoffRoleAdmission {
         &self.role
@@ -118,9 +144,33 @@ impl NativeRegisteredReplicaAdmission {
             business,
             frozen,
             parent,
-            Some((publication, preflight)),
+            Some(RetainedRemoteCatalogue::Installing(publication, preflight)),
         )?;
         Ok(step.into_transfer_request())
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn observe_remote_catalogue_request<'request>(
+        &'request self,
+        frame: &'request NativeRemoteImageStep<'request>,
+        role: HandoffRoleAdmission,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        frozen: &'request FrozenRangeMutationPermit,
+        parent: &'request CancellationToken,
+        publication:&crate::distribution_range_consensus::NativeRegisteredRemoteCataloguePublication,
+        preflight: &super::remote_attempt::NativeRegisteredRemoteInstallPreflight,
+    ) -> Result<NativeRegisteredRemoteTransferRequest> {
+        Ok(self
+            .observe_remote_image_step_inner(
+                frame,
+                role,
+                own,
+                business,
+                frozen,
+                parent,
+                Some(RetainedRemoteCatalogue::Adoption(publication, preflight)),
+            )?
+            .into_transfer_request())
     }
     #[allow(clippy::too_many_arguments)]
     fn observe_remote_image_step_inner<'request>(
@@ -131,10 +181,7 @@ impl NativeRegisteredReplicaAdmission {
         business: Uuid,
         frozen: &'request FrozenRangeMutationPermit,
         parent: &'request CancellationToken,
-        retained: Option<(
-            &crate::distribution_range_consensus::NativeRegisteredRemoteInstallingPublication,
-            &super::remote_attempt::NativeRegisteredRemoteInstallPreflight,
-        )>,
+        retained: Option<RetainedRemoteCatalogue<'_>>,
     ) -> Result<NativeRegisteredRemoteImageStep<'request>> {
         parent.check()?;
         frame.require_request_live()?;
@@ -191,8 +238,8 @@ impl NativeRegisteredReplicaAdmission {
             db.require_registered_remote_image_writer_absence(&self.original_hook)?;
             db.range_mutation_gate()
                 .validate_quiescent_frozen(plan.old_range().id, frozen)?;
-            if let Some((publication, preflight)) = retained {
-                actual.require_retained_registered_remote_catalogue(&db, publication, preflight)?;
+            if let Some(retained) = retained {
+                retained.require(&actual, &db)?;
             } else {
                 actual.require_native_catalog_database(&db)?;
             }
@@ -242,9 +289,12 @@ impl NativeRegisteredReplicaAdmission {
             let db = database
                 .try_read()
                 .ok_or_else(|| invalid("remote image target DB changed before return"))?;
-            if let Some((publication, preflight)) = retained {
-                actual.require_retained_registered_remote_catalogue(&db, publication, preflight)?;
-                step.require_database_store_identity(&db, preflight.catalogue().store_open_id())?;
+            if let Some(retained) = retained {
+                retained.require(&actual, &db)?;
+                step.require_database_store_identity(
+                    &db,
+                    retained.preflight().catalogue().store_open_id(),
+                )?;
             } else {
                 actual.require_registered_remote_image_step(&step, &db)?;
             }

@@ -349,6 +349,47 @@ impl std::fmt::Debug for NativeRegisteredRemoteFinalImageReceipt {
     }
 }
 impl NativeRegisteredRemoteFinalImageReceipt {
+    /// Necessary image constraints after this ORIGINAL owner's verified base
+    /// has been published. Mutable staging headers may then be pruned. This
+    /// does not reconstruct A, replace exact catalogue checks, grant adoption
+    /// or prove index parity/Serving. The caller must hold the actual scope.
+    pub(crate) fn require_installed_native_current(
+        &self,
+        db: &BicDb,
+        native: &NativeRecoveryAdmission,
+        base: &NativeInstalledRangeImageBase,
+        point: &NativeRegisteredRemoteProposalPoint<'_>,
+    ) -> Result<()> {
+        point.require_live()?;
+        base.require_current(db, native)?;
+        let actual = db.read_registered_final_image_integrity(native, &self.pointer())?;
+        let record = &self.record;
+        let preflight = point.preflight();
+        let bindings = db.capture_range_image_bindings()?;
+        if bounded_json(&actual.record, MAX_NATIVE_RECEIPT_BYTES)?
+            != bounded_json(record, MAX_NATIVE_RECEIPT_BYTES)?
+            || base.registered_final_image_pointer() != Some(&self.pointer())
+            || record.database_open != db.incarnation_id()
+            || record.store_open != preflight.catalogue().store_open_id()
+            || record.catalogue_id != preflight.catalogue().catalogue_id()
+            || record.namespaces != bindings.namespace_ids()
+            || record.manifest.schema_sha256 != bindings.schema_sha256()
+            || record.manifest.readers != bindings.reader_features()
+            || record.image_generations != db.native_range_image_generation_pair(record.range)?
+            || bounded_json(&record.index_definitions, MAX_NATIVE_RECEIPT_BYTES)?
+                != bounded_json(&verification::actual_indexes(db)?, MAX_NATIVE_RECEIPT_BYTES)?
+            || record.metadata_store != point.request().member().store_id()
+            || point.request().own().term() < record.metadata_term
+            || point.request().own().read_index() < record.metadata_index
+            || db.replication_shippable_seq() < record.target_reserved_b
+            || db.current_visibility_watermark() < record.target_reserved_b
+        {
+            return Err(invalid(
+                "Registered installed final image original identity/freshness changed",
+            ));
+        }
+        point.require_live()
+    }
     pub(crate) fn pointer(&self) -> NativeRegisteredRemoteFinalImagePointer {
         self.record.pointer()
     }

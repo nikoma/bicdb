@@ -247,6 +247,7 @@ pub(crate) enum NativeRegisteredRemoteImageOperation {
     VerifyTarget { max_scanned_records: usize },
     PublishFinalImage,
     PublishNativeBase,
+    AdoptCatalogueFloor,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) enum NativeRegisteredRemoteImageProgress {
@@ -258,6 +259,11 @@ pub(crate) enum NativeRegisteredRemoteImageProgress {
         range_index: u64,
         native_page_xid: u64,
         checksum_sha256: String,
+    },
+    CatalogueFloor {
+        range_index: u64,
+        native_page_xid: u64,
+        native_receipt_sha256: String,
     },
 }
 /// Actual fully stored and separately audited source spine, not a range floor,
@@ -314,6 +320,9 @@ impl NativeRegisteredRemoteImageInstallation {
             ));
         }
         match operation {
+            NativeRegisteredRemoteImageOperation::AdoptCatalogueFloor => Err(invalid(
+                "Registered catalogue adoption requires the original host mutable service sink",
+            )),
             NativeRegisteredRemoteImageOperation::BeginHistory => self
                 .begin_history(db, context)
                 .map(NativeRegisteredRemoteImageProgress::History),
@@ -404,6 +413,11 @@ impl NativeRegisteredRemoteImageInstallation {
     }
     pub(crate) fn base_boundary(&self) -> Option<Arc<crate::db::RegisteredRemoteBaseBoundary>> {
         self.base_publication.as_ref().and_then(|p| p.boundary())
+    }
+    pub(crate) fn verified_base(&self) -> Option<&NativeInstalledRangeImageBase> {
+        self.base_publication
+            .as_ref()
+            .and_then(|p| p.verified_base())
     }
     fn require_owner(
         &self,

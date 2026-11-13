@@ -81,6 +81,9 @@ pub(crate) struct RegisteredRemoteBasePublication {
     verified: Option<NativeInstalledRangeImageBase>,
 }
 impl RegisteredRemoteBasePublication {
+    pub(crate) fn verified_base(&self) -> Option<&NativeInstalledRangeImageBase> {
+        self.verified.as_ref()
+    }
     pub(crate) fn retain(
         db: &BicDb,
         context: &NativeRegisteredRemoteImageContext<'_>,
@@ -210,7 +213,16 @@ impl RegisteredRemoteBasePublication {
     pub(crate) fn test_state(&self) -> serde_json::Value {
         serde_json::json!({"receipt":self.receipt,"attempted":self.attempted.is_some(),
             "actual_commit_returned":self.commit_returned,"verified":self.verified.is_some(),
-            "catalogue_floor_adopted":false,"serving":false})
+            "catalogue_floor_publication_owned_here":false,"serving":false})
+    }
+}
+
+impl NativeInstalledRangeImageBase {
+    /// Profile DATA only. This borrowed pointer is not an image/adoption grant.
+    pub(crate) fn registered_final_image_pointer(
+        &self,
+    ) -> Option<&crate::db::NativeRegisteredRemoteFinalImagePointer> {
+        self.receipt.registered_final_image.as_ref()
     }
 }
 

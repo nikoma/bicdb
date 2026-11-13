@@ -47,6 +47,17 @@ impl NativeRegisteredRemoteInstallingFence {
         preflight: &NativeRegisteredRemoteInstallPreflight,
         receipt: &NativeRegisteredRemoteProposalReceipt,
     ) -> Result<()> {
+        self.require_database_identity(db, preflight, receipt)?;
+        self.require_disk_at(db.data_path())
+    }
+    /// Original identities only. A subsequent owned catalogue publication
+    /// must separately prove its exact retained candidate and durable readback.
+    pub(crate) fn require_database_identity(
+        &self,
+        db: &crate::BicDb,
+        preflight: &NativeRegisteredRemoteInstallPreflight,
+        receipt: &NativeRegisteredRemoteProposalReceipt,
+    ) -> Result<()> {
         preflight.require_original_process()?;
         preflight.native().require_current(db)?;
         db.validate_range_image_bindings(preflight.bindings())?;
@@ -63,7 +74,6 @@ impl NativeRegisteredRemoteInstallingFence {
                 "Registered Installing original database/proposal binding changed",
             ));
         }
-        self.require_disk_at(db.data_path())?;
         preflight.require_original_process()
     }
     /// Exact readonly catalogue/identity constraints. A caller must ALSO hold

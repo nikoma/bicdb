@@ -48,6 +48,10 @@ pub(super) enum SourceCase {
     TargetNativeBaseCanceled,
     TargetNativeBaseInvalidated,
     TargetNativeBaseWithoutFinal,
+    TargetCatalogueFloor,
+    TargetCatalogueFloorMissingBase,
+    TargetCatalogueFloorDirSyncRetry,
+    TargetCatalogueFloorCanceled,
     RemoteConstraintCapture,
     RemoteOldCollectorExpiredObservation,
     RemoteOldCollectorUnrelatedAdvance,
@@ -149,6 +153,10 @@ pub(super) fn uses_actual_remote_old_seed(case: SourceCase) -> bool {
             | SourceCase::TargetNativeBaseCanceled
             | SourceCase::TargetNativeBaseInvalidated
             | SourceCase::TargetNativeBaseWithoutFinal
+            | SourceCase::TargetCatalogueFloor
+            | SourceCase::TargetCatalogueFloorMissingBase
+            | SourceCase::TargetCatalogueFloorDirSyncRetry
+            | SourceCase::TargetCatalogueFloorCanceled
             | SourceCase::RemoteOldCollectorExpiredObservation
             | SourceCase::RemoteOldCollectorUnrelatedAdvance
             | SourceCase::RemoteOldCollectorPlanChanged
@@ -1288,6 +1296,10 @@ pub(super) fn exercise(
                     | SourceCase::TargetNativeBaseCanceled
                     | SourceCase::TargetNativeBaseInvalidated
                     | SourceCase::TargetNativeBaseWithoutFinal
+                    | SourceCase::TargetCatalogueFloor
+                    | SourceCase::TargetCatalogueFloorMissingBase
+                    | SourceCase::TargetCatalogueFloorDirSyncRetry
+                    | SourceCase::TargetCatalogueFloorCanceled
             ) {
                 target_final_image_tests::exercise(
                     case,

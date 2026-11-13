@@ -103,10 +103,10 @@ pub(super) fn exercise(
     ranges: &[crate::RangeDescriptor],
     acknowledged: &serde_json::Value,
     output: &std::path::Path,
+    journal: &mut Vec<serde_json::Value>,
 ) {
     let range = plan.old_range().id;
     let manifest = source.manifest();
-    let mut journal = Vec::new();
     let initial = RangeImageHistoryCursorV1::default();
     let frame = source
         .bind_step(
@@ -118,7 +118,7 @@ pub(super) fn exercise(
                     max_entries: 256,
                 },
                 output,
-                &mut journal,
+                journal,
             )
             .unwrap(),
         )
@@ -156,7 +156,7 @@ pub(super) fn exercise(
                         max_entries: 256,
                     },
                     output,
-                    &mut journal,
+                    journal,
                 )
                 .unwrap(),
             )
@@ -181,7 +181,7 @@ pub(super) fn exercise(
                         max_entries: 256,
                     },
                     output,
-                    &mut journal,
+                    journal,
                 )
                 .unwrap(),
             )
@@ -210,7 +210,7 @@ pub(super) fn exercise(
                         options: Default::default(),
                     },
                     output,
-                    &mut journal,
+                    journal,
                 )
                 .unwrap(),
             )
@@ -251,7 +251,7 @@ pub(super) fn exercise(
                         max_entries: 256,
                     },
                     output,
-                    &mut journal,
+                    journal,
                 )
                 .unwrap(),
             )
@@ -286,7 +286,7 @@ pub(super) fn exercise(
                         max_entries: 256,
                     },
                     output,
-                    &mut journal,
+                    journal,
                 )
                 .unwrap(),
             )
@@ -329,7 +329,7 @@ pub(super) fn exercise(
                         options: Default::default(),
                     },
                     output,
-                    &mut journal,
+                    journal,
                 )
                 .unwrap(),
             )
@@ -420,7 +420,7 @@ pub(super) fn exercise(
                             options: Default::default(),
                         },
                         output,
-                        &mut journal,
+                        journal,
                     )
                     .unwrap(),
                 )
@@ -488,7 +488,7 @@ pub(super) fn exercise(
                             options: Default::default(),
                         },
                         output,
-                        &mut journal,
+                        journal,
                     )
                     .unwrap(),
                 )
@@ -532,12 +532,38 @@ pub(super) fn exercise(
         assert!(faulted);
     }
     let final_frame = source
-        .bind_step(super::frame(client, manifest, Op::Finish, output, &mut journal).unwrap())
+        .bind_step(super::frame(client, manifest, Op::Finish, output, journal).unwrap())
         .unwrap();
     let Payload::Finished(seal) = final_frame.payload().unwrap() else {
         panic!("actual complete source seal required")
     };
     let rows = last.unwrap();
+    let observed_record = factory.database.read().get(
+        crate::CLUSTER_EVENTS_COLLECTION,
+        acknowledged["record_id"].as_str().unwrap(),
+    );
+    let observed_after = state(&factory.database, pending, &node(4), ranges);
+    let observed_owner = control.test_registered_remote_image_state(range);
+    // Retain actual observations before final assertions, including read
+    // errors. A later verifier failure must not erase the before/after cut.
+    evidence(
+        &output.join("registered-image-before-final-assertions.json"),
+        &serde_json::json!({
+            "before":before,"after":observed_after.as_ref().ok(),
+            "after_error":observed_after.as_ref().err().map(ToString::to_string),
+            "actual_owner":observed_owner.as_ref().ok(),
+            "owner_error":observed_owner.as_ref().err().map(ToString::to_string),
+            "rows":rows,"actual_source_seal":seal,
+            "acknowledged_record_observed_locally":observed_record.as_ref().ok(),
+            "record_read_error":observed_record.as_ref().err().map(ToString::to_string),
+            "expected_acknowledged_record":acknowledged["actual_full_record"],
+            "fault_outcomes":fault_outcomes,
+            "observed_before_final_assertions":true,"final_assertions_not_yet_run":true,
+            "other_range_initially_populated":false,
+            "strong_read_or_serving_proven":false,"cold_recovery_or_physical_qualification":false,
+        }),
+    )
+    .unwrap();
     assert!(rows.complete);
     assert_eq!(rows.records, seal.record_count);
     assert_eq!(rows.bytes, seal.serialized_record_bytes);
@@ -546,20 +572,12 @@ pub(super) fn exercise(
         factory.database.read().current_commit_seq() > 0,
         "actual row WAL must move beyond B0"
     );
-    let record = factory
-        .database
-        .read()
-        .get(
-            crate::CLUSTER_EVENTS_COLLECTION,
-            acknowledged["record_id"].as_str().unwrap(),
-        )
-        .unwrap()
-        .unwrap();
+    let record = observed_record.unwrap().unwrap();
     assert_eq!(
         serde_json::to_value(&record).unwrap(),
         acknowledged["actual_full_record"]
     );
-    let after = state(&factory.database, pending, &node(4), ranges).unwrap();
+    let after = observed_after.unwrap();
     assert_eq!(
         crate::format::required_reader_features(factory.database.read().data_path()).unwrap(),
         readers,
@@ -573,9 +591,34 @@ pub(super) fn exercise(
         .find(|descriptor| descriptor.id != range)
         .unwrap()
         .id
+        .get()
         .to_string();
-    assert!(!before["points"][&other].is_null());
-    assert_eq!(after["points"][&other], before["points"][&other]);
+    let other_before = before["points"]
+        .as_object()
+        .unwrap()
+        .get(&other)
+        .expect("actual other-range observation key must be present");
+    assert_eq!(
+        other_before["range_id"].as_u64().unwrap().to_string(),
+        other
+    );
+    for field in [
+        "native_base_index",
+        "native_applied_index",
+        "pending_command_index",
+        "materialized_pending_index",
+        "native_receipt_sha256",
+    ] {
+        assert!(other_before.as_object().unwrap().contains_key(field));
+        assert!(
+            other_before[field].is_null(),
+            "Registered other range must preserve explicit unknown {field}, never R0"
+        );
+    }
+    assert_eq!(
+        after["points"].as_object().unwrap().get(&other),
+        Some(other_before)
+    );
     for field in [
         "namespace_ids",
         "schema",

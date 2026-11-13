@@ -990,6 +990,7 @@ pub(super) fn exercise(
                     ranges,
                     acknowledged,
                     output,
+                    &mut journal,
                 );
                 return;
             }

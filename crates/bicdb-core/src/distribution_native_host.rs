@@ -589,7 +589,7 @@ impl NativeProvisionalNode {
 mod tests;
 
 #[cfg(feature = "tls-replication")]
-pub(crate) use provisional_listener::NativeInitialDataAdmission;
+pub(crate) use provisional_listener::{NativeInitialDataAdmission, NativeInitialOldStep};
 #[cfg(feature = "tls-replication")]
 pub use provisional_listener::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
 

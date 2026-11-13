@@ -383,6 +383,36 @@ impl NativeJointHandoffRuntime {
         role: RecoveryRoleAdmission,
         parent: &crate::CancellationToken,
     ) -> Result<NativeJointOldObservation> {
+        self.close_old_with_role_owner(plan, Arc::new(role), parent)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn close_old_for_initial_step(
+        &self,
+        step: &crate::distribution_native_host::NativeInitialOldStep<'_>,
+        parent: &crate::CancellationToken,
+    ) -> Result<NativeJointOldObservation> {
+        step.require_metadata_current()?;
+        step.require_joint_runtime(self)?;
+        let _operation = self.operation(step.plan().old_range().id)?;
+        let frozen = self.freeze(step.plan(), step.role(), parent)?;
+        let actual = {
+            let mut service = self
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("OLD source service busy at actual mutation"))?;
+            service.close_native_joint_old_for_initial_step(step, frozen, parent)?
+        };
+        // The caller must retain this actual observation before any subsequent
+        // fallible metadata/response check. No successful response is minted
+        // merely because native WAL may have completed.
+        NativeJointOldObservation::from_actual_service(actual, self.service.clone())
+    }
+    pub(crate) fn close_old_with_role_owner(
+        &self,
+        plan: Arc<NativeJointHandoffPlan>,
+        role: Arc<RecoveryRoleAdmission>,
+        parent: &crate::CancellationToken,
+    ) -> Result<NativeJointOldObservation> {
         let _operation = self.operation(plan.old_range().id)?;
         let frozen = self.freeze(&plan, &role, parent)?;
         let actual = {
@@ -390,7 +420,7 @@ impl NativeJointHandoffRuntime {
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("joint closure actual service busy"))?;
-            service.close_native_joint_old(plan, role, frozen, parent)?
+            service.close_native_joint_old_with_role_owner(plan, role, frozen, parent)?
         };
         NativeJointOldObservation::from_actual_service(actual, self.service.clone())
     }

@@ -30,12 +30,17 @@ mod closed_image_source;
 #[cfg(feature = "tls-replication")]
 mod remote_source;
 #[cfg(feature = "tls-replication")]
+mod remote_target;
+#[cfg(feature = "tls-replication")]
 pub(crate) use remote_source::{
     ActualNativeRemoteImageSourceFrame, NativeRemoteImageManifestV1,
     NativeRemoteImageSourceOperationV1, NativeRemoteImageSourcePayloadV1,
-    NativeRemoteImageSourceReplyV1, NativeRemoteImageSourceRequestV1,
-    NativeRemoteImageSourceSession,
+    NativeRemoteImageSourceRegistry, NativeRemoteImageSourceReplyV1,
+    NativeRemoteImageSourceRequestV1, NativeRemoteImageSourceSession,
+    NativeRetainedRemoteImageSource,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_target::{NativeRemoteImageFact, NativeRemoteImageStep};
 mod source_cut;
 pub(crate) use closed_image_source::ClosedNativeImageSource;
 pub(crate) use source_cut::{

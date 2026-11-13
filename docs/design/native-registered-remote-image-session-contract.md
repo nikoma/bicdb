@@ -154,3 +154,129 @@ is canceled while the long session stays live; complete actual native history
 export still succeeds with all original OLD-closure assertions. These are lower
 capture-producer controls, not a remote source-session/TLS/image acceptance run.
 A consumed failed cut stays quarantined; exact restart/resume remains OPEN.
+
+## Source ingress leaf and its exact component boundary
+
+The next leaf adds a bounded retained source-owner table to the ACTUAL initial
+DATA host and a separate readonly `NativeRemoteImageSourceFrame` request/reply.
+The host captures its existing admission/runtime/protected MStore/guard/coordinator
+before taking an `Option<NativeJointOldClosedQuorum>` from the caller. All later
+publication failures retain that owner. The table holds at most eight sessions;
+it does not evict on TTL, clear permanent refusals or provide a recovery reset.
+Safe completed-session retirement and failed-publication continuation remain
+OPEN rather than silently discarding pins or reconstructing a cut.
+
+The immutable INITIAL DATA listener alone permits this new source route; old
+metadata/provisional/Registered allowlists stay closed. Before any service/DB
+latch, the handler binds the actual TLS target and original request budget. The
+source acquires its own fresh HostMQ without table/session/engine guards, then
+validates its original actual objects and exports through existing bounded
+capture/history producers. The target client uses the real numeric, pinned TLS
+exchange and native destination birth fence. Exact original request, peer,
+source birth, session, attempt, checksum, inner operation/cursor/history/seal
+bindings precede the opaque observation. Its original step token remains stored.
+No decoded frame constructs this wrapper, a local lineage or a target row grant.
+Normal completed-response EOF does not imply source-session death.
+
+Driver owns reserved private wire30. This isolated leaf inherits private wire29
+and adds arms only, with no independent version reservation or rolling upgrade
+claim; parent composition MUST union them into the already-reserved wire30.
+It changes no durable catalogue/native record codec or grants from old bytes.
+
+Two source-only component tests first run EVERY original genuine-fifth setup,
+2 source APP ACK/full records, 2 actual target fences and 4 original writer guard
+assertions. A separate typed runner branch then produces real native OLD QQs
+LOCALLY, publishes actual source sessions and fetches both ranges' manifests,
+zero-through-R history, rows and seals over real fifth-to-source TLS. Duplicate
+row-cursor requests return the same actual inner step; full acknowledged records
+cross the connection. Target native/raw/B/namespace/rows remain byte/state equal
+and its no-writer policy stays absent. A separate control cancels the actual
+source session after a returned manifest: issued historical facts remain equal,
+while a new real source request refuses with the target caller still live.
+Both cases retain normal cleanup/custody and intent-before-API frame ledgers.
+The original required/control runner is byte-equal after removing ONLY this
+optional typed source branch. No existing acceptance body or clock is relaxed.
+
+These tests DO NOT collect remote OLD QQ, install target rows, establish source
+death detection, cover source death between row reply and target Tx, or grant
+Serving/ACK on the fifth. The two CLOSED source streams are a component-only
+prerequisite; full range1 NEW QQ/open/ACK/Strong THEN range2 on the same Assigned
+writer remains mandatory. The next target/history/row/finalizer producer must
+consume these authenticated historical facts under its DISTINCT original local
+owner/role/caller authority, preserving every target/other-range obligation.
+
+## Recipient Pending-plan producer for remote OLD ingress
+
+`NativeJointHandoffPlan::from_actual_role_and_own` is a separate recipient
+producer. It requires a REAL sealed CommittedHandoff role and independently
+fresh OWN HostMQ with exactly equal term/readIndex/full committed C/restore and
+actual recipient identity. It derives the native birth/member/Pending scope
+internally and checks both original inputs again at return. It does not decode
+a plan from a controller hash, cast an observer/HostMQ into a role, or grant any
+native mutation by itself. Its deadline is bounded by BOTH original proofs.
+Actual DB/Store/MStore/open/freeze/current-role checks remain independently
+mandatory at the future receiver's exact mutation/reply boundaries.
+
+The existing authority-based promise/configuration derivation is extracted to
+a private pure helper; its original body has token-for-token parity after
+whitespace normalization, including hashes and original relocation-map key.
+The old authority range/live checks stay before/after that same derivation.
+The original source-scope fields are constructed through a private shared DATA
+extractor, not an externally callable topology-to-authority adapter.
+
+The source-wire component tests now produce recipient plans from real role/OWN
+pairs before actual local OLD-close calls and require exact scope equality to
+the separately actual controller plan. A foreign OWN observation from the real
+fifth refuses while its original role/caller/foreign observation remain live.
+Those are source-only controls, not a remote OLD-certificate acceptance. The
+remote collector must still collect actual authenticated receiver native-close
+receipts/constraints and verify the selected real source's complete ancestry and
+irreversible commands, without reconstructing local service/pin observations.
+
+## Original OLD-close role ownership prerequisite
+
+The actual OLD service evidence and observation now retain the SAME sealed role
+through `Arc` ownership. Existing owned-role Runtime/service entry points wrap
+that role once; new role-owner entries can share it with the future receiver
+step's original OWN/caller/actual-owner admission through the real persistence
+boundaries. No Clone/Serde/DTO-to-role conversion is introduced. Original
+Runtime/service body token parity holds after the exact ownership callee rename;
+all scope/freeze/raw/native/pin/role/caller checks and ordering stay unchanged.
+Sharing a role is not a new authority, response certificate or mutation bypass.
+The remote OLD step/sink and actual remote certificate remain unimplemented in
+this prerequisite; its eventual guarded admission cannot be replaced by a plan,
+a status getter, a cached passed Boolean or an independently refreshed role.
+
+## Original receiver step at actual OLD persistence boundaries
+
+The next producer is `NativeInitialOldStep`, constructed only through the real
+INITIAL DATA admission, a genuine role/OWN pair and actual same-open protected
+MStore. It RETAINS both original observations, caller, actual service/runtime,
+open/Store-slot guard and native metadata-member proof. It is non-Serde/non-Clone,
+thread-bound and borrowed by a nonescaping `with_initial_old_step` callback.
+It is not an Assigned-donor substitute or a plan/UUID/None-hook permission.
+
+The dedicated Runtime entry requires that exact service and exact original role
+Arc/plan Arc, then uses its real retained freeze and the existing OLD producer.
+At service entry and before/after raw refsync, before permanent raw promise,
+after that write/before native OLD WAL, after native WAL/before confirmation and
+at return, it checks original caller/role/OWN, protected same-DB metadata UUID
+and namespaces, actual DB open, Store slot, exact actual native predecessor,
+ORIGINAL installed writer/registration/current protected audit and loaded native
+catalogue custody. These checks acquire neither MStore nor network under engine
+guards, and run outside the producer's native-journal critical sections. Final
+MStore-current validation occurs after dropping engine/service guards. Original
+generic OLD-close body byte parity holds after removing ONLY these optional TLS
+checks; every old role/freeze/native/raw/pin check stays unchanged.
+
+If cancellation/revocation occurs during a write, a later error does not erase
+its actual permanent refusal or prove rollback. Runtime exclusion stays owned.
+The eventual RPC manager MUST retain the actual returned observation before a
+fallible post-MStore/response check; the callback documents that obligation and
+must not mint a successful reply from merely retained/uncertain state. The
+actual source-wire fixture now drives real OLD close through this admission
+for every original OLD actor, rather than treating the purpose-only plan as an
+owner grant. Actual sink-time cancellation/revocation and remote OLD request/
+readonly-fact observation/transport certificate still require the next focused
+controls and implementation. No dynamic or fault-safe claim follows from this
+source-only step.

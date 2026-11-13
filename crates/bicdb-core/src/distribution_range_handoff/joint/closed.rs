@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 pub(crate) struct NativeJointOldObservation {
     plan: Arc<NativeJointHandoffPlan>,
-    role: RecoveryRoleAdmission,
+    role: Arc<RecoveryRoleAdmission>,
     native: crate::db::NativeJointOldCloseReceipt,
     promise: crate::distribution_range_consensus::NativeJointOldPromiseReceipt,
     frozen: Arc<FrozenRangeMutationPermit>,

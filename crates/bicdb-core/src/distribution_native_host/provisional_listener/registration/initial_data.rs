@@ -8,8 +8,10 @@ use std::sync::Weak;
 
 mod cleanup;
 mod hot_recovery;
+mod old_step;
 use cleanup::{NativeInitialDataCleanup, NativeInitialDataCleanupSender};
 use hot_recovery::NativeHotRecoveryMaintenance;
+pub(crate) use old_step::NativeInitialOldStep;
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct NativeInitialDataRangeStatus {
@@ -45,6 +47,7 @@ pub(crate) struct NativeInitialDataAdmission {
     store_slot: crate::distribution_data::RangeWriteServiceSlotGuard,
     life: Weak<AtomicBool>,
     published: Arc<AtomicBool>,
+    image_sources: Weak<crate::distribution_range_image::NativeRemoteImageSourceRegistry>,
 }
 impl NativeInitialDataAdmission {
     pub(crate) fn require_live(&self) -> Result<()> {
@@ -102,6 +105,22 @@ impl NativeInitialDataAdmission {
         }
         Ok(())
     }
+    pub(crate) fn observe_remote_image_source_frame(
+        &self,
+        actual_target: &crate::distribution_consensus::MetadataReadParticipant,
+        request: &crate::distribution_range_image::NativeRemoteImageSourceRequestV1,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_image::ActualNativeRemoteImageSourceFrame> {
+        self.require_live()?;
+        let sources = self
+            .image_sources
+            .upgrade()
+            .ok_or_else(|| invalid("actual source image owner ended"))?;
+        let frame = sources.observe_frame(actual_target, request, parent)?;
+        self.require_live()?;
+        parent.check()?;
+        Ok(frame)
+    }
     pub(crate) fn application_published(&self) -> Result<bool> {
         self.require_live()?;
         Ok(self.published.load(Ordering::Acquire))
@@ -124,6 +143,7 @@ pub(super) struct NativeInitialDataHost {
     cleanup: Option<NativeInitialDataCleanupSender>,
     hot_recovery: Option<Arc<NativeHotRecoveryMaintenance>>,
     registry_refresh_last_attempt: Option<serde_json::Value>,
+    image_sources: Option<Arc<crate::distribution_range_image::NativeRemoteImageSourceRegistry>>,
 }
 impl Drop for NativeInitialDataHost {
     fn drop(&mut self) {
@@ -180,6 +200,7 @@ impl NativeInitialDataHost {
         Ok(Self {
             initial,
             enrollment: None,
+            image_sources: None,
             registry_refresh_last_attempt: None,
             genesis: BTreeMap::new(),
             runtime: None,
@@ -259,6 +280,14 @@ impl NativeInitialDataHost {
                 &self.initial.topology,
             )?);
         }
+        if self.image_sources.is_none() {
+            self.image_sources = Some(Arc::new(
+                crate::distribution_range_image::NativeRemoteImageSourceRegistry::new(
+                    self.initial.transport.clone(),
+                    self.initial.provider.clone(),
+                ),
+            ));
+        }
         if self.admission.is_none() {
             let service = self
                 .initial
@@ -280,6 +309,7 @@ impl NativeInitialDataHost {
                 store_slot: service.native_replica_listener_store_open_guard(),
                 life: Arc::downgrade(&self.life),
                 published: self.published.clone(),
+                image_sources: Arc::downgrade(self.image_sources.as_ref().unwrap()),
             }));
         }
         if self.hot_recovery.is_none() {
@@ -353,6 +383,59 @@ impl NativeInitialDataHost {
         // Do not revoke an earlier successful publication on a later retry.
         self.published.store(true, Ordering::Release);
         Ok(())
+    }
+    pub(super) fn admission_for_old_step(&self) -> Result<&Arc<NativeInitialDataAdmission>> {
+        if !self.is_running() {
+            return Err(invalid("original initial DATA source is stopping"));
+        }
+        let admission = self
+            .admission
+            .as_ref()
+            .ok_or_else(|| invalid("actual source admission absent"))?;
+        admission.require_live()?;
+        Ok(admission)
+    }
+    /// Capture actual owner bindings before consuming OLD ownership. No
+    /// fallible publication follows a take without an opaque retained owner.
+    pub(super) fn retain_remote_image_source(
+        &self,
+        old: &mut Option<crate::distribution_range_handoff::NativeJointOldClosedQuorum>,
+        target_attempt: Uuid,
+        original_session: &CancellationToken,
+    ) -> Result<crate::distribution_range_image::NativeRetainedRemoteImageSource> {
+        original_session.check()?;
+        if !self.is_running() {
+            return Err(invalid("source initial DATA owner is not running"));
+        }
+        let admission = self
+            .admission
+            .as_ref()
+            .ok_or_else(|| invalid("source admission absent"))?;
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or_else(|| invalid("source runtime absent"))?;
+        let enrollment = self
+            .enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("source original writer absent"))?;
+        let registry = self
+            .image_sources
+            .as_ref()
+            .ok_or_else(|| invalid("source image registry absent"))?;
+        admission.require_listener(&self.initial.service, runtime)?;
+        let actual = old
+            .take()
+            .ok_or_else(|| invalid("source OLD quorum already transferred"))?;
+        let session = crate::distribution_range_image::NativeRemoteImageSourceSession::retain_actual_old_quorum(
+            admission.clone(), runtime.clone(), self.initial.service.clone(), self.initial.metadata.clone(),
+            enrollment.guard.clone(), enrollment.coordinator.clone(), actual, target_attempt, original_session);
+        Ok(
+            crate::distribution_range_image::NativeRetainedRemoteImageSource::retain(
+                session,
+                registry.clone(),
+            ),
+        )
     }
     fn status(&self, parent: &CancellationToken) -> Result<NativeInitialDataStatus> {
         parent.check()?;

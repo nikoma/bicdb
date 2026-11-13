@@ -86,6 +86,7 @@ mod learner_birth;
 pub(crate) mod metadata_append;
 mod native_abort;
 mod native_activation;
+mod native_image_source;
 use crate::distribution_native_host::{
     NativeInitialBirthOfferRequest, NativeInitialBirthOfferResponse,
     NativeInitialPreparationRequest, NativeInitialPreparationResponse, NativeLearnerBirthRequest,
@@ -117,6 +118,7 @@ pub(crate) use learner_birth::AuthenticatedNativeLearnerBirthReply;
 pub(crate) use native_abort::{
     AuthenticatedNativeAbortCandidateReply, AuthenticatedNativeAbortPromiseReply,
 };
+pub(crate) use native_image_source::AuthenticatedNativeRemoteImageSourceFrame;
 
 const FRAME_HEADER_BYTES: usize = 4;
 
@@ -268,6 +270,9 @@ enum NativeCommandRequestRef<'a> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum ClusterDataRequest {
     Ping,
+    NativeRemoteImageSourceFrame {
+        request: crate::distribution_range_image::NativeRemoteImageSourceRequestV1,
+    },
     ApplicationEvent(crate::ClusterEventRequest),
     NativeEventGet(crate::distribution_native_read::NativeEventGetRequest),
     ExportSchemaBundle {
@@ -515,7 +520,7 @@ impl ClusterDataRequest {
     fn range_id_for_schema_fence(&self) -> Option<RangeId> {
         match self {
             Self::ApplicationEvent(request) => Some(request.range_id),
-            Self::NativeEventGet(_) => None,
+            Self::NativeEventGet(_) | Self::NativeRemoteImageSourceFrame { .. } => None,
             Self::ExportSchemaBundle { range_id, .. } => Some(*range_id),
             Self::InstallSchemaBundle { .. }
             | Self::StageSignedSchemaBundle { .. }
@@ -607,6 +612,7 @@ impl ClusterDataRequest {
                 | Self::AcquireMetadataRecoveryRole { .. }
                 | Self::RecertifyNativeOrigin { .. }
                 | Self::MaterializeNativeCompleted { .. }
+                | Self::NativeRemoteImageSourceFrame { .. }
         )
     }
 }
@@ -614,6 +620,7 @@ impl ClusterDataRequest {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 enum ClusterDataResponse {
     Pong,
+    NativeRemoteImageSourceFrame(crate::distribution_range_image::NativeRemoteImageSourceReplyV1),
     ApplicationEvent(crate::ClusterEventResponse),
     NativeEventGet(crate::distribution_native_read::NativeEventGetReply),
     Ack,
@@ -1574,6 +1581,23 @@ fn handle_cluster_data_connection(
                 "registered enforced native member has another actual local store",
             ));
         }
+        if let ClusterDataRequest::NativeRemoteImageSourceFrame { request } = request.request {
+            let source = initial_data.ok_or_else(|| {
+                transport_error(
+                    "source image session requires its actual immutable INITIAL DATA owner",
+                )
+            })?;
+            let target = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("source image frame requires actual authenticated target")
+            })?;
+            let parent =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return source
+                .observe_remote_image_source_frame(target, &request, &parent)
+                .map(|actual| {
+                    ClusterDataResponse::NativeRemoteImageSourceFrame(actual.into_reply())
+                });
+        }
         if let ClusterDataRequest::HostMetadataReadAcquire { request } = request.request {
             let provider = metadata_read_provider
                 .ok_or_else(|| transport_error("fresh host metadata provider is not active"))?;
@@ -2391,6 +2415,9 @@ fn dispatch_cluster_data_request(
     }
     match request {
         ClusterDataRequest::Ping => Ok(ClusterDataResponse::Pong),
+        ClusterDataRequest::NativeRemoteImageSourceFrame { .. } => Err(transport_error(
+            "source image frames require their actual before-latch owner",
+        )),
         ClusterDataRequest::NativeEventGet(_) => Err(transport_error(
             "typed Get requires the before-latch dispatcher",
         )),
@@ -5283,7 +5310,8 @@ impl TcpClusterRelocationTransport {
             ))
             || matches!(
                 &request,
-                ClusterDataRequest::MetadataReadProbe { .. }
+                ClusterDataRequest::NativeRemoteImageSourceFrame { .. }
+                    | ClusterDataRequest::MetadataReadProbe { .. }
                     | ClusterDataRequest::MetadataReadAcquire { .. }
                     | ClusterDataRequest::HostMetadataReadAcquire { .. }
                     | ClusterDataRequest::NativeInitialBirthOffer { .. }

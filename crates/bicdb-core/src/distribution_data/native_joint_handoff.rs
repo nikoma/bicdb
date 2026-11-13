@@ -17,7 +17,7 @@ pub(crate) use bridge::{
 /// or native receipts can be substituted when the observation consumes it.
 pub(crate) struct ActualServiceNativeJointOldEvidence {
     plan: Arc<NativeJointHandoffPlan>,
-    role: RecoveryRoleAdmission,
+    role: Arc<RecoveryRoleAdmission>,
     native: NativeJointOldCloseReceipt,
     promise: NativeJointOldPromiseReceipt,
     frozen: Arc<FrozenRangeMutationPermit>,
@@ -41,7 +41,7 @@ impl ActualServiceNativeJointOldEvidence {
         self,
     ) -> (
         Arc<NativeJointHandoffPlan>,
-        RecoveryRoleAdmission,
+        Arc<RecoveryRoleAdmission>,
         NativeJointOldCloseReceipt,
         NativeJointOldPromiseReceipt,
         Arc<FrozenRangeMutationPermit>,
@@ -65,6 +65,62 @@ impl ClusterDataNodeService {
         frozen: Arc<FrozenRangeMutationPermit>,
         parent: &CancellationToken,
     ) -> Result<ActualServiceNativeJointOldEvidence> {
+        self.close_native_joint_old_with_role_owner(plan, Arc::new(role), frozen, parent)
+    }
+    /// Same original sealed role shared with its actual receiver step. This
+    /// does not clone/reseal an observation or change any validation predicate.
+    pub(crate) fn close_native_joint_old_with_role_owner(
+        &mut self,
+        plan: Arc<NativeJointHandoffPlan>,
+        role: Arc<RecoveryRoleAdmission>,
+        frozen: Arc<FrozenRangeMutationPermit>,
+        parent: &CancellationToken,
+    ) -> Result<ActualServiceNativeJointOldEvidence> {
+        self.close_native_joint_old_guarded(
+            plan,
+            role,
+            frozen,
+            parent,
+            #[cfg(feature = "tls-replication")]
+            None,
+        )
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_initial_old_step(
+        &self,
+        step: &crate::distribution_native_host::NativeInitialOldStep<'_>,
+        plan: &Arc<NativeJointHandoffPlan>,
+        role: &Arc<RecoveryRoleAdmission>,
+        database: &BicDb,
+    ) -> Result<()> {
+        self.storage_policy.require_database(database)?;
+        step.require_database_store(database, &self.range_writes, plan, role)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn close_native_joint_old_for_initial_step(
+        &mut self,
+        step: &crate::distribution_native_host::NativeInitialOldStep<'_>,
+        frozen: Arc<FrozenRangeMutationPermit>,
+        parent: &CancellationToken,
+    ) -> Result<ActualServiceNativeJointOldEvidence> {
+        self.close_native_joint_old_guarded(
+            step.plan().clone(),
+            step.role().clone(),
+            frozen,
+            parent,
+            Some(step),
+        )
+    }
+    fn close_native_joint_old_guarded(
+        &mut self,
+        plan: Arc<NativeJointHandoffPlan>,
+        role: Arc<RecoveryRoleAdmission>,
+        frozen: Arc<FrozenRangeMutationPermit>,
+        parent: &CancellationToken,
+        #[cfg(feature = "tls-replication")] step: Option<
+            &crate::distribution_native_host::NativeInitialOldStep<'_>,
+        >,
+    ) -> Result<ActualServiceNativeJointOldEvidence> {
         parent.check()?;
         plan.require_role(&role)?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
@@ -87,12 +143,24 @@ impl ClusterDataNodeService {
         database
             .range_mutation_gate()
             .validate_quiescent_frozen(plan.old_range().id, &frozen)?;
+        #[cfg(feature = "tls-replication")]
+        if let Some(step) = step {
+            self.require_initial_old_step(step, &plan, &role, &database)?;
+        }
         // A writer-aware native birth is independently checked above. The
         // feature flag is only a durable refusal for older native binaries.
         crate::format::enable_native_joint_data_handoff(database.data_path())?;
+        #[cfg(feature = "tls-replication")]
+        if let Some(step) = step {
+            self.require_initial_old_step(step, &plan, &role, &database)?;
+        }
         self.range_writes
             .current_mut()
             .refsync_native_joint_session(&database, &plan, &role)?;
+        #[cfg(feature = "tls-replication")]
+        if let Some(step) = step {
+            self.require_initial_old_step(step, &plan, &role, &database)?;
+        }
         self.require_native_catalog_database(&database)?;
         let lineage = database.current_native_range_source_lineage(plan.old_range().id)?;
         let catalogue = self
@@ -108,10 +176,18 @@ impl ClusterDataNodeService {
         )?;
         let gate = database.range_mutation_gate();
         let controlled = gate.try_controlled_mutation(&frozen)?;
+        #[cfg(feature = "tls-replication")]
+        if let Some(step) = step {
+            self.require_initial_old_step(step, &plan, &role, &database)?;
+        }
         let promise = self
             .range_writes
             .current_mut()
             .persist_native_joint_old_promise(&database, &plan, &role, &physical, &controlled)?;
+        #[cfg(feature = "tls-replication")]
+        if let Some(step) = step {
+            self.require_initial_old_step(step, &plan, &role, &database)?;
+        }
         let native = database.persist_native_joint_old_close(
             &plan,
             &role,
@@ -120,6 +196,10 @@ impl ClusterDataNodeService {
             &promise,
             &controlled,
         )?;
+        #[cfg(feature = "tls-replication")]
+        if let Some(step) = step {
+            self.require_initial_old_step(step, &plan, &role, &database)?;
+        }
         self.range_writes
             .current_mut()
             .confirm_native_joint_old_close(&database, &plan, &role, &promise, &native)?;
@@ -128,6 +208,10 @@ impl ClusterDataNodeService {
         parent.check()?;
         plan.require_role(&role)?;
         native.require_current(&database, &plan, &role, &promise, &self.range_writes)?;
+        #[cfg(feature = "tls-replication")]
+        if let Some(step) = step {
+            self.require_initial_old_step(step, &plan, &role, &database)?;
+        }
         Ok(ActualServiceNativeJointOldEvidence {
             plan,
             role,

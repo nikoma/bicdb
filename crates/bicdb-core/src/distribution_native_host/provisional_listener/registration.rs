@@ -1,7 +1,7 @@
 //! Native CONFIG ingress and a finite queue consumer. No data surface.
 use super::*;
 use crate::distribution::{ClusterBootstrapSnapshot, ClusterNode, DistributionConfig};
-use crate::distribution_consensus::MetadataConsensusRole;
+use crate::distribution_consensus::{HostMetadataReadObservation, MetadataConsensusRole};
 use crate::distribution_transport::{
     DrainedClusterDataListener, NativeMetadataRegistrationIngress,
 };
@@ -17,8 +17,8 @@ pub(crate) use registered_replica::{
     NativeAssignedRegisteredClosedFence, NativeRegisteredReplicaAdmission,
 };
 mod maintenance;
-pub(crate) use initial_data::NativeInitialDataAdmission;
 use initial_data::NativeInitialDataHost;
+pub(crate) use initial_data::{NativeInitialDataAdmission, NativeInitialOldStep};
 pub use initial_data::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
 mod schema_export;
 pub(crate) use maintenance::NativeMetadataMaintenanceReport;
@@ -502,6 +502,45 @@ impl NativeMetadataControlHost {
         self.old_listener.take();
         self.listener = Some(self.backend.start_listener(self.network.clone(), &token)?);
         token.check()
+    }
+    /// Actual receiver step; neither its borrow nor a cached validation result
+    /// can escape. Network acquisitions must precede this call. The closure
+    /// must retain actual mutation outcomes before fallible postchecks.
+    pub(crate) fn with_initial_old_step<T>(
+        &self,
+        role: Arc<crate::distribution_range_recovery::RecoveryRoleAdmission>,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+        operation: impl for<'step> FnOnce(&NativeInitialOldStep<'step>) -> Result<T>,
+    ) -> Result<T> {
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("original initial DATA owner absent"))?;
+        let admission = data.admission_for_old_step()?;
+        let step = admission.observe_initial_old_step(
+            self.backend.metadata.clone(),
+            role,
+            own,
+            business,
+            parent,
+        )?;
+        let result = operation(&step)?;
+        step.require_metadata_current()?;
+        step.require_live()?;
+        Ok(result)
+    }
+    pub(crate) fn retain_initial_remote_image_source(
+        &self,
+        old: &mut Option<crate::distribution_range_handoff::NativeJointOldClosedQuorum>,
+        target_attempt: Uuid,
+        original_session: &CancellationToken,
+    ) -> Result<crate::distribution_range_image::NativeRetainedRemoteImageSource> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual initial DATA owner is absent"))?
+            .retain_remote_image_source(old, target_attempt, original_session)
     }
     pub(crate) fn ensure_enrolled_target(
         &self,

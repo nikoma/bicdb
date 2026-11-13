@@ -31,10 +31,83 @@ pub(super) fn canonical_range(range: &RangeDescriptor) -> RangeDescriptor {
 }
 impl NativeJointScopeData {
     pub(super) fn from_actual_round(round: &HandoffCutRound) -> Result<Self> {
-        let topology = round.authority.topology()?;
-        let relocation = &topology.relocations[&round.request.relocation_id];
-        let schema = round
-            .range
+        Self::from_actual_configuration(
+            round.authority.topology()?,
+            &round.range,
+            &round.intended_activation_range,
+            round.request.clone(),
+            round.authority.restore_activation()?.cloned(),
+        )
+    }
+    /// A recipient's paired REAL role and independent OWN HostMQ, not a
+    /// decoded local plan or a controller-provided topology declaration.
+    pub(super) fn from_actual_role_and_own(
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        own: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+    ) -> Result<Self> {
+        role.require_own_host_metadata(own, business)?;
+        let crate::distribution_consensus::MetadataRecoveryRolePurpose::CommittedHandoff {
+            relocation_id,
+            ..
+        } = role.purpose()
+        else {
+            return Err(invalid(
+                "recipient OLD plan requires actual CommittedHandoff role",
+            ));
+        };
+        let topology = own.committed_topology(business)?;
+        let relocation = topology
+            .relocations
+            .get(relocation_id)
+            .ok_or_else(|| invalid("recipient actual Pending relocation absent"))?;
+        let range = topology
+            .range_by_id(relocation.range_id)
+            .ok_or_else(|| invalid("recipient actual Pending range absent"))?;
+        if role.committed_relocation() != Some(relocation)
+            || canonical_range(role.current_range()) != canonical_range(range)
+            || relocation.learner_epoch != range.epoch
+            || !matches!(
+                relocation.phase,
+                crate::distribution::RelocationPhase::LearnerAllocated
+                    | crate::distribution::RelocationPhase::SnapshotCopying
+                    | crate::distribution::RelocationPhase::CatchingUp
+                    | crate::distribution::RelocationPhase::ReadyToPromote
+            )
+        {
+            return Err(invalid(
+                "recipient actual Pending role/configuration differs",
+            ));
+        }
+        let (promise, activation_range, _) = super::super::pending_handoff_configuration(
+            topology,
+            *relocation_id,
+            relocation,
+            range,
+            own.restore_activation(business)?,
+        )?;
+        let result = Self::from_actual_configuration(
+            topology,
+            range,
+            &activation_range,
+            promise,
+            own.restore_activation(business)?.cloned(),
+        )?;
+        role.require_own_host_metadata(own, business)?;
+        Ok(result)
+    }
+    fn from_actual_configuration(
+        topology: &crate::ClusterTopology,
+        range: &RangeDescriptor,
+        activation_range: &RangeDescriptor,
+        promise: RangeHandoffPromise,
+        restore_activation: Option<crate::distribution_consensus::MetadataRestoreActivation>,
+    ) -> Result<Self> {
+        let relocation = topology
+            .relocations
+            .get(&promise.relocation_id)
+            .ok_or_else(|| invalid("actual joint relocation absent"))?;
+        let schema = range
             .required_schema_sha256(&topology.nodes)
             .ok_or_else(|| invalid("joint scope has no common schema"))?
             .to_owned();
@@ -66,8 +139,8 @@ impl NativeJointScopeData {
                 })
                 .collect()
         };
-        let old_members = members(&round.range);
-        let new_members = members(&round.intended_activation_range);
+        let old_members = members(range);
+        let new_members = members(activation_range);
         let mut required: BTreeSet<_> = topology.metadata_voters();
         required.extend(old_members.keys().cloned());
         required.extend(new_members.keys().cloned());
@@ -99,16 +172,16 @@ impl NativeJointScopeData {
             version: 1,
             cluster_id: topology.cluster_id.clone(),
             bootstrap_id,
-            promise: round.request.clone(),
-            old_range: canonical_range(&round.range),
-            activation_range: canonical_range(&round.intended_activation_range),
+            promise,
+            old_range: canonical_range(range),
+            activation_range: canonical_range(activation_range),
             old_members,
             new_members,
             enrolled_births,
             old_source,
             target: relocation.target.clone(),
             schema_sha256: schema,
-            restore_activation: round.authority.restore_activation()?.cloned(),
+            restore_activation,
         };
         result.validate()?;
         Ok(result)

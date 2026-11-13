@@ -36,6 +36,26 @@ impl NativeJointHandoffPlan {
             round,
         ))
     }
+    /// Recipient plan production requires TWO independently sealed matching
+    /// actual observations. The result is still only a purpose/scope object;
+    /// every mutation separately checks its actual role/DB/native/freeze.
+    pub(crate) fn from_actual_role_and_own(
+        role: &RecoveryRoleAdmission,
+        own: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+    ) -> Result<Self> {
+        role.require_own_host_metadata(own, business)?;
+        let result = Self {
+            data: NativeJointScopeData::from_actual_role_and_own(role, own, business)?,
+            metadata_term: role.metadata_term(),
+            metadata_read_index: role.metadata_read_index(),
+            metadata_context: role.context_id(),
+            deadline: role.deadline().min(own.deadline()),
+        };
+        result.require_role(role)?;
+        role.require_own_host_metadata(own, business)?;
+        Ok(result)
+    }
     pub(crate) fn require_live(&self) -> Result<()> {
         if std::time::Instant::now() >= self.deadline {
             return Err(invalid("original joint metadata acquisition expired"));

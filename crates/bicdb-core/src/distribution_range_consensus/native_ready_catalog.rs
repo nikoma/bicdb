@@ -99,7 +99,6 @@ impl RangeWriteStore {
         scope: &RecoveryFenceScope,
         frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
     ) -> Result<RecoveryImageHistoryObligationsV1> {
-
         // FENCE_TRACE_BEGIN
         #[cfg(test)]
         crate::distribution_range_recovery::fence_trace::mark("response-native-current-begin");

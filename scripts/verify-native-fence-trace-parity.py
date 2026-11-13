@@ -4,7 +4,9 @@ import argparse
 parser=argparse.ArgumentParser(description="Strip only marked passive fence trace blocks and verify original Rust.")
 parser.add_argument("--repo",default=".")
 parser.add_argument("--candidate",default="HEAD")
+parser.add_argument("--baseline",default=base,help="Exact uninstrumented source; defaults to the original historical baseline")
 a=parser.parse_args()
+base=a.baseline
 root=pathlib.Path(a.repo).resolve()
 def git(*args):return subprocess.check_output(["git","-C",str(root),*args])
 paths=[

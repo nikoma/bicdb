@@ -484,7 +484,18 @@ impl NativeHotRecoveryMaintenance {
                         job.peer_retry_after
                             .insert(node, Instant::now() + Duration::from_secs(10));
                     } else {
-                        job.semantic_veto.insert(node, job.phase);
+                        // Sender-local cancellation/expiry is not an
+                        // authenticated semantic statement by this voter.
+                        // It still aborts this attempt and never enables skip
+                        // or successful phase progress. Remote timeout/busy
+                        // replies remain generic authenticated Cluster errors
+                        // and conservatively retain their actual-peer veto.
+                        if !matches!(
+                            error,
+                            crate::BicDbError::QueryCanceled | crate::BicDbError::QueryTimedOut
+                        ) {
+                            job.semantic_veto.insert(node, job.phase);
+                        }
                         return Err(error);
                     }
                 }

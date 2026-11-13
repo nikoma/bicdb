@@ -225,7 +225,7 @@ fn actual_wal_eio_leaves_pending_birth_and_retry_publishes_that_same_backing() {
         for site in ["transaction_log.write", "transaction_log.sync"] {
             let parent = tempfile::tempdir().unwrap();
             let path = parent.path().join("db");
-            let cfg = config(mode);
+            let cfg = config(mode.clone());
             let mut db = BicDb::open_with_config(&path, cfg.clone()).unwrap();
             db.sync_quorum().hold("allocation-history", 0);
             enable(&mut db);
@@ -285,7 +285,7 @@ fn actual_marker_clear_eio_never_allocates_a_second_birth() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let parent = tempfile::tempdir().unwrap();
         let path = parent.path().join("db");
-        let cfg = config(mode);
+        let cfg = config(mode.clone());
         let mut db = BicDb::open_with_config(&path, cfg.clone()).unwrap();
         db.sync_quorum().hold("allocation-history", 0);
         enable(&mut db);

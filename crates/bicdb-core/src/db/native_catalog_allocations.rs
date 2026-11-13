@@ -179,6 +179,8 @@ impl BicDb {
         let Some(allocation) = self.pending_native_catalog_allocation(name)? else {
             return Ok(());
         };
+        let _database_mutation = self.range_mutations.try_enter_database()?;
+        self.invalidate_native_range_images_before_mutation(None, "retry collection creation")?;
         let mode = allocation.meta.mode.clone();
         self.log_catalog_op_with_allocation(
             collection_rename::CatalogOp::Create {

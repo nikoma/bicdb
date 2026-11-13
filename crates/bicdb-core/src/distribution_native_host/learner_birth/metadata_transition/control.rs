@@ -32,6 +32,65 @@ impl NativeUnassignedLearnerHost {
             .ok_or_else(|| invalid("actual retained Assigned control absent"))?
             .take_assigned_joint_image_lease(parent)
     }
+    /// See `NativeMetadataControlHost::open_joined_data`.
+    pub(in crate::distribution_native_host) fn open_joined_data(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.metadata_transition
+            .control
+            .as_mut()
+            .ok_or_else(|| invalid("actual Registered metadata control absent"))?
+            .open_joined_data(parent)
+    }
+    pub(in crate::distribution_native_host) fn refresh_joined_data_policy(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.metadata_transition
+            .control
+            .as_mut()
+            .ok_or_else(|| invalid("actual retained joined DATA control absent"))?
+            .refresh_joined_data_policy(parent)
+    }
+    pub(in crate::distribution_native_host) fn publish_joined_data(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<usize> {
+        self.metadata_transition
+            .control
+            .as_mut()
+            .ok_or_else(|| invalid("actual retained joined DATA control absent"))?
+            .publish_joined_data(parent)
+    }
+    pub(in crate::distribution_native_host) fn joined_data_status(
+        &self,
+    ) -> Option<crate::distribution_native_host::NativeJoinedDataStatus> {
+        self.metadata_transition
+            .control
+            .as_ref()
+            .and_then(|control| control.joined_data_status())
+    }
+    #[cfg(test)]
+    #[allow(clippy::type_complexity)]
+    pub(in crate::distribution_native_host) fn test_joined_data_bindings(
+        &self,
+    ) -> Result<(
+        Arc<
+            crate::distribution_range_consensus::RangeWriteCoordinator<
+                TcpClusterRelocationTransport,
+            >,
+        >,
+        Arc<crate::db::InstalledNativeWriterHostGuard>,
+        Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>,
+        Arc<TcpClusterRelocationTransport>,
+    )> {
+        self.metadata_transition
+            .control
+            .as_ref()
+            .ok_or_else(|| invalid("actual metadata control absent"))?
+            .test_joined_data_bindings()
+    }
     pub(in crate::distribution_native_host) fn metadata_control_owned(&self) -> bool {
         self.metadata_transition
             .control

@@ -173,13 +173,10 @@ impl NativeInitialOldStep<'_> {
         self.member.require_database(database)?;
         let actual = database.current_native_range_source_lineage(plan.old_range().id)?;
         plan.require_old_native_configuration(&actual)?;
-        self.admission
-            .writer
-            .require_store(database.data_path(), self.slot.id())?;
-        self.admission
-            .writer
-            .require_database(database, actual.native_write_range()?)?;
-        if !Arc::ptr_eq(&store.native_writer_host_state()?, &self.admission.writer) {
+        let writer = self.admission.writer();
+        writer.require_store(database.data_path(), self.slot.id())?;
+        writer.require_database(database, actual.native_write_range()?)?;
+        if !Arc::ptr_eq(&store.native_writer_host_state()?, &writer) {
             return Err(invalid("OLD step original actual writer replaced"));
         }
         database.require_native_writer_catalogue_custody(store)?;

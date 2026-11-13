@@ -14,7 +14,10 @@ mod initial_data;
 pub(crate) use assigned_data::NativeAssignedDataAdmission;
 use assigned_data::NativeAssignedDataHost;
 mod data_owner;
+mod joined_data;
 pub(crate) use data_owner::NativeDataOwnerAdmission;
+use joined_data::NativeJoinedDataHost;
+pub use joined_data::NativeJoinedDataStatus;
 mod registered_replica;
 use registered_replica::NativeRegisteredReplicaReceiver;
 pub use registered_replica::NativeRegisteredReplicaReceiverStatus;
@@ -397,6 +400,7 @@ pub(crate) struct NativeMetadataControlHost {
     data_process: std::sync::OnceLock<CancellationToken>,
     replica: Option<NativeRegisteredReplicaReceiver>,
     assigned: Option<NativeAssignedDataHost>,
+    joined: Option<NativeJoinedDataHost>,
     old_listener: Option<ClusterDataServerHandle>,
     drained: Option<DrainedClusterDataListener>,
     controller: Option<Arc<NativeMetadataRegistrationController>>,
@@ -419,6 +423,7 @@ impl NativeMetadataControlHost {
             data_process: std::sync::OnceLock::new(),
             replica: None,
             assigned: None,
+            joined: None,
             old_listener: Some(listener),
             drained: None,
             controller: None,
@@ -439,6 +444,7 @@ impl NativeMetadataControlHost {
             data_process: std::sync::OnceLock::new(),
             replica: None,
             assigned: None,
+            joined: None,
             old_listener: Some(listener),
             drained: None,
             controller: None,
@@ -454,6 +460,7 @@ impl NativeMetadataControlHost {
                 .as_ref()
                 .is_some_and(|owner| owner.is_running())
             || self.data.as_ref().is_some_and(|data| data.is_running())
+            || self.joined.as_ref().is_some_and(|owner| owner.is_running())
             || self
                 .replica
                 .as_ref()
@@ -796,6 +803,9 @@ impl NativeMetadataControlHost {
     pub(crate) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
         if let Some(assigned) = self.assigned.as_mut() {
             assigned.stop(parent)?;
+        }
+        if let Some(joined) = self.joined.as_mut() {
+            joined.stop(parent)?;
         }
         if let Some(replica) = self.replica.as_mut() {
             replica.stop(parent)?;

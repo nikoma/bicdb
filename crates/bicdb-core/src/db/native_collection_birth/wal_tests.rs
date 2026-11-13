@@ -27,6 +27,9 @@ fn retained_write_contract_after_name_reuse(live: bool) {
         let root = tempfile::tempdir().unwrap();
         let cfg = config(mode);
         let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        // A real local-consumer retention hold survives Embedded rename's
+        // checkpoint. It retains WAL without counting as any replica ACK.
+        db.sync_quorum().hold("native-birth-export-control", 0);
         db.activate_local_namespace_identity_v1().unwrap();
         db.activate_native_collection_birth_v1().unwrap();
         db.create_collection("items").unwrap();

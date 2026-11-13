@@ -111,6 +111,7 @@ pub(crate) fn start_schedule(
                 let execution_schedule = schedule.clone();
                 let execution_health = thread_healthy.clone();
                 let execution_claim = claim.clone();
+                let execution_catalog_context = catalog_context.clone();
                 let spawn = std::thread::Builder::new()
                     .name(format!(
                         "bicdb-schedule-run-{}-{}",
@@ -119,7 +120,7 @@ pub(crate) fn start_schedule(
                     .spawn(move || {
                         // Retain the pre-claim catalog through execution and
                         // durable completion, including failure recording.
-                        let _catalog_context = catalog_context;
+                        let _catalog_context = execution_catalog_context;
                         let result = execute_schedule_occurrence(
                             &execution_db,
                             &execution_module,

@@ -21,6 +21,20 @@ impl NativeOwnedMetadataMemberObservation {
         &self.topology
     }
     pub(crate) fn require_database(&self, db: &BicDb) -> Result<()> {
+        let record = db.read_native_metadata_store(&self.topology, &self.node)?;
+        self.require_database_record(db, &record)
+    }
+    /// Immutable protected-record/local-open recheck while the caller already
+    /// holds the native journal. Not a fresh metadata quorum or MStore check.
+    pub(crate) fn require_database_point(&self, db: &BicDb) -> Result<()> {
+        let record = db.read_native_metadata_store_point(&self.topology, &self.node)?;
+        self.require_database_record(db, &record)
+    }
+    fn require_database_record(
+        &self,
+        db: &BicDb,
+        record: &crate::db::NativeMetadataStoreRecord,
+    ) -> Result<()> {
         self.cancellation.check()?;
         if !std::sync::Weak::ptr_eq(&self.actual_open, &db.native_metadata_owner_open_lifetime())
             || self.actual_open.upgrade().is_none()
@@ -45,7 +59,6 @@ impl NativeOwnedMetadataMemberObservation {
                 "owned metadata member native birth/restore changed",
             ));
         }
-        let record = db.read_native_metadata_store(&self.topology, &self.node)?;
         if !record.registered() || record.store_id() != self.store_id {
             return Err(metadata_error(
                 "actual protected Registered metadata owner differs",

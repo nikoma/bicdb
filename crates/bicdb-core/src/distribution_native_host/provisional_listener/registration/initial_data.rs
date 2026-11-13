@@ -9,6 +9,7 @@ use std::sync::Weak;
 mod cleanup;
 mod hot_recovery;
 mod old_step;
+mod writer_data_domain;
 use cleanup::{NativeInitialDataCleanup, NativeInitialDataCleanupSender};
 use hot_recovery::NativeHotRecoveryMaintenance;
 pub(crate) use old_step::NativeInitialOldStep;
@@ -152,6 +153,7 @@ pub(super) struct NativeInitialDataHost {
     registry_refresh_last_attempt: Option<serde_json::Value>,
     image_sources: Option<Arc<crate::distribution_range_image::NativeRemoteImageSourceRegistry>>,
     old_closures: Arc<RetainedInitialOldTable>,
+    writer_data_domains: super::writer_data_domain::NativeHostWriterDataDomains,
 }
 impl Drop for NativeInitialDataHost {
     fn drop(&mut self) {
@@ -214,6 +216,7 @@ impl NativeInitialDataHost {
             image_sources: None,
             old_closures: Arc::new(Mutex::new(BTreeMap::new())),
             registry_refresh_last_attempt: None,
+            writer_data_domains: Default::default(),
             genesis: BTreeMap::new(),
             runtime: None,
             dispatcher: None,
@@ -728,6 +731,9 @@ impl NativeInitialDataHost {
             std::thread::sleep(Duration::from_millis(5));
         }
         if let Some(owner) = &self.enrollment {
+            if self.writer_data_domains.unresolved() {
+                return Err(invalid("INITIAL unknown DATA-domain publication retained; explicit reconciliation required"));
+            }
             let database = self
                 .initial
                 .seed

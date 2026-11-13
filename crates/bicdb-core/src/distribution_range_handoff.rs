@@ -24,7 +24,8 @@ pub(crate) use joint::{
     NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
     NativeJointPreparedServingVoteData, NativeJointPublishedServingQuorum,
     NativeJointReleaseAdmission, NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum,
-    NativeJointReleasePhaseRound, NativeJointServingPublicationRound,
+    NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
+    NativeJointServingPublicationRound,
 };
 #[cfg(test)]
 pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};

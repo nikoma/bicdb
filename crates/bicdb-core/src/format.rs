@@ -58,9 +58,11 @@ pub const NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG: &str =
 /// Sticky node-local receipt semantics. Never a portable schema capability.
 pub const NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG: &str =
     "native_completed_decision_materialization_v1";
+pub const NATIVE_WRITER_DATA_DOMAIN_FEATURE_FLAG: &str = "native_writer_data_domain_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
     EXACT_DECIMAL_UNITS_FEATURE_FLAG,
     NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG,
+    NATIVE_WRITER_DATA_DOMAIN_FEATURE_FLAG,
     EXACT_DECIMAL_LIST_SUM_FEATURE_FLAG,
     EXACT_PROPORTIONAL_INTERVALS_FEATURE_FLAG,
     NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG,
@@ -802,6 +804,34 @@ pub(crate) fn native_catalogue_custody_active(root: &Path) -> Result<bool> {
         .contains(NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG))
 }
 
+pub(crate) fn enable_native_writer_data_domain(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    for required in [
+        NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
+        NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG,
+        NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG,
+    ] {
+        if !metadata.feature_flags.contains(required) {
+            return Err(BicDbError::InvalidConfig(
+                "writer DATA transition needs actual writer/joint/custody reader fences".into(),
+            ));
+        }
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_WRITER_DATA_DOMAIN_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+pub(crate) fn native_writer_data_domain_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_DATA_DOMAIN_FEATURE_FLAG))
+}
 pub(crate) fn native_writer_enrollment_active(root: &Path) -> Result<bool> {
     let metadata = read_or_legacy_metadata(root)?;
     validate_supported(&metadata)?;

@@ -138,4 +138,9 @@ impl CommittedNativeJointDecisionObservation {
     pub(crate) fn deadline(&self) -> std::time::Instant {
         self.metadata.deadline()
     }
+    pub(crate) fn writer_domain_metadata_audit(&self) -> Result<serde_json::Value> {
+        self.require_metadata_current()?;
+        self.metadata
+            .joint_writer_domain_audit(self.business, self.data())
+    }
 }

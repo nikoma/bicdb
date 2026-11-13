@@ -37,6 +37,11 @@ pub(crate) use writer_enrollment::NativeRegisteredClosedPersistScope;
 pub(crate) use writer_enrollment::{
     InstalledNativeWriterHostGuard, NativeRegisteredReceiverHook, NativeWriterHostState,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::{
+    NativeClosedWriterDomain, NativeWriterDataDomainPolicy, NativeWriterDataDomainTransition,
+    NativeWriterServingDomainPublication,
+};
 mod serving_configuration;
 pub(crate) use native_read::{
     NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,
@@ -49,7 +54,10 @@ pub(crate) use serving_configuration::{
     NativeJointServingBridgeReceipt, NativeJointServingPreparation, NativeReadyObserverReadScope,
     NativeRecoveredServingReceipt,
 };
-use serving_configuration::{NativeJointServingDomain, NativeRecoveredServingConfiguration};
+use serving_configuration::{
+    NativeClosedWriterFact, NativeClosedWriterPoint, NativeJointServingDomain,
+    NativeRecoveredServingConfiguration,
+};
 #[cfg(test)]
 pub(crate) mod rf3_fixture;
 use certified_prefix::NativeCertifiedRangePrefix;
@@ -2257,3 +2265,5 @@ mod tests {
             .is_none());
     }
 }
+
+pub(crate) use writer_enrollment::NativeJointWriterDomain;

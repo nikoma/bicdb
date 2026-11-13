@@ -111,7 +111,8 @@ impl NativeJointOpenPhaseRound {
                 &old.actual,
                 &self.cancellation,
             )?;
-            let committed = service.observe_committed_native_joint_decision(
+            let committed = old.actual.observe_fresh_committed(
+                &service,
                 metadata,
                 business,
                 self.original.data().old_range().id,
@@ -297,7 +298,8 @@ impl NativeJointOpenPhaseQuorum {
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("fresh open postquorum service busy"))?;
-            service.observe_committed_native_joint_decision(
+            local.actual.observe_fresh_committed(
+                &service,
                 metadata,
                 business,
                 self.original.data().old_range().id,

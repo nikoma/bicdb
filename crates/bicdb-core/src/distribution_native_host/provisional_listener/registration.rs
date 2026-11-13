@@ -16,6 +16,7 @@ use assigned_data::NativeAssignedDataHost;
 mod data_owner;
 pub(crate) use data_owner::NativeDataOwnerAdmission;
 mod registered_replica;
+mod writer_data_domain;
 use registered_replica::NativeRegisteredReplicaReceiver;
 pub use registered_replica::NativeRegisteredReplicaReceiverStatus;
 pub(crate) use registered_replica::{

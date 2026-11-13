@@ -110,6 +110,10 @@ impl NativeRangeReadStamp {
     }
 }
 impl RangeServingGeneration {
+    pub(crate) fn id(&self) -> Result<Uuid> {
+        self.require_current()?;
+        Ok(self.generation)
+    }
     pub(crate) fn require_current(&self) -> Result<()> {
         let inner = self
             .inner

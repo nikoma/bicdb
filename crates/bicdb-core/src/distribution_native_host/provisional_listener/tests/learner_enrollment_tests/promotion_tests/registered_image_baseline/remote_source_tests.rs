@@ -34,6 +34,11 @@ pub(super) enum SourceCase {
     TargetInstalling,
     TargetInstallingPostCanceled,
     TargetInstallingDirSyncRetry,
+    TargetImageRows,
+    TargetImageRowsWithoutAudit,
+    TargetImageRowsPreWalCanceled,
+    TargetImageRowsPostWalCanceled,
+    TargetImageRowsApplyFailed,
     RemoteConstraintCapture,
 }
 #[test]
@@ -964,6 +969,30 @@ pub(super) fn exercise(
                 remote_fact.manifest().checksum_sha256,
                 manifest.checksum_sha256
             );
+            if matches!(
+                case,
+                SourceCase::TargetImageRows
+                    | SourceCase::TargetImageRowsWithoutAudit
+                    | SourceCase::TargetImageRowsPreWalCanceled
+                    | SourceCase::TargetImageRowsPostWalCanceled
+                    | SourceCase::TargetImageRowsApplyFailed
+            ) {
+                target_image_tests::exercise(
+                    case,
+                    target_control,
+                    target,
+                    remote_fact.clone(),
+                    &plan,
+                    &MetadataReadProvider::new(target_metadata.clone(), target.clone()).unwrap(),
+                    &actor,
+                    factory,
+                    pending,
+                    ranges,
+                    acknowledged,
+                    output,
+                );
+                return;
+            }
             let mut history = RangeImageHistoryCursorV1::default();
             loop {
                 let actual = frame(
@@ -1258,6 +1287,7 @@ pub(super) fn exercise(
         "real_target_namespaces":factory.database.read().capture_range_image_bindings().unwrap().namespace_ids(),
     })).unwrap();
 }
+mod target_image_tests;
 mod target_installing_tests;
 mod target_no_domain_tests;
 mod target_proposal_tests;

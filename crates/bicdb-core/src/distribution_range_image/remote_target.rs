@@ -89,6 +89,13 @@ pub(crate) struct NativeRemoteImageStep<'source> {
     actual: AuthenticatedNativeRemoteImageSourceFrame,
 }
 impl NativeRemoteImageStep<'_> {
+    /// Preserve the original authenticated request's exact cancellation and
+    /// deadline through one private synchronous row transaction. This is only
+    /// liveness DATA; it is neither a renewed request nor target authority.
+    pub(crate) fn retain_original_request_cancellation(&self) -> Result<CancellationToken> {
+        self.require_request_live()?;
+        self.actual.retain_original_request_cancellation()
+    }
     pub(crate) fn require_request_live(&self) -> Result<()> {
         self.actual.require_request_live()
     }

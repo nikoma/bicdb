@@ -31,6 +31,23 @@ pub(super) struct RegisteredRemoteNativePreflight {
     metadata_store: Uuid,
 }
 impl RegisteredRemoteNativePreflight {
+    pub(super) fn require_mutation_boundary(
+        &self,
+        db: &BicDb,
+        scope: &crate::db::NativeRegisteredRemoteMutationScope<'_>,
+        member: &NativeOwnedMetadataMemberObservation,
+    ) -> Result<()> {
+        if member.store_id() != self.metadata_store
+            || self.native.birth_id() != scope.native().birth_id()
+        {
+            return Err(invalid(
+                "Registered mutation changed original metadata/native owner",
+            ));
+        }
+        member.require_database_point(db)?;
+        db.validate_range_image_bindings(&self.bindings)?;
+        scope.require_irreversible_install_safety(&self.safety)
+    }
     pub(super) fn require_original_boundary(
         &self,
         db: &BicDb,

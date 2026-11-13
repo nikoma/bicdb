@@ -24,6 +24,19 @@ impl BicDb {
         native: &NativeRecoveryAdmission,
         journal: &NativeImageJournalGuard<'_>,
     ) -> Result<()> {
+        self.require_original_registered_receiver_birth_open_with_journal(native, journal)?;
+        if self.current_commit_seq() != 0 {
+            return Err(invalid("Registered no-domain boundary is no longer B0"));
+        }
+        Ok(())
+    }
+    /// The actual original Registered birth/open, without interpreting a later
+    /// copied-row visibility sequence as a native range floor or new birth.
+    pub(super) fn require_original_registered_receiver_birth_open_with_journal(
+        &self,
+        native: &NativeRecoveryAdmission,
+        journal: &NativeImageJournalGuard<'_>,
+    ) -> Result<()> {
         journal.require_database(self)?;
         native.require_current(self)?;
         let birth = self
@@ -40,7 +53,6 @@ impl BicDb {
             || ready.birth_id != birth.birth_id
             || ready.birth_sha256 != birth.checksum_sha256
             || !ready.genesis_sha256.is_empty()
-            || self.current_commit_seq() != 0
         {
             return Err(invalid(
                 "registered receiver is not the original no-INITIAL-range/native domain",

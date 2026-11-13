@@ -31,9 +31,9 @@ pub(crate) struct NativeRegisteredRemoteImageStep<'request> {
 /// independently at every boundary and must point to the actual MF owner.
 pub(crate) struct NativeRegisteredRemoteTransferRequest {
     pub(super) role: HandoffRoleAdmission,
-    pub(super) own: HostMetadataReadObservation,
+    pub(super) own: Arc<HostMetadataReadObservation>,
     pub(super) business: Uuid,
-    pub(super) member: NativeOwnedMetadataMemberObservation,
+    pub(super) member: Arc<NativeOwnedMetadataMemberObservation>,
     pub(super) plan: NativeJointHandoffPlan,
     parent: CancellationToken,
     phase: CancellationToken,
@@ -303,9 +303,9 @@ impl NativeRegisteredRemoteImageStep<'_> {
     pub(super) fn into_transfer_request(self) -> NativeRegisteredRemoteTransferRequest {
         NativeRegisteredRemoteTransferRequest {
             role: self.role,
-            own: self.own,
+            own: Arc::new(self.own),
             business: self.business,
-            member: self.member,
+            member: Arc::new(self.member),
             plan: self.plan,
             parent: self.parent.clone(),
             phase: self.phase,

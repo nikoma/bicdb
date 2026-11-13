@@ -118,6 +118,50 @@ impl std::fmt::Debug for NativeRegisteredRemoteProposalReceipt {
     }
 }
 impl NativeRegisteredRemoteProposalReceipt {
+    pub(in crate::db::range_image_native) fn require_guarded_transaction_current(
+        &self,
+        db: &BicDb,
+        native: &NativeRecoveryAdmission,
+        scope: &writer_enrollment::RegisteredRemoteMutationScopeLiveness,
+    ) -> Result<()> {
+        scope.require_current(db, self.record.attempt, self.record.range)?;
+        let actual = db.read_native_registered_remote_proposal_record_point(
+            self.record.target_store_open,
+            native,
+            self.record.range,
+            self.record.attempt,
+            &self.pointer(),
+        )?;
+        if crate::distribution_range_image::bounded_json(&actual.record, MAX_BYTES)?
+            != crate::distribution_range_image::bounded_json(&self.record, MAX_BYTES)?
+        {
+            return Err(invalid(
+                "Registered guarded transaction proposal readback changed",
+            ));
+        }
+        scope.require_current(db, self.record.attempt, self.record.range)
+    }
+    pub(crate) fn require_mutation_current(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        scope: &NativeRegisteredRemoteMutationScope<'_>,
+    ) -> Result<()> {
+        scope.require_database(db)?;
+        let actual = db.read_native_registered_remote_proposal_record_point(
+            store.native_writer_store_open_id(),
+            scope.native(),
+            scope.range_id(),
+            scope.attempt_id(),
+            &self.pointer(),
+        )?;
+        if crate::distribution_range_image::bounded_json(&actual.record, MAX_BYTES)?
+            != crate::distribution_range_image::bounded_json(&self.record, MAX_BYTES)?
+        {
+            return Err(invalid("Registered mutation proposal readback changed"));
+        }
+        scope.require_database(db)
+    }
     pub(crate) fn pointer(&self) -> NativeRegisteredRemoteProposalPointer {
         self.record.pointer()
     }
@@ -352,6 +396,23 @@ impl NativeRegisteredRemoteProposalPublication {
     }
 }
 impl BicDb {
+    pub(crate) fn read_native_registered_remote_proposal_for_mutation(
+        &self,
+        store: &RangeWriteStore,
+        scope: &NativeRegisteredRemoteMutationScope<'_>,
+        pointer: &NativeRegisteredRemoteProposalPointer,
+    ) -> Result<NativeRegisteredRemoteProposalReceipt> {
+        scope.require_database(self)?;
+        let receipt = self.read_native_registered_remote_proposal_record_point(
+            store.native_writer_store_open_id(),
+            scope.native(),
+            scope.range_id(),
+            scope.attempt_id(),
+            pointer,
+        )?;
+        scope.require_database(self)?;
+        Ok(receipt)
+    }
     pub(crate) fn read_native_registered_remote_proposal(
         &self,
         store: &RangeWriteStore,
@@ -359,7 +420,26 @@ impl BicDb {
         pointer: &NativeRegisteredRemoteProposalPointer,
     ) -> Result<NativeRegisteredRemoteProposalReceipt> {
         scope.require_database(self)?;
-        let native = scope.native();
+        let receipt = self.read_native_registered_remote_proposal_record_point(
+            store.native_writer_store_open_id(),
+            scope.native(),
+            scope.range_id(),
+            scope.attempt_id(),
+            pointer,
+        )?;
+        scope.require_database(self)?;
+        Ok(receipt)
+    }
+    /// Shared exact protected reader. Only original guarded callers supply
+    /// the actual admission/open/A; visible DTOs never construct a row grant.
+    fn read_native_registered_remote_proposal_record_point(
+        &self,
+        store_open: Uuid,
+        native: &NativeRecoveryAdmission,
+        range: RangeId,
+        attempt: Uuid,
+        pointer: &NativeRegisteredRemoteProposalPointer,
+    ) -> Result<NativeRegisteredRemoteProposalReceipt> {
         native.require_current(self)?;
         if !crate::format::native_registered_remote_proposal_active(self.data_path())? {
             return Err(invalid(
@@ -380,9 +460,9 @@ impl BicDb {
         archived.validate()?;
         if record.pointer() != *pointer
             || archived.pointer() != *pointer
-            || record.range != scope.range_id()
-            || record.attempt != scope.attempt_id()
-            || record.target_store_open != store.native_writer_store_open_id()
+            || record.range != range
+            || record.attempt != attempt
+            || record.target_store_open != store_open
             || crate::distribution_range_image::bounded_json(&record, MAX_BYTES)?
                 != crate::distribution_range_image::bounded_json(&archived, MAX_BYTES)?
             || record.target_birth

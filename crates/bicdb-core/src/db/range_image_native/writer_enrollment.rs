@@ -21,9 +21,15 @@ mod registered_no_domain;
 #[cfg(feature = "tls-replication")]
 mod registered_remote_attempt;
 #[cfg(feature = "tls-replication")]
+mod registered_remote_mutation;
+#[cfg(feature = "tls-replication")]
 pub(crate) use registered_no_domain::NativeRegisteredNoDomainScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use registered_remote_attempt::NativeRegisteredRemoteAttemptScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote_mutation::NativeRegisteredRemoteMutationScope;
+#[cfg(feature = "tls-replication")]
+pub(in crate::db::range_image_native) use registered_remote_mutation::RegisteredRemoteMutationScopeLiveness;
 #[cfg(feature = "tls-replication")]
 mod old_constraints;
 mod registry_refresh;

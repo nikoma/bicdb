@@ -602,8 +602,8 @@ pub(crate) use provisional_listener::{
     NativeAssignedDataAdmission, NativeAssignedDataPolicyOrigin,
     NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission, NativeRegisteredRemoteImageStep,
     NativeRegisteredRemoteInstallPreflight, NativeRegisteredRemoteProposalPoint,
-    NativeRegisteredRemoteTransferRequest, NativeRegisteredReplicaAdmission,
-    NativeRegisteredSelectedRangeNoDomain,
+    NativeRegisteredRemoteTransactionRequest, NativeRegisteredRemoteTransferRequest,
+    NativeRegisteredReplicaAdmission, NativeRegisteredSelectedRangeNoDomain,
 };
 
 #[cfg(all(test, feature = "tls-replication"))]

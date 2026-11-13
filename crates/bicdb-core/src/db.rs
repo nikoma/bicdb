@@ -101,6 +101,8 @@ pub(crate) use range_image_native::rf3_fixture::{
 pub(crate) use range_image_native::test_fire_before_registered_remote_proposal_scope;
 #[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use range_image_native::test_registered_remote_proposal_cut;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use range_image_native::test_registered_remote_row_wal_cut;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeAssignedWriterInstallAttempt;
 pub(crate) use range_image_native::NativeInitialDataGenesis;
@@ -110,6 +112,8 @@ pub(crate) use range_image_native::NativeRegisteredClosedPersistScope;
 pub(crate) use range_image_native::NativeRegisteredNoDomainScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredRemoteAttemptScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeRegisteredRemoteMutationScope;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
     FreshNativeCatalogueBootstrap, FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard,
@@ -140,6 +144,13 @@ pub(crate) use range_image_native::{
 };
 pub(crate) use range_image_native::{
     NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::{
+    NativeRegisteredRemoteHistoryProgress, NativeRegisteredRemoteHistoryProof,
+    NativeRegisteredRemoteImageContext, NativeRegisteredRemoteImageInstallation,
+    NativeRegisteredRemoteImageOperation, NativeRegisteredRemoteImageProgress,
+    NativeRegisteredRemoteRowProgress,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::{
@@ -9572,6 +9583,9 @@ pub struct Transaction {
     /// crate and therefore cannot be selected by SQL, pgwire, or extensions.
     bypass_commit_admission: bool,
     native_image_row_grant: Option<range_image_native::NativeImageTransactionGrant>,
+    #[cfg(feature = "tls-replication")]
+    native_registered_remote_row_grant:
+        Option<range_image_native::NativeRegisteredRemoteRowTransactionGrant>,
     range_mutation_claim: Option<crate::distribution_range_mutation::RangeMutationClaim>,
     database_mutation_permit: Option<crate::distribution_range_mutation::DatabaseMutationPermit>,
     native_wal_retention: Option<native_wal_apply::NativeWalRetentionPin>,
@@ -18897,6 +18911,27 @@ impl Transaction {
         self.finalize_committed_memory_jobs()?;
         unsafe { db.as_ref() }.auto_checkpoint_if_due();
         Ok(commit_seq)
+    }
+
+    /// The actual Registered import caller holds original admission/hook
+    /// guards. Its private grant is mandatory, and durable success is retained
+    /// before finalizers. Auto-checkpoint must run only after those guards drop.
+    #[cfg(feature = "tls-replication")]
+    fn commit_registered_remote_image_with_sequence(mut self) -> Result<u64> {
+        let db = self.db;
+        let database = unsafe { db.as_ref() };
+        self.native_registered_remote_row_grant
+            .as_ref()
+            .ok_or_else(|| {
+                BicDbError::Cluster("Registered row commit requires actual private grant".into())
+            })?
+            .require_current(database, &self)?;
+        let sequence = database.commit_transaction(&mut self)?;
+        database.tx_log.write_durable(sequence)?;
+        self.finalize_commit_admission()?;
+        self.finalize_committed_broker_outbox();
+        self.finalize_committed_memory_jobs()?;
+        Ok(sequence)
     }
 
     /// Checkpoint the range command as locally applied only after the caller's

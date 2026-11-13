@@ -9,6 +9,8 @@ use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 use crate::distribution_range_recovery::{
     HandoffRoleAdmission, RegisteredRemoteImageInstallFreeze,
 };
+mod remote_mutation;
+pub(crate) use remote_mutation::NativeRegisteredRemoteTransactionRequest;
 mod remote_installing;
 
 pub(crate) struct NativeRegisteredRemoteInstallPreflight {

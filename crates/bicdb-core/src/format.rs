@@ -62,11 +62,14 @@ pub const NATIVE_WRITER_DATA_DOMAIN_FEATURE_FLAG: &str = "native_writer_data_dom
 /// Node-local Registered proposal semantics; older binaries must refuse.
 pub const NATIVE_REGISTERED_REMOTE_PROPOSAL_FEATURE_FLAG: &str =
     "native_registered_remote_proposal_v1";
+/// Node-local Registered remote history/row-intent semantics, never portable.
+pub const NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG: &str = "native_registered_remote_image_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
     EXACT_DECIMAL_UNITS_FEATURE_FLAG,
     NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG,
     NATIVE_WRITER_DATA_DOMAIN_FEATURE_FLAG,
     NATIVE_REGISTERED_REMOTE_PROPOSAL_FEATURE_FLAG,
+    NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG,
     EXACT_DECIMAL_LIST_SUM_FEATURE_FLAG,
     EXACT_PROPORTIONAL_INTERVALS_FEATURE_FLAG,
     NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG,
@@ -875,6 +878,39 @@ pub(crate) fn native_registered_remote_proposal_active(root: &Path) -> Result<bo
     Ok(metadata
         .feature_flags
         .contains(NATIVE_REGISTERED_REMOTE_PROPOSAL_FEATURE_FLAG))
+}
+pub(crate) fn enable_native_registered_remote_image(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_REGISTERED_REMOTE_PROPOSAL_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "Registered image requires its protected proposal reader fence".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG.into());
+    persist_metadata_with(root, &metadata, true, |path, bytes, sync| {
+        storage::replace_durably(
+            path,
+            storage::ReplaceContents::Plain(bytes),
+            sync,
+            "registered_remote_image.format",
+            storage::FailClosed::No,
+        )
+    })
+}
+pub(crate) fn native_registered_remote_image_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG))
 }
 pub(crate) fn native_writer_enrollment_active(root: &Path) -> Result<bool> {
     let metadata = read_or_legacy_metadata(root)?;

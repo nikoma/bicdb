@@ -3,14 +3,15 @@
 //! the caller supplies a freshly authenticated and authorized CapabilityHost.
 use crate::CapabilityHost;
 use bicdb_extension::abi_v2::{
-    DatabaseAction, DatabaseRequest, EgressRequest, HostCall, HostHandle, HostRequest, HostValue,
-    IsolationLevel, SecretRequest, TransactionRequest,
+    DatabaseAction, DatabaseRequest, EgressRequest, ErrorClass, HostCall, HostError, HostHandle,
+    HostRequest, HostValue, IsolationLevel, SecretRequest, TransactionRequest,
 };
 use bicdb_extension::host::ApplicationHost;
 use bicdb_workflow::{Language, ScriptVersion, WorkflowJob};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(test)]
@@ -40,6 +41,8 @@ struct Host {
     /// Durable workflow jobs may request a retry; HTTP route handlers cannot.
     allow_retry: bool,
     options: ScriptWorkflowOptions,
+    native_errors: BTreeMap<u64, HostError>,
+    pending_error: Option<u64>,
 }
 type Result<T> = std::result::Result<T, String>;
 fn now_ms() -> Result<i64> {
@@ -72,7 +75,10 @@ impl Host {
             request,
         });
         if let Some(error) = response.error {
-            return Err(format!("{}: {}", error.code, error.message));
+            let message = format!("{}: {}", error.code, error.message);
+            self.native_errors.insert(self.request_id, error);
+            self.pending_error = Some(self.request_id);
+            return Err(message);
         }
         response
             .value
@@ -93,6 +99,33 @@ impl Host {
                 .map_err(|e| e.to_string())?;
         }
         Ok(())
+    }
+    fn commit(&mut self) -> Result<()> {
+        let transaction = self
+            .transaction
+            .take()
+            .ok_or_else(|| "no active transaction".to_string())?;
+        let result = self.request(HostRequest::Transaction(TransactionRequest::Commit {
+            transaction,
+        }));
+        if result.is_err() {
+            // Commit may already have consumed its handle. Trusted cleanup must
+            // never replace the original native error and origin.
+            let _ = self.capability.rollback_script_transaction(transaction);
+        }
+        result.map(|_| ())
+    }
+    fn call_with_origins(
+        &mut self,
+        method: &str,
+        value: Value,
+    ) -> std::result::Result<Value, bicdb_script::HostFailure> {
+        self.pending_error = None;
+        self.call(method, value)
+            .map_err(|message| bicdb_script::HostFailure {
+                message,
+                origin: self.pending_error.take(),
+            })
     }
     fn sql(&mut self, method: &str, args: Vec<Value>) -> Result<Value> {
         if args.len() != 2 {
@@ -157,14 +190,11 @@ impl Host {
         if owned {
             match result {
                 Ok(value) => {
-                    self.request(HostRequest::Transaction(TransactionRequest::Commit {
-                        transaction,
-                    }))?;
-                    self.transaction = None;
+                    self.commit()?;
                     Ok(value)
                 }
                 Err(error) => {
-                    self.rollback()?;
+                    let _ = self.rollback();
                     Err(error)
                 }
             }
@@ -201,21 +231,7 @@ impl Host {
                 Ok(Value::Null)
             }
             "db.commit" if args.is_empty() => {
-                let transaction = self
-                    .transaction
-                    .take()
-                    .ok_or_else(|| "no active transaction".to_string())?;
-                let result = self.request(HostRequest::Transaction(TransactionRequest::Commit {
-                    transaction,
-                }));
-                if result.is_err() {
-                    // A failed commit normally consumed the handle. If host
-                    // dispatch failed before consumption, release it through
-                    // trusted deadline-independent cleanup. Neither outcome
-                    // may hide the original commit error from the caller.
-                    let _ = self.capability.rollback_script_transaction(transaction);
-                }
-                result?;
+                self.commit()?;
                 Ok(Value::Null)
             }
             "db.rollback" if args.is_empty() => {
@@ -360,6 +376,8 @@ pub fn execute_script_workflow(
         retry: None,
         allow_retry: true,
         options: options.clone(),
+        native_errors: BTreeMap::new(),
+        pending_error: None,
     }));
     let callback = host.clone();
     let lua_instructions = host
@@ -497,26 +515,37 @@ pub(crate) fn execute_script_handler(
         retry: None,
         allow_retry: false,
         options: options.clone(),
+        native_errors: BTreeMap::new(),
+        pending_error: None,
     }));
     let callback = host.clone();
-    let result = bicdb_script::execute_entry(
+    let result = bicdb_script::execute_entry_with_host_origins(
         javascript,
         export,
         request,
         &options.limits,
-        move |method, args| callback.borrow_mut().call(method, args),
+        move |method, args| callback.borrow_mut().call_with_origins(method, args),
     );
     let mut host = host.borrow_mut();
     let left_open = host.transaction.is_some();
-    host.rollback().map_err(failed)?;
+    let cleanup = host.rollback();
     let expired = || now_ms().map_or(true, |now| now >= deadline);
     let value = match result {
         Ok(value) => value,
         Err(_) if expired() => return Err(timed_out()),
         Err(error) => {
-            return Err(failed(bounded_error_text(&error.0)));
+            if let Some(native) = error
+                .host_origin
+                .and_then(|origin| host.native_errors.remove(&origin))
+            {
+                if let Some(typed) = native_script_error(native) {
+                    return Err(typed);
+                }
+            }
+            return Err(failed(bounded_error_text(&error.error.0)));
         }
     };
+    cleanup.map_err(failed)?;
     if left_open {
         return Err(failed("handler left a transaction open".into()));
     }
@@ -527,6 +556,33 @@ pub(crate) fn execute_script_handler(
         return Err(failed("result exceeds the signed output limit".into()));
     }
     Ok(value)
+}
+
+/// Only an exact exception-object match from this invocation can reach here.
+/// Guest strings/properties and arbitrary SQLSTATEs never select a class.
+fn native_script_error(error: HostError) -> Option<crate::AppRuntimeError> {
+    use crate::AppRuntimeError;
+    let message = bounded_error_text(&error.message);
+    Some(match error.class {
+        ErrorClass::InvalidRequest => AppRuntimeError::InvalidRequest(message),
+        ErrorClass::Unauthenticated => AppRuntimeError::Authentication(message),
+        ErrorClass::Unauthorized | ErrorClass::PolicyDenied | ErrorClass::MutationGrantDenied => {
+            AppRuntimeError::CapabilityDenied(message)
+        }
+        ErrorClass::NotFound => AppRuntimeError::NotFound(message),
+        ErrorClass::Conflict | ErrorClass::Constraint | ErrorClass::CommitValidation => {
+            AppRuntimeError::Conflict(message)
+        }
+        ErrorClass::OptimisticConflict => AppRuntimeError::OptimisticConflict(message),
+        ErrorClass::DependencyUnavailable | ErrorClass::DependencyIncompatible => {
+            AppRuntimeError::NotReady(message)
+        }
+        ErrorClass::Timeout => AppRuntimeError::Timeout(message),
+        ErrorClass::Cancelled => AppRuntimeError::Cancelled(message),
+        ErrorClass::ResourceExhausted => AppRuntimeError::ResourceExhausted(message),
+        ErrorClass::RateLimited => AppRuntimeError::RateLimited(message),
+        _ => return None,
+    })
 }
 
 /// Execute and settle one durable broker delivery. The caller constructs the

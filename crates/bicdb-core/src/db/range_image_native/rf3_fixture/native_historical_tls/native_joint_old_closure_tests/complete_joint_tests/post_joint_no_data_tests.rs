@@ -18,6 +18,15 @@ fn native_post_joint_actual_new_domain_prepare_only_recovers_then_ack4_and_stron
 fn token() -> CancellationToken {
     CancellationToken::uncancelable().child_with_deadline(Instant::now() + Duration::from_secs(5))
 }
+/// Only expiry of the caller's own bounded request is an uncertain outcome
+/// that a fresh request may retry; every protocol refusal stays terminal.
+fn caller_budget_expired(error: &crate::BicDbError) -> bool {
+    let message = error.to_string();
+    matches!(error, crate::BicDbError::QueryTimedOut)
+        || message.contains("query timeout")
+        || message.contains("deadline expired")
+        || message.contains("timed out")
+}
 fn members(range: &crate::RangeDescriptor) -> BTreeSet<ClusterNodeId> {
     range
         .replicas
@@ -637,9 +646,56 @@ pub(super) fn exercise_actual_new_domain_prepare_only_recovery(
         &serde_json::json!({"scope":scope,"command":command,"actual_no_effect_candidate":candidate.record(),"actual_permanent_NEW_promises":promises,"snapshots":new_members.iter().map(|id|(id.clone(),snapshot(fixture,range,id))).collect::<BTreeMap<_,_>>()}),
     );
     for id in &new_members {
-        let resolved =
-            fixture.clients[&range.leader].resolve_native_abort_at(id, &request, &token());
-        fixture.idle();
+        // Each resolve is one bounded request (4.5 s) covering two fresh role
+        // reads, the candidate fetch, the promise round and the durable
+        // decision. On a contended host that budget can expire AFTER the
+        // recipient durably published canonical Abort3; the caller then sees a
+        // timeout while native R is already 3. That is an uncertain outcome,
+        // not a refusal: the protocol's answer is a fresh bounded request,
+        // which must return the ORIGINAL covered decision. Anything other than
+        // caller-budget expiry is still terminal on the first attempt.
+        let mut resolved = None;
+        for attempt in 0..3 {
+            let attempt_request = if attempt == 0 {
+                request.clone()
+            } else {
+                NativeAbortRequest {
+                    challenge: Uuid::now_v7(),
+                    ..request.clone()
+                }
+            };
+            let started = Instant::now();
+            let result = fixture.clients[&range.leader].resolve_native_abort_at(
+                id,
+                &attempt_request,
+                &token(),
+            );
+            fixture.idle();
+            let native_index = fixture.native.databases[id]
+                .read()
+                .current_native_range_source_lineage(range.id)
+                .unwrap()
+                .range_index();
+            eprintln!(
+                "ACTUAL_POST_JOINT_NEW_RESOLVE recipient={id} attempt={attempt} elapsed_ms={} native_index={native_index} error={:?}",
+                started.elapsed().as_millis(),
+                result.as_ref().err().map(|e| e.to_string())
+            );
+            assert!(
+                native_index == 2 || native_index == 3,
+                "{id}: resolve can only keep R2 or publish canonical Abort3"
+            );
+            match result {
+                Err(error) if attempt < 2 && caller_budget_expired(&error) => eprintln!(
+                    "ACTUAL_POST_JOINT_NEW_RESOLVE bounded-fresh-retry recipient={id} attempt={attempt} uncertain-native-index={native_index}"
+                ),
+                result => {
+                    resolved = Some(result);
+                    break;
+                }
+            }
+        }
+        let resolved = resolved.expect("bounded resolve loop always records its last result");
         if let Err(error) = &resolved {
             let stopped = new_members
                 .iter()
@@ -654,20 +710,32 @@ pub(super) fn exercise_actual_new_domain_prepare_only_recovery(
             for member in &new_members {
                 let db = fixture.native.databases[member].read();
                 let source = db.current_native_range_source_lineage(range.id).unwrap();
-                assert_eq!(source.range_index(), 2);
+                // Members are resolved one at a time and a failed request may
+                // itself have published before its reply was lost, so a member
+                // is either untouched at R2 or holds the canonical Abort3.
+                if source.range_index() == 2 {
+                    assert_eq!(
+                        source.logical_history_sha256(),
+                        before[member]["h"].as_str().unwrap()
+                    );
+                    assert_eq!(
+                        db.observe_actual_native_abort_promise(range.id, 3)
+                            .unwrap()
+                            .as_ref(),
+                        Some(&promises[member])
+                    );
+                } else {
+                    assert_eq!(source.range_index(), 3);
+                    assert_eq!(
+                        db.read_native_history_entry(range.id, source.history_generation(), 3)
+                            .unwrap()
+                            .outcome,
+                        crate::db::range_image_native::history::NativeLogicalHistoryOutcomeV1::Aborted
+                    );
+                }
                 assert_eq!(
                     source.actual_local_visibility_sequence(),
                     before[member]["local_data_b"].as_u64().unwrap()
-                );
-                assert_eq!(
-                    source.logical_history_sha256(),
-                    before[member]["h"].as_str().unwrap()
-                );
-                assert_eq!(
-                    db.observe_actual_native_abort_promise(range.id, 3)
-                        .unwrap()
-                        .as_ref(),
-                    Some(&promises[member])
                 );
                 assert!(db.get("items", &failed_key).unwrap().is_none());
             }

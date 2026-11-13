@@ -389,12 +389,30 @@ fn native_origin_retained_wal_requires_root_after_scoped_backing_was_dropped() {
         let cfg = config(mode);
         let mut db = BicDb::open_with_config(&path, cfg.clone()).unwrap();
         db.sync_quorum().hold("origin-history-control", 0);
+        // Allocate the catalog log before root/birth activation too, so the
+        // later DROP leaves no scoped namespace and tests the WAL-only fence.
+        db.create_collection("independent").unwrap();
+        db.insert(
+            "independent",
+            Record::new("ACK").with_metadata(json!({"value":97})),
+        )
+        .unwrap();
+        let ack = db
+            .get("independent", "ACK")
+            .unwrap()
+            .unwrap()
+            .content_hash()
+            .unwrap();
         db.activate_native_origin_root_v1().unwrap();
         enable_birth(&mut db);
         let root = db.native_origin_root_id().unwrap();
         db.create_collection("scoped").unwrap();
         db.insert("scoped", Record::new("ACK")).unwrap();
         db.drop_collection("scoped").unwrap();
+        assert!(db
+            .collections()
+            .iter()
+            .all(|m| m.native_backing_origin_root.is_none()));
         db.close().unwrap();
         let file = format::metadata_path(&path);
         let original = fs::read(&file).unwrap();
@@ -412,6 +430,14 @@ fn native_origin_retained_wal_requires_root_after_scoped_backing_was_dropped() {
         fs::write(file, original).unwrap();
         let db = BicDb::open_with_config(&path, cfg).unwrap();
         assert_eq!(db.native_origin_root_id().unwrap(), root);
+        assert_eq!(
+            db.get("independent", "ACK")
+                .unwrap()
+                .unwrap()
+                .content_hash()
+                .unwrap(),
+            ack
+        );
     }
 }
 

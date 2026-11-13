@@ -80,3 +80,5 @@ impl BicDb {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod wal_tests;

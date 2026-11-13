@@ -482,38 +482,6 @@ impl NativeHotRecoveryMaintenance {
             Phase::Publish | Phase::Replica => unreachable!(),
         }
     }
-    /// Socket budget of one FOLLOWER subrequest of the current phase.
-    fn follower_io_ms(job: &Job, budget_ms: u64, deferred: bool) -> u64 {
-        if job.phase == Phase::Fence {
-            budget_ms.min(500)
-        } else if deferred {
-            // Bounded re-probe: leave budget for the other deferred peer
-            // and for the mandatory original origin.
-            (budget_ms / 2).max(1)
-        } else {
-            budget_ms.saturating_sub(250).max(1)
-        }
-    }
-    /// Scheduling predicate only: would the current phase be sent to this
-    /// follower now? Returns its `deferred` (transport cooldown) flag.
-    fn follower_due(job: &Job, node: &ClusterNodeId, cooldown_probe: bool) -> Option<bool> {
-        let vetoed = job.semantic_veto.contains_key(node);
-        if job.phase_observed.contains(node) && !vetoed {
-            return None;
-        }
-        if !vetoed && job.recipient_next.get(node) != Some(&job.phase) {
-            return None;
-        }
-        let deferred = !vetoed
-            && job
-                .peer_retry_after
-                .get(node)
-                .is_some_and(|d| Instant::now() < *d);
-        if deferred && !cooldown_probe {
-            return None;
-        }
-        Some(deferred)
-    }
     fn run_job(&self, job: &mut Job, parent: &CancellationToken) -> Result<()> {
         self.live(parent)?;
         let held = self.coordinator.reserve_hot_native_recovery(
@@ -529,12 +497,6 @@ impl NativeHotRecoveryMaintenance {
         // Per attempt and phase: a transport cooldown may defer a peer only
         // while the origin plus a majority can be observed without it.
         let mut cooldown_probe = false;
-        // Actual results of follower subrequests of the CURRENT phase that
-        // were sent concurrently with an earlier member's. Each is consumed
-        // exactly once by the unchanged per-recipient handling below; the
-        // original origin is never sent before every due follower returned.
-        let mut concurrent: BTreeMap<ClusterNodeId, (u64, Result<HotRecoveryPeerOpen>)> =
-            BTreeMap::new();
         loop {
             self.live(&phase_parent)?;
             role.require_live_request()?;
@@ -601,7 +563,6 @@ impl NativeHotRecoveryMaintenance {
                         })
                     {
                         cooldown_probe = true;
-                        concurrent.clear();
                         continue;
                     }
                     return Err(invalid("hot native phase lacks actual original-origin and majority recipient observations"));
@@ -610,7 +571,6 @@ impl NativeHotRecoveryMaintenance {
                 fresh.require_live_request()?;
                 job.position = 0;
                 cooldown_probe = false;
-                concurrent.clear();
                 job.phase_observed.clear();
                 job.phase = match job.phase {
                     Phase::Fence => Phase::Certify,
@@ -657,117 +617,31 @@ impl NativeHotRecoveryMaintenance {
                 continue;
             }
             let budget_ms = Self::remaining(&phase_parent)?;
-            let (io_ms, result) = if let Some(returned) = concurrent.remove(&node) {
-                returned
-            } else if origin {
-                #[cfg(test)]
-                eprintln!("NATIVE_HOT_DATA_PHASE node={} target={} phase={:?} command={} nonce={} remaining_ms={} subrequest_ms={}", self.initial.seed.spec.node_id,node,job.phase,job.command.command_id,job.scope.recovery_nonce,budget_ms,budget_ms);
-                let result = self
-                    .initial
-                    .transport
-                    .hot_recovery_phase_observation(
-                        &node,
-                        Self::phase_request(job, budget_ms),
-                        job.command.index,
-                        Duration::from_millis(budget_ms),
-                        &phase_parent,
-                    )
-                    .map(|receipt| receipt.observed_open().clone());
-                (budget_ms, result)
+            let io_ms = if origin {
+                budget_ms
+            } else if job.phase == Phase::Fence {
+                budget_ms.min(500)
+            } else if deferred {
+                // Bounded re-probe: leave budget for the other deferred peer
+                // and for the mandatory original origin.
+                (budget_ms / 2).max(1)
             } else {
-                // This follower plus every LATER follower the same phase is
-                // due to. They are independent recipients of one request
-                // kind; sending them together removes one whole peer round
-                // trip per phase from the unavailable window.
-                let current: &Job = job;
-                let mut batch = vec![(
-                    node.clone(),
-                    Self::follower_io_ms(current, budget_ms, deferred),
-                )];
-                for later in &current.members[current.position + 1..] {
-                    if *later == self.initial.seed.spec.node_id {
-                        continue;
-                    }
-                    if let Some(later_deferred) = Self::follower_due(current, later, cooldown_probe)
-                    {
-                        batch.push((
-                            later.clone(),
-                            Self::follower_io_ms(current, budget_ms, later_deferred),
-                        ));
-                    }
-                }
-                let index = current.command.index;
-                let transport = &self.initial.transport;
-                let requests = batch
-                    .into_iter()
-                    .map(|(target, io_ms)| {
-                        #[cfg(test)]
-                        eprintln!("NATIVE_HOT_DATA_PHASE node={} target={} phase={:?} command={} nonce={} remaining_ms={} subrequest_ms={}", self.initial.seed.spec.node_id,target,current.phase,current.command.command_id,current.scope.recovery_nonce,budget_ms,io_ms);
-                        (target, io_ms, Self::phase_request(current, budget_ms))
-                    })
-                    .collect::<Vec<_>>();
-                let mut returned = if requests.len() == 1 {
-                    requests
-                        .into_iter()
-                        .map(|(target, io_ms, request)| {
-                            let result = transport
-                                .hot_recovery_phase_observation(
-                                    &target,
-                                    request,
-                                    index,
-                                    Duration::from_millis(io_ms),
-                                    &phase_parent,
-                                )
-                                .map(|receipt| receipt.observed_open().clone());
-                            (target, io_ms, result)
-                        })
-                        .collect::<Vec<_>>()
-                } else {
-                    std::thread::scope(|scope| {
-                        let started = requests
-                            .into_iter()
-                            .map(|(target, io_ms, request)| {
-                                let token = phase_parent.clone();
-                                let destination = target.clone();
-                                let worker = std::thread::Builder::new()
-                                    .name("native-hot-phase-peer".into())
-                                    .spawn_scoped(scope, move || {
-                                        transport
-                                            .hot_recovery_phase_observation(
-                                                &destination,
-                                                request,
-                                                index,
-                                                Duration::from_millis(io_ms),
-                                                &token,
-                                            )
-                                            .map(|receipt| receipt.observed_open().clone())
-                                    });
-                                (target, io_ms, worker)
-                            })
-                            .collect::<Vec<_>>();
-                        started
-                            .into_iter()
-                            .map(|(target, io_ms, worker)| {
-                                // A sender-local spawn failure or panic is
-                                // not a statement by the peer: end the attempt
-                                // like a local expiry, without veto/cooldown.
-                                let result = match worker {
-                                    Ok(worker) => worker
-                                        .join()
-                                        .unwrap_or(Err(crate::BicDbError::QueryTimedOut)),
-                                    Err(_) => Err(crate::BicDbError::QueryTimedOut),
-                                };
-                                (target, io_ms, result)
-                            })
-                            .collect::<Vec<_>>()
-                    })
-                };
-                let (_, io_ms, result) = returned.remove(0);
-                for (target, io_ms, result) in returned {
-                    concurrent.insert(target, (io_ms, result));
-                }
-                (io_ms, result)
+                budget_ms.saturating_sub(250).max(1)
             };
+            let request = Self::phase_request(job, budget_ms);
+            #[cfg(test)]
+            eprintln!("NATIVE_HOT_DATA_PHASE node={} target={} phase={:?} command={} nonce={} remaining_ms={} subrequest_ms={}", self.initial.seed.spec.node_id,node,job.phase,job.command.command_id,job.scope.recovery_nonce,budget_ms,io_ms);
+            let result = self
+                .initial
+                .transport
+                .hot_recovery_phase_observation(
+                    &node,
+                    request,
+                    job.command.index,
+                    Duration::from_millis(io_ms),
+                    &phase_parent,
+                )
+                .map(|receipt| receipt.observed_open().clone());
             // Expired caller/role or changed original service slot aborts the
             // whole attempt regardless of any shorter peer socket timeout.
             self.live(&phase_parent)?;

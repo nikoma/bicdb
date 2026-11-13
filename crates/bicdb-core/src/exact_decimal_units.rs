@@ -4,7 +4,7 @@ use bigdecimal::num_bigint::BigInt;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
-use crate::{BicDbError, MAX_EXACT_DECIMAL_LIST_SUM_ITEMS, Result};
+use crate::{BicDbError, Result, MAX_EXACT_DECIMAL_LIST_SUM_ITEMS};
 
 const MAX_UNITS_BITS: u64 = 254;
 const MAX_UNITS_DIGITS: usize = 77;

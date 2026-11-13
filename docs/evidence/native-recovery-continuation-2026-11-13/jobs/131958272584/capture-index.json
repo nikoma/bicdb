@@ -1,0 +1,149 @@
+{
+  "source_revision": "4081523f16e0d5ee1c36d332145ad6d56e479080",
+  "requested_source": "4081523f16e0d5ee1c36d332145ad6d56e479080",
+  "authoritative_source_verified": true,
+  "run_id": 43446784706,
+  "job_id": 131958272584,
+  "job_name": "Focused Core library (native_registered_fifth_remote_old_actual_close_fetch_cut_and_source_tls_without_local_quorum)",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T14:58:14.760731+00:00",
+  "raw_bytes": 112254,
+  "raw_sha256": "41784e9736dd9fa04516f20322af11d2c8f3ecf7d94b2c72b7d87b5f2f9df3a3",
+  "compressed_file": "job.log.gz",
+  "compressed_sha256": "cdac679ced0587090b5a0e5f6a7fd221386ea7ef8f8589cd2440a2fe0f678cee",
+  "capture_exit_code": 0,
+  "test_summaries": [],
+  "failure_context": [
+    {
+      "line": 1204,
+      "remaining": 5,
+      "lines": [
+        "2026-11-13T14:55:44.4283607Z    |                       ^^^^^^^",
+        "2026-11-13T14:55:44.4283908Z",
+        "2026-11-13T14:55:55.1664778Z error[E0609]: no field `database` on type `&provisional_listener::registration::initial_data::NativeInitialDataAdmission`",
+        "2026-11-13T14:55:55.1666262Z    --> crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/old_step/remote_old.rs:276:51",
+        "2026-11-13T14:55:55.1667100Z     |",
+        "2026-11-13T14:55:55.1667613Z 276 |             store.require_listener_database(&self.database)?;",
+        "2026-11-13T14:55:55.1668379Z     |                                                   ^^^^^^^^ unknown field",
+        "2026-11-13T14:55:55.1668895Z     |",
+        "2026-11-13T14:55:55.1669566Z     = note: available fields are: `service`, `runtime`, `writer`, `root`, `store_open` ... and 8 others",
+        "2026-11-13T14:55:55.1670117Z",
+        "2026-11-13T14:55:55.1675131Z error[E0609]: no field `database` on type `&provisional_listener::registration::initial_data::NativeInitialDataAdmission`"
+      ]
+    },
+    {
+      "line": 1212,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T14:55:55.1669566Z     = note: available fields are: `service`, `runtime`, `writer`, `root`, `store_open` ... and 8 others",
+        "2026-11-13T14:55:55.1670117Z",
+        "2026-11-13T14:55:55.1675131Z error[E0609]: no field `database` on type `&provisional_listener::registration::initial_data::NativeInitialDataAdmission`",
+        "2026-11-13T14:55:55.1676946Z    --> crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/old_step/remote_old.rs:289:18",
+        "2026-11-13T14:55:55.1677911Z     |",
+        "2026-11-13T14:55:55.1678286Z 289 |             self.database.require_database(&db)?;",
+        "2026-11-13T14:55:55.1678783Z     |                  ^^^^^^^^ unknown field",
+        "2026-11-13T14:55:55.1679139Z     |",
+        "2026-11-13T14:55:55.1679654Z     = note: available fields are: `service`, `runtime`, `writer`, `root`, `store_open` ... and 8 others",
+        "2026-11-13T14:55:55.1680074Z",
+        "2026-11-13T14:56:01.1323678Z warning: unused import: `Verifier`",
+        "2026-11-13T14:56:01.1324754Z    --> crates/bicdb-core/src/db.rs:145:32",
+        "2026-11-13T14:56:01.1325488Z     |",
+        "2026-11-13T14:56:01.1326556Z 145 | use ed25519_dalek::{Signature, Verifier, VerifyingKey};",
+        "2026-11-13T14:56:01.1327445Z     |                                ^^^^^^^^",
+        "2026-11-13T14:56:01.1327732Z"
+      ]
+    }
+  ],
+  "test_observations": [],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T14:51:54Z",
+      "completed_at": "2026-11-13T14:51:55Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T14:51:55Z",
+      "completed_at": "2026-11-13T14:52:03Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T14:52:03Z",
+      "completed_at": "2026-11-13T14:52:14Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T14:52:14Z",
+      "completed_at": "2026-11-13T14:52:23Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 5,
+      "started_at": "2026-11-13T14:52:23Z",
+      "completed_at": "2026-11-13T14:56:18Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 6,
+      "started_at": "2026-11-13T14:56:18Z",
+      "completed_at": "2026-11-13T14:56:18Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 7,
+      "started_at": "2026-11-13T14:56:18Z",
+      "completed_at": "2026-11-13T14:56:18Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T14:56:18Z",
+      "completed_at": "2026-11-13T14:56:19Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-13T14:56:19Z",
+      "completed_at": "2026-11-13T14:56:19Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T14:56:19Z",
+      "completed_at": "2026-11-13T14:56:19Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T14:56:19Z",
+      "completed_at": "2026-11-13T14:56:19Z"
+    }
+  ]
+}

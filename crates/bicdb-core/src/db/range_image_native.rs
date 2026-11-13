@@ -868,6 +868,8 @@ impl BicDb {
         db.activate_local_namespace_identity_v1()?;
         db.activate_native_collection_birth_v1()?;
         db.activate_native_wal_backing_capture_v1()?;
+        #[cfg(unix)]
+        db.activate_native_catalog_allocation_facts_v1()?;
         format::enable_range_image_install(root)?;
         if enforce {
             format::enable_current_image_proposal(root)?;

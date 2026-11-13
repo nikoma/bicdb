@@ -2847,6 +2847,7 @@ impl BicDb {
             commit_seq,
             &tx.writes,
             &pending_publishes,
+            &tx.native_catalog_allocations,
             &record_audit_events,
             &sync_ops,
             prepared,

@@ -172,13 +172,19 @@ impl BicDb {
         &self,
         frame: CommitFrame,
         backings: BTreeMap<String, CollectionMeta>,
+        allocations: BTreeMap<String, CollectionMeta>,
     ) -> Result<CommitFrame> {
         let backings = validated(backings)?;
+        let allocations = native_catalog_allocations::validated(allocations)?;
+        native_origin::validate_catalog(
+            &allocations.values().cloned().collect::<Vec<_>>(),
+            self.native_origin.as_ref(),
+        )?;
         native_origin::validate_catalog(
             &backings.values().cloned().collect::<Vec<_>>(),
             self.native_origin.as_ref(),
         )?;
-        if backings.is_empty() || !self.config.fsync {
+        if (backings.is_empty() && allocations.is_empty()) || !self.config.fsync {
             return Ok(frame);
         }
         if !self.native_wal_backing_capture_active {
@@ -198,6 +204,7 @@ impl BicDb {
             &self.incarnation,
             backings,
             self.observe_native_origin_root()?,
+            allocations,
         ))
     }
 }

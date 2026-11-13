@@ -80,6 +80,7 @@ impl BicDb {
         commit_seq: u64,
         writes: &[TxWrite],
         broker_publishes: &[crate::broker::PendingBrokerPublish],
+        native_catalog_allocations: &BTreeMap<String, CollectionMeta>,
         record_audit_events: &[Event],
         sync_ops: &[SyncOp],
         prepared: PreparedWal,
@@ -89,6 +90,7 @@ impl BicDb {
             commit_seq,
             writes,
             broker_publishes,
+            native_catalog_allocations,
             record_audit_events,
             sync_ops,
             prepared,
@@ -102,6 +104,7 @@ impl BicDb {
         commit_seq: u64,
         writes: &[TxWrite],
         broker_publishes: &[crate::broker::PendingBrokerPublish],
+        native_catalog_allocations: &BTreeMap<String, CollectionMeta>,
         record_audit_events: &[Event],
         sync_ops: &[SyncOp],
         prepared: PreparedWal,
@@ -115,6 +118,7 @@ impl BicDb {
             return Ok(Vec::new());
         }
         let native_backings = self.capture_native_wal_backings(writes)?;
+        self.validate_native_catalog_allocation_commit(writes, native_catalog_allocations)?;
         let prepared = match prepared {
             PreparedWal::PlainFrames { count, mut bytes }
                 if count == writes.len() && !self.encryption.is_enabled() =>
@@ -151,6 +155,7 @@ impl BicDb {
                         timestamp,
                         commit_seq,
                         native_backings: &native_backings,
+                        native_catalog_allocations,
                     },
                 )?;
                 return Ok(bytes);
@@ -194,6 +199,7 @@ impl BicDb {
             timestamp,
             commit_seq,
             native_backings: &native_backings,
+            native_catalog_allocations,
         })?);
         storage::encode_frames_to_bytes(
             &self.tx_log_path(),
@@ -266,6 +272,7 @@ impl BicDb {
                     local_namespace_id: self.fresh_local_namespace_identity(),
                     native_backing_birth_id: self.fresh_native_collection_birth(),
                     native_backing_origin_root: self.fresh_native_backing_origin_root(),
+                    native_catalog_allocation_pending: false,
                 };
                 self.collections.insert(
                     write.collection.clone(),
@@ -289,6 +296,7 @@ impl BicDb {
             commit_seq,
             writes,
             &[],
+            &BTreeMap::new(),
             journal,
             &[],
             PreparedWal::default(),
@@ -1689,6 +1697,10 @@ impl BicDb {
             self.local_namespace_identity_active,
         )?;
         native_origin::validate_catalog(&collections, self.native_origin.as_ref())?;
+        native_catalog_allocations::validate_catalog(
+            &collections,
+            self.native_catalog_allocation_facts_active,
+        )?;
         collections.sort_by(|left, right| left.name.cmp(&right.name));
         let catalog = CollectionCatalog { collections };
         let bytes = serde_json::to_vec_pretty(&catalog)?;
@@ -2861,7 +2873,11 @@ impl BicDb {
     }
 
     pub(crate) fn ensure_collection(&self, collection: &str) -> Result<()> {
-        self.collection_state(collection).map(|_| ())
+        let state = self.collection_state(collection)?;
+        if state.meta.native_catalog_allocation_pending {
+            return Err(BicDbError::Replication(format!("Native collection `{collection}` creation publication is pending; retry its create operation")));
+        }
+        Ok(())
     }
 
     pub(crate) fn validate_secure_index_definition(

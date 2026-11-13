@@ -214,6 +214,7 @@ pub struct NativeWalWriteCapture {
     source_open_incarnation: String,
     backings: BTreeMap<String, CollectionMeta>,
     origin_root: Option<crate::db::NativeOriginObservation>,
+    catalog_allocations: BTreeMap<String, CollectionMeta>,
 }
 
 impl CommitFrame {
@@ -258,12 +259,14 @@ impl CommitFrame {
         source_open_incarnation: &str,
         backings: BTreeMap<String, CollectionMeta>,
         origin_root: Option<crate::db::NativeOriginObservation>,
+        catalog_allocations: BTreeMap<String, CollectionMeta>,
     ) -> Self {
         self.native_wal_capture = Some(NativeWalWriteCapture {
             frame_checksum: self.checksum,
             source_open_incarnation: source_open_incarnation.to_owned(),
             backings,
             origin_root,
+            catalog_allocations,
         });
         self
     }
@@ -291,6 +294,16 @@ impl CommitFrame {
             .native_wal_capture
             .as_ref()
             .and_then(|c| c.origin_root.as_ref()))
+    }
+
+    pub(crate) fn captured_native_catalog_allocations(
+        &self,
+    ) -> Result<Option<&BTreeMap<String, CollectionMeta>>> {
+        self.captured_native_wal_backings()?;
+        Ok(self
+            .native_wal_capture
+            .as_ref()
+            .map(|c| &c.catalog_allocations))
     }
 
     pub fn verify_checksum(&self) -> Result<()> {

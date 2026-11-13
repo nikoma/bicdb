@@ -265,6 +265,7 @@ mod tests {
                 timestamp: 9877,
                 commit_seq: 1,
                 native_backings: BTreeMap::new(),
+                native_catalog_allocations: BTreeMap::new(),
             })
             .unwrap(),
         );

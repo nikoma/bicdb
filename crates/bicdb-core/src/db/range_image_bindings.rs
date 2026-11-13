@@ -90,6 +90,12 @@ impl BicDb {
                 ))
             })?;
             let state = self.collection_state(&name)?;
+            if state.meta.native_catalog_allocation_pending {
+                return Err(BicDbError::Cluster(
+                    "Native creation publication is pending; no protected capture is available"
+                        .into(),
+                ));
+            }
             if !state.paged_lazy {
                 return Err(BicDbError::Cluster(format!(
                     "range image namespace `{name}` is not server_paged"

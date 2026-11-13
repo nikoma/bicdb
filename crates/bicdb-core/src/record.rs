@@ -1291,6 +1291,10 @@ pub enum CollectionMode {
     TimeSeries,
 }
 
+fn is_false_bool(value: &bool) -> bool {
+    !value
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CollectionMeta {
     pub name: String,
@@ -1334,6 +1338,10 @@ pub struct CollectionMeta {
     /// Native root active at actual allocation, never assigned later.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native_backing_origin_root: Option<uuid::Uuid>,
+    /// Private Native creation publication still needs its catalog-stream
+    /// decision. Import metadata must never adopt this local pending state.
+    #[serde(default, skip_serializing_if = "is_false_bool")]
+    pub native_catalog_allocation_pending: bool,
 }
 
 impl CollectionMeta {
@@ -1349,6 +1357,7 @@ impl CollectionMeta {
         portable.local_namespace_id = None;
         portable.native_backing_birth_id = None;
         portable.native_backing_origin_root = None;
+        portable.native_catalog_allocation_pending = false;
         portable
     }
 
@@ -1366,6 +1375,7 @@ impl CollectionMeta {
             local_namespace_id: None,
             native_backing_birth_id: None,
             native_backing_origin_root: None,
+            native_catalog_allocation_pending: false,
         }
     }
 
@@ -1383,6 +1393,7 @@ impl CollectionMeta {
             local_namespace_id: None,
             native_backing_birth_id: None,
             native_backing_origin_root: None,
+            native_catalog_allocation_pending: false,
         }
     }
 }

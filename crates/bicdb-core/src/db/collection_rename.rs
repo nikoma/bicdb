@@ -160,6 +160,14 @@ impl BicDb {
     /// On a replication primary, ships `op` to standbys (see
     /// [`CATALOG_LOG_COLLECTION`]).
     pub(super) fn log_catalog_op(&mut self, op: CatalogOp) -> Result<()> {
+        self.log_catalog_op_with_allocation(op, None)
+    }
+
+    pub(super) fn log_catalog_op_with_allocation(
+        &mut self,
+        op: CatalogOp,
+        allocation: Option<native_catalog_allocations::NativeCatalogAllocation>,
+    ) -> Result<()> {
         if !self.replicates_catalog() {
             return Ok(());
         }
@@ -175,6 +183,9 @@ impl BicDb {
         let record = Record::new(Uuid::new_v4().simple().to_string())
             .with_metadata(serde_json::to_value(&op)?);
         let mut tx = self.begin_transaction()?;
+        if let Some(allocation) = allocation {
+            allocation.stage(&mut tx)?;
+        }
         tx.insert(CATALOG_LOG_COLLECTION, record)?;
         tx.commit()
     }
@@ -379,6 +390,15 @@ impl BicDb {
     }
 
     fn ensure_renamable(&self, collection: &str) -> Result<()> {
+        if self
+            .collection_state(collection)?
+            .meta
+            .native_catalog_allocation_pending
+        {
+            return Err(BicDbError::Replication(
+                "Native allocation publication is pending; retry create before rename".into(),
+            ));
+        }
         let refuse = |reason: &str| {
             Err(BicDbError::Unsupported(format!(
                 "collection `{collection}` cannot be renamed: {reason}"
@@ -635,6 +655,7 @@ impl BicDb {
         copied.local_namespace_id = target.meta.local_namespace_id;
         copied.native_backing_birth_id = target.meta.native_backing_birth_id;
         copied.native_backing_origin_root = target.meta.native_backing_origin_root;
+        copied.native_catalog_allocation_pending = target.meta.native_catalog_allocation_pending;
         copied.renamed_from = None;
         target.meta = copied;
         self.persist_catalog()?;

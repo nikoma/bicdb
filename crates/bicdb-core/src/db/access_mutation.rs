@@ -975,6 +975,7 @@ impl BicDb {
             constraint_modes: Mutex::new(Vec::new()),
             mutation_grants: BTreeMap::new(),
             native_write_issuers: Mutex::new(BTreeMap::new()),
+            native_catalog_allocations: BTreeMap::new(),
             next_mutation_grant: 1,
             commit_validators: Vec::new(),
             validate_existing_application_invariants: false,

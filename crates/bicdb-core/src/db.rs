@@ -13,6 +13,7 @@ mod native_calendar;
 use exact_decimal_sum::ExactDecimalSum;
 mod local_namespace_identity;
 mod mutation_identity;
+mod native_catalog_allocations;
 mod native_collection_birth;
 mod native_origin;
 pub(crate) use native_origin::NativeOriginObservation;
@@ -4005,6 +4006,7 @@ pub struct BicDb {
     native_wal_backing_capture_active: bool,
     native_origin: Option<native_origin::NativeOriginRoot>,
     fresh_directory_created: bool,
+    native_catalog_allocation_facts_active: bool,
     sql_partition_execution_v1_active: AtomicBool,
     ha_state: HaState,
     replication_state: ReplicationApplyState,
@@ -7778,6 +7780,8 @@ pub(crate) enum TxFrame {
         /// Empty for legacy/unborn backings, never inferred during replay.
         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         native_backings: BTreeMap<String, CollectionMeta>,
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        native_catalog_allocations: BTreeMap<String, CollectionMeta>,
     },
     #[serde(rename = "tx_commit_materialized")]
     CommitMaterialized {
@@ -7836,6 +7840,8 @@ struct TxFrameWire {
     commit_seq: u64,
     #[serde(default)]
     native_backings: BTreeMap<String, CollectionMeta>,
+    #[serde(default)]
+    native_catalog_allocations: BTreeMap<String, CollectionMeta>,
 }
 
 fn decode_tx_frame(payload: &[u8]) -> Result<TxFrame> {
@@ -7889,6 +7895,9 @@ fn decode_tx_frame(payload: &[u8]) -> Result<TxFrame> {
             timestamp: wire.timestamp.ok_or_else(|| missing("timestamp"))?,
             commit_seq: wire.commit_seq,
             native_backings: native_wal_backings::validated(wire.native_backings)?,
+            native_catalog_allocations: native_catalog_allocations::validated(
+                wire.native_catalog_allocations,
+            )?,
         },
         TxFrameKind::TxCommitMaterialized => TxFrame::CommitMaterialized {
             tx_id: wire.tx_id,
@@ -8334,6 +8343,8 @@ enum TxFrameRef<'a> {
         commit_seq: u64,
         #[serde(skip_serializing_if = "BTreeMap::is_empty")]
         native_backings: &'a BTreeMap<String, CollectionMeta>,
+        #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+        native_catalog_allocations: &'a BTreeMap<String, CollectionMeta>,
     },
 }
 
@@ -9158,6 +9169,7 @@ struct RetainedReplicationCommit {
     writes: Vec<ReplicationWrite>,
     audit_events: Vec<Event>,
     native_backings: BTreeMap<String, CollectionMeta>,
+    native_catalog_allocations: BTreeMap<String, CollectionMeta>,
 }
 
 fn tx_write_to_replication_write(
@@ -9494,6 +9506,7 @@ pub struct Transaction {
     constraint_modes: Mutex<Vec<(String, bool)>>,
     mutation_grants: BTreeMap<MutationGrantId, MutationGrant>,
     native_write_issuers: Mutex<BTreeMap<usize, Option<String>>>,
+    native_catalog_allocations: BTreeMap<String, CollectionMeta>,
     next_mutation_grant: u64,
     commit_validators: Vec<NativeCommitValidator>,
     // Explicit existing-data admission retains full validation on a zero-write
@@ -10639,6 +10652,22 @@ impl BicDb {
             format_capabilities.contains(format::NATIVE_COLLECTION_BIRTH_FEATURE_FLAG);
         let native_wal_backing_capture_active =
             format_capabilities.contains(format::NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG);
+        let native_catalog_allocation_facts_active =
+            format_capabilities.contains(format::NATIVE_CATALOG_ALLOCATION_FACTS_FEATURE_FLAG);
+        if tx_recovery.requires_native_catalog_allocations
+            && !native_catalog_allocation_facts_active
+        {
+            return Err(BicDbError::FormatCompatibility(
+                "Native catalog allocation facts require their publisher format fence".into(),
+            ));
+        }
+        if native_catalog_allocation_facts_active
+            && (!native_wal_backing_capture_active || native_origin.is_none())
+        {
+            return Err(BicDbError::FormatCompatibility(
+                "Native allocation publication has no origin/WAL capture fence".into(),
+            ));
+        }
         if native_wal_backing_capture_active && !native_collection_birth_active {
             return Err(BicDbError::FormatCompatibility(
                 "Native WAL backing capture has no collection birth format fence".into(),
@@ -10659,6 +10688,10 @@ impl BicDb {
         )?;
         native_wal_backings::rebind_recovery_writes(&mut tx_recovery, &metas)?;
         native_origin::validate_catalog(&metas, native_origin.as_ref())?;
+        native_catalog_allocations::validate_catalog(
+            &metas,
+            native_catalog_allocation_facts_active,
+        )?;
         native_origin::validate_recorded_roots(
             &tx_recovery.native_origin_roots,
             native_origin.as_ref(),
@@ -11452,6 +11485,7 @@ impl BicDb {
             sql_partition_execution_v1_active: AtomicBool::new(sql_partition_execution_v1_active),
             native_origin,
             fresh_directory_created,
+            native_catalog_allocation_facts_active,
             ha_state,
             replication_state,
             consensus_state,
@@ -12338,7 +12372,11 @@ impl BicDb {
                     frame
                 };
                 let frame = frame.with_required_reader_features(reader_features.clone())?;
-                self.capture_native_wal_export(frame, commit.native_backings)
+                self.capture_native_wal_export(
+                    frame,
+                    commit.native_backings,
+                    commit.native_catalog_allocations,
+                )
             })
             .collect::<Result<Vec<_>>>()?)
     }
@@ -12499,6 +12537,7 @@ impl BicDb {
         let mut writes: BTreeMap<u64, Vec<TxWrite>> = BTreeMap::new();
         let mut audit: BTreeMap<u64, Vec<Event>> = BTreeMap::new();
         let mut native_backings_by_tx = BTreeMap::new();
+        let mut native_allocations_by_tx = BTreeMap::new();
         let mut commits: Vec<(u64, u64, i64)> = Vec::new();
         for (_, _, payload) in frames {
             let tx_frame = decode_tx_frame(&payload)?;
@@ -12522,10 +12561,12 @@ impl BicDb {
                     timestamp,
                     commit_seq,
                     native_backings,
+                    native_catalog_allocations,
                 } => {
                     if commit_seq <= through_seq {
                         commits.push((commit_seq, tx_id.0, timestamp));
                         native_backings_by_tx.insert(tx_id.0, native_backings);
+                        native_allocations_by_tx.insert(tx_id.0, native_catalog_allocations);
                     } else {
                         writes.remove(&tx_id.0);
                         audit.remove(&tx_id.0);
@@ -12535,6 +12576,7 @@ impl BicDb {
                     writes.remove(&tx_id.0);
                     audit.remove(&tx_id.0);
                     native_backings_by_tx.remove(&tx_id.0);
+                    native_allocations_by_tx.remove(&tx_id.0);
                     commits.retain(|(_, committed_tx_id, _)| *committed_tx_id != tx_id.0);
                 }
                 TxFrame::Truncate { tx_id, len } => {
@@ -12573,6 +12615,9 @@ impl BicDb {
                 writes,
                 audit_events: audit.remove(&tx_id).unwrap_or_default(),
                 native_backings,
+                native_catalog_allocations: native_allocations_by_tx
+                    .remove(&tx_id)
+                    .unwrap_or_default(),
             });
         }
         Ok(retained)
@@ -13334,6 +13379,7 @@ impl BicDb {
         self.ensure_writable("create collection")?;
         validate_collection_name(name)?;
         if self.collections.contains_key(name) {
+            self.finish_native_catalog_allocation(name)?;
             return Ok(());
         }
 
@@ -13354,6 +13400,8 @@ impl BicDb {
             local_namespace_id: self.fresh_local_namespace_identity(),
             native_backing_birth_id: self.fresh_native_collection_birth(),
             native_backing_origin_root: self.fresh_native_backing_origin_root(),
+            native_catalog_allocation_pending: self.native_catalog_allocation_logging_active()
+                && name != collection_rename::CATALOG_LOG_COLLECTION,
         };
         if let Some(storage) = storage_name {
             self.set_storage_alias(name, &storage);
@@ -13361,13 +13409,18 @@ impl BicDb {
         self.collections
             .insert(name.to_string(), RwLock::new(CollectionState::new(meta)));
         self.persist_catalog()?;
-        if name != collection_rename::CATALOG_LOG_COLLECTION {
-            self.log_catalog_op(collection_rename::CatalogOp::Create {
-                name: name.to_string(),
-                mode: logged_mode,
-            })?;
-        }
         self.schema_compatibility.invalidate();
+        if name != collection_rename::CATALOG_LOG_COLLECTION {
+            let allocation = self.pending_native_catalog_allocation(name)?;
+            self.log_catalog_op_with_allocation(
+                collection_rename::CatalogOp::Create {
+                    name: name.to_string(),
+                    mode: logged_mode,
+                },
+                allocation,
+            )?;
+            self.clear_native_catalog_allocation_pending(name)?;
+        }
         Ok(())
     }
 
@@ -21255,6 +21308,7 @@ struct TxRecovery {
     next_tx_id: u64,
     last_commit_seq: u64,
     requires_native_collection_birth: bool,
+    requires_native_catalog_allocations: bool,
     native_backings_by_tx: BTreeMap<u64, BTreeMap<String, (Uuid, Uuid)>>,
     native_backing_history: BTreeSet<(Uuid, Uuid)>,
     native_origin_roots: BTreeSet<Uuid>,
@@ -21402,6 +21456,7 @@ fn recover_transaction_log(
     let mut max_tx = 0_u64;
     let mut max_commit_seq = 0_u64;
     let mut requires_native_collection_birth = false;
+    let mut requires_native_catalog_allocations = false;
     let mut native_backings_by_tx = BTreeMap::new();
     let mut native_backing_history = BTreeSet::new();
     let mut native_origin_roots = BTreeSet::new();
@@ -21465,8 +21520,20 @@ fn recover_transaction_log(
                 tx_id,
                 commit_seq,
                 native_backings,
+                native_catalog_allocations,
                 ..
             } => {
+                requires_native_catalog_allocations |= !native_catalog_allocations.is_empty();
+                native_origin_roots.extend(
+                    native_catalog_allocations
+                        .values()
+                        .filter_map(|m| m.native_backing_origin_root),
+                );
+                native_backing_history.extend(
+                    native_wal_backings::identities(&native_catalog_allocations)?
+                        .values()
+                        .copied(),
+                );
                 requires_native_collection_birth |= !native_backings.is_empty();
                 native_origin_roots.extend(
                     native_backings
@@ -21537,6 +21604,7 @@ fn recover_transaction_log(
         next_tx_id: max_tx.saturating_add(1).max(1),
         last_commit_seq: max_commit_seq,
         requires_native_collection_birth,
+        requires_native_catalog_allocations,
         native_backings_by_tx,
         native_backing_history,
         native_origin_roots,
@@ -31973,6 +32041,7 @@ mod index_maintenance_tests {
                     timestamp: 1234,
                     commit_seq: 1,
                     native_backings: BTreeMap::new(),
+                    native_catalog_allocations: BTreeMap::new(),
                 },
             ] {
                 storage::append_frame(
@@ -32129,12 +32198,14 @@ mod index_maintenance_tests {
             timestamp: 999,
             commit_seq: 42,
             native_backings: BTreeMap::new(),
+            native_catalog_allocations: BTreeMap::new(),
         };
         let borrowed_commit = TxFrameRef::Commit {
             tx_id,
             timestamp: 999,
             commit_seq: 42,
             native_backings: &BTreeMap::new(),
+            native_catalog_allocations: &BTreeMap::new(),
         };
         assert_eq!(
             serde_json::to_vec(&owned_commit).unwrap(),
@@ -32275,6 +32346,7 @@ mod index_maintenance_tests {
                 timestamp: 100,
                 commit_seq: 0,
                 native_backings: BTreeMap::new(),
+                native_catalog_allocations: BTreeMap::new(),
             },
         ] {
             storage::append_frame(

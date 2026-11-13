@@ -46,6 +46,9 @@ pub(crate) struct TargetImageCatalogHistoryObligations {
     resolved_through: u64,
     compacted_through: u64,
     irrevocable_commands: BTreeMap<u64, String>,
+    // Observed possible-commit tails. They do NOT become committed because
+    // they are retained here, and must not disappear from a remote cut proof.
+    unresolved_commands: BTreeMap<u64, String>,
     range_log_sha256: String,
 }
 impl TargetImageCatalogHistoryObligations {
@@ -81,6 +84,11 @@ impl TargetImageCatalogHistoryObligations {
     /// A caller cannot filter this map or reconstruct the enclosing token.
     pub(crate) fn irrevocable_commands(&self) -> &BTreeMap<u64, String> {
         &self.irrevocable_commands
+    }
+    /// Exact actual Prepared/Committed command identities, separate from
+    /// CQ/Applied/archive obligations. An unknown possible commit is not absence.
+    pub(crate) fn unresolved_commands(&self) -> &BTreeMap<u64, String> {
+        &self.unresolved_commands
     }
 
     /// Exact protected activation is the ONLY allowed epoch-only transition.
@@ -157,6 +165,7 @@ impl RangeWriteStore {
         }
         let mut observations = Vec::new();
         let mut irrevocable_commands = BTreeMap::new();
+        let mut unresolved_commands = BTreeMap::new();
         if let Some(log) = self.catalog.ranges.get(&range_id) {
             if log.entries.len() > MAX_OBLIGATIONS {
                 return Err(range_write_error("image catalog obligation bound exceeded"));
@@ -171,6 +180,16 @@ impl RangeWriteStore {
                     &entry.command.checksum_sha256,
                     entry.state,
                 ));
+                if matches!(
+                    entry.state,
+                    RangeWriteState::Prepared | RangeWriteState::Committed
+                ) {
+                    insert_irrevocable(
+                        &mut unresolved_commands,
+                        *index,
+                        &entry.command.checksum_sha256,
+                    )?;
+                }
                 if matches!(
                     entry.state,
                     RangeWriteState::QuorumCommitted | RangeWriteState::Applied
@@ -306,6 +325,7 @@ impl RangeWriteStore {
             resolved_through: progress.resolved_through,
             compacted_through: progress.compacted_through,
             irrevocable_commands,
+            unresolved_commands,
             range_log_sha256,
         })
     }
@@ -374,14 +394,37 @@ mod tests {
             .image_install_catalog_history_obligations(one.range_id)
             .unwrap();
         let three = command(3);
-        store.prepare(three).unwrap();
+        store.prepare(three.clone()).unwrap();
         assert!(
             token.require_current(&store).is_err(),
             "new unresolved tail cannot hide behind unchanged CQ map"
         );
+        let prepared = store
+            .image_install_catalog_history_obligations(one.range_id)
+            .unwrap();
+        assert_eq!(
+            prepared.unresolved_commands(),
+            &BTreeMap::from([(3, three.checksum_sha256.clone())])
+        );
+        assert_eq!(prepared.last_index(), 3);
+        assert_eq!(prepared.resolved_through(), 2);
+        store.commit(&three).unwrap();
+        assert!(
+            prepared.require_current(&store).is_err(),
+            "Prepared→Committed changes exact raw observation"
+        );
         let token = store
             .image_install_catalog_history_obligations(one.range_id)
             .unwrap();
+        assert_eq!(
+            token.unresolved_commands(),
+            &BTreeMap::from([(3, three.checksum_sha256.clone())])
+        );
+        assert_eq!(
+            token.irrevocable_commands().len(),
+            2,
+            "possible commit is not fabricated CQ"
+        );
         drop(store);
         let reopened = RangeWriteStore::open(
             root.path(),

@@ -40,6 +40,7 @@ pub(super) fn require_request(
     match request {
         ClusterDataRequest::Ping
         | ClusterDataRequest::NativeRemoteImageSourceFrame { .. }
+        | ClusterDataRequest::NativeRemoteOld { .. }
         | ClusterDataRequest::RegisterMetadataLearner { .. }
         | ClusterDataRequest::FetchBootstrapSnapshot
         | ClusterDataRequest::ExportSchemaBundle { .. }

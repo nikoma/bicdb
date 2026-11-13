@@ -9,6 +9,10 @@ use crate::distribution_range_mutation::{
     ControlledFrozenMutationPermit, FrozenRangeMutationPermit, RangeMutationAuthority,
 };
 
+mod writer_domain;
+pub(in crate::db::range_image_native) use writer_domain::{
+    NativeClosedWriterFact, NativeClosedWriterPoint,
+};
 mod bridge;
 pub(in crate::db::range_image_native) use bridge::NativeJointServingDomain;
 pub(crate) use bridge::{
@@ -353,6 +357,44 @@ impl BicDb {
         promise: &crate::distribution_range_consensus::NativeJointOldPromiseReceipt,
         controlled: &ControlledFrozenMutationPermit,
     ) -> Result<NativeJointOldCloseReceipt> {
+        let receipt = self.persist_native_joint_old_close_before_final_check(
+            plan, role, store, physical, promise, controlled,
+        )?;
+        receipt.require_current(self, plan, role, promise, store)?;
+        Ok(receipt)
+    }
+    /// Retain the actual successful native-WAL observation before original
+    /// role/current checks can fail. No receipt is fabricated for WAL errors.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn persist_native_joint_old_close_retained(
+        &self,
+        plan: &NativeJointHandoffPlan,
+        role: &RecoveryRoleAdmission,
+        store: &RangeWriteStore,
+        physical: &NativeJointOldPhysicalProof,
+        promise: &crate::distribution_range_consensus::NativeJointOldPromiseReceipt,
+        controlled: &ControlledFrozenMutationPermit,
+        retained: &mut Option<Arc<NativeJointOldCloseReceipt>>,
+    ) -> Result<Arc<NativeJointOldCloseReceipt>> {
+        if retained.is_none() {
+            let actual = self.persist_native_joint_old_close_before_final_check(
+                plan, role, store, physical, promise, controlled,
+            )?;
+            *retained = Some(Arc::new(actual));
+        }
+        let receipt = retained.as_ref().unwrap();
+        receipt.require_current(self, plan, role, promise, store)?;
+        Ok(receipt.clone())
+    }
+    fn persist_native_joint_old_close_before_final_check(
+        &self,
+        plan: &NativeJointHandoffPlan,
+        role: &RecoveryRoleAdmission,
+        store: &RangeWriteStore,
+        physical: &NativeJointOldPhysicalProof,
+        promise: &crate::distribution_range_consensus::NativeJointOldPromiseReceipt,
+        controlled: &ControlledFrozenMutationPermit,
+    ) -> Result<NativeJointOldCloseReceipt> {
         plan.require_role(role)?;
         plan.require_actual_native(physical.native_admission())?;
         promise.require_current(store, plan)?;
@@ -375,6 +417,7 @@ impl BicDb {
             ));
         }
         let point = &physical.lineage;
+        let native = self.native_admission_for_actual_birth(&point.birth)?;
         let base = &point.base;
         let mut record = NativeJointOldCloseRecord {
             version: 1,
@@ -436,14 +479,7 @@ impl BicDb {
             .ok_or_else(|| invalid("native old closure has no actual page WAL"))?;
         }
         drop(_journal);
-        let receipt = NativeJointOldCloseReceipt {
-            native: self.native_admission_for_actual_birth(&point.birth)?,
-            record,
-        };
-        // The borrowed actual DB, closed prefix and original role are checked
-        // again after the real WAL commit. Failure cannot release the promise.
-        receipt.require_current(self, plan, role, promise, store)?;
-        Ok(receipt)
+        Ok(NativeJointOldCloseReceipt { native, record })
     }
 }
 

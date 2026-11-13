@@ -9,12 +9,16 @@ use std::sync::Weak;
 mod cleanup;
 mod hot_recovery;
 mod old_step;
+mod writer_data_domain;
 use cleanup::{NativeInitialDataCleanup, NativeInitialDataCleanupSender};
 use hot_recovery::NativeHotRecoveryMaintenance;
-pub(crate) use old_step::NativeInitialOldStep;
-use old_step::RetainedInitialOld;
+use old_step::RetainedInitialOldTable;
 #[cfg(test)]
-pub(crate) use old_step::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
+pub(crate) use old_step::{
+    after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
+    CancelRemoteOldAfterNativeWal,
+};
+pub(crate) use old_step::{NativeInitialOldConstraintStep, NativeInitialOldStep};
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct NativeInitialDataRangeStatus {
@@ -44,6 +48,9 @@ pub(crate) struct NativeInitialDataAdmission {
     service: Weak<Mutex<ClusterDataNodeService>>,
     runtime: Weak<RangeRecoveryRuntime>,
     writer: Arc<NativeWriterHostState>,
+    // Captured from the actual original service when this DATA owner is
+    // constructed. Readonly OLD observations cannot replace its DB open.
+    database: crate::distribution_data::ClusterServiceOpenGuard,
     root: PathBuf,
     store_open: Uuid,
     // Actual service SLOT identity, not merely a live removed Store/old ID.
@@ -51,6 +58,10 @@ pub(crate) struct NativeInitialDataAdmission {
     life: Weak<AtomicBool>,
     published: Arc<AtomicBool>,
     image_sources: Weak<crate::distribution_range_image::NativeRemoteImageSourceRegistry>,
+    old_closures: Weak<RetainedInitialOldTable>,
+    old_metadata: Weak<Mutex<crate::distribution_consensus::MetadataConsensusStore>>,
+    old_provider: Weak<crate::distribution_metadata_read_provider::MetadataReadProvider>,
+    old_transport: Weak<TcpClusterRelocationTransport>,
 }
 impl NativeInitialDataAdmission {
     pub(crate) fn require_live(&self) -> Result<()> {
@@ -61,6 +72,7 @@ impl NativeInitialDataAdmission {
         {
             return Err(invalid("initial DATA owner is stopping or ended"));
         }
+        self.database.require_live()?;
         self.store_slot.require_live()?;
         if self.store_slot.id() != self.store_open {
             return Err(invalid("initial DATA actual Store slot/open differs"));
@@ -147,7 +159,8 @@ pub(super) struct NativeInitialDataHost {
     hot_recovery: Option<Arc<NativeHotRecoveryMaintenance>>,
     registry_refresh_last_attempt: Option<serde_json::Value>,
     image_sources: Option<Arc<crate::distribution_range_image::NativeRemoteImageSourceRegistry>>,
-    old_closures: Mutex<BTreeMap<crate::RangeId, Arc<Mutex<RetainedInitialOld>>>>,
+    old_closures: Arc<RetainedInitialOldTable>,
+    writer_data_domains: super::writer_data_domain::NativeHostWriterDataDomains,
 }
 impl Drop for NativeInitialDataHost {
     fn drop(&mut self) {
@@ -208,8 +221,9 @@ impl NativeInitialDataHost {
             initial,
             enrollment: None,
             image_sources: None,
-            old_closures: Mutex::new(BTreeMap::new()),
+            old_closures: Arc::new(Mutex::new(BTreeMap::new())),
             registry_refresh_last_attempt: None,
+            writer_data_domains: Default::default(),
             genesis: BTreeMap::new(),
             runtime: None,
             dispatcher: None,
@@ -312,12 +326,17 @@ impl NativeInitialDataHost {
                 service: Arc::downgrade(&self.initial.service),
                 runtime: Arc::downgrade(runtime),
                 writer,
+                database: service.listener_open_guard(),
                 root,
                 store_open: service.native_initial_listener_store_open_id(),
                 store_slot: service.native_replica_listener_store_open_guard(),
                 life: Arc::downgrade(&self.life),
                 published: self.published.clone(),
                 image_sources: Arc::downgrade(self.image_sources.as_ref().unwrap()),
+                old_closures: Arc::downgrade(&self.old_closures),
+                old_metadata: Arc::downgrade(&self.initial.metadata),
+                old_provider: Arc::downgrade(&self.initial.provider),
+                old_transport: Arc::downgrade(&self.initial.transport),
             }));
         }
         if self.hot_recovery.is_none() {
@@ -452,6 +471,204 @@ impl NativeInitialDataHost {
             enrollment.guard.clone(),
             enrollment.coordinator.clone(),
             actual,
+            target_attempt,
+        ))
+    }
+    pub(super) fn collect_remote_old_at_actual_donor(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteOldCutCertificate> {
+        self.collect_remote_old_at_actual_donor_inner(range, parent, |_, _, _| Ok(()))
+    }
+    // The callback is a source-test seam at the actual post-fetch boundary.
+    // It holds no engine/MStore lock and cannot replace any frame or grant.
+    fn collect_remote_old_at_actual_donor_inner(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+        after_fetch: impl FnOnce(
+            &HostMetadataReadObservation,
+            Uuid,
+            &[crate::distribution_transport::AuthenticatedNativeRemoteOldFrame],
+        ) -> Result<()>,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteOldCutCertificate> {
+        use crate::distribution_range_handoff::{
+            NativeRemoteOldOperationV1, NativeRemoteOldRequestV1, NativeRemoteOldRound,
+        };
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        self.admission_for_old_step()?.require_live()?;
+        self.image_sources
+            .as_ref()
+            .ok_or_else(|| invalid("actual donor source process absent"))?
+            .require_original_process()?;
+        let actual = self.retained_actual_old_source(range)?;
+        let plan = actual.plan().clone();
+        let leader = self
+            .initial
+            .provider
+            .current_metadata_leader_hint(&token)?
+            .ok_or_else(|| invalid("actual donor metadata leader unavailable"))?;
+        let business = Uuid::now_v7();
+        let own = self.initial.transport.acquire_host_metadata_observation(
+            &leader,
+            business,
+            Duration::from_secs(5),
+            &token,
+        )?;
+        // This first fresh OWN binds the observation phase, not the final
+        // collector lifetime. Retain only necessary monotonic/phase DATA;
+        // unrelated range metadata changes need not invalidate this cut.
+        plan.require_source_host_metadata(&own, business, actual.node_id())?;
+        let started_term = own.term();
+        let started_index = own.read_index();
+        let started_phase = own
+            .committed_topology(business)?
+            .relocations
+            .get(&plan.promise().relocation_id)
+            .ok_or_else(|| invalid("remote OLD observation phase disappeared"))?
+            .phase;
+        let mut frames = Vec::with_capacity(plan.old_members().len());
+        for node in plan.old_members().keys() {
+            token.check()?;
+            let business = Uuid::now_v7();
+            let remaining = token
+                .deadline()
+                .unwrap()
+                .saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(BicDbError::QueryTimedOut);
+            }
+            let own = self
+                .initial
+                .transport
+                .acquire_host_metadata_observation(&leader, business, remaining, &token)?;
+            let request = NativeRemoteOldRequestV1::from_plan(
+                &plan,
+                NativeRemoteOldOperationV1::Observe,
+                business,
+                remaining.as_millis().min(4000).max(1) as u64,
+            )?;
+            let frame = self
+                .initial
+                .transport
+                .request_remote_native_old(node, &plan, &request, &own, &token)?;
+            frame.require_request_live()?;
+            frames.push(frame);
+        }
+        after_fetch(&own, business, &frames)?;
+        token.check()?;
+        self.admission_for_old_step()?.require_live()?;
+        self.image_sources
+            .as_ref()
+            .ok_or_else(|| invalid("actual donor source process absent after OLD fetch"))?
+            .require_original_process()?;
+        actual.require_current()?;
+        for frame in &frames {
+            frame.require_request_live()?;
+        }
+        let remaining = token
+            .deadline()
+            .unwrap()
+            .checked_duration_since(Instant::now())
+            .ok_or(BicDbError::QueryTimedOut)?;
+        // Fresh final authority is acquired AFTER the bounded remote reads.
+        // None of their original request tokens or authenticated owners is
+        // reissued or relabeled. A canceled/expired frame still refuses below.
+        let final_business = Uuid::now_v7();
+        let final_own = self.initial.transport.acquire_host_metadata_observation(
+            &leader,
+            final_business,
+            remaining,
+            &token,
+        )?;
+        plan.require_source_host_metadata(&final_own, final_business, actual.node_id())?;
+        let final_phase = final_own
+            .committed_topology(final_business)?
+            .relocations
+            .get(&plan.promise().relocation_id)
+            .ok_or_else(|| invalid("remote OLD final Pending phase disappeared"))?
+            .phase;
+        if final_own.term() < started_term
+            || final_own.read_index() < started_index
+            || final_phase != started_phase
+        {
+            return Err(invalid(
+                "remote OLD final metadata regressed or selected phase changed",
+            ));
+        }
+        let mut round =
+            NativeRemoteOldRound::begin(actual.clone(), final_own, final_business, &token)?;
+        for frame in frames {
+            round.record(frame)?;
+        }
+        let result = round.finish()?;
+        actual.require_current()?;
+        self.admission_for_old_step()?.require_live()?;
+        self.image_sources
+            .as_ref()
+            .ok_or_else(|| invalid("actual donor source process absent after OLD cut"))?
+            .require_original_process()?;
+        token.check()?;
+        Ok(result)
+    }
+    #[cfg(test)]
+    pub(super) fn test_collect_remote_old_at_actual_donor(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+        after_fetch: impl FnOnce(
+            &HostMetadataReadObservation,
+            Uuid,
+            &[crate::distribution_transport::AuthenticatedNativeRemoteOldFrame],
+        ) -> Result<()>,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteOldCutCertificate> {
+        self.collect_remote_old_at_actual_donor_inner(range, parent, after_fetch)
+    }
+    pub(super) fn retain_remote_image_from_remote_old(
+        &self,
+        old: &mut Option<crate::distribution_range_handoff::NativeRemoteOldCutCertificate>,
+        target_attempt: Uuid,
+        original_request: &CancellationToken,
+    ) -> Result<crate::distribution_range_image::NativeRetainedRemoteImageSource> {
+        original_request.check()?;
+        let admission = self.admission_for_old_step()?;
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or_else(|| invalid("actual remote donor runtime absent"))?;
+        let enrollment = self
+            .enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("actual remote donor writer absent"))?;
+        let registry = self
+            .image_sources
+            .as_ref()
+            .ok_or_else(|| invalid("actual remote donor registry absent"))?;
+        registry.require_original_process()?;
+        admission.require_listener(&self.initial.service, runtime)?;
+        let certificate = old
+            .as_ref()
+            .ok_or_else(|| invalid("actual remote OLD certificate absent"))?;
+        if certificate.selected_source_id() != &self.initial.seed.spec.node_id
+            || target_attempt.is_nil()
+        {
+            return Err(invalid(
+                "actual remote OLD certificate belongs to another donor/attempt",
+            ));
+        }
+        certificate.require_current()?;
+        // All fallible owner checks precede take. The returned retainer owns
+        // the actual certificate/capture progress before publication starts.
+        let certificate = old.take().unwrap();
+        Ok(registry.retain_initial_source_from_remote_old(
+            admission.clone(),
+            runtime.clone(),
+            self.initial.service.clone(),
+            self.initial.metadata.clone(),
+            enrollment.guard.clone(),
+            enrollment.coordinator.clone(),
+            certificate,
             target_attempt,
         ))
     }
@@ -613,6 +830,9 @@ impl NativeInitialDataHost {
             std::thread::sleep(Duration::from_millis(5));
         }
         if let Some(owner) = &self.enrollment {
+            if self.writer_data_domains.unresolved() {
+                return Err(invalid("INITIAL unknown DATA-domain publication retained; explicit reconciliation required"));
+            }
             let database = self
                 .initial
                 .seed

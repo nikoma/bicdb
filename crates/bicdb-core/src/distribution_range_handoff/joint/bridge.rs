@@ -13,7 +13,7 @@ pub(crate) use phase::{NativeJointPreparationPhaseQuorum, NativeJointPreparation
 pub(crate) use publication::{
     NativeJointOpenAdmission, NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound,
     NativeJointPublishedServingQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
-    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound,
+    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
     NativeJointServingPublicationRound,
 };
 
@@ -320,7 +320,8 @@ impl NativeJointPreparedServingQuorum {
                 actor.node_id(),
                 &cancellation,
             );
-            let result = service.observe_committed_native_joint_decision(
+            let result = local.actual.observe_fresh_committed(
+                &service,
                 metadata,
                 business,
                 self.data.old_range().id,

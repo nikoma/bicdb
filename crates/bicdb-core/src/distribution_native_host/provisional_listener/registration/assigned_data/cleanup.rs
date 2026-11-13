@@ -13,6 +13,7 @@ pub(super) struct AssignedCleanup {
     attempt: Option<NativeAssignedWriterInstallAttempt>,
     listener: Option<ClusterDataServerHandle>,
     _image: Option<NativeJointServingLease>,
+    writer_data_domains: super::super::writer_data_domain::NativeHostWriterDataDomains,
 }
 impl AssignedCleanup {
     pub(super) fn take(owner: &mut NativeAssignedDataHost) -> Self {
@@ -22,6 +23,7 @@ impl AssignedCleanup {
             attempt: owner.attempt.take(),
             listener: owner.listener.take(),
             _image: owner.image.take(),
+            writer_data_domains: std::mem::take(&mut owner.writer_data_domains),
         }
     }
     pub(super) fn quarantine(self) {
@@ -34,6 +36,7 @@ impl AssignedCleanup {
             .as_mut()
             .is_some_and(|l| !l.poll_shutdown_drained_for_cleanup())
             || !matches!(self.parts.runtime.active_contexts(), Ok(0))
+            || self.writer_data_domains.unresolved()
         {
             return false;
         }

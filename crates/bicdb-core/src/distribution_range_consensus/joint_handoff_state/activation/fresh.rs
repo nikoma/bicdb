@@ -29,6 +29,7 @@ impl RangeWriteStore {
     ) -> Result<Option<NativeJointCatalogueActivationReceipt>> {
         admission.require_live()?;
         let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
 
         let native = admission.native_receipt();
         let range = native.data().old_range().id;
@@ -73,6 +74,7 @@ impl RangeWriteStore {
             activated: fact.activated,
             native: fact.native,
             writer,
+            writer_domain,
             writer_root,
             cancellation: admission.cancellation().clone(),
         };
@@ -93,6 +95,7 @@ impl RangeWriteStore {
     ) -> Result<NativeJointCatalogueActivationReceipt> {
         parent.check()?;
         let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
 
         // Nonwaiting cross-service checks happen BEFORE this local journal.
         #[cfg(test)]
@@ -160,6 +163,7 @@ impl RangeWriteStore {
         gate.validate_quiescent_frozen(range, frozen)?;
         let controlled = gate.try_controlled_mutation(frozen)?;
         gate.validate(range, &RangeMutationAuthority::Controlled(&controlled))?;
+        writer_domain.require_current(database, self, data.activation_range())?;
         let state = self
             .catalog
             .native_joint_handoffs
@@ -174,7 +178,6 @@ impl RangeWriteStore {
                 "fresh activation changed permanent plan/session/nonce",
             ));
         }
-        writer.require_database(database, data.activation_range())?;
         self.recovery_persistence_uncertain = true;
         state.serving_activation = Some(candidate.clone());
         // Missing raw log is possible only at an actually verified genesis
@@ -208,6 +211,7 @@ impl RangeWriteStore {
             activated: candidate,
             native: native.clone(),
             writer,
+            writer_domain,
             writer_root,
             cancellation: admission.cancellation().clone(),
         };

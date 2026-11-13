@@ -192,6 +192,26 @@ impl NativeJointHandoffPlan {
             .get(node)
             .ok_or_else(|| invalid("source image participant birth absent from actual OLD scope"))
     }
+    /// Necessary comparison DATA only. Actual writer/native/Role+OWN guards
+    /// independently prove whether the original local owner matches it.
+    pub(crate) fn old_native_predecessor_data(&self) -> Result<RangeDescriptor> {
+        self.data.validate()?;
+        let mut expected = self.data.old_range.clone();
+        expected.replicas.retain(|r| r.node_id != self.data.target);
+        expected.epoch = expected
+            .epoch
+            .checked_sub(1)
+            .ok_or_else(|| invalid("joint expected native epoch underflow"))?;
+        Ok(expected)
+    }
+    pub(crate) fn constraint_schema_sha256(&self) -> &str {
+        &self.data.schema_sha256
+    }
+    pub(crate) fn constraint_restore_activation(
+        &self,
+    ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
+        self.data.restore_activation.as_ref()
+    }
     pub(crate) fn require_old_native_configuration(
         &self,
         lineage: &crate::db::SourceRangeImageLineage,
@@ -226,6 +246,11 @@ impl NativeJointHandoffPlan {
     }
     pub(crate) fn old_range(&self) -> &RangeDescriptor {
         &self.data.old_range
+    }
+    /// Placement DATA only. The retiring replica is not the image donor or
+    /// authenticated mutation initiator.
+    pub(crate) fn retiring_source(&self) -> &ClusterNodeId {
+        &self.data.old_source
     }
     pub(crate) fn activation_range(&self) -> &RangeDescriptor {
         &self.data.activation_range

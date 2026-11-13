@@ -10,6 +10,7 @@ use crate::distribution_range_consensus::RangeWriteCoordinator;
 use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use std::sync::Weak;
 mod cleanup;
+mod writer_data_domain;
 use cleanup::{AssignedCleanup, AssignedCleanupSender};
 
 pub(crate) struct NativeAssignedDataAdmission {
@@ -81,6 +82,7 @@ pub(super) struct NativeAssignedDataHost {
     life: Arc<AtomicBool>,
     stopping: bool,
     cleanup: Option<AssignedCleanupSender>,
+    writer_data_domains: super::writer_data_domain::NativeHostWriterDataDomains,
 }
 impl NativeAssignedDataHost {
     fn new(
@@ -111,6 +113,7 @@ impl NativeAssignedDataHost {
             life: Arc::new(AtomicBool::new(true)),
             stopping: false,
             cleanup: None,
+            writer_data_domains: Default::default(),
         })
     }
     fn install_closed(&mut self, parent: &CancellationToken) -> Result<()> {
@@ -326,6 +329,9 @@ impl NativeAssignedDataHost {
             std::thread::sleep(Duration::from_millis(5));
         }
         if let Some(attempt) = &self.attempt {
+            if self.writer_data_domains.unresolved() {
+                return Err(invalid("Assigned unknown DATA-domain publication retained; explicit reconciliation required"));
+            }
             if attempt.unresolved_native_publication() {
                 return Err(invalid("Assigned unknown native policy retained CLOSED; explicit reconciliation required"));
             }

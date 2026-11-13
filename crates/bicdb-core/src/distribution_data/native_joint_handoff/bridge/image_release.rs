@@ -123,6 +123,11 @@ impl NativeJointImageReleaseOwner {
             }
             let actual = Arc::get_mut(frozen)
                 .ok_or_else(|| data_error("fresh joint image owner changed"))?;
+            if actual.requires_registered_remote_release() {
+                return Err(data_error(
+                    "Registered remote image release protocol is not implemented",
+                ));
+            }
             if let NativeImageInstallFreeze::Recovery(lease) = actual {
                 lease.release_after_fresh_joint_activation(&self.image, admission)?;
             } else {
@@ -193,6 +198,11 @@ impl NativeJointImageReleaseOwner {
             self.activation.require_live()?;
             let actual = Arc::get_mut(frozen)
                 .ok_or_else(|| data_error("joint image lease acquired another owner"))?;
+            if actual.requires_registered_remote_release() {
+                return Err(data_error(
+                    "Registered remote image release protocol is not implemented",
+                ));
+            }
             if let NativeImageInstallFreeze::Recovery(lease) = actual {
                 // This consumes only an actually activated joint image. Drop
                 // must not return its A-owned freeze to the old recovery map.

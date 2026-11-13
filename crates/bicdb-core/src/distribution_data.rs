@@ -57,11 +57,17 @@ mod native_assigned_policy;
 mod native_durability;
 pub(crate) use metadata_ingress::NativeMetadataIngressRegistration;
 mod native_joint_handoff;
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_joint_handoff::NativeJointOldRetainedOutcome;
 mod native_writer;
 #[cfg(feature = "tls-replication")]
 pub(crate) use native_assigned_policy::NativeAssignedImagePolicyEvidence;
 #[cfg(feature = "tls-replication")]
 mod registered_closed_fence;
+#[cfg(feature = "tls-replication")]
+mod registered_remote_catalogue;
+#[cfg(feature = "tls-replication")]
+mod registered_remote_installing;
 pub(crate) use native_durability::ClusterServiceOpenGuard;
 use native_durability::{checked_database_read, checked_database_write, ServiceStoragePolicy};
 pub(crate) use native_joint_handoff::{
@@ -80,6 +86,8 @@ mod native_range_read;
 mod native_ready;
 #[cfg(feature = "tls-replication")]
 mod registered_metadata_catchup;
+#[cfg(feature = "tls-replication")]
+mod remote_image_target;
 pub(crate) use native_range_read::{
     ActualServiceNativeReadEvidence, ActualServiceNativeReadProbeEvidence,
 };

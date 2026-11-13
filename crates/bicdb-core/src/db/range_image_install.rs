@@ -10,6 +10,13 @@ use crate::distribution_range_image::{bounded_json, canonical_range_image_catalo
 use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 
 const INSTALL_FORMAT: u32 = 1;
+const REGISTERED_INSTALL_FORMAT: u32 = 2;
+#[cfg(feature = "tls-replication")]
+mod registered_remote;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_remote::test_registered_remote_base_after_wal;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote::{RegisteredRemoteBaseBoundary, RegisteredRemoteBasePublication};
 
 fn invalid(detail: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(format!("native target image: {}", detail.into()))
@@ -38,6 +45,10 @@ struct NativeInstalling {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct NativeInstalledRangeImageReceipt {
     format_version: u32,
+    // Unconditional persistence DATA. A reader without the actual Registered
+    // history validator must refuse this profile, never interpret it as local.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    registered_final_image: Option<crate::db::NativeRegisteredRemoteFinalImagePointer>,
     cluster_id: ClusterId,
     bootstrap_id: Uuid,
     target_node_id: ClusterNodeId,
@@ -89,8 +100,10 @@ impl NativeInstalledRangeImageReceipt {
     fn validate(&self) -> Result<()> {
         let digest =
             |value: &str| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit());
-        if self.format_version != INSTALL_FORMAT
-            || self.bootstrap_id.is_nil()
+        if !matches!(
+            (self.format_version, self.registered_final_image.as_ref()),
+            (INSTALL_FORMAT, None) | (REGISTERED_INSTALL_FORMAT, Some(_))
+        ) || self.bootstrap_id.is_nil()
             || self.birth_id.is_nil()
             || self.attempt_id.is_nil()
             || self.session_id.is_nil()
@@ -128,6 +141,14 @@ impl NativeInstalledRangeImageReceipt {
         {
             return Err(invalid("damaged installed image receipt"));
         }
+        if let Some(pointer) = &self.registered_final_image {
+            pointer.validate()?;
+            if pointer.attempt_id != self.attempt_id
+                || self.purpose != ImageInstallPurpose::RelocationLearner
+            {
+                return Err(invalid("Registered installed profile/purpose mismatch"));
+            }
+        }
         Ok(())
     }
 }
@@ -152,6 +173,9 @@ pub(crate) struct NativeInstalledRangeImageIntegrity {
     database_incarnation: String,
 }
 impl NativeInstalledRangeImageIntegrity {
+    pub(super) fn has_registered_history_publication(&self) -> bool {
+        self.receipt.registered_final_image.is_some()
+    }
     pub(crate) fn source_native_receipt_sha256(&self) -> &str {
         &self.receipt.source_native_receipt_sha256
     }
@@ -289,6 +313,7 @@ impl NativeInstalledRangeImageIntegrity {
         if actual != self.receipt {
             return Err(invalid("installed integrity receipt changed"));
         }
+        database.validate_registered_installed_history_if_present(receipt)?;
         Ok(())
     }
 }
@@ -396,6 +421,9 @@ impl TargetNativeImageSnapshotBound {
     }
 }
 impl NativeInstalledRangeImageBase {
+    pub(super) fn has_registered_history_publication(&self) -> bool {
+        self.receipt.registered_final_image.is_some()
+    }
     pub(crate) fn source_native_receipt_sha256(&self) -> &str {
         &self.receipt.source_native_receipt_sha256
     }
@@ -540,6 +568,7 @@ impl NativeInstalledRangeImageBase {
         if &current != receipt {
             return Err(invalid("installed native receipt was superseded"));
         }
+        database.validate_registered_installed_history_if_present(receipt)?;
         let catalog = canonical_range_image_catalog(
             &receipt.cluster_id,
             &receipt.capture_range,
@@ -554,6 +583,35 @@ impl NativeInstalledRangeImageBase {
 }
 
 impl BicDb {
+    fn validate_registered_installed_history_if_present(
+        &self,
+        receipt: &NativeInstalledRangeImageReceipt,
+    ) -> Result<()> {
+        if receipt.registered_final_image.is_none() {
+            return Ok(());
+        }
+        #[cfg(feature = "tls-replication")]
+        return self.validate_registered_installed_history(receipt);
+        #[cfg(not(feature = "tls-replication"))]
+        Err(invalid(
+            "Registered installed history reader unavailable in this build",
+        ))
+    }
+
+    pub(in crate::db) fn validate_registered_installed_base_history(
+        &self,
+        base: &NativeInstalledRangeImageBase,
+    ) -> Result<()> {
+        self.validate_registered_installed_history_if_present(&base.receipt)
+    }
+
+    pub(in crate::db) fn validate_registered_installed_integrity_history(
+        &self,
+        base: &NativeInstalledRangeImageIntegrity,
+    ) -> Result<()> {
+        self.validate_registered_installed_history_if_present(&base.receipt)
+    }
+
     #[cfg(test)]
     pub(crate) fn test_native_serving_history_json(
         &self,
@@ -1106,6 +1164,7 @@ impl BicDb {
             |paged, xid, history_binding| {
                 let mut receipt = NativeInstalledRangeImageReceipt {
                     format_version: INSTALL_FORMAT,
+                    registered_final_image: None,
                     cluster_id: fence.cluster_id().clone(),
                     bootstrap_id: fence.bootstrap_id(),
                     target_node_id: admission.local_node_id().clone(),

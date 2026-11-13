@@ -2214,6 +2214,10 @@ impl BicDb {
                             .into(),
                     ));
                 };
+                registered_row_retention::require_no_outstanding(
+                    &self.path,
+                    self.paged_records.as_deref(),
+                )?;
                 self.tx_log.flush_pending()?;
                 let _backup_gate = storage::acquire_database_backup_write_guard(&self.path)?;
                 copy_transaction_log_tail(&log, 0, true)?;
@@ -2591,7 +2595,20 @@ impl BicDb {
             return Err(BicDbError::TransactionNotPending);
         }
         self.ensure_writable_by_consensus(tx)?;
-        let _serializable_shared = (tx.isolation != TransactionIsolation::Serializable)
+        // The private Registered importer already holds the actual lexical
+        // admission read guard. Validate that exact scope/Tx/claim rather than
+        // recursively waiting behind a queued admission writer.
+        #[cfg(feature = "tls-replication")]
+        let registered_guarded = tx
+            .native_registered_remote_row_grant
+            .as_ref()
+            .map(|grant| grant.require_current(self, tx))
+            .transpose()?
+            .is_some();
+        #[cfg(not(feature = "tls-replication"))]
+        let registered_guarded = false;
+        let _serializable_shared = (tx.isolation != TransactionIsolation::Serializable
+            && !registered_guarded)
             .then(|| self.serializable_commit_admission.read());
         let _serializable_exclusive = (tx.isolation == TransactionIsolation::Serializable)
             .then(|| self.serializable_commit_admission.write());
@@ -2911,6 +2928,13 @@ impl BicDb {
                 return Err(self.commit_outcome_unknown(tx.id.0, commit_seq, &error));
             }
         }
+        // The actual original Registered row owner records logical durability
+        // here, including the Backup race which proved this exact seq already
+        // durable. Record application has NOT completed at this boundary.
+        #[cfg(feature = "tls-replication")]
+        if let Some(grant) = &tx.native_registered_remote_row_grant {
+            grant.retain_wal_durable(commit_seq);
+        }
         bicdb_page::test_faults::crash_point("commit.after_txlog_durable");
         timer.lap(&commit_trace::WAL_ENCODE);
         let deferred = self
@@ -3046,6 +3070,10 @@ impl BicDb {
         }
         tx.state = TxState::Committed;
         tx.committed_seq = Some(commit_seq);
+        #[cfg(feature = "tls-replication")]
+        if let Some(grant) = &tx.native_registered_remote_row_grant {
+            grant.retain_applied_known(commit_seq);
+        }
         postgres_commit.map(|attempt| attempt.committed(tx));
         drop(postgres_registry);
         // The decision is already durable. Complete the outboxes while this

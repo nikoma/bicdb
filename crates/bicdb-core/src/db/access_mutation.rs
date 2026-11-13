@@ -986,6 +986,8 @@ impl BicDb {
             postgres_serializable: None,
             bypass_commit_admission: false,
             native_image_row_grant: None,
+            #[cfg(feature = "tls-replication")]
+            native_registered_remote_row_grant: None,
             range_mutation_claim: None,
             database_mutation_permit: None,
             native_wal_retention: None,

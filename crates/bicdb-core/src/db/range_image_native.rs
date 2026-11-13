@@ -29,13 +29,50 @@ pub(crate) use history_stage::ClosedImageOriginalWriter;
 mod installed_anchor;
 mod native_read;
 mod registered_receiver_domain;
+#[cfg(feature = "tls-replication")]
+mod registered_remote_proposal;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_remote_proposal::test_fire_before_registered_remote_proposal_scope;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_remote_proposal::test_registered_remote_proposal_cut;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote_proposal::{
+    NativeRegisteredRemoteProposalPointer, NativeRegisteredRemoteProposalPublication,
+    NativeRegisteredRemoteProposalReceipt,
+};
+#[cfg(feature = "tls-replication")]
+mod registered_remote_image;
 mod writer_enrollment;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_remote_image::test_registered_remote_final_image_after_wal;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_remote_image::test_registered_remote_row_wal_cut;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote_image::{
+    HistoricalRegisteredFinalImage, NativeRegisteredRemoteFinalImagePointer,
+    NativeRegisteredRemoteFinalImageReceipt, NativeRegisteredRemoteHistoryProgress,
+    NativeRegisteredRemoteHistoryProof, NativeRegisteredRemoteImageContext,
+    NativeRegisteredRemoteImageInstallation, NativeRegisteredRemoteImageOperation,
+    NativeRegisteredRemoteImageProgress, NativeRegisteredRemoteRowProgress,
+    NativeRegisteredRemoteRowTransactionGrant, NativeRegisteredRemoteVerificationProgress,
+};
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeAssignedWriterInstallAttempt;
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredClosedPersistScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeRegisteredNoDomainScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeRegisteredRemoteAttemptScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeRegisteredRemoteMutationScope;
 pub(crate) use writer_enrollment::{
     InstalledNativeWriterHostGuard, NativeRegisteredReceiverHook, NativeWriterHostState,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::{
+    NativeClosedWriterDomain, NativeWriterDataDomainPolicy, NativeWriterDataDomainTransition,
+    NativeWriterServingDomainPublication,
 };
 mod serving_configuration;
 pub(crate) use native_read::{
@@ -49,7 +86,10 @@ pub(crate) use serving_configuration::{
     NativeJointServingBridgeReceipt, NativeJointServingPreparation, NativeReadyObserverReadScope,
     NativeRecoveredServingReceipt,
 };
-use serving_configuration::{NativeJointServingDomain, NativeRecoveredServingConfiguration};
+use serving_configuration::{
+    NativeClosedWriterFact, NativeClosedWriterPoint, NativeJointServingDomain,
+    NativeRecoveredServingConfiguration,
+};
 #[cfg(test)]
 pub(crate) mod rf3_fixture;
 use certified_prefix::NativeCertifiedRangePrefix;
@@ -2268,3 +2308,5 @@ mod tests {
             .is_none());
     }
 }
+
+pub(crate) use writer_enrollment::NativeJointWriterDomain;

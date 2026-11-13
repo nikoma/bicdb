@@ -2,6 +2,7 @@
 //! An observation holds only Weak ownership of the actual installed guard.
 use super::*;
 
+#[derive(Debug)]
 pub(crate) struct NativeJointOpenContinuity {
     guard: std::sync::Weak<NativeJointActivatedOpenGuard>,
     store_open_id: Uuid,
@@ -52,6 +53,22 @@ impl NativeJointActivatedOpenGuard {
     }
 }
 impl NativeJointOpenContinuity {
+    /// Identity of the actual retained, armed generation; a number alone is
+    /// never an open permission or a replacement for this weak observation.
+    pub(crate) fn released_generation(&self) -> Result<Uuid> {
+        self.require_observed_lifetime()?;
+        let actual = self
+            .guard
+            .upgrade()
+            .ok_or_else(|| BicDbError::Cluster("joint observed guard ended".into()))?;
+        if !self.armed {
+            return Err(BicDbError::Cluster(
+                "joint observed owner has not released".into(),
+            ));
+        }
+        actual.require_current(self.store_open_id, &self.activation_sha256)?;
+        actual.generation.id()
+    }
     pub(crate) fn armed(&self) -> bool {
         self.armed
     }

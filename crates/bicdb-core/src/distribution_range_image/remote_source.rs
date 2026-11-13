@@ -10,6 +10,7 @@ use crate::distribution_data::{
 };
 use crate::distribution_native_host::NativeInitialDataAdmission;
 use crate::distribution_range_consensus::RangeWriteCoordinator;
+use crate::distribution_range_handoff::NativeRemoteOldCutCertificate;
 use crate::distribution_range_handoff::{NativeJointMaterializedFacts, NativeJointOldClosedQuorum};
 use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use crate::distribution_transport::TcpClusterRelocationTransport;
@@ -191,6 +192,55 @@ impl ActualNativeRemoteImageSourceFrame {
 /// Owns the real local source snapshot and quorum. No serialized constructor,
 /// replacement setters or deadline-renewal API. Long-session cancellation is
 /// separate from every step's original bounded request/fresh OWN metadata.
+enum ActualSourceOld {
+    Local(NativeJointOldClosedQuorum),
+    Remote(NativeRemoteOldCutCertificate),
+}
+impl ActualSourceOld {
+    fn plan(&self) -> std::sync::Arc<crate::distribution_range_handoff::NativeJointHandoffPlan> {
+        match self {
+            Self::Local(x) => x.plan(),
+            Self::Remote(x) => x.plan(),
+        }
+    }
+    fn selected_source_id(&self) -> &ClusterNodeId {
+        match self {
+            Self::Local(x) => x.selected_source_id(),
+            Self::Remote(x) => x.selected_source_id(),
+        }
+    }
+    fn require_current(&self) -> Result<()> {
+        match self {
+            Self::Local(x) => x.require_current(),
+            Self::Remote(x) => x.require_current(),
+        }
+    }
+    fn checksum_sha256(&self) -> Result<String> {
+        match self {
+            Self::Local(x) => x.checksum_sha256(),
+            Self::Remote(x) => x.checksum_sha256(),
+        }
+    }
+    fn source_image_materialized_facts(
+        &self,
+    ) -> Result<BTreeMap<ClusterNodeId, NativeJointMaterializedFacts>> {
+        match self {
+            Self::Local(x) => x.source_image_materialized_facts(),
+            Self::Remote(x) => x.source_image_materialized_facts(),
+        }
+    }
+    fn begin_capture_with_initial_wait(
+        &mut self,
+        wait: Duration,
+        process: &CancellationToken,
+        publish: &CancellationToken,
+    ) -> Result<RangeImageCapture> {
+        match self {
+            Self::Local(x) => x.begin_capture_with_initial_wait(wait, process, publish),
+            Self::Remote(x) => x.begin_capture_with_initial_wait(wait, process, publish),
+        }
+    }
+}
 pub(crate) struct NativeRemoteImageSourceSession {
     admission: Arc<NativeInitialDataAdmission>,
     runtime: Arc<RangeRecoveryRuntime>,
@@ -201,7 +251,7 @@ pub(crate) struct NativeRemoteImageSourceSession {
     writer: Arc<crate::db::InstalledNativeWriterHostGuard>,
     coordinator: Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
     metadata_store_id: Option<Uuid>,
-    old: NativeJointOldClosedQuorum,
+    old: ActualSourceOld,
     capture: Option<RangeImageCapture>,
     manifest: Option<NativeRemoteImageManifestV1>,
     target_attempt: Uuid,
@@ -222,7 +272,7 @@ impl NativeRemoteImageSourceSession {
         metadata: Arc<Mutex<MetadataConsensusStore>>,
         writer: Arc<crate::db::InstalledNativeWriterHostGuard>,
         coordinator: Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
-        old: NativeJointOldClosedQuorum,
+        old: ActualSourceOld,
         target_attempt: Uuid,
         original_session: &CancellationToken,
     ) -> Self {
@@ -617,6 +667,52 @@ impl NativeRemoteImageSourceRegistry {
         writer: Arc<crate::db::InstalledNativeWriterHostGuard>,
         coordinator: Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
         old: NativeJointOldClosedQuorum,
+        target_attempt: Uuid,
+    ) -> NativeRetainedRemoteImageSource {
+        self.retain_initial_source_with_old(
+            admission,
+            runtime,
+            service,
+            metadata,
+            writer,
+            coordinator,
+            ActualSourceOld::Local(old),
+            target_attempt,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn retain_initial_source_from_remote_old(
+        self: &Arc<Self>,
+        admission: Arc<NativeInitialDataAdmission>,
+        runtime: Arc<RangeRecoveryRuntime>,
+        service: Arc<Mutex<ClusterDataNodeService>>,
+        metadata: Arc<Mutex<MetadataConsensusStore>>,
+        writer: Arc<crate::db::InstalledNativeWriterHostGuard>,
+        coordinator: Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
+        old: NativeRemoteOldCutCertificate,
+        target_attempt: Uuid,
+    ) -> NativeRetainedRemoteImageSource {
+        self.retain_initial_source_with_old(
+            admission,
+            runtime,
+            service,
+            metadata,
+            writer,
+            coordinator,
+            ActualSourceOld::Remote(old),
+            target_attempt,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn retain_initial_source_with_old(
+        self: &Arc<Self>,
+        admission: Arc<NativeInitialDataAdmission>,
+        runtime: Arc<RangeRecoveryRuntime>,
+        service: Arc<Mutex<ClusterDataNodeService>>,
+        metadata: Arc<Mutex<MetadataConsensusStore>>,
+        writer: Arc<crate::db::InstalledNativeWriterHostGuard>,
+        coordinator: Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
+        old: ActualSourceOld,
         target_attempt: Uuid,
     ) -> NativeRetainedRemoteImageSource {
         // The actual Host checks require_original_process BEFORE transferring

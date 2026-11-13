@@ -50,6 +50,8 @@ pub(crate) use initial_offer::{
     NativeInitialBirthOfferResponse,
 };
 #[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeInitialOldConstraintStep;
+#[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::{
     NativeInitialConsensusLaunch, NativeLearnerMetadataEnrollment, NativeMetadataControlHost,
     NativeMetadataRegistrationController, NativeProvisionalHost,
@@ -598,9 +600,14 @@ pub use provisional_listener::NativeRegisteredReplicaReceiverStatus;
 #[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::{
     NativeAssignedDataAdmission, NativeAssignedDataPolicyOrigin,
-    NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission,
-    NativeRegisteredReplicaAdmission,
+    NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission, NativeRegisteredRemoteImageStep,
+    NativeRegisteredRemoteInstallPreflight, NativeRegisteredRemoteProposalPoint,
+    NativeRegisteredRemoteTransactionRequest, NativeRegisteredRemoteTransferRequest,
+    NativeRegisteredReplicaAdmission, NativeRegisteredSelectedRangeNoDomain,
 };
 
 #[cfg(all(test, feature = "tls-replication"))]
-pub(crate) use provisional_listener::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
+pub(crate) use provisional_listener::{
+    after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
+    CancelRemoteOldAfterNativeWal,
+};

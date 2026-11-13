@@ -16,6 +16,7 @@ pub(crate) struct ActualServiceNativeJointReleaseEvidence {
     native: Arc<crate::db::NativeJointServingBridgeReceipt>,
     activation: NativeJointCatalogueActivationFact,
     writer: Arc<crate::db::NativeWriterHostState>,
+    writer_domain: crate::db::NativeJointWriterDomain,
     root: std::path::PathBuf,
     frozen_owner: Option<Uuid>,
     continuity: crate::db::NativeJointOpenContinuity,
@@ -39,6 +40,40 @@ fn require_original_dropped_binding(
     Ok(())
 }
 impl ActualServiceNativeJointReleaseEvidence {
+    /// Actual post-drop AND armed same-open generation. A Frozen or merely
+    /// dropped/unarmed member cannot count toward a Serving-policy quorum.
+    pub(crate) fn require_released_open(&self) -> Result<Uuid> {
+        self.require_live()?;
+        if self.frozen_owner.is_some() {
+            return Err(data_error(
+                "Serving writer policy still has an actual Frozen owner",
+            ));
+        }
+        self.continuity.released_generation()
+    }
+    pub(crate) fn writer_domain_audit(&self) -> Result<serde_json::Value> {
+        let generation = self.require_released_open()?;
+        Ok(serde_json::json!({
+            "metadata": self.committed.writer_domain_metadata_audit()?,
+            "native_bridge_sha256": self.native.checksum_sha256(),
+            "catalogue_activation_sha256": self.activation.activation_sha256()?,
+            "released_generation": generation,
+            "local_node_id": self.native.local_node_id(),
+        }))
+    }
+    pub(crate) fn observe_released_continuity(
+        &self,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<crate::db::NativeJointOpenContinuity> {
+        let expected = self.require_released_open()?;
+        let actual = store.observe_native_joint_open_continuity(&self.activation)?;
+        if actual.released_generation()? != expected {
+            return Err(data_error(
+                "Serving writer policy replaced actual released generation",
+            ));
+        }
+        Ok(actual)
+    }
     pub(crate) fn require_original_writer_identity(
         &self,
         original: &Arc<crate::db::NativeWriterHostState>,
@@ -65,8 +100,11 @@ impl ActualServiceNativeJointReleaseEvidence {
         self.continuity.require_observed_lifetime()?;
         self.writer
             .require_store(&self.root, self.activation.store_open_id())?;
-        self.writer
-            .require_range(self.native.data().activation_range())
+        self.writer_domain.require_lifetime(
+            &self.root,
+            self.activation.store_open_id(),
+            self.native.data().activation_range(),
+        )
     }
     pub(crate) fn require_current(
         &self,
@@ -76,8 +114,9 @@ impl ActualServiceNativeJointReleaseEvidence {
         self.require_live()?;
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
-        service.require_native_writer_host_for_range(
+        self.writer_domain.require_current(
             &database,
+            &service.range_writes,
             self.native.data().activation_range(),
         )?;
         let scope = self.native.historical_cut_scope(&database)?;
@@ -110,7 +149,11 @@ impl ActualServiceNativeJointReleaseEvidence {
         self.activation
             .require_current_with_historical_cut_scope(scope, store)?;
         let writer = store.native_writer_host_state()?;
-        writer.require_database(database, self.native.data().activation_range())?;
+        self.writer_domain.require_current(
+            database,
+            store,
+            self.native.data().activation_range(),
+        )?;
         if !Arc::ptr_eq(&writer, &self.writer) {
             return Err(data_error(
                 "joint release current writer registration/open/member changed",
@@ -148,21 +191,47 @@ impl ClusterDataNodeService {
         native: Arc<crate::db::NativeJointServingBridgeReceipt>,
         owner: NativeJointReleaseOwnerView<'_>,
     ) -> Result<ActualServiceNativeJointReleaseEvidence> {
-        let committed = self.observe_committed_native_joint_decision(
+        let writer = self.range_writes.native_writer_host_state()?;
+        self.observe_joint_release_member_with_domain(
+            &crate::db::NativeJointWriterDomain::Installed(writer),
+            host,
+            business,
+            native,
+            owner,
+        )
+    }
+    pub(crate) fn observe_joint_release_member_with_domain(
+        &self,
+        writer_domain: &crate::db::NativeJointWriterDomain,
+        host: HostMetadataReadObservation,
+        business: Uuid,
+        native: Arc<crate::db::NativeJointServingBridgeReceipt>,
+        owner: NativeJointReleaseOwnerView<'_>,
+    ) -> Result<ActualServiceNativeJointReleaseEvidence> {
+        let committed = self.observe_joint_decision_with_writer_domain(
+            writer_domain,
             host,
             business,
             native.data().old_range().id,
         )?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
-        self.require_native_writer_host_for_range(&database, native.data().activation_range())?;
+        writer_domain.require_current(
+            &database,
+            &self.range_writes,
+            native.data().activation_range(),
+        )?;
         let scope = native.historical_cut_scope(&database)?;
         committed.require_current_with_historical_cut_scope(&scope)?;
         let activation = self
             .range_writes
             .observe_native_joint_activation_fact_at_historical_cut(&scope, native.clone())?;
         let writer = self.range_writes.native_writer_host_state()?;
-        writer.require_database(&database, native.data().activation_range())?;
+        writer_domain.require_current(
+            &database,
+            &self.range_writes,
+            native.data().activation_range(),
+        )?;
         let (frozen_owner, continuity) = match owner {
             NativeJointReleaseOwnerView::Frozen(frozen) => {
                 self.range_writes
@@ -196,6 +265,7 @@ impl ClusterDataNodeService {
             native,
             activation,
             writer,
+            writer_domain: writer_domain.clone(),
             root,
             frozen_owner,
             continuity,
@@ -212,8 +282,9 @@ impl ClusterDataNodeService {
     ) -> Result<()> {
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
-        self.require_native_writer_host_for_range(
+        admission.writer_domain().require_current(
             &database,
+            &self.range_writes,
             admission.native().data().activation_range(),
         )?;
         let scope = admission.native().historical_cut_scope(&database)?;
@@ -226,8 +297,9 @@ impl ClusterDataNodeService {
     ) -> Result<()> {
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
-        self.require_native_writer_host_for_range(
+        admission.writer_domain().require_current(
             &database,
+            &self.range_writes,
             admission.native().data().activation_range(),
         )?;
         let scope = admission.native().historical_cut_scope(&database)?;

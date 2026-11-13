@@ -310,6 +310,18 @@ fn run_registered_image_baseline_with_placement_and_source(
         .unwrap_or_else(|| f.root.path().join("registered-image-diagnostics"))
         .join(format!("native-registered-fifth-image-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&output).unwrap();
+    evidence(
+        &output.join("execution-identity.json"),
+        &serde_json::json!({
+            "actual_rust_test_thread": std::thread::current().name().map(str::to_owned),
+            "source_commit": std::env::var("BICDB_TEST_SOURCE_SHA").ok(),
+            "package_version": env!("CARGO_PKG_VERSION"),
+            "source_case": source_case.map(|value| format!("{value:?}")),
+            "assignment_mode": format!("{assignment:?}"),
+            "identity_is_correlation_not_authority": true,
+        }),
+    )
+    .unwrap();
     let mut phase = "four_initial_control";
     let mut reports = Vec::new();
     let mut ledger = Vec::new();
@@ -724,6 +736,7 @@ fn run_registered_image_baseline_with_placement_and_source(
         assert_eq!(succeeded,2,"REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute");
         if let Some(source_case) = source_case {
             phase = "actual_local_old_quorum_seeded_remote_source_frames";
+            let target_runtime = host.test_registered_receiver_parts().unwrap().1;
             remote_source_tests::exercise(
                 source_case,
                 &controls,
@@ -731,6 +744,10 @@ fn run_registered_image_baseline_with_placement_and_source(
                 &services,
                 &metadata,
                 &target_transport,
+                host.test_registered_image_control_mut().unwrap(),
+                &target_runtime,
+                &target_service,
+                &target_metadata,
                 &factory,
                 &pending,
                 &ranges,

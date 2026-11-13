@@ -77,6 +77,7 @@ pub(crate) struct NativeJointCatalogueActivationReceipt {
     native: Arc<crate::db::NativeJointServingBridgeReceipt>,
     // Request continuity only; never serialized into the durable fact below.
     writer: Arc<crate::db::NativeWriterHostState>,
+    writer_domain: crate::db::NativeJointWriterDomain,
     writer_root: PathBuf,
     cancellation: CancellationToken,
 }
@@ -189,10 +190,14 @@ impl NativeJointCatalogueActivationReceipt {
         self.cancellation.check()?;
         self.writer
             .require_store(&self.writer_root, self.store_open_id)?;
-        self.writer.require_range(&self.activated.range)?;
+        self.writer_domain.require_lifetime(
+            &self.writer_root,
+            self.store_open_id,
+            &self.activated.range,
+        )?;
         self.cancellation.check()
     }
-    fn require_original_writer_current(
+    pub(crate) fn require_original_writer_current(
         &self,
         database: &crate::BicDb,
         store: &RangeWriteStore,
@@ -203,8 +208,8 @@ impl NativeJointCatalogueActivationReceipt {
                 "original joint activation writer registration changed",
             ));
         }
-        self.writer
-            .require_database(database, &self.activated.range)?;
+        self.writer_domain
+            .require_current(database, store, &self.activated.range)?;
         self.require_live()
     }
     #[cfg(test)]
@@ -391,6 +396,7 @@ impl RangeWriteStore {
         }
 
         let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
         admission.require_live()?;
         admission.committed().require_current(database)?;
         let Some(fact) =
@@ -405,6 +411,7 @@ impl RangeWriteStore {
             activated: fact.activated,
             native: fact.native,
             writer,
+            writer_domain,
             writer_root,
             cancellation: admission.cancellation().clone(),
         };
@@ -420,6 +427,7 @@ impl RangeWriteStore {
         admission: &NativeJointOpenAdmission,
     ) -> Result<()> {
         let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
         if !self.recovery_persistence_uncertain {
             return Ok(());
         }
@@ -454,7 +462,7 @@ impl RangeWriteStore {
                 "cannot re-fsync an unrelated uncertain joint activation",
             ));
         }
-        writer.require_database(database, native.data().activation_range())?;
+        writer_domain.require_current(database, self, native.data().activation_range())?;
         self.persist()?;
         self.recovery_persistence_uncertain = false;
         writer.require_store(&writer_root, self.open_id)?;
@@ -489,6 +497,7 @@ impl RangeWriteStore {
         }
         parent.check()?;
         let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
 
         admission.require_external_publications_current()?;
         admission.committed().require_current(database)?;
@@ -572,6 +581,7 @@ impl RangeWriteStore {
         drop(pin);
         let controlled = gate.try_controlled_mutation(frozen)?;
         gate.validate(range, &RangeMutationAuthority::Controlled(&controlled))?;
+        writer_domain.require_current(database, self, data.activation_range())?;
         let state = self
             .catalog
             .native_joint_handoffs
@@ -590,7 +600,6 @@ impl RangeWriteStore {
         }
         // Retiring the exact adopted image refusal and recording the new
         // CLOSED activation happen in the SAME fsynced catalogue publication.
-        writer.require_database(database, data.activation_range())?;
         self.recovery_persistence_uncertain = true;
         state.serving_activation = Some(candidate.clone());
         self.catalog
@@ -619,6 +628,7 @@ impl RangeWriteStore {
             activated: candidate,
             native,
             writer,
+            writer_domain,
             writer_root,
             cancellation: admission.cancellation().clone(),
         };

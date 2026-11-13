@@ -1,6 +1,9 @@
 //! Actual source-owner admission for ONLY OLD refusal/closure. Purpose/plan
 //! DATA alone is insufficient. No APP/Strong/image-row/Serving grant.
 use super::*;
+mod constraint_step;
+mod remote_old;
+pub(crate) use constraint_step::NativeInitialOldConstraintStep;
 #[cfg(test)]
 mod sink_test;
 use crate::distribution_consensus::{
@@ -10,7 +13,10 @@ use crate::distribution_range_consensus::RangeWriteStore;
 use crate::distribution_range_handoff::NativeJointHandoffPlan;
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 #[cfg(test)]
-pub(crate) use sink_test::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
+pub(crate) use sink_test::{
+    after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
+    CancelRemoteOldAfterNativeWal,
+};
 
 const METADATA_LOCK_POLL: std::time::Duration = std::time::Duration::from_millis(5);
 
@@ -27,6 +33,7 @@ pub(crate) struct NativeInitialOldStep<'request> {
     business: Uuid,
     member: NativeOwnedMetadataMemberObservation,
     parent: &'request CancellationToken,
+    hosted_process: Option<Arc<crate::distribution_range_image::NativeRemoteImageSourceRegistry>>,
     _local: std::marker::PhantomData<std::rc::Rc<()>>,
 }
 impl NativeInitialDataAdmission {
@@ -40,6 +47,41 @@ impl NativeInitialDataAdmission {
         own: HostMetadataReadObservation,
         business: Uuid,
         parent: &'request CancellationToken,
+    ) -> Result<NativeInitialOldStep<'request>> {
+        self.observe_initial_old_step_with_process(metadata, role, own, business, parent, None)
+    }
+    fn observe_hosted_initial_old_step<'request>(
+        &'request self,
+        metadata: Arc<Mutex<MetadataConsensusStore>>,
+        role: Arc<RecoveryRoleAdmission>,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        parent: &'request CancellationToken,
+    ) -> Result<NativeInitialOldStep<'request>> {
+        let process = self
+            .image_sources
+            .upgrade()
+            .ok_or_else(|| invalid("actual OLD hosted process owner ended"))?;
+        process.require_original_process()?;
+        self.observe_initial_old_step_with_process(
+            metadata,
+            role,
+            own,
+            business,
+            parent,
+            Some(process),
+        )
+    }
+    fn observe_initial_old_step_with_process<'request>(
+        &'request self,
+        metadata: Arc<Mutex<MetadataConsensusStore>>,
+        role: Arc<RecoveryRoleAdmission>,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        parent: &'request CancellationToken,
+        hosted_process: Option<
+            Arc<crate::distribution_range_image::NativeRemoteImageSourceRegistry>,
+        >,
     ) -> Result<NativeInitialOldStep<'request>> {
         parent.check()?;
         role.require_own_host_metadata(&own, business)?;
@@ -96,6 +138,7 @@ impl NativeInitialDataAdmission {
             business,
             member,
             parent,
+            hosted_process,
             _local: std::marker::PhantomData,
         };
         {
@@ -130,6 +173,9 @@ impl NativeInitialOldStep<'_> {
     }
     pub(crate) fn require_live(&self) -> Result<()> {
         self.parent.check()?;
+        if let Some(process) = &self.hosted_process {
+            process.require_original_process()?;
+        }
         self.role
             .require_own_host_metadata(&self.own, self.business)?;
         self.admission
@@ -191,10 +237,47 @@ impl NativeInitialOldStep<'_> {
 /// An uncertain producer never removes this owner or invents an observation.
 pub(super) struct RetainedInitialOld {
     plan_sha256: String,
+    plan: Arc<NativeJointHandoffPlan>,
     runtime: Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>,
     actual: Option<Arc<crate::distribution_range_handoff::NativeJointOldObservation>>,
+    constraints: Option<crate::distribution_data::NativeJointIrrevocableFacts>,
+    constraint_owner: Option<Arc<crate::distribution_data::ActualServiceNativeJointConstraints>>,
+    // Distinct actual durable outcomes, retained before postchecks. Cleared
+    // only after the SAME produced observation is stored in `actual`.
+    outcome: Option<crate::distribution_data::NativeJointOldRetainedOutcome>,
 }
+pub(super) type RetainedInitialOldTable =
+    Mutex<BTreeMap<crate::RangeId, Arc<Mutex<RetainedInitialOld>>>>;
 impl NativeInitialDataHost {
+    pub(super) fn retained_actual_old_source(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<Arc<crate::distribution_range_handoff::NativeJointOldObservation>> {
+        self.admission_for_old_step()?.require_live()?;
+        let entries = self
+            .old_closures
+            .try_lock()
+            .ok_or_else(|| invalid("actual OLD donor table busy"))?;
+        let owner = entries
+            .get(&range)
+            .ok_or_else(|| invalid("actual OLD donor has no retained local closure"))?;
+        let owner = owner
+            .try_lock()
+            .ok_or_else(|| invalid("actual OLD donor closure still active"))?;
+        let actual = owner
+            .actual
+            .clone()
+            .ok_or_else(|| invalid("actual OLD donor outcome remains uncertain"))?;
+        if actual.node_id() != &self.initial.seed.spec.node_id
+            || actual.plan().checksum_sha256()? != owner.plan_sha256
+        {
+            return Err(invalid(
+                "actual OLD donor changed original local identity/scope",
+            ));
+        }
+        actual.require_current()?;
+        Ok(actual)
+    }
     pub(in crate::distribution_native_host::provisional_listener::registration) fn close_initial_old(
         &self,
         runtime: Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>,
@@ -229,8 +312,12 @@ impl NativeInitialDataHost {
                 }
                 let owner = Arc::new(Mutex::new(RetainedInitialOld {
                     plan_sha256: digest.clone(),
+                    plan: step.plan().clone(),
                     runtime: runtime.clone(),
                     actual: None,
+                    constraints: None,
+                    constraint_owner: None,
+                    outcome: None,
                 }));
                 owners.insert(range, owner.clone());
                 owner

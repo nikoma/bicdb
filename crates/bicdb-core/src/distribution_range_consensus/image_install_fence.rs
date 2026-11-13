@@ -12,6 +12,19 @@ use crate::distribution_range_recovery::{HandoffRoleAdmission, RecoveryRoleAdmis
 
 use super::image_install_state::{ImageInstallIntent, MAX_INSTALL_INTENTS};
 
+#[cfg(feature = "tls-replication")]
+mod registered_remote;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote::NativeRegisteredRemoteImageIntent;
+#[cfg(feature = "tls-replication")]
+mod registered_installing;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_installing::test_registered_remote_installing_after_fsync;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_installing::{
+    NativeRegisteredRemoteInstallingFence, NativeRegisteredRemoteInstallingPublication,
+};
+
 fn canonical_range(range: &RangeDescriptor) -> RangeDescriptor {
     let mut range = range.clone();
     range.approximate_bytes = 0;
@@ -1130,6 +1143,17 @@ impl RangeWriteStore {
         attempt_id: Uuid,
         expected_freeze_owner: Uuid,
     ) -> Result<ImageInstallIntent> {
+        if self.catalog.format_version >= super::REGISTERED_IMAGE_INSTALL_CATALOG_FORMAT
+            || self
+                .catalog
+                .image_install_intents
+                .get(&source.cut().range().id)
+                .is_some_and(|intent| intent.registered_proposal.is_some())
+        {
+            return Err(range_write_error(
+                "generic local image installer cannot replace a Registered remote attempt",
+            ));
+        }
         source.require_current()?;
         let cut = source.cut();
         role.require_scope(&cut.purpose(), cut.session_id(), cut.nonce())?;
@@ -1231,6 +1255,7 @@ impl RangeWriteStore {
             restore_activation: current.restore_activation().cloned(),
             schema_sha256: source.bindings().schema_sha256().to_string(),
             protected_proposal: None,
+            registered_proposal: None,
         };
         intent.validate()?;
         Ok(intent)
@@ -1270,6 +1295,11 @@ impl RangeWriteStore {
         role: &NativeImageInstallRole<'_>,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
+        if fence.intent.registered_proposal.is_some() {
+            return Err(range_write_error(
+                "Registered remote Installing requires its original distinct owner and scope",
+            ));
+        }
         fence.require_live_role(role)?;
         admission.require_current(database)?;
         if let Some(pointer) = &fence.intent.protected_proposal {
@@ -1406,6 +1436,7 @@ mod tests {
             restore_activation: None,
             schema_sha256: "f".repeat(64),
             protected_proposal: None,
+            registered_proposal: None,
         }
     }
     fn store(root: &Path) -> RangeWriteStore {

@@ -85,6 +85,7 @@ pub fn paged_live_count_walks_on_this_thread() -> u64 {
 #[derive(Debug)]
 pub struct PagedRecords {
     store: Arc<PagedStore>,
+    opened_directory: PathBuf,
     /// Opt-in zstd compression for newly written record values.
     value_compression: std::sync::atomic::AtomicBool,
     index_aliases: parking_lot::RwLock<BTreeMap<String, String>>,
@@ -264,6 +265,7 @@ impl PagedRecords {
         let (store, _recovery) = PagedStore::open(dir, store_options).map_err(page_error)?;
         let aliases = load_nearby_index_aliases(dir)?;
         Ok(Self {
+            opened_directory: std::fs::canonicalize(dir)?,
             value_compression: std::sync::atomic::AtomicBool::new(false),
             store: Arc::new(store),
             index_aliases: parking_lot::RwLock::new(aliases),
@@ -277,6 +279,10 @@ impl PagedRecords {
 
     pub fn store(&self) -> &Arc<PagedStore> {
         &self.store
+    }
+    /// Actual opened directory identity, not a reconstructed database owner.
+    pub(crate) fn opened_directory(&self) -> &Path {
+        &self.opened_directory
     }
 
     pub fn free_page_extents(

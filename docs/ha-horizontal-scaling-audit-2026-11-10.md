@@ -18,8 +18,9 @@ The later inspected remote `main` is **1.0.502-beta**,
 The [separate source/CI checkpoint](evidence/main502-ha-source-checkpoint-2026-11-13.json)
 pins the exact files, tested PR177 head `4f1d61b837894217bb3c2b7e2461985382ce6cef`,
 individual check results and the retained complete serial-native log. The merged
-whole tree differs from that tested head; matching relevant file hashes do not
-make the full assembled release independently qualified.
+whole tree is identical to that tested head (`33480d5ab92f676ded81906093f1d648cf96e860`).
+Those passing CI checks cover the same source tree; they do not establish
+physical or production qualification.
 
 There is now a **positive fifth-member DATA path**. Three named tests pass in
 [serial native job 132191245216](https://github.com/nikoma/bicdb/actions/runs/43513977284/job/132191245216)

@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 
 mod closed_fence_controls;
 mod custody;
+mod fifth_data_path_tests;
 mod placement_cases;
 mod remote_source_tests;
 use closed_fence_controls::Case;

@@ -819,6 +819,7 @@ impl ApplicationRuntime {
             lifecycle: Mutex::new(()),
             history: Mutex::new(BTreeMap::new()),
             supervisors: Mutex::new(BTreeMap::new()),
+            background_supervisors: true,
             wasm_engine,
             module_cache: Mutex::new(CompiledModuleCache::default()),
         };
@@ -834,14 +835,39 @@ impl ApplicationRuntime {
         db: Arc<RwLock<BicDb>>,
         config: ApplicationHostConfig,
         verifier: PackageVerifier,
+        services: InvocationServices,
+    ) -> Result<Arc<Self>> {
+        Self::new_shared_mode(db, config, verifier, services, true)
+    }
+
+    /// Open a fully verified catalog for an exclusive lifecycle CLI command.
+    /// Restore still performs signed existing-data admission. Background work
+    /// remains dormant so it cannot race this command's quiescence boundary.
+    /// A subsequent serving runtime starts the ordinary worker/schedule plans.
+    pub fn new_shared_for_lifecycle(
+        db: Arc<RwLock<BicDb>>,
+        config: ApplicationHostConfig,
+        verifier: PackageVerifier,
+        services: InvocationServices,
+    ) -> Result<Arc<Self>> {
+        Self::new_shared_mode(db, config, verifier, services, false)
+    }
+
+    fn new_shared_mode(
+        db: Arc<RwLock<BicDb>>,
+        config: ApplicationHostConfig,
+        verifier: PackageVerifier,
         mut services: InvocationServices,
+        background_supervisors: bool,
     ) -> Result<Arc<Self>> {
         let dispatcher = Arc::new(RuntimeServiceDispatcher::default());
         services.services = dispatcher.clone();
         // Bind the service broker before restored workers and schedules become
         // active. Otherwise a fast restored worker can observe an unbound
         // dispatcher during process startup.
-        let runtime = Arc::new(Self::initialize(db, config, verifier, services, false)?);
+        let mut runtime = Self::initialize(db, config, verifier, services, false)?;
+        runtime.background_supervisors = background_supervisors;
+        let runtime = Arc::new(runtime);
         dispatcher.bind(&runtime);
         runtime.restore_active_snapshot()?;
         Ok(runtime)
@@ -1085,8 +1111,10 @@ impl ApplicationRuntime {
         for supervisors in previous {
             supervisors.stop();
         }
-        for supervisors in prepared.values() {
-            supervisors.activate();
+        if self.background_supervisors {
+            for supervisors in prepared.values() {
+                supervisors.activate();
+            }
         }
         self.supervisors
             .lock()
@@ -1189,7 +1217,9 @@ impl ApplicationRuntime {
         if let Some(previous) = previous {
             previous.stop();
         }
-        prepared_supervisors.activate();
+        if self.background_supervisors {
+            prepared_supervisors.activate();
+        }
         self.supervisors
             .lock()
             .expect("application supervisors poisoned")
@@ -1296,7 +1326,9 @@ impl ApplicationRuntime {
         if let Some(old) = old {
             old.stop();
         }
-        prepared_supervisors.activate();
+        if self.background_supervisors {
+            prepared_supervisors.activate();
+        }
         self.supervisors
             .lock()
             .expect("application supervisors poisoned")
@@ -2809,7 +2841,7 @@ impl ApplicationRuntime {
     }
 
     pub(crate) fn restore_active_snapshot(&self) -> Result<()> {
-        self.restore_active_snapshot_with_supervisors(true)
+        self.restore_active_snapshot_with_supervisors(self.background_supervisors)
     }
 
     /// Validate the complete planned signed catalog before exposing routes or workers.

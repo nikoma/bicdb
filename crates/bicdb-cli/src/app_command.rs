@@ -414,6 +414,7 @@ pub fn run(
         print_json(&outcome)?;
         return Ok(());
     }
+    let background_supervisors = matches!(&command, AppCommand::Serve { .. });
     let bundle = open_runtime(
         &database_path,
         &package_root,
@@ -421,6 +422,7 @@ pub fn run(
         &secret_specs,
         blob_config.as_deref(),
         integration_config.as_deref(),
+        background_supervisors,
     )?;
     match command {
         AppCommand::UniqueScope { .. } => {
@@ -629,6 +631,7 @@ fn open_runtime(
     secret_specs: &[String],
     blob_config: Option<&Path>,
     integration_config: Option<&Path>,
+    background_supervisors: bool,
 ) -> Result<RuntimeBundle> {
     let (verifier, services) = open_runtime_services(
         package_root,
@@ -638,7 +641,12 @@ fn open_runtime(
         integration_config,
     )?;
     let db = Arc::new(RwLock::new(BicDb::open(database_path)?));
-    let runtime = ApplicationRuntime::new_shared(
+    let constructor = if background_supervisors {
+        ApplicationRuntime::new_shared
+    } else {
+        ApplicationRuntime::new_shared_for_lifecycle
+    };
+    let runtime = constructor(
         db.clone(),
         ApplicationHostConfig::new(package_root, host_node_id()),
         verifier,

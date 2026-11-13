@@ -389,6 +389,28 @@ pub fn native_ratio_representable_units_value(arguments: &[Value]) -> Result<Val
     ))
 }
 
+/// Extract one base10^14 limb from canonical unsigned units <2^254. Position
+/// zero is the least significant limb; only actual Int64 positions 0..5 are
+/// admitted. This bounded pure codec grants no source or financial authority.
+pub fn exact_units_limb_value(arguments: &[Value]) -> Result<Value> {
+    let operation = "exact units limb";
+    if arguments.len() != 2 {
+        return Err(invalid(
+            operation,
+            "requires String units and Int64 position",
+        ));
+    }
+    let units = unsigned_units(&arguments[0], operation, "units")?;
+    let position = int_scale(&arguments[1], 5, operation, "limb position")?;
+    let base = BigInt::from(100_000_000_000_000i64);
+    let limb = (units / base.pow(position)) % base;
+    let limb = limb
+        .to_string()
+        .parse::<i64>()
+        .map_err(|_| invalid(operation, "bounded limb does not fit Int64"))?;
+    Ok(Value::from(limb))
+}
+
 /// Six actual Int64 limbs, highest first, each in [0,10^14), to canonical
 /// unsigned units <2^254. This pure codec establishes no source/tenant/order or
 /// financial authority. Native callers must independently prove authentic limbs.

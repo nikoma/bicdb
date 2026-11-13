@@ -13,7 +13,7 @@ pub use exact_decimal_list_sum::{exact_decimal_list_sum_value, MAX_EXACT_DECIMAL
 mod exact_decimal_units;
 pub use exact_decimal_units::{
     exact_decimal_sum_units_value, exact_prorate_native_units_value, exact_prorate_units_value,
-    exact_units_from_limbs_value, native_ratio_representable_units_value,
+    exact_units_from_limbs_value, exact_units_limb_value, native_ratio_representable_units_value,
     nearest_native_display_ratio_value, nearest_native_full_display_ratio_value,
     ExactDecimalUnitsSum,
 };

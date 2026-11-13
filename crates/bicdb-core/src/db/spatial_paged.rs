@@ -2343,7 +2343,7 @@ impl BicDb {
             }
         }
         drop(issuers);
-        for validator in &tx.commit_validators {
+        for validator in tx.native_commit_validators() {
             match validator {
                 NativeCommitValidator::AppendOnly { relation } => {
                     for write in tx
@@ -2647,7 +2647,7 @@ impl BicDb {
         // committer's full apply completes before the next committer begins.
         let has_carrier_invariants = (!tx.writes.is_empty()
             || tx.validate_existing_application_invariants)
-            && tx.commit_validators.iter().any(|validator| {
+            && tx.native_commit_validators().any(|validator| {
                 matches!(
                     validator,
                     NativeCommitValidator::ApplicationInvariant { .. }

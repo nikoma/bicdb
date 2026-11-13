@@ -783,6 +783,7 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn apply_setting_value(&mut self, setting: String, value: SqlValue) -> Result<()> {
+        self.require_local_transaction_setting_control(&setting)?;
         if setting == super::read_only::SETTING {
             return Err(SqlError::Unsupported(
                 "transaction access mode must be changed with SET TRANSACTION".into(),

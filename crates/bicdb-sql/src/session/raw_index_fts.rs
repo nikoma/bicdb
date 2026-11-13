@@ -834,11 +834,16 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_query(&mut self, query: &Query) -> Result<SqlResult> {
+        if self.app_exact_decimal_units == Some(false) {
+            self.sql_engine().require_query_exact_decimal_units(query)?;
+        }
         self.ensure_read_only_query(query)?;
         // Every relation of the FROM tree needs SELECT before any row is read,
         // whether or not the executor ends up scanning it.
         self.sql_engine().require_from_relations_readable(query)?;
         validate_comparison_signatures(&self.sql_engine(), ComparisonStatement::Query(query))?;
+        let bound_units = self.sql_engine().bind_exact_units_scales(query)?;
+        let query = bound_units.as_ref().unwrap_or(query);
         if self.oracle_autonomous && query_has_row_locks(query) {
             // A locking read starts an Oracle transaction even if SELECT INTO
             // subsequently raises NO_DATA_FOUND and its handler catches it.
@@ -2374,6 +2379,7 @@ impl<'db> SqlSession<'db> {
         let session_gucs = self.session_gucs.clone();
         let security_context = self.security_context.clone();
         let cancellation = self.cancellation.clone();
+        let app_exact_decimal_units = self.app_exact_decimal_units;
         let chunks = std::thread::scope(|scope| {
             let mut handles = Vec::new();
             for chunk in records.chunks(chunk_rows) {
@@ -2390,6 +2396,7 @@ impl<'db> SqlSession<'db> {
                     worker.routine_vars = routine_vars;
                     worker.session_gucs = session_gucs;
                     worker.cancellation = cancellation;
+                    worker.app_exact_decimal_units = app_exact_decimal_units;
                     let mut blobs = Vec::with_capacity(chunk.len());
                     for record in chunk {
                         worker.cancellation.check()?;

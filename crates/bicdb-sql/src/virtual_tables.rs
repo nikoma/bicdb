@@ -1425,6 +1425,17 @@ pub(crate) fn execute_builtin_function(
     tx: Option<&bicdb_core::Transaction>,
     session_gucs: Option<&HashMap<String, String>>,
 ) -> Result<SqlResult> {
+    execute_builtin_function_with_engine(function, db, security_context, tx, session_gucs, None)
+}
+
+pub(crate) fn execute_builtin_function_with_engine(
+    function: &Function,
+    db: Option<&BicDb>,
+    security_context: Option<&SecurityContext>,
+    tx: Option<&bicdb_core::Transaction>,
+    session_gucs: Option<&HashMap<String, String>>,
+    query_engine: Option<&SqlEngine<'_>>,
+) -> Result<SqlResult> {
     // This compatibility path synthesizes Expr::Function wrappers and argument
     // rewrites. Their addresses cannot outlive this call in a routine's memo.
     let _temporary_types = suspend_expr_type_scope();
@@ -1531,12 +1542,13 @@ pub(crate) fn execute_builtin_function(
                             | "pg_last_wal_receive_lsn"
                             | "pg_last_wal_replay_lsn"
                     ) {
-                        return eval_db_catalog_function_value(
+                        return eval_db_catalog_function_value_with_engine(
                             db,
                             nested_bare,
                             &[],
                             tx.map(Transaction::visibility_watermark),
                             session_gucs,
+                            query_engine,
                         )?
                         .ok_or_else(|| {
                             SqlError::Unsupported(format!(
@@ -1549,12 +1561,13 @@ pub(crate) fn execute_builtin_function(
                 _ => eval_constant_expr(arg),
             })
             .collect::<Result<Vec<_>>>()?;
-        let value = eval_db_catalog_function_value(
+        let value = eval_db_catalog_function_value_with_engine(
             db,
             bare_name,
             &args,
             tx.map(Transaction::visibility_watermark),
             session_gucs,
+            query_engine,
         )?
         .ok_or_else(|| SqlError::Unsupported(format!("function {bare_name} is not supported")))?;
         return Ok(
@@ -1804,12 +1817,13 @@ pub(crate) fn execute_builtin_function(
                 )]));
             }
             if let Some(db) = db {
-                if let Some(value) = eval_db_catalog_function_value(
+                if let Some(value) = eval_db_catalog_function_value_with_engine(
                     db,
                     other,
                     &args,
                     tx.map(Transaction::visibility_watermark),
                     session_gucs,
+                    query_engine,
                 )? {
                     return Ok(SqlResult::new(
                         vec![name.replace("pg_catalog.", "")],

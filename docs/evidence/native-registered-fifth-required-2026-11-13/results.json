@@ -1,0 +1,38 @@
+{
+  "source": "a98c6a6b1390b0a3853e4ae658e8e103a7749b19",
+  "run": 43343369839,
+  "core_job": 131616827260,
+  "compile_job": 131616783865,
+  "core": {
+    "passed": 0,
+    "failed": 1,
+    "ignored": 0,
+    "filtered": 980,
+    "duration_s": 4.31
+  },
+  "all_targets": "PASS",
+  "isolated_consumer": "PASS",
+  "workflow_conclusion": "failure",
+  "phase": "required_fence_acceptance",
+  "required_baseline_succeeded": false,
+  "primary_error": "assertion `left == right` failed: REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute\n  left: 0\n right: 2",
+  "cleanup": {
+    "errors": [],
+    "original_roots_retained": true,
+    "primary_failure_preserved": "assertion `left == right` failed: REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute\n  left: 0\n right: 2"
+  },
+  "evidence_errors": [],
+  "custody_error": null,
+  "original_writer_guards_retained": 4,
+  "actual_required_fence_successes": 0,
+  "required_fence_successes": 2,
+  "no_registered_row_or_new_data_quorum_claim": true,
+  "old_closed_data_quorum_exercised": false,
+  "source_image_capture_exercised": false,
+  "local_image_source_session_wire_not_exercised": true,
+  "engine_opened_or_replayed": false,
+  "qualified": false,
+  "automatic_movement_tested": false,
+  "physical_or_vm_tested": false,
+  "core_host_fixture_not_five_processes": true
+}

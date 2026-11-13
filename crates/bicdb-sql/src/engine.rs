@@ -4133,6 +4133,7 @@ pub struct SqlEngine<'db> {
     pub(crate) settings: SqlSettings,
     pub(crate) ctes: BTreeMap<String, CteResult>,
     pub(crate) security_context: Option<SecurityContext>,
+    pub(crate) app_exact_decimal_units: Option<bool>,
     pub(crate) runtime: Option<Arc<dyn SqlSessionRuntime>>,
     pub(crate) session_gucs: Arc<HashMap<String, String>>,
     pub(crate) oracle_output: oracle::output::State,
@@ -4374,6 +4375,7 @@ impl<'db> SqlEngine<'db> {
             settings,
             ctes: BTreeMap::new(),
             security_context: None,
+            app_exact_decimal_units: None,
             runtime: None,
             session_gucs: Arc::new(HashMap::new()),
             oracle_output: oracle::output::State::default(),
@@ -4411,6 +4413,7 @@ impl<'db> SqlEngine<'db> {
             settings,
             ctes: BTreeMap::new(),
             security_context,
+            app_exact_decimal_units: None,
             runtime: None,
             session_gucs: Arc::new(session_gucs),
             oracle_output: oracle::output::State::default(),
@@ -4458,6 +4461,7 @@ impl<'db> SqlEngine<'db> {
         runtime: Option<Arc<dyn SqlSessionRuntime>>,
         cancellation: CancellationToken,
         fts_limits: bicdb_core::FtsQueryLimits,
+        app_exact_decimal_units: Option<bool>,
     ) -> Self {
         let session_gucs =
             bind_trusted_security_settings_shared(session_gucs, security_context.as_ref());
@@ -4469,6 +4473,7 @@ impl<'db> SqlEngine<'db> {
             ctes,
             security_context,
             runtime,
+            app_exact_decimal_units,
             session_gucs,
             oracle_output: oracle::output::State::default(),
             routine_vars,
@@ -4508,6 +4513,7 @@ impl<'db> SqlEngine<'db> {
             ctes,
             security_context,
             runtime: None,
+            app_exact_decimal_units: None,
             session_gucs,
             oracle_output: oracle::output::State::default(),
             routine_vars: Arc::new(BTreeMap::new()),
@@ -4628,6 +4634,142 @@ impl<'db> SqlEngine<'db> {
         self
     }
 
+    pub(crate) fn require_exact_decimal_units(&self) -> Result<()> {
+        if self.app_exact_decimal_units == Some(false) {
+            return Err(SqlError::ExactUnitsCapabilityDenied);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn require_query_exact_decimal_units(&self, query: &Query) -> Result<()> {
+        if self.app_exact_decimal_units != Some(false) {
+            return Ok(());
+        }
+        let found = sqlparser::ast::visit_expressions(query, |expression| {
+            if let Expr::Function(function) = expression {
+                if object_name(&function.name)
+                    .is_ok_and(|name| name.eq_ignore_ascii_case("bicdb_exact_sum_units"))
+                {
+                    return ControlFlow::Break(());
+                }
+            }
+            ControlFlow::Continue(())
+        });
+        if found.is_break() {
+            self.require_exact_decimal_units()?;
+        }
+        Ok(())
+    }
+
+    /// Resolve the unit scale once from typed routine/statement bindings. The
+    /// record and streaming aggregate paths then share a literal Int scale;
+    /// no path evaluates it against a relation row or narrows a SUM first.
+    pub(crate) fn bind_exact_units_scales(&self, query: &Query) -> Result<Option<Query>> {
+        let found = sqlparser::ast::visit_expressions(query, |expr| {
+            if matches!(expr, Expr::Function(function)
+                if object_name(&function.name).is_ok_and(|name| name.eq_ignore_ascii_case("bicdb_exact_sum_units")))
+            {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        });
+        if !found.is_break() {
+            return Ok(None);
+        }
+        fn invariant(expr: &Expr) -> bool {
+            match expr {
+                Expr::Value(_) => true,
+                Expr::Nested(inner)
+                | Expr::Cast { expr: inner, .. }
+                | Expr::UnaryOp { expr: inner, .. } => invariant(inner),
+                Expr::BinaryOp { left, right, .. } => invariant(left) && invariant(right),
+                _ => false,
+            }
+        }
+        let mut bound = query.clone();
+        let result = sqlparser::ast::visit_expressions_mut(&mut bound, |expr| {
+            let Expr::Function(function) = expr else {
+                return ControlFlow::Continue(());
+            };
+            if !object_name(&function.name)
+                .is_ok_and(|name| name.eq_ignore_ascii_case("bicdb_exact_sum_units"))
+            {
+                return ControlFlow::Continue(());
+            }
+            let bind = (|| -> Result<()> {
+                let FunctionArguments::List(args) = &mut function.args else {
+                    return Err(SqlError::ExactUnitsParameter(
+                        "bicdb_exact_sum_units requires two positional arguments".into(),
+                    ));
+                };
+                if args.args.len() != 2
+                    || args
+                        .args
+                        .iter()
+                        .any(|arg| !matches!(arg, FunctionArg::Unnamed(FunctionArgExpr::Expr(_))))
+                {
+                    return Err(SqlError::ExactUnitsParameter(
+                        "bicdb_exact_sum_units requires two positional arguments".into(),
+                    ));
+                }
+                let FunctionArg::Unnamed(FunctionArgExpr::Expr(scale)) = &mut args.args[1] else {
+                    unreachable!()
+                };
+                if !invariant(scale) {
+                    return Err(SqlError::ExactUnitsParameter(
+                        "bicdb_exact_sum_units scale requires a literal or positional Int binding; row and ambiguous named identifiers are not admitted".into(),
+                    ));
+                }
+                let mut scalar = scale.clone();
+                let parameters = sqlparser::ast::visit_expressions_mut(&mut scalar, |value| {
+                    let Expr::Value(literal) = value else {
+                        return ControlFlow::Continue(());
+                    };
+                    let Value::Placeholder(name) = &literal.value else {
+                        return ControlFlow::Continue(());
+                    };
+                    let Some(SqlValue::Int(number)) =
+                        crate::select_exec::routine_var_from_name(&self.routine_vars, name)
+                    else {
+                        return ControlFlow::Break(SqlError::ExactUnitsParameter(
+                            "bicdb_exact_sum_units scale requires an actual bound Int".into(),
+                        ));
+                    };
+                    *value = Expr::Value(Value::Number(number.to_string(), false).into());
+                    ControlFlow::Continue(())
+                });
+                if let ControlFlow::Break(error) = parameters {
+                    return Err(error);
+                }
+                // Pure constant evaluation cannot capture a FROM/outer row,
+                // role/GUC or a same-named routine variable as a scale.
+                let SqlValue::Int(value) =
+                    crate::eval::eval_constant_expr(&scalar).map_err(|error| {
+                        SqlError::ExactUnitsParameter(format!(
+                            "bicdb_exact_sum_units scale is not an invariant Int: {error}"
+                        ))
+                    })?
+                else {
+                    return Err(SqlError::ExactUnitsParameter(
+                        "bicdb_exact_sum_units scale requires an exact Int".into(),
+                    ));
+                };
+                *scale = Expr::Value(Value::Number(value.to_string(), false).into());
+                crate::eval::ExactUnitsAggregate::from_function(function)?;
+                Ok(())
+            })();
+            match bind {
+                Ok(()) => ControlFlow::Continue(()),
+                Err(error) => ControlFlow::Break(error),
+            }
+        });
+        if let ControlFlow::Break(error) = result {
+            return Err(error);
+        }
+        Ok(Some(bound))
+    }
+
     pub(crate) fn inherit_transaction(&self, engine: SqlEngine<'db>) -> SqlEngine<'db> {
         let mut engine = engine
             .with_index_lookup_cache(self.index_lookup_cache.clone())
@@ -4637,6 +4779,7 @@ impl<'db> SqlEngine<'db> {
             .with_routine_host(self.routine_host)
             .with_oracle_output(self.oracle_output.clone());
         engine.heap_lock_identity = self.heap_lock_identity;
+        engine.app_exact_decimal_units = self.app_exact_decimal_units;
         if engine.outer_row.is_none() {
             engine.outer_row.clone_from(&self.outer_row);
         }
@@ -5109,11 +5252,14 @@ impl<'db> SqlEngine<'db> {
     }
 
     pub(crate) fn execute_query(&self, query: &Query) -> Result<SqlResult> {
+        self.require_query_exact_decimal_units(query)?;
         let join_budget = crate::join_budget::QueryScope::enter();
         self.db_ref().check_recovery_state()?;
         crate::session::recycle_bin::ensure_replica_catalog_ready(self.db_ref())?;
         self.require_from_relations_readable(query)?;
         validate_comparison_signatures(self, ComparisonStatement::Query(query))?;
+        let bound_units = self.bind_exact_units_scales(query)?;
+        let query = bound_units.as_ref().unwrap_or(query);
         let _slot_types = crate::slot_types::push_frame();
         let _subqueries = self.subquery_memo.scope();
         let _probes = self.exists_probe_memo.scope(
@@ -5181,7 +5327,7 @@ impl<'db> SqlEngine<'db> {
             return self.execute_query(&rewritten);
         }
         validate_window_functions(select, query)?;
-        self.validate_money_aggregate_signatures(select, query)?;
+        self.validate_native_aggregate_signatures(select, query)?;
         let has_windows = select_has_window_functions(select, query)?;
 
         if select.from.is_empty() {
@@ -5679,6 +5825,7 @@ impl<'db> SqlEngine<'db> {
             memo_operand_types: false,
             ir_owned_statement: false,
             security_context: self.security_context.clone(),
+            app_exact_decimal_units: self.app_exact_decimal_units,
             runtime: self.runtime.clone(),
             session_gucs,
             oracle_output: self.oracle_output.clone(),

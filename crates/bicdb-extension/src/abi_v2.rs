@@ -3253,6 +3253,25 @@ impl ApplicationManifestV2 {
         }
         if let Some(program) = &self.application_program {
             program.validate()?;
+            if application_program_uses_builtin(
+                program,
+                &[
+                    "finance.sum_units",
+                    "finance.prorate_units",
+                    "finance.display_ratio_units",
+                    "finance.prorate_native_units",
+                    "finance.display_native_ratio_units",
+                    "finance.units_from_limbs",
+                    "finance.native_ratio_representable_units",
+                ],
+            ) && !self
+                .required_features
+                .contains(&ApplicationFeature::ExactDecimalUnits)
+            {
+                return invalid(
+                    "exact unit arithmetic requires signed exact_decimal_units feature",
+                );
+            }
             if application_program_uses_builtin(program, &["query.decimal_sum"])
                 && !self
                     .required_features
@@ -5207,6 +5226,20 @@ fn validate_carrier_expression(expression: &ApplicationExpressionV1) -> Result<(
             if *kind == ApplicationCallKindV1::Builtin && target == "query.decimal_sum" {
                 validate_decimal_list_sum_call(expression)?;
             }
+            if *kind == ApplicationCallKindV1::Builtin
+                && matches!(
+                    target.as_str(),
+                    "finance.sum_units"
+                        | "finance.prorate_units"
+                        | "finance.display_ratio_units"
+                        | "finance.prorate_native_units"
+                        | "finance.display_native_ratio_units"
+                        | "finance.units_from_limbs"
+                        | "finance.native_ratio_representable_units"
+                )
+            {
+                validate_exact_decimal_units_call(expression)?;
+            }
             for argument in arguments {
                 validate_carrier_expression(&argument.value)?;
             }
@@ -6096,6 +6129,7 @@ impl EgressDeclaration {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum ApplicationFeature {
+    ExactDecimalUnits,
     ExactDecimalListSum,
     ExactProportionalIntervals,
     NativeImmutableFacts,
@@ -6704,6 +6738,56 @@ impl ApplicationInvariantV1 {
     }
 }
 
+fn validate_exact_decimal_units_call(expression: &ApplicationExpressionV1) -> Result<()> {
+    let ApplicationExpressionV1::Call {
+        kind: ApplicationCallKindV1::Builtin,
+        target,
+        method,
+        result_type,
+        argument_types,
+        argument_item_types,
+        result_projection,
+        arguments,
+    } = expression
+    else {
+        return invalid("exact units require their typed builtin call");
+    };
+    use ApplicationExpressionTypeV1::{Decimal, Int, Other, String as Text};
+    let (expected, items, output): (&[_], &[_], _) = match target.as_str() {
+        "finance.sum_units" => (&[Other, Int], &[Some(Decimal), None], Text),
+        "finance.prorate_units" | "finance.prorate_native_units" => (
+            &[Text, Text, Decimal, Int, Int],
+            &[None, None, None, None, None],
+            Decimal,
+        ),
+        "finance.display_ratio_units" | "finance.display_native_ratio_units" => {
+            (&[Text, Text, Int, Int], &[None, None, None, None], Decimal)
+        }
+        "finance.native_ratio_representable_units" => (
+            &[Text, Text, Int, Int],
+            &[None, None, None, None],
+            ApplicationExpressionTypeV1::Bool,
+        ),
+        "finance.units_from_limbs" => (
+            &[Int, Int, Int, Int, Int, Int],
+            &[None, None, None, None, None, None],
+            Text,
+        ),
+        _ => return invalid("unknown exact units builtin"),
+    };
+    if method.is_some()
+        || result_projection.is_some()
+        || *result_type != Some(output)
+        || argument_types != expected
+        || argument_item_types != items
+        || arguments.len() != expected.len()
+        || arguments.iter().any(|argument| argument.name.is_some())
+    {
+        return invalid("exact units require strict positional Decimal-list/Int or String/String/Decimal/Int scalar signatures and their declared result type");
+    }
+    Ok(())
+}
+
 fn validate_decimal_list_sum_call(expression: &ApplicationExpressionV1) -> Result<()> {
     let ApplicationExpressionV1::Call {
         kind: ApplicationCallKindV1::Builtin,
@@ -6864,6 +6948,18 @@ fn invariant_scalar_operand_type(
         } if target == "finance.proportional_interval" => {
             Some(ApplicationExpressionTypeV1::Decimal)
         }
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            ..
+        } if target == "finance.units_from_limbs" => Some(ApplicationExpressionTypeV1::String),
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            ..
+        } if target == "finance.native_ratio_representable_units" => {
+            Some(ApplicationExpressionTypeV1::Bool)
+        }
         ApplicationExpressionV1::Aggregate {
             function: ApplicationAggregateFunctionV1::Count,
             ..
@@ -7020,6 +7116,57 @@ fn validate_invariant_expression(
             }
             recurse(left, bindings, dependencies)?;
             recurse(right, bindings, dependencies)
+        }
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            arguments,
+            ..
+        } if target == "finance.units_from_limbs" => {
+            validate_exact_decimal_units_call(expression)?;
+            if !application
+                .required_features
+                .contains(&ApplicationFeature::ExactDecimalUnits)
+            {
+                return invalid(
+                    "native unit formatter requires signed exact_decimal_units feature",
+                );
+            }
+            for argument in arguments {
+                recurse(&argument.value, bindings, dependencies)?;
+                if invariant_scalar_operand_type(application, subject, bindings, &argument.value)
+                    != Some(ApplicationExpressionTypeV1::Int)
+                {
+                    return invalid("native unit formatter operands must be actual nonnullable signed Int fields or Int expressions");
+                }
+            }
+            Ok(())
+        }
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            arguments,
+            ..
+        } if target == "finance.native_ratio_representable_units" => {
+            validate_exact_decimal_units_call(expression)?;
+            if !application
+                .required_features
+                .contains(&ApplicationFeature::ExactDecimalUnits)
+            {
+                return invalid(
+                    "native ratio predicate requires signed exact_decimal_units feature",
+                );
+            }
+            use ApplicationExpressionTypeV1::{Int, String as Text};
+            for (argument, expected) in arguments.iter().zip([Text, Text, Int, Int]) {
+                recurse(&argument.value, bindings, dependencies)?;
+                if invariant_scalar_operand_type(application, subject, bindings, &argument.value)
+                    != Some(expected)
+                {
+                    return invalid("native ratio predicate operands must match actual nonnullable String/String/Int/Int fields or expressions");
+                }
+            }
+            Ok(())
         }
         ApplicationExpressionV1::Call {
             kind: ApplicationCallKindV1::Builtin,

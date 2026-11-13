@@ -1,0 +1,47 @@
+{
+  "source": "5812d5750409e8b4f21d959fbaf367c8d4362f39",
+  "run": 43343984328,
+  "core_job": 131618814672,
+  "compile_job": 131618780247,
+  "formatting_job": 131618780186,
+  "workflow_conclusion": "failure",
+  "core": {
+    "pass": 4,
+    "fail": 0,
+    "ignored": 0,
+    "filtered": 976,
+    "duration_s": 67.7,
+    "test_results": [
+      "2026-11-13T01:25:47.2975367Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_writer_replacement_refused ... ok",
+      "2026-11-13T01:25:47.3438771Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_foreign_db_and_store_refused ... ok",
+      "2026-11-13T01:25:47.4064677Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_missing_decision_archive_refused ... ok",
+      "2026-11-13T01:25:49.1197628Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_caller_cancel_and_exact_fresh_recovery ... ok"
+    ]
+  },
+  "all_target": "PASS",
+  "isolated_consumer": "PASS",
+  "formatting": "FAIL: one extra empty line before FENCE_TRACE_BEGIN in distribution_range_recovery.rs",
+  "later_whitespace_fix": "1a3ee02ea (Root source-only raw rustfmt PASS, not this executed head)",
+  "artifact": {
+    "id": 14000941836,
+    "sha256": "51b521e32c132ece9b2caa99a3b8ae04976167ea61851474d85549bc41be96ab",
+    "bytes": 362562,
+    "file_count": 4,
+    "native_database_custody_retained": false
+  },
+  "prior_source": "5cec7687196fe6b113805485672e8730c8295a56",
+  "prior_run": 43339165885,
+  "prior_core_job": 131602906573,
+  "prior_core": {
+    "pass": 3,
+    "fail": 1,
+    "duration_s": 88.59,
+    "stage": "missing archive not reached; n3 original fence record QueryTimedOut after three actual RPC successes, business parent512ms"
+  },
+  "old_cause_resolved": false,
+  "production_timing_fix": false,
+  "qualified": false,
+  "deployed": false,
+  "engine_opened_or_replayed": false,
+  "physical_or_vm_test": false
+}

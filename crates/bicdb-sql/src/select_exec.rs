@@ -1930,6 +1930,7 @@ pub(crate) enum RowAggregate {
     CountAll,
     CountExpr(Expr, bool),
     Sum(Expr, bool),
+    ExactSumUnits(ExactUnitsAggregate),
     Avg(Expr, bool),
     Min(Expr),
     Max(Expr),
@@ -1995,6 +1996,9 @@ impl RowAggregate {
         }
         let distinct = function_args_are_distinct(function);
         match name.as_str() {
+            "bicdb_exact_sum_units" => Ok(Self::ExactSumUnits(ExactUnitsAggregate::from_function(
+                function,
+            )?)),
             "count" => {
                 if is_count_star(function) {
                     Ok(Self::CountAll)
@@ -2116,6 +2120,7 @@ impl RowAggregate {
             Self::RegressionSlope(_) => "regr_slope".to_string(),
             Self::CountAll | Self::CountExpr(_, _) => "count".to_string(),
             Self::Sum(_, _) => "sum".to_string(),
+            Self::ExactSumUnits(_) => "bicdb_exact_sum_units".to_string(),
             Self::Avg(_, _) => "avg".to_string(),
             Self::Min(_) => "min".to_string(),
             Self::Max(_) => "max".to_string(),
@@ -2203,6 +2208,21 @@ impl RowAggregate {
             Self::Sum(expr, distinct) => {
                 reject_oid_numeric_aggregate(engine, expr, columns, "sum")?;
                 row_sum_value(engine, rows, columns, expr, *distinct)
+            }
+            Self::ExactSumUnits(aggregate) => {
+                engine.require_exact_decimal_units()?;
+                aggregate.validate_type(|expr| {
+                    row_columns_expr_pg_type(
+                        engine.db_ref(),
+                        expr,
+                        columns.iter().map(String::as_str),
+                    )
+                })?;
+                let (_, context) = engine.bound_row_context(columns);
+                aggregate.evaluate(rows, |row, expr| {
+                    engine.check_cancellation()?;
+                    engine.eval_slot_row_value(row, &context, expr)
+                })
             }
             Self::Avg(expr, distinct) => {
                 reject_oid_numeric_aggregate(engine, expr, columns, "avg")?;
@@ -2359,6 +2379,20 @@ impl RowAggregate {
                 reject_oid_numeric_aggregate(engine, expr, context.column_keys(), "sum")?;
                 let bound = scope.bind(expr);
                 row_sum_bound_value(engine, rows, expr, bound.as_ref(), context, *distinct)
+            }
+            Self::ExactSumUnits(aggregate) => {
+                engine.require_exact_decimal_units()?;
+                aggregate.validate_type(|expr| {
+                    row_columns_expr_pg_type(
+                        engine.db_ref(),
+                        expr,
+                        context.column_keys().iter().map(String::as_str),
+                    )
+                })?;
+                aggregate.evaluate(rows, |row, expr| {
+                    engine.check_cancellation()?;
+                    engine.eval_slot_row_value(row, context, expr)
+                })
             }
             Self::Avg(expr, distinct) => {
                 reject_oid_numeric_aggregate(engine, expr, context.column_keys(), "avg")?;

@@ -1,0 +1,178 @@
+{
+  "artifacts": [
+    {
+      "artifact_id": 13996127246,
+      "database_roots_retained": false,
+      "engine_opened": false,
+      "files": [
+        {
+          "bytes": 196,
+          "name": "rustc.txt",
+          "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+        },
+        {
+          "bytes": 246619,
+          "name": "selected-tests.log",
+          "sha256": "e5aef2a900d394ccaaed937080c9794112322d475f2b7c95c0595d27aec3d95c"
+        },
+        {
+          "bytes": 41,
+          "name": "source-revision.txt",
+          "sha256": "8517cee8c6ace1ad45f0d150bd3017a853079eefd0820ab67b04cc0a74a21c00"
+        },
+        {
+          "bytes": 250931,
+          "name": "tests.log",
+          "sha256": "9e18e748090c247086b55a7b92cf3506f2044cddd7c8136b7ca38c2ac96d1727"
+        }
+      ],
+      "receipt_path": "/tmp/bicdb-native-foundations-ci/8e-c1-image-artifact-receipt.json",
+      "receipt_sha256": "7712ccd752921ef1784bfb71ef9e980fff62c952fa4b2151fbe64dffc0805216",
+      "run_id": 43333163664,
+      "source": "8e537222796648c1c652a8a73c87ffece9b53551",
+      "zip": "/tmp/bicdb-native-foundations-ci/8e-c1-image-artifact13996127246.zip",
+      "zip_bytes": 41015,
+      "zip_sha256": "0440643acf84a5c40170000af118327fe2d6615e6a270374588f61533ace7dc6"
+    },
+    {
+      "artifact_id": 13996776041,
+      "engine_opened": false,
+      "files": [
+        {
+          "bytes": 196,
+          "name": "rustc.txt",
+          "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+        },
+        {
+          "bytes": 245558,
+          "name": "selected-tests.log",
+          "sha256": "185f38fc6d29d47825ba715f7f4cc66a9de07bfc8609277cb9116d9d31d1cb2b"
+        },
+        {
+          "bytes": 41,
+          "name": "source-revision.txt",
+          "sha256": "8517cee8c6ace1ad45f0d150bd3017a853079eefd0820ab67b04cc0a74a21c00"
+        },
+        {
+          "bytes": 246377,
+          "name": "tests.log",
+          "sha256": "57932ec2ad306cc4c6105b8f5e2684a5cd11562497b9c8bd33b821ba6c50e3f9"
+        }
+      ],
+      "receipt_path": "/tmp/bicdb-native-foundations-ci/8e-c1-role-artifact-receipt.json",
+      "receipt_sha256": "34ce5becad025c0b9f6c3535f0e19f61027d00eba9501e0b222a608e15cb563d",
+      "run_id": 43332875879,
+      "source": "8e537222796648c1c652a8a73c87ffece9b53551",
+      "zip": "/tmp/bicdb-native-foundations-ci/8e-c1-role-artifact13996776041.zip",
+      "zip_bytes": 40592,
+      "zip_sha256": "014591de8ff30bbd518b5c6ada844436c214898b2a20703e0f3e0a9c772c9c05"
+    }
+  ],
+  "canceled_dispatch": {
+    "classification": "same-ref workflow concurrency cancellation before tests",
+    "conclusion": "cancelled",
+    "run_id": 43332872622,
+    "test_result": null
+  },
+  "command": "cargo test -p bicdb-core --lib --locked \"$BICDB_CORE_TEST_FILTER\" -- --test-threads=4 --show-output",
+  "database_custody_roots_retained": false,
+  "engine_opened_or_replayed": false,
+  "environment": {
+    "CARGO_BUILD_JOBS": "1",
+    "RUST_TEST_THREADS": "4"
+  },
+  "image": {
+    "actual_data_B_advanced_asserted": true,
+    "branch": "qual/native-c1-image-8e5372227",
+    "compile_consumer_conclusion": "success",
+    "compile_consumer_job": 131582633227,
+    "copied_original_ack_full_value": true,
+    "core_job": 131582678444,
+    "data_ready_grant_claimed": false,
+    "failed": 0,
+    "filtered": 960,
+    "functions": [
+      "native_joint_closed_c1_image_actual_rows_copy_without_policy_reinstall",
+      "native_joint_closed_c1_image_live_original_writer_replacement_refused",
+      "native_joint_closed_c1_image_original_caller_cancel_before_actual_row_wal_refused",
+      "native_joint_closed_c1_image_step_role_cancel_before_actual_row_wal_refused",
+      "native_joint_closed_c1_image_actual_old_owners_ended_cannot_reissue_quorum"
+    ],
+    "ignored": 0,
+    "new_business_ack_claimed": false,
+    "numeric_data_B_not_printed": true,
+    "passed": 5,
+    "positive_original_policies_and_namespace_ids_unchanged_asserted": true,
+    "run_id": 43333163664,
+    "seconds": 7.88,
+    "selector": "native_joint_closed_c1_image_",
+    "target_frozen_asserted": true,
+    "workflow_conclusion": "success"
+  },
+  "older_failures_preserved": [
+    "no-reinstall image68",
+    "Strong7b",
+    "same-source grouped observer prerequisites"
+  ],
+  "open_gates": [
+    "new Registered receiver/no INITIAL writer",
+    "compatible nonempty target or source NoData domains",
+    "all-owner cold/resume or expired-original continuation",
+    "remote image/session kernel",
+    "multi-range fifth-node population",
+    "final NEW writer admission/activation/target ACK/full Strong",
+    "fault self-healing and final coherent broad regressions"
+  ],
+  "qualification": "original-C1-writer-only image clear/copy component; role companion whole-test failed; not overall prototype qualification",
+  "raw_logs": {
+    "8e-c1-image-compile-job131582633227": {
+      "gzip_bytes": 276613,
+      "path": "/tmp/bicdb-native-foundations-ci/8e-c1-image-compile-job131582633227.log.gz",
+      "raw_bytes": 2367168,
+      "raw_sha256": "2f189cb2813b37f6d02cb3501d92ad3e61c56b854cf4fcd4857f529dcac1efc0"
+    },
+    "8e-c1-image-job131582678444": {
+      "gzip_bytes": 187418,
+      "path": "/tmp/bicdb-native-foundations-ci/8e-c1-image-job131582678444.log.gz",
+      "raw_bytes": 1628020,
+      "raw_sha256": "168035e69842572a73c1008ba1640686ca9982eb9ba499526e9f1b94e7da9eae"
+    },
+    "8e-c1-role-compile-job131581649020": {
+      "gzip_bytes": 275110,
+      "path": "/tmp/bicdb-native-foundations-ci/8e-c1-role-compile-job131581649020.log.gz",
+      "raw_bytes": 2361367,
+      "raw_sha256": "d21e7814ffdc385dbacf5b82837a5a93725385f0f8fcdcc48abcafbaaaf5d87b"
+    },
+    "8e-c1-role-job131581679752": {
+      "gzip_bytes": 185596,
+      "path": "/tmp/bicdb-native-foundations-ci/8e-c1-role-job131581679752.log.gz",
+      "raw_bytes": 1616319,
+      "raw_sha256": "38d20ccccecb1818b04aabb7aa015b58b505432bf5911950fa9c44af21df5436"
+    }
+  },
+  "role": {
+    "branch": "integrate/native-milestone1-current-main",
+    "classification": "test fixture supplied initiator n2 instead of authenticated recipient n1 to real acquisition producer",
+    "compile_consumer_conclusion": "success",
+    "compile_consumer_job": 131581649020,
+    "core_job": 131581679752,
+    "correction_source_only": "d71f8a89941e242cf6eef33ffb9dd40d6653fb9f",
+    "failed": 1,
+    "failure": "metadata consensus: recovery-role recipient is not its authenticated member",
+    "failure_line": 839,
+    "filtered": 964,
+    "ignored": 0,
+    "local_mint_and_parent_cancellation_iteration_completed": true,
+    "passed": 0,
+    "run_id": 43332875879,
+    "seconds": 0.02,
+    "selector": "recovery_role_observations_retain_local_and_transport_acquisition_cancellation",
+    "transport_cancellation_assertion_reached": false,
+    "workflow_conclusion": "failure"
+  },
+  "schema": 1,
+  "source_revision": "8e537222796648c1c652a8a73c87ffece9b53551",
+  "source_version": "1.0.490-beta",
+  "toolchain": "rustc 1.96.0 ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96",
+  "workflow": ".github/workflows/tests.yml"
+}

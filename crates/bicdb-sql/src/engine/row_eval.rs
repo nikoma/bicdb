@@ -1873,12 +1873,13 @@ impl<'db> SqlEngine<'db> {
         {
             return Ok(value);
         }
-        if let Some(value) = eval_db_catalog_function_value(
+        if let Some(value) = eval_db_catalog_function_value_with_engine(
             self.db_ref(),
             &name,
             &args,
             self.tx.map(Transaction::visibility_watermark),
             Some(&self.session_gucs),
+            Some(self),
         )? {
             return Ok(value);
         }
@@ -1923,12 +1924,13 @@ impl<'db> SqlEngine<'db> {
         if let Some(value) = self.eval_stored_sql_function_value(&name, &args, &arg_types)? {
             return Ok(value);
         }
-        execute_builtin_function(
+        execute_builtin_function_with_engine(
             function,
             Some(self.db_ref()),
             self.security_context.as_ref(),
             self.tx,
             Some(&self.session_gucs),
+            Some(self),
         )
         .ok()
         .and_then(first_result_value)
@@ -3492,12 +3494,13 @@ impl<'db> SqlEngine<'db> {
         {
             return Ok(value);
         }
-        if let Some(value) = eval_db_catalog_function_value(
+        if let Some(value) = eval_db_catalog_function_value_with_engine(
             self.db_ref(),
             &name,
             &args,
             self.tx.map(Transaction::visibility_watermark),
             Some(&self.session_gucs),
+            Some(self),
         )? {
             return Ok(value);
         }
@@ -3542,12 +3545,13 @@ impl<'db> SqlEngine<'db> {
         if let Some(value) = self.eval_stored_sql_function_value(&name, &args, &arg_types)? {
             return Ok(value);
         }
-        execute_builtin_function(
+        execute_builtin_function_with_engine(
             function,
             Some(self.db_ref()),
             self.security_context.as_ref(),
             self.tx,
             Some(&self.session_gucs),
+            Some(self),
         )
         .ok()
         .and_then(first_result_value)

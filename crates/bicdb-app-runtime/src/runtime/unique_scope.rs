@@ -283,6 +283,7 @@ impl OfflineUniqueScopeTransition {
                 .ok_or_else(|| invalid("catalog generation overflow"))?,
             packages: current.packages.clone(),
             routes: BTreeMap::new(),
+            native_invariants: Arc::from([]),
         };
         let mut provided = BTreeMap::new();
         for path in package_paths {

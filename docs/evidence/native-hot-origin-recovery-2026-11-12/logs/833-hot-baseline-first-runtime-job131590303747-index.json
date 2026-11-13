@@ -1,0 +1,122 @@
+{
+  "source_revision": "8334a99e666970263c2d5a4192b5c9ce61d26677",
+  "requested_source": "8334a99e666970263c2d5a4192b5c9ce61d26677",
+  "authoritative_source_verified": true,
+  "run_id": 43335421681,
+  "job_id": 131590303747,
+  "job_name": "Focused Core library (origin_pre_wal_fault_tests)",
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "captured_at_utc": "2026-11-13T00:20:39.029417+00:00",
+  "raw_bytes": 2726767,
+  "raw_sha256": "783ed47a38fd58c49861eb9efce8c3cf1de6d233224e86cc9a6ad45b617e6bbf",
+  "compressed_file": "833-hot-baseline-first-runtime-job131590303747.log.gz",
+  "compressed_sha256": "fa935676c8e6953904f575ba08989ac86fa9bc84260709adc131d21228bf56d6",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-13T00:19:49.9677578Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 969 filtered out; finished in 14.38s"
+  ],
+  "failure_context": [],
+  "test_observations": [
+    {
+      "line": 16365,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_origin_fault_arm_drop_revokes_retained_probe_without_erasing_successor",
+      "result": "ok"
+    },
+    {
+      "line": 18073,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_actual_rpc_post_admission_fault_requires_autonomous_tail_recovery",
+      "result": "ok"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T00:14:18Z",
+      "completed_at": "2026-11-13T00:14:19Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T00:14:19Z",
+      "completed_at": "2026-11-13T00:14:23Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T00:14:23Z",
+      "completed_at": "2026-11-13T00:14:31Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T00:14:31Z",
+      "completed_at": "2026-11-13T00:14:39Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T00:14:39Z",
+      "completed_at": "2026-11-13T00:18:12Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T00:18:12Z",
+      "completed_at": "2026-11-13T00:19:35Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-11-13T00:19:35Z",
+      "completed_at": "2026-11-13T00:19:49Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T00:19:49Z",
+      "completed_at": "2026-11-13T00:19:51Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 15,
+      "started_at": "2026-11-13T00:19:51Z",
+      "completed_at": "2026-11-13T00:20:00Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T00:20:00Z",
+      "completed_at": "2026-11-13T00:20:01Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T00:20:01Z",
+      "completed_at": "2026-11-13T00:20:01Z"
+    }
+  ]
+}

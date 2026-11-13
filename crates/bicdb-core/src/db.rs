@@ -8696,6 +8696,38 @@ fn evaluate_native_invariant_expression(
                 .collect::<Result<Vec<_>>>()?;
             crate::exact_proportional_interval_value(&values)?
         }
+        NativeInvariantExpression::UnitsFromLimbs { arguments } => {
+            let values = arguments
+                .iter()
+                .map(|argument| {
+                    evaluate_native_invariant_expression(
+                        db,
+                        tx,
+                        subject_relation,
+                        subject,
+                        bindings,
+                        argument,
+                    )
+                })
+                .collect::<Result<Vec<_>>>()?;
+            crate::exact_units_from_limbs_value(&values)?
+        }
+        NativeInvariantExpression::NativeRatioRepresentableUnits { arguments } => {
+            let values = arguments
+                .iter()
+                .map(|argument| {
+                    evaluate_native_invariant_expression(
+                        db,
+                        tx,
+                        subject_relation,
+                        subject,
+                        bindings,
+                        argument,
+                    )
+                })
+                .collect::<Result<Vec<_>>>()?;
+            crate::native_ratio_representable_units_value(&values)?
+        }
         NativeInvariantExpression::DateAddDays { date, days } => {
             let date = evaluate_native_invariant_expression(
                 db,
@@ -9122,6 +9154,19 @@ fn validate_carrier_invariant(
             NativeInvariantExpression::Exists { condition, .. }
             | NativeInvariantExpression::Aggregate { condition, .. } => has_published(condition),
             NativeInvariantExpression::Overlaps { values, .. } => values.iter().any(has_published),
+            NativeInvariantExpression::ProportionalInterval { arguments }
+            | NativeInvariantExpression::UnitsFromLimbs { arguments } => {
+                arguments.iter().any(|argument| has_published(argument))
+            }
+            NativeInvariantExpression::NativeRatioRepresentableUnits { arguments } => {
+                arguments.iter().any(|argument| has_published(argument))
+            }
+            NativeInvariantExpression::DateAddDays { date, days } => {
+                has_published(date) || has_published(days)
+            }
+            NativeInvariantExpression::DateDifferenceDays { end, start } => {
+                has_published(end) || has_published(start)
+            }
             _ => false,
         }
     }
@@ -9404,6 +9449,13 @@ struct AuthorizedMutation {
     record_ids: Vec<String>,
 }
 
+#[derive(Clone, Debug)]
+struct RegisteredMutationInvariantBundle {
+    package_sha256: String,
+    definition_sha256: String,
+    validators: Arc<[NativeCommitValidator]>,
+}
+
 #[derive(Debug)]
 pub struct Transaction {
     db: NonNull<BicDb>,
@@ -9520,6 +9572,9 @@ pub struct Transaction {
     native_catalog_allocations: BTreeMap<String, CollectionMeta>,
     next_mutation_grant: u64,
     commit_validators: Vec<NativeCommitValidator>,
+    // Trusted active-owner native guards, shared without cloning their ASTs.
+    // Monotonic transaction authority: savepoints must not unregister a bundle.
+    mutation_invariant_bundles: BTreeMap<String, RegisteredMutationInvariantBundle>,
     // Explicit existing-data admission retains full validation on a zero-write
     // transaction. Automatically attached mutation guards do not turn ordinary
     // reads into full-database invariant scans. Monotonic for this transaction.
@@ -10446,6 +10501,11 @@ impl BicDb {
     pub fn enable_exact_decimal_list_sum(&mut self) -> Result<()> {
         self.ensure_writable("enable exact memory Decimal sum contract")?;
         format::enable_exact_decimal_list_sum(&self.path)
+    }
+
+    pub fn enable_exact_decimal_units(&mut self) -> Result<()> {
+        self.ensure_writable("enable exact Decimal units contract")?;
+        format::enable_exact_decimal_units(&self.path)
     }
 
     fn open_inner(
@@ -16295,6 +16355,86 @@ impl Transaction {
         self.register_commit_validator_inner(validator, false)
     }
 
+    /// Attach a trusted active application's pre-lowered native invariant bundle.
+    /// The runtime, not an actor-supplied application name or SQL option, must
+    /// resolve these identities from the verified active application registry.
+    /// This does not grant data access, replay application callbacks, or turn a
+    /// zero-write mutation transaction into existing-data admission. Bundles
+    /// remain registered across savepoint rollback and borrowed-host attachment.
+    pub fn register_mutation_invariant_bundle(
+        &mut self,
+        owner_application: &str,
+        package_sha256: &str,
+        definition_sha256: &str,
+        validators: Arc<[NativeCommitValidator]>,
+    ) -> Result<()> {
+        if self.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        if self.mutation_actor.is_none() {
+            return Err(BicDbError::MutationDenied(
+                "ordinary transactions cannot register invariant bundles".to_string(),
+            ));
+        }
+        let canonical_sha256 = |value: &str| {
+            value.len() == 64
+                && value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        };
+        if owner_application.is_empty()
+            || owner_application.chars().any(char::is_whitespace)
+            || owner_application.chars().any(char::is_control)
+            || !canonical_sha256(package_sha256)
+            || !canonical_sha256(definition_sha256)
+        {
+            return Err(BicDbError::MutationDenied(
+                "invariant bundle requires an exact owner and canonical SHA256 identities"
+                    .to_string(),
+            ));
+        }
+        if let Some(existing) = self.mutation_invariant_bundles.get(owner_application) {
+            if existing.package_sha256 == package_sha256
+                && existing.definition_sha256 == definition_sha256
+                && (Arc::ptr_eq(&existing.validators, &validators)
+                    || existing.validators.as_ref() == validators.as_ref())
+            {
+                return Ok(());
+            }
+            return Err(BicDbError::MutationDenied(format!(
+                "conflicting invariant bundle for active owner `{owner_application}`"
+            )));
+        }
+        if !validators.iter().all(|validator| {
+            matches!(
+                validator,
+                NativeCommitValidator::ApplicationInvariant { .. }
+            )
+        }) {
+            return Err(BicDbError::MutationDenied(
+                "owner invariant bundles may contain only native application invariants"
+                    .to_string(),
+            ));
+        }
+        self.mutation_invariant_bundles.insert(
+            owner_application.to_string(),
+            RegisteredMutationInvariantBundle {
+                package_sha256: package_sha256.to_string(),
+                definition_sha256: definition_sha256.to_string(),
+                validators,
+            },
+        );
+        Ok(())
+    }
+
+    fn native_commit_validators(&self) -> impl Iterator<Item = &NativeCommitValidator> {
+        self.commit_validators.iter().chain(
+            self.mutation_invariant_bundles
+                .values()
+                .flat_map(|bundle| bundle.validators.iter()),
+        )
+    }
+
     fn register_commit_validator_inner(
         &mut self,
         validator: NativeCommitValidator,
@@ -19192,10 +19332,18 @@ impl Transaction {
     }
 
     pub fn rollback(mut self) -> Result<()> {
+        self.abort_in_place()
+    }
+
+    /// Abort this exact transaction without replacing or consuming its host slot.
+    /// Uses ordinary rollback cleanup (locks, pending state and receipt), leaving
+    /// the retained handle terminally Aborted. Hosts must discard/deny that handle;
+    /// it must never stand in for a lost SQL-owned application transaction.
+    pub fn abort_in_place(&mut self) -> Result<()> {
         let db = self.db;
         // Rollback uses shared interior-mutability APIs; a transaction created
         // from &BicDb must never manufacture an exclusive database borrow.
-        unsafe { db.as_ref() }.rollback_transaction(&mut self)
+        unsafe { db.as_ref() }.rollback_transaction(self)
     }
 
     pub fn write_len(&self) -> usize {

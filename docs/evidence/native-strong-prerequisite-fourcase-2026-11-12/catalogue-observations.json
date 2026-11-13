@@ -1,0 +1,441 @@
+{
+  "source_revision": "7b55059fd610b40189afd239cf8e9ea7b2986ad4",
+  "artifact_id": 13995525792,
+  "zip_sha256": "87ac6582d5e2483fc6aca73fe712d5d1ed0c20ee28035693c6c595d227c4e912",
+  "catalogue_observations": [
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_writer_replacement_refused",
+      "manifest_path": "fault-state/native-joint-cut-01a1d224-58c7-7de2-9157-6ae4ec492a51/manifest.json",
+      "manifest_sha256": "b47da2dc47f11d5e9e629f3f4dd06b27d91ba6e68de2b6a6e3f2a7e572450825",
+      "ledger_records": 2,
+      "ledger_sha256": "ce8357e599bd098ad5773d469743f2e373017146b2bae19ce92653eb8bb453d6",
+      "metadata": [
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        },
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        },
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        },
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        }
+      ],
+      "package_version": "1.0.490-beta",
+      "catalogues": {
+        "n0": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 1,
+              "resolved_through": 1,
+              "compacted_through": 0
+            },
+            "2": {
+              "current_epoch": 1,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            }
+          },
+          "recovery_fence_phases": {}
+        },
+        "n1": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            },
+            "2": {
+              "current_epoch": 1,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            }
+          },
+          "recovery_fence_phases": {}
+        },
+        "n2": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            },
+            "2": {
+              "current_epoch": 1,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            }
+          },
+          "recovery_fence_phases": {}
+        },
+        "n3": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 1
+            }
+          },
+          "recovery_fence_phases": {
+            "1": "Active"
+          }
+        }
+      }
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_caller_cancel_and_exact_fresh_recovery",
+      "manifest_path": "fault-state/native-joint-cut-01a1d224-5911-79f1-96b2-63c1a6c7bbcc/manifest.json",
+      "manifest_sha256": "6de9673215f0b56f6d68ad21078bf1108477af5292e52a3ac670224c03bd580d",
+      "ledger_records": 2,
+      "ledger_sha256": "ce8357e599bd098ad5773d469743f2e373017146b2bae19ce92653eb8bb453d6",
+      "metadata": [
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        },
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        },
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        },
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        }
+      ],
+      "package_version": "1.0.490-beta",
+      "catalogues": {
+        "n0": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 1,
+              "resolved_through": 1,
+              "compacted_through": 0
+            },
+            "2": {
+              "current_epoch": 1,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            }
+          },
+          "recovery_fence_phases": {}
+        },
+        "n1": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            },
+            "2": {
+              "current_epoch": 1,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            }
+          },
+          "recovery_fence_phases": {}
+        },
+        "n2": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            },
+            "2": {
+              "current_epoch": 1,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            }
+          },
+          "recovery_fence_phases": {}
+        },
+        "n3": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 1
+            }
+          },
+          "recovery_fence_phases": {
+            "1": "Active"
+          }
+        }
+      }
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_foreign_db_and_store_refused",
+      "manifest_path": "fault-state/native-joint-cut-01a1d224-5c54-7283-8d05-16beba656fa5/manifest.json",
+      "manifest_sha256": "d2966430fe513b2a483d794cfe60a6c5cc97d427be1cad6482e98504496e2fd9",
+      "ledger_records": 2,
+      "ledger_sha256": "ce8357e599bd098ad5773d469743f2e373017146b2bae19ce92653eb8bb453d6",
+      "metadata": [
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        },
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        },
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        },
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        }
+      ],
+      "package_version": "1.0.490-beta",
+      "catalogues": {
+        "n0": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 1,
+              "resolved_through": 1,
+              "compacted_through": 0
+            },
+            "2": {
+              "current_epoch": 1,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            }
+          },
+          "recovery_fence_phases": {}
+        },
+        "n1": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            },
+            "2": {
+              "current_epoch": 1,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            }
+          },
+          "recovery_fence_phases": {}
+        },
+        "n2": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            },
+            "2": {
+              "current_epoch": 1,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            }
+          },
+          "recovery_fence_phases": {}
+        },
+        "n3": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 1
+            }
+          },
+          "recovery_fence_phases": {
+            "1": "Active"
+          }
+        }
+      }
+    },
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_missing_decision_archive_refused",
+      "manifest_path": "fault-state/native-joint-cut-01a1d224-5c8e-7603-9802-12cdddaf99d5/manifest.json",
+      "manifest_sha256": "517f3557ca7e72383f832d06cc1b882e79e7ff69ff67212880520ea61bae8f26",
+      "ledger_records": 2,
+      "ledger_sha256": "ce8357e599bd098ad5773d469743f2e373017146b2bae19ce92653eb8bb453d6",
+      "metadata": [
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        },
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        },
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        },
+        {
+          "commit_index": 5,
+          "generation": 5,
+          "last_index": 5,
+          "term": 1
+        }
+      ],
+      "package_version": "1.0.490-beta",
+      "catalogues": {
+        "n0": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 1,
+              "resolved_through": 1,
+              "compacted_through": 0
+            },
+            "2": {
+              "current_epoch": 1,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            }
+          },
+          "recovery_fence_phases": {}
+        },
+        "n1": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            },
+            "2": {
+              "current_epoch": 1,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            }
+          },
+          "recovery_fence_phases": {}
+        },
+        "n2": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            },
+            "2": {
+              "current_epoch": 1,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 0
+            }
+          },
+          "recovery_fence_phases": {}
+        },
+        "n3": {
+          "catalogue_checksum_verified": true,
+          "format_version": 15,
+          "ranges": {
+            "1": {
+              "current_epoch": 4,
+              "last_index": 2,
+              "resolved_through": 2,
+              "compacted_through": 1
+            }
+          },
+          "recovery_fence_phases": {
+            "1": "Active"
+          }
+        }
+      }
+    }
+  ],
+  "native_paged_data_decoded": false,
+  "engine_opened_or_replayed": false
+}

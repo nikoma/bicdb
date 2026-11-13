@@ -1,0 +1,66 @@
+{
+  "artifact_id": 13995525792,
+  "run_id": 43330054124,
+  "source_revision": "7b55059fd610b40189afd239cf8e9ea7b2986ad4",
+  "zip_bytes": 1065617,
+  "zip_sha256": "87ac6582d5e2483fc6aca73fe712d5d1ed0c20ee28035693c6c595d227c4e912",
+  "zip_file_count": 308,
+  "manifests": [
+    {
+      "path": "fault-state/native-joint-cut-01a1d224-58c7-7de2-9157-6ae4ec492a51/manifest.json",
+      "manifest_sha256": "b47da2dc47f11d5e9e629f3f4dd06b27d91ba6e68de2b6a6e3f2a7e572450825",
+      "status": "captured_observed_stable_with_live_engine_owners",
+      "source_revision": "7b55059fd610b40189afd239cf8e9ea7b2986ad4",
+      "verified_files": 75,
+      "expected_files": 75,
+      "verified_bytes": 4677766,
+      "missing_files": [],
+      "engine_reopened": false,
+      "engine_owners_remain_alive": true,
+      "atomic_powerloss_snapshot_or_replay_verified": false
+    },
+    {
+      "path": "fault-state/native-joint-cut-01a1d224-5911-79f1-96b2-63c1a6c7bbcc/manifest.json",
+      "manifest_sha256": "6de9673215f0b56f6d68ad21078bf1108477af5292e52a3ac670224c03bd580d",
+      "status": "captured_observed_stable_with_live_engine_owners",
+      "source_revision": "7b55059fd610b40189afd239cf8e9ea7b2986ad4",
+      "verified_files": 75,
+      "expected_files": 75,
+      "verified_bytes": 4677766,
+      "missing_files": [],
+      "engine_reopened": false,
+      "engine_owners_remain_alive": true,
+      "atomic_powerloss_snapshot_or_replay_verified": false
+    },
+    {
+      "path": "fault-state/native-joint-cut-01a1d224-5c54-7283-8d05-16beba656fa5/manifest.json",
+      "manifest_sha256": "d2966430fe513b2a483d794cfe60a6c5cc97d427be1cad6482e98504496e2fd9",
+      "status": "captured_observed_stable_with_live_engine_owners",
+      "source_revision": "7b55059fd610b40189afd239cf8e9ea7b2986ad4",
+      "verified_files": 75,
+      "expected_files": 75,
+      "verified_bytes": 4677766,
+      "missing_files": [],
+      "engine_reopened": false,
+      "engine_owners_remain_alive": true,
+      "atomic_powerloss_snapshot_or_replay_verified": false
+    },
+    {
+      "path": "fault-state/native-joint-cut-01a1d224-5c8e-7603-9802-12cdddaf99d5/manifest.json",
+      "manifest_sha256": "517f3557ca7e72383f832d06cc1b882e79e7ff69ff67212880520ea61bae8f26",
+      "status": "captured_observed_stable_with_live_engine_owners",
+      "source_revision": "7b55059fd610b40189afd239cf8e9ea7b2986ad4",
+      "verified_files": 75,
+      "expected_files": 75,
+      "verified_bytes": 4677766,
+      "missing_files": [],
+      "engine_reopened": false,
+      "engine_owners_remain_alive": true,
+      "atomic_powerloss_snapshot_or_replay_verified": false
+    }
+  ],
+  "verified_files": 300,
+  "verified_bytes": 18711064,
+  "engine_opened_or_replayed": false,
+  "private_zip_may_contain_native_mesh_signing_keys": true
+}

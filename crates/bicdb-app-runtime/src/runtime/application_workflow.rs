@@ -2872,6 +2872,21 @@ pub(crate) fn start_worker(
                     std::thread::sleep(Duration::from_millis(10));
                     continue;
                 }
+                // Obtain catalog authority before leasing a message. A catalog
+                // transition must never spend a retry on unexecuted work.
+                let catalog_context = match services.acquire_runtime_invariant_context(&manifest.identity.name) {
+                    Ok(context) => context,
+                    Err(AppRuntimeError::NotReady(_)) => {
+                        std::thread::sleep(Duration::from_millis(25));
+                        continue;
+                    }
+                    Err(error) => {
+                        thread_healthy.store(false, Ordering::Release);
+                        eprintln!("bicdb: worker `{}` admission failed: {error}", worker.name);
+                        std::thread::sleep(Duration::from_millis(100));
+                        continue;
+                    }
+                };
                 let messages = {
                     let db = db.read();
                     db.with_broker(|broker| {
@@ -2897,6 +2912,7 @@ pub(crate) fn start_worker(
                     }
                 };
                 if messages.is_empty() {
+                    drop(catalog_context);
                     std::thread::sleep(Duration::from_millis(25));
                     continue;
                 }

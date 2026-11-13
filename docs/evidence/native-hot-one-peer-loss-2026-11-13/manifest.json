@@ -1,0 +1,44 @@
+{
+  "files": [
+    {
+      "path": "14002265636.zip",
+      "bytes": 258094,
+      "sha256": "a9c29226e14f1362780d748b9950e8bd934a18d1e13150df0d83f6906f71e1fb"
+    },
+    {
+      "path": "README.md",
+      "bytes": 4808,
+      "sha256": "1809e8ea48fed1db27c11cedd223b19ecf1f93c2e184ceb576273848cfeb654a"
+    },
+    {
+      "path": "ae5-hot-one-peer-loss-baseline-job131624117250-index.json",
+      "bytes": 6279,
+      "sha256": "149a70f292ca4703484e59f2467c2d4af4ae75acc9b4ef592475def3bc8fa3e6"
+    },
+    {
+      "path": "ae5-hot-one-peer-loss-baseline-job131624117250.log.gz",
+      "bytes": 289207,
+      "sha256": "0aadfdf686b99951f97d871f4765f4ee5fa4ce6a0cbca7ef9073e5ec67775ebd"
+    },
+    {
+      "path": "ae5-hot-one-peer-loss-compile-job131624086315-index.json",
+      "bytes": 2847,
+      "sha256": "09e1ef66de6820c3fd3fdf7c0d90e1354ab57defadd1eaa54e1caeece9ffc1ff"
+    },
+    {
+      "path": "ae5-hot-one-peer-loss-compile-job131624086315.log.gz",
+      "bytes": 291888,
+      "sha256": "9b8ea8336b9a3770b50db74084beef0e1724e58cfffc28a458bb9bc54dcf1a62"
+    },
+    {
+      "path": "receipt.json",
+      "bytes": 2253444,
+      "sha256": "1ea739a306792beae315cc7519090b0d3b69fec314b9f70a75d1c54280c24c68"
+    },
+    {
+      "path": "verify.py",
+      "bytes": 10002,
+      "sha256": "1bc2ad9f12165616883f74d06ddfcae04d7a6af6d71819966066f262ffc37372"
+    }
+  ]
+}

@@ -21,6 +21,8 @@ pub(crate) use operators_compare::*;
 mod aggregates;
 pub(crate) use aggregates::*;
 mod identity_sequence_options;
+mod exact_units;
+pub(crate) use exact_units::*;
 pub(crate) mod rewrite_helpers;
 pub(crate) use rewrite_helpers::*;
 mod text_rewrite;

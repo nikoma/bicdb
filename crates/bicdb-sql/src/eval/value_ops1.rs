@@ -92,6 +92,26 @@ pub(crate) fn eval_db_catalog_function_value(
     snapshot_watermark: Option<u64>,
     session_gucs: Option<&HashMap<String, String>>,
 ) -> Result<Option<SqlValue>> {
+    // Fixed-name metadata/operator callers have no application execution
+    // engine. Application expression paths use the explicit context variant.
+    eval_db_catalog_function_value_with_engine(
+        db,
+        name,
+        args,
+        snapshot_watermark,
+        session_gucs,
+        None,
+    )
+}
+
+pub(crate) fn eval_db_catalog_function_value_with_engine(
+    db: &BicDb,
+    name: &str,
+    args: &[SqlValue],
+    snapshot_watermark: Option<u64>,
+    session_gucs: Option<&HashMap<String, String>>,
+    query_engine: Option<&SqlEngine<'_>>,
+) -> Result<Option<SqlValue>> {
     let bare_name = name.strip_prefix("pg_catalog.").unwrap_or(name);
     if oracle::current_time::pg_type(bare_name).is_some() {
         return oracle::current_time::evaluate(db, bare_name, args).map(Some);
@@ -171,7 +191,7 @@ pub(crate) fn eval_db_catalog_function_value(
         let resolution = db.resolve_commit_outcome(incarnation, sequence)?;
         return Ok(Some(SqlValue::String(resolution.as_str().to_string())));
     }
-    if let Some(value) = eval_fts_db_function_value(db, name, args, session_gucs)? {
+    if let Some(value) = eval_fts_db_function_value(db, name, args, session_gucs, query_engine)? {
         return Ok(Some(value));
     }
     // Flashback SCN functions (Oracle DBMS_FLASHBACK / SCN_TO_TIMESTAMP).
@@ -1087,12 +1107,13 @@ pub(crate) fn eval_db_catalog_function_value(
             let Some(oid) = resolve_regtype_oid(db, &value)? else {
                 return Ok(Some(SqlValue::Null));
             };
-            let formatted = eval_db_catalog_function_value(
+            let formatted = eval_db_catalog_function_value_with_engine(
                 db,
                 "format_type",
                 &[SqlValue::Int(i64::from(oid)), SqlValue::Int(-1)],
                 snapshot_watermark,
                 session_gucs,
+                query_engine,
             )?
             .unwrap_or(SqlValue::Null);
             Ok(Some(formatted))

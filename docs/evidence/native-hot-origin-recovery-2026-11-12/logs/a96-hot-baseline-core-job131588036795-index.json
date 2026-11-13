@@ -1,0 +1,132 @@
+{
+  "source_revision": "a96bbf958b8f366d41bbe31b2bc776f1fb6bcbe4",
+  "requested_source": "a96bbf958b8f366d41bbe31b2bc776f1fb6bcbe4",
+  "authoritative_source_verified": true,
+  "run_id": 43334749077,
+  "job_id": 131588036795,
+  "job_name": "Focused Core library (origin_pre_wal_fault_tests)",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T00:14:15.578319+00:00",
+  "raw_bytes": 109770,
+  "raw_sha256": "f9c6a994082ddf1c6c00b72177a604265e1a8ea0019601dce5251bcfa3bdfa88",
+  "compressed_file": "a96-hot-baseline-core-job131588036795.log.gz",
+  "compressed_sha256": "4fc33164711030b3580cb17b9a3dbfc9b5f5ed2982729e529e392fb7e3f32927",
+  "capture_exit_code": 0,
+  "test_summaries": [],
+  "failure_context": [
+    {
+      "line": 1186,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T00:12:48.3964304Z    |                       ^^^^^^^",
+        "2026-11-13T00:12:48.3964546Z",
+        "2026-11-13T00:12:57.7486153Z error[E0599]: no method named `require_live` found for struct `distribution_range_recovery::RecoveryHistoryObservation` in the current scope",
+        "2026-11-13T00:12:57.7488627Z    --> crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/hot_recovery.rs:394:26",
+        "2026-11-13T00:12:57.7489459Z     |",
+        "2026-11-13T00:12:57.7489901Z 382 | /                     self.initial",
+        "2026-11-13T00:12:57.7490534Z 383 | |                         .transport",
+        "2026-11-13T00:12:57.7491751Z 384 | |                         .recovery_historical_command_observation(",
+        "2026-11-13T00:12:57.7492524Z 385 | |                             node,",
+        "2026-11-13T00:12:57.7493018Z ...   |",
+        "2026-11-13T00:12:57.7493479Z 393 | |                         )?",
+        "2026-11-13T00:12:57.7494088Z 394 | |                         .require_live()?;",
+        "2026-11-13T00:12:57.7495495Z     | |                         -^^^^^^^^^^^^ method not found in `distribution_range_recovery::RecoveryHistoryObservation`",
+        "2026-11-13T00:12:57.7496204Z     | |_________________________|",
+        "2026-11-13T00:12:57.7496548Z     |",
+        "2026-11-13T00:12:57.7496790Z     |"
+      ]
+    }
+  ],
+  "test_observations": [],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T00:09:24Z",
+      "completed_at": "2026-11-13T00:09:25Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T00:09:25Z",
+      "completed_at": "2026-11-13T00:09:31Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T00:09:31Z",
+      "completed_at": "2026-11-13T00:09:40Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T00:09:40Z",
+      "completed_at": "2026-11-13T00:09:49Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 5,
+      "started_at": "2026-11-13T00:09:49Z",
+      "completed_at": "2026-11-13T00:13:19Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 6,
+      "started_at": "2026-11-13T00:13:19Z",
+      "completed_at": "2026-11-13T00:13:19Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 7,
+      "started_at": "2026-11-13T00:13:19Z",
+      "completed_at": "2026-11-13T00:13:19Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T00:13:19Z",
+      "completed_at": "2026-11-13T00:13:20Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-13T00:13:20Z",
+      "completed_at": "2026-11-13T00:13:20Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T00:13:20Z",
+      "completed_at": "2026-11-13T00:13:20Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T00:13:20Z",
+      "completed_at": "2026-11-13T00:13:20Z"
+    }
+  ]
+}

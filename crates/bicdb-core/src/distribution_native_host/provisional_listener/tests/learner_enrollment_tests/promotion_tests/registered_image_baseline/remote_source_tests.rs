@@ -10,9 +10,16 @@ use crate::distribution_range_image::{
     RangeImageCursorV1, RangeImageHistoryCursorV1,
 };
 use crate::distribution_transport::AuthenticatedNativeRemoteImageSourceFrame;
+mod source_discovery_tests;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum SourceCase {
+    SourceDiscovery,
+    SourceDiscoveryReplyLost,
+    SourceDiscoveryWrongActor,
+    SourceDiscoveryRequestConflict,
+    SourceDiscoveryPlanRevoked,
+    SourceDiscoveryProcessRevoked,
     Frames,
     CancelAfterIssuedFrame,
     RevokeBeforeNativeWal,
@@ -151,7 +158,13 @@ fn native_registered_fifth_remote_old_collector_actual_original_caller_cancellat
 pub(super) fn uses_actual_remote_old_seed(case: SourceCase) -> bool {
     matches!(
         case,
-        SourceCase::RemoteOldFrames
+        SourceCase::SourceDiscovery
+            | SourceCase::SourceDiscoveryReplyLost
+            | SourceCase::SourceDiscoveryWrongActor
+            | SourceCase::SourceDiscoveryRequestConflict
+            | SourceCase::SourceDiscoveryPlanRevoked
+            | SourceCase::SourceDiscoveryProcessRevoked
+            | SourceCase::RemoteOldFrames
             | SourceCase::RemoteOldRetainedNative
             | SourceCase::TargetImageRows
             | SourceCase::TargetImageRowsWithoutAudit
@@ -424,6 +437,7 @@ fn frame(
 #[allow(clippy::too_many_arguments)]
 fn remote_old_seed(
     case: SourceCase,
+    target: &TcpClusterRelocationTransport,
     controls: &[NativeMetadataControlHost],
     clients: &[Arc<TcpClusterRelocationTransport>],
     services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
@@ -659,6 +673,31 @@ fn remote_old_seed(
         })
         .collect::<std::collections::BTreeMap<_, _>>();
     assert_eq!(native_before.len(), plan.old_members().len());
+    if matches!(
+        case,
+        SourceCase::SourceDiscovery
+            | SourceCase::SourceDiscoveryReplyLost
+            | SourceCase::SourceDiscoveryWrongActor
+            | SourceCase::SourceDiscoveryRequestConflict
+            | SourceCase::SourceDiscoveryPlanRevoked
+            | SourceCase::SourceDiscoveryProcessRevoked
+    ) {
+        source_discovery_tests::exercise(
+            case,
+            controls,
+            clients,
+            services,
+            metadata,
+            plan,
+            source,
+            target,
+            output,
+            journal,
+            &native_before,
+        );
+        return None;
+    }
+
     let collect_index = journal.len();
     journal.push(serde_json::json!({
         "operation":"remote_old_fresh_all_closed_collection",
@@ -1081,6 +1120,7 @@ pub(super) fn exercise(
             evidence(&output.join("remote-old-ledger.json"), &journal).unwrap();
             let seed = remote_old_seed(
                 case,
+                target,
                 controls,
                 clients,
                 services,

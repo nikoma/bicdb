@@ -431,3 +431,47 @@ impl NativeMetadataControlHost {
         Ok(())
     }
 }
+
+impl NativeInitialDataAdmission {
+    pub(super) fn retained_actual_old_source(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<Arc<crate::distribution_range_handoff::NativeJointOldObservation>> {
+        self.require_live()?;
+        let table = self
+            .old_closures
+            .upgrade()
+            .ok_or_else(|| invalid("actual OLD donor table ended"))?;
+        let entries = table
+            .try_lock()
+            .ok_or_else(|| invalid("actual OLD donor table busy"))?;
+        let owner = entries
+            .get(&range)
+            .ok_or_else(|| invalid("actual OLD donor has no retained local closure"))?;
+        let owner = owner
+            .try_lock()
+            .ok_or_else(|| invalid("actual OLD donor closure still active"))?;
+        if !Arc::ptr_eq(&owner.writer, &self.writer()) {
+            return Err(invalid("retained OLD source original writer replaced"));
+        }
+        let actual = owner
+            .actual
+            .clone()
+            .ok_or_else(|| invalid("actual OLD donor outcome remains uncertain"))?;
+        if actual.node_id()
+            != self
+                .old_transport
+                .upgrade()
+                .ok_or_else(|| invalid("actual OLD donor transport ended"))?
+                .local_metadata_read_participant()
+                .node_id()
+            || actual.plan().checksum_sha256()? != owner.plan_sha256
+        {
+            return Err(invalid(
+                "actual OLD donor changed original local identity/scope",
+            ));
+        }
+        actual.require_current()?;
+        Ok(actual)
+    }
+}

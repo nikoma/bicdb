@@ -9,7 +9,11 @@ use crate::distribution_transport::AuthenticatedNativeRemoteImageSourceFrame;
 /// can construct this value. Historical issuance survives request expiry;
 /// it asserts neither continuous remote liveness nor target write authority.
 pub(crate) struct NativeRemoteImageFact {
-    actual_manifest: AuthenticatedNativeRemoteImageSourceFrame,
+    actual_manifest: ActualManifestIssuance,
+}
+enum ActualManifestIssuance {
+    Frame(AuthenticatedNativeRemoteImageSourceFrame),
+    Discovery(crate::distribution_transport::AuthenticatedNativeSourceDiscovery),
 }
 impl NativeRemoteImageFact {
     pub(crate) fn from_actual_manifest(
@@ -34,16 +38,31 @@ impl NativeRemoteImageFact {
         }
         actual.require_request_live()?;
         Ok(Self {
-            actual_manifest: actual,
+            actual_manifest: ActualManifestIssuance::Frame(actual),
+        })
+    }
+
+    /// Only the strict actual Start/Describe transport exchange constructs a
+    /// discovered fact. No fabricated old Manifest request/frame is created.
+    pub(crate) fn from_actual_discovery(
+        actual: crate::distribution_transport::AuthenticatedNativeSourceDiscovery,
+    ) -> Result<Self> {
+        actual.require_request_live()?;
+        actual.reply().manifest.require_shape()?;
+        Ok(Self {
+            actual_manifest: ActualManifestIssuance::Discovery(actual),
         })
     }
 
     /// Immutable historical data only. This is not an alternate constructor
     /// for local lineage, OLD quorum, NativeRecoveryAdmission or an image grant.
     pub(crate) fn manifest(&self) -> &NativeRemoteImageManifestV1 {
-        match &self.actual_manifest.reply().payload {
-            NativeRemoteImageSourcePayloadV1::Manifest(manifest) => manifest,
-            _ => unreachable!("private constructor requires Manifest"),
+        match &self.actual_manifest {
+            ActualManifestIssuance::Frame(actual) => match &actual.reply().payload {
+                NativeRemoteImageSourcePayloadV1::Manifest(manifest) => manifest,
+                _ => unreachable!("private constructor requires Manifest"),
+            },
+            ActualManifestIssuance::Discovery(actual) => &actual.reply().manifest,
         }
     }
 

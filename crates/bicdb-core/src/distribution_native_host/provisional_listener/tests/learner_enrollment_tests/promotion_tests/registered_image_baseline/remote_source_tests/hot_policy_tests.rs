@@ -226,6 +226,7 @@ pub(in super::super) fn exercise(
     let mut journal = Vec::new();
     let (donor, retained, _) = remote_old_seed(
         SourceCase::TargetCatalogueFloor,
+        target,
         controls,
         clients,
         services,

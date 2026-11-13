@@ -16,6 +16,11 @@ use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use crate::distribution_transport::TcpClusterRelocationTransport;
 use parking_lot::Mutex;
 use std::collections::BTreeMap;
+mod discovery;
+pub(crate) use discovery::{
+    ActualNativeSourceDiscovery, NativeSourceDiscoveryOperationV1, NativeSourceDiscoveryReplyV1,
+    NativeSourceDiscoveryRequestV1,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -644,6 +649,9 @@ impl NativeRemoteImageSourceSession {
 /// by the original admission inside every real session boundary.
 pub(crate) struct NativeRemoteImageSourceRegistry {
     sessions: Mutex<BTreeMap<Uuid, Arc<Mutex<NativeRemoteImageSourceSession>>>>,
+    discoveries: Mutex<BTreeMap<RangeId, Arc<discovery::NativeSourceDiscoveryAttempt>>>,
+    #[cfg(test)]
+    drop_next_discovery_reply: std::sync::atomic::AtomicBool,
     transport: Arc<TcpClusterRelocationTransport>,
     provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
     original_process: std::sync::OnceLock<CancellationToken>,
@@ -655,6 +663,9 @@ impl NativeRemoteImageSourceRegistry {
     ) -> Self {
         Self {
             sessions: Mutex::new(BTreeMap::new()),
+            discoveries: Mutex::new(BTreeMap::new()),
+            #[cfg(test)]
+            drop_next_discovery_reply: std::sync::atomic::AtomicBool::new(false),
             transport,
             provider,
             original_process: std::sync::OnceLock::new(),

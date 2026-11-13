@@ -4,6 +4,7 @@ use super::*;
 
 pub(crate) struct NativeInitialOldConstraintStep<'request> {
     admission: &'request NativeInitialDataAdmission,
+    writer: Arc<crate::db::NativeWriterHostState>,
     service: Arc<Mutex<ClusterDataNodeService>>,
     runtime: Arc<RangeRecoveryRuntime>,
     metadata: Arc<Mutex<MetadataConsensusStore>>,
@@ -56,6 +57,7 @@ impl NativeInitialDataAdmission {
             &role, &own, business,
         )?);
         let step = NativeInitialOldConstraintStep {
+            writer: self.writer(),
             admission: self,
             service,
             runtime,
@@ -97,6 +99,9 @@ impl NativeInitialOldConstraintStep<'_> {
     }
     pub(crate) fn require_live(&self) -> Result<()> {
         self.parent.check()?;
+        if !Arc::ptr_eq(&self.writer, &self.admission.writer()) {
+            return Err(invalid("OLD constraint original writer snapshot replaced"));
+        }
         self.process.require_original_process()?;
         self.role
             .require_own_host_metadata(&self.own, self.business)?;
@@ -133,7 +138,7 @@ impl NativeInitialOldConstraintStep<'_> {
         if !Arc::ptr_eq(plan, &self.plan)
             || !Arc::ptr_eq(role, &self.role)
             || store.native_writer_store_open_id() != self.admission.store_slot.id()
-            || !Arc::ptr_eq(&store.native_writer_host_state()?, &self.admission.writer)
+            || !Arc::ptr_eq(&store.native_writer_host_state()?, &self.writer)
         {
             return Err(invalid(
                 "OLD constraint changed original plan/role/slot/writer",
@@ -142,11 +147,9 @@ impl NativeInitialOldConstraintStep<'_> {
         self.admission.database.require_database(database)?;
         self.member.require_database(database)?;
         self.admission.store_slot.require_live()?;
-        self.admission
-            .writer
+        self.writer
             .require_store(database.data_path(), self.admission.store_slot.id())?;
-        self.admission
-            .writer
+        self.writer
             .require_old_constraint_predecessor(database, plan)?;
         database.require_native_writer_catalogue_custody(store)?;
         self.require_live()

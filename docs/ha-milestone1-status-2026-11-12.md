@@ -42,6 +42,22 @@ Still open and **not** qualified by this merge:
   The original Azure qualification remains **FAILED**.
 - No release binary or deployment is produced by this source version.
 
+### Unmerged candidate on this source: first positive fifth-member DATA path
+
+Branch `feat/ha-fifth-node-data-path` (not versioned, not merged) adds the
+first positive path in which a genuine registered fifth member receives rows
+and serves them, for one range, in a five-host single-process fixture:
+source cut, image and history transfer with verification on the fifth, joint
+decision, staged membership change, Open, release, then leadership and
+application/Strong ingress on the fifth. Its acceptance test also stops one
+surviving original and requires further acknowledged writes. The handoff is
+orchestrated through the existing in-process joint objects; there is no
+cross-process image stream and no controller. The range is unavailable for
+writes from the committed learner allocation until release, and a failure in
+that interval has no abort back to the old configuration. Exact scope, new
+source and open items: [design note](design/native-fifth-data-path.md). The
+"still open" list above is unchanged for everything that note does not name.
+
 **Production qualification remains incomplete.** The metadata repair merged into main as **1.0.485-beta**,
 `e3fa39974d23c13d6212d5b94ab84437271c50bf`, merged the metadata Append
 frontier repair in [PR 162](https://github.com/nikoma/bicdb/pull/162). The exact

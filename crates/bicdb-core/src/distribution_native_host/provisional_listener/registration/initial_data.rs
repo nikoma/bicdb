@@ -47,9 +47,10 @@ pub struct NativeInitialDataStatus {
 pub(crate) struct NativeInitialDataAdmission {
     service: Weak<Mutex<ClusterDataNodeService>>,
     runtime: Weak<RangeRecoveryRuntime>,
-    writer: Arc<NativeWriterHostState>,
-    // Captured from the actual original service when this DATA owner is
-    // constructed. Readonly OLD observations cannot replace its DB open.
+    // Mutable only after this actual owner's durable policy refresh. OLD
+    // operations separately retain their exact original writer snapshot.
+    writer: parking_lot::RwLock<Arc<NativeWriterHostState>>,
+    // Original service/open identity is never replaced by policy refresh.
     database: crate::distribution_data::ClusterServiceOpenGuard,
     root: PathBuf,
     store_open: Uuid,
@@ -64,6 +65,48 @@ pub(crate) struct NativeInitialDataAdmission {
     old_transport: Weak<TcpClusterRelocationTransport>,
 }
 impl NativeInitialDataAdmission {
+    /// The currently installed writer policy of this same retained owner.
+    pub(super) fn writer(&self) -> Arc<NativeWriterHostState> {
+        Arc::clone(&self.writer.read())
+    }
+    /// Only the retained owner calls this, after the replacement policy is
+    /// durable and its hook installed. Lifetime, Store slot and root stay the
+    /// original ones; this is not a role, quorum or serving grant.
+    pub(super) fn replace_writer(&self, writer: Arc<NativeWriterHostState>) {
+        *self.writer.write() = writer;
+    }
+    /// A Registered member that joined DATA through the joint handoff binds
+    /// the same necessary lifetime/slot/writer refusals as an INITIAL owner.
+    /// It has no image-source registry and no INITIAL genesis.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn for_joined_owner(
+        service: &Arc<Mutex<ClusterDataNodeService>>,
+        runtime: &Arc<RangeRecoveryRuntime>,
+        database: crate::distribution_data::ClusterServiceOpenGuard,
+        writer: Arc<NativeWriterHostState>,
+        root: PathBuf,
+        store_slot: crate::distribution_data::RangeWriteServiceSlotGuard,
+        life: &Arc<AtomicBool>,
+        published: Arc<AtomicBool>,
+    ) -> Self {
+        Self {
+            service: Arc::downgrade(service),
+            runtime: Arc::downgrade(runtime),
+            writer: parking_lot::RwLock::new(writer),
+            database,
+            root,
+            store_open: store_slot.id(),
+            store_slot,
+            life: Arc::downgrade(life),
+            published,
+            image_sources: Weak::new(),
+            // A Joined lifecycle supplies no INITIAL OLD/source authority.
+            old_closures: Weak::new(),
+            old_metadata: Weak::new(),
+            old_provider: Weak::new(),
+            old_transport: Weak::new(),
+        }
+    }
     pub(crate) fn require_live(&self) -> Result<()> {
         if !self
             .life
@@ -77,7 +120,7 @@ impl NativeInitialDataAdmission {
         if self.store_slot.id() != self.store_open {
             return Err(invalid("initial DATA actual Store slot/open differs"));
         }
-        self.writer.require_store(&self.root, self.store_open)
+        self.writer().require_store(&self.root, self.store_open)
     }
     /// Necessary same-service/current-slot refusal, never routing/Q/read/write
     /// authority. The constructor captured the actual slot under that service.
@@ -325,7 +368,7 @@ impl NativeInitialDataHost {
             self.admission = Some(Arc::new(NativeInitialDataAdmission {
                 service: Arc::downgrade(&self.initial.service),
                 runtime: Arc::downgrade(runtime),
-                writer,
+                writer: parking_lot::RwLock::new(writer),
                 database: service.listener_open_guard(),
                 root,
                 store_open: service.native_initial_listener_store_open_id(),
@@ -679,7 +722,7 @@ impl NativeInitialDataHost {
             Some(admission) => {
                 admission.require_live().is_ok()
                     && self.initial.topology.try_read().is_some_and(|topology| {
-                        admission.writer.require_topology(&topology).is_ok()
+                        admission.writer().require_topology(&topology).is_ok()
                     })
             }
             None => false,
@@ -730,7 +773,7 @@ impl NativeInitialDataHost {
             .initial
             .topology
             .try_read()
-            .is_some_and(|c| admission.writer.require_topology(&c).is_ok())
+            .is_some_and(|c| admission.writer().require_topology(&c).is_ok())
         {
             return Ok(());
         }
@@ -794,6 +837,146 @@ impl NativeInitialDataHost {
             prepared,
             &token,
         )
+    }
+    /// Re-enroll the SAME retained coordinator at the current committed DATA
+    /// configuration. A range whose voter set or epoch changed (a committed
+    /// learner allocation, or a completed joint membership change) is outside
+    /// the previously installed policy, and the metadata-only registry refresh
+    /// deliberately refuses such a change. This publishes a complete new
+    /// native policy from a fresh host metadata observation; it creates no
+    /// leadership, recovered epoch, Ready or Strong permission.
+    ///
+    /// APP ingress is closed across the replacement and reopened only if it
+    /// was published before. A process-owned maintenance worker retains the
+    /// original writer objects, so this bounded continuation is refused once
+    /// that worker has been started.
+    fn refresh_data_policy(&mut self, parent: &CancellationToken) -> Result<()> {
+        parent.check()?;
+        if self.stopping {
+            return Err(invalid("stopping INITIAL data owner cannot change policy"));
+        }
+        if self
+            .hot_recovery
+            .as_ref()
+            .is_some_and(|hot| hot.process_bound())
+        {
+            return Err(invalid(
+                "DATA policy change is unavailable while process maintenance owns the original writer",
+            ));
+        }
+        let admission = self
+            .admission
+            .as_ref()
+            .ok_or_else(|| invalid("DATA policy change requires the retained admission"))?
+            .clone();
+        let dispatcher = self
+            .dispatcher
+            .as_ref()
+            .ok_or_else(|| invalid("DATA policy change requires the retained dispatcher"))?
+            .clone();
+        let coordinator = Arc::clone(
+            &self
+                .enrollment
+                .as_ref()
+                .ok_or_else(|| invalid("DATA policy change requires the retained writer"))?
+                .coordinator,
+        );
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        let route = {
+            let metadata = self.initial.lock_initial_metadata(&token)?;
+            let status = metadata.status();
+            if status.role == MetadataConsensusRole::Leader {
+                status.node_id
+            } else {
+                status
+                    .leader_id
+                    .ok_or_else(|| invalid("DATA policy change metadata leader unknown"))?
+            }
+        };
+        let business = Uuid::now_v7();
+        let observed = self.initial.transport.acquire_host_metadata_observation(
+            &route,
+            business,
+            Duration::from_secs(5),
+            &token,
+        )?;
+        let topology = observed.committed_topology(business)?.clone();
+        let range = topology
+            .ranges
+            .values()
+            .next()
+            .cloned()
+            .ok_or_else(|| invalid("DATA policy change has no committed range"))?;
+        self.initial.transport.install_topology(topology)?;
+        let policy = {
+            let service = self
+                .initial
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("DATA policy change service busy"))?;
+            let database = self
+                .initial
+                .seed
+                .database
+                .try_read()
+                .ok_or_else(|| invalid("DATA policy change database busy"))?;
+            service.prepare_native_host_writer_enrollment(&database, observed, business)?
+        };
+        let context = policy.metadata_context_id();
+        let term = policy.metadata_term();
+        let read_index = policy.metadata_read_index();
+        // Close APP before the hook is replaced. Nothing below reopens it on
+        // an error: the retained owner stays closed until a later success.
+        let was_published = self.published.swap(false, Ordering::AcqRel);
+        dispatcher.clear();
+        let guard = {
+            let database = self
+                .initial
+                .seed
+                .database
+                .try_read()
+                .ok_or_else(|| invalid("DATA policy change database busy before policy"))?;
+            Arc::new(
+                database.install_enrolled_native_coordinator(Arc::clone(&coordinator), policy)?,
+            )
+        };
+        // Retain the actual installed owner before any fallible postcheck.
+        self.enrollment = Some(NativeInitialWriterEnrollment {
+            coordinator: Arc::clone(&coordinator),
+            guard: Arc::clone(&guard),
+            metadata_context_id: context,
+            metadata_term: term,
+            metadata_read_index: read_index,
+        });
+        let (writer, _root) = {
+            let service = self
+                .initial
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("DATA policy change service busy after policy"))?;
+            service.retain_initial_data_writer(&coordinator, &guard, &range)?
+        };
+        admission.replace_writer(writer);
+        admission.require_live()?;
+        self.hot_recovery = Some(NativeHotRecoveryMaintenance::new(self)?);
+        dispatcher.publish(&coordinator, &guard)?;
+        token.check()?;
+        admission.require_live()?;
+        if was_published {
+            self.published.store(true, Ordering::Release);
+        }
+        Ok(())
+    }
+    /// Drop this host's retained OLD closure owner for one range once the
+    /// collector that consumed it has finished. Only custody is released; the
+    /// durable promise, native close record and joint state are untouched.
+    fn forget_old_closure(&self, range: crate::RangeId) -> Result<bool> {
+        Ok(self
+            .old_closures
+            .try_lock()
+            .ok_or_else(|| invalid("retained OLD owner table busy"))?
+            .remove(&range)
+            .is_some())
     }
     pub(super) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
         self.stopping = true;
@@ -870,6 +1053,19 @@ fn network_address(
 }
 
 impl NativeMetadataControlHost {
+    /// See `NativeInitialDataHost::refresh_data_policy`.
+    pub(crate) fn refresh_initial_data_policy(&mut self, parent: &CancellationToken) -> Result<()> {
+        self.data
+            .as_mut()
+            .ok_or_else(|| invalid("actual initial DATA owner absent"))?
+            .refresh_data_policy(parent)
+    }
+    pub(crate) fn forget_initial_old_closure(&self, range: crate::RangeId) -> Result<bool> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual initial DATA owner absent"))?
+            .forget_old_closure(range)
+    }
     pub(crate) fn refresh_initial_data_registry(
         &mut self,
         parent: &CancellationToken,

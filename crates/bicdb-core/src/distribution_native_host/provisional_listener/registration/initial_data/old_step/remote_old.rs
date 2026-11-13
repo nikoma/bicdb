@@ -140,6 +140,7 @@ impl NativeInitialDataAdmission {
                     }
                     let actual_runtime = Arc::new(NativeJointHandoffRuntime::new(service.clone())?);
                     let held = Arc::new(Mutex::new(RetainedInitialOld {
+                        writer: step.writer.clone(),
                         plan_sha256: request.scope_sha256.clone(),
                         plan: step.plan().clone(),
                         runtime: actual_runtime,
@@ -155,7 +156,8 @@ impl NativeInitialDataAdmission {
             let mut held = retained
                 .try_lock()
                 .ok_or_else(|| invalid("OLD source operation already active"))?;
-            if held.plan_sha256 != request.scope_sha256 {
+            if held.plan_sha256 != request.scope_sha256 || !Arc::ptr_eq(&held.writer, &step.writer)
+            {
                 return Err(invalid("OLD source retains another exact session"));
             }
             step.require_joint_runtime(&held.runtime)?;
@@ -278,6 +280,7 @@ impl NativeInitialDataAdmission {
                 }
                 let runtime = Arc::new(NativeJointHandoffRuntime::new(service.clone())?);
                 let owner = Arc::new(Mutex::new(RetainedInitialOld {
+                    writer: step.writer.clone(),
                     plan_sha256: request.scope_sha256.clone(),
                     plan: step.plan().clone(),
                     runtime,
@@ -295,6 +298,7 @@ impl NativeInitialDataAdmission {
                 .try_lock()
                 .ok_or_else(|| invalid("OLD constraint operation already active"))?;
             if held.plan_sha256 != request.scope_sha256
+                || !Arc::ptr_eq(&held.writer, &step.writer)
                 || held.actual.is_some()
                 || held.outcome.is_some()
             {
@@ -345,7 +349,7 @@ impl NativeInitialDataAdmission {
     ) -> Result<ActualNativeRemoteOldFrame> {
         token.check()?;
         self.require_live()?;
-        let (plan, actual, constraint_owner, retained_constraints) = {
+        let (plan, actual, constraint_owner, retained_constraints, writer) = {
             let entries = table
                 .try_lock()
                 .ok_or_else(|| invalid("OLD source retained table busy at observation"))?;
@@ -365,9 +369,15 @@ impl NativeInitialDataAdmission {
                 held.constraints.clone().ok_or_else(|| {
                     invalid("OLD actual irreversible constraints were not retained")
                 })?,
+                held.writer.clone(),
             )
         };
         request.require_plan(&plan)?;
+        if !Arc::ptr_eq(&writer, &self.writer()) {
+            return Err(invalid(
+                "readonly OLD response cannot retag retained original writer",
+            ));
+        }
         let local = own.requester_node_id();
         plan.require_source_host_metadata(own, own_business, local)?;
         let constraints = if actual.is_some() {
@@ -416,15 +426,15 @@ impl NativeInitialDataAdmission {
                 plan.require_old_native_configuration(&lineage)?;
                 s.require_remote_old_original_writer(
                     &db,
-                    &self.writer,
+                    &writer,
                     &self.store_slot,
                     lineage.native_write_range()?,
                 )?;
             } else {
-                self.writer.require_old_constraint_predecessor(&db, &plan)?;
+                writer.require_old_constraint_predecessor(&db, &plan)?;
                 s.require_remote_old_original_writer(
                     &db,
-                    &self.writer,
+                    &writer,
                     &self.store_slot,
                     &plan.old_native_predecessor_data()?,
                 )?;

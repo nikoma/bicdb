@@ -22,6 +22,7 @@ const METADATA_LOCK_POLL: std::time::Duration = std::time::Duration::from_millis
 
 pub(crate) struct NativeInitialOldStep<'request> {
     admission: &'request NativeInitialDataAdmission,
+    writer: Arc<crate::db::NativeWriterHostState>,
     service: Arc<Mutex<ClusterDataNodeService>>,
     runtime: Arc<RangeRecoveryRuntime>,
     metadata: Arc<Mutex<MetadataConsensusStore>>,
@@ -126,6 +127,7 @@ impl NativeInitialDataAdmission {
             &role, &own, business,
         )?);
         let step = NativeInitialOldStep {
+            writer: self.writer(),
             admission: self,
             service,
             runtime,
@@ -173,6 +175,11 @@ impl NativeInitialOldStep<'_> {
     }
     pub(crate) fn require_live(&self) -> Result<()> {
         self.parent.check()?;
+        if !Arc::ptr_eq(&self.writer, &self.admission.writer()) {
+            return Err(invalid(
+                "OLD step original writer snapshot replaced by policy refresh",
+            ));
+        }
         if let Some(process) = &self.hosted_process {
             process.require_original_process()?;
         }
@@ -219,13 +226,11 @@ impl NativeInitialOldStep<'_> {
         self.member.require_database(database)?;
         let actual = database.current_native_range_source_lineage(plan.old_range().id)?;
         plan.require_old_native_configuration(&actual)?;
-        self.admission
-            .writer
+        self.writer
             .require_store(database.data_path(), self.slot.id())?;
-        self.admission
-            .writer
+        self.writer
             .require_database(database, actual.native_write_range()?)?;
-        if !Arc::ptr_eq(&store.native_writer_host_state()?, &self.admission.writer) {
+        if !Arc::ptr_eq(&store.native_writer_host_state()?, &self.writer) {
             return Err(invalid("OLD step original actual writer replaced"));
         }
         database.require_native_writer_catalogue_custody(store)?;
@@ -236,6 +241,7 @@ impl NativeInitialOldStep<'_> {
 /// Retained BEFORE any real freeze/write and kept in the actual DATA host.
 /// An uncertain producer never removes this owner or invents an observation.
 pub(super) struct RetainedInitialOld {
+    writer: Arc<crate::db::NativeWriterHostState>,
     plan_sha256: String,
     plan: Arc<NativeJointHandoffPlan>,
     runtime: Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>,
@@ -264,6 +270,9 @@ impl NativeInitialDataHost {
         let owner = owner
             .try_lock()
             .ok_or_else(|| invalid("actual OLD donor closure still active"))?;
+        if !Arc::ptr_eq(&owner.writer, &self.admission_for_old_step()?.writer()) {
+            return Err(invalid("retained OLD source original writer replaced"));
+        }
         let actual = owner
             .actual
             .clone()
@@ -311,6 +320,7 @@ impl NativeInitialDataHost {
                     ));
                 }
                 let owner = Arc::new(Mutex::new(RetainedInitialOld {
+                    writer: step.writer.clone(),
                     plan_sha256: digest.clone(),
                     plan: step.plan().clone(),
                     runtime: runtime.clone(),
@@ -326,7 +336,10 @@ impl NativeInitialDataHost {
         let mut owner = retained
             .try_lock()
             .ok_or_else(|| invalid("actual OLD operation already active"))?;
-        if owner.plan_sha256 != digest || !Arc::ptr_eq(&owner.runtime, &runtime) {
+        if owner.plan_sha256 != digest
+            || !Arc::ptr_eq(&owner.runtime, &runtime)
+            || !Arc::ptr_eq(&owner.writer, &step.writer)
+        {
             return Err(invalid(
                 "OLD continuation changed original plan/runtime owner",
             ));

@@ -10651,6 +10651,7 @@ impl BicDb {
             native_collection_birth_active,
             local_namespace_identity_active,
         )?;
+        native_wal_backings::rebind_recovery_writes(&mut tx_recovery, &metas)?;
         // Physical storage names must be known before any row is read, and an
         // interrupted rename (renamed_from still set) maps index definitions
         // still recorded under the old name.
@@ -21240,6 +21241,7 @@ struct TxRecovery {
     next_tx_id: u64,
     last_commit_seq: u64,
     requires_native_collection_birth: bool,
+    native_backings_by_tx: BTreeMap<u64, BTreeMap<String, (Uuid, Uuid)>>,
 }
 
 #[derive(Clone, Debug)]
@@ -21384,6 +21386,7 @@ fn recover_transaction_log(
     let mut max_tx = 0_u64;
     let mut max_commit_seq = 0_u64;
     let mut requires_native_collection_birth = false;
+    let mut native_backings_by_tx = BTreeMap::new();
 
     // Stream the WAL independently of the record-segment read mode. Preserve
     // torn-tail repair, without retaining every raw frame beside decoded rows.
@@ -21447,6 +21450,10 @@ fn recover_transaction_log(
                 ..
             } => {
                 requires_native_collection_birth |= !native_backings.is_empty();
+                if !native_backings.is_empty() {
+                    native_backings_by_tx
+                        .insert(tx_id.0, native_wal_backings::identities(&native_backings)?);
+                }
                 max_tx = max_tx.max(tx_id.0);
                 max_commit_seq = max_commit_seq.max(commit_seq);
                 commit_seq_by_tx.insert(tx_id.0, commit_seq);
@@ -21465,6 +21472,7 @@ fn recover_transaction_log(
                     // redo of decisions that still require materialization.
                     // Raw log bytes remain available for replication.
                     writes.remove(&tx_id.0);
+                    native_backings_by_tx.remove(&tx_id.0);
                 }
                 commit_seq_by_tx.insert(tx_id.0, commit_seq);
             }
@@ -21477,6 +21485,7 @@ fn recover_transaction_log(
                 record_audit_events.remove(&tx_id.0);
                 record_audit_published.remove(&tx_id.0);
                 sync_ops.remove(&tx_id.0);
+                native_backings_by_tx.remove(&tx_id.0);
             }
         }
         Ok(())
@@ -21504,6 +21513,7 @@ fn recover_transaction_log(
         next_tx_id: max_tx.saturating_add(1).max(1),
         last_commit_seq: max_commit_seq,
         requires_native_collection_birth,
+        native_backings_by_tx,
     })
 }
 

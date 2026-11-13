@@ -6,6 +6,86 @@ use super::*;
 const MAX_BACKINGS: usize = 65_536;
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 
+pub(super) fn identities(
+    backings: &BTreeMap<String, CollectionMeta>,
+) -> Result<BTreeMap<String, (Uuid, Uuid)>> {
+    backings
+        .iter()
+        .map(
+            |(name, meta)| match (meta.native_backing_birth_id, meta.local_namespace_id) {
+                (Some(birth), Some(namespace)) => Ok((name.clone(), (birth, namespace))),
+                _ => Err(BicDbError::FormatCompatibility(
+                    "Native WAL backing lacks its allocation/namespace pair".into(),
+                )),
+            },
+        )
+        .collect()
+}
+
+/// Local WAL is already this database's Native commit history. Rebind only
+/// writes carrying its recorded allocation pair, never a current same-name
+/// collection. This creates no cross-node origin map or imported authority.
+pub(super) fn rebind_recovery_writes(
+    recovery: &mut TxRecovery,
+    metas: &[CollectionMeta],
+) -> Result<()> {
+    if recovery.native_backings_by_tx.is_empty() {
+        return Ok(());
+    }
+    let mut births = BTreeMap::new();
+    let mut namespaces = BTreeMap::new();
+    for meta in metas {
+        if let Some(namespace) = meta.local_namespace_id {
+            namespaces.insert(namespace, meta.native_backing_birth_id);
+            if let Some(birth) = meta.native_backing_birth_id {
+                births.insert(birth, (namespace, meta.name.as_str()));
+            }
+        }
+    }
+    for (tx_id, backings) in &recovery.native_backings_by_tx {
+        if recovery.states.get(tx_id) != Some(&TxState::Committed) {
+            continue;
+        }
+        let mut destinations = BTreeMap::new();
+        for (name, (birth, namespace)) in backings {
+            let destination = match births.get(birth) {
+                Some((actual_namespace, name)) if actual_namespace == namespace => Some(*name),
+                Some(_) => {
+                    return Err(BicDbError::FormatCompatibility(
+                        "Native WAL birth has a changed local namespace identity".into(),
+                    ))
+                }
+                None if namespaces.contains_key(namespace) => {
+                    return Err(BicDbError::FormatCompatibility(
+                        "Native WAL namespace has a changed local backing birth".into(),
+                    ))
+                }
+                None => None, // Both identities are absent: that backing was dropped.
+            };
+            destinations.insert(name.as_str(), destination);
+        }
+        if let Some(writes) = recovery.writes.get_mut(tx_id) {
+            writes.retain_mut(|write| {
+                let Some(destination) = destinations.get(write.collection()) else {
+                    return true; // Legacy/unborn writes acquire no new identity.
+                };
+                let Some(destination) = destination else {
+                    return false;
+                };
+                if write.collection() == *destination {
+                    return true;
+                }
+                match write {
+                    RecoveredTxWrite::Full(write) => write.collection = (*destination).to_owned(),
+                    RecoveredTxWrite::Patch(patch) => patch.collection = (*destination).to_owned(),
+                }
+                true
+            });
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn validated(
     backings: BTreeMap<String, CollectionMeta>,
 ) -> Result<BTreeMap<String, CollectionMeta>> {

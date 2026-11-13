@@ -131,7 +131,10 @@ impl RangeWriteStore {
             range_write_error("Registered NoDomain actual CLOSED raw pair missing")
         })?;
         refusal.scope.require_role(role)?;
-        self.require_persisted_recovery_scope(&refusal.scope)?;
+        // Generic persisted-scope admission requires an installed DATA writer.
+        // This actual Registered observation has its own exact stored refusal
+        // and direct no-image/empty-domain checks below; it grants no writes.
+        // Native catalogue durability/custody was already checked above.
         if !matches!(refusal.phase, RecoveryFencePhase::Active)
             || !matches!(
                 refusal.scope.purpose,

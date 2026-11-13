@@ -60,6 +60,18 @@ healthy recovery state. It defers automatic checkpointing until the
 actual lexical hook/admission/journal and engine guards have dropped, avoiding
 an admission-write deadlock. The normal public commit path is unchanged.
 
+Physical row projection disables `enqueue_memory_jobs_on_commit` before row
+buffering, and the private grant requires it to remain disabled. This matches
+the existing imported-projection path in `commit_snapshot.rs`. Source
+`97c54218d` did not suppress these jobs: a later non-fencing model/sidecar error
+could leave `AppliedKnown` while retry skipped the unfinished job. This
+follow-up closes that source-level gap; it has not been compiled or run.
+Generated business-record audits, source change-capture operations and new
+application broker publishes are suppressed on this private physical-copy
+path. Local spatial-index maintenance audit events may still occur. Memory
+index assets and their rebuilding/recovery remain separately unqualified;
+disabling job generation does not prove those assets have moved or rebuilt.
+
 Caller cancellation before row WAL leaves the same pending Transaction and
 durable native intent for a fresh bounded request. Cancellation after known
 durable row WAL leaves that exact sequence known; fresh same-step progress

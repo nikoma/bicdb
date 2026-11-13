@@ -169,6 +169,7 @@ impl NativeRegisteredRemoteRowTransactionGrant {
             || self.intent.mutations_sha256.as_deref() != Some(self.mutations_sha256.as_str())
             || !tx.bypass_commit_admission
             || !tx.imported_projection
+            || tx.enqueue_memory_jobs_on_commit
             || tx.isolation != TransactionIsolation::ReadCommitted
         {
             return Err(invalid(
@@ -344,6 +345,9 @@ impl RetainedRemoteRows {
                 let mut tx = db.begin_transaction()?;
                 tx.bypass_commit_admission = true;
                 tx.imported_projection = true;
+                // Physical projection must not enqueue fresh model/embedding
+                // or application memory jobs while copying source records.
+                tx.enqueue_memory_jobs_on_commit = false;
                 tx.write_upserts_unchecked(&batch.collection, batch.records.clone())?;
                 transaction = Some(tx);
             }

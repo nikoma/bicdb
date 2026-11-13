@@ -10614,6 +10614,15 @@ impl BicDb {
             paged.set_index_aliases(fts_generations.indexes.clone());
         }
 
+        // One durability state per database: the page store's when there is
+        // one, so a failure in the page log, the page file or the
+        // transaction log fences all of them.
+        let durability = paged_records
+            .as_ref()
+            .map_or_else(bicdb_page::DurabilityHealth::new, |paged| {
+                paged.store().durability_health().clone()
+            });
+        durability.set_marker_path(path.join(DURABILITY_FAILURE_MARKER));
         let ha_state = load_ha_state(&path)?;
         let consensus_state = load_consensus_state(&path, &config.consensus, config.fsync)?;
         let mut tx_recovery = recover_transaction_log(
@@ -11480,15 +11489,6 @@ impl BicDb {
         };
 
         open_trace!("events+graphs+sync_state");
-        // One durability state per database: the page store's when there is
-        // one, so a failure in the page log, the page file or the
-        // transaction log fences all of them.
-        let durability = paged_records
-            .as_ref()
-            .map_or_else(bicdb_page::DurabilityHealth::new, |paged| {
-                paged.store().durability_health().clone()
-            });
-        durability.set_marker_path(path.join(DURABILITY_FAILURE_MARKER));
         let tx_log = TxLogHandle::new(
             path.join(DEFAULT_TRANSACTION_LOG),
             tx_recovery.last_commit_seq,

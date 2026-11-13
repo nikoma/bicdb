@@ -24,3 +24,7 @@ The `compatibility/v2` corpus is normative. Every accepted case must decode
 and validate; every rejected case must fail at the phase named in `index.json`.
 Files marked `canonical` must round-trip byte-for-byte after trimming the final
 newline.
+
+### Bounded exact-unit limb access
+
+The program-only `finance.units_limb` builtin has the strict positional signature `(String, Int) -> Int` and requires the separately signed `exact_unit_limb_access` application feature. Canonical unsigned ASCII units must be below `2^254`; position must be an actual Int64 from0 through5. The result is `floor(U / 10^(14*position)) mod 10^14`. No signs, leading zeroes, coercion, approximation, SQL access or invariant fallback is admitted. It grants no authority over source documents or postings. Older readers refuse the unknown signed feature rather than executing a fallback.

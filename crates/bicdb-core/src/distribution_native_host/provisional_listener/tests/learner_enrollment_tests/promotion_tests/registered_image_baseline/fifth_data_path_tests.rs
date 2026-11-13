@@ -56,7 +56,9 @@ fn key_for(topology: &ClusterTopology, range: crate::RangeId, tag: &str) -> Stri
 /// Four INITIAL owners with open DATA, and a fifth member that registered,
 /// caught up, was promoted to metadata voter and opened its replica receiver.
 fn start_five(name: &str) -> Five {
-    let mut f = EnrollmentFixture::new();
+    // Same per-request network budget as the three-member joint fixture: a
+    // joint phase revalidates every final member inside one metadata window.
+    let mut f = EnrollmentFixture::with_spares_and_io_timeout(1, 4000);
     let (factory, mut host) = f.factory(name);
     assert!(factory.spec.initial_ranges.is_empty());
     let token = CancellationToken::uncancelable();

@@ -34,6 +34,16 @@ fn planned_network(count: usize) -> PlannedNetwork {
     planned_network_with_spare(count, 0)
 }
 fn planned_network_with_spare(count: usize, spare: usize) -> PlannedNetwork {
+    planned_network_with_spare_and_io_timeout(count, spare, 1500)
+}
+/// The per-request network budget also bounds every metadata observation
+/// window a member can obtain. Multi-member joint phases revalidate every
+/// participant inside ONE such window, so their fixture states it explicitly.
+fn planned_network_with_spare_and_io_timeout(
+    count: usize,
+    spare: usize,
+    io_timeout_ms: u64,
+) -> PlannedNetwork {
     assert!(matches!(count, 3 | 4));
     assert!(spare <= 2);
     let root = tempfile::tempdir().unwrap();
@@ -82,7 +92,7 @@ fn planned_network_with_spare(count: usize, spare: usize) -> PlannedNetwork {
         );
         networks.push(ClusterNetworkTransportConfig {
             connect_timeout_ms: 200,
-            io_timeout_ms: 1500,
+            io_timeout_ms,
             max_frame_bytes: 4 * 1024 * 1024,
             max_inbound_connections: 8,
             dev_localhost_plaintext: false,

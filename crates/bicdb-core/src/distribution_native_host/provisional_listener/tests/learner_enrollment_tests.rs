@@ -20,13 +20,16 @@ impl EnrollmentFixture {
         Self::with_spares(1)
     }
     fn with_spares(spares: usize) -> Self {
+        Self::with_spares_and_io_timeout(spares, 1500)
+    }
+    fn with_spares_and_io_timeout(spares: usize, io_timeout_ms: u64) -> Self {
         assert!((1..=2).contains(&spares));
         let PlannedNetwork {
             mut root,
             plan,
             networks,
             ports,
-        } = planned_network_with_spare(4, spares);
+        } = planned_network_with_spare_and_io_timeout(4, spares, io_timeout_ms);
         let next_learner_address = ports.get(5).map(|p| p.local_addr().unwrap().to_string());
         root.disable_cleanup(true);
         eprintln!("NATIVE_LEARNER_ENROLLMENT_ROOT {}", root.path().display());

@@ -15,7 +15,15 @@ pub(super) struct ReplicaDebt {
     semantic_veto: BTreeMap<ClusterNodeId, Phase>,
     retry_after: BTreeMap<ClusterNodeId, Instant>,
     peer_opens: BTreeMap<ClusterNodeId, HotRecoveryPeerOpen>,
+    // Last continuation attempt per follower. A SETTLED follower (activated,
+    // nothing pending, no veto) is only re-observed at a slow cadence: each
+    // observation occupies that follower's recovery context, and while it is
+    // occupied the follower refuses the ordinary native apply instruction.
+    tracked_at: BTreeMap<ClusterNodeId, Instant>,
 }
+/// Cadence of re-observing a settled follower. Unsettled followers keep the
+/// one-per-attempt cadence.
+const SETTLED_TRACKING_INTERVAL: Duration = Duration::from_secs(5);
 impl ReplicaDebt {
     pub(super) fn diagnostic(&self, boundary: &str) -> serde_json::Value {
         serde_json::json!({"phase":"ReplicaDebt","range_id":self.range.id,
@@ -31,11 +39,21 @@ impl ReplicaDebt {
         self.pending.is_empty() && self.semantic_veto.is_empty()
     }
     pub(super) fn from_published(job: Job) -> Self {
+        // A follower that actually acknowledged every phase through Activate
+        // inside the published session owes nothing: it is settled from the
+        // start. Only followers with a retained next phase are pending.
         let pending = job
             .members
             .iter()
-            .filter(|n| **n != job.range.leader)
+            .filter(|n| **n != job.range.leader && job.recipient_next.contains_key(*n))
             .cloned()
+            .collect::<BTreeSet<_>>();
+        let published_at = Instant::now();
+        let tracked_at = job
+            .members
+            .iter()
+            .filter(|n| **n != job.range.leader && !pending.contains(*n))
+            .map(|n| (n.clone(), published_at))
             .collect();
         Self {
             scope: job.scope,
@@ -52,7 +70,13 @@ impl ReplicaDebt {
             // transport cooldowns are not permissions or durable phase facts.
             retry_after: BTreeMap::new(),
             peer_opens: job.peer_opens,
+            tracked_at,
         }
+    }
+    fn settled(&self, node: &ClusterNodeId) -> bool {
+        !self.pending.contains(node)
+            && !self.semantic_veto.contains_key(node)
+            && !self.next.contains_key(node)
     }
 }
 impl NativeHotRecoveryMaintenance {
@@ -76,8 +100,26 @@ impl NativeHotRecoveryMaintenance {
         if members.is_empty() {
             return Ok(());
         }
-        let node = members[debt.cursor % members.len()].clone();
-        debt.cursor = (debt.cursor + 1) % members.len();
+        let mut selected = None;
+        for _ in 0..members.len() {
+            let candidate = members[debt.cursor % members.len()].clone();
+            debt.cursor = (debt.cursor + 1) % members.len();
+            if debt.settled(&candidate)
+                && debt
+                    .tracked_at
+                    .get(&candidate)
+                    .is_some_and(|at| at.elapsed() < SETTLED_TRACKING_INTERVAL)
+            {
+                continue;
+            }
+            selected = Some(candidate);
+            break;
+        }
+        let Some(node) = selected else {
+            return Ok(());
+        };
+        let was_settled = debt.settled(&node);
+        debt.tracked_at.insert(node.clone(), Instant::now());
         if !debt.semantic_veto.contains_key(&node)
             && debt
                 .retry_after
@@ -287,7 +329,12 @@ impl NativeHotRecoveryMaintenance {
             Ok(())
         })();
         if let Err(error) = &result {
-            debt.pending.insert(node.clone());
+            // A failed re-observation of a settled follower proves no new
+            // obligation; it is retried at the slow cadence. Only a follower
+            // that already owed something stays on the fast cadence.
+            if !was_settled {
+                debt.pending.insert(node.clone());
+            }
             if matches!(error, crate::BicDbError::Io(io) if matches!(
                 io.kind(),
                 std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
@@ -306,6 +353,10 @@ impl NativeHotRecoveryMaintenance {
                 // This ORIGIN's own momentarily busy latch or in-flight
                 // native command is not a statement by the follower. The
                 // obligation stays pending and is retried; no veto, no skip.
+            } else if was_settled {
+                // A settled follower's refusal of a re-observation creates no
+                // obligation and blocks nothing; it is asked again at the
+                // slow cadence.
             } else if !matches!(
                 error,
                 crate::BicDbError::QueryCanceled | crate::BicDbError::QueryTimedOut

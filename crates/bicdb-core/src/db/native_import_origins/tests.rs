@@ -409,3 +409,57 @@ fn recovery_never_publishes_pending_origin_before_its_wal_rewrite_sync() {
         }
     }
 }
+
+#[test]
+fn retained_import_decisions_require_their_fence_after_all_mapped_backings_are_dropped() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("target");
+        let cfg = config(mode.clone(), ReplicationMode::Standby);
+        let mut source = BicDb::open_with_config(
+            root.path().join("source"),
+            config(mode, ReplicationMode::Primary),
+        )
+        .unwrap();
+        source.sync_quorum().hold("origin-history", 0);
+        source
+            .initialize_fresh_primary_replication_origins()
+            .unwrap();
+        source.create_collection("items").unwrap();
+        let mut target = BicDb::open_with_config(&path, cfg.clone()).unwrap();
+        target.sync_quorum().hold("origin-history", 0);
+        target.persist_standby_slots().unwrap();
+        ship(&source, &mut target);
+        source.drop_collection("items").unwrap();
+        ship(&source, &mut target);
+        assert!(target
+            .collections()
+            .iter()
+            .all(|m| m.native_imported_backing_origin.is_none()));
+        target.close().unwrap();
+        let file = format::metadata_path(&path);
+        let original = fs::read(&file).unwrap();
+        let mut metadata: Value = serde_json::from_slice(&original).unwrap();
+        metadata["feature_flags"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|f| f.as_str() != Some(format::NATIVE_IMPORTED_BACKING_ORIGINS_FEATURE_FLAG));
+        fs::write(&file, serde_json::to_vec_pretty(&metadata).unwrap()).unwrap();
+        let error = BicDb::open_with_config(&path, cfg.clone()).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("imported allocation WAL requires its format fence"),
+            "{error}"
+        );
+        fs::write(file, original).unwrap();
+        for _ in 0..2 {
+            let target = BicDb::open_with_config(&path, cfg.clone()).unwrap();
+            assert!(target
+                .collections()
+                .iter()
+                .all(|m| m.native_imported_backing_origin.is_none()));
+            target.close().unwrap();
+        }
+    }
+}

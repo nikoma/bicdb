@@ -61,7 +61,8 @@ pub(super) fn pending(meta: &CollectionMeta) -> bool {
 }
 
 pub(super) fn validate_catalog(metas: &[CollectionMeta], active: bool) -> Result<()> {
-    let mut sources = BTreeSet::new();
+    let mut source_births = BTreeSet::new();
+    let mut source_namespaces = BTreeSet::new();
     let mut generations = BTreeSet::new();
     for meta in metas {
         if let Some(origin) = &meta.native_imported_backing_origin {
@@ -69,11 +70,9 @@ pub(super) fn validate_catalog(metas: &[CollectionMeta], active: bool) -> Result
                 return Err(invalid("catalog provenance has no Native format fence"));
             }
             origin.validate(meta)?;
-            if !sources.insert((
-                origin.source_root,
-                origin.source_birth,
-                origin.source_namespace,
-            )) || !generations.insert(origin.generation)
+            if !source_births.insert((origin.source_root, origin.source_birth))
+                || !source_namespaces.insert((origin.source_root, origin.source_namespace))
+                || !generations.insert(origin.generation)
             {
                 return Err(invalid("ambiguous imported backing or install generation"));
             }
@@ -209,6 +208,22 @@ impl BicDb {
                 return Err(invalid(
                     "source allocation has no corresponding catalog CREATE",
                 ));
+            }
+            for existing in self.collections() {
+                if existing.name != *name
+                    && existing
+                        .native_imported_backing_origin
+                        .as_ref()
+                        .is_some_and(|origin| {
+                            origin.source_root == root.root_id()
+                                && (Some(origin.source_birth) == fact.native_backing_birth_id
+                                    || Some(origin.source_namespace) == fact.local_namespace_id)
+                        })
+                {
+                    return Err(invalid(
+                        "source allocation already belongs to another actual target",
+                    ));
+                }
             }
             if let Some(state) = self.collections.get(name) {
                 let state = state.read();

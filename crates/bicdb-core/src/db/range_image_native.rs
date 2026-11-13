@@ -31,7 +31,9 @@ mod native_read;
 mod writer_enrollment;
 pub(crate) use writer_enrollment::{InstalledNativeWriterHostGuard, NativeWriterHostState};
 mod serving_configuration;
-pub(crate) use native_read::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
+pub(crate) use native_read::{
+    NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,
+};
 pub(crate) use serving_configuration::{
     NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,
     NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,

@@ -5,6 +5,9 @@ use crate::distribution_native_read::{canonical_range, NativeRangeReadScope};
 use crate::distribution_range_consensus::{NativeRangeReadCatalogue, NativeReadCatalogueDecision};
 use crate::distribution_range_mutation::NativeRangeReadStamp;
 
+mod scope;
+pub(crate) use scope::NativeServingObservationScope;
+
 /// Target-LOCAL data visibility bound from actual native receipts. No public
 /// constructor/Deserialize: a numeric R/source sequence cannot become this.
 #[derive(Debug)]
@@ -32,6 +35,30 @@ struct PhysicalPoint {
     serving_commitment: Option<String>,
 }
 #[derive(Debug)]
+enum NativeReadWriterLifetime {
+    LegacyComponent,
+    Enforced {
+        writer: std::sync::Weak<NativeWriterHostState>,
+        slot: crate::distribution_data::RangeWriteServiceSlotGuard,
+        schema_generation: u64,
+        serving_record_sha256: Option<String>,
+    },
+}
+impl NativeReadWriterLifetime {
+    fn require_live(&self) -> Result<()> {
+        match self {
+            Self::LegacyComponent => Ok(()),
+            Self::Enforced { writer, slot, .. } => {
+                slot.require_live()?;
+                writer
+                    .upgrade()
+                    .ok_or_else(|| invalid("native read original writer lifetime ended"))?
+                    .require_read_lifetime()
+            }
+        }
+    }
+}
+#[derive(Debug)]
 pub(crate) struct NativeRangeReadPhysical {
     native: NativeRecoveryAdmission,
     scope: NativeRangeReadScope,
@@ -43,6 +70,7 @@ pub(crate) struct NativeRangeReadPhysical {
     store_open_id: Uuid,
     catalogue_sha256: String,
     cancellation: CancellationToken,
+    writer: NativeReadWriterLifetime,
 }
 impl NativeRangeReadPhysical {
     /// Compare a lower peer point with actual immutable local history. This
@@ -73,6 +101,19 @@ impl NativeRangeReadPhysical {
         }
         self.require_lifetime()
     }
+    pub(crate) fn require_service_identity(
+        &self,
+        cluster: &ClusterId,
+        node: &ClusterNodeId,
+    ) -> Result<()> {
+        self.require_lifetime()?;
+        if self.scope.cluster_id != *cluster || self.point.node_id != *node {
+            return Err(invalid(
+                "native read source belongs to another actual service",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn local_visibility(&self) -> &NativeReadLocalDbSequence {
         &self.local_b
     }
@@ -85,6 +126,7 @@ impl NativeRangeReadPhysical {
     pub(crate) fn require_lifetime(&self) -> Result<()> {
         self.cancellation.check()?;
         self.stamp.require_current()?;
+        self.writer.require_live()?;
         if self.directory.upgrade().is_none() {
             return Err(invalid("native read database lifetime ended"));
         }
@@ -162,12 +204,30 @@ impl BicDb {
         self.check_recovery_state()?;
         let fingerprint = self.schema_compatibility_fingerprint()?;
         let lineage = self.current_native_range_source_lineage(scope.range.id)?;
+        self.native_read_point_from_lineage(
+            scope,
+            catalogue,
+            cancellation,
+            &lineage,
+            &fingerprint.sha256,
+        )
+    }
+    // Caller either runs the unchanged full standalone producer above or holds
+    // the private serving-observation scope's actual journal+validated lineage.
+    fn native_read_point_from_lineage(
+        &self,
+        scope: &NativeRangeReadScope,
+        catalogue: &NativeRangeReadCatalogue,
+        cancellation: &CancellationToken,
+        lineage: &SourceRangeImageLineage,
+        fingerprint_sha256: &str,
+    ) -> Result<PhysicalPoint> {
         let actual_members = lineage.native_write_members()?;
         if lineage.cluster_id() != &scope.cluster_id
             || lineage.bootstrap_id() != scope.bootstrap_id
             || canonical_range(lineage.native_write_range()?) != canonical_range(&scope.range)
             || lineage.schema_sha256() != scope.schema_sha256
-            || fingerprint.sha256 != scope.schema_sha256
+            || fingerprint_sha256 != scope.schema_sha256
             || lineage.restore_activation() != scope.restore_activation.as_ref()
             || !scope
                 .members
@@ -280,6 +340,7 @@ impl BicDb {
             store_open_id: catalogue.store_open_id(),
             catalogue_sha256: catalogue.checksum_sha256().into(),
             cancellation: parent.child(),
+            writer: NativeReadWriterLifetime::LegacyComponent,
         };
         result.require_lifetime()?;
         Ok(result)

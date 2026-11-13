@@ -335,6 +335,37 @@ impl NativePrepareOnlyRejection {
         self.local_data_visibility
     }
 }
+enum AbortReadValidation<'scope, 'db> {
+    Standalone,
+    Serving(&'scope crate::db::NativeServingObservationScope<'db>),
+}
+impl AbortReadValidation<'_, '_> {
+    fn history(
+        &self,
+        db: &crate::BicDb,
+        range: RangeId,
+        native_r: u64,
+        indices: impl Iterator<Item = u64>,
+    ) -> Result<()> {
+        match self {
+            Self::Standalone => db.require_native_abort_control_history(range, native_r, indices),
+            Self::Serving(scope) => db.require_native_abort_control_history_in_read_scope(
+                scope, range, native_r, indices,
+            ),
+        }
+    }
+    fn receipt(&self, db: &crate::BicDb, range: RangeId, index: u64, expected: &str) -> Result<()> {
+        match self {
+            Self::Standalone => {
+                db.require_actual_native_abort_decision_digest(range, index, expected)
+            }
+            Self::Serving(scope) => db.require_actual_native_abort_decision_digest_in_read_scope(
+                scope, range, index, expected,
+            ),
+        }
+    }
+}
+
 impl RangeWriteStore {
     pub(crate) fn abort_catalogue_owner(root: &Path) -> Result<bicdb_page::DirectoryLock> {
         let owned = root.join("native-range-catalogue-owner");
@@ -595,6 +626,34 @@ impl RangeWriteStore {
         range_id: RangeId,
         actual_native_r: u64,
     ) -> Result<()> {
+        self.require_actual_abort_controls_read(
+            db,
+            range_id,
+            actual_native_r,
+            AbortReadValidation::Standalone,
+        )
+    }
+    pub(crate) fn require_actual_abort_controls_in_read_scope(
+        &self,
+        scope: &crate::db::NativeServingObservationScope<'_>,
+    ) -> Result<()> {
+        let db = scope.database();
+        scope.require_database_store(db, self)?;
+        let (range, native_r) = scope.actual_range_point();
+        self.require_actual_abort_controls_read(
+            db,
+            range,
+            native_r,
+            AbortReadValidation::Serving(scope),
+        )
+    }
+    fn require_actual_abort_controls_read(
+        &self,
+        db: &crate::BicDb,
+        range_id: RangeId,
+        actual_native_r: u64,
+        read: AbortReadValidation<'_, '_>,
+    ) -> Result<()> {
         self.require_actual_abort_catalogue(db)?;
         if db.native_abort_catalogue_store_id()?.is_none() {
             return Ok(());
@@ -614,7 +673,8 @@ impl RangeWriteStore {
                 "actual protected abort inventory differs from range catalogue",
             ));
         }
-        db.require_native_abort_control_history(
+        read.history(
+            db,
             range_id,
             actual_native_r,
             actual.iter().map(|r| r.command.index),
@@ -643,11 +703,7 @@ impl RangeWriteStore {
                 )));
             }
             if let Some(expected) = &slot.resolved_native_receipt_sha256 {
-                db.require_actual_native_abort_decision_digest(
-                    range_id,
-                    record.command.index,
-                    expected,
-                )?;
+                read.receipt(db, range_id, record.command.index, expected)?;
             }
             let promise = db.observe_actual_native_abort_promise(range_id, record.command.index)?;
             match (&slot.promise, promise) {

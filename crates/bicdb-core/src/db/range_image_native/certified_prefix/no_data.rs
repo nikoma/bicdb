@@ -205,6 +205,34 @@ impl BicDb {
             .ok_or_else(|| invalid("catalogue abort receipt lacks actual protected decision"))?;
         record.validate(&birth)?;
         let source = self.current_native_range_source_lineage(range)?;
+        self.validate_native_abort_decision_at_lineage(&record, &source, range, index, expected)
+    }
+    pub(crate) fn require_actual_native_abort_decision_digest_in_read_scope(
+        &self,
+        scope: &NativeServingObservationScope<'_>,
+        range: RangeId,
+        index: u64,
+        expected: &str,
+    ) -> Result<()> {
+        let birth = self
+            .read_native_birth()?
+            .ok_or_else(|| invalid("abort decision birth missing"))?;
+        let record: NativeAbortDecisionRecord = self
+            .read_native_range_image_record(&decision_key(range, index))?
+            .ok_or_else(|| invalid("catalogue abort receipt lacks actual protected decision"))?;
+        record.validate(&birth)?;
+        let source = scope.lineage(self)?;
+        scope.require_range(range, source.range_index())?;
+        self.validate_native_abort_decision_at_lineage(&record, source, range, index, expected)
+    }
+    fn validate_native_abort_decision_at_lineage(
+        &self,
+        record: &NativeAbortDecisionRecord,
+        source: &SourceRangeImageLineage,
+        range: RangeId,
+        index: u64,
+        expected: &str,
+    ) -> Result<()> {
         let entry = self.read_native_history_entry(range, source.history_generation(), index)?;
         if record.checksum_sha256 != expected
             || record.scope.range_id != range

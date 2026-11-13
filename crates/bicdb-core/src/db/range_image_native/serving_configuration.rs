@@ -329,6 +329,38 @@ impl BicDb {
         }
         Ok(Some(record))
     }
+    /// Same-call serving observation only. The typed scope owns the actual
+    /// journal/lineage; its native current record and immutable archive must
+    /// still agree. No historical record becomes Ready or a read permission.
+    pub(in crate::db::range_image_native) fn require_native_serving_read_archive(
+        &self,
+        scope: &NativeServingObservationScope<'_>,
+    ) -> Result<()> {
+        let actual = scope.lineage(self)?;
+        let current = self.read_native_recovered_serving_configuration(
+            &actual.birth,
+            &actual.base,
+            actual.prefix.as_ref(),
+        )?;
+        if current != actual.serving {
+            return Err(invalid(
+                "serving read actual current serving pointer changed",
+            ));
+        }
+        if let Some(record) = current {
+            let archive: NativeRecoveredServingConfiguration = self
+                .read_native_range_image_record(&history_key(
+                    record.range.id,
+                    &record.checksum_sha256,
+                ))?
+                .ok_or_else(|| invalid("serving read immutable serving archive missing"))?;
+            archive.validate_historical_floor(&actual.birth, &actual.base)?;
+            if archive != record {
+                return Err(invalid("serving read actual current/archive differ"));
+            }
+        }
+        Ok(())
+    }
     /// Historical completion anchor only. The actual native head may exceed
     /// R; this cannot become NativeReady or a current-prefix/read permit.
     pub(crate) fn observe_native_activated_completion_anchor(

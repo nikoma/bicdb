@@ -117,7 +117,9 @@ pub(crate) use range_image_native::{
 pub(crate) use range_image_native::{
     NativeOriginAppSpan, NativeOriginFaultArm, NativeOriginFaultProbe,
 };
-pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
+pub(crate) use range_image_native::{
+    NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,
+};
 mod range_image_bindings;
 pub(crate) use range_image_bindings::RangeImageDbBindings;
 pub(crate) use range_image_native::ClosedImageOriginalWriter;

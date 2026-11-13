@@ -293,7 +293,51 @@ impl NativeReadQuorumRound {
             .get(&self.local_node)
             .and_then(|o| o.local())
             .ok_or_else(|| invalid("actual same-service local read observation unavailable"))?;
-        local.require_current(service)?;
+        if local
+            .physical()
+            .native_admission()
+            .writer_enforcement_version()
+            != 1
+        {
+            local.require_current(service)?;
+        }
+        let matching = if local
+            .physical()
+            .native_admission()
+            .writer_enforcement_version()
+            == 1
+        {
+            service.with_native_serving_read_observation(local, &self.cancellation, |actual| {
+                self.require_live()?;
+                let matching =
+                    self.matching_at_local_point(local, |facts| actual.require_ancestor(facts))?;
+                self.require_live()?;
+                Ok(matching)
+            })?
+        } else {
+            self.matching_at_local_point(local, |facts| {
+                service.require_native_read_ancestor(local, facts)
+            })?
+        };
+        if local
+            .physical()
+            .native_admission()
+            .writer_enforcement_version()
+            != 1
+        {
+            local.require_current(service)?;
+        }
+        self.require_live()?;
+        Ok(NativeReadQuorumCandidate {
+            round: self,
+            matching,
+        })
+    }
+    fn matching_at_local_point(
+        &self,
+        local: &LocalNativeRangeReadObservation,
+        mut ancestor: impl FnMut(&NativeRangeReadFacts) -> Result<()>,
+    ) -> Result<BTreeSet<ClusterNodeId>> {
         let point = local.facts();
 
         // STRONG_TRACE_BEGIN
@@ -315,12 +359,12 @@ impl NativeReadQuorumRound {
             if facts.range_index == point.range_index {
                 matching.insert(node.clone());
             } else {
-                service.require_native_read_ancestor(local, facts)?;
+                ancestor(facts)?;
             }
         }
         for facts in &self.expired_constraints {
             if facts.range_index < point.range_index {
-                service.require_native_read_ancestor(local, facts)?;
+                ancestor(facts)?;
             }
         }
         if matching.len() < self.request.scope.members.len() / 2 + 1 {
@@ -328,12 +372,7 @@ impl NativeReadQuorumRound {
                 "distinct matching current-voter read majority unavailable",
             ));
         }
-        local.require_current(service)?;
-        self.require_live()?;
-        Ok(NativeReadQuorumCandidate {
-            round: self,
-            matching,
-        })
+        Ok(matching)
     }
 }
 /// No admission bit/constructor, no numeric snapshot-floor accessor and no

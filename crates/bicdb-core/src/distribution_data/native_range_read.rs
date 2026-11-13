@@ -93,6 +93,27 @@ impl ClusterDataNodeService {
         parent: &CancellationToken,
     ) -> Result<LocalNativeRangeReadObservation> {
         let cancellation = request.cancellation(parent)?;
+        if self.native_writer_enforcement_version()? == 1 {
+            let database = checked_database_read(&self.db, &self.storage_policy)?;
+            self.require_native_catalog_database(&database)?;
+            let slot = self.range_writes.guard();
+            let (physical, catalogue) = database.observe_enforced_native_range_read(
+                &self.range_writes,
+                &slot,
+                &request.scope,
+                &cancellation,
+            )?;
+            physical.require_service_identity(&self.cluster_id, &self.node_id)?;
+            cancellation.check()?;
+            return LocalNativeRangeReadObservation::from_actual_service(
+                ActualServiceNativeReadEvidence {
+                    request: request.clone(),
+                    physical,
+                    catalogue,
+                    cancellation,
+                },
+            );
+        }
 
         // STRONG_TRACE_BEGIN
         #[cfg(test)]
@@ -248,6 +269,13 @@ impl ClusterDataNodeService {
             crate::distribution_native_read::trace::Span::current("read-local-revalidate");
         // STRONG_TRACE_END
         observation.require_lifetime()?;
+        if self.native_writer_enforcement_version()? == 1 {
+            return self.with_native_serving_read_observation(
+                observation,
+                observation.cancellation(),
+                |_| Ok(()),
+            );
+        }
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         let scope = observation.scope();
@@ -277,5 +305,31 @@ impl ClusterDataNodeService {
             .physical()
             .require_current(&database, observation.catalogue())?;
         observation.require_lifetime()
+    }
+    pub(crate) fn with_native_serving_read_observation<R>(
+        &self,
+        observation: &LocalNativeRangeReadObservation,
+        parent: &CancellationToken,
+        action: impl for<'scope> FnOnce(&crate::db::NativeServingObservationScope<'scope>) -> Result<R>,
+    ) -> Result<R> {
+        parent.check()?;
+        observation.require_lifetime()?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
+        self.require_native_catalog_database(&database)?;
+        observation
+            .physical()
+            .require_service_identity(&self.cluster_id, &self.node_id)?;
+        let slot = self.range_writes.guard();
+        let result = database.with_existing_native_serving_read_scope(
+            observation.physical(),
+            observation.catalogue(),
+            &self.range_writes,
+            &slot,
+            parent,
+            action,
+        )?;
+        observation.require_lifetime()?;
+        parent.check()?;
+        Ok(result)
     }
 }

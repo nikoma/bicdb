@@ -523,6 +523,36 @@ impl BicDb {
         indices: impl Iterator<Item = u64>,
     ) -> Result<()> {
         let source = self.current_native_range_source_lineage(range_id)?;
+        self.validate_native_abort_control_history_at_lineage(
+            &source,
+            range_id,
+            actual_native_r,
+            indices,
+        )
+    }
+    pub(crate) fn require_native_abort_control_history_in_read_scope(
+        &self,
+        scope: &NativeServingObservationScope<'_>,
+        range_id: RangeId,
+        actual_native_r: u64,
+        indices: impl Iterator<Item = u64>,
+    ) -> Result<()> {
+        scope.require_range(range_id, actual_native_r)?;
+        let source = scope.lineage(self)?;
+        self.validate_native_abort_control_history_at_lineage(
+            source,
+            range_id,
+            actual_native_r,
+            indices,
+        )
+    }
+    fn validate_native_abort_control_history_at_lineage(
+        &self,
+        source: &SourceRangeImageLineage,
+        range_id: RangeId,
+        actual_native_r: u64,
+        indices: impl Iterator<Item = u64>,
+    ) -> Result<()> {
         if source.range_index() != actual_native_r {
             return Err(invalid(
                 "abort control closure belongs to another actual native prefix",

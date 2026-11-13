@@ -106,6 +106,11 @@ impl NativeWriterHostState {
             .map_err(|error| BicDbError::PagedStorage(error.to_string()))?;
         Ok(registration)
     }
+    /// Necessary original writer/registration lifetime refusal for an owned
+    /// read observation. Full actual DB/hook/registry checks remain scoped.
+    pub(in crate::db::range_image_native) fn require_read_lifetime(&self) -> Result<()> {
+        self.require_lifetime().map(|_| ())
+    }
     pub(crate) fn require_store(&self, root: &Path, open_id: Uuid) -> Result<()> {
         self.require_lifetime()?;
         if open_id != self.record.store_open_id
@@ -173,6 +178,16 @@ impl NativeWriterHostState {
             ));
         }
         self.require_range(range)
+    }
+    /// Necessary read boundary only: same existing original registration,
+    /// DB/open, hook, schema/health and immutable DATA policy checks. This
+    /// unit preflight grants neither activation nor a serving observation.
+    pub(in crate::db::range_image_native) fn require_read_database_lifetime(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+    ) -> Result<()> {
+        self.require_activation_lifetime(database, range)
     }
     pub(crate) fn require_database(&self, database: &BicDb, range: &RangeDescriptor) -> Result<()> {
         self.require_original_database(database, range)?;

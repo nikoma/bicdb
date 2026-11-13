@@ -209,6 +209,9 @@ impl LocalNativeRangeReadObservation {
     pub(crate) fn local_visibility(&self) -> &crate::db::NativeReadLocalDbSequence {
         self.physical.local_visibility()
     }
+    pub(crate) fn cancellation(&self) -> &CancellationToken {
+        &self.cancellation
+    }
     pub(crate) fn require_lifetime(&self) -> Result<()> {
         self.cancellation.check()?;
         self.physical.require_lifetime()

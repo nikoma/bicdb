@@ -995,3 +995,5 @@ mod joint_old_closure_tests;
 mod native_abort_cold;
 mod native_abort_tests;
 mod service_open_guard_tests;
+
+mod serving_observation_scope_tests;

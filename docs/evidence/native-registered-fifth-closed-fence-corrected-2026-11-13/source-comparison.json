@@ -1,0 +1,15 @@
+{
+  "base": "da56e489a34c1776e97a4ea089c1f250215cf8dc",
+  "source": "550c23d0458ab7a4e10af94d1cc625a7eb69bb89",
+  "only_changed_paths": [
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/closed_fence_controls.rs",
+    "docs/design/native-assigned-registered-closed-fence-source.md"
+  ],
+  "numstat": [
+    "25\t5\tcrates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/closed_fence_controls.rs",
+    "35\t0\tdocs/design/native-assigned-registered-closed-fence-source.md"
+  ],
+  "patch_sha256": "cfa386cb6df381c5a1d9fd23f04d4cd3b2f8c4e47c4997a477bfe100ae51c011",
+  "production_changes": false,
+  "old_failed_result_preserved": true
+}

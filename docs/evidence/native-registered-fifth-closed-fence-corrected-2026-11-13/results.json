@@ -1,0 +1,73 @@
+{
+  "source": "550c23d0458ab7a4e10af94d1cc625a7eb69bb89",
+  "run": 43352756475,
+  "core_job": 131647532734,
+  "workflow": "success",
+  "runtime": {
+    "passed": 10,
+    "failed": 0,
+    "ignored": 0,
+    "filtered": 980,
+    "seconds": 22.45
+  },
+  "tests": [
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_sink_fsync_then_original_cancel_retains_refusal",
+      "case": "SinkCanceled",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_foreign_database_refused",
+      "case": "Foreign",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_durable_invalidation_is_not_unknown_absence",
+      "case": "ActualInvalidation",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_receiver_stop_refused",
+      "case": "Stopped",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_generic_ingress_stays_strict",
+      "case": "Ingress",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_captured_original_caller_cancel_refused",
+      "case": "Canceled",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_sink_io_unknown_exact_live_refsync",
+      "case": "SinkIoUnknown",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_store_slot_restore_refused",
+      "case": "SlotAba",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_baseline",
+      "case": "Required",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_original_empty_hook_aba_refused",
+      "case": "HookAba",
+      "result": "ok"
+    }
+  ],
+  "correction": {
+    "source": "550c23d0458ab7a4e10af94d1cc625a7eb69bb89",
+    "executed_in_this_run": true
+  },
+  "physical_qualification": false,
+  "engine_replay": false,
+  "rows_transferred": false,
+  "automatic_relocation": false
+}

@@ -1325,6 +1325,12 @@ pub struct CollectionMeta {
     /// Portable schema/replication metadata must not transfer this identity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub local_namespace_id: Option<uuid::Uuid>,
+    /// Allocation-time identity of this local backing, written only while
+    /// `native_collection_birth_v1` is active. Unlike a migrated namespace ID,
+    /// this is never assigned to an existing collection. It is an identity,
+    /// not an import receipt, source attestation or recovery authorization.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_backing_birth_id: Option<uuid::Uuid>,
 }
 
 impl CollectionMeta {
@@ -1338,6 +1344,7 @@ impl CollectionMeta {
     pub fn portable_contract(&self) -> Self {
         let mut portable = self.clone();
         portable.local_namespace_id = None;
+        portable.native_backing_birth_id = None;
         portable
     }
 
@@ -1353,6 +1360,7 @@ impl CollectionMeta {
             storage_name: None,
             renamed_from: None,
             local_namespace_id: None,
+            native_backing_birth_id: None,
         }
     }
 
@@ -1368,6 +1376,7 @@ impl CollectionMeta {
             storage_name: None,
             renamed_from: None,
             local_namespace_id: None,
+            native_backing_birth_id: None,
         }
     }
 }

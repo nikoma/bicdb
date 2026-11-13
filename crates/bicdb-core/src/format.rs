@@ -31,6 +31,8 @@ pub const SQL_RENAME_INTENTS_FEATURE_FLAG: &str = "sql_rename_intents_v1";
 /// Node-local namespace lineage. Never replicate this as a portable schema
 /// reader capability: each destination activates and owns its own identities.
 pub const LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG: &str = "local_namespace_identity_v1";
+/// Future-only local allocation identities, never portable reader authority.
+pub const NATIVE_COLLECTION_BIRTH_FEATURE_FLAG: &str = "native_collection_birth_v1";
 /// Local native image receipts require writers that honor image invalidation.
 /// This capability is separate from namespace IDs and is never portable schema.
 pub const RANGE_IMAGE_INSTALL_FEATURE_FLAG: &str = "range_image_install_v1";
@@ -67,6 +69,7 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     SQL_CATALOG_INTENTS_FEATURE_FLAG,
     SQL_RENAME_INTENTS_FEATURE_FLAG,
     LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
+    NATIVE_COLLECTION_BIRTH_FEATURE_FLAG,
     RANGE_IMAGE_INSTALL_FEATURE_FLAG,
     CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG,
     NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
@@ -793,6 +796,27 @@ pub(crate) fn enable_local_namespace_identity(root: &Path) -> Result<()> {
     metadata
         .feature_flags
         .insert(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+/// Fence older readers/writers before a new backing can acquire a birth ID.
+/// Retrying this fence must not manufacture identities for older backings.
+pub(crate) fn enable_native_collection_birth(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "Native collection birth requires local namespace identities".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_COLLECTION_BIRTH_FEATURE_FLAG.into());
     persist_metadata(root, &metadata, true)
 }
 

@@ -76,6 +76,7 @@ impl BicDb {
     pub(super) fn new_local_collection_metadata(&self, meta: &CollectionMeta) -> CollectionMeta {
         let mut local = meta.portable_contract();
         local.local_namespace_id = self.fresh_local_namespace_identity();
+        local.native_backing_birth_id = self.fresh_native_collection_birth();
         local
     }
 }

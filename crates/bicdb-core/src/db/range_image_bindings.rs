@@ -9,6 +9,7 @@ const MAX_IMAGE_CATALOG_BYTES: usize = 8 * 1024 * 1024;
 struct NamespacePin {
     name: String,
     local_id: Uuid,
+    backing_birth_id: Option<Uuid>,
     incarnation: Arc<()>,
 }
 
@@ -100,6 +101,7 @@ impl BicDb {
             namespaces.push(NamespacePin {
                 name,
                 local_id,
+                backing_birth_id: state.meta.native_backing_birth_id,
                 incarnation: Arc::clone(&state.incarnation),
             });
             portable_collections.push(state.meta.portable_contract());
@@ -142,6 +144,7 @@ impl BicDb {
             let state = self.collection_state(&pin.name)?;
             if !Arc::ptr_eq(&state.incarnation, &pin.incarnation)
                 || self.local_namespace_identity(&pin.name)? != Some(pin.local_id)
+                || state.meta.native_backing_birth_id != pin.backing_birth_id
             {
                 return Err(BicDbError::Cluster(format!(
                     "range image namespace `{}` changed physical lineage; discard this capture",
@@ -386,6 +389,40 @@ mod tests {
                 db.close().unwrap();
             }
         }
+    }
+
+    #[test]
+    fn range_image_bindings_pin_allocation_birth_separately_from_local_namespace() {
+        let root = tempfile::tempdir().unwrap();
+        let mut db = populated(root.path());
+        db.activate_native_collection_birth_v1().unwrap();
+        assert_eq!(db.native_collection_birth_id("items").unwrap(), None);
+        db.create_collection("born").unwrap();
+        db.schema_compatibility_fingerprint().unwrap();
+        let bindings = db.capture_range_image_bindings().unwrap();
+        let namespace = db.local_namespace_identity("born").unwrap();
+        let birth = db.native_collection_birth_id("born").unwrap();
+        assert!(birth.is_some());
+        assert!(bindings.collections().iter().all(
+            |meta| meta.native_backing_birth_id.is_none() && meta.local_namespace_id.is_none()
+        ));
+        assert!(!bindings
+            .reader_features()
+            .iter()
+            .any(|f| f == format::NATIVE_COLLECTION_BIRTH_FEATURE_FLAG));
+        // White-box corruption control: a digest and local namespace alone
+        // must not validate a capture after its allocation identity changes.
+        db.collection_state_mut("born")
+            .unwrap()
+            .meta
+            .native_backing_birth_id = Some(Uuid::new_v4());
+        assert_eq!(db.local_namespace_identity("born").unwrap(), namespace);
+        assert!(db.validate_range_image_bindings(&bindings).is_err());
+        db.collection_state_mut("born")
+            .unwrap()
+            .meta
+            .native_backing_birth_id = birth;
+        db.validate_range_image_bindings(&bindings).unwrap();
     }
 
     #[test]

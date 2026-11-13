@@ -13,6 +13,7 @@ mod native_calendar;
 use exact_decimal_sum::ExactDecimalSum;
 mod local_namespace_identity;
 mod mutation_identity;
+mod native_collection_birth;
 mod sql_partition_execution;
 pub use sql_partition_execution::CollectionCacheStamp;
 mod native_wal_apply;
@@ -3997,6 +3998,7 @@ pub struct BicDb {
     config: DbConfig,
     // Opt-in, sticky local format capability; never a portable reader flag.
     local_namespace_identity_active: bool,
+    native_collection_birth_active: bool,
     sql_partition_execution_v1_active: AtomicBool,
     ha_state: HaState,
     replication_state: ReplicationApplyState,
@@ -10615,9 +10617,16 @@ impl BicDb {
         let format_capabilities = format::read_or_legacy_metadata(&path)?.feature_flags;
         let local_namespace_identity_active =
             format_capabilities.contains(format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG);
+        let native_collection_birth_active =
+            format_capabilities.contains(format::NATIVE_COLLECTION_BIRTH_FEATURE_FLAG);
         let sql_partition_execution_v1_active =
             format_capabilities.contains(format::SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG);
         local_namespace_identity::validate_catalog(&metas, local_namespace_identity_active)?;
+        native_collection_birth::validate_catalog(
+            &metas,
+            native_collection_birth_active,
+            local_namespace_identity_active,
+        )?;
         // Physical storage names must be known before any row is read, and an
         // interrupted rename (renamed_from still set) maps index definitions
         // still recorded under the old name.
@@ -11402,6 +11411,7 @@ impl BicDb {
             native_metadata_open_lifetime: Arc::new(()),
             config,
             local_namespace_identity_active,
+            native_collection_birth_active,
             sql_partition_execution_v1_active: AtomicBool::new(sql_partition_execution_v1_active),
             ha_state,
             replication_state,
@@ -13294,6 +13304,7 @@ impl BicDb {
             storage_name: storage_name.clone(),
             renamed_from: None,
             local_namespace_id: self.fresh_local_namespace_identity(),
+            native_backing_birth_id: self.fresh_native_collection_birth(),
         };
         if let Some(storage) = storage_name {
             self.set_storage_alias(name, &storage);

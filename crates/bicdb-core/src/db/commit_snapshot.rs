@@ -261,6 +261,7 @@ impl BicDb {
                     storage_name: None,
                     renamed_from: None,
                     local_namespace_id: self.fresh_local_namespace_identity(),
+                    native_backing_birth_id: self.fresh_native_collection_birth(),
                 };
                 self.collections.insert(
                     write.collection.clone(),
@@ -1676,6 +1677,11 @@ impl BicDb {
         let mut collections = self.collections();
         local_namespace_identity::validate_catalog(
             &collections,
+            self.local_namespace_identity_active,
+        )?;
+        native_collection_birth::validate_catalog(
+            &collections,
+            self.native_collection_birth_active,
             self.local_namespace_identity_active,
         )?;
         collections.sort_by(|left, right| left.name.cmp(&right.name));

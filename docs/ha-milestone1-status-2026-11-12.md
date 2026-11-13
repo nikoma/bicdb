@@ -10,13 +10,44 @@ larger recovery/relocation candidate remains unmerged; its source-scoped results
 
 ## Current operational verdict
 
-Remote main is source **1.0.490-beta**, `702f0435a12944563c7751525f8429d80374a3d0`,
-at this documentation checkpoint. The read-safety foundation below is merged;
+Verified GitHub main is **1.0.491-beta**, `be388fdb20c53ea47ca57003aa7df9087a3ee0a1`
+([documentation/evidence PR166](https://github.com/nikoma/bicdb/pull/166)). The
+read-safety foundation below is already merged. The newer native runtime
+candidate remains **unmerged**, with separately pinned results; no release binary,
+verified deployment or production admission follows from these results.
+
+| Scope | Classification | Exact evidence and practical limit |
+| --- | --- | --- |
+| Autonomous same-original-origin committed-tail repair, all recipients reachable | **Passed component** | `8334a99e…`: original two controls pass; `60c47ae2…`: all six repair controls pass. Actual first Unknown remains Unknown, exact old/committed Strong values and next ACK follow without a fixture maintenance tick. Three actual NativeHosts/TLS in **one Core process**. [Full journal and prior failures](evidence/native-hot-origin-recovery-2026-11-12/README.md). |
+| Serving observations, independently fresh finish and after-entry serving CURRENT/archive damage | **Passed focused cohort** | `ca8383ef36190c6c69cc8853cd51dd7803c7cc52`, [run43341692634](https://github.com/nikoma/bicdb/actions/runs/43341692634): **9/0**, 10.43s; all-target and isolated consumer checks pass. Prior `5cec…` **8/1 failed** on its schema-invalidated post-fault diagnostic; the successor changes only test diagnostics and preserves all refusal assertions. |
+| Public native CLI acceptance | **Passed six-case cohort** | `5cec7687196fe6b113805485672e8730c8295a56`, [run43340175836](https://github.com/nikoma/bicdb/actions/runs/43340175836): **6/0**, 71.94s; compile/consumer pass. Separate localhost processes; cold coverage is **METADATA**. Registered fifth remains DATA-unserved; no DATA movement. |
+| Unchanged four post-catalogue fault controls | **Failed cohort: 3/1** | Same `5cec…`, [run43339165885](https://github.com/nikoma/bicdb/actions/runs/43339165885): 88.59s. All four StrongR2 prerequisites now pass and three actual cuts complete. Missing-archive cut is **not reached**: an earlier genuine fence collector rejects n3 at its original deadline. Business-parent time remaining does not establish role/collector liveness. [Precise source audit](design/native-current-joint-fence-collector-5cec.md). |
+| One unavailable RF3 voter during hot repair | **Not tested; source blocker identified** | The outer controller waits for every recipient despite inner majority-capable collectors. Permanent n1 loss stalls its first required phase. A required-success actual-owner witness is under review; safe unavailability will not count as a pass. [Source audit and deterministic test contract](design/native-hot-origin-one-peer-loss-audit.md). |
+| Genuine fifth assigned-receiver handoff | **Not yet established** | Separate test-only `a98c6a6b1390b0a3853e4ae658e8e103a7749b19` has been dispatched. It requires two actual TLS fences on the same genuine no-INITIAL/no-writer fifth, retaining the four original writers and source ACKs. Until an actual result is retained it is **not tested**, not a movement result. [Producer gap](design/native-registered-fifth-closed-image-producer-audit.md). |
+| Physical automatic four-to-five expansion, convergence and sustained capacity gain | **Failed original qualification; no successful successor** | Original Azure status remains FAILED. No new physical run or stable five-node throughput comparison, RPO/RTO or hardware latency qualification is delivered. |
+
+[Full nine/six receipts, logs and all three public attempt journals](evidence/native-serving-cli-focused-2026-11-13/README.md)
+keep six business ACKs across three **different** fixtures separate from retries,
+the pre-quorum unknown write and the unsuccessful pre-open read. No engine replay
+or durable reconciliation of that unknown is inferred. No successful Strong
+absence is equated with an error or JSON null. General transparent cross-range
+PostgreSQL transactions and distributed SQL remain separate unfinished work.
+
+The retained-original-writer C1 image lane also has its source-pinned five passing
+controls; it does not supply genuine Registered fifth admission. Current native
+image/wire/controller, one-peer and cold DATA recovery, all-owner crash safety,
+complete automatic relocation and physical scale-out gates remain open. Source
+repairs and limited test passes do not qualify the overall HA/scaling product.
+
+## Historical source721 operational checkpoint
+
+Remote main was source **1.0.490-beta**, `702f0435a12944563c7751525f8429d80374a3d0`,
+at that documentation checkpoint. The read-safety foundation below is merged;
 the larger candidate is not. The proposed 1.0.491-beta delivery contains only
 documentation/evidence and synchronized version metadata, not these candidate
 implementation changes, a new binary or a deployment.
 
-The newest executed autonomous-recovery baseline is **failed**, exact candidate
+At this older checkpoint, the newest executed autonomous-recovery baseline was **failed**, exact candidate
 `721c329de4196aeef96604642c439fe7d8ddb0bf`,
 [run 43325316433](https://github.com/nikoma/bicdb/actions/runs/43325316433):
 one control passed, one required recovery test failed, 957 filtered, 26.04s.
@@ -85,9 +116,9 @@ assertions unexecuted, remain preserved. These are eight distinct tests across
 14 executions, **13 passed plus one preserved failure**, not 14 distinct tests.
 
 This is **three actual NativeHosts/RF3/TLS in one Core process**, all recipients
-reachable. It does not close the four failing StrongR2 prerequisites below,
+reachable. It does not establish the complete post-catalogue fault cohort above,
 genuine fifth-node DATA image/joint/controller integration, public-process
-repair acceptance, cold/higher-domain or one-peer-loss recovery, sustained
+injected-tail repair acceptance, cold/higher-domain or one-peer-loss recovery, sustained
 capacity, physical RPO/RTO, or the overall production gate. No implementation
 main merge, release binary or deployment follows from this evidence. Original
 Azure FAILED status is unchanged. The raw generic Core Unknown advice to reopen

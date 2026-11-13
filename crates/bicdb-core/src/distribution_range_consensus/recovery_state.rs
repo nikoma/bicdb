@@ -1015,7 +1015,19 @@ impl RangeWriteStore {
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
     ) -> Result<()> {
         self.recovery_persistence_uncertain = true;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark(
+            "fence-catalogue-durable-write-begin",
+        );
+        // FENCE_TRACE_END
         self.persist_with(write)?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-catalogue-durable-write-ok");
+        // FENCE_TRACE_END
+
         self.recovery_persistence_uncertain = false;
         Ok(())
     }

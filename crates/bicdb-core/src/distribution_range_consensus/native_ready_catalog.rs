@@ -83,7 +83,17 @@ impl RangeWriteStore {
         frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
     ) -> Result<RecoveryImageHistoryObligationsV1> {
         self.require_persisted_recovery_scope(scope)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("response-native-current-begin");
+        // FENCE_TRACE_END
         native.require_current(db)?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("response-native-current-ok");
+        // FENCE_TRACE_END
+
         let saved = &self.catalog.recovery_fences[&scope.range_id];
         if !self.fsync
             || self.root.canonicalize()? != db.data_path().canonicalize()?
@@ -98,12 +108,31 @@ impl RangeWriteStore {
                 "fenced history observation has another actual native/store identity",
             ));
         }
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark(
+            "response-native-install-safety-begin",
+        );
+        // FENCE_TRACE_END
         let safety = db.native_range_install_safety(native, scope.range_id, frozen)?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("response-native-install-safety-ok");
+        // FENCE_TRACE_END
+
         let log = self
             .catalog
             .ranges
             .get(&scope.range_id)
             .ok_or_else(|| range_write_error("fenced history range is absent"))?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark(
+            "response-irreversible-inventory-begin",
+        );
+        // FENCE_TRACE_END
         let mut irreversible_command_sha256 = BTreeMap::new();
         for entry in log.entries.values().filter(|entry| {
             matches!(
@@ -172,8 +201,18 @@ impl RangeWriteStore {
             irreversible_command_sha256,
             sparse_committed_command_sha256,
         };
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("response-irreversible-inventory-ok");
+        // FENCE_TRACE_END
         observed.require_shape(scope, &self.progress(scope.range_id))?;
         self.require_persisted_recovery_scope(scope)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("response-image-obligations-ok");
+        // FENCE_TRACE_END
         Ok(observed)
     }
     /// Compaction may remove a command payload while the durable current-

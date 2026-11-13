@@ -1211,23 +1211,67 @@ impl ClusterDataNodeService {
         cancellation: &crate::CancellationToken,
     ) -> Result<()> {
         cancellation.check()?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("preflight-db-acquire-begin");
+        // FENCE_TRACE_END
         let db = checked_database_read(&self.db, &self.storage_policy)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("preflight-db-acquire-ok");
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("preflight-native-admission-begin");
+        // FENCE_TRACE_END
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
             role.local_node_id(),
             role.local_member_incarnation(),
         )?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("preflight-native-admission-ok");
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("preflight-native-current-begin");
+        // FENCE_TRACE_END
         native.require_current(&db)?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("preflight-native-current-ok");
+        // FENCE_TRACE_END
+
         if matches!(
             role.purpose(),
             crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
         ) {
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("preflight-joint-domain-begin");
+            // FENCE_TRACE_END
             let fact = db.observe_current_joint_recovery_domain(
                 &self.range_writes,
                 scope.range_id,
                 cancellation,
             )?;
+
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("preflight-joint-domain-ok");
+            // FENCE_TRACE_END
+
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("preflight-joint-store-begin");
+            // FENCE_TRACE_END
             self.range_writes
                 .preflight_current_joint_recovery(&db, role, &native, scope, &fact)
         } else {
@@ -1399,14 +1443,44 @@ impl ClusterDataNodeService {
         self.range_mutations
             .validate_quiescent_frozen(scope.range_id, frozen)?;
         cancellation.check()?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-db-acquire-begin");
+        // FENCE_TRACE_END
         let db = checked_database_read(&self.db, &self.storage_policy)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-db-acquire-ok");
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-native-admission-begin");
+        // FENCE_TRACE_END
         let native = db.native_recovery_admission(
             role.cluster_id(),
             role.bootstrap_id(),
             role.local_node_id(),
             role.local_member_incarnation(),
         )?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-native-admission-ok");
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-native-current-begin");
+        // FENCE_TRACE_END
         native.require_current(&db)?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-native-current-ok");
+        // FENCE_TRACE_END
+
         role.require_live_request()?;
         self.range_mutations
             .validate_quiescent_frozen(scope.range_id, frozen)?;
@@ -1414,11 +1488,25 @@ impl ClusterDataNodeService {
             role.purpose(),
             crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
         ) {
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("fence-joint-domain-begin");
+            // FENCE_TRACE_END
             let fact = db.observe_current_joint_recovery_domain(
                 &self.range_writes,
                 scope.range_id,
                 cancellation,
             )?;
+
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("fence-joint-domain-ok");
+            // FENCE_TRACE_END
+
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("fence-joint-store-begin");
+            // FENCE_TRACE_END
             self.range_writes
                 .current_mut()
                 .fence_current_joint_recovery(&db, role, &native, scope, &fact, frozen)?;
@@ -1427,9 +1515,27 @@ impl ClusterDataNodeService {
                 .current_mut()
                 .fence_recovery_epoch(role, &native, scope)?;
         }
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-persist-returned");
+        // FENCE_TRACE_END
         cancellation.check()?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-post-native-current-begin");
+        // FENCE_TRACE_END
         native.require_current(&db)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-post-native-current-ok");
+        // FENCE_TRACE_END
         role.require_live_request()?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("fence-response-inventory-begin");
+        // FENCE_TRACE_END
         Ok(
             crate::distribution_range_recovery::RecoveryEpochFenceReply {
                 phase: self.range_writes.recovery_observation_phase(scope)?,

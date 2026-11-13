@@ -23,6 +23,10 @@ pub(crate) struct RecoveryFenceQuorumRound {
     scope: RecoveryFenceScope,
     cancellation: CancellationToken,
     observations: BTreeMap<ClusterNodeId, Arc<RecoveryFenceObservation>>,
+    // FENCE_TRACE_BEGIN
+    #[cfg(test)]
+    diagnostic_parent_deadline: Option<Instant>,
+    // FENCE_TRACE_END
 }
 
 impl RecoveryFenceQuorumRound {
@@ -54,11 +58,28 @@ impl RecoveryFenceQuorumRound {
             return Err(invalid("invalid or oversized current recovery voter set"));
         }
         let scope = RecoveryFenceScope::from_role(&role)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        let _fence_trace = super::fence_trace::Context::enter(
+            "collector-begin",
+            role.local_node_id(),
+            &scope,
+            Some(role.recipient_challenge()),
+            parent.deadline(),
+            Some(role.deadline()),
+            cancellation.deadline(),
+        );
+        // FENCE_TRACE_END
         Ok(Self {
             role,
             scope,
             cancellation,
             observations: BTreeMap::new(),
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            diagnostic_parent_deadline: parent.deadline(),
+            // FENCE_TRACE_END
         })
     }
 
@@ -77,18 +98,74 @@ impl RecoveryFenceQuorumRound {
         observation: impl Into<Arc<RecoveryFenceObservation>>,
     ) -> Result<()> {
         let observation = observation.into();
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        let _fence_trace = super::fence_trace::Context::enter(
+            "collector-record",
+            self.role.local_node_id(),
+            &self.scope,
+            Some(self.role.recipient_challenge()),
+            self.diagnostic_parent_deadline,
+            Some(self.role.deadline()),
+            self.cancellation.deadline(),
+        );
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("record-round-cancellation-begin");
+        // FENCE_TRACE_END
         self.cancellation.check()?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("record-round-cancellation-ok");
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("record-original-role-begin");
+        // FENCE_TRACE_END
         self.role.require_live_request()?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("record-original-role-ok");
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("record-observation-begin");
+        // FENCE_TRACE_END
         observation.require_live()?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("record-observation-ok");
+        // FENCE_TRACE_END
+
         if self.observations.contains_key(observation.node_id()) {
             return Err(invalid("duplicate recovery fence voter"));
         }
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("record-exact-role-validation-begin");
+        // FENCE_TRACE_END
         validate_ordinary_fence_for_role(&self.role, &self.scope, &observation)?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("record-exact-role-validation-ok");
+        // FENCE_TRACE_END
+
         // Unknown/invalidated native floors can join a logical fence quorum.
         // They must be repaired before native-ready certification; None is
         // never converted to verified empty genesis or a snapshot floor.
         self.observations
             .insert(observation.node_id().clone(), observation);
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("record-counted");
+        // FENCE_TRACE_END
         Ok(())
     }
 
@@ -705,8 +782,26 @@ pub(super) fn validate_ordinary_fence_for_role(
     scope: &RecoveryFenceScope,
     observation: &RecoveryFenceObservation,
 ) -> Result<()> {
+    // FENCE_TRACE_BEGIN
+    #[cfg(test)]
+    crate::distribution_range_recovery::fence_trace::mark("record-validation-original-role-begin");
+    // FENCE_TRACE_END
     role.require_live_request()?;
+    // FENCE_TRACE_BEGIN
+    #[cfg(test)]
+    crate::distribution_range_recovery::fence_trace::mark("record-validation-original-role-ok");
+    // FENCE_TRACE_END
+
+    // FENCE_TRACE_BEGIN
+    #[cfg(test)]
+    crate::distribution_range_recovery::fence_trace::mark("record-validation-observation-begin");
+    // FENCE_TRACE_END
     observation.require_live()?;
+    // FENCE_TRACE_BEGIN
+    #[cfg(test)]
+    crate::distribution_range_recovery::fence_trace::mark("record-validation-observation-ok");
+    // FENCE_TRACE_END
+
     if !observation.is_active_recovery() {
         return Err(invalid(
             "completed epoch authority is not an active recovery fence",
@@ -714,7 +809,17 @@ pub(super) fn validate_ordinary_fence_for_role(
     }
     // Recipients obtain independent fresh metadata contexts. Their durable
     // recovery session must match; their context UUID need not equal ours.
+
+    // FENCE_TRACE_BEGIN
+    #[cfg(test)]
+    crate::distribution_range_recovery::fence_trace::mark("record-validation-scope-begin");
+    // FENCE_TRACE_END
     observation.scope().require_role(&role)?;
+    // FENCE_TRACE_BEGIN
+    #[cfg(test)]
+    crate::distribution_range_recovery::fence_trace::mark("record-validation-scope-ok");
+    // FENCE_TRACE_END
+
     if !scope.same_session(observation.scope()) {
         return Err(invalid(
             "epoch-fence reply belongs to another recovery session",

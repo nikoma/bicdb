@@ -849,12 +849,40 @@ impl RangeRecoveryRuntime {
         parent: &CancellationToken,
     ) -> Result<RecoveryFenceObservation> {
         let token = request.cancellation(parent)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        let _fence_trace = super::fence_trace::Context::enter(
+            "receiver",
+            &self.local_node_id,
+            &request.scope,
+            None,
+            parent.deadline(),
+            None,
+            token.deadline(),
+        );
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("runtime-reserve-begin");
+        // FENCE_TRACE_END
         let _operation = self.reserve(request.scope.range_id)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("runtime-reserve-ok");
+        // FENCE_TRACE_END
         let business = Uuid::now_v7();
         let challenge = Uuid::now_v7();
         let scope = &request.scope;
         // Actual initiating peer and fresh recipient challenge enter a new
         // metadata leader begin/probe/record/finish; no cached role fallback.
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("recipient-witness-begin");
+        // FENCE_TRACE_END
         let observation = self.provider.witness_recovery_role(
             initiator,
             business,
@@ -865,6 +893,11 @@ impl RangeRecoveryRuntime {
             scope.purpose.clone(),
             &token,
         )?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("recipient-witness-ok");
+        // FENCE_TRACE_END
         let role = RecoveryRoleAdmission::from_witness(
             observation,
             initiator,
@@ -878,25 +911,93 @@ impl RangeRecoveryRuntime {
         )?;
         scope.require_role(&role)?;
         let token = token.child_with_deadline(role.deadline());
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        super::fence_trace::role_ids(business, role.context_id(), role.recipient_challenge());
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        super::fence_trace::deadlines(
+            "recipient-role-bound",
+            parent.deadline(),
+            Some(role.deadline()),
+            token.deadline(),
+        );
+        // FENCE_TRACE_END
+
         {
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark(
+                "preflight-service-acquire-begin",
+            );
+            // FENCE_TRACE_END
             let service = loop {
                 token.check()?;
                 if let Some(service) = self.service.try_lock_for(LATCH_POLL) {
                     break service;
                 }
             };
+
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("preflight-service-acquire-ok");
+            // FENCE_TRACE_END
+
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("service-preflight-begin");
+            // FENCE_TRACE_END
             service.preflight_native_recovery(&role, scope, &token)?;
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("service-preflight-ok");
+            // FENCE_TRACE_END
         }
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("runtime-freeze-drain-begin");
+        // FENCE_TRACE_END
         let frozen = self.frozen(scope, &token, true)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("runtime-freeze-drain-ok");
+        // FENCE_TRACE_END
         token.check()?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("postfreeze-service-acquire-begin");
+        // FENCE_TRACE_END
         let mut service = loop {
             token.check()?;
             if let Some(service) = self.service.try_lock_for(LATCH_POLL) {
                 break service;
             }
         };
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("postfreeze-service-acquire-ok");
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("service-fence-producer-begin");
+        // FENCE_TRACE_END
         let reply = service.fence_native_recovery(&role, scope, &frozen, &token)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("service-fence-producer-ok");
+        // FENCE_TRACE_END
         token.check()?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("local-observation-projection-begin");
+        // FENCE_TRACE_END
         RecoveryFenceObservation::from_local(
             reply,
             self.provider.local_participant(),

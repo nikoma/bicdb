@@ -468,7 +468,17 @@ impl RangeWriteStore {
         self.require_native_recovery_identity(role, native)?;
         scope.require_role(role)?;
         fact.require_role(role)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("joint-preflight-actual-fact-begin");
+        // FENCE_TRACE_END
         fact.require_current(db, self)?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("joint-preflight-actual-fact-ok");
+        // FENCE_TRACE_END
+
         if self.catalog.backup_fences.contains_key(&scope.range_id)
             || scope.recovery_nonce == fact.data().promise().session_id
             || scope.recovery_nonce == fact.data().promise().nonce
@@ -600,7 +610,16 @@ impl RangeWriteStore {
         fact: &NativeCurrentJointRecoveryDomain,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("joint-fence-preflight-begin");
+        // FENCE_TRACE_END
         self.preflight_current_joint_recovery(db, role, native, scope, fact)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("joint-fence-preflight-ok");
+        // FENCE_TRACE_END
         db.range_mutation_gate()
             .validate_quiescent_frozen(scope.range_id, frozen)?;
         if frozen.owner() != scope.freeze_owner()? {
@@ -689,6 +708,11 @@ impl RangeWriteStore {
                 retired_nonces: retired,
             },
         );
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("joint-fence-persist-begin");
+        // FENCE_TRACE_END
         self.persist_recovery_catalog()
     }
 }

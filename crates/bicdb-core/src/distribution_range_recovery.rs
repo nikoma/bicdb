@@ -22,6 +22,11 @@ fn invalid(message: &str) -> BicDbError {
     BicDbError::Cluster(format!("range recovery: {message}"))
 }
 
+
+// FENCE_TRACE_BEGIN
+#[cfg(test)]
+pub(crate) mod fence_trace;
+// FENCE_TRACE_END
 #[cfg(test)]
 mod native_probe_trace;
 #[cfg(test)]

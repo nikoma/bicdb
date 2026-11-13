@@ -5447,6 +5447,10 @@ impl<'db> SqlSession<'db> {
                 schema,
                 records,
             } => {
+                // A rename this transaction left undecided still reserves the
+                // relation; restore inside that journal's own scope rather
+                // than as an unrelated writer it must refuse.
+                let _access = self.catalog_record_undo_access(SCHEMA_COLLECTION, &table)?;
                 restore_table_state(self.db_mut()?, &table, &schema, records)?;
             }
             DdlUndo::RestoreRenameJournal { id, .. } => {

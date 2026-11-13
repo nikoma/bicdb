@@ -1,0 +1,31 @@
+{
+  "run_id": 43315453055,
+  "job_id": 131522237759,
+  "source_revision": "68be040ebb00a4c606d519697f913e310c496812",
+  "runtime_result": {
+    "passed": 0,
+    "failed": 1,
+    "ignored": 0,
+    "filtered": 955,
+    "seconds": 2.31
+  },
+  "selected_tests": 1,
+  "test_compiled_and_listed": true,
+  "raw_bytes": 1645733,
+  "raw_sha256": "fa01556ef8995ec888c070fa19e6cc7ae689a4346486521886c08d1a62929c6d",
+  "earliest_failure": {
+    "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs",
+    "line": 260,
+    "operation": "clear_native_range_image_step",
+    "error": "native host writer enrollment: range configuration changed; refresh actual host metadata policy"
+  },
+  "before_image_report_sha256": "129d6a13a35571c5b1c8ed6b1e41d6898c1c739db2432ba0c2067381f54e685b",
+  "old_cut_R": 1,
+  "ordinary_writer_reinstalled": false,
+  "image_clear_success_observed": false,
+  "global_joint_decision_observed": false,
+  "new_serving_or_extra_ACK_observed": false,
+  "engine_opened_or_replayed": false,
+  "separate_all_targets_job_id": 131522179911,
+  "separate_all_targets_result": "pending at Core record freeze"
+}

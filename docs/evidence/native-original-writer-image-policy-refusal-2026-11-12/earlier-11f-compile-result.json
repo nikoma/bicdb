@@ -1,0 +1,12 @@
+{
+  "run_id": 43314169894,
+  "job_id": 131517719477,
+  "source_revision": "11f5b4b222f4bd84d1f3870dbd59da11ee8cd17c",
+  "result": "PASS",
+  "workspace_all_targets_check": "PASS",
+  "isolated_consumer_no_core_defaults_check": "PASS",
+  "runtime_tests_in_this_job": false,
+  "raw_bytes": 2481029,
+  "raw_sha256": "24919358848fcd3bd81576adc70b0d0951539a74d555106b9bc9a6358a53fe56",
+  "gzip_bytes": 304787
+}

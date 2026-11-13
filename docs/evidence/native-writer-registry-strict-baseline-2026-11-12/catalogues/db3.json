@@ -1,0 +1,17 @@
+{
+  "catalog": {
+    "format_version": 15,
+    "native_writer_enforcement_version": 1,
+    "cluster_id": "native-operator-cli",
+    "node_id": "n3",
+    "ranges": {},
+    "sparse_committed_decisions": {},
+    "installing_committed_certifications": {},
+    "installing_recovery_handovers": {},
+    "native_abort_protocol": {
+      "store_id": "01a1d122-6b32-7aa1-b52a-8ee7aef0a4ed",
+      "ranges": {}
+    }
+  },
+  "checksum_sha256": "374e8dcf10afa713b9cb0281d27695f0d1b68dcc85e187cc4a7d109f9d72badc"
+}

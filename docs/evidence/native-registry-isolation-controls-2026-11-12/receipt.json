@@ -1,0 +1,522 @@
+{
+  "archive_receipts": [
+    {
+      "bytes": 40646,
+      "id": 13986240082,
+      "private_path": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-registry-isolation-29bfd6c9/13986240082.zip",
+      "sha256": "31716be591bdbba4c548ca44294a7c2dcf10db3cfaeb15df77c26bfbf3fe66c7"
+    },
+    {
+      "bytes": 49828,
+      "id": 13985122026,
+      "private_path": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-registry-isolation-29bfd6c9/13985122026.zip",
+      "sha256": "94431824eb991bf922cf54325ecf3ca89c3d13bf72a2adaa7721c9a509e1fd02"
+    },
+    {
+      "bytes": 46064,
+      "id": 13981649824,
+      "private_path": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-registry-refresh-ded3c412/13981649824.zip",
+      "sha256": "fc61c55af6b556fe584fb3eeb5b5368b4814ccf586c40735d5b5bf86b00d4333"
+    },
+    {
+      "bytes": 40407,
+      "id": 13984864323,
+      "private_path": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-owned-validation-6e00ba51/13984864323.zip",
+      "sha256": "1a076560dddc918f23808e56ca3e6c45201d03b79f6d08f40dbc0323be259944"
+    },
+    {
+      "bytes": 69969,
+      "id": 13984613758,
+      "private_path": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-registry-refresh-ded3c412/13984613758.zip",
+      "sha256": "cb21dadaa21393895ea461382b22c3c5cbf630fdc648fe9d382d834dababdf4e"
+    },
+    {
+      "bytes": 40167,
+      "id": 13985332464,
+      "private_path": "/root/.local/state/bicdb/ha-scaling-2026-11-11/private/native-registry-isolation-29bfd6c9/13985332464.zip",
+      "sha256": "72439b7532d7e65433ddb7ba37c134557fd6aa4ada589b04e009a476959b1828"
+    }
+  ],
+  "cancellations": [
+    {
+      "completed_individual_results": {
+        "ignored, internal child entry requires a parent-owned bounded private process configuration": 1,
+        "ok": 57
+      },
+      "compressed_file": "ded-host-cancelled-harness-reentrancy-job131479132858.log.gz",
+      "index_file": "ded-host-cancelled-harness-reentrancy-job131479132858-index.json",
+      "job_conclusion": "cancelled",
+      "job_id": 131479132858,
+      "job_name": "Focused Core library (distribution_native_host::)",
+      "not_a_suite_pass": true,
+      "raw_bytes": 1626447,
+      "raw_sha256": "dd1eab5966432924f6f61164f076be955262dd216aff95271b72a8fb3f27f6a9",
+      "reason": "Owner canceled after definite source-level fixture reentrancy: receiver metadata.lock remained held while config(&f) locked same mutex.",
+      "run_id": 43303070364,
+      "selected_test_names": [
+        "distribution_native_host::provisional_listener::tests::heartbeat_backlog_tests::native_initial_metadata_actual_tls_65_barriers_resume_across_finite_heartbeat_calls",
+        "distribution_native_host::provisional_listener::tests::heartbeat_backlog_tests::native_initial_metadata_actual_tls_barrier_backlog_advances_beyond_first_batch",
+        "distribution_native_host::provisional_listener::tests::heartbeat_backlog_tests::native_initial_metadata_actual_tls_midround_retirement_skips_stale_peer",
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_cancel_partial_quorum_then_nonempty_is_not_new_genesis",
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root",
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_genesis_refuses_changed_epoch_restore_and_actual_foreign_birth",
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_genesis_refuses_same_root_same_birth_new_actual_open",
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::registry_refresh_tests::native_initial_data_registry_actual_native_publication_error_fresh_retry_and_cold_no_grant",
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::registry_refresh_tests::native_initial_data_registry_original_cancellation_and_retained_old_store_slot_refuse",
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::registry_refresh_tests::native_initial_data_registry_original_writer_replacement_refuses_before_new_audit",
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::routing_discovery_tests::native_initial_data_healthy_metadata_discovery_while_all_data_services_held",
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::routing_discovery_tests::native_initial_data_routing_refuses_replaced_store_with_old_actual_owner_retained",
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::routing_discovery_tests::native_initial_data_routing_refuses_wrong_actual_service_and_stopped_owner",
+        "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_exposed_cold_copy_never_reenters_prevote_or_resets_term",
+        "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_drain_deadline_retains_stopping_owner_and_same_store",
+        "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_foreign_c_and_incomplete_barrier_never_expose_votes",
+        "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_original_cancel_cannot_relabel_accepted_fact",
+        "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_prepared_cold_copy_reopens_same_store_without_birth_fallback",
+        "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_protected_proposal_and_both_metadata_cuts_resume_exact_c_on_cold_copy",
+        "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_sequential_launch_uses_historical_same_c_after_first_vote",
+        "distribution_native_host::provisional_listener::tests::learner_birth_tests::native_unassigned_learner_birth_tls_live_scope_cancel_and_permanent_provisional_refusal",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::cold_tests::native_learner_cold_actual_uid_receipt_old_decoder_refuses_and_none_voter_bytes_unchanged",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::cold_tests::native_learner_cold_all_owners_sidecar_and_both_prepared_cuts_keep_uuid_and_actual_tls_ack",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::cold_tests::native_learner_cold_prepared_missing_or_changed_original_and_nonzero_vote_never_reset",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::cold_tests::native_learner_cold_registered_loss_refuses_and_bind_cancel_retry_keeps_real_owner",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::cold_tests::registered_catchup_tests::native_registered_metadata_cancel_promotion_catchup_and_all_owner_cold_voter_reopen",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::native_enrolled_learner_metadata_constructor_failure_retains_prepared_quarantine_identity",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::native_enrolled_learner_metadata_registered_cancel_and_bind_retry_keep_same_owned_uuid",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::native_enrolled_learner_same_service_metadata_tls_catchup_bound_ack_and_strict_reopen",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::native_registered_learner_enrollment_rejects_original_canceled_or_expired_fact_before_held_latches",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::native_registered_learner_enrollment_retries_only_exact_persisted_pending_entry",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::native_registered_learner_enrollment_tls_commits_exact_birth_and_preserves_identity_fences",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::bootstrap_budget_tests::native_metadata_fresh_bootstrap_original_budget_and_cancel_refuse_before_root",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::native_metadata_promotion_pending_entry_and_held_ack_cannot_cross_actual_leader_transfer",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::native_metadata_promotion_requires_actual_owned_ack_and_original_live_budget",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_owned_metadata_validation_original_cancel_exits_while_actual_final_store_held",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_owned_metadata_validation_waits_for_actual_final_store_then_keeps_same_proof",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::replica_receiver_tests::native_registered_replica_receiver_actual_tls_preserves_owner_and_refuses_blank_app_strong",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::self_maintenance_tests::native_metadata_promoted_leader_maintenance_never_appends_to_itself",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::stale_seed_tests::native_metadata_fresh_sixth_stale_seed_discovers_current_quorum_before_root",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::writer_registry_continuity_tests::native_initial_data_registry_actual_added_voter_remains_bound_on_later_member_mutation",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::writer_registry_continuity_tests::native_initial_data_registry_legacy_none_policy_refuses_retroactive_continuity_capture",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::schema_label_tests::native_registered_learner_schema_commits_actual_label_and_refuses_contradictory_or_bound_missing_label",
+        "distribution_native_host::provisional_listener::tests::learner_factory_tests::native_unassigned_fifth_factory_actual_host_mq_create_reopen_and_proposal",
+        "distribution_native_host::provisional_listener::tests::metadata_supervisor_tests::native_owned_metadata_supervisor_actual_tls_invalid_and_stale_messages_do_not_renew_contact",
+        "distribution_native_host::provisional_listener::tests::metadata_supervisor_tests::native_owned_metadata_supervisor_actual_tls_majority_minority_stationary_leader_and_heal",
+        "distribution_native_host::provisional_listener::tests::metadata_supervisor_tests::native_owned_metadata_supervisor_strict_metadata_reopen_preserves_protected_uuid_and_durable_state",
+        "distribution_native_host::provisional_listener::tests::native_initial_birth_tls_all_actual_factories_bind_initial_config_without_admitting_writes",
+        "distribution_native_host::provisional_listener::tests::native_initial_birth_tls_before_latch_but_busy_actual_factory_is_bounded_unavailable",
+        "distribution_native_host::provisional_listener::tests::native_initial_birth_tls_provisional_surface_never_falls_through_even_after_factory_owner_ends",
+        "distribution_native_host::provisional_listener::tests::native_initial_birth_tls_refuses_incomplete_duplicate_changed_plan_and_expired_attempt",
+        "distribution_native_host::provisional_listener::tests::native_initial_birth_tls_refuses_registered_root_stale_peer_and_plaintext_host",
+        "distribution_native_host::provisional_listener::tests::process_tests::native_initial_birth_process_child",
+        "distribution_native_host::provisional_listener::tests::process_tests::native_initial_birth_process_four_independent_factories_and_cold_restart",
+        "distribution_native_host::provisional_listener::tests::process_tests::startup_tests::native_initial_startup_four_processes_actual_election_host_mq_and_writer_policies",
+        "distribution_native_host::provisional_listener::tests::process_tests::startup_tests::registration_tests::native_metadata_registration_four_process_commands_commit_exact_learner",
+        "distribution_native_host::tests::native_host_actual_seed_strict_reopen_preserves_birth_and_still_cannot_ack",
+        "distribution_native_host::tests::native_host_initial_metadata_binds_every_actual_factory_and_rejects_recreated_root",
+        "distribution_native_host::tests::native_host_initial_plan_assigns_replicas_and_leaders_without_manual_shards",
+        "distribution_native_host::tests::native_host_initial_seed_refuses_existing_root_and_incompatible_plan"
+      ],
+      "selected_without_completed_result": [
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_owned_metadata_validation_original_cancel_exits_while_actual_final_store_held",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_owned_metadata_validation_waits_for_actual_final_store_then_keeps_same_proof"
+      ],
+      "source_revision": "ded3c412cf25c12f3c6fe524d22aac02310a1c0b",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run dtolnay/rust-toolchain@stable"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run Swatinem/rust-cache@v2"
+        },
+        {
+          "conclusion": "success",
+          "name": "Build projection chaos helper"
+        },
+        {
+          "conclusion": "success",
+          "name": "Record source and list selected Core library tests"
+        },
+        {
+          "conclusion": "cancelled",
+          "name": "Execute selected Core library tests"
+        },
+        {
+          "conclusion": "success",
+          "name": "Retain focused source, log and opted-in fault-state evidence"
+        },
+        {
+          "conclusion": "skipped",
+          "name": "Post Run Swatinem/rust-cache@v2"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job"
+        }
+      ],
+      "test_summaries": []
+    },
+    {
+      "completed_individual_results": {},
+      "compressed_file": "29b-owned-cancelled-harness-reentrancy-job131496490839.log.gz",
+      "index_file": "29b-owned-cancelled-harness-reentrancy-job131496490839-index.json",
+      "job_conclusion": "cancelled",
+      "job_id": 131496490839,
+      "job_name": "Focused Core library (owned_validation_wait_tests)",
+      "not_a_suite_pass": true,
+      "raw_bytes": 1602884,
+      "raw_sha256": "b411ef431b6f2122d07c6a6ba333017a7e1a54923fe0cba269b319146cab2aa6",
+      "reason": "Owner canceled after definite source-level fixture reentrancy: receiver metadata.lock remained held while config(&f) locked same mutex.",
+      "run_id": 43308048131,
+      "selected_test_names": [
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_owned_metadata_validation_original_cancel_exits_while_actual_final_store_held",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_owned_metadata_validation_waits_for_actual_final_store_then_keeps_same_proof",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_registered_metadata_catchup_original_cancel_exits_while_actual_final_store_held",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_registered_metadata_catchup_waits_for_actual_final_store_with_same_proof"
+      ],
+      "selected_without_completed_result": [
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_owned_metadata_validation_original_cancel_exits_while_actual_final_store_held",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_owned_metadata_validation_waits_for_actual_final_store_then_keeps_same_proof",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_registered_metadata_catchup_original_cancel_exits_while_actual_final_store_held",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_registered_metadata_catchup_waits_for_actual_final_store_with_same_proof"
+      ],
+      "source_revision": "29bfd6c9af7652a8e40a97e46b23d4629777ece9",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run dtolnay/rust-toolchain@stable"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run Swatinem/rust-cache@v2"
+        },
+        {
+          "conclusion": "success",
+          "name": "Build projection chaos helper"
+        },
+        {
+          "conclusion": "success",
+          "name": "Record source and list selected Core library tests"
+        },
+        {
+          "conclusion": "cancelled",
+          "name": "Execute selected Core library tests"
+        },
+        {
+          "conclusion": "success",
+          "name": "Retain focused source, log and opted-in fault-state evidence"
+        },
+        {
+          "conclusion": "skipped",
+          "name": "Post Run Swatinem/rust-cache@v2"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job"
+        }
+      ],
+      "test_summaries": []
+    },
+    {
+      "completed_individual_results": {},
+      "compressed_file": "29b-owned-alltargets-cancelled-job131496447289.log.gz",
+      "index_file": "29b-owned-alltargets-cancelled-job131496447289-index.json",
+      "job_conclusion": "cancelled",
+      "job_id": 131496447289,
+      "job_name": "Community-only workspace compiles, tests included",
+      "not_a_suite_pass": true,
+      "raw_bytes": 1114503,
+      "raw_sha256": "e7fa6636ca96144cc04c787353bce999f81d31dca6631f8dcb52fdd31564afc9",
+      "reason": "Owner canceled after definite source-level fixture reentrancy: receiver metadata.lock remained held while config(&f) locked same mutex.",
+      "run_id": 43308048131,
+      "selected_test_names": [],
+      "selected_without_completed_result": [],
+      "source_revision": "29bfd6c9af7652a8e40a97e46b23d4629777ece9",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run dtolnay/rust-toolchain@stable"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run Swatinem/rust-cache@v2"
+        },
+        {
+          "conclusion": "cancelled",
+          "name": "cargo check --workspace --all-targets"
+        },
+        {
+          "conclusion": "skipped",
+          "name": "Workflow consumer compiles without Core defaults"
+        },
+        {
+          "conclusion": "skipped",
+          "name": "Post Run Swatinem/rust-cache@v2"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job"
+        }
+      ],
+      "test_summaries": []
+    }
+  ],
+  "compile_jobs": [
+    {
+      "all_targets": "success",
+      "compressed_file": "29b-registry-isolation-alltargets-job131496474440.log.gz",
+      "index_file": "29b-registry-isolation-alltargets-job131496474440-index.json",
+      "isolated_consumer_without_core_defaults": "success",
+      "job_conclusion": "success",
+      "job_id": 131496474440,
+      "job_name": "Community-only workspace compiles, tests included",
+      "raw_bytes": 2473229,
+      "raw_sha256": "55cc356c79af1783cf8aa9ef63e472df6870bcad98c204486c24a97dbe007b6e",
+      "run_id": 43308056358,
+      "source_revision": "29bfd6c9af7652a8e40a97e46b23d4629777ece9",
+      "test_summaries": []
+    },
+    {
+      "all_targets": "success",
+      "compressed_file": "29b-routing-isolation-alltargets-job131496514951.log.gz",
+      "index_file": "29b-routing-isolation-alltargets-job131496514951-index.json",
+      "isolated_consumer_without_core_defaults": "success",
+      "job_conclusion": "success",
+      "job_id": 131496514951,
+      "job_name": "Community-only workspace compiles, tests included",
+      "raw_bytes": 2473226,
+      "raw_sha256": "df91e8f162eb2f1c1c834e647ef0bbce6939c70207699879f6bd3b194aa357bc",
+      "run_id": 43308063984,
+      "source_revision": "29bfd6c9af7652a8e40a97e46b23d4629777ece9",
+      "test_summaries": []
+    },
+    {
+      "all_targets": "success",
+      "compressed_file": "ded-expiry-alltargets-corrected-job131479101287.log.gz",
+      "index_file": "ded-expiry-alltargets-corrected-job131479101287-index.json",
+      "isolated_consumer_without_core_defaults": "success",
+      "job_conclusion": "success",
+      "job_id": 131479101287,
+      "job_name": "Community-only workspace compiles, tests included",
+      "raw_bytes": 2473187,
+      "raw_sha256": "ce67823b4992ba0e7abe83b69a7b4ad994b33593e89b7e0ac0bf2f15053f96a8",
+      "run_id": 43303076063,
+      "source_revision": "ded3c412cf25c12f3c6fe524d22aac02310a1c0b",
+      "test_summaries": []
+    },
+    {
+      "all_targets": "success",
+      "compressed_file": "ded-host-alltargets-corrected-job131479079371.log.gz",
+      "index_file": "ded-host-alltargets-corrected-job131479079371-index.json",
+      "isolated_consumer_without_core_defaults": "success",
+      "job_conclusion": "success",
+      "job_id": 131479079371,
+      "job_name": "Community-only workspace compiles, tests included",
+      "raw_bytes": 2473192,
+      "raw_sha256": "9cd5887d716988cca1fc4ad306796216c1b9c6488b0c23cbafff65188f086adb",
+      "run_id": 43303070364,
+      "source_revision": "ded3c412cf25c12f3c6fe524d22aac02310a1c0b",
+      "test_summaries": []
+    },
+    {
+      "all_targets": "success",
+      "compressed_file": "6e0-owned-corrected-alltargets-job131504948931.log.gz",
+      "index_file": "6e0-owned-corrected-alltargets-job131504948931-index.json",
+      "isolated_consumer_without_core_defaults": "success",
+      "job_conclusion": "success",
+      "job_id": 131504948931,
+      "job_name": "Community-only workspace compiles, tests included",
+      "raw_bytes": 2480960,
+      "raw_sha256": "af0051894f7482077f0a033bee62dcfc82c3a6f99118b715ab44e82a8a16b75b",
+      "run_id": 43310478213,
+      "source_revision": "6e00ba519715ee0ca392357394f2b0a9749a1358",
+      "test_summaries": []
+    }
+  ],
+  "corrected_owned_compile_at_freeze": {
+    "active_step": "cargo check --workspace --all-targets",
+    "conclusion": null,
+    "job_id": 131504948931,
+    "run_id": 43310478213,
+    "scope": "pending at this receipt checkpoint; no compiler or consumer pass claimed for this job",
+    "source": "6e00ba519715ee0ca392357394f2b0a9749a1358",
+    "status": "in_progress"
+  },
+  "corrected_owned_compile_terminal_addendum": {
+    "conclusion": "success",
+    "job_id": 131504948931,
+    "pending_checkpoint_commit": "528b1f03e",
+    "raw_sha256": "af0051894f7482077f0a033bee62dcfc82c3a6f99118b715ab44e82a8a16b75b",
+    "scope": "terminal all-target and isolated-consumer result appended after the preserved pending checkpoint",
+    "source": "6e00ba519715ee0ca392357394f2b0a9749a1358"
+  },
+  "limits": [
+    "No whole CLI pass: source56f whole CLI3/3 remains unchanged; uncertain empty-object write is not rollback.",
+    "No cold contention-control claim: four owned tests cover HOT strict and HOT Registered catch-up.",
+    "No native data move, five DATA-serving nodes, CurrentJoint recovery, VM/physical, main merge, release or deployment claim.",
+    "Historical MQ/readiness facts are not new authority.",
+    "Raw checks verify retained bytes and recorded results; no engine replay or independent execution attestation."
+  ],
+  "runtime": [
+    {
+      "compressed_file": "29b-registry-isolation-job131496514002.log.gz",
+      "failed": 0,
+      "filtered": 945,
+      "ignored": 0,
+      "index_file": "29b-registry-isolation-job131496514002-index.json",
+      "job_conclusion": "success",
+      "job_id": 131496514002,
+      "job_name": "Focused Core library (native_initial_data_registry_)",
+      "label": "registry",
+      "passed": 5,
+      "raw_bytes": 1613977,
+      "raw_sha256": "b0bb46e9572862aa4d29edef3946fa6c0b95f5f20ff852ec7d43f805f1f578b0",
+      "run_id": 43308056358,
+      "seconds": 7.61,
+      "source_revision": "29bfd6c9af7652a8e40a97e46b23d4629777ece9",
+      "test_names": [
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::registry_refresh_tests::native_initial_data_registry_original_cancellation_and_retained_old_store_slot_refuse",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::writer_registry_continuity_tests::native_initial_data_registry_actual_added_voter_remains_bound_on_later_member_mutation",
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::registry_refresh_tests::native_initial_data_registry_original_writer_replacement_refuses_before_new_audit",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::writer_registry_continuity_tests::native_initial_data_registry_legacy_none_policy_refuses_retroactive_continuity_capture",
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::registry_refresh_tests::native_initial_data_registry_actual_native_publication_error_fresh_retry_and_cold_no_grant"
+      ],
+      "test_summaries": [
+        "2026-11-12T21:19:49.8671112Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 945 filtered out; finished in 7.61s"
+      ]
+    },
+    {
+      "compressed_file": "29b-routing-isolation-job131496564730.log.gz",
+      "failed": 0,
+      "filtered": 947,
+      "ignored": 0,
+      "index_file": "29b-routing-isolation-job131496564730-index.json",
+      "job_conclusion": "success",
+      "job_id": 131496564730,
+      "job_name": "Focused Core library (routing_discovery_tests)",
+      "label": "routing",
+      "passed": 3,
+      "raw_bytes": 1611115,
+      "raw_sha256": "ed58a37166c99b8aaffbb8f60c17b6df8f8a367581203449214cc66d97ff37ae",
+      "run_id": 43308063984,
+      "seconds": 5.71,
+      "source_revision": "29bfd6c9af7652a8e40a97e46b23d4629777ece9",
+      "test_names": [
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::routing_discovery_tests::native_initial_data_routing_refuses_wrong_actual_service_and_stopped_owner",
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::routing_discovery_tests::native_initial_data_routing_refuses_replaced_store_with_old_actual_owner_retained",
+        "distribution_native_host::provisional_listener::tests::initial_data_tests::routing_discovery_tests::native_initial_data_healthy_metadata_discovery_while_all_data_services_held"
+      ],
+      "test_summaries": [
+        "2026-11-12T21:20:00.7086706Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 947 filtered out; finished in 5.71s"
+      ]
+    },
+    {
+      "compressed_file": "ded-ready-expiry-corrected-job131479146693.log.gz",
+      "failed": 0,
+      "filtered": 947,
+      "ignored": 0,
+      "index_file": "ded-ready-expiry-corrected-job131479146693-index.json",
+      "job_conclusion": "success",
+      "job_id": 131479146693,
+      "job_name": "Focused Core library (native_ready_actual_tls_both_matching_peer_attempts_expire_without_counting_or_mutation)",
+      "label": "expiry",
+      "passed": 1,
+      "raw_bytes": 1693054,
+      "raw_sha256": "9c22922a055f2ad6115b23985007c49ffe3e3d41f8b8f7aeb855f8f2b6b45704",
+      "run_id": 43303076063,
+      "seconds": 3.2,
+      "source_revision": "ded3c412cf25c12f3c6fe524d22aac02310a1c0b",
+      "test_names": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::expired_ready_delivery_tests::native_ready_actual_tls_both_matching_peer_attempts_expire_without_counting_or_mutation"
+      ],
+      "test_summaries": [
+        "2026-11-12T20:49:26.5047177Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 947 filtered out; finished in 3.20s"
+      ]
+    },
+    {
+      "compressed_file": "6e0-owned-reentrancy-corrected-job131505005808.log.gz",
+      "failed": 0,
+      "filtered": 947,
+      "ignored": 0,
+      "index_file": "6e0-owned-reentrancy-corrected-job131505005808-index.json",
+      "job_conclusion": "success",
+      "job_id": 131505005808,
+      "job_name": "Focused Core library (owned_validation_wait_tests)",
+      "label": "owned_corrected",
+      "passed": 4,
+      "raw_bytes": 1611384,
+      "raw_sha256": "258fbd0469569cc132ade992211a45fda06754c68397b22318ce58ad2e0b7a6b",
+      "run_id": 43310478213,
+      "seconds": 2.3,
+      "source_revision": "6e00ba519715ee0ca392357394f2b0a9749a1358",
+      "test_names": [
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_registered_metadata_catchup_original_cancel_exits_while_actual_final_store_held",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_registered_metadata_catchup_waits_for_actual_final_store_with_same_proof",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_owned_metadata_validation_waits_for_actual_final_store_then_keeps_same_proof",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_owned_metadata_validation_original_cancel_exits_while_actual_final_store_held"
+      ],
+      "test_summaries": [
+        "2026-11-12T21:32:28.8175778Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 947 filtered out; finished in 2.30s"
+      ]
+    }
+  ],
+  "scope": "source-separated focused component results; not a coherent broad-suite pass",
+  "source_file_fingerprints": [
+    {
+      "nested_config_call_in_receiver_guard": true,
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/owned_validation_wait_tests.rs",
+      "sha256": "8c461b8487d7a2440220983a46579e1a0e926036363498da2a68fc7dfa067c20",
+      "source": "ded3c412cf25c12f3c6fe524d22aac02310a1c0b"
+    },
+    {
+      "nested_config_call_in_receiver_guard": true,
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/owned_validation_wait_tests.rs",
+      "sha256": "9d05e8c9ab9975ad30472f8a24c2fb76ae16f9983dddff766f5d8d68a8c0ef6f",
+      "source": "29bfd6c9af7652a8e40a97e46b23d4629777ece9"
+    },
+    {
+      "nested_config_call_in_receiver_guard": false,
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/owned_validation_wait_tests.rs",
+      "sha256": "807eb0f7ae8c05bed672c7c13d9fd82307d2d41e924a393ff9d11233e35393f6",
+      "source": "6e00ba519715ee0ca392357394f2b0a9749a1358"
+    }
+  ],
+  "source_package_version": "1.0.489-beta",
+  "version": 1
+}

@@ -1,0 +1,31 @@
+{
+  "classification": "whole_cli_target_passed_on_one_CI_host",
+  "source_revision": "4b4059fe811d90dcf876507b92ef293c1ae4530d",
+  "run_id": 43249496779,
+  "job_id": 131291102510,
+  "test_summaries": [
+    "2026-11-12T15:54:44.5975861Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 45.81s"
+  ],
+  "raw_job_log_sha256": "7110f7ef7b57bf8beead27342838ca0bc87477e17693b74dad354dcdb53b7c65",
+  "artifact_id": 13961100685,
+  "artifact_bytes": 91568470,
+  "artifact_sha256": "9b1b01903d2a25eb213fcd51fbacba647a5942ebe54c0bf70ab345565f7979f6",
+  "tests_log_uncompressed_sha256": "cfc2ada53dd0355f9b129c1dd8bb607116d201a3dcd663cce81b7fc3b0caa2cb",
+  "observed_execution_identity": {
+    "source": "4b4059fe811d90dcf876507b92ef293c1ae4530d",
+    "source_available": true,
+    "source_authority": "BICDB_TEST_SOURCE_SHA runtime environment; not option_env or runtime git lookup",
+    "test_package_version": "1.0.487-beta",
+    "binary_sha256": "1cbbd08d36e6522e905f43e1ad0f7709257e9e0ae63d2880ee0679a1bfffd2a9",
+    "binary_bytes": 748650376,
+    "binary_scope": "actual CARGO_BIN_EXE_bicdb bytes read before process/startup/ACK phase; not a published release"
+  },
+  "emitted_ledger_records": 21,
+  "acknowledged_writes": 3,
+  "fifth_data_stage": "not_entered",
+  "automatic_data_move": "not_implemented",
+  "binary_archived": false,
+  "physical_qualified": false,
+  "production_qualified": false,
+  "complete_physical_attempt_ledger": false
+}

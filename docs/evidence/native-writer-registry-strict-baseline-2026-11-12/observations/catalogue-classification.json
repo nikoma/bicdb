@@ -1,0 +1,68 @@
+{
+  "strict_case_prior_ack": {
+    "namespace": "items",
+    "key": "ack-before-fifth-registry-refresh",
+    "value": {
+      "entire": "external ACK precedes fifth stage",
+      "nested": [
+        17,
+        null,
+        {
+          "retained": true
+        }
+      ]
+    },
+    "raw_command_sha256": "d92c97987d43ade998ab09eea2f3fc7ae45ce5bf3e409987ee795f07547ade05",
+    "raw_applied_copies": [
+      "db0",
+      "db1",
+      "db2"
+    ],
+    "range_id": 4,
+    "epoch": 1,
+    "index": 1
+  },
+  "unknown_api_attempts": 2,
+  "unknown_key": "fresh-ack-after-fifth-registry-addition",
+  "unknown_key_in_captured_raw_catalogues": false,
+  "classification": "NO_USER_ACK_OUTCOME_UNKNOWN remains unchanged; raw absence is not canonical abort/native absence/rollback",
+  "other_cohort_acks": 4,
+  "other_cohort_db_roots_retained": false,
+  "catalogues": [
+    {
+      "node": "db0",
+      "sha256": "5dcc3729d098a81cf39d38247f1bef6c0accf9bc1bdafda0610de8d3186cc734",
+      "bytes": 6821,
+      "raw_path": "database-failure-95003364-6507-4d03-93dc-43d2cdf03d79/database-snapshot/db0/cluster-range-write-log.json",
+      "interpretation": "decoded retained raw catalogue only; no native page/WAL replay or read permission"
+    },
+    {
+      "node": "db1",
+      "sha256": "c6ad220591f0908da8b1e5bd2ba294a8c170bb87c88caac9a471f40ef5c91261",
+      "bytes": 6821,
+      "raw_path": "database-failure-95003364-6507-4d03-93dc-43d2cdf03d79/database-snapshot/db1/cluster-range-write-log.json",
+      "interpretation": "decoded retained raw catalogue only; no native page/WAL replay or read permission"
+    },
+    {
+      "node": "db2",
+      "sha256": "1b92849463a57e82d1fbbbb1807986fac10a45c4d30b52a8917d854cb30c506a",
+      "bytes": 6821,
+      "raw_path": "database-failure-95003364-6507-4d03-93dc-43d2cdf03d79/database-snapshot/db2/cluster-range-write-log.json",
+      "interpretation": "decoded retained raw catalogue only; no native page/WAL replay or read permission"
+    },
+    {
+      "node": "db3",
+      "sha256": "ff8e083e817244d22ae34a163ea5efaf46d5b1b950e1a056af7ae50942fd24bf",
+      "bytes": 501,
+      "raw_path": "database-failure-95003364-6507-4d03-93dc-43d2cdf03d79/database-snapshot/db3/cluster-range-write-log.json",
+      "interpretation": "decoded retained raw catalogue only; no native page/WAL replay or read permission"
+    },
+    {
+      "node": "db4",
+      "sha256": "68974f4513f6db7d1d40cf2582967d6135d2c2dec91baf932b99a7eb0e19e882",
+      "bytes": 501,
+      "raw_path": "database-failure-95003364-6507-4d03-93dc-43d2cdf03d79/database-snapshot/db4/cluster-range-write-log.json",
+      "interpretation": "decoded retained raw catalogue only; no native page/WAL replay or read permission"
+    }
+  ]
+}

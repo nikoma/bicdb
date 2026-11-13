@@ -6,7 +6,58 @@ frontier repair in [PR 162](https://github.com/nikoma/bicdb/pull/162). The exact
 tested candidate was `ce02303676fe5fe730ffd7fc822a3a27ee8189aa`. The merge has
 the same tree. A source version is not a published binary or verified deployment.
 Evidence updates do not establish a new release binary or deployment. The
-larger read/recovery candidate remains unmerged; its source-scoped results follow.
+larger recovery/relocation candidate remains unmerged; its source-scoped results follow.
+
+## Current operational verdict
+
+Remote main is source **1.0.490-beta**, `702f0435a12944563c7751525f8429d80374a3d0`,
+at this documentation checkpoint. The read-safety foundation below is merged;
+the larger candidate is not. The proposed 1.0.491-beta delivery contains only
+documentation/evidence and synchronized version metadata, not these candidate
+implementation changes, a new binary or a deployment.
+
+The newest executed autonomous-recovery baseline is **failed**, exact candidate
+`721c329de4196aeef96604642c439fe7d8ddb0bf`,
+[run 43325316433](https://github.com/nikoma/bicdb/actions/runs/43325316433):
+one control passed, one required recovery test failed, 957 filtered, 26.04s.
+All-target and isolated-consumer compilation passed. After actual quorum
+admission and a pre-local-WAL fault, the original leader's normal APP handler
+has exited and release callback has returned. Two actual native replicas
+contain the complete committed command at R2/B2, while the original leader
+retains R1/Pending2. The original call remains Unknown with no user ACK; it is
+not rollback. Subsequent Strong calls return unavailable, and neither next-write
+API call ACKs. The two completed health-round receipts are 7.650s and 15.333s
+under a declared 20-second success limit; sampling ends at 15.333s, not second20.
+This confirms a missing bounded autonomous committed-tail recovery path in the
+candidate, not acknowledged data loss or the cause of the old Azure incident.
+[Complete attempt ledger, actual native observations and offline verifier](evidence/native-origin-pre-wal-2026-11-12/README.md).
+
+The no-reinstall handoff baseline separately fails at image admission before
+rows are cleared. A [read-only source audit](design/native-closed-handoff-image-admission-audit.md)
+identifies missing closed-purpose admission for the retained original writer
+and for a genuine Registered receiver; the latter cannot borrow INITIAL-genesis
+authority. These are proposed contracts, not implemented fixes.
+
+The passing post-joint component tests below establish useful protocol paths,
+but require explicit fixture orchestration and writer re-enrollment. Automatic
+DATA movement to a genuine fifth node, crash-safe convergence, current physical
+RPO/RTO and stable-five throughput gain remain unqualified. Original Azure
+qualification remains **FAILED**. Historical sections retain their own
+revision-scoped outcomes; their old pending/open labels do not override this
+current verdict or the later executed results.
+
+## Documentation delivery on current main
+
+This documentation-only delivery is prepared as source **1.0.491-beta**, based
+on verified GitHub main **1.0.490-beta**,
+`702f0435a12944563c7751525f8429d80374a3d0` (PR 164, November 12, 22:24 UTC).
+It contains evidence, source-scoped audits and the required synchronized version
+metadata. It includes **none of the unmerged native HA implementation or test
+changes** described below and produces no new binary or deployment.
+The candidate results remain pinned to their actual Git SHAs and original source
+versions, even where those versions precede the current main version. Final
+native qualification still requires composition with current main and exact-head
+validation; documentation publication does not satisfy that requirement.
 
 ## Read-safety foundation delivered: 1.0.489-beta
 
@@ -37,6 +88,225 @@ The original Azure qualification remains **FAILED**, and production admission
 remains unchanged. The following checkpoints retain their original revisions
 and pre-merge status; they are not newer claims that read489 is still unmerged.
 
+## Latest executed component result: ACK4/Strong and historical retry pass
+
+Exact unmerged candidate `eedf23d58e236cf62d61366349ad4de3bd52373b` passes
+three distinct component tests. [Run 43319425823](https://github.com/nikoma/bicdb/actions/runs/43319425823),
+Core `131535932600`, records **two passed, zero failed, 955 filtered, 100.89s**:
+the unchanged post-joint PrepareOnly → canonical Abort3 → all-member activation
+→ actual ACK4/Strong R4 positive, plus its separate post-ACK idempotence test.
+[Run 43319432266](https://github.com/nikoma/bicdb/actions/runs/43319432266), Core
+`131535951702`, records **one passed, zero failed, 956 filtered, 98.32s**: the
+actual copied-image target returns historical AnchorR3 at current R4, then
+refuses a deliberately removed immutable serving archive with the caller live.
+Both exact-source all-target and isolated-consumer jobs pass.
+
+The actual diagnostic confirms n3's physical members `[n0,n1,n2]` and protected
+effective/observer voters `[n1,n2,n3]`. The correction binds the NEW domain to
+actual native joint/serving records and archives. Historical AnchorR3 remains
+distinct from a current-prefix or Strong-read grant. Exact prior ACK payloads,
+actual R/H/B/UID and inherited commitments survive the tested paths.
+
+**This is not a passing whole-candidate qualification.** The sibling
+[run 43319438217](https://github.com/nikoma/bicdb/actions/runs/43319438217), Core
+`131535993682`, records **zero passed, four failed, 953 filtered, 81.00s**.
+All four cases reach target ACK2 but fail their StrongR2 prerequisite before
+CurrentJoint preparation, fault injection or the new timing spans. Their
+structured unavailable/timeout results do not establish false absence or durable
+loss. All-target/consumer checks pass; zero observer timing contexts were reached.
+[Exact failed prerequisite and custody scope](design/native-ready-observer-inner-result-eedf.md).
+
+The passed component uses fixture-level opaque protocol orchestration, writer
+re-enrollment prerequisites and explicit coordinator recovery. It does not prove
+automatic NativeHost repair, original-writer operational transition, a genuine
+fifth-node DATA move, online or 8 GiB transfer, crash/cold recovery, throughput,
+physical RPO/RTO, general SQL transparency or deployment. The independent
+no-reinstall image-policy baseline remains **failed**. Successful CI artifacts
+retain complete logs/source/compiler facts but **no database or WAL custody**.
+[Complete source-pinned receipt, raw logs, artifacts and offline verifier](evidence/native-current-joint-first-success-2026-11-12/README.md).
+Original Azure qualification and production admission remain unchanged.
+
+A separate one-selected-test experiment, exact same eedf source and unchanged
+worker/deadline settings, [run 43322376572](https://github.com/nikoma/bicdb/actions/runs/43322376572),
+passes the missing-decision-archive control: **one passed, zero failed, 956
+filtered, 71.83s**; its compilation/consumer checks pass. It reaches the actual
+observer spans. In the representative boundary, tagged full-writer checks account
+for about 7.1%, so repeated writer validation is not established as the dominant
+cost. This isolated result does not replace or explain the four-selected-case
+StrongR2 failures, prove concurrency causation, or qualify the whole candidate.
+[Exact isolated source, disjoint timing accounting and limits](design/native-ready-observer-isolated-eedf-result.md).
+
+## Executed 68b results: activation releases, then anchor projection refuses
+
+Exact source `68be040ebb00a4c606d519697f913e310c496812` has **failed full
+acceptance**. All four workflow all-target and isolated-consumer checks pass;
+this does not qualify their failed runtime cases.
+
+| Finding | Classification | Exact evidence and limit |
+| --- | --- | --- |
+| New post-catalogue controls | **Failed cohort; three controls passed** | [Run 43315433251](https://github.com/nikoma/bicdb/actions/runs/43315433251), Core `131522161919`: three passed, one failed, 952 filtered, 90.87s. Foreign actual DB/Store, original cancellation with independently fresh exact recovery, and actual writer-hook replacement cuts pass. The missing-decision-archive case fails its third Complete prerequisite before injection; no archive-cut success follows. |
+| Full post-joint recovery positive | **Failed; all three activations released** | [Run 43315439379](https://github.com/nikoma/bicdb/actions/runs/43315439379), Core `131522178395`: zero passed, one failed, 955 filtered, 83.58s. All three actual native decisions, catalogue activations and arm/release steps finish. The n3 result observer rejects `activated completion anchor differs from actual current same-voter native domain` with 2594ms remaining. This is a semantic refusal, not the previous deadline failure. ACK4 and Strong R4 are not reached. |
+| Activation/idempotence cohort | **Failed; seven legacy controls passed** | [Run 43315446340](https://github.com/nikoma/bicdb/actions/runs/43315446340), Core `131522192672`: seven passed, one failed, 948 filtered, 66.97s. The heavy case likewise releases all three activations, then n3's result observer refuses with 2914ms remaining. Later ACK4/Strong/idempotence remain unexecuted. |
+| Original-writer image transition | **Failed required baseline** | [Run 43315453055](https://github.com/nikoma/bicdb/actions/runs/43315453055), Core `131522237759`: zero passed, one failed, 955 filtered, 2.31s. Both fixture writer reinstalls are omitted. Actual OLD closure and initial ACK rows survive on original writers; n3 remains correctly untrusted before image installation. Actual image clear then refuses the changed installed-writer range policy before its row mutation grant. No adoption or global joint decision is reached. [Complete original log/report and custody scope](evidence/native-original-writer-image-policy-refusal-2026-11-12/README.md). |
+| Missing-archive case's earlier Complete failure | **Inconclusive detailed cost attribution** | Actual peer service/DB queueing is negligible in the retained trace. First remote observer validation takes 774/795ms under an 801ms child allowance; retry construction takes 511/518ms under shorter remaining allowances. Entry/exit spans do not attribute cost among full writer, native admission, lineage or joint binding. Nested instrumentation is required before claiming which checks dominate. [Exact source-specific trace/profile](design/native-current-joint-activation-scope-68-result.md). |
+
+The installed image preserves OLD physical voter credentials; the current joint
+bridge protects the NEW voter set. Source review identifies the historical
+completion anchor's use of physical `base_members` as a mismatch for n3.
+Correction `ebcb23b92e66911d3b74fe96d21e8612bf2100ff` selects protected effective
+credentials **only for CurrentJoint**, binds the exact joint decision and serving
+archive, and preserves the NormalRecovery predicate. Test import
+`1ecb621d43762c9cfe772cf43ba1ff0d43c989ce` adds a real n3 AnchorR3-at-R4 positive
+and missing-serving-archive refusal after the unchanged ACK4/Strong prerequisite.
+At the earlier 68b checkpoint, these changes were source-only, uncompiled and
+unexecuted. The subsequent exact eedf results above compile and exercise both,
+including the actual n3 membership diagnostics. Those later component passes
+do not qualify the whole candidate or replace its failed sibling cohort.
+
+The following section preserves the earlier launch-time checkpoint. Its pending
+labels are superseded by the terminal results above, without changing source IDs.
+
+## Historical launch checkpoint: 68b correction and new executions
+
+Candidate `68be040ebb00a4c606d519697f913e310c496812` contains the independently
+reviewed [activation validation scope batch](design/native-current-joint-activation-validation-scopes.md),
+author commit `a4345eda607a108cbe05f72852dc333d9b656371`, imported as
+`3cda3fc73b5e6a563bceacdc0f9d40a136ba6881`. It uses separate actual pre-catalogue,
+post-catalogue and late-arm scopes. Current authority, original writer/caller,
+current/archive records and physical ownership remain required; no deadline,
+retry or worker count is changed. Formatting, diff and all 29 source-version
+identity checks pass locally. **Runtime and compilation results for this new
+batch are pending**, not inherited from f58. Source remains unmerged.
+
+Actual focused executions at exact 68b are:
+
+| Selection | Run | Status at this checkpoint |
+| --- | --- | --- |
+| Four new post-catalogue fault controls | [43315433251](https://github.com/nikoma/bicdb/actions/runs/43315433251) | **Inconclusive at launch**; terminal results are recorded above |
+| Unchanged full Abort3 → activation → ACK4/Strong positive | [43315439379](https://github.com/nikoma/bicdb/actions/runs/43315439379) | **Inconclusive at launch**; terminal results are recorded above |
+| Existing activation controls and full idempotence continuation | [43315446340](https://github.com/nikoma/bicdb/actions/runs/43315446340) | **Inconclusive at launch**; terminal results are recorded above |
+| Original writers retained through both fixture reinstall boundaries | [43315453055](https://github.com/nikoma/bicdb/actions/runs/43315453055) | **Inconclusive at launch**; failed required baseline is recorded above |
+
+The preceding diagnostic at source
+`11f5b4b222f4bd84d1f3870dbd59da11ee8cd17c`,
+[run 43314169894](https://github.com/nikoma/bicdb/actions/runs/43314169894),
+Core job `131517781459`, **failed**: zero passed, one failed, 951 filtered,
+2.12s. Its observation helper incorrectly required the not-yet-installed learner
+to have a trusted native anchor. The actual error is `no trusted native anchor;
+image repair required`. This is a **test observation defect**, not execution of
+the expected image-policy refusal or proof of an engine defect. Original raw log,
+source and complete 75-file custody are preserved. Correction 68b records the
+learner's actual refusal as data, asserts actual OLD-member ACK rows and continues
+toward the unchanged image operation; it does not invent a trusted zero floor.
+The new run must establish the earliest real operational boundary independently.
+
+## Historical f58 acceptance: completion progresses, activation fails
+
+**Milestone 1 remains incomplete.** These results belong to the unmerged candidate
+revisions below. They do not establish release admission, a deployed binary,
+physical failover, automatic four-to-five-node convergence or throughput gain.
+Earlier failures remain retained; passing controls do not waive full acceptance.
+
+| Finding | Classification | Exact executed evidence and limit |
+| --- | --- | --- |
+| Original-writer registry replacement controls | **Passed focused controls** | Source `29bfd6c9af7652a8e40a97e46b23d4629777ece9`, [run 43308056358](https://github.com/nikoma/bicdb/actions/runs/43308056358), Core job `131496514002`: five passed, zero failed, 945 filtered, 7.61s. This includes the corrected test of actual old/new writer-generation custody. Workspace all-target and isolated consumer compilation pass at this revision. It is not DATA relocation. |
+| Discovery under actual held DATA-service locks | **Passed focused controls** | Same source 29b, [run 43308063984](https://github.com/nikoma/bicdb/actions/runs/43308063984), Core job `131496564730`: three passed, zero failed, 947 filtered, 5.71s. Bounded fixture-holder startup retains the original actual three-lock hold and quorum/read assertions. All-target and isolated consumer compilation pass. |
+| Original owned-validation fixtures | **Inconclusive suites; cancelled after a confirmed fixture deadlock** | Source `ded3c412cf25c12f3c6fe524d22aac02310a1c0b`, [run 43303070364](https://github.com/nikoma/bicdb/actions/runs/43303070364), Core job `131479132858`, records 57 individual passes and one ignored helper, but no final suite result. Source 29b, [run 43308048131](https://github.com/nikoma/bicdb/actions/runs/43308048131), Core job `131496490839`, selects four controls and completes none. The fixture calls `config(&f)` while already holding the same non-reentrant metadata mutex; `config` locks it again. Both task-owned runs were explicitly cancelled for this source-proven setup deadlock, with partial logs retained. This is not evidence of a production relocation deadlock or a passed broad suite. |
+| Corrected owned-validation execution | **Passed focused controls and compilation** | Source `6e00ba519715ee0ca392357394f2b0a9749a1358`, [run 43310478213](https://github.com/nikoma/bicdb/actions/runs/43310478213), Core job `131505005808`: four passed, zero failed, 947 filtered, 2.30s. Configuration is captured before acquiring the fixture mutex. Both strict-owned and both HOT registered-catch-up contention/release/cancellation cases execute. No production condition or authority deadline is relaxed. Workspace job `131504948931` subsequently passed both all-target and isolated no-default consumer compilation at exact 6e; the complete focused workflow passed. No COLD fault-control or whole-CLI pass follows. |
+| CurrentJoint observer-scope controls | **Passed focused controls** | Source `f58d14fc8836e5cb14ba5251d4415d5ac47fd5b0`, [run 43309668194](https://github.com/nikoma/bicdb/actions/runs/43309668194), Core job `131502198055`: five passed, zero failed, 946 filtered, 75.06s. Includes actual full-handoff R2 Completed preparation followed by foreign DB/Store, original-parent cancellation and real writer-hook replacement refusals, alongside existing codec/authority controls. This does not establish activation or a post-transfer ACK. All-target and isolated consumer compilation also pass at this revision. |
+| Native producer controls | **Passed focused controls** | Same f58 source, [run 43309675405](https://github.com/nikoma/bicdb/actions/runs/43309675405), Core job `131502195020`: nine passed, zero failed, 942 filtered, 0.79s. This selector does not substitute for the full handoff. All-target and isolated consumer compilation also pass at this revision. |
+| Activation continuation | **Failed; useful later durable cut** | Same f58 source, [run 43309691294](https://github.com/nikoma/bicdb/actions/runs/43309691294), Core job `131502250718`: seven passed, one failed, 62.07s. All three Complete calls return within their original deadlines. First activation persists the actual native decision and `NativeActivated` catalogue, then its final catalogue-receipt validation consumes 986.139ms with approximately 746ms remaining. The runtime refuses to arm after expiry. No successful activation reply, ACK4, Strong R4 or idempotent continuation is established. Retained catalogues are n1 Activated, n2/n3 Completed; this is observed custody, not cold-replay qualification. |
+| Unchanged full positive handoff | **Failed at activation preflight** | Same f58 source, [run 43309683056](https://github.com/nikoma/bicdb/actions/runs/43309683056), Core job `131502214629`: zero passed, one failed, 950 filtered, 102.51s. All three Complete calls return; activation expires during native preflight before the new decision WAL. All retained catalogues remain Completed. This is a different cut from the activation continuation above. Workspace all-target and isolated consumer compilation pass at exact f58; the complete workflow fails its acceptance test. Nested debug timings are not summed or extrapolated to physical performance. |
+| Initial native committed-tail recovery | **Open source-level gap; automatic recovery not tested by this audit** | The retained 56f CLI unknown operation is not established as lost or rolled back. A source audit distinguishes a still-running original APP worker from genuine post-admission error/cleanup. Fresh Strong reads must refuse unresolved history; no automatic NativeHost committed-tail controller is established. The next deterministic test must prove actual handler exit before requiring autonomous recovery and the next ACK/Strong. See [source audit and exact test specification](design/native-initial-committed-tail-56f-source-audit.md). |
+
+All four f58 workspace/all-target and isolated-consumer checks subsequently
+passed. Authority and producer workflows pass; both recovery acceptance workflows
+remain failed on their runtime tests. See the [complete f58 receipt](design/native-current-joint-observer-f58-result.md)
+and [source-separated isolation controls](evidence/native-registry-isolation-controls-2026-11-12/README.md).
+
+The next activation correction must independently establish current native facts
+after catalogue fsync. Reusing a pre-fsync currentness check is insufficient.
+Repeated full lineage/materialization checks are source-proven; the trace does
+not attribute all elapsed time to individual repeated calls. Removing repetition
+must preserve actual current/archive proofs, original writer and caller fences,
+fresh quorum/role authority and entry/exit checks for mutable facts. The original
+full acceptance, time limits, terminal ACK4 and Strong R4 remain mandatory.
+
+## Historical native candidate checkpoint: discovery and registry admission
+
+The working native candidate remains **unmerged and unqualified**. The results
+below identify their actual tested revisions; they do not qualify the later
+composition or main merely because each carries source version `1.0.489-beta`.
+No new release binary, deployment or physical experiment is established.
+
+| Finding | Classification | Exact executed evidence and limit |
+| --- | --- | --- |
+| Discovery with DATA-service contention | **Failed baseline** | Source `05979463ef312fc1128a42903f908de0189c2a63`, [run 43278532377](https://github.com/nikoma/bicdb/actions/runs/43278532377): zero passed/one failed, 5.07s. Two genuine metadata-quorum acquisitions succeed with all three DATA-service mutexes held, while public discovery receives three bootstrap-busy and three unsupported-fallback replies. Releasing the locks restores the same client's original ACK/value and a fresh null ACK/Strong result. [Portable original receipt and precise scope](evidence/native-initial-data-discovery-held-2026-11-12/README.md). This is a same-process TLS component witness, not an Azure causal finding. |
+| INITIAL-only routing correction | **Passed focused runtime and compilation controls** | Source `26cdaa87c446ca35542ec816b29f069d57f47242`, [run 43284689289](https://github.com/nikoma/bicdb/actions/runs/43284689289), Core job `131414888059`: three passed/zero failed/933 filtered, 5.93s. All three actual bootstrap replies contain the full committed topology while the DATA locks remain held; both genuine held metadata quorums and the original full-value/present-null reads pass. Separate controls reject wrong service, stopped owner and a replaced Store even while the original Store/writer remain alive. The actual slot-generation fence also rejects restoration of that old Store. Generic/control bootstrap and listener allowlists remain unchanged. Workspace all-target and isolated no-default consumer compilation also pass on exact 26c. This does not establish a broader regression suite or qualify the later composition. [Original complete passing receipt](evidence/native-initial-routing-discovery-2026-11-12/README.md). |
+| Healthy read/write continuity after fifth metadata-voter admission | **Failed** | Source `1d3976f9f8011f3ac7411494aa0dfb432763ce78`, [run 43282887768](https://github.com/nikoma/bicdb/actions/runs/43282887768), CLI job `131408621456`: five passed/one failed, 84.04s. The original five cases pass; the additive strict case fails its final health assertion after attempting BOTH old-ACK Strong reads and fresh Appends in two rounds. Reads receive actual typed `WriterAdmission` unavailable replies at generation 4; writes receive actual registry-changed RPC errors. Successful routing snapshots remain distinct from fresh metadata-quorum authority. All five original child processes are running after the probes; no restart is inferred or performed. All-target and isolated-consumer checks pass. The fifth node is still an unassigned receiver, not a relocated DATA owner. [Complete wire, ledger and stopped-custody receipt](evidence/native-writer-registry-strict-baseline-2026-11-12/README.md). |
+| Strict-case ACK and uncertain-write custody | **Inconclusive for independent native-page reconciliation** | Complete journals and stopped owned database roots are retained for the failing strict fixture. It has one prior external ACK and two uncertain fresh-write API calls with physical retries; neither an RPC error nor a catalogue entry alone proves rollback or native-row visibility. Earlier passing fixtures' four ACKs are separate and their database roots are not in this failed fixture's capture. This is process-stop custody, not a physical power-loss or cold-replay result. |
+| CurrentJoint completion under original deadlines | **Failed full recovery; useful partial completion** | Source `fd85a24392abf8a273479f8637e040523c053109`, [run 43278537440](https://github.com/nikoma/bicdb/actions/runs/43278537440): zero passed/one failed, 83.78s; all-target and isolated-consumer checks pass. Node n1 actually returns completion with 226ms left. Node n2 returns from native-WAL and catalogue fsync before the deadline, then expires during refresh; its reply remains uncertain. Node n3 completion, activation, ACK4 and Strong R4 are not reached. [Exact profile, source reconstruction and custody limits](evidence/native-current-joint-refresh-fd85-2026-11-12/README.md). Nested timing spans overlap and are not additive throughput measurements. |
+| Two-scope publication/cancellation/ownership controls | **Passed focused controls and compilation** | Exact source `883f5f6e1ec30d96b14cb55ab346cf769c9ea693`, [run 43288464580](https://github.com/nikoma/bicdb/actions/runs/43288464580), Core job `131428110439`: nine passed/zero failed/929 filtered, 0.61s. Includes genuine foreign Store/fresh-role refusal, original QQ/caller cancellation, persistence ambiguity and actual second-range prompt busy refusal followed by observer progress after release. All three 883 workspace/all-target and isolated-consumer compilation jobs subsequently passed. This does not demonstrate concurrent ACK progress during a stalled global journal or uniform Normal born-v2 original-writer safety. |
+| Full recovery after two-scope correction | **Failed, at a later stage** | Same exact source 883f, [run 43288472362](https://github.com/nikoma/bicdb/actions/runs/43288472362), Core job `131428140992`: zero passed/one failed/937 filtered, 65.45s. All THREE Complete RPCs actually return within their original cap: n1 1571.750ms, n2 2116.626ms, n3 1386.843ms. First recovery activation then reports `native image journal busy`; ACK4/Strong R4 are not reached. Source tracing finds an inherited journal reentry in both fresh and same-session native activation-decision paths. Exact runtime persistence stage remains subject to retained-state verification. These three CI phase timings are not physical RTO or latency percentiles. |
+| CurrentJoint authority/original-writer lane after scope correction | **Focused Core job passed; limited selector** | Same exact source 883f, [run 43288468790](https://github.com/nikoma/bicdb/actions/runs/43288468790), Core job `131428118476` passes. The module selector matches one heavy authority/original-writer test; it does NOT execute the earlier four-test `current_joint_` group. The other producer/codec controls still require the final coherent Core suite. No earlier revision's four-test result is transferred to this source. |
+| Activation journal correction, full recovery prerequisite | **Failed; new activation path not reached** | Source `432fc9bc5e9f681bb40e3bfe6b07fd043bcdf061`, [run 43294492826](https://github.com/nikoma/bicdb/actions/runs/43294492826), Core job `131449108302`: zero passed/one failed/939 filtered, 101.66s. The unchanged full positive returns n1/n2 Complete in 2894.045/3949.512ms with 1104/48ms remaining. The third Complete fails closed-Ready quorum collection with a peer n2 query timeout while its parent still has 1056ms remaining; no activation, ACK4 or Strong R4 follows. Aggregate spans do not record the peer's exact allowance, local contention or the timeout's physical cause. This failure does not validate or refute the newly changed activation branch, which was not executed. |
+| Activation controls and added full-path idempotence continuation | **Seven controls passed; new continuation failed before activation** | Same source 432fc, [run 43294496599](https://github.com/nikoma/bicdb/actions/runs/43294496599), Core job `131449126336`: seven passed/one failed/932 filtered, 89.94s. The separate continuation first requires the original fresh activation/ACK4/Strong path. It fails at the same third Complete prerequisite, with peer n1 query timeout and 1067ms parent remaining. Neither its fresh activation nor later Runtime idempotence assertions execute. Workspace/all-target and isolated no-default consumer compilation pass at this source. No existing control's pass is transferred to the unexecuted CurrentJoint activation branch. |
+| Retained-writer metadata-registry correction, first focused cohort | **Failed cohort; four controls passed** | Reviewed batch `6c5074442d73f8e9a4398eaa5c4d07f6fd235c9b` + `37ee4db501c81e90408aad659519a72f04e8f85f` + `9771fcfeb7fd79f2f4818351b644d9e3e2c68b9a`, integrated as `aac6192c2b034e1f2e4c88a16fd84bcd94e0bf6b`. [Run 43296887408](https://github.com/nikoma/bicdb/actions/runs/43296887408), Core job `131457525202`: four passed/one failed/940 filtered, 6.47s. Passing controls cover actual post-native-readback error and independently fresh exact retry/cold no-grant, original cancellation and replaced Store-slot refusal, actual fifth-voter extension followed by committed label mutation, and legacy no-baseline refusal. The new replacement test expects a later object-fence message but receives an earlier real hook-lifetime refusal; its subsequent audit/point/cleanup assertions did not execute. Test-only successor `794fd5ad3f16e21e07c641bb9635910ffb6d274a` separately checks fresh-ingress refusal and replay of a genuinely captured pre-replacement preparation, with original-token, full ACK-row and actual replacement-hook assertions. That successor is not tested by this result. No production fence was relaxed. |
+| Learner's actual schema identity publication | **Passed focused control** | Same exact aac source, [run 43296897267](https://github.com/nikoma/bicdb/actions/runs/43296897267), Core job `131457557639`: one passed/zero failed/944 filtered, 2.68s. Actual native/TLS enrollment commits the sealed observed schema with the learner birth through the real pending proposal and old-voter quorum. Contradictory and previously bound-but-missing labels refuse. Metadata enrollment is not DATA Ready or relocation. |
+| Strict fifth metadata-voter addition with existing DATA continuity | **Passed strict case; complete CLI cohort failed elsewhere** | Same exact aac source, [run 43296905362](https://github.com/nikoma/bicdb/actions/runs/43296905362), CLI job `131457578487`: five passed/one failed, 65.89s. The additive strict case passes on its first health round: the same client receives the prior ACK's exact Strong value, a fresh ACK and its exact Strong value at monotonic receipt 1,015,797,325ns, inside the unchanged 10,000,000,000ns gate and original two-second API budgets. It records no false absence or wrong value. The four retained writers publish registry extensions; the fifth remains non-serving and DATA assignments do not move. This is a bounded metadata-addition continuity result, not physical relocation, RTO or capacity qualification. |
+| Existing automatic join/election CLI case at aac | **Failed** | The same complete CLI target fails `native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_voter` on the actual n4 `elect` command, after n4 becomes an owned metadata voter and before the sixth process is spawned. The error is `owned metadata member changed/busy`; all five processes are still running before custody teardown. Source `learner_birth/metadata_transition.rs::validate_owned_metadata_member` emits that exact message only when its second `try_lock` fails, after factory validation; actual proof-state change has a different error. This identifies a local acquisition refusal, not a child crash or an Azure causal finding. A bounded wait must preserve the original caller/MQ expiry and the unchanged final proof-current check. No failing assertion is waived. |
+| Automatic DATA-policy transition and retained ingress across handoff | **Not tested operationally; missing integration identified by source review** | [Exact source audit](design/native-data-policy-transition-gap.md) at aac distinguishes the component fixture's explicit `refresh_hosts` re-enrollment after actual metadata transition from a production retained-host transition. Later original-writer checks preserve the post-refresh preparation's writer; they do not prove automatic lifecycle retargeting. Metadata-registry refresh deliberately refuses DATA range/epoch/leader changes. An authorized internal policy rotation or extension may be valid, but the actual controller must consume the handoff decision, keep old ingress fenced, reconcile uncertain publication, and preserve all native/ACK obligations. No existing fixture-map replacement proves this gate. |
+| New physical four-to-five expansion, fault-safe convergence and capacity | **Not tested** | No new VMs, physical RPO/RTO, stable-five latency window or sustained throughput comparison. The original Azure qualification remains **FAILED**. These component results do not close its unknown restoration event or prove its original unreadable-ACK/nonconvergence causes. |
+
+All three aac workspace/all-target and isolated no-default consumer compilation
+jobs passed. They do not change either failed cohort's classification, and do
+not validate the later test-only successor or subsequent composition.
+
+The [first aac receipt](evidence/native-writer-registry-first-aac-2026-11-12/README.md)
+retains all 54 strict journal records, distinct failed-command/stopped-state
+chronology, actual binary identity and separate fixture custody. Its portable
+and private checks, including four semantic tamper cases, passed independently
+at integration. They verify retained bytes and consistency, not engine replay
+or independent physical qualification.
+
+Hot owned-member correction `f5b419100beadaece29c3b3dcb85f88f6fd226a4`
+(integration `56f9a3c999fba329c349d3e6dda664dcfb64e4c6`) waits for the two short
+metadata borrows under the minimum of the original MQ expiry and caller
+deadline/cancellation, with the original final proof-current check intact.
+Cold-member and other service-lock paths are unchanged. Its two genuine mutex
+controls and the separate actual-TLS expired-delivery control **did not execute**
+in the first 56f Core jobs: three snapshot calls used a nonexistent `BicDb::scan`
+API and failed compilation. [Exact failed-build receipt](evidence/native-writer-registry-first-aac-2026-11-12/FAILED-BUILD-56f.md).
+Test-only correction `626736598093281a440ca500794846f9373bcb4c` uses the real
+`scan_collection` API without changing assertions. Earlier passing controls
+cannot validate this corrected source.
+
+The [correlated observer diagnostic](design/native-ready-peer-deadline-diagnostic.md)
+adds test-only peer budgets, receiver validation phases and actual operation-exit
+traces. Its first composition `be85db58c1c4f54b13372a9a966794d146d31722`
+also failed test compilation on those same three snapshot calls, before any
+observer telemetry or recovery test ran. No receiver-cost attribution or
+activation success follows. Corrected composition and final versioned-head
+regressions remain required; the original full positive's acceptance child is
+byte-identical to 883.
+
+The registry repair has a [retained-writer design contract](design/native-retained-writer-registry-refresh-contract.md)
+and a source-reviewed implementation in the unmerged candidate. Its companion
+learner change publishes the actual observed schema identity with the registered
+birth. Runtime evidence must still establish automatic refresh under fresh actual
+metadata authority while preserving the original writer/registration/coordinator
+and recovery lineage. No initial-genesis reset or cached-topology grant is allowed.
+The [completion borrow-scope contract](design/native-current-joint-refresh-borrow-scope-contract.md)
+has focused passing two-scope controls and the failed full-path results above.
+The later activation correction remains unvalidated because its prerequisites
+failed; [its complete failed receipt](design/native-current-joint-432fc-closed-ready-timeout.md)
+and the [observer timing/scope analysis](design/native-ready-observer-read-scope-analysis.md)
+separate measured aggregate durations from unmeasured receiver costs.
+Its original-writer operation proof is specific
+to CurrentJoint, and does not newly qualify Normal born-v2 hook replacement.
+No measured performance or recovery success follows from this source review.
+Production admission and the complete Milestone 1 gates remain unchanged.
+
 ## Earlier verified checkpoint (before the read489 merge)
 
 Verified GitHub main is now **1.0.488-beta**,
@@ -65,6 +335,28 @@ The later status-document update changes no runtime code.
 
 | Operator-driven expansion, cold recovery and physical capacity | Open. Registered fifth-node replica receiver, authenticated native image/joint wire consumers and native placement-controller integration remain unfinished. Initial-only data-open does not supply general post-joint/cold recovery. No automatic four-to-five relocation/controller-restart result, new VM trial, physical RPO/RTO or stable-five throughput result exists. |
 
+
+## Additional candidate checkpoint: November 12, 17:14 UTC
+
+The earlier rows retain their exact source histories. The larger working
+candidate is still unmerged; its code anchor is
+`2a7a587fcfd392e851dc42eccc8762837b0c7fb6`, source `1.0.489-beta`.
+It includes the separate read489 candidate; it is not GitHub main489, a
+release binary or a deployed cluster. Main remains verified488 at this checkpoint.
+
+| Finding | Classification and exact evidence |
+| --- | --- |
+| Full read/Abort/joint composition | Passed focused checks only. At `f8a68673b`, run43264294037, native-writer controls pass10/0/907filtered in1.73s; all-target and isolated-consumer compilation pass. This does not validate later recovery code. |
+| Registered fifth-node receiver | Passed limited controls on `3ee40c19b`: Core3/0/913filtered in2.28s. The real CLI receiver case obtained an ACK/full Strong result before joining the fifth metadata voter and opening its replica-only receiver. APP/Get/Scan refused correctly. The same gateway then timed out: healthy post-join continuity, native image/joint transfer and automatic movement remain unproved. |
+| Expanded CLI cohort | **Failed4passed/1failed**, source3ee, run43262683104. The existing initial-DATA case obtained one object ACK/full Strong value, then its JSON-null append returned generic no-member-reachable. All four processes were alive, and retained metadata shows no leader change. Null durable outcome and post-failure ACK reconciliation are unknown because full DB/page/WAL/range-catalogue custody was not retained. [Original full logs, diagnostics, hashes, source excerpts, verifier and precise next-test limits](evidence/native-registered-receiver-cli-2026-11-12/README.md). No rerun or durable-loss conclusion follows. |
+| Ready-preparation timeout | **Failed positive acceptance** at `6ce80ad32`, run43263149425. Actual preparation fsync returned with662ms of the original budget left; full post-persistence validation left80ms, then repeated response validation expired. Service-lock waits were microseconds. This directly proves preparation persistence before the deadline in this cohort, not completion/activation/next ACK. |
+| Scoped produced-Ready correction | Source-reviewed; full positive result pending. Code2a7 consumes actual physical evidence, retains full validation before and after fsync, and immediately projects within the same exclusive Store/DB/freeze/pin ownership. Original deadline, caller, writer and session checks remain. RF1 controls pass2/0 in0.15s at run43265974939; CurrentJoint authority controls pass4/0 in47.80s at run43265975524. Full recovery acceptance43265975417 is still running. Predicted latency savings are not measured success. |
+
+The capability catalog now explicitly scopes automatic replica rebalancing to
+the legacy range/event controller. It does not assert that the unfinished native
+DATA image/joint/controller path is implemented. Manifest tested, qualified and
+deployed statuses remain not-established. No physical qualification, capacity
+increase, general distributed SQL or critical-workload admission is established.
 
 ## Deployment modes
 
@@ -114,8 +406,8 @@ data relocation, a physical experiment, production qualification or deployment.
 | Automatic metadata elections and catch-up | Passed, focused unmerged candidate | `d194594b138fced00b611bef2b00e70f950e1045` at [run 43207170874](https://github.com/nikoma/bicdb/actions/runs/43207170874): three passed, zero failed. Actual TLS votes, current-term barrier, valid-contact checks and malformed/stale rejection. Stop/drain is not a process kill; metadata-store reopen is not an all-database-owner restart. |
 | Metadata promotion authority | Passed, focused unmerged candidate | Same source at [run 43207174755](https://github.com/nikoma/bicdb/actions/runs/43207174755): two passed, zero failed. Actual owned acknowledgment and original live budget required; pending promotion and held acknowledgment cannot cross an actual leader transfer. |
 | Registered metadata catch-up, cold owner and promoted control batch | Passed, focused unmerged candidate | `67aff6f566c62117999e8625696cb327b3afaba1` at [run 43211866859](https://github.com/nikoma/bicdb/actions/runs/43211866859), job 131161252327: 40 passed, zero failed, one ignored, 844 filtered, 47.53 seconds. All-target and isolated-consumer compilation passed. Includes actual Registered catch-up after withheld promotion delivery, all-target-owner cold voter reopen, exact elected-fifth-node registration/schema RPCs, stale metadata authority refusal, and metadata supervisor controls. Lower catch-up custody does not grant readiness; strict current owned-member evidence remains required. This does not test the later CLI process-kill successor or complete data relocation. Raw job-log SHA-256: `0bbcdd6e7d37b81fb9b8cdcf5a076eb56d41312200146b8ec92e1df40ce8a4f8`. |
-| Default automatic fifth-node enrollment | Passed, focused unmerged candidate | Same source at [run 43207178489](https://github.com/nikoma/bicdb/actions/runs/43207178489), job 131145204507: two passed, zero failed, 8.92 seconds for the complete CLI target. One test is the manual/cold control; the other uses default automatic scheduling to make the actual fifth process a locally ready metadata voter. All application-data requests remain refused. Raw job-log SHA-256: `558fb080e4f9315d10892b5114d5477eafdba7c4546e50486346ea1ea58bff89`. |
-| Bounded joint publication and lost-reply recovery | Passed, focused unmerged candidate | Same source at [run 43207167250](https://github.com/nikoma/bicdb/actions/runs/43207167250): two passed, zero failed. Fresh bounded authority for each publication/recovery preserves the expired original quorum and original caller cancellation. Covers all three durable publications and uncertain replies, not opening/releasing replicas or the next write/read. |
+| Default automatic fifth-node enrollment | Passed, focused unmerged candidate | Source `d194594b138fced00b611bef2b00e70f950e1045` at [run 43207178489](https://github.com/nikoma/bicdb/actions/runs/43207178489), job 131145204507: two passed, zero failed, 8.92 seconds for the complete CLI target. One test is the manual/cold control; the other uses default automatic scheduling to make the actual fifth process a locally ready metadata voter. All application-data requests remain refused. Raw job-log SHA-256: `558fb080e4f9315d10892b5114d5477eafdba7c4546e50486346ea1ea58bff89`. |
+| Bounded joint publication and lost-reply recovery | Passed, focused unmerged candidate | Source `d194594b138fced00b611bef2b00e70f950e1045` at [run 43207167250](https://github.com/nikoma/bicdb/actions/runs/43207167250): two passed, zero failed. Fresh bounded authority for each publication/recovery preserves the expired original quorum and original caller cancellation. Covers all three durable publications and uncertain replies, not opening/releasing replicas or the next write/read. |
 | Complete joint handoff | Failed in retained complete-fixture runs; newer phase corrections not yet qualified | `c96f27427b855ab20d533eb30dfd3aa11f9fe194` at [run 43200329282](https://github.com/nikoma/bicdb/actions/runs/43200329282): zero passed, one failed. Component traces identify exhaustion of the retained quorum's deadline during repeated authority validation. The required target-as-new-leader, next acknowledged write and Strong read remain mandatory. A passing publication-only check does not close this failure. |
 | Fresh phase opening while all three owners remain frozen | Failed, focused unmerged candidate | `5056d857cc44d9f405d60a40a76323a1f2d5b45d` at [run 43209913124](https://github.com/nikoma/bicdb/actions/runs/43209913124), job 131154586387: zero passed, one failed, 883 filtered, 37.31 seconds. All-target and isolated-consumer compilation passed. All three publications completed; two fresh-open attempts on target n3 then exhausted their bounded authority before the required open result. Exact failing assertion is `complete_joint_tests.rs:1005`. Opening, release and subsequent write/read are not established by this run. Preserve the failed execution; do not infer the original Azure mechanism from this CI timeout. |
 | Instrumented all-Frozen opening with actual lost-reply reconciliation | Passed once, focused unmerged candidate; earlier timeout cause and stability unresolved | `656a8e6a44d324acd94ab36a7f06ac83497ff08a` at [run 43212523246](https://github.com/nikoma/bicdb/actions/runs/43212523246), job 131163486234: one passed, zero failed, 884 filtered, 32.96 seconds. All-target and isolated-consumer compilation passed. The successor adds diagnostic spans, fault-state capture and a test correction that injects lost reply after the first actual returned durable target receipt, reserving a bounded reconciliation attempt. No authority timeout was extended. Successful Rust output was suppressed, so this run supplies no retained component timings; the capture-on-failure hook was not exercised. Raw job-log SHA-256: `484083abf63a9d3ebcf43cbfccadbf74962f18768f69db07fe1e0358bc26f6f2`. Full release, new-leader ACK and Strong read remain open. |
@@ -148,9 +440,11 @@ data moves automatically or that five nodes provide greater sustained capacity.
 | --- | --- |
 | Strong-read authority and visibility after leadership movement | Actual acknowledged value immediately after transfer: latest value or bounded retryable unavailable. No successful false absence. Independently observe replica-ready, leader-ready and strong-read-ready; none is inferred solely from election or topology. |
 | Stale gateway route | Hold an actual stale route across promotion, record its structured refusal, bounded refresh and final read against the same ACK ledger. Preserve request/response bytes, topology generation, range epoch, leader and applied/commit positions. |
-| Same-birth reopen after range-catalog loss | **Confirmed unsafe Strong absence in the unmerged candidate.** Source 3d0041e09 at run 43218099779: intact stopped twin recovered ACK1/full value; removing only the other twin's n1 catalog admitted clean zero and successful absence. No permanent loss of every copy, ordinary main487 single-host defect or Azure causality is established. [Retained paired witness, fifty-file custody and portable checks](evidence/native-read-catalogue-loss-2026-11-12/README.md). Hold delivery for fail-closed custody, genuine bootstrap ordering, repeated-reopen and compatibility tests. |
+| Same-birth reopen after range-catalog loss | **Baseline failed; scoped repair delivered in main489.** Source 3d0041e09 at run 43218099779 admitted successful absence after only a twin's catalogue was removed. [Retained paired witness](evidence/native-read-catalogue-loss-2026-11-12/README.md). The subsequent fail-closed custody and reopen controls passed and were included in the read489 delivery above. This does not qualify arbitrary snapshot rollback, every recovery defect or Azure causality. Compose later recovery/relocation changes with current main and rerun their relevant final-head checks. |
 | Source fails during image installation | Complete actual current-quorum replacement/resume while target is Installing. Cover nonzero target-native prefix and a higher replacement cut, original cancellation/authority, cold restart, retained archived stage ancestry and all inherited command obligations. No historical receipt may become fresh quorum authority. |
-| Joint handoff and post-joint recovery | Same-open handoff, target ACK2 and Strong R2 have passed the exact component cohort above. The subsequent recovery acceptance still fails its target fence. Complete NEW-domain Prepare-only/no-effect recovery with fresh NEW quorum and next ACK. Preserve permanent promises and prior Commit obligations; see [post-joint audit](design/native-post-joint-no-data-audit.md). |
+| Joint handoff and post-joint recovery | Exact eedf passes full PrepareOnly/Abort3/activation/ACK4/Strong R4 and its separate idempotence/archive controls. Its four-case sibling cohort fails the earlier Strong R2 prerequisite, while an isolated archive case passes. Resolve and rerun the failed cohort; the isolated pass is not a waiver. Replace fixture re-enrollment/orchestration with actual operator-owned producers and qualify the genuine fifth-node path. See the executed results above and [post-joint audit](design/native-post-joint-no-data-audit.md). |
+| Hot committed-tail autonomous repair | Exact721 reaches the intended fault and fails recovery after the normal origin handler has exited. Recover the actual quorum-committed command into the same original writer, then obtain exact old/new Strong values and the next ACK/Strong without a manual reset or coordinator replacement. Preserve the complete attempt ledger; do not convert a committed tail into NoData/Abort. See the [failed baseline](evidence/native-origin-pre-wal-2026-11-12/README.md). |
+| Original writer and genuine receiver image admission | Both image row-scope construction and transaction authorization require the actual native writer descriptor. Pending's epoch differs from original C1. Supply closed-purpose, actual-proof-bound admission for the original writer and a distinct genuine Registered receiver, without weakening ordinary APP/Strong guards. Prove first and second range images with the same owners; see the [source audit](design/native-closed-handoff-image-admission-audit.md). |
 | One stalled move versus independent ranges | Stall actual disk/catch-up work, prove other ranges continue, persist bounded progress and explicit refusal reason; restart controller at promotion and cleanup cuts. Distinguish progress, blocked condition, oscillation and controller error from request-time traces. |
 | All-owner restart and command lifecycle | Strictly reopen actual birth/namespace/store UUID, term/vote/log and exact original configuration. Drive registration, catch-up, promotion and data activation through operator commands. See [command-path delta](design/native-command-driven-enrollment-delta.md) and [cold-recovery design](design/native-learner-all-owner-cold-recovery-design.md). |
 | Long-running availability | Resolve bounded permanent-slot/inventory and archived-history limits with crash-safe reader and persistence contracts. Small tests do not qualify an 8 GiB/long-running relocation workload by avoiding those limits. |

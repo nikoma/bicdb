@@ -1,0 +1,179 @@
+{
+  "source_revision": "eedf23d58e236cf62d61366349ad4de3bd52373b",
+  "source_version": "1.0.489-beta",
+  "wire_protocol": 28,
+  "receipt_scope": "same-open local opaque orchestration with real mTLS metadata/data RPCs; historical anchor is not current Ready/read authority",
+  "runtime_cohorts": [
+    {
+      "run_id": 43319425823,
+      "core_job_id": 131535932600,
+      "filter": "native_post_joint_",
+      "log": "positive.log.gz",
+      "result": {
+        "status": "ok",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 955,
+        "seconds": 100.89
+      },
+      "test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::post_joint_no_data_tests::native_post_joint_actual_new_domain_prepare_only_recovers_then_ack4_and_strong",
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_activation_idempotence_tests::native_post_joint_actual_activation_idempotence_after_fresh_activation_ack4_and_strong"
+      ],
+      "compile_job_id": 131535889066
+    },
+    {
+      "run_id": 43319432266,
+      "core_job_id": 131535951702,
+      "filter": "native_current_joint_actual_image_target_anchor_r3_at_r4_refuses_missing_serving_archive",
+      "log": "archive-control.log.gz",
+      "result": {
+        "status": "ok",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 956,
+        "seconds": 98.32
+      },
+      "test_ids": [
+        "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activated_anchor_archive_tests::native_current_joint_actual_image_target_anchor_r3_at_r4_refuses_missing_serving_archive"
+      ],
+      "compile_job_id": 131535911651
+    }
+  ],
+  "unique_passed_test_ids": [
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activated_anchor_archive_tests::native_current_joint_actual_image_target_anchor_r3_at_r4_refuses_missing_serving_archive",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_activation_idempotence_tests::native_post_joint_actual_activation_idempotence_after_fresh_activation_ack4_and_strong",
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::post_joint_no_data_tests::native_post_joint_actual_new_domain_prepare_only_recovers_then_ack4_and_strong"
+  ],
+  "unique_passed_tests": 3,
+  "compile_checks": [
+    {
+      "job_id": 131535889066,
+      "run_id": 43319425823,
+      "log": "positive-compile.log.gz",
+      "workspace_all_targets": "PASS",
+      "isolated_consumer_no_core_defaults": "PASS"
+    },
+    {
+      "job_id": 131535911651,
+      "run_id": 43319432266,
+      "log": "archive-compile.log.gz",
+      "workspace_all_targets": "PASS",
+      "isolated_consumer_no_core_defaults": "PASS"
+    }
+  ],
+  "actual_anchor": {
+    "node": "n3",
+    "physical_ids": [
+      "n0",
+      "n1",
+      "n2"
+    ],
+    "protected_effective_ids": [
+      "n1",
+      "n2",
+      "n3"
+    ],
+    "observer_ids": [
+      "n1",
+      "n2",
+      "n3"
+    ],
+    "historical_R": 3,
+    "current_R_after_ACK4": 4,
+    "observed_anchor_local_B": 2,
+    "ready_grant": false
+  },
+  "archive_control": {
+    "actual_native_WAL_delete": true,
+    "current_pointer_unchanged": true,
+    "exact_error": "immutable joint activated serving archive is missing",
+    "receiver_remaining_ms": 3890,
+    "original_parent_live": true,
+    "full_R4_H_B_UID_rows_slots_raw_3ACKs_unchanged": true,
+    "Strong_after_corruption_qualified": false
+  },
+  "success_artifacts": [
+    {
+      "artifact_id": 13990062815,
+      "path": "artifacts/positive.zip",
+      "zip_sha256": "61570cc1b547858e4a5426ed2dcd0f125aff9c2783b34ef8c9ab75888b85dbc2",
+      "workflow_files": 4,
+      "database_custody_retained": false
+    },
+    {
+      "artifact_id": 13990905691,
+      "path": "artifacts/archive-control.zip",
+      "zip_sha256": "5a80e7cc25ab21cad895ffa141e5853adaf9b2bb913c0a345af1727366328bdb",
+      "workflow_files": 4,
+      "database_custody_retained": false
+    }
+  ],
+  "sibling_failure": {
+    "source_revision": "eedf23d58e236cf62d61366349ad4de3bd52373b",
+    "run_id": 43319438217,
+    "core_job_id": 131535993682,
+    "log": "sibling-four-cuts.log.gz",
+    "result": {
+      "status": "FAILED",
+      "passed": 0,
+      "failed": 4,
+      "ignored": 0,
+      "measured": 0,
+      "filtered": 953,
+      "seconds": 81.0
+    },
+    "earliest_boundary": "StrongR2 prerequisite AFTER actual target ACK2, BEFORE CurrentJoint/fault cuts",
+    "NativeProbe_events_contexts_spans": 0,
+    "CurrentJoint_or_fault_cuts_reached": false,
+    "observer_cost_measured": false,
+    "compile_job_id": 131535934325,
+    "compile_and_consumer": "PASS",
+    "private_artifact_id": 13989698674,
+    "private_payload_files_verified": 300,
+    "private_payload_bytes": 18711064,
+    "engine_replay_qualified": false
+  },
+  "whole_candidate_qualified": false,
+  "operator_or_autonomous_4_to_5_qualified": false,
+  "physical_or_8GiB_qualified": false,
+  "deployed": false,
+  "engine_opened_or_replayed_for_receipt": false,
+  "full_source_reconstruction_included": false,
+  "raw_logs": {
+    "positive.log.gz": {
+      "raw_bytes": 5991466,
+      "raw_sha256": "80aa57b0cf3ae97e61704ab2b3f57a562772bacf6c1801731dcd80b200350900",
+      "eof_diagnostics": 102,
+      "broken_pipe_diagnostics": 55
+    },
+    "archive-control.log.gz": {
+      "raw_bytes": 3796737,
+      "raw_sha256": "72d857a6514910216d90204713f44356e255780e24b999f4c593a29004c2a66a",
+      "eof_diagnostics": 6,
+      "broken_pipe_diagnostics": 12
+    },
+    "positive-compile.log.gz": {
+      "raw_bytes": 2505893,
+      "raw_sha256": "7c37a394e74fa61b6e21ad4cf1b8822d1b35f97283ef9e83cfaf283a4736b1e6",
+      "eof_diagnostics": 0,
+      "broken_pipe_diagnostics": 0
+    },
+    "archive-compile.log.gz": {
+      "raw_bytes": 2505957,
+      "raw_sha256": "204ffdcd098e25d5353335b95681e311c0c9f7b12b008887ac461f53b722dfa8",
+      "eof_diagnostics": 0,
+      "broken_pipe_diagnostics": 0
+    },
+    "sibling-four-cuts.log.gz": {
+      "raw_bytes": 1990269,
+      "raw_sha256": "ac9b8e8d8ca220b817e89a0d5f23b2b40b9bf5c5fce5ba5c57e52e158b6da791",
+      "eof_diagnostics": 24,
+      "broken_pipe_diagnostics": 33
+    }
+  }
+}

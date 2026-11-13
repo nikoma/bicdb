@@ -93,6 +93,17 @@ Cell evidence lease, resource placement, failure domains or deployed binary.
 Those require separate live/configuration checks. Conditional claims are denied
 even at the `implemented` level rather than silently trusting supplied prose.
 
+The `distributed_ranges.automatic_range_rebalancing` implementation declaration
+covers the legacy range/event controller. It does not cover born-v2 enforced
+native DATA relocation: the native guard refuses legacy membership/cleanup,
+and the registered replica receiver supplies neither native image/joint
+transfer nor an automatic native placement controller. A local component test,
+receiver-ready status or implemented one-range write capability cannot establish
+that missing path. `native_streaming_ha` describes whole-database single-primary
+HA; its declarations do not qualify native range handoff. Transparent SQL,
+general cross-range transactions/joins, physical scale certification and
+critical-workload admission retain their separate catalog limitations.
+
 The manifest has no database or key capability. It cannot bypass Cell admission,
 writer fencing, normal SQL authorization or the engine's unsupported-operation
 checks. Logical locality is an optimization; a placement tool must not advertise

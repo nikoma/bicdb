@@ -1,0 +1,36 @@
+{
+  "classification": "deterministic_baseline_failed_fixed_focused_passed",
+  "records": [
+    {
+      "label": "baseline",
+      "source_revision": "ec20e46ba3ee6334d00ccf0f77893538a7bb741a",
+      "run_id": 43251524358,
+      "job_id": 131298317193,
+      "classification": "failure",
+      "test_summaries": [
+        "2026-11-12T15:52:34.5282368Z test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 906 filtered out; finished in 2.34s"
+      ],
+      "raw_job_log_sha256": "546caf20ae84e721b4efda8b503b2aa9f9ea5ce960af4217c627b2bfab4d86b1",
+      "artifact_id": 13960845456,
+      "artifact_bytes": 41338,
+      "artifact_sha256": "2dbbd889db5493c645c993d47fcc4272e6ce8f23d4596ae43ab85d6bbe7d8cf4"
+    },
+    {
+      "label": "fixed",
+      "source_revision": "cd8e6e87ba48daebb15fe3cb875b63e1a6051d0b",
+      "run_id": 43251543496,
+      "job_id": 131298370673,
+      "classification": "success",
+      "test_summaries": [
+        "2026-11-12T15:53:25.7234302Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 908 filtered out; finished in 2.80s"
+      ],
+      "raw_job_log_sha256": "160203c32d7c283b5692b97127e5a62bc74d56b00166ce5946284d3523b24886",
+      "artifact_id": 13959602601,
+      "artifact_bytes": 41095,
+      "artifact_sha256": "4bbaabd190cfabf96b4d59fab2c09d0d1dd385115ba2f86feb42156ed794bd42"
+    }
+  ],
+  "physical_qualified": false,
+  "production_qualified": false,
+  "deployed": false
+}

@@ -1,0 +1,19 @@
+{
+  "run_id": 43315453055,
+  "job_id": 131522237759,
+  "source_revision": "68be040ebb00a4c606d519697f913e310c496812",
+  "artifact_id": 13988651282,
+  "zip_sha256": "9b2767cfb899a897d958a1b0fa6cbc145273f13aa0873ba747b2abe4bd3616b1",
+  "zip_bytes": 193253,
+  "zip_entries": 81,
+  "manifest_sha256": "36eb0532a937384d0a07d75e847e9ad273be3fb5e2aee616f0711f95d94e1400",
+  "manifest_file_count": 76,
+  "verified_files": 76,
+  "verified_bytes": 2686795,
+  "missing_files": [],
+  "mismatched_files": [],
+  "engine_opened_or_replayed": false,
+  "custody_status": "captured_observed_stable_with_live_engine_owners",
+  "custody_engine_owners_alive": true,
+  "atomic_powerloss_snapshot_or_replay_verified": false
+}

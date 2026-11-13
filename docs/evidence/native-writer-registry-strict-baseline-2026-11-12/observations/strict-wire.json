@@ -1,0 +1,1665 @@
+{
+  "01a1d122-811b-7761-bd0c-a4ac89f4bf69": {
+    "request": {
+      "public_operation": "get_strong",
+      "namespace": "items",
+      "key": "ack-before-fifth-registry-refresh",
+      "phase": "strict_after_fifth",
+      "round": 1,
+      "request_timeout_ms": 2000,
+      "eventual_health_gate_ms": 10000
+    },
+    "physical_attempts": 42,
+    "operations": {
+      "native_event_get": 34,
+      "metadata_snapshot_discovery": 136
+    },
+    "errors": [
+      {
+        "sequence": 203,
+        "destination": "n0",
+        "phase": "partial_or_rejected_response_frame",
+        "errors": [
+          "io error: cluster RPC interrupted: canceling statement due to query timeout",
+          "cluster RPC interrupted: canceling statement due to query timeout"
+        ]
+      },
+      {
+        "sequence": 204,
+        "destination": "n0",
+        "phase": "exchange_error_before_cancellation_override",
+        "errors": [
+          "io error: cluster RPC interrupted: canceling statement due to query timeout",
+          "cluster RPC interrupted: canceling statement due to query timeout"
+        ]
+      },
+      {
+        "sequence": 205,
+        "destination": "n0",
+        "phase": "validated_transport_result_error",
+        "errors": [
+          "canceling statement due to query timeout"
+        ]
+      },
+      {
+        "sequence": 206,
+        "destination": "n0",
+        "phase": "return_boundary_error_after_evidence",
+        "errors": [
+          "canceling statement due to query timeout"
+        ]
+      }
+    ],
+    "request_frames": [
+      {
+        "sequence": 38,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 3,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-811b-7761-bd0c-a4b5734c071a",
+            "challenge": "01a1d122-811b-7761-bd0c-a4ccd592908a",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 999
+          }
+        }
+      },
+      {
+        "sequence": 58,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 8,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-811b-7761-bd0c-a4b5734c071a",
+            "challenge": "01a1d122-81ad-74d0-9e63-b950286eb49c",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 926
+          }
+        }
+      },
+      {
+        "sequence": 82,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 14,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-811b-7761-bd0c-a4b5734c071a",
+            "challenge": "01a1d122-8256-7600-beb3-2698c07d3e68",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 842
+          }
+        }
+      },
+      {
+        "sequence": 106,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 20,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-811b-7761-bd0c-a4b5734c071a",
+            "challenge": "01a1d122-832a-7871-8878-106b43c05816",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 736
+          }
+        }
+      },
+      {
+        "sequence": 130,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 26,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-811b-7761-bd0c-a4b5734c071a",
+            "challenge": "01a1d122-8462-7852-841e-bee5088862ef",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 580
+          }
+        }
+      },
+      {
+        "sequence": 154,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 32,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-811b-7761-bd0c-a4b5734c071a",
+            "challenge": "01a1d122-85ce-7b92-bbfd-d2406b9885bd",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 398
+          }
+        }
+      },
+      {
+        "sequence": 178,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 38,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-811b-7761-bd0c-a4b5734c071a",
+            "challenge": "01a1d122-872f-7142-9587-57d7b42ff414",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 221
+          }
+        }
+      },
+      {
+        "sequence": 202,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 44,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-811b-7761-bd0c-a4b5734c071a",
+            "challenge": "01a1d122-889b-73c2-b2c0-e9f85f08f30e",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 40
+          }
+        }
+      }
+    ],
+    "response_frames": [
+      {
+        "sequence": 39,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": "n0",
+        "request_id": 3,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b32-7e00-827a-9173970d57be",
+          "birth_sha256": "9ca5737372dc78d6f65c46c921b74003a152a3e93128cc6f357e1fd64b9bd16b",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-811b-7761-bd0c-a4b5734c071a",
+              "challenge": "01a1d122-811b-7761-bd0c-a4ccd592908a",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 4,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 59,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": "n0",
+        "request_id": 8,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b32-7e00-827a-9173970d57be",
+          "birth_sha256": "9ca5737372dc78d6f65c46c921b74003a152a3e93128cc6f357e1fd64b9bd16b",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-811b-7761-bd0c-a4b5734c071a",
+              "challenge": "01a1d122-81ad-74d0-9e63-b950286eb49c",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 4,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 83,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": "n0",
+        "request_id": 14,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b32-7e00-827a-9173970d57be",
+          "birth_sha256": "9ca5737372dc78d6f65c46c921b74003a152a3e93128cc6f357e1fd64b9bd16b",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-811b-7761-bd0c-a4b5734c071a",
+              "challenge": "01a1d122-8256-7600-beb3-2698c07d3e68",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 4,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 107,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": "n0",
+        "request_id": 20,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b32-7e00-827a-9173970d57be",
+          "birth_sha256": "9ca5737372dc78d6f65c46c921b74003a152a3e93128cc6f357e1fd64b9bd16b",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-811b-7761-bd0c-a4b5734c071a",
+              "challenge": "01a1d122-832a-7871-8878-106b43c05816",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 4,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 131,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": "n0",
+        "request_id": 26,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b32-7e00-827a-9173970d57be",
+          "birth_sha256": "9ca5737372dc78d6f65c46c921b74003a152a3e93128cc6f357e1fd64b9bd16b",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-811b-7761-bd0c-a4b5734c071a",
+              "challenge": "01a1d122-8462-7852-841e-bee5088862ef",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 4,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 155,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": "n0",
+        "request_id": 32,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b32-7e00-827a-9173970d57be",
+          "birth_sha256": "9ca5737372dc78d6f65c46c921b74003a152a3e93128cc6f357e1fd64b9bd16b",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-811b-7761-bd0c-a4b5734c071a",
+              "challenge": "01a1d122-85ce-7b92-bbfd-d2406b9885bd",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 4,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 179,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": "n0",
+        "request_id": 38,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b32-7e00-827a-9173970d57be",
+          "birth_sha256": "9ca5737372dc78d6f65c46c921b74003a152a3e93128cc6f357e1fd64b9bd16b",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-811b-7761-bd0c-a4b5734c071a",
+              "challenge": "01a1d122-872f-7142-9587-57d7b42ff414",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 4,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "snapshot_responses": {
+      "n0": 7,
+      "n1": 7,
+      "n2": 7,
+      "n3": 7,
+      "n4": 6
+    },
+    "positive_bytes_written_attempts": 8,
+    "zero_bytes_only_attempts": 0
+  },
+  "01a1d122-88ec-7681-929e-4b0fe38a9307": {
+    "request": {
+      "public_operation": "append",
+      "namespace": "items",
+      "key": "fresh-ack-after-fifth-registry-addition",
+      "value": {
+        "whole": "new external ACK after registry addition",
+        "nested": [
+          null,
+          {
+            "unchanged_data_assignment": true
+          }
+        ],
+        "empty": {}
+      },
+      "payload_sha256": "329927017ed48a141d882f3d14f6e3b874b210dc6aa21cdaeeee0017977bc9ea",
+      "phase": "strict_after_fifth",
+      "round": 1,
+      "request_timeout_ms": 2000
+    },
+    "physical_attempts": 25,
+    "operations": {
+      "event_append": 20,
+      "metadata_snapshot_discovery": 80
+    },
+    "errors": [
+      {
+        "sequence": 212,
+        "destination": "n2",
+        "phase": "validated_transport_result_error",
+        "errors": [
+          "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: current voter registry changed"
+        ]
+      },
+      {
+        "sequence": 236,
+        "destination": "n2",
+        "phase": "validated_transport_result_error",
+        "errors": [
+          "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: current voter registry changed"
+        ]
+      },
+      {
+        "sequence": 260,
+        "destination": "n2",
+        "phase": "validated_transport_result_error",
+        "errors": [
+          "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: current voter registry changed"
+        ]
+      },
+      {
+        "sequence": 284,
+        "destination": "n2",
+        "phase": "validated_transport_result_error",
+        "errors": [
+          "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: current voter registry changed"
+        ]
+      },
+      {
+        "sequence": 308,
+        "destination": "n2",
+        "phase": "validated_transport_result_error",
+        "errors": [
+          "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: current voter registry changed"
+        ]
+      }
+    ],
+    "request_frames": [
+      {
+        "sequence": 210,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": null,
+        "request_id": 45,
+        "request": {
+          "ApplicationEvent": {
+            "range_id": 2,
+            "range_epoch": 1,
+            "operation": {
+              "operation": "append",
+              "namespace": "items",
+              "key": "fresh-ack-after-fifth-registry-addition",
+              "value": {
+                "whole": "new external ACK after registry addition",
+                "nested": [
+                  null,
+                  {
+                    "unchanged_data_assignment": true
+                  }
+                ],
+                "empty": {}
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 234,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": null,
+        "request_id": 51,
+        "request": {
+          "ApplicationEvent": {
+            "range_id": 2,
+            "range_epoch": 1,
+            "operation": {
+              "operation": "append",
+              "namespace": "items",
+              "key": "fresh-ack-after-fifth-registry-addition",
+              "value": {
+                "whole": "new external ACK after registry addition",
+                "nested": [
+                  null,
+                  {
+                    "unchanged_data_assignment": true
+                  }
+                ],
+                "empty": {}
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 258,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": null,
+        "request_id": 57,
+        "request": {
+          "ApplicationEvent": {
+            "range_id": 2,
+            "range_epoch": 1,
+            "operation": {
+              "operation": "append",
+              "namespace": "items",
+              "key": "fresh-ack-after-fifth-registry-addition",
+              "value": {
+                "whole": "new external ACK after registry addition",
+                "nested": [
+                  null,
+                  {
+                    "unchanged_data_assignment": true
+                  }
+                ],
+                "empty": {}
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 282,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": null,
+        "request_id": 63,
+        "request": {
+          "ApplicationEvent": {
+            "range_id": 2,
+            "range_epoch": 1,
+            "operation": {
+              "operation": "append",
+              "namespace": "items",
+              "key": "fresh-ack-after-fifth-registry-addition",
+              "value": {
+                "whole": "new external ACK after registry addition",
+                "nested": [
+                  null,
+                  {
+                    "unchanged_data_assignment": true
+                  }
+                ],
+                "empty": {}
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 306,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": null,
+        "request_id": 69,
+        "request": {
+          "ApplicationEvent": {
+            "range_id": 2,
+            "range_epoch": 1,
+            "operation": {
+              "operation": "append",
+              "namespace": "items",
+              "key": "fresh-ack-after-fifth-registry-addition",
+              "value": {
+                "whole": "new external ACK after registry addition",
+                "nested": [
+                  null,
+                  {
+                    "unchanged_data_assignment": true
+                  }
+                ],
+                "empty": {}
+              }
+            }
+          }
+        }
+      }
+    ],
+    "response_frames": [
+      {
+        "sequence": 211,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": "n2",
+        "request_id": 45,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b36-7410-b837-66fc2aa64b1c",
+          "birth_sha256": "a907c219847e73e03d6b82a4e7350f9ab930e1f906ee113e808212c7e2377489",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: native host writer enrollment: current voter registry changed"
+          }
+        }
+      },
+      {
+        "sequence": 235,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": "n2",
+        "request_id": 51,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b36-7410-b837-66fc2aa64b1c",
+          "birth_sha256": "a907c219847e73e03d6b82a4e7350f9ab930e1f906ee113e808212c7e2377489",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: native host writer enrollment: current voter registry changed"
+          }
+        }
+      },
+      {
+        "sequence": 259,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": "n2",
+        "request_id": 57,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b36-7410-b837-66fc2aa64b1c",
+          "birth_sha256": "a907c219847e73e03d6b82a4e7350f9ab930e1f906ee113e808212c7e2377489",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: native host writer enrollment: current voter registry changed"
+          }
+        }
+      },
+      {
+        "sequence": 283,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": "n2",
+        "request_id": 63,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b36-7410-b837-66fc2aa64b1c",
+          "birth_sha256": "a907c219847e73e03d6b82a4e7350f9ab930e1f906ee113e808212c7e2377489",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: native host writer enrollment: current voter registry changed"
+          }
+        }
+      },
+      {
+        "sequence": 307,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": "n2",
+        "request_id": 69,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b36-7410-b837-66fc2aa64b1c",
+          "birth_sha256": "a907c219847e73e03d6b82a4e7350f9ab930e1f906ee113e808212c7e2377489",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: native host writer enrollment: current voter registry changed"
+          }
+        }
+      }
+    ],
+    "snapshot_responses": {
+      "n0": 4,
+      "n1": 4,
+      "n2": 4,
+      "n3": 4,
+      "n4": 4
+    },
+    "positive_bytes_written_attempts": 5,
+    "zero_bytes_only_attempts": 0
+  },
+  "01a1d122-9045-7db0-b24e-04cb85d5845c": {
+    "request": {
+      "public_operation": "get_strong",
+      "namespace": "items",
+      "key": "ack-before-fifth-registry-refresh",
+      "phase": "strict_after_fifth",
+      "round": 2,
+      "request_timeout_ms": 2000,
+      "eventual_health_gate_ms": 10000
+    },
+    "physical_attempts": 43,
+    "operations": {
+      "native_event_get": 33,
+      "metadata_snapshot_discovery": 140
+    },
+    "errors": [
+      {
+        "sequence": 481,
+        "destination": "n0",
+        "phase": "exchange_error_before_cancellation_override",
+        "errors": [
+          "io error: cluster RPC interrupted: canceling statement due to query timeout",
+          "cluster RPC interrupted: canceling statement due to query timeout"
+        ]
+      },
+      {
+        "sequence": 482,
+        "destination": "n0",
+        "phase": "validated_transport_result_error",
+        "errors": [
+          "canceling statement due to query timeout"
+        ]
+      },
+      {
+        "sequence": 483,
+        "destination": "n0",
+        "phase": "return_boundary_error_after_evidence",
+        "errors": [
+          "canceling statement due to query timeout"
+        ]
+      }
+    ],
+    "request_frames": [
+      {
+        "sequence": 312,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 70,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-9046-78d0-8784-31077d5ea209",
+            "challenge": "01a1d122-9046-78d0-8784-311b4d96ce0b",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 999
+          }
+        }
+      },
+      {
+        "sequence": 336,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 76,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-9046-78d0-8784-31077d5ea209",
+            "challenge": "01a1d122-90e1-7ad3-b88d-920a424cc778",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 922
+          }
+        }
+      },
+      {
+        "sequence": 360,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 82,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-9046-78d0-8784-31077d5ea209",
+            "challenge": "01a1d122-9179-73e3-9860-d14126780d25",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 846
+          }
+        }
+      },
+      {
+        "sequence": 384,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 88,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-9046-78d0-8784-31077d5ea209",
+            "challenge": "01a1d122-9243-7ff0-b99c-6a4e19d24c8d",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 745
+          }
+        }
+      },
+      {
+        "sequence": 408,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 94,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-9046-78d0-8784-31077d5ea209",
+            "challenge": "01a1d122-93a6-7a32-9b82-86aec94e6e54",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 567
+          }
+        }
+      },
+      {
+        "sequence": 432,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 100,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-9046-78d0-8784-31077d5ea209",
+            "challenge": "01a1d122-951b-7fe1-9447-107d01c4e530",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 381
+          }
+        }
+      },
+      {
+        "sequence": 456,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 106,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-9046-78d0-8784-31077d5ea209",
+            "challenge": "01a1d122-9690-78f2-a20c-0a7f73e16b62",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 194
+          }
+        }
+      },
+      {
+        "sequence": 480,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": null,
+        "request_id": 112,
+        "request": {
+          "NativeEventGet": {
+            "version": 1,
+            "mode": "strong",
+            "business_request_id": "01a1d122-9046-78d0-8784-31077d5ea209",
+            "challenge": "01a1d122-9812-7152-b7c9-d9177ee6d805",
+            "range_id": 4,
+            "range_epoch": 1,
+            "namespace": "items",
+            "key": "ack-before-fifth-registry-refresh",
+            "budget_ms": 1
+          }
+        }
+      }
+    ],
+    "response_frames": [
+      {
+        "sequence": 313,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": "n0",
+        "request_id": 70,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b32-7e00-827a-9173970d57be",
+          "birth_sha256": "9ca5737372dc78d6f65c46c921b74003a152a3e93128cc6f357e1fd64b9bd16b",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-9046-78d0-8784-31077d5ea209",
+              "challenge": "01a1d122-9046-78d0-8784-311b4d96ce0b",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 4,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 337,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": "n0",
+        "request_id": 76,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b32-7e00-827a-9173970d57be",
+          "birth_sha256": "9ca5737372dc78d6f65c46c921b74003a152a3e93128cc6f357e1fd64b9bd16b",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-9046-78d0-8784-31077d5ea209",
+              "challenge": "01a1d122-90e1-7ad3-b88d-920a424cc778",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 4,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 361,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": "n0",
+        "request_id": 82,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b32-7e00-827a-9173970d57be",
+          "birth_sha256": "9ca5737372dc78d6f65c46c921b74003a152a3e93128cc6f357e1fd64b9bd16b",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-9046-78d0-8784-31077d5ea209",
+              "challenge": "01a1d122-9179-73e3-9860-d14126780d25",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 4,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 385,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": "n0",
+        "request_id": 88,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b32-7e00-827a-9173970d57be",
+          "birth_sha256": "9ca5737372dc78d6f65c46c921b74003a152a3e93128cc6f357e1fd64b9bd16b",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-9046-78d0-8784-31077d5ea209",
+              "challenge": "01a1d122-9243-7ff0-b99c-6a4e19d24c8d",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 4,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 409,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": "n0",
+        "request_id": 94,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b32-7e00-827a-9173970d57be",
+          "birth_sha256": "9ca5737372dc78d6f65c46c921b74003a152a3e93128cc6f357e1fd64b9bd16b",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-9046-78d0-8784-31077d5ea209",
+              "challenge": "01a1d122-93a6-7a32-9b82-86aec94e6e54",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 4,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 433,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": "n0",
+        "request_id": 100,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b32-7e00-827a-9173970d57be",
+          "birth_sha256": "9ca5737372dc78d6f65c46c921b74003a152a3e93128cc6f357e1fd64b9bd16b",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-9046-78d0-8784-31077d5ea209",
+              "challenge": "01a1d122-951b-7fe1-9447-107d01c4e530",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 4,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 457,
+        "destination": "n0",
+        "operation": "native_event_get",
+        "source": "n0",
+        "request_id": 106,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b32-7e00-827a-9173970d57be",
+          "birth_sha256": "9ca5737372dc78d6f65c46c921b74003a152a3e93128cc6f357e1fd64b9bd16b",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Ok": {
+            "NativeEventGet": {
+              "version": 1,
+              "business_request_id": "01a1d122-9046-78d0-8784-31077d5ea209",
+              "challenge": "01a1d122-9690-78f2-a20c-0a7f73e16b62",
+              "result": {
+                "kind": "unavailable",
+                "code": {
+                  "code": "native_read",
+                  "stage": "WriterAdmission"
+                },
+                "route": {
+                  "generation": 4,
+                  "range_id": 4,
+                  "range_epoch": 1,
+                  "leader": "n0"
+                },
+                "retry_after_ms": 50,
+                "detail": "cluster error: native host writer enrollment: current voter registry changed"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "snapshot_responses": {
+      "n0": 7,
+      "n1": 7,
+      "n2": 7,
+      "n3": 7,
+      "n4": 7
+    },
+    "positive_bytes_written_attempts": 7,
+    "zero_bytes_only_attempts": 1
+  },
+  "01a1d122-9817-7d82-b154-b5830a1f6932": {
+    "request": {
+      "public_operation": "append",
+      "namespace": "items",
+      "key": "fresh-ack-after-fifth-registry-addition",
+      "value": {
+        "whole": "new external ACK after registry addition",
+        "nested": [
+          null,
+          {
+            "unchanged_data_assignment": true
+          }
+        ],
+        "empty": {}
+      },
+      "payload_sha256": "329927017ed48a141d882f3d14f6e3b874b210dc6aa21cdaeeee0017977bc9ea",
+      "phase": "strict_after_fifth",
+      "round": 2,
+      "request_timeout_ms": 2000
+    },
+    "physical_attempts": 25,
+    "operations": {
+      "event_append": 20,
+      "metadata_snapshot_discovery": 80
+    },
+    "errors": [
+      {
+        "sequence": 489,
+        "destination": "n2",
+        "phase": "validated_transport_result_error",
+        "errors": [
+          "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: current voter registry changed"
+        ]
+      },
+      {
+        "sequence": 513,
+        "destination": "n2",
+        "phase": "validated_transport_result_error",
+        "errors": [
+          "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: current voter registry changed"
+        ]
+      },
+      {
+        "sequence": 537,
+        "destination": "n2",
+        "phase": "validated_transport_result_error",
+        "errors": [
+          "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: current voter registry changed"
+        ]
+      },
+      {
+        "sequence": 561,
+        "destination": "n2",
+        "phase": "validated_transport_result_error",
+        "errors": [
+          "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: current voter registry changed"
+        ]
+      },
+      {
+        "sequence": 585,
+        "destination": "n2",
+        "phase": "validated_transport_result_error",
+        "errors": [
+          "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native host writer enrollment: current voter registry changed"
+        ]
+      }
+    ],
+    "request_frames": [
+      {
+        "sequence": 487,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": null,
+        "request_id": 113,
+        "request": {
+          "ApplicationEvent": {
+            "range_id": 2,
+            "range_epoch": 1,
+            "operation": {
+              "operation": "append",
+              "namespace": "items",
+              "key": "fresh-ack-after-fifth-registry-addition",
+              "value": {
+                "whole": "new external ACK after registry addition",
+                "nested": [
+                  null,
+                  {
+                    "unchanged_data_assignment": true
+                  }
+                ],
+                "empty": {}
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 511,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": null,
+        "request_id": 119,
+        "request": {
+          "ApplicationEvent": {
+            "range_id": 2,
+            "range_epoch": 1,
+            "operation": {
+              "operation": "append",
+              "namespace": "items",
+              "key": "fresh-ack-after-fifth-registry-addition",
+              "value": {
+                "whole": "new external ACK after registry addition",
+                "nested": [
+                  null,
+                  {
+                    "unchanged_data_assignment": true
+                  }
+                ],
+                "empty": {}
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 535,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": null,
+        "request_id": 125,
+        "request": {
+          "ApplicationEvent": {
+            "range_id": 2,
+            "range_epoch": 1,
+            "operation": {
+              "operation": "append",
+              "namespace": "items",
+              "key": "fresh-ack-after-fifth-registry-addition",
+              "value": {
+                "whole": "new external ACK after registry addition",
+                "nested": [
+                  null,
+                  {
+                    "unchanged_data_assignment": true
+                  }
+                ],
+                "empty": {}
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 559,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": null,
+        "request_id": 131,
+        "request": {
+          "ApplicationEvent": {
+            "range_id": 2,
+            "range_epoch": 1,
+            "operation": {
+              "operation": "append",
+              "namespace": "items",
+              "key": "fresh-ack-after-fifth-registry-addition",
+              "value": {
+                "whole": "new external ACK after registry addition",
+                "nested": [
+                  null,
+                  {
+                    "unchanged_data_assignment": true
+                  }
+                ],
+                "empty": {}
+              }
+            }
+          }
+        }
+      },
+      {
+        "sequence": 583,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": null,
+        "request_id": 137,
+        "request": {
+          "ApplicationEvent": {
+            "range_id": 2,
+            "range_epoch": 1,
+            "operation": {
+              "operation": "append",
+              "namespace": "items",
+              "key": "fresh-ack-after-fifth-registry-addition",
+              "value": {
+                "whole": "new external ACK after registry addition",
+                "nested": [
+                  null,
+                  {
+                    "unchanged_data_assignment": true
+                  }
+                ],
+                "empty": {}
+              }
+            }
+          }
+        }
+      }
+    ],
+    "response_frames": [
+      {
+        "sequence": 488,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": "n2",
+        "request_id": 113,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b36-7410-b837-66fc2aa64b1c",
+          "birth_sha256": "a907c219847e73e03d6b82a4e7350f9ab930e1f906ee113e808212c7e2377489",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: native host writer enrollment: current voter registry changed"
+          }
+        }
+      },
+      {
+        "sequence": 512,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": "n2",
+        "request_id": 119,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b36-7410-b837-66fc2aa64b1c",
+          "birth_sha256": "a907c219847e73e03d6b82a4e7350f9ab930e1f906ee113e808212c7e2377489",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: native host writer enrollment: current voter registry changed"
+          }
+        }
+      },
+      {
+        "sequence": 536,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": "n2",
+        "request_id": 125,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b36-7410-b837-66fc2aa64b1c",
+          "birth_sha256": "a907c219847e73e03d6b82a4e7350f9ab930e1f906ee113e808212c7e2377489",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: native host writer enrollment: current voter registry changed"
+          }
+        }
+      },
+      {
+        "sequence": 560,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": "n2",
+        "request_id": 131,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b36-7410-b837-66fc2aa64b1c",
+          "birth_sha256": "a907c219847e73e03d6b82a4e7350f9ab930e1f906ee113e808212c7e2377489",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: native host writer enrollment: current voter registry changed"
+          }
+        }
+      },
+      {
+        "sequence": 584,
+        "destination": "n2",
+        "operation": "event_append",
+        "source": "n2",
+        "request_id": 137,
+        "actual_native_source": {
+          "version": 1,
+          "bootstrap_id": "01a1d122-6ad5-7311-9f8c-45b5fb892fdb",
+          "birth_id": "01a1d122-6b36-7410-b837-66fc2aa64b1c",
+          "birth_sha256": "a907c219847e73e03d6b82a4e7350f9ab930e1f906ee113e808212c7e2377489",
+          "node_incarnation": 1,
+          "writer_enforcement_version": 1,
+          "abort_protocol_version": 1
+        },
+        "response": {
+          "Err": {
+            "code": "cluster_data_operation_failed",
+            "message": "cluster error: native host writer enrollment: current voter registry changed"
+          }
+        }
+      }
+    ],
+    "snapshot_responses": {
+      "n0": 4,
+      "n1": 4,
+      "n2": 4,
+      "n3": 4,
+      "n4": 4
+    },
+    "positive_bytes_written_attempts": 5,
+    "zero_bytes_only_attempts": 0
+  }
+}

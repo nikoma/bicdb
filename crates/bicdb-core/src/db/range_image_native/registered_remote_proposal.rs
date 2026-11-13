@@ -260,9 +260,10 @@ impl NativeRegisteredRemoteProposalPublication {
         scope: &NativeRegisteredRemoteAttemptScope<'_>,
     ) -> Result<NativeRegisteredRemoteProposalPointer> {
         point.require_database_store(db, store, scope)?;
-        if !crate::format::native_registered_remote_proposal_active(db.data_path())? {
-            crate::format::enable_native_registered_remote_proposal(db.data_path())?;
-        }
+        // A prior rename can make the flag visible even when its directory
+        // sync failed. Re-persist and sync it on EVERY continuation before
+        // the first put or an attempted/verified proposal is relied upon.
+        crate::format::enable_native_registered_remote_proposal(db.data_path())?;
         if let State::Prepared(record) = &self.state {
             if record.attempt != point.preflight().attempt_id() {
                 return Err(invalid("Registered proposal attempt changed"));

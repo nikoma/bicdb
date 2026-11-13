@@ -30,6 +30,7 @@ pub(super) enum SourceCase {
     TargetProposalPostCanceled,
     TargetProposalBeforeCanceled,
     TargetProposalBeforeHookRevoked,
+    TargetProposalReaderFenceRetry,
     RemoteConstraintCapture,
 }
 #[test]
@@ -1078,6 +1079,7 @@ pub(super) fn exercise(
                     | SourceCase::TargetProposalPostCanceled
                     | SourceCase::TargetProposalBeforeCanceled
                     | SourceCase::TargetProposalBeforeHookRevoked
+                    | SourceCase::TargetProposalReaderFenceRetry
             ) {
                 target_proposal_tests::exercise(
                     case,

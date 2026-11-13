@@ -27,7 +27,10 @@ indices stay `None`. The scoped DB watermark is observed before the put; it is
 not an inferred native range floor.
 
 The local sticky `native_registered_remote_proposal_v1` reader-refusal flag is
-durable before the first native put. It is excluded from portable schema-reader
+persisted with file and directory sync before the first native put. Every
+continuation repeats that persistence, including when a previous failed
+post-rename directory sync left the flag visible. Visible flag presence does
+not establish its durability. It is excluded from portable schema-reader
 features. Actual older-binary compatibility has not been tested for this flag.
 
 At page transaction assignment, the publication retains the exact xid and
@@ -65,3 +68,17 @@ only this proposal's two records to change. These tests have not run. A successf
 post-WAL cancellation test is not a simulated fsync failure or physical recovery
 qualification. Catalogue Installing, rows, power-loss recovery, populated Assigned
 second-range movement and physical capacity qualification remain open.
+
+The follow-up after source `d16e9319d` closes a visible-reader-flag retry gap.
+It uses the existing atomic-replacement I/O fault seam at
+`registered_remote_proposal.format.dir_sync`, after actual file sync and rename,
+to return injected EIO before directory sync. The fifth-node source regression
+`native_registered_fifth_remote_proposal_actual_reader_flag_dir_sync_failure_retry`
+checks two fresh failing requests with a visible flag, no native xid and no
+native-record changes. After removal of the fault, a fresh request may persist
+the flag and publish the proposal. A later injected directory-sync failure must
+also refuse a Verified continuation; successful retry keeps the original
+proposal xid and bytes. This follow-up has not been compiled or run. Earlier
+revision results do not cover it. This injected boundary test is separate from
+native-page commit/fsync uncertainty, simulated power loss and physical hardware
+qualification, none of which it establishes.

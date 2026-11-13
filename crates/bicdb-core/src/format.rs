@@ -857,7 +857,17 @@ pub(crate) fn enable_native_registered_remote_proposal(root: &Path) -> Result<()
     metadata
         .feature_flags
         .insert(NATIVE_REGISTERED_REMOTE_PROPOSAL_FEATURE_FLAG.into());
-    persist_metadata(root, &metadata, true)
+    // Always repeat the durable replacement, including when an earlier
+    // post-rename directory-sync error left this flag visibly installed.
+    persist_metadata_with(root, &metadata, true, |path, bytes, sync| {
+        storage::replace_durably(
+            path,
+            storage::ReplaceContents::Plain(bytes),
+            sync,
+            "registered_remote_proposal.format",
+            storage::FailClosed::No,
+        )
+    })
 }
 pub(crate) fn native_registered_remote_proposal_active(root: &Path) -> Result<bool> {
     let metadata = read_or_legacy_metadata(root)?;

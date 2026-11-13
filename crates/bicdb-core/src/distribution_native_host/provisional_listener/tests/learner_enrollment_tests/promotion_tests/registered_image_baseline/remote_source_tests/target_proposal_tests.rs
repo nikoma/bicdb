@@ -25,6 +25,13 @@ fn native_registered_fifth_remote_proposal_actual_pre_wal_hook_aba_preserves_dat
         Some(SourceCase::TargetProposalBeforeHookRevoked),
     );
 }
+#[test]
+fn native_registered_fifth_remote_proposal_actual_reader_flag_dir_sync_failure_retry() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::TargetProposalReaderFenceRetry),
+    );
+}
 #[allow(clippy::too_many_arguments)]
 pub(super) fn exercise(
     case: SourceCase,
@@ -69,6 +76,12 @@ pub(super) fn exercise(
     let readers_before =
         crate::format::required_reader_features(factory.database.read().data_path()).unwrap();
     assert_eq!(native_before.len(), 4, "real original Registered inventory");
+    if matches!(case, SourceCase::TargetProposalReaderFenceRetry) {
+        exercise_reader_fence_retry(
+            control, client, &source, plan, provider, actor, factory, pending, ranges, output,
+        );
+        return;
+    }
     let parent = budget(5000);
     let role = actual_role(provider, actor, plan, &node(4), &parent)
         .into_handoff()
@@ -254,4 +267,172 @@ pub(super) fn exercise(
         "exact_error":exact_error,"first_outcome":first_outcome,"record_after_first":record_after_first,
         "native_before":native_before,"native_after_first":native_after_first,"pointer":final_pointer,
         "before":before,"after":after,"actual_A_lease":true,"no_catalogue_installing":true,"no_rows_or_serving":true})).unwrap();
+}
+
+#[allow(clippy::too_many_arguments)]
+fn publish_fresh(
+    control: &mut NativeMetadataControlHost,
+    client: &TcpClusterRelocationTransport,
+    source: &Arc<NativeRemoteImageFact>,
+    plan: &NativeJointHandoffPlan,
+    provider: &MetadataReadProvider,
+    actor: &crate::distribution_consensus::MetadataReadParticipant,
+    output: &std::path::Path,
+) -> Result<crate::db::NativeRegisteredRemoteProposalPointer> {
+    let parent = budget(5000);
+    let role = actual_role(provider, actor, plan, &node(4), &parent)
+        .into_handoff()
+        .unwrap();
+    let business = Uuid::now_v7();
+    let own = client.acquire_host_metadata_observation(
+        &node(0),
+        business,
+        Duration::from_secs(5),
+        &parent,
+    )?;
+    let mut frames = Vec::new();
+    let fresh = source.bind_step(super::frame(
+        client,
+        source.manifest(),
+        Op::Finish,
+        output,
+        &mut frames,
+    )?)?;
+    let result =
+        control.publish_registered_remote_proposal(source, &fresh, role, own, business, &parent);
+    parent.cancel();
+    result
+}
+
+#[allow(clippy::too_many_arguments)]
+fn exercise_reader_fence_retry(
+    control: &mut NativeMetadataControlHost,
+    client: &TcpClusterRelocationTransport,
+    source: &Arc<NativeRemoteImageFact>,
+    plan: &NativeJointHandoffPlan,
+    provider: &MetadataReadProvider,
+    actor: &crate::distribution_consensus::MetadataReadParticipant,
+    factory: &Arc<crate::distribution_native_host::NativeUnassignedLearnerFactory>,
+    pending: &ClusterTopology,
+    ranges: &[crate::RangeDescriptor],
+    output: &std::path::Path,
+) {
+    let range = plan.old_range().id;
+    let root = factory.database.read().data_path().to_owned();
+    let before = state(&factory.database, pending, &node(4), ranges).unwrap();
+    let native_before = factory
+        .database
+        .read()
+        .test_registered_remote_native_inventory()
+        .unwrap();
+    let readers_before = crate::format::required_reader_features(&root).unwrap();
+    assert!(!crate::format::native_registered_remote_proposal_active(&root).unwrap());
+    // This is the existing real atomic-replacement I/O seam, after rename
+    // and before directory sync. The visible flag is deliberately ambiguous.
+    let faults = bicdb_page::test_faults::arm_io_failure(
+        "registered_remote_proposal.format.dir_sync",
+        &root,
+        1,
+        true,
+    );
+    let mut failures = Vec::new();
+    let mut outcomes = Vec::new();
+    for expected in 1..=2 {
+        let error =
+            publish_fresh(control, client, source, plan, provider, actor, output).unwrap_err();
+        assert!(
+            matches!(&error, BicDbError::Io(e) if e.raw_os_error() == Some(libc::EIO)),
+            "{error}"
+        );
+        assert_eq!(faults.fired(), expected);
+        assert_eq!(faults.seen(), expected);
+        assert!(crate::format::native_registered_remote_proposal_active(&root).unwrap());
+        let actual = control.test_registered_remote_attempt(range).unwrap();
+        assert_eq!(actual["proposal"]["outcome"], "prepared_no_native_xid");
+        assert_eq!(
+            actual["proposal"]["attempted_pointer"],
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            factory
+                .database
+                .read()
+                .test_registered_remote_native_inventory()
+                .unwrap(),
+            native_before,
+            "visible but unsynced reader flag must never permit a first native put"
+        );
+        failures.push(error.to_string());
+        outcomes.push(actual);
+    }
+    drop(faults);
+    let pointer = publish_fresh(control, client, source, plan, provider, actor, output).unwrap();
+    let committed_record = factory
+        .database
+        .read()
+        .test_registered_remote_proposal_record(source.manifest().target_attempt)
+        .unwrap();
+    let committed_inventory = factory
+        .database
+        .read()
+        .test_registered_remote_native_inventory()
+        .unwrap();
+    assert_eq!(committed_inventory.len(), native_before.len() + 2);
+    // A Verified continuation also must re-establish durable flag publication;
+    // its visible flag and earlier receipt cannot bypass the failed boundary.
+    let fault = bicdb_page::test_faults::arm_io_failure(
+        "registered_remote_proposal.format.dir_sync",
+        &root,
+        1,
+        false,
+    );
+    let error = publish_fresh(control, client, source, plan, provider, actor, output).unwrap_err();
+    assert!(
+        matches!(&error, BicDbError::Io(e) if e.raw_os_error() == Some(libc::EIO)),
+        "{error}"
+    );
+    assert_eq!(fault.fired(), 1);
+    failures.push(error.to_string());
+    let verified = control.test_registered_remote_attempt(range).unwrap();
+    assert_eq!(
+        verified["proposal"]["outcome"],
+        "exact_current_archive_verified"
+    );
+    assert_eq!(
+        verified["proposal"]["attempted_pointer"],
+        serde_json::to_value(&pointer).unwrap()
+    );
+    drop(fault);
+    assert_eq!(
+        publish_fresh(control, client, source, plan, provider, actor, output).unwrap(),
+        pointer
+    );
+    assert_eq!(
+        factory
+            .database
+            .read()
+            .test_registered_remote_proposal_record(source.manifest().target_attempt)
+            .unwrap(),
+        committed_record
+    );
+    assert_eq!(
+        factory
+            .database
+            .read()
+            .test_registered_remote_native_inventory()
+            .unwrap(),
+        committed_inventory
+    );
+    let after = state(&factory.database, pending, &node(4), ranges).unwrap();
+    assert_eq!(after, before);
+    assert_eq!(
+        crate::format::required_reader_features(&root).unwrap(),
+        readers_before
+    );
+    evidence(&output.join(format!("registered-proposal-reader-fence-retry-{}.json", range.get())),
+        &serde_json::json!({"boundary":"actual atomic format replacement post-rename/pre-directory-sync injected EIO",
+            "failures":failures,"prepared_outcomes":outcomes,"verified_retry_outcome":verified,
+            "pointer":pointer,"committed_record":committed_record,
+            "native_before":native_before,"native_after":committed_inventory,"before":before,"after":after,
+            "hardware_power_loss":false,"catalogue_installing_or_rows":false})).unwrap();
 }

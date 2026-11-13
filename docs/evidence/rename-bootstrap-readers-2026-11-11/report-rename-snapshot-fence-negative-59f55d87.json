@@ -1,0 +1,49 @@
+{
+  "source": "59f55d87a59e9b8a155bf928aeb8645cfd27369d",
+  "scope": "Tests-only negative controls for retained portable reader flags on range snapshot ingestion and equal structural schema bootstrap; separate commands continue to retain both actual failures. ServerPaged source; each intended target storage mode, stops each command on first failing case.",
+  "started_unix": 1794386231.6749513,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "sql_rename_snapshot_fence",
+        "range_snapshot_installs_source_reader_requirements_before_business_rows",
+        "--",
+        "--exact"
+      ],
+      "started_unix": 1794386231.675145,
+      "exit": 101,
+      "finished_unix": 1794386232.5777297
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "sql_rename_snapshot_fence",
+        "schema_bootstrap_installs_source_reader_requirements_even_for_equal_schema",
+        "--",
+        "--exact"
+      ],
+      "started_unix": 1794386232.5779114,
+      "exit": 101,
+      "finished_unix": 1794386232.7343771
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794386232.7345326
+}

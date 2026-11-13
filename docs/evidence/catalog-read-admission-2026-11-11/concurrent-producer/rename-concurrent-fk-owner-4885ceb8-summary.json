@@ -1,0 +1,71 @@
+{
+  "source": "4885ceb8585393f072b8f53422133118cf008bdc",
+  "status": "failed",
+  "counts": [
+    {
+      "status": "FAILED",
+      "passed": 4,
+      "failed": 1,
+      "ignored": 0
+    },
+    {
+      "status": "FAILED",
+      "passed": 12,
+      "failed": 3,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "FAILED",
+      "passed": 0,
+      "failed": 1,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "passed": 55,
+  "failed": 5,
+  "ignored": 0,
+  "files": {
+    "report-rename-concurrent-fk-owner-4885ceb8.json": {
+      "bytes": 2946,
+      "sha256": "4ae26eabade04bf21af8b6697f29c602ec5d5cc671e51522c20a22085d8abd33"
+    },
+    "tc-step-rename-concurrent-fk-owner-4885ceb8.log": {
+      "bytes": 449482,
+      "sha256": "5e5490a23bd9f2ddf2eb2799fbe61968309619718899cce4afec5a384de93cf5"
+    }
+  },
+  "scope": "Coherent private rename batch: existing29focused component passes retained on6ab;895 added raw scoped-inventory negative control passed14journal, but4 actual concurrent wire cases failed due global catalog observation. Fix FK discovery to admit only parent and actual referring descriptors, including memo hits. Keep original scope observation checks and diagnostic conflict collection. Reuse real CALL preflight owner via existing session transaction constructor. Add RR/SSI wire decision matrices +CALL regression. Collect independent related failures across five focused commands; do not skip assertions, change fsync, remove original legacy negative gate, or claim application/replicated mapping/main delivery.",
+  "main_delivered": false,
+  "application_qualified": false,
+  "observed_unix": 1794434030.384033
+}

@@ -1,0 +1,29 @@
+{
+  "source": "b715e546c8c0e815cb552939cd1cdc26079939b5",
+  "scope": "Nativecapabilitycomponentonly: stickyreaderflagbeforeSQLsemanticpublication, fsync-retry evenflagvisible, per-handleWriteFailedon4criticalIOstepsx2stores,ACKsurvival+reopens, durable-index/quiescenceprerequisites. No SQLmigrationimplemented/certifiedyet; actualoldfixturesbaselineindependent. No broad/app/HA/featurecompletion orP2promotion.",
+  "started_unix": 1794489963.6723711,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "sql_partition_execution",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794489963.6725626,
+      "exit": 0,
+      "finished_unix": 1794489994.799384
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794489994.7995439
+}

@@ -394,6 +394,7 @@ pub(crate) fn commit_buffered_transaction(
                     crate::deliver_notifications(server, state.connection_id, notifications);
                 }
                 let committed_ddl = !state.tx_ddl_undo.is_empty();
+                let committed_catalog_scopes = std::mem::take(&mut state.tx_ddl_undo);
                 clear_open_transaction_state(server, state);
                 server
                     .advisory_locks
@@ -411,6 +412,7 @@ pub(crate) fn commit_buffered_transaction(
                     drop(tx);
                     let admission = server.try_admit_write()?;
                     let mut db = server.write_db_with_admission(&admission)?;
+                    committed_catalog_scopes.finish_committed_catalog_scopes(&db)?;
                     bicdb_sql::finish_committed_recycle_bin_purges(&mut db)?;
                 }
                 return Ok(SqlResult::command("COMMIT"));
@@ -551,8 +553,15 @@ pub(crate) fn rollback_transaction_ddl_to_len(
         with_connection_guc_state(sql_session_for_server(server, &mut db), server, state)
             .with_catalog_cache(catalog_cache)
             .with_ddl_undo_log(ddl_undo_log);
+    // SAVEPOINT undo keeps the native business transaction alive. Passing its
+    // actual owner lets journal repair validate that owner's retained scope;
+    // full rollback has already consumed it and uses abandoned-owner recovery.
+    if let Some(tx) = state.tx.take() {
+        session = session.with_pending_transaction(tx);
+    }
     let result = session.rollback_ddl_undo_to_len(len);
     capture_connection_guc_state(state, &session);
+    state.tx = session.take_pending_transaction();
     state.tx_ddl_undo = session.take_ddl_undo_log();
     state.catalog_cache = session.into_catalog_cache();
     result.map_err(PgWireError::from)
@@ -2453,6 +2462,17 @@ pub(crate) fn normalize_relation_identifier(value: &str) -> String {
     normalize_identifier(last_separator.map_or(value, |idx| &value[idx + 1..]))
 }
 
+/// Metadata outside SqlSession still belongs to the connection's actual live
+/// owner. The returned guard owns its handles; no database read lock is held
+/// while a caller subsequently executes SQL or acquires another server lock.
+pub(crate) fn connection_catalog_read_access(
+    server: &Arc<PgWireServer>,
+    state: &ConnectionState,
+) -> Result<Option<bicdb_core::CatalogReadAccess>> {
+    let db = server.read_db_for_transaction_progress()?;
+    Ok(db.enter_catalog_read_access(state.tx.as_ref())?)
+}
+
 pub(crate) fn parse_message(
     payload: &[u8],
     server: &Arc<PgWireServer>,
@@ -2462,6 +2482,7 @@ pub(crate) fn parse_message(
         parse_payload_sql(payload).is_some_and(bicdb_sql::postgres_parse_requires_snapshot)
     })?;
     let db = server.read_db_for_transaction_progress()?;
+    let _catalog_owner = db.enter_catalog_read_access(state.tx.as_ref())?;
     state.catalog_cache.with_schema_cache(&db, || {
         parse_message_inner(payload, server, &db, &state.session_state, &state.user)
     })
@@ -2648,12 +2669,22 @@ pub(crate) fn bind_message(
     ))
 }
 
+pub(crate) fn bind_message_for_connection(
+    payload: &[u8],
+    server: &Arc<PgWireServer>,
+    state: &ConnectionState,
+) -> Result<(String, Portal, bool)> {
+    let _catalog_owner = connection_catalog_read_access(server, state)?;
+    bind_message(payload, &state.prepared, server)
+}
+
 pub(crate) fn describe_message(
     stream: &mut ClientStream,
     payload: &[u8],
     server: &Arc<PgWireServer>,
     state: &mut ConnectionState,
 ) -> Result<()> {
+    let mut catalog_owner = connection_catalog_read_access(server, state)?;
     let mut idx = 0;
     let target = *payload
         .get(idx)
@@ -2844,6 +2875,11 @@ pub(crate) fn describe_message(
             } else {
                 let materialization_watermark = region_reads::snapshot_watermark(server, state);
                 let result = execute_server_sql_with_options(server, state, &portal_sql, true)?;
+                // This fallback can execute transaction control. Replace the
+                // old metadata identity before describing its result, including
+                // explicitly masking an owner that COMMIT/ROLLBACK consumed.
+                drop(catalog_owner);
+                catalog_owner = connection_catalog_read_access(server, state)?;
                 describe_result(
                     stream,
                     server,
@@ -2865,6 +2901,7 @@ pub(crate) fn describe_message(
             )));
         }
     }
+    drop(catalog_owner);
     Ok(())
 }
 

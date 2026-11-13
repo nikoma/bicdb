@@ -1,0 +1,29 @@
+{
+  "source": "43358d641d62d2f896bfb891c396762f85b31ea9",
+  "scope": "Tests-only actual SQL host undo-loop retry gate: foreignpendingtx refuses journalundo; queued DdlUndo entry and originalnativeowner must survive refusal, then retryafterforeignrollback mustrestorebacking/removeheader. Not OracleimplicitDDL,scopeproducerintegration,applicationorVM proof. Nativefoundationruntimef4 unchanged.",
+  "started_unix": 1794390371.6433942,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_journal::tests::refused_ddl_undo_keeps_the_journal_entry_for_a_later_retry",
+        "--",
+        "--exact",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794390371.6434913,
+      "exit": 101,
+      "finished_unix": 1794390455.8540337
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794390455.8542397
+}

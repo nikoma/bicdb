@@ -1,0 +1,29 @@
+{
+  "source": "e86d6fc1f2f2afcbcf2f6db5622db02b89733561",
+  "scope": "Seven mandatory positive PGpartition execution requirements on bothstores+ACK+2reopens: original4 plusUPDATEpartitionmove,DELETEdescendants andaccess-relationprivileges/RLS. NativePG16actualreference establishesparentgrant/policyandchildownpolicy; no copiedparentRLS. Expectedmain485failures retained. No implementationyet; no originalappassertionchange. Previous f9/699 test harness did not compile (moved BicDb at conditional reopen); no product tests ran. This revision keeps all7 assertions unchanged and corrects fixture ownership across both reopens.",
+  "started_unix": 1794480884.6301177,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_execution",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794480884.630288,
+      "exit": 101,
+      "finished_unix": 1794480889.8147893
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794480889.8149633
+}

@@ -1,0 +1,52 @@
+{
+  "source": "92b8456d795f7576636a1b10269fe2336af92a08",
+  "verifier": "/root/bicdb-durability-s3/host-control/verify_native_ha_ack_artifacts_v2.py",
+  "verifier_sha256": "2450296045b75477675cc60e9628dad9668d528fc0fdb927d702cc158991bfb4",
+  "original_result_sha256": "a62e9ca83e84ab87579216ea50322893e09242b008ee6b67fad7388a852cf4fe",
+  "status": "passed",
+  "started_unix": 1794413642.8962297,
+  "engine_opened": false,
+  "cases": [
+    {
+      "control": "unchanged",
+      "expected": "accept",
+      "exit": 0,
+      "stdout": "{\"status\": \"passed\", \"cases\": [{\"voters\": 3, \"acknowledged\": 48, \"known_readonly_refusals\": 169, \"snapshots_verified\": 12}, {\"voters\": 5, \"acknowledged\": 32, \"known_readonly_refusals\": 287, \"snapshots_verified\": 12}]}\n",
+      "stderr": "",
+      "matched_expectation": true
+    },
+    {
+      "control": "lost_ack_with_zero_declared_expectations",
+      "expected": "reject",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "Traceback (most recent call last):\n  File \"/root/bicdb-durability-s3/host-control/verify_native_ha_ack_artifacts_v2.py\", line 73, in <module>\n    assert snapshot['acknowledged'] == len(expected), 'snapshot counter cannot weaken ledger expectations'\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: snapshot counter cannot weaken ledger expectations\n",
+      "matched_expectation": true
+    },
+    {
+      "control": "changed_ack_value",
+      "expected": "reject",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "Traceback (most recent call last):\n  File \"/root/bicdb-durability-s3/host-control/verify_native_ha_ack_artifacts_v2.py\", line 79, in <module>\n    assert all(rows.get(identity) == value for identity, value in expected.items())\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n",
+      "matched_expectation": true
+    },
+    {
+      "control": "readonly_refusal_present",
+      "expected": "reject",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "Traceback (most recent call last):\n  File \"/root/bicdb-durability-s3/host-control/verify_native_ha_ack_artifacts_v2.py\", line 80, in <module>\n    assert -1 not in rows and not refused.intersection(rows)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n",
+      "matched_expectation": true
+    },
+    {
+      "control": "uncertain_error_write_present",
+      "expected": "accept",
+      "exit": 0,
+      "stdout": "{\"status\": \"passed\", \"cases\": [{\"voters\": 3, \"acknowledged\": 48, \"known_readonly_refusals\": 169, \"snapshots_verified\": 12}, {\"voters\": 5, \"acknowledged\": 32, \"known_readonly_refusals\": 287, \"snapshots_verified\": 12}]}\n",
+      "stderr": "",
+      "matched_expectation": true
+    }
+  ],
+  "finished_unix": 1794413643.1179056
+}

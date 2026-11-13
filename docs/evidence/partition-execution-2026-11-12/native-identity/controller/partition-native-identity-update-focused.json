@@ -1,0 +1,78 @@
+{
+  "label": "partition-native-identity-update-focused",
+  "source": "a05c66fbc0d39441e1e1d21c2bd667ba9b96cd98",
+  "base": "3545a445ac4b2c8d4f937ca0eeff254a1d184999",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "Native-authorized samecollection physicalidentity update batch. Real Native locked preimage+bothaddresses grantbounds+explicitidcolumn; oneUpdate budget/audit, actualold/new address audit, tenant/workspace/immutable/version checks; atomicwrite/lock/audit/grantrollback onfailure. SQLusesNativeAPI onlysamephysicalcollection protectedkeychange, keepsblobowners/FTS andvalidatesfullUPDATEconstraints. MutationDenied42501. Nativebaseline2P2F retained. Corechanged: previous1699Core/broad5aa/recoveryVM not automaticqualificationofnewAPI. FocusnewNativegrantsnegatives+actualpositive+bounds+stalesnapshot+rollback andoriginalSQLcontrols; fullgoalACTIVE, no merge/release/productionclaim.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "mutation_grants",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "partition_native_authority",
+      "--test",
+      "mutation_authority",
+      "--test",
+      "partition_generated",
+      "--test",
+      "partition_upsert",
+      "--test",
+      "partition_child_schema",
+      "--test",
+      "jsonb_primary_keys",
+      "--test",
+      "trusted_identity_triggers",
+      "--test",
+      "read_committed_upsert_grants",
+      "--test",
+      "read_committed_upsert_signed_arbiters",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-native-authority-baseline"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-partition-native-authority-baseline.json",
+      "equals": {
+        "source": "3545a445ac4b2c8d4f937ca0eeff254a1d184999",
+        "status": "failed"
+      }
+    }
+  ],
+  "continue_on_failure": true,
+  "allow_isolated_builds": [
+    {
+      "pid": 2891109,
+      "start_ticks": 164428829,
+      "repo": "/root/bicdb-durability-s3/repo-metadata-describe",
+      "target": "/root/bicdb-durability-s3/target-metadata-describe"
+    }
+  ]
+}

@@ -1,0 +1,165 @@
+{
+  "native-origin-root-focused-v1": {
+    "source": "591e6415d468ec0bc3744af1609df8a7afd2d98e",
+    "status": "focused_passed",
+    "exits": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "parent_results": [
+      {
+        "outcome": "ok",
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 14,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 10,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 8,
+        "failed": 0,
+        "ignored": 1
+      },
+      {
+        "outcome": "ok",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "unit_terminal": {
+      "MainPID": "0",
+      "ActiveState": "inactive"
+    }
+  },
+  "native-origin-root-focused-v2": {
+    "source": "e044c8de3c6a97fb6247112fb3205ccd336da49c",
+    "status": "failed",
+    "exits": [
+      0,
+      0,
+      101
+    ],
+    "parent_results": [
+      {
+        "outcome": "FAILED",
+        "passed": 7,
+        "failed": 1,
+        "ignored": 0
+      }
+    ],
+    "unit_terminal": {
+      "MainPID": "0",
+      "ActiveState": "failed"
+    }
+  },
+  "native-origin-root-focused-v3": {
+    "source": "1f14ae1d7ed9ebdbde8a9cd2ae4af9f4bedb7c1f",
+    "status": "focused_passed",
+    "exits": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "parent_results": [
+      {
+        "outcome": "ok",
+        "passed": 8,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 14,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 10,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 8,
+        "failed": 0,
+        "ignored": 1
+      },
+      {
+        "outcome": "ok",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "outcome": "ok",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "unit_terminal": {
+      "MainPID": "0",
+      "ActiveState": "inactive"
+    }
+  },
+  "qualification": {
+    "source": "1f14ae1d7ed9ebdbde8a9cd2ae4af9f4bedb7c1f",
+    "Core_focused_passed": 51,
+    "failed": 0,
+    "historical_ignored": 1,
+    "parent_targets": 7,
+    "new_actual_publication_EIO_cases": 2,
+    "prior_WAL_EIO_cases_included": 4,
+    "Page_Core_SQL_wire_alltargets_compile_passed": true,
+    "physical_qualification": "Unix directory device/inode/OS creation time",
+    "source_root_observation": "actual Native factory and physical custody, not peer auth",
+    "authenticated_import_producers_and_record_lineage_and_SQL_resolver_implemented": false,
+    "independent_crash_KVM_qualified": false,
+    "main_delivered": false,
+    "production_binary_built": false,
+    "release_published": false,
+    "deployed": false
+  }
+}

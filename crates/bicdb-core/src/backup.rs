@@ -427,6 +427,8 @@ pub(crate) fn copy_open_database_files(db_path: &Path, target: &Path, fsync: boo
             File::open(&destination)?.sync_all()?;
         }
     }
+    // Copied from the open database that holds the root's custody.
+    crate::db::authorize_materialized_native_copy(target)?;
     Ok(())
 }
 
@@ -474,6 +476,10 @@ fn create_backup_with_mode(
 ) -> Result<BackupCreateReport> {
     let db_path = db_path.as_ref();
     let backup_path = backup_path.as_ref();
+    // An archive authorizes its restore target to take custody of the
+    // archived Native root, so it is only ever cut from a directory that
+    // holds that custody itself. A plain copy cannot launder itself here.
+    crate::db::refuse_unauthorized_native_copy(db_path)?;
     if let Some(parent) = backup_path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -824,7 +830,9 @@ pub fn restore_backup(
     options: BackupRestoreOptions,
 ) -> Result<BackupRestoreReport> {
     if repository::is_manifest(backup_path.as_ref())? {
-        return repository::restore(backup_path.as_ref(), target_path.as_ref(), &options);
+        let report = repository::restore(backup_path.as_ref(), target_path.as_ref(), &options)?;
+        crate::db::authorize_materialized_native_copy(target_path.as_ref())?;
+        return Ok(report);
     }
     let mut reader = BufReader::new(File::open(backup_path)?);
     let verified = verify_backup_reader_header(&mut reader, &options.passphrase)?;
@@ -892,6 +900,9 @@ pub fn restore_backup(
     };
 
     verify_restored_manifest(target_path, &verified.manifest)?;
+    // The verified archive came from a root in custody; this freshly
+    // materialized directory may take custody at its first open.
+    crate::db::authorize_materialized_native_copy(target_path)?;
     fs::remove_file(&marker)?;
     sync_parent_directory(&marker)?;
     Ok(BackupRestoreReport {

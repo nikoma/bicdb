@@ -108,7 +108,9 @@ pub(crate) fn binding_path(
             schemas.push(schema);
         }
     }
-    Ok((other || !public_exists).then(|| schemas.into()))
+    // No usable schema is distinct from the default public-only path. Keep
+    // the empty path for value lookups such as regclass and current_schema.
+    Ok((other || !public_exists || schemas.is_empty()).then(|| schemas.into()))
 }
 
 fn relation_exists(db: &BicDb, name: &str) -> bool {

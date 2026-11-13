@@ -1,0 +1,106 @@
+{
+  "source": "f5090de8df6c7d432dbed66e3b57c6c21df43a98",
+  "scope": "Coherent constraint-owned index integrity batch: exact namespace/path and quoted identity, multi-drop preflight, view descriptors/storage identities, PG2BP01 and separate Oracle02429 diagnostics. Prior437 had4real failures; ASCII negativea499 loses a second Native index. New6focused and existing authority/catalog/constraint regressions, original case-mapped index library regressions, then wire admission/protocol; no original test changes. DEFAULT, pending-owner index undo and authenticated portable import remain open.",
+  "started_unix": 1794466565.9547093,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "drop_constraint_indexes",
+        "--",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "started_unix": 1794466565.9551823,
+      "exit": 0,
+      "finished_unix": 1794466664.3976488
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "--no-fail-fast",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "constraint_diagnostics",
+        "--test",
+        "catalog_default_and_index_columns",
+        "--test",
+        "raw_ddl_authorization",
+        "--test",
+        "object_ddl_authorization",
+        "--test",
+        "ddl_authorization_holes",
+        "--test",
+        "ownership_authorization",
+        "--test",
+        "set_role_drops_privilege",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794466664.3978665,
+      "exit": 0,
+      "finished_unix": 1794466702.5086436
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "case_mapped_index_tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794466702.5088797,
+      "exit": 0,
+      "finished_unix": 1794466792.4678159
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "--no-fail-fast",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "catalog_read_admission",
+        "--test",
+        "catalog_acl_types",
+        "--test",
+        "read_only_transactions",
+        "--test",
+        "protocol",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794466792.4680166,
+      "exit": 0,
+      "finished_unix": 1794467011.555323
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794467011.5556428
+}

@@ -1,0 +1,6 @@
+{
+  "status": "actual_native_pg16_trigger_upsert_reference_passed",
+  "exit": 0,
+  "scope": "Only new scratchschema inside rolledback transaction. No original businessschema touched; no physicalbyteidentityclaim.",
+  "recorded_unix": 1794484481.8080957
+}

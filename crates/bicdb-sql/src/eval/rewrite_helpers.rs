@@ -535,6 +535,11 @@ pub(crate) fn rewrite_postgres_parse_compat(sql: &str) -> Option<String> {
     let mut rewritten = sql.to_string();
     let mut changed = false;
 
+    if let Some(next) = super::identity_sequence_options::rewrite(&rewritten) {
+        rewritten = next;
+        changed = true;
+    }
+
     if let Some(next) = crate::engine::flashback::rewrite_flashback_clauses(&rewritten) {
         rewritten = next;
         changed = true;

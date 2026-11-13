@@ -1,0 +1,95 @@
+{
+  "controls": [
+    {
+      "label": "constraint_parent",
+      "state": "00000",
+      "message": "accepted"
+    },
+    {
+      "label": "function_restrict",
+      "state": "2BP01",
+      "message": "cannot drop function f() because other objects depend on it"
+    },
+    {
+      "label": "multi_missing_function",
+      "state": "42883",
+      "message": "function missing_function() does not exist"
+    }
+  ],
+  "before_cascade": [
+    {
+      "parent": true,
+      "trigger": "c",
+      "relation": "high"
+    },
+    {
+      "parent": true,
+      "trigger": "guard",
+      "relation": "high"
+    },
+    {
+      "parent": true,
+      "trigger": "c",
+      "relation": "low"
+    },
+    {
+      "parent": false,
+      "trigger": "child_c",
+      "relation": "low"
+    },
+    {
+      "parent": true,
+      "trigger": "guard",
+      "relation": "low"
+    },
+    {
+      "parent": false,
+      "trigger": "c",
+      "relation": "p"
+    },
+    {
+      "parent": false,
+      "trigger": "guard",
+      "relation": "p"
+    }
+  ],
+  "cascade_trigger_count": 0,
+  "after_rollback": [
+    {
+      "parent": true,
+      "trigger": "c",
+      "relation": "high"
+    },
+    {
+      "parent": true,
+      "trigger": "guard",
+      "relation": "high"
+    },
+    {
+      "parent": true,
+      "trigger": "c",
+      "relation": "low"
+    },
+    {
+      "parent": false,
+      "trigger": "child_c",
+      "relation": "low"
+    },
+    {
+      "parent": true,
+      "trigger": "guard",
+      "relation": "low"
+    },
+    {
+      "parent": false,
+      "trigger": "c",
+      "relation": "p"
+    },
+    {
+      "parent": false,
+      "trigger": "guard",
+      "relation": "p"
+    }
+  ],
+  "ack": 1
+}

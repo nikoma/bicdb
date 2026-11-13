@@ -1,0 +1,752 @@
+{
+  "partition-old-store-fixtures-482-20261112/ack-ledger.jsonl": {
+    "stored_as": "partition-old-store-fixtures-482-20261112/ack-ledger.jsonl",
+    "raw_bytes": 4352,
+    "raw_sha256": "210dbeb74e92a9c72be9222d2d4c1a003db137417e9a835e633efc3cca570928"
+  },
+  "partition-old-store-fixtures-482-20261112/old-reader-raw-policy-export.jsonl": {
+    "stored_as": "partition-old-store-fixtures-482-20261112/old-reader-raw-policy-export.jsonl",
+    "raw_bytes": 3402,
+    "raw_sha256": "f719f4f87eb3048c77a096d41f9a2ea787d9eba36e3f5acfe680d99ee8cbca62"
+  },
+  "partition-old-store-fixtures-482-20261112/result.json": {
+    "stored_as": "partition-old-store-fixtures-482-20261112/result.json",
+    "raw_bytes": 47465,
+    "raw_sha256": "7db7e27026524713553b223a90ff3bbc726c428a3e7998bea42854d1a78ecb56"
+  },
+  "partition-old-store-baseline-1f6a25ed/embedded_memory-bad_child_bound.stderr": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/embedded_memory-bad_child_bound.stderr.gz",
+    "raw_bytes": 646,
+    "raw_sha256": "af41acf496e6c1fdb26baba92604dbc8f1a8a5d5c14524d720bdd638c9a09629"
+  },
+  "partition-old-store-baseline-1f6a25ed/embedded_memory-bad_child_bound.stdout": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/embedded_memory-bad_child_bound.stdout.gz",
+    "raw_bytes": 421,
+    "raw_sha256": "0cfc09eed26bcab3f8f167081af4ea2b748dd53b987514fb891c8c9ac07a4e6c"
+  },
+  "partition-old-store-baseline-1f6a25ed/embedded_memory-independent_child_policy.stderr": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/embedded_memory-independent_child_policy.stderr.gz",
+    "raw_bytes": 637,
+    "raw_sha256": "6f1c37233a4e474a4ce6fa691b069cb02d832c7d72d31d9651b2b1cadc5e1460"
+  },
+  "partition-old-store-baseline-1f6a25ed/embedded_memory-independent_child_policy.stdout": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/embedded_memory-independent_child_policy.stdout.gz",
+    "raw_bytes": 421,
+    "raw_sha256": "a748bdeb614412ac0b4a39e086bfd290b625167ad9366ed88b55fe86a3d3ae69"
+  },
+  "partition-old-store-baseline-1f6a25ed/embedded_memory-old-reader.stderr": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/embedded_memory-old-reader.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-old-store-baseline-1f6a25ed/embedded_memory-old-reader.stdout": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/embedded_memory-old-reader.stdout.gz",
+    "raw_bytes": 425,
+    "raw_sha256": "11198515ce5101163cfa77b38c73312beed6aacba6f2ba07f1ccd4ad9285d516"
+  },
+  "partition-old-store-baseline-1f6a25ed/embedded_memory-parent_heap.stderr": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/embedded_memory-parent_heap.stderr.gz",
+    "raw_bytes": 665,
+    "raw_sha256": "4237f766987828886f1771a27ecddfca2e7a33b8685a39a796c0e400c343d4cc"
+  },
+  "partition-old-store-baseline-1f6a25ed/embedded_memory-parent_heap.stdout": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/embedded_memory-parent_heap.stdout.gz",
+    "raw_bytes": 154,
+    "raw_sha256": "7e0601ade3a99ea5a13d3267267e0d92325d46074779101b35ba110b19721395"
+  },
+  "partition-old-store-baseline-1f6a25ed/result.json": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/result.json",
+    "raw_bytes": 3639,
+    "raw_sha256": "f1bdfdf0b0de1358cad10a0167f097e85397959e48ffb0d4042d94f882b7662d"
+  },
+  "partition-old-store-baseline-1f6a25ed/server_paged-bad_child_bound.stderr": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/server_paged-bad_child_bound.stderr.gz",
+    "raw_bytes": 646,
+    "raw_sha256": "f40fdb1eeb63208e3347c38c399d19cd43dab3065fac1292b51209bb55e2ce88"
+  },
+  "partition-old-store-baseline-1f6a25ed/server_paged-bad_child_bound.stdout": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/server_paged-bad_child_bound.stdout.gz",
+    "raw_bytes": 421,
+    "raw_sha256": "0cfc09eed26bcab3f8f167081af4ea2b748dd53b987514fb891c8c9ac07a4e6c"
+  },
+  "partition-old-store-baseline-1f6a25ed/server_paged-independent_child_policy.stderr": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/server_paged-independent_child_policy.stderr.gz",
+    "raw_bytes": 637,
+    "raw_sha256": "e90e6b16b7d7ff7e35247bc0dac65c06a0adc7cb33b64e13e66dd59bd7d7dafa"
+  },
+  "partition-old-store-baseline-1f6a25ed/server_paged-independent_child_policy.stdout": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/server_paged-independent_child_policy.stdout.gz",
+    "raw_bytes": 421,
+    "raw_sha256": "a748bdeb614412ac0b4a39e086bfd290b625167ad9366ed88b55fe86a3d3ae69"
+  },
+  "partition-old-store-baseline-1f6a25ed/server_paged-old-reader.stderr": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/server_paged-old-reader.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-old-store-baseline-1f6a25ed/server_paged-old-reader.stdout": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/server_paged-old-reader.stdout.gz",
+    "raw_bytes": 425,
+    "raw_sha256": "11198515ce5101163cfa77b38c73312beed6aacba6f2ba07f1ccd4ad9285d516"
+  },
+  "partition-old-store-baseline-1f6a25ed/server_paged-parent_heap.stderr": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/server_paged-parent_heap.stderr.gz",
+    "raw_bytes": 665,
+    "raw_sha256": "347e66f92518b2cc1017c295065953e69baec225c9d31b0a515c526f2a1d338f"
+  },
+  "partition-old-store-baseline-1f6a25ed/server_paged-parent_heap.stdout": {
+    "stored_as": "partition-old-store-baseline-1f6a25ed/server_paged-parent_heap.stdout.gz",
+    "raw_bytes": 154,
+    "raw_sha256": "7e0601ade3a99ea5a13d3267267e0d92325d46074779101b35ba110b19721395"
+  },
+  "partition-upgrade-inspection-08f42204/embedded_memory-bad_child_bound.stderr": {
+    "stored_as": "partition-upgrade-inspection-08f42204/embedded_memory-bad_child_bound.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-inspection-08f42204/embedded_memory-bad_child_bound.stdout": {
+    "stored_as": "partition-upgrade-inspection-08f42204/embedded_memory-bad_child_bound.stdout.gz",
+    "raw_bytes": 1059,
+    "raw_sha256": "b00408d69523c55b6c9748bf9d4859eb2cafd519ac4f0b573b7c758a56103f9f"
+  },
+  "partition-upgrade-inspection-08f42204/embedded_memory-independent_child_policy.stderr": {
+    "stored_as": "partition-upgrade-inspection-08f42204/embedded_memory-independent_child_policy.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-inspection-08f42204/embedded_memory-independent_child_policy.stdout": {
+    "stored_as": "partition-upgrade-inspection-08f42204/embedded_memory-independent_child_policy.stdout.gz",
+    "raw_bytes": 3252,
+    "raw_sha256": "d7f9f1185a306c58f084381d38b68cf191464d301db032bc22b92819f0b5580f"
+  },
+  "partition-upgrade-inspection-08f42204/embedded_memory-parent_heap.stderr": {
+    "stored_as": "partition-upgrade-inspection-08f42204/embedded_memory-parent_heap.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-inspection-08f42204/embedded_memory-parent_heap.stdout": {
+    "stored_as": "partition-upgrade-inspection-08f42204/embedded_memory-parent_heap.stdout.gz",
+    "raw_bytes": 657,
+    "raw_sha256": "81913ec174f797606b58b19ca47075c0aaee00ada01fdef553eaf9649ee09b38"
+  },
+  "partition-upgrade-inspection-08f42204/result.json": {
+    "stored_as": "partition-upgrade-inspection-08f42204/result.json",
+    "raw_bytes": 8182,
+    "raw_sha256": "99a711f6ff6d73f37c0a53e9e785e143a034042d78ca71a20cd88a46400cc539"
+  },
+  "partition-upgrade-inspection-08f42204/server_paged-bad_child_bound.stderr": {
+    "stored_as": "partition-upgrade-inspection-08f42204/server_paged-bad_child_bound.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-inspection-08f42204/server_paged-bad_child_bound.stdout": {
+    "stored_as": "partition-upgrade-inspection-08f42204/server_paged-bad_child_bound.stdout.gz",
+    "raw_bytes": 1059,
+    "raw_sha256": "b00408d69523c55b6c9748bf9d4859eb2cafd519ac4f0b573b7c758a56103f9f"
+  },
+  "partition-upgrade-inspection-08f42204/server_paged-independent_child_policy.stderr": {
+    "stored_as": "partition-upgrade-inspection-08f42204/server_paged-independent_child_policy.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-inspection-08f42204/server_paged-independent_child_policy.stdout": {
+    "stored_as": "partition-upgrade-inspection-08f42204/server_paged-independent_child_policy.stdout.gz",
+    "raw_bytes": 3252,
+    "raw_sha256": "d7f9f1185a306c58f084381d38b68cf191464d301db032bc22b92819f0b5580f"
+  },
+  "partition-upgrade-inspection-08f42204/server_paged-parent_heap.stderr": {
+    "stored_as": "partition-upgrade-inspection-08f42204/server_paged-parent_heap.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-inspection-08f42204/server_paged-parent_heap.stdout": {
+    "stored_as": "partition-upgrade-inspection-08f42204/server_paged-parent_heap.stdout.gz",
+    "raw_bytes": 657,
+    "raw_sha256": "81913ec174f797606b58b19ca47075c0aaee00ada01fdef553eaf9649ee09b38"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_bad_child_bound.old-reader.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_bad_child_bound.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_bad_child_bound.old-reader.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_bad_child_bound.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_bad_child_bound.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_bad_child_bound.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_bad_child_bound.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_bad_child_bound.stdout.gz",
+    "raw_bytes": 162,
+    "raw_sha256": "84cd591208ad9ba203452dd3e21c621f1e4710edc928a7f1ce390a49f6a6ac25"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_parent_heap.old-reader.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_parent_heap.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_parent_heap.old-reader.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_parent_heap.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_parent_heap.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_parent_heap.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_parent_heap.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_parent_heap.stdout.gz",
+    "raw_bytes": 579,
+    "raw_sha256": "49eb2670d64992e20d681e365279c3bbb05d383747e0969f33bc783718417063"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_keep_stored.old-reader.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_keep_stored.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_keep_stored.old-reader.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_keep_stored.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_keep_stored.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_keep_stored.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_keep_stored.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_keep_stored.stdout.gz",
+    "raw_bytes": 162,
+    "raw_sha256": "721ec497d868a733d685ac5e4e97ec29042abe8ddf0817e2fd7f08caf1601296"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_preserve_historical.old-reader.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_preserve_historical.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_preserve_historical.old-reader.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_preserve_historical.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_preserve_historical.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_preserve_historical.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_preserve_historical.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/embedded_memory-apply_policy_preserve_historical.stdout.gz",
+    "raw_bytes": 162,
+    "raw_sha256": "abd96081f13710f7390917adba565655fd90a920320f65d8ace45a7486ea6a79"
+  },
+  "partition-upgrade-apply-first-eccbe714/result.json": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/result.json",
+    "raw_bytes": 3682,
+    "raw_sha256": "5d805d9b34a2e9ff9b51bcb29c31eb29f1a2a11e4244275f1c0aa3afca7a20e8"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_bad_child_bound.old-reader.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_bad_child_bound.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_bad_child_bound.old-reader.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_bad_child_bound.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_bad_child_bound.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_bad_child_bound.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_bad_child_bound.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_bad_child_bound.stdout.gz",
+    "raw_bytes": 162,
+    "raw_sha256": "0a56557ddd07c60d4d4c0b3d85cc864ffaa17fabbd909cd8a0038b62beecff0a"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_parent_heap.old-reader.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_parent_heap.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_parent_heap.old-reader.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_parent_heap.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_parent_heap.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_parent_heap.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_parent_heap.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_parent_heap.stdout.gz",
+    "raw_bytes": 579,
+    "raw_sha256": "423aa85565330ac5a3866c56e84828ac91e90ef632060968ff5b5d6a75595442"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_keep_stored.old-reader.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_keep_stored.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_keep_stored.old-reader.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_keep_stored.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_keep_stored.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_keep_stored.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_keep_stored.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_keep_stored.stdout.gz",
+    "raw_bytes": 162,
+    "raw_sha256": "8cd69f26d2aca9056fd33024aa6739494086df8b2d54b6527931a338ccfafd2a"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_preserve_historical.old-reader.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_preserve_historical.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_preserve_historical.old-reader.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_preserve_historical.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_preserve_historical.stderr": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_preserve_historical.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_preserve_historical.stdout": {
+    "stored_as": "partition-upgrade-apply-first-eccbe714/server_paged-apply_policy_preserve_historical.stdout.gz",
+    "raw_bytes": 162,
+    "raw_sha256": "8e4288dbf9dc6c1d84d1e015c78bcbc385693e9f979c54c12aa8b35e96c92452"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_bad_child_bound.old-reader.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_bad_child_bound.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_bad_child_bound.old-reader.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_bad_child_bound.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_bad_child_bound.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_bad_child_bound.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_bad_child_bound.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_bad_child_bound.stdout.gz",
+    "raw_bytes": 162,
+    "raw_sha256": "226f112b941e2f4ad902f6ff2842d1e3cb0e0e1c23d3b89d72e92f2ba73ec7c6"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_parent_heap.old-reader.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_parent_heap.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_parent_heap.old-reader.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_parent_heap.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_parent_heap.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_parent_heap.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_parent_heap.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_parent_heap.stdout.gz",
+    "raw_bytes": 579,
+    "raw_sha256": "4dd8d8c970ef01a89c05c764779c9683c1f1c51affa07ab581cb8d4349b9e925"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_keep_stored.old-reader.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_keep_stored.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_keep_stored.old-reader.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_keep_stored.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_keep_stored.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_keep_stored.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_keep_stored.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_keep_stored.stdout.gz",
+    "raw_bytes": 162,
+    "raw_sha256": "14fbd7df4d9f1f634d5187d3c385d85446e3c9d4117dcf0e5e0a851850b23fe4"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_preserve_historical.old-reader.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_preserve_historical.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_preserve_historical.old-reader.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_preserve_historical.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_preserve_historical.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_preserve_historical.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_preserve_historical.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/embedded_memory-apply_policy_preserve_historical.stdout.gz",
+    "raw_bytes": 162,
+    "raw_sha256": "c75503f01f33cf75f3f9d41c66c9e6d468b650aefced948385d53553904cf5cf"
+  },
+  "partition-upgrade-api-e45a5118/result.json": {
+    "stored_as": "partition-upgrade-api-e45a5118/result.json",
+    "raw_bytes": 3682,
+    "raw_sha256": "9ba42028ddcf348f279730ad6b23b2d0187147ab72a04da27fe82a6a192f0a8d"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_bad_child_bound.old-reader.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_bad_child_bound.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_bad_child_bound.old-reader.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_bad_child_bound.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_bad_child_bound.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_bad_child_bound.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_bad_child_bound.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_bad_child_bound.stdout.gz",
+    "raw_bytes": 162,
+    "raw_sha256": "1eaecdf792bf7c554e040ca5dacddc6d150c5f7811002aa4dcebbe3f505f6f58"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_parent_heap.old-reader.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_parent_heap.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_parent_heap.old-reader.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_parent_heap.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_parent_heap.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_parent_heap.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_parent_heap.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_parent_heap.stdout.gz",
+    "raw_bytes": 579,
+    "raw_sha256": "870867436be3201706a33726bbd7eca782038261bf2d256cdbbe1685fd9eba54"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_policy_keep_stored.old-reader.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_policy_keep_stored.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_policy_keep_stored.old-reader.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_policy_keep_stored.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_policy_keep_stored.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_policy_keep_stored.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_policy_keep_stored.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_policy_keep_stored.stdout.gz",
+    "raw_bytes": 162,
+    "raw_sha256": "69ca2db535aa006c758b012103c5cc2609a712d3423133ad807f7435022d7c61"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_policy_preserve_historical.old-reader.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_policy_preserve_historical.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_policy_preserve_historical.old-reader.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_policy_preserve_historical.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_policy_preserve_historical.stderr": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_policy_preserve_historical.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-api-e45a5118/server_paged-apply_policy_preserve_historical.stdout": {
+    "stored_as": "partition-upgrade-api-e45a5118/server_paged-apply_policy_preserve_historical.stdout.gz",
+    "raw_bytes": 162,
+    "raw_sha256": "41a57bb347814fc2309ce9bb1b72c2e0f810db2ac60af2bf7e001a6fb9bbbcfc"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_bad_child_bound.old-reader.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_bad_child_bound.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_bad_child_bound.old-reader.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_bad_child_bound.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_bad_child_bound.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_bad_child_bound.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_bad_child_bound.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_bad_child_bound.stdout.gz",
+    "raw_bytes": 186,
+    "raw_sha256": "f2137a8085895aba1ac16901e0b9bc4d26ce41301fa11840ec5c49eb0a0d28b8"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_parent_heap.old-reader.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_parent_heap.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_parent_heap.old-reader.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_parent_heap.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_parent_heap.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_parent_heap.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_parent_heap.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_parent_heap.stdout.gz",
+    "raw_bytes": 603,
+    "raw_sha256": "14c369f8741acebb80647a4d29aa69d1e17050f287f1507e40920a89c9361a00"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_keep_stored.old-reader.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_keep_stored.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_keep_stored.old-reader.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_keep_stored.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_keep_stored.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_keep_stored.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_keep_stored.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_keep_stored.stdout.gz",
+    "raw_bytes": 186,
+    "raw_sha256": "1a0216beef3cbe5c1d7ea23f4d69199d71ec5c950359d2d2bc4e96f4d23dba1d"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_preserve_historical.old-reader.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_preserve_historical.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_preserve_historical.old-reader.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_preserve_historical.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_preserve_historical.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_preserve_historical.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_preserve_historical.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/embedded_memory-apply_policy_preserve_historical.stdout.gz",
+    "raw_bytes": 186,
+    "raw_sha256": "3e7ece66e994f84d72e3a3b3e8d384dc7a0acd7c4e108794f69e51c9770f6b2c"
+  },
+  "partition-upgrade-resume-fixture-fixed/result.json": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/result.json",
+    "raw_bytes": 3739,
+    "raw_sha256": "7046aa0855925dca94f6fcdbd4ca3ce9a564c9a3f3eb9e405b902607fc66c644"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_bad_child_bound.old-reader.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_bad_child_bound.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_bad_child_bound.old-reader.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_bad_child_bound.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_bad_child_bound.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_bad_child_bound.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_bad_child_bound.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_bad_child_bound.stdout.gz",
+    "raw_bytes": 186,
+    "raw_sha256": "6d725d6558ae3150b249a49cb7ff83da4779ff100771ca851b98fcdd5bf53b80"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_parent_heap.old-reader.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_parent_heap.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_parent_heap.old-reader.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_parent_heap.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_parent_heap.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_parent_heap.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_parent_heap.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_parent_heap.stdout.gz",
+    "raw_bytes": 603,
+    "raw_sha256": "fa24d8c9ec646dde2defa5d7ee9a13e648b6d7aff0f1bc7c306dc7c5f1eca643"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_keep_stored.old-reader.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_keep_stored.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_keep_stored.old-reader.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_keep_stored.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_keep_stored.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_keep_stored.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_keep_stored.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_keep_stored.stdout.gz",
+    "raw_bytes": 186,
+    "raw_sha256": "e2356b108dd73b4e2db323b04a4f0c26f921a2cf11b4aed58cb0c3e49ac5e52d"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_preserve_historical.old-reader.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_preserve_historical.old-reader.stderr.gz",
+    "raw_bytes": 110,
+    "raw_sha256": "000076858dffe44dbf7d7ade249c660f746a14b4f022cea577a6345892992843"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_preserve_historical.old-reader.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_preserve_historical.old-reader.stdout.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_preserve_historical.stderr": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_preserve_historical.stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_preserve_historical.stdout": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed/server_paged-apply_policy_preserve_historical.stdout.gz",
+    "raw_bytes": 186,
+    "raw_sha256": "f65c913bdc57c2ccd3391118a5b00abb78a8309725aedf74402ef63756ed9072"
+  },
+  "report-partition-reader-fence-b715e546.json": {
+    "stored_as": "report-partition-reader-fence-b715e546.json",
+    "raw_bytes": 931,
+    "raw_sha256": "737562545e98a74c02415a39700fe4bc7b65bf391dc4a4440f8e70cf31756c45"
+  },
+  "tc-step-partition-reader-fence-b715e546.log": {
+    "stored_as": "tc-step-partition-reader-fence-b715e546.log.gz",
+    "raw_bytes": 70600,
+    "raw_sha256": "d4f7139b26cc03002888a92c633461a85c6f7063da623c5f16d665de39f8860c"
+  },
+  "report-partition-reader-fence-retry-3b0289b2.json": {
+    "stored_as": "report-partition-reader-fence-retry-3b0289b2.json",
+    "raw_bytes": 910,
+    "raw_sha256": "12bca3c1a452cea1ee99d44c56ee35eefe7b0fc3d62143bfe4ae02ccca068241"
+  },
+  "tc-step-partition-reader-fence-retry-3b0289b2.log": {
+    "stored_as": "tc-step-partition-reader-fence-retry-3b0289b2.log.gz",
+    "raw_bytes": 72418,
+    "raw_sha256": "19cd74961ab0ea7d19b8387011f291c7fddaa9fa528a1d9e30f1486c819a13e4"
+  },
+  "report-partition-upgrade-inspector-build.json": {
+    "stored_as": "report-partition-upgrade-inspector-build.json",
+    "raw_bytes": 1115,
+    "raw_sha256": "af2369e6e402e00c3fd9cd307aedb87f53705b45172afde336d3daf8a010be30"
+  },
+  "tc-step-partition-upgrade-inspector-build.log": {
+    "stored_as": "tc-step-partition-upgrade-inspector-build.log.gz",
+    "raw_bytes": 86196,
+    "raw_sha256": "cb8e10873f74954e5c250268a49767804ac03e18922a0ae479f4375178f39f29"
+  },
+  "report-partition-upgrade-inspector-bound-build.json": {
+    "stored_as": "report-partition-upgrade-inspector-bound-build.json",
+    "raw_bytes": 1147,
+    "raw_sha256": "5a7a2a9dde37abe800761ac544b3f1aedaedbc6a44e2c940c0f887425880b3de"
+  },
+  "tc-step-partition-upgrade-inspector-bound-build.log": {
+    "stored_as": "tc-step-partition-upgrade-inspector-bound-build.log.gz",
+    "raw_bytes": 86688,
+    "raw_sha256": "0dede4029ba6058ebefff5b3fd3ec3e666b73735c421fa328454a4c67b0eaf3a"
+  },
+  "report-partition-upgrade-apply-first-build.json": {
+    "stored_as": "report-partition-upgrade-apply-first-build.json",
+    "raw_bytes": 1226,
+    "raw_sha256": "b956f33484ddc6b43809dea9563654aef89a8e2ff0902d8a91b7789499e8fe09"
+  },
+  "tc-step-partition-upgrade-apply-first-build.log": {
+    "stored_as": "tc-step-partition-upgrade-apply-first-build.log.gz",
+    "raw_bytes": 84820,
+    "raw_sha256": "ef244ccf975d850262f1906596da9b6b478fa4a0a0f6655bcd343985d2110df7"
+  },
+  "report-partition-upgrade-api-preflight-build-e45a5118.json": {
+    "stored_as": "report-partition-upgrade-api-preflight-build-e45a5118.json",
+    "raw_bytes": 1557,
+    "raw_sha256": "827fc416a3e545be0017e63f00cfbd40d9caeefb3f7711ed99e4f44155ae01f1"
+  },
+  "tc-step-partition-upgrade-api-preflight-build-e45a5118.log": {
+    "stored_as": "tc-step-partition-upgrade-api-preflight-build-e45a5118.log.gz",
+    "raw_bytes": 166489,
+    "raw_sha256": "03c0a6926cff433930f3cd583234ec9ed5cb4aadfc5fd7513b283248c72bf427"
+  },
+  "report-partition-upgrade-resume-build-f5ee9eec.json": {
+    "stored_as": "report-partition-upgrade-resume-build-f5ee9eec.json",
+    "raw_bytes": 1366,
+    "raw_sha256": "a7a9c107642e46f281ada32ecec224d1c2b9decd5679bc92e922f92c085536a8"
+  },
+  "tc-step-partition-upgrade-resume-build-f5ee9eec.log": {
+    "stored_as": "tc-step-partition-upgrade-resume-build-f5ee9eec.log.gz",
+    "raw_bytes": 167766,
+    "raw_sha256": "3865337918870a29c847f81938d30827f767afefdfa9752665d71099573ac323"
+  },
+  "report-partition-upgrade-resume-fixture-fixed.json": {
+    "stored_as": "report-partition-upgrade-resume-fixture-fixed.json",
+    "raw_bytes": 1803,
+    "raw_sha256": "20554057a564a176f5577317b2a6389ca20613671ac9d3869e548e3318b44ac8"
+  },
+  "tc-step-partition-upgrade-resume-fixture-fixed.log": {
+    "stored_as": "tc-step-partition-upgrade-resume-fixture-fixed.log.gz",
+    "raw_bytes": 167255,
+    "raw_sha256": "30ddc9c56d5356fa949f68e84cc0d286517e00fb6c037d83b160d18e3bb0b218"
+  },
+  "partition-upgrade-resume-f5ee9eec.log": {
+    "stored_as": "partition-upgrade-resume-f5ee9eec.log.gz",
+    "raw_bytes": 504,
+    "raw_sha256": "19c347d03a976354d5e40a53e4b55a294cf39d3505542ef5aeceae971e168c6c"
+  },
+  "partition-upgrade-resume-fixture-fixed-runtime.log": {
+    "stored_as": "partition-upgrade-resume-fixture-fixed-runtime.log.gz",
+    "raw_bytes": 3201,
+    "raw_sha256": "598c0be146eb14a1cd92eac5cceb28036421cb2c5f96ae9aa4b3620e6ff30a73"
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "private-partition-e8c426a7-mtable95-v2/controller.json": {
+    "stored_as": "private-partition-e8c426a7-mtable95-v2/controller.json",
+    "raw_bytes": 4347,
+    "raw_sha256": "61b6f1d33452c763523bb15379a983e72c8720ce06d9695765612d1cb09aa9e1"
+  },
+  "private-partition-e8c426a7-mtable95-v2/test-run.json": {
+    "stored_as": "private-partition-e8c426a7-mtable95-v2/test-run.json",
+    "raw_bytes": 6357,
+    "raw_sha256": "5812bea8a01f88be37a344a478af0a772f9f4fc2fa847c305912f5256c709832"
+  },
+  "private-partition-e8c426a7-mtable95-v2/surefire/TEST-org.idempiere.test.base.MProcessTest.xml": {
+    "stored_as": "private-partition-e8c426a7-mtable95-v2/surefire/TEST-org.idempiere.test.base.MProcessTest.xml.gz",
+    "raw_bytes": 24054,
+    "raw_sha256": "17efbf0f9fd4f642d613bc0a4b6ac64d94f6773976e25502657ee973f8cf247b"
+  },
+  "private-partition-e8c426a7-mtable95-v2/surefire/TEST-org.idempiere.test.base.MQueryTest.xml": {
+    "stored_as": "private-partition-e8c426a7-mtable95-v2/surefire/TEST-org.idempiere.test.base.MQueryTest.xml.gz",
+    "raw_bytes": 22956,
+    "raw_sha256": "7ffac27185f1efd44f047f7eb924e7f063d5fcbba43066c198aa0b378570fda8"
+  },
+  "private-partition-e8c426a7-mtable95-v2/surefire/TEST-org.idempiere.test.base.MRelationTypeTest.xml": {
+    "stored_as": "private-partition-e8c426a7-mtable95-v2/surefire/TEST-org.idempiere.test.base.MRelationTypeTest.xml.gz",
+    "raw_bytes": 19594,
+    "raw_sha256": "fd44c2b39d9927d6b1bdf51dd1b933d958a304be906d00751a536165319266f9"
+  },
+  "private-partition-e8c426a7-mtable95-v2/surefire/TEST-org.idempiere.test.base.MStorageTest.xml": {
+    "stored_as": "private-partition-e8c426a7-mtable95-v2/surefire/TEST-org.idempiere.test.base.MStorageTest.xml.gz",
+    "raw_bytes": 19306,
+    "raw_sha256": "2cbf0be0051224cf8727ac8c61e911833453ef99786a265f784f9e2b15ddd887"
+  },
+  "private-partition-e8c426a7-mtable95-v2/surefire/TEST-org.idempiere.test.base.MTabTest.xml": {
+    "stored_as": "private-partition-e8c426a7-mtable95-v2/surefire/TEST-org.idempiere.test.base.MTabTest.xml.gz",
+    "raw_bytes": 22151,
+    "raw_sha256": "9036e4ee3bbb6ed62095a8ae7800d23e1fadbf2ab2b301ef08b766e5f5cf0ee2"
+  },
+  "private-partition-e8c426a7-mtable95-v2/surefire/TEST-org.idempiere.test.base.MTableTest.xml": {
+    "stored_as": "private-partition-e8c426a7-mtable95-v2/surefire/TEST-org.idempiere.test.base.MTableTest.xml.gz",
+    "raw_bytes": 37435,
+    "raw_sha256": "3ab86384e703598b4cf7c5e007e672b41386b9052d026e77742bc7bf54f1898d"
+  },
+  "private-partition-e8c426a7-mtable95-v2/jvm.log": {
+    "stored_as": "private-partition-e8c426a7-mtable95-v2/jvm.log.gz",
+    "raw_bytes": 75339,
+    "raw_sha256": "87c6da9f124df186217e3389b6cdf0d2a911dd4aa6044d73a288941cb2b0908a"
+  },
+  "private-partition-e8c426a7-mtable95-v2/database.log": {
+    "stored_as": "private-partition-e8c426a7-mtable95-v2/database.log.gz",
+    "raw_bytes": 9874,
+    "raw_sha256": "7b9d216b513b70ef37c50405a74b405841b4cbe934e3516becd258e4f6a420f6"
+  },
+  "private-composed-4e329f36-mtable95-v1/controller.json": {
+    "stored_as": "private-composed-4e329f36-mtable95-v1/controller.json",
+    "raw_bytes": 4336,
+    "raw_sha256": "6f3f045bd8c941fc9d1196a78813d350cff32fac06f79b5b9bf7d3c6296eddb5"
+  },
+  "private-composed-4e329f36-mtable95-v1/test-run.json": {
+    "stored_as": "private-composed-4e329f36-mtable95-v1/test-run.json",
+    "raw_bytes": 6351,
+    "raw_sha256": "ba7e03317b4ce74176fb1db8863bf7d445dd04cb956beab01d66095523fd1fc3"
+  },
+  "private-composed-4e329f36-mtable95-v1/surefire/TEST-org.idempiere.test.base.MProcessTest.xml": {
+    "stored_as": "private-composed-4e329f36-mtable95-v1/surefire/TEST-org.idempiere.test.base.MProcessTest.xml.gz",
+    "raw_bytes": 24031,
+    "raw_sha256": "5433e796e33a463d221208f07d7f42c488af3d3b64c32df4d60ff43a9d48c598"
+  },
+  "private-composed-4e329f36-mtable95-v1/surefire/TEST-org.idempiere.test.base.MQueryTest.xml": {
+    "stored_as": "private-composed-4e329f36-mtable95-v1/surefire/TEST-org.idempiere.test.base.MQueryTest.xml.gz",
+    "raw_bytes": 22932,
+    "raw_sha256": "f7f9a88d04681b535c05fb43801acc700df230a0a4ab85b756a0b3ea26439495"
+  },
+  "private-composed-4e329f36-mtable95-v1/surefire/TEST-org.idempiere.test.base.MRelationTypeTest.xml": {
+    "stored_as": "private-composed-4e329f36-mtable95-v1/surefire/TEST-org.idempiere.test.base.MRelationTypeTest.xml.gz",
+    "raw_bytes": 19571,
+    "raw_sha256": "02d179cb83f3e47f5895134968143167876f2e9d8c26ea4dde60c556d57e1e77"
+  },
+  "private-composed-4e329f36-mtable95-v1/surefire/TEST-org.idempiere.test.base.MStorageTest.xml": {
+    "stored_as": "private-composed-4e329f36-mtable95-v1/surefire/TEST-org.idempiere.test.base.MStorageTest.xml.gz",
+    "raw_bytes": 19284,
+    "raw_sha256": "8ceb88dd548261facb32fef9be934e51702ba02e3026f68a9240afd765bc9d31"
+  },
+  "private-composed-4e329f36-mtable95-v1/surefire/TEST-org.idempiere.test.base.MTabTest.xml": {
+    "stored_as": "private-composed-4e329f36-mtable95-v1/surefire/TEST-org.idempiere.test.base.MTabTest.xml.gz",
+    "raw_bytes": 22129,
+    "raw_sha256": "743e138a827c28830d94fb2967018e4ad306ecc99e9c17162245dc05aba20e05"
+  },
+  "private-composed-4e329f36-mtable95-v1/surefire/TEST-org.idempiere.test.base.MTableTest.xml": {
+    "stored_as": "private-composed-4e329f36-mtable95-v1/surefire/TEST-org.idempiere.test.base.MTableTest.xml.gz",
+    "raw_bytes": 37418,
+    "raw_sha256": "8d4a7a798f7952dfef2f11025216103101a3d3413600fe11f71961b3241aa253"
+  },
+  "private-composed-4e329f36-mtable95-v1/jvm.log": {
+    "stored_as": "private-composed-4e329f36-mtable95-v1/jvm.log.gz",
+    "raw_bytes": 75261,
+    "raw_sha256": "94b5a14360521a9d3e0642ef015e908715cd6ee60a8ea982754f5c9989660039"
+  },
+  "private-composed-4e329f36-mtable95-v1/database.log": {
+    "stored_as": "private-composed-4e329f36-mtable95-v1/database.log.gz",
+    "raw_bytes": 8782,
+    "raw_sha256": "9a92682a26439c14d06c434a297a0e928b6875e6b6c8aff9242fcfd586576b45"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "label": "private-wire-catalog-oid-positive-b1e5b872",
+  "source": "b1e5b872dade1ee9b964deae4d8471ebd81354ad",
+  "base": "08442cac00bba6771f2ece21ed498b8f87977146",
+  "repo": "/root/bicdb-sql-rename-journal",
+  "wait_units": [
+    "bicdb-private-wire-catalog-oid-positive-08442cac"
+  ],
+  "scope": "Private catalog reader precision only; no Native CollectionMeta/UID/WAL/lifecycle changes and no global producer/recovery gate relaxed. Known built-in OIDs avoid mutable catalogs while checking recovery health. Known declared/table OIDs classify through private generation snapshots, admit exact stored catalog key before exposure, and unknown OIDs conservatively admit whole catalogs. Public list scans retain whole guards. Actual seven-case TCP negative ea7 retained; verify unrelated builtin/enum/composite/row metadata vs affected Source/Describe bothstores, then existing direct catalog/owner/routine/default regressions. Not main474/runtime qualification. Actual08442TCP result6PASS1FAIL remainingunrelatedROWcast usedwhole-schemaDDLtype resolver. Followupusespointadmittedstoredkeyname resolution andexistingquotedidentifierparser; addquoted-dotrowtype anddirectknownaffected/unknownOIDcontrols. Ninewire/API tests thenexistingcatalogSQLclosure; no broad beforefocusedbatchstabilizes.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-pgwire",
+      "--test",
+      "catalog_read_admission",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "catalog_read_admission",
+      "--test",
+      "catalog_read_owner",
+      "--test",
+      "catalog_read_routine_transitions",
+      "--test",
+      "catalog_default_dependencies",
+      "--test",
+      "catalog_default_and_index_columns"
+    ]
+  ]
+}

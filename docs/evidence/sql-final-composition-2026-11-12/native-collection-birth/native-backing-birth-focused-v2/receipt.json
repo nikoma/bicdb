@@ -1,0 +1,79 @@
+{
+  "source": "5bf80715ed86e7ff55852b86932d747ee8eb3b39",
+  "scope": "Private combined source Native future-only backing allocation identity prerequisite. New lifecycle/import/restart/capture controls plus existing local identity controls, Core/SQL/wire alltargets compile, and unchanged original promoted undecided rename positive retained as OPEN acceptance gate. No portable authenticated origin producer/resolver yet; no main/release/deployment or application qualification. Goal active, experimental production OFF, no new spend. v1 stopped at a test-setup E0382 compile error; preserved. This source fixes only the borrowed storage-mode setup. No semantic failures hidden.",
+  "started_unix": 1794531317.3371506,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794531317.3373322,
+      "exit": 0,
+      "finished_unix": 1794531317.388263
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "check",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "-p",
+        "bicdb-sql",
+        "-p",
+        "bicdb-pgwire",
+        "--all-targets"
+      ],
+      "started_unix": 1794531317.3884034,
+      "exit": 0,
+      "finished_unix": 1794531372.2095754
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "native_collection_birth::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794531372.2097523,
+      "exit": 0,
+      "finished_unix": 1794531413.6039383
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "range_image_bindings::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794531413.6041665,
+      "exit": 101,
+      "finished_unix": 1794531414.1941926
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794531414.1943448
+}

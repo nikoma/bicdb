@@ -1,0 +1,62 @@
+{
+  "label": "private-catalog-record-positive-c5edfd49",
+  "repo": "/root/bicdb-sql-rename-journal",
+  "source": "c5edfd4954277efbbefd64b6806470503722c5d3",
+  "base": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+  "source_ref": "refs/bicdb-proof/private-catalog-record-positive-c5edfd49",
+  "wait_units": [],
+  "required_receipts": [],
+  "scope": "Actual73control fiveFAILunderoldcollectionadapter: unrelatedrecordreadblocked, priorotherrecordobservationblocksreservation, disjointownersblocked, undeclaredscalarupdateallowed andmixedbatchallowed. NewexactNativecatalogresourceAPI protectsfullrelationsandmetadatarecordswithphysicalincarnations; boundedpercollectionSQLcatalogpointobservations128escalatetoallrecords ratherthanunboundedmemory. ExistingNativecoarsecollectionobservationsremainconservative. Hostmutatorsvalidateallrecordeffects beforelocks/append; centralappendbackstopretained; pointinternalreads/bindsallowdisjointowners. UpdatedonlyadaptertonewAPI,same5assertionbodies. WholecollectionNativeadmission/hostlifecycle/readcapability/SQLreaderfences retained. Scopeproducer/SQLread-owner-context/wireDescribe/fullmetadataclosure/lifecycleNamespaceUID integrationstillOPEN; no globalDDLowner gate relaxed. Private471notpublic147257,nopublicationversionreserved.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "catalog_record_scope",
+      "--test",
+      "catalog_read_scope",
+      "--test",
+      "catalog_host_scope",
+      "--test",
+      "catalog_scope_admission",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "catalog_read_admission",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "transaction_isolation",
+      "--test",
+      "mutation_grants",
+      "--",
+      "--test-threads=1"
+    ]
+  ]
+}

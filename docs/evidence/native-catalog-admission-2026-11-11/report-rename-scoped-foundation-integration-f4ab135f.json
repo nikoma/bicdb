@@ -1,0 +1,131 @@
+{
+  "source": "f4ab135fef987fddd9fbc4c53c8c3d914a90005d",
+  "scope": "Native catalog foundation f4 all5focused commands/29tests passed. Revalidate changed native transaction binding/registration/drop integration against portable snapshot+WAL readerfences, full live/durable/journal selected targets, schema compat, SQLrename/startup/profile/promotion/recycle/pending-composite/read-only/snapshot regressions. This is selected integration, not fullworkspace/Oracle implicitDDL/application/VM acceptance. SQL scopedproducer/metadata/Describe bridge NOTimplemented; separate ce3 tests-only unrelated-native SQLregression remains unresolved, not hidden or passing. Finalproducerintegration+broadgates required before delivery.",
+  "started_unix": 1794390044.7844064,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "sql_rename_snapshot_fence",
+        "--test",
+        "sql_rename_replication_fence"
+      ],
+      "started_unix": 1794390044.784474,
+      "exit": 0,
+      "finished_unix": 1794390047.2284214
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "live_replication",
+        "--test",
+        "replication_durable_frames",
+        "--test",
+        "replication_journal"
+      ],
+      "started_unix": 1794390047.2286665,
+      "exit": 0,
+      "finished_unix": 1794390075.875531
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "schema_compatibility_tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794390075.8757339,
+      "exit": 0,
+      "finished_unix": 1794390076.34683
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794390076.3469207,
+      "exit": 0,
+      "finished_unix": 1794390211.8867602
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::recycle_bin_journal::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794390211.887045,
+      "exit": 0,
+      "finished_unix": 1794390248.1348557
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_pending_composites",
+        "--test",
+        "table_rename_views",
+        "--test",
+        "schema_table_rename",
+        "--test",
+        "session_statement_snapshots",
+        "--test",
+        "read_only_transactions"
+      ],
+      "started_unix": 1794390248.1352186,
+      "exit": 0,
+      "finished_unix": 1794390370.9570103
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794390370.9572752
+}

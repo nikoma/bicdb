@@ -1,0 +1,118 @@
+{
+  "README.md": {
+    "bytes": 3270,
+    "sha256": "3484ede93c9331566a7c4d1f9f2df8b7373be712e08c67541376974a6cf516e1"
+  },
+  "collector.py": {
+    "bytes": 8993,
+    "sha256": "f9c90dc69e81ae47385d068e70d2243d7b89b4dc008689994b24fb6b8264c19f"
+  },
+  "native-backing-birth-focused-v1/raw-manifest.json": {
+    "bytes": 664,
+    "sha256": "4f5ac2e32f99b60575ee08a41f1a5a0b38d8f7838affae2aea0a27bfceb3f4cc"
+  },
+  "native-backing-birth-focused-v1/receipt.json": {
+    "bytes": 1242,
+    "sha256": "4742c7b71bdbaaab4b6680a4935c4aec73fd19e0e5be4f6efe84748b86a3e7e7"
+  },
+  "native-backing-birth-focused-v1/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-backing-birth-focused-v1/spec.json": {
+    "bytes": 2042,
+    "sha256": "b31c935041137647ebc5b9e0a482b7b0ac160a6f2f2b59a807bdfacc598bdf00"
+  },
+  "native-backing-birth-focused-v1/validation.log.gz": {
+    "bytes": 40654,
+    "sha256": "0d4193a0171e61ca23f87262460b8c1e29ac7c8aa7dbf4a55a2b440332c9a120"
+  },
+  "native-backing-birth-focused-v2/raw-manifest.json": {
+    "bytes": 664,
+    "sha256": "b299728e72ac9f90185e8ac2f7a039cd75e3723bac13446ba0b7ff520d3a1a96"
+  },
+  "native-backing-birth-focused-v2/receipt.json": {
+    "bytes": 2175,
+    "sha256": "87697d199efedfc72e4003158d22a9d42b16e94b5e936ffd9406abf3b67b32cb"
+  },
+  "native-backing-birth-focused-v2/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-backing-birth-focused-v2/spec.json": {
+    "bytes": 2186,
+    "sha256": "7fd4540e5db6661804a8665319db55035d97e55de85f76095009921013526037"
+  },
+  "native-backing-birth-focused-v2/validation.log.gz": {
+    "bytes": 73961,
+    "sha256": "ed42e834d3f19c6dad5a6dc6fc89c563fe465d5383875a259669eec654f968ea"
+  },
+  "native-backing-birth-focused-v3/raw-manifest.json": {
+    "bytes": 665,
+    "sha256": "63cc874d9e1d73c8d1c30d62b8c0bc6d064eed0d52b8740caea65198a4ca7e2f"
+  },
+  "native-backing-birth-focused-v3/receipt.json": {
+    "bytes": 3292,
+    "sha256": "d740c91f520021ccf6b4759be9d292a3811e00d7069f1b70c919bb989ed766f4"
+  },
+  "native-backing-birth-focused-v3/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-backing-birth-focused-v3/spec.json": {
+    "bytes": 2468,
+    "sha256": "c4ae5e6c98cf95357eb9bed65c76b769b9684ac9a2d0ee12733f5418b94b46c4"
+  },
+  "native-backing-birth-focused-v3/validation.log.gz": {
+    "bytes": 124719,
+    "sha256": "125452067e2e5a0fda67dd5f7c4bf3e271d1eabc9db9aeed898f0b3eeb2c52ea"
+  },
+  "native-backing-birth-focused-v4/raw-manifest.json": {
+    "bytes": 665,
+    "sha256": "778391714dc957fcf580ea66dbaf25410ce3690b1d9edfc722571f158193da12"
+  },
+  "native-backing-birth-focused-v4/receipt.json": {
+    "bytes": 3366,
+    "sha256": "774b1dcda10d056bd1e659da9d750736f983834c1068b6fc7baa58097a8bd12f"
+  },
+  "native-backing-birth-focused-v4/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-backing-birth-focused-v4/spec.json": {
+    "bytes": 2696,
+    "sha256": "9a561392d447fcde53a7ed5460c7cbbc8bc620b5c4f49f01dabbef242b78124b"
+  },
+  "native-backing-birth-focused-v4/validation.log.gz": {
+    "bytes": 156491,
+    "sha256": "d0acfb90f839bf43b5f62c47464d0093f25d684633645790c6b203782c399d72"
+  },
+  "native-backing-birth-schema-refresh-baseline/raw-manifest.json": {
+    "bytes": 664,
+    "sha256": "5a9be2ec5b1cd9ef0d620578d8606a056892565e6f09e29e31b40cbf1709a89d"
+  },
+  "native-backing-birth-schema-refresh-baseline/receipt.json": {
+    "bytes": 1007,
+    "sha256": "b624eff5e56df6d28bfa5f64a0b836bd8501c3d71c7041390e1ff035e98faf1e"
+  },
+  "native-backing-birth-schema-refresh-baseline/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-backing-birth-schema-refresh-baseline/spec.json": {
+    "bytes": 1015,
+    "sha256": "fcd54d366891162708b52210850e28c21c278695a9c67b1384a88cfb9ff379e9"
+  },
+  "native-backing-birth-schema-refresh-baseline/validation.log.gz": {
+    "bytes": 16971,
+    "sha256": "665f5e1f976c9c1e657ce062eec0514e5773734fe69082f7ff3966cbdb1241c7"
+  },
+  "submit_s3_isolation_batch.py": {
+    "bytes": 7879,
+    "sha256": "06f8a0128af88f4e520690cbc175bf31f552559d900c72df06d6390775a30206"
+  },
+  "summary.json": {
+    "bytes": 2805,
+    "sha256": "4260120ae763ccfb4888f6e468a82909366c1eaeec69164bcabb1aaf4d61edec"
+  }
+}

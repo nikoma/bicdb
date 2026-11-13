@@ -1,0 +1,178 @@
+{
+  "label": "sql-partition-owner-publication-related",
+  "source": "82a8311156e2293a92e7cf9c1ffd70d1df92d57a",
+  "base": "4c9c90476e14dc4a589b05f7d7259d167965399d",
+  "source_ref": "refs/bicdb-proof/partition-owner-publication-related-82a83111",
+  "repo": "/root/bicdb-sql-final-composition",
+  "scope": "Currentprivatecombinedfinance490 Native temporarycatalogpublication+SQLpartition/rename ownerbatch. Requiresunchangedpositive094->82afocusedPASS. Relevantalltargetscheck, realNativecatalogowner/record/host/readcontrols, existingrenamejournal/dependencycases, partitiondata/schema/trigger/replicareads, actualwirecatalogfences+protocol library. Notfullbroad/current1464/application/crash/VM/main/portableorigin/HAqualification. Originalpromotedundecidedrenamepositive preservedseparatelyopenmissingNativeportableproducer; notskippedorclaimedPASS. Goalactive/P2productionoff/no spend.",
+  "continue_on_failure": false,
+  "wait_units": [
+    "bicdb-sql-partition-retained-owner-publication-focused-v3"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-sql-partition-retained-owner-publication-focused-v3.json",
+      "equals": {
+        "source": "82a8311156e2293a92e7cf9c1ffd70d1df92d57a",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "commands": [
+    [
+      "python3",
+      "scripts/bump-version.py",
+      "--check"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "check",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "-p",
+      "bicdb-sql",
+      "-p",
+      "bicdb-pgwire",
+      "--all-targets"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "catalog_admission::",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "catalog_scope_admission",
+      "--test",
+      "catalog_record_scope",
+      "--test",
+      "catalog_host_scope",
+      "--test",
+      "catalog_read_scope",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "rename_journal::",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "rename_dependencies::",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "partition_execution",
+      "--test",
+      "partition_child_schema",
+      "--test",
+      "partition_trigger_catalog",
+      "--test",
+      "partition_trigger_events",
+      "--test",
+      "partition_schema_changes",
+      "--test",
+      "partition_replication_reader",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-pgwire",
+      "--test",
+      "catalog_read_admission",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-pgwire",
+      "--lib",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "allow_isolated_builds": [
+    {
+      "pid": 2039683,
+      "start_ticks": 165686736,
+      "repo": "/root/bicdb-durability-s3/repo-metadata-describe",
+      "target": "/root/bicdb-durability-s3/target-metadata-describe"
+    }
+  ]
+}

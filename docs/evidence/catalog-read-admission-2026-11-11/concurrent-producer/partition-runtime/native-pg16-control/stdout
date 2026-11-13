@@ -1,0 +1,21 @@
+BEGIN
+CREATE SCHEMA
+SET
+CREATE TABLE
+CREATE TABLE
+INSERT 0 1
+DO
+parent_after_child|1|child-ack
+INSERT 0 1
+DO
+child_after_parent|1|child-ack
+child_after_parent|2|parent-ack
+CREATE TABLE
+ALTER TABLE
+INSERT 0 1
+DO
+default_index|t
+parent_after_default|1|child-ack
+parent_after_default|2|parent-ack
+parent_after_default|20|default-ack
+ROLLBACK

@@ -1,0 +1,49 @@
+{
+  "label": "partition-native-authority-baseline",
+  "source": "3545a445ac4b2c8d4f937ca0eeff254a1d184999",
+  "base": "6c16e66e742bb575041aebce4086ebf434b9fe64",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "Test-only overexact5aa productionruntime. Nativeprotected routing negatives preserveallACKs/NativeSeq/reopens; sameleafUpdategrant positive; generatedcomputedPKUpdategrant mustremainoneactualUpdate withoutDelete/Insertpermissions andoneaudit, oldIDretired. Originalassertionsnotweakened. This is securitygatebaseline, not claimedpass. Otherbroad5aa continues unchanged; Coreunchanged. VM56 qualification independentlyverifying.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "partition_native_authority",
+      "--test",
+      "mutation_authority",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-ack-main489-broad",
+    "bicdb-partition-cc84-elf-cleanup"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-partition-ack-main489-broad.json",
+      "equals": {
+        "source": "6c16e66e742bb575041aebce4086ebf434b9fe64",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "continue_on_failure": true,
+  "allow_isolated_builds": [
+    {
+      "pid": 2891109,
+      "start_ticks": 164428829,
+      "repo": "/root/bicdb-durability-s3/repo-metadata-describe",
+      "target": "/root/bicdb-durability-s3/target-metadata-describe"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "label": "partition-multi-function-catalog-negative",
+  "source": "1f9bfb159c54a62d54e5d331cca53b7f6bec8364",
+  "reported_batch_status": "failed",
+  "passed": 0,
+  "failed_tests": 1,
+  "ignored": 0,
+  "compile_errors": false,
+  "scope": "Correctedobservable,unchanged21runtime: requireONEroutinecataloggenerationandONEtriggercataloggeneration, oneNativecatalogTXplusknownexistingemptySQLwrappercommit=2. Previousnewcounterexpected1globalcommitbutobserved3(2catalog+emptywrapper); preserveoriginalfailureandexplicitcorrection. Mandatorynewpositiveexpectedold3vs2failure, notfullprocess/crashatomicproof.",
+  "raw_log": {
+    "archive": "tc-step-partition-multi-function-catalog-negative.log.gz",
+    "uncompressed_bytes": 82198,
+    "sha256": "ac06305e065a421f7faf17d3d05fd3e0739ea303166b8d4cb6d983d6ddd381fe",
+    "gzip_sha256": "9b16b71f509476a109b8152ed7557158e4968d34401e8f6087122cd9197c2054"
+  }
+}

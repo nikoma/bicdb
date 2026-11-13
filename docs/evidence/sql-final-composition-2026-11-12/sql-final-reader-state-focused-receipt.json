@@ -1,0 +1,135 @@
+{
+  "source": "1348dcc58e3f007d4de481b20172019f0fd86728",
+  "scope": "Native live partition requirement cache fix after real0P1F baseline. Atomically publish live state after durable import and schema invalidation; partition/appunique local enables invalidate schema compatibility; updated test fixture recomputes actual verified schema before new capture. Actual source/standby ACK+fullflag+two reopen positive, shared snapshot/signed bundle and prior Native capture/reader-fence regressions. No portablecollectionorigin/HA/capacity/application/oldreaderbinary/release or mainmerge claim. Original tests/assertions/waits preserved.",
+  "started_unix": 1794521251.856418,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "snapshot_reader_tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794521251.8565736,
+      "exit": 0,
+      "finished_unix": 1794521313.3600352
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "semantic_reader",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794521313.360244,
+      "exit": 0,
+      "finished_unix": 1794521314.587808
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "range_image_bindings::tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794521314.588066,
+      "exit": 0,
+      "finished_unix": 1794521315.473128
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "sql_rename_replication_fence",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794521315.4733953,
+      "exit": 0,
+      "finished_unix": 1794521372.8315191
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "sql_rename_snapshot_fence",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794521372.831753,
+      "exit": 0,
+      "finished_unix": 1794521375.118061
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "sql_rename_format_fence",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794521375.1183667,
+      "exit": 0,
+      "finished_unix": 1794521376.2611442
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794521376.2614615
+}

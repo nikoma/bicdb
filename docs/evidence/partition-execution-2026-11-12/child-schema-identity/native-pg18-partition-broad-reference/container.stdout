@@ -1,0 +1,46 @@
+The files belonging to this database system will be owned by user "postgres".
+This user must also own the server process.
+
+The database cluster will be initialized with locale "en_US.utf8".
+The default database encoding has accordingly been set to "UTF8".
+The default text search configuration will be set to "english".
+
+Data page checksums are enabled.
+
+fixing permissions on existing directory /var/lib/postgresql/18/docker ... ok
+creating subdirectories ... ok
+selecting dynamic shared memory implementation ... posix
+selecting default "max_connections" ... 100
+selecting default "shared_buffers" ... 128MB
+selecting default time zone ... Etc/UTC
+creating configuration files ... ok
+running bootstrap script ... ok
+performing post-bootstrap initialization ... ok
+syncing data to disk ... ok
+
+
+Success. You can now start the database server using:
+
+    pg_ctl -D /var/lib/postgresql/18/docker -l logfile start
+
+waiting for server to start....2026-11-12 17:51:58.182 UTC [73] LOG:  starting PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+2026-11-12 17:51:58.182 UTC [73] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-11-12 17:51:58.184 UTC [79] LOG:  database system was shut down at 2026-11-12 17:51:58 UTC
+2026-11-12 17:51:58.186 UTC [73] LOG:  database system is ready to accept connections
+ done
+server started
+
+/usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+
+2026-11-12 17:51:58.291 UTC [73] LOG:  received fast shutdown request
+waiting for server to shut down....2026-11-12 17:51:58.291 UTC [73] LOG:  aborting any active transactions
+2026-11-12 17:51:58.292 UTC [73] LOG:  background worker "logical replication launcher" (PID 82) exited with exit code 1
+2026-11-12 17:51:58.292 UTC [77] LOG:  shutting down
+2026-11-12 17:51:58.292 UTC [77] LOG:  checkpoint starting: shutdown immediate
+2026-11-12 17:51:58.293 UTC [77] LOG:  checkpoint complete: wrote 0 buffers (0.0%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.001 s, sync=0.001 s, total=0.001 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB; lsn=0/175F850, redo lsn=0/175F850
+2026-11-12 17:51:58.297 UTC [73] LOG:  database system is shut down
+ done
+server stopped
+
+PostgreSQL init process complete; ready for start up.
+

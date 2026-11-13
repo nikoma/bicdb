@@ -1,0 +1,63 @@
+{
+  "source": "a339fa54498ac001fd9835ad09525f0522b24971",
+  "scope": "Actual47control2PASS(cold/warmunrelatedSQL+DescribecontinuewithSource+Meta exactleases),3FAIL: SQLcatalogobservationnotretained, ownimportedNativeownerSQLrefused, batchCOMMITcontextfailsfirstSourcequery. c5edNativeexactrowsall3commands40focusedPASS. CurrentSQLtext/prebinding/parsed/ASTstatementboundariesinstallactualpendingNativeownerreadidentity; controlstatementsdonotacquirequerysnapshot; explicitunownedcontextmasksouterowneraftertransactionends, noHostmutationdelegation. Commonquery/DMLASTsavoidSQLserializationforcontextclassification, repeatedmetadatarecordobservationsavoidfreshkeyallocation. Originalassertionsretained. FullSQLproducer/wirecachedDescribe/allmetadatafamilies/NativeNamespaceUIDintegrationstillOPEN, noglobalDDLgate relaxed. Private471notpublic147257,nopublicationversionreserved.",
+  "started_unix": 1794409966.5911453,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "catalog_read_owner",
+        "--test",
+        "catalog_read_admission",
+        "--test",
+        "session_statement_snapshots",
+        "--test",
+        "read_only_transactions",
+        "--test",
+        "routine_header_metadata",
+        "--test",
+        "rename_routine_header_dependencies",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794409966.5913534,
+      "exit": 0,
+      "finished_unix": 1794410087.750376
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_record_scope",
+        "--test",
+        "catalog_read_scope",
+        "--test",
+        "catalog_host_scope",
+        "--test",
+        "catalog_scope_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794410087.7505748,
+      "exit": 0,
+      "finished_unix": 1794410136.8292844
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794410136.8295324
+}

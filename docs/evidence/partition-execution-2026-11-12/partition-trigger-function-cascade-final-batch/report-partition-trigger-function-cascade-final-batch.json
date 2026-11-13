@@ -1,0 +1,249 @@
+{
+  "source": "21d821009a8a9e86597d6f1b3c477be2929271c2",
+  "scope": "Currentcoherenttriggerfunctionlifecyclebatch: resolvesallfunctiontargetsandpreflightsdeps; restrictrefusesactualresolvedtriggerfunction; Nativeatomicfunction+completeownedtriggerrecordsandpromotioncatalog; exactrawbatchundo. ActualPG16parentconstraintacceptance/noinventedrefusal; 5mandatorylifecyclepositivesafter2PASS3FAIL. Relevanttrigger,owner,privilege,baseTypeandindependentOracleinvalidroutine regressions. Broad/multiobjectoperator-type/processfault/namespace/oldreader/app/HAgatesunqualified.",
+  "started_unix": 1794487180.9221437,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_trigger_lifecycle",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794487180.922236,
+      "exit": 0,
+      "finished_unix": 1794487260.8911552
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_trigger_catalog",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794487260.891365,
+      "exit": 0,
+      "finished_unix": 1794487266.2356472
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_trigger_events",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794487266.2358437,
+      "exit": 0,
+      "finished_unix": 1794487271.4292343
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_trigger_visibility",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794487271.4294736,
+      "exit": 0,
+      "finished_unix": 1794487278.657824
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "trigger_authorization",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794487278.6580932,
+      "exit": 0,
+      "finished_unix": 1794487283.2514155
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "trusted_identity_triggers",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794487283.2516701,
+      "exit": 0,
+      "finished_unix": 1794487287.8659244
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "renamed_table_triggers",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794487287.866174,
+      "exit": 0,
+      "finished_unix": 1794487292.7437637
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "deferred_trigger_rollback",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794487292.7440367,
+      "exit": 0,
+      "finished_unix": 1794487297.383862
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "routine_owner_execution_identity",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794487297.384136,
+      "exit": 0,
+      "finished_unix": 1794487301.7948093
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "routine_privilege_lists",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794487301.7951558,
+      "exit": 0,
+      "finished_unix": 1794487306.2136412
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "base_types",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794487306.2139227,
+      "exit": 0,
+      "finished_unix": 1794487310.8567846
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "oracle_invalid_routine_lifecycle",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794487310.8570733,
+      "exit": 0,
+      "finished_unix": 1794487315.510683
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794487315.5110652
+}

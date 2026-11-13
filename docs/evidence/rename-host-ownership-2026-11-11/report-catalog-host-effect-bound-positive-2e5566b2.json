@@ -1,0 +1,30 @@
+{
+  "source": "2e5566b288310f59d32dac47cda493f2d7c6b051",
+  "scope": "5188 ownership/ACL batch all seven commands passed. Tests-only 97bdaf8b actually permits unreserved internal.update and fails its original denial assertion. Bound host actor row effects to reserved collection names/backing IDs, preserve ordinary read/policy/grant checks and primary role gate, and cover common/stored/repair update paths before row reservations plus central append backstop. Control strengthens coverage with repairing writes and immediate unrelated transaction progress after denial. All ten host lifecycle tests and prior native/SQL focused integrations rerun on this exact head. Full SQL metadata row resources, relation/type/routine/Describe and durable pending-header inventory remain OPEN; SQL producer remains conservative. No broad workspace, application, VM or delivery claim.",
+  "started_unix": 1794395121.4832213,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_host_scope",
+        "--test",
+        "catalog_scope_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794395121.4833095,
+      "exit": 101,
+      "finished_unix": 1794395146.756099
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794395146.7562625
+}

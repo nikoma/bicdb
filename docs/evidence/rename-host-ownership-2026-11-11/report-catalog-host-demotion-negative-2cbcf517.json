@@ -1,0 +1,29 @@
+{
+  "source": "2cbcf517cd4d12b1fbf766dba3fc81007ce7ec3c",
+  "scope": "Tests-only role-fence error-path control. A primary buffers a business write and retains host catalog scope, then is demoted before commit. Commit must fail with no business row; host may still inspect its own prefix through a read-only child while mutations/recovery remain refused. Exercises the early standby-commit branch reopening behavior. Intended both storage modes; first negative failure stops. Local role API control, not wire election or VM qualification.",
+  "started_unix": 1794394282.5020456,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_host_scope",
+        "demotion_during_an_outer_decision_keeps_readonly_host_cleanup_access",
+        "--",
+        "--exact"
+      ],
+      "started_unix": 1794394282.502567,
+      "exit": 101,
+      "finished_unix": 1794394283.7417643
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794394283.7420297
+}

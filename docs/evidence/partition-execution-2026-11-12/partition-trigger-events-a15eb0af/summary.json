@@ -1,0 +1,9 @@
+{
+  "label": "partition-trigger-events-a15eb0af",
+  "source": "a15eb0af82cc158cef614939c44b04ec413b8d1a",
+  "status": "focused_passed",
+  "passed": 80,
+  "failed": 0,
+  "ignored": 0,
+  "scope": "Evolving partition physical row trigger execution: routed BEFORE INSERT, source BEFORE UPDATE and movement DELETE/INSERT sequence, physical DELETE, row order AFTER queue and upsert interleaving, scoped PK identity rebuild, retained root SQL RLS/physical Native authorization. Mandatory actual PG16.13 event positives plus existing trigger/auth/rollback/upsert controls. No broad/processfault/application/HA/completedfeature qualification."
+}

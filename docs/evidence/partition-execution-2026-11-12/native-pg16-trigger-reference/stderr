@@ -1,0 +1,4 @@
+NOTICE:  upsert_cross_partition_state=0A000
+NOTICE:  upsert_cardinality_state=21000
+NOTICE:  drop_clone_state=2BP01
+NOTICE:  trigger_cross_partition_state=23514 message=new row for relation "low" violates partition constraint

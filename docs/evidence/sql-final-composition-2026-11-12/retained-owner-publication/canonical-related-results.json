@@ -1,0 +1,327 @@
+{
+  "source": "82a8311156e2293a92e7cf9c1ffd70d1df92d57a",
+  "status": "focused_related_passed",
+  "counts": {
+    "Core": {
+      "targets": 5,
+      "passed": 34,
+      "failed": 0,
+      "ignored": 0,
+      "child_summaries_excluded": 0
+    },
+    "SQL": {
+      "targets": 8,
+      "passed": 54,
+      "failed": 0,
+      "ignored": 0,
+      "child_summaries_excluded": 0
+    },
+    "wire": {
+      "targets": 2,
+      "passed": 171,
+      "failed": 0,
+      "ignored": 0,
+      "child_summaries_excluded": 0
+    }
+  },
+  "all_related_commands_exit": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "log_sha256": "17e14d03098b3311743bdcd2e811b25ebe56a2d08d5009eb29b54187505c1685",
+  "scope": "Relatedfocusedchecks, notfullbroad. Core3publicationcases repeat the initial4-testfocus; do not add duplicated counts. SQL1newpositive separatelypasses unchanged. Telemetryremovedonlyfromderivedparse/rawlogsretained. Original95new82arunseparateandstilllive; portableoriginpositive stillopen.",
+  "targets": [
+    {
+      "target": "src/lib.rs",
+      "binary": "/root/bicdb-durability-s3/target-tc/debug/deps/bicdb_core-ea76fa1eb8669919",
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "package": "Core",
+      "parent_result": {
+        "status": "ok",
+        "passed": 8,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "target": "tests/catalog_host_scope.rs",
+      "binary": "/root/bicdb-durability-s3/target-tc/debug/deps/catalog_host_scope-333cdd7429bd5343",
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "package": "Core",
+      "parent_result": {
+        "status": "ok",
+        "passed": 10,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "target": "tests/catalog_read_scope.rs",
+      "binary": "/root/bicdb-durability-s3/target-tc/debug/deps/catalog_read_scope-27e12c0a5c94f2d0",
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "package": "Core",
+      "parent_result": {
+        "status": "ok",
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "target": "tests/catalog_record_scope.rs",
+      "binary": "/root/bicdb-durability-s3/target-tc/debug/deps/catalog_record_scope-f6511aa2cc10bfbc",
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "package": "Core",
+      "parent_result": {
+        "status": "ok",
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "target": "tests/catalog_scope_admission.rs",
+      "binary": "/root/bicdb-durability-s3/target-tc/debug/deps/catalog_scope_admission-8d4441abf28cf810",
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "package": "Core",
+      "parent_result": {
+        "status": "ok",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "target": "src/lib.rs",
+      "binary": "/root/bicdb-durability-s3/target-tc/debug/deps/bicdb_sql-d04868eff82a63be",
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 15,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "package": "SQL",
+      "parent_result": {
+        "status": "ok",
+        "passed": 15,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "target": "src/lib.rs",
+      "binary": "/root/bicdb-durability-s3/target-tc/debug/deps/bicdb_sql-d04868eff82a63be",
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "package": "SQL",
+      "parent_result": {
+        "status": "ok",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "target": "tests/partition_child_schema.rs",
+      "binary": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_child_schema-659f465c92062c83",
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "package": "SQL",
+      "parent_result": {
+        "status": "ok",
+        "passed": 12,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "target": "tests/partition_execution.rs",
+      "binary": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_execution-629bcec7307f466d",
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "package": "SQL",
+      "parent_result": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "target": "tests/partition_replication_reader.rs",
+      "binary": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_replication_reader-fa8b591b0dc2419f",
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "package": "SQL",
+      "parent_result": {
+        "status": "ok",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "target": "tests/partition_schema_changes.rs",
+      "binary": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_schema_changes-609043f4270b750f",
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "package": "SQL",
+      "parent_result": {
+        "status": "ok",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "target": "tests/partition_trigger_catalog.rs",
+      "binary": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_trigger_catalog-3d8af2c77d9c0461",
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "package": "SQL",
+      "parent_result": {
+        "status": "ok",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "target": "tests/partition_trigger_events.rs",
+      "binary": "/root/bicdb-durability-s3/target-tc/debug/deps/partition_trigger_events-1231adf82c8cd11e",
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "package": "SQL",
+      "parent_result": {
+        "status": "ok",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "target": "tests/catalog_read_admission.rs",
+      "binary": "/root/bicdb-durability-s3/target-tc/debug/deps/catalog_read_admission-33900c90a8e35734",
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "package": "wire",
+      "parent_result": {
+        "status": "ok",
+        "passed": 20,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    {
+      "target": "src/lib.rs",
+      "binary": "/root/bicdb-durability-s3/target-tc/debug/deps/bicdb_pgwire-10ace3557f057123",
+      "summaries": [
+        {
+          "status": "ok",
+          "passed": 151,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "package": "wire",
+      "parent_result": {
+        "status": "ok",
+        "passed": 151,
+        "failed": 0,
+        "ignored": 0
+      }
+    }
+  ]
+}

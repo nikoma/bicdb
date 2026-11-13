@@ -1,0 +1,27 @@
+{
+  "source": "3a8484bf16f1653d7e96292992b4900f706b7370",
+  "production_equivalent": "0031d1976ece1be2d6139ea9972fbf49069b1590",
+  "status": "verified_passed",
+  "recorded_unix": 1794515254.91559,
+  "scope": "ActualNativeSQLidentityUPDATE+oneaudit: independentexactcoverage/source+binarySHA/original4seedACKfilehashes+Nativefullrecordhashes/NativeTXwitness/auditpayload+idempotency/threeunchangedopens/ACK-new/no-grant-refusal. Process38+EIO8; optionalactualKVM10. Not old482fixturequalification/fullapplication/physicalHA/capacity.",
+  "process_cases": 38,
+  "process_states": {
+    "complete_old": 10,
+    "complete_new": 28
+  },
+  "IO_failure_cases": 8,
+  "IO_failure_states": {
+    "complete_old": 8
+  },
+  "fixture_ACKs": 4,
+  "originals_unchanged": true,
+  "process_result_sha256": "49186067e90590fb5324cc5554bc1737058f0e6c4c5eed79c145b9ba38dfd1dd",
+  "binary_sha256": "01e7e30a9ce469fbee01e2c407c3a81fde19302b232d297539388a2b3ed9ee1b",
+  "VM_cases": 10,
+  "VM_states": {
+    "complete_old": 2,
+    "complete_new": 8
+  },
+  "VM_acknowledged_new": 2,
+  "VM_result_sha256": "e3130daf3b85dc89d6e32fc3dd3ed1bfb1e6c6cffd9bb35f3da0af2236c1e5c9"
+}

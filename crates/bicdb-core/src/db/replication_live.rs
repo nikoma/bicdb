@@ -173,6 +173,7 @@ impl BicDb {
         if cursor.sent_seq >= shippable {
             return Ok(Vec::new());
         }
+        let reader_features = format::required_reader_features(&self.path)?;
         let target = shippable.min(cursor.sent_seq.saturating_add(limit.max(1) as u64));
         let path = self.tx_log_path();
         // One descriptor for the anchor check, the read and the new anchor.
@@ -213,6 +214,8 @@ impl BicDb {
 
         let mut writes: FxHashMap<u64, Vec<TxWrite>> = FxHashMap::default();
         let mut audit: FxHashMap<u64, Vec<Event>> = FxHashMap::default();
+        let mut native_backings_by_tx = FxHashMap::default();
+        let mut native_allocations_by_tx = FxHashMap::default();
         // commit_seq -> (tx_id, timestamp)
         let mut commits: BTreeMap<u64, (u64, i64)> = BTreeMap::new();
         let mut tx_of_seq: FxHashMap<u64, u64> = FxHashMap::default();
@@ -242,12 +245,17 @@ impl BicDb {
                     tx_id,
                     timestamp,
                     commit_seq,
+                    native_backings,
+                    native_catalog_allocations,
+                    ..
                 } => {
                     if commit_seq <= target {
                         new_anchor = Some((*start, *end));
                     }
                     if commit_seq > cursor.sent_seq && commit_seq <= target {
                         commits.insert(commit_seq, (tx_id.0, timestamp));
+                        native_backings_by_tx.insert(tx_id.0, native_backings);
+                        native_allocations_by_tx.insert(tx_id.0, native_catalog_allocations);
                         tx_of_seq.insert(commit_seq, tx_id.0);
                     } else {
                         writes.remove(&tx_id.0);
@@ -256,6 +264,8 @@ impl BicDb {
                 TxFrame::Abort { tx_id, .. } => {
                     writes.remove(&tx_id.0);
                     audit.remove(&tx_id.0);
+                    native_backings_by_tx.remove(&tx_id.0);
+                    native_allocations_by_tx.remove(&tx_id.0);
                     commits.retain(|_, (committed, _)| *committed != tx_id.0);
                 }
                 TxFrame::Begin { .. }
@@ -286,13 +296,16 @@ impl BicDb {
             else {
                 break;
             };
+            let native_backings = native_backings_by_tx.remove(&tx_id).unwrap_or_default();
             let tx_writes = tx_writes
                 .iter()
                 .map(|write| {
-                    let collection_meta = self
-                        .collections
-                        .get(&write.collection)
-                        .map(|state| state.read().meta.clone());
+                    let collection_meta =
+                        native_backings.get(&write.collection).cloned().or_else(|| {
+                            self.collections
+                                .get(&write.collection)
+                                .map(|state| state.read().meta.clone())
+                        });
                     tx_write_to_replication_write(collection_meta, write)
                 })
                 .collect::<Result<Vec<_>>>()?;
@@ -305,11 +318,17 @@ impl BicDb {
                 timestamp,
                 tx_writes,
             );
-            out.push(if self.config.replication.record_journal {
+            let frame = if self.config.replication.record_journal {
                 frame.with_journal(journal)
             } else {
                 frame
-            });
+            };
+            let frame = frame.with_required_reader_features(reader_features.clone())?;
+            out.push(self.capture_native_wal_export(
+                frame,
+                native_backings,
+                native_allocations_by_tx.remove(&tx_id).unwrap_or_default(),
+            )?);
             sent = seq;
         }
         cursor.sent_seq = sent;

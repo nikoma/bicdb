@@ -1,0 +1,12 @@
+{
+  "actual-old-reader-result.json": "b3d8066a0ad2ee1c682dd71e07bb1a56cc0fbf171dddcac470760d72d7a98942",
+  "native-rename-unrelated-writer-control.json": "7650953ae905f510004a89b07f32a6047ce4efd8d2ea5991b2dadb735b25552d",
+  "report-rename-bootstrap-old-reader-fixtures-2262454a.json": "d8a340686f022f710f4b22443ba5377ce5c87b1cffec7156dccb35211666218c",
+  "report-rename-persisted-promotion-81fe1ca7.json": "be732de280f6da349bf27d49506408060d059d34aa6a10699676a109b48e2a06",
+  "report-rename-role-aware-startup-546ac4a6.json": "358fd0cd4b567c8e2aafc1db3958bab5698ec00ac22920c2469fd91ac932adc9",
+  "report-rename-snapshot-fence-negative-59f55d87.json": "170b711be581f1d94f9fa943d78847407244b293b32ff292d145cbe7dcee59c9",
+  "report-rename-snapshot-reader-capabilities-237edc53.json": "dd312126a0ebb2b0a6aea4934ccb7b1f261c1982f3fd8b6b6ab991821c5e1d92",
+  "report-rename-snapshot-reader-capabilities-c3ce4ebf.json": "1ee87eb96d2dc3dbd49592245d55e7b35559d5ceb46465cea420ddb8cefe3ddc",
+  "report-rename-unrelated-native-negative-ce3dc430.json": "3ac98796e8a995ed9b2c3d5f38edfadca40b4f00e21a4ac7ab7c2704ca48985e",
+  "summary.json": "f332f4344331596ca57cd361dbb2762d812474b7c255dfbca0a902930e1bdbba"
+}

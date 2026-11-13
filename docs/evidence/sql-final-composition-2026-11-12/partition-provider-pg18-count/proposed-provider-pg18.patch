@@ -1,0 +1,10 @@
+--- a/org.compiere.db.postgresql.provider/src/org/adempiere/db/postgresql/partition/TablePartitionService.java
++++ b/org.compiere.db.postgresql.provider/src/org/adempiere/db/postgresql/partition/TablePartitionService.java
+@@ -112,6 +112,7 @@
+ 				SELECT COUNT(*)
+ 				FROM pg_constraint c
+ 				WHERE conrelid = LOWER(?)::regclass		
++				AND contype <> 'n'
+ 			""";
+ 		int count = DB.getSQLValueEx(trxName, sql, table.getTableName());
+ 		if (count > 0)

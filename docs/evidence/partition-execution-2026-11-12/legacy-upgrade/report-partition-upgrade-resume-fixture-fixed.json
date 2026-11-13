@@ -1,0 +1,48 @@
+{
+  "source": "adfa24f3118c0c2025b5035fdce3f4f69de93241",
+  "scope": "Explicit local upgrade API: flag/empty-bookkeeping interruption resume, exact completed-plan receipt without second commit across two reopens, stale/wrong-directory/altered-action/unknown-unfenced-certificate refusal, typed version marker preservation through generic schema saves. Both storage modes. Then build genuine old482 fixture probe including idempotent repeats. Automatic SQL/startup admission and full fault/HA qualification remain open. Corrected fixture executes each partition DDL separately; same retry assertions and production runtime as f5ee9eec. Initial f5 run 1PASS3setupFAIL retained; no old fixture runtime ran after failed build gate.",
+  "started_unix": 1794493586.1040013,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "partition_admission::tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794493586.1041834,
+      "exit": 0,
+      "finished_unix": 1794493688.604518
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--example",
+        "partition_upgrade_probe"
+      ],
+      "started_unix": 1794493688.604792,
+      "exit": 0,
+      "finished_unix": 1794493768.5586731
+    }
+  ],
+  "status": "focused_passed",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/adfa24f3118c0c2025b5035fdce3f4f69de93241/partition_upgrade_probe",
+  "binary_sha256": "92ca8af528f31f9749cf3d4d682ab4315621d682fad7254fcb332cb8e9640f9f",
+  "finished_unix": 1794493768.8496568
+}

@@ -1,0 +1,14 @@
+{
+  "README.md": {
+    "bytes": 4174,
+    "sha256": "1ae875ffc9b706d492470b79d2b4d154a903906dd8c622362a77a02258c47367"
+  },
+  "archived-files.json": {
+    "bytes": 374302,
+    "sha256": "8de8a6bbc4583e752c4501ba162202c4e5bf523b6c69139f6f48530a2da118a3"
+  },
+  "original-source-scoped-results.tar.gz": {
+    "bytes": 473315,
+    "sha256": "92e4bba66e45075494a75eb03b096910dbfce5150fff5c521e2abac9cee23a0b"
+  }
+}

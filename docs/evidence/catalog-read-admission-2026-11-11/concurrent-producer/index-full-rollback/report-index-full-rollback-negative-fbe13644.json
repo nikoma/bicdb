@@ -1,0 +1,29 @@
+{
+  "source": "fbe13644ef3210f140cb4badd36c90c44823a056",
+  "scope": "New full ROLLBACK regression. SQL owner has actually rolled back before rebuild; real unrelated pending Native writer must still block paged full index build. Commit foreign ACK, retry full ROLLBACK, assert exact Native index definitions, SQL descriptor, acknowledged rows and independent ACK across two reopens. Embedded control included. Original invalid savepoint fixture stays reverted; production remains f509.",
+  "started_unix": 1794467173.5010254,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rollback_index_admission",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794467173.5012233,
+      "exit": 101,
+      "finished_unix": 1794467178.9806542
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794467178.980904
+}

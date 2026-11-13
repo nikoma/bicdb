@@ -1,0 +1,169 @@
+{
+  "source": "22a347869620d46519c0665926fa1a4cc644eee2",
+  "scope": "Evolvingbatch mandatoryphysicalparent/childrowlockcontrols+bounds/execution/hash106PGvectors andoriginalrowlock/systemtype/Oraclepartition/auth regressions. PartitionlockingresolvesactualadmittedtreeOID thenNativephysicalheap/recordid; heapwithoutPKcarriesownedid. ParentSELECT/UPDATEpolicies+privilegesandNativecontextretained. No fullbroad/processfault/upsert/upgrade/genericoperatorclaim.",
+  "started_unix": 1794483389.6130836,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_row_locks",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483389.6131682,
+      "exit": 0,
+      "finished_unix": 1794483468.5110016
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_hash",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483468.5112398,
+      "exit": 0,
+      "finished_unix": 1794483482.7726073
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_bounds",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483482.7728162,
+      "exit": 0,
+      "finished_unix": 1794483497.4066505
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_execution",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483497.4068835,
+      "exit": 0,
+      "finished_unix": 1794483503.000652
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "select_row_locks",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483503.0009036,
+      "exit": 0,
+      "finished_unix": 1794483507.7849925
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "transaction_system_types",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483507.7851834,
+      "exit": 0,
+      "finished_unix": 1794483512.1094565
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "oracle_partitioning",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483512.1097353,
+      "exit": 0,
+      "finished_unix": 1794483516.4441764
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "raw_ddl_authorization",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483516.4444337,
+      "exit": 0,
+      "finished_unix": 1794483520.801215
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794483520.8015442
+}

@@ -1,0 +1,50 @@
+{
+  "format": 1,
+  "scope": "Historical457 native HA artifact verifier correction; source-scoped controls and portable replay. No new source471 application/HA claim.",
+  "files": {
+    "README.md": {
+      "sha256": "f96e64c588c7dd0bc86f9e2e4331eed6c76538d491a5880c7021222a19e7ea66",
+      "bytes": 2800
+    },
+    "control_native_ha_artifact_verifier.py": {
+      "sha256": "591982bf39d4d64bc21ec6e926974c1d1685add4581e7179055bcab40305dd2f",
+      "bytes": 5733
+    },
+    "controller-replay-controls.json": {
+      "sha256": "8c51a0e6e1f56d4885c6c9e54865b061ec99f109b8984ad367d10d8d62fa9103",
+      "bytes": 3010
+    },
+    "corrected-verifier-controls.json": {
+      "sha256": "78d140cde3d42b1f46368d7a311872ca22344743afdf6d8b25f4cda9b1c3a7b7",
+      "bytes": 2839
+    },
+    "fixture-manifest.json": {
+      "sha256": "2d56754672289aa9309dd082b2fff1aaea903f69d3beadc78dc4218ab59465a6",
+      "bytes": 5582
+    },
+    "fixture.tar.gz": {
+      "sha256": "203b2b07a3eab9379d3e3f751a2621d8ff0dd8710971388ab98f1fba41220891",
+      "bytes": 11572
+    },
+    "historical457-independent-verification-v2.json": {
+      "sha256": "b8e006a04394b90ec0c35b0765e8a99aac8eb4e69f229c913003a17b240ab882",
+      "bytes": 2875
+    },
+    "original-verifier-controls.json": {
+      "sha256": "d397fc8d5edb5fc714f99ff1fdd30157e63e70644955c24ca338122d40e7f737",
+      "bytes": 3724
+    },
+    "replay_fixture.py": {
+      "sha256": "56106530a72d2004dffbaa6829fbf2351c0d318d87f9f0fc4fd6cfdd47f7051e",
+      "bytes": 2270
+    },
+    "verify_native_ha_ack_artifacts.py": {
+      "sha256": "1b9deba441090b56f050d6903e7bc20993527b8b3a6cccc5895406f9a99d2375",
+      "bytes": 2193
+    },
+    "verify_native_ha_ack_artifacts_v2.py": {
+      "sha256": "2450296045b75477675cc60e9628dad9668d528fc0fdb927d702cc158991bfb4",
+      "bytes": 5594
+    }
+  }
+}

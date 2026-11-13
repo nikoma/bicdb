@@ -1,0 +1,14 @@
+{
+  "status": "reference_passed",
+  "container": "bicdb-partition-broad-199979ac5c",
+  "image": "sha256:71e27bf60b70bded003791b5573f8b808365613f341df20ffcf0c1ed7bc13ddf",
+  "sql": "control.sql",
+  "started_unix": 1794501838.858013,
+  "exit": 0,
+  "version": "PostgreSQL 16.13 (Debian 16.13-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+  "finished_unix": 1794501840.2954154,
+  "scope": "Actual PG16 owned384MiB/no-network/tmpfs reference; rolledback scratch schema. Original four broad-suite fixture counterexamples (invalid PK/absent partition) and valid setup controls; valid parent ALTER TYPE/ADD propagation. Original application tests unchanged. No application modifications.",
+  "container_removed": true,
+  "cleanup_stdout": "bicdb-partition-broad-199979ac5c\n",
+  "cleanup_stderr": ""
+}

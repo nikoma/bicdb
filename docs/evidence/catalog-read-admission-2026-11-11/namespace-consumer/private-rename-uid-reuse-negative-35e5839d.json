@@ -1,0 +1,23 @@
+{
+  "label": "private-rename-uid-reuse-negative-35e5839d",
+  "source": "35e5839d026f90919ca10a323d7fca98a8aa5419",
+  "base": "b1e5b872dade1ee9b964deae4d8471ebd81354ad",
+  "repo": "/root/bicdb-sql-rename-uid-consumer",
+  "scope": "Private test-only negative for stale rename/row images after drop/recreate with the same physical storage alias. Integrates a700 namespace foundation and root transaction delivery parents; no producer gate relaxed and no recovery behavior changed. Both original fail-closed assertions expected to fail against storage-string consumer. Full fsync, both storage modes when assertions reached. Not main474 or application qualification.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "session::rename_journal::tests::reused_",
+      "--",
+      "--test-threads=1"
+    ]
+  ]
+}

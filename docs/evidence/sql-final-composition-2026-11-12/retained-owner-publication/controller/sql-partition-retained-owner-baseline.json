@@ -1,0 +1,34 @@
+{
+  "label": "sql-partition-retained-owner-baseline",
+  "source": "09473ee9c4fdd30d1a0511c75ed7e559017c338f",
+  "repo": "/root/bicdb-sql-final-composition",
+  "base": "4e329f368de5fc7485971b877e905d3d17110880",
+  "source_ref": "refs/bicdb-proof/partition-retained-owner-baseline-09473ee9",
+  "scope": "Actualoriginal4e95 remains94P1F, gotpastcompaction andfails CREATEpartition certificate outside retainedrename resources. Focusedunchangedpositivefirstsource beforeanyfix; ACK/fullhash/bothmodes/commitrollback/tworeopens/unrelatedquery asserted, notwaived. Fullgoalactive;no P2promotion/cloudspend.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "retained_rename_owner_creates_partition_tree",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "allow_isolated_builds": [
+    {
+      "pid": 2039683,
+      "start_ticks": 165686736,
+      "repo": "/root/bicdb-durability-s3/repo-metadata-describe",
+      "target": "/root/bicdb-durability-s3/target-metadata-describe"
+    }
+  ]
+}

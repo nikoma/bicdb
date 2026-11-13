@@ -1,0 +1,38 @@
+{
+  "source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+  "scope": "Debug oracle_server diagnostic artifact for unchanged original PG remaining-06 inventory95 including MTable. Build only, not application result. Private partition/Native identity/capture runtime e8c426a7, inherited source489; not merged/released/deployed/final1464 qualification. Wait exact current Core broad and prior cleanup/standard broad complete; single heavy compiler, active memory monitor. P2off/no new cloudspend/promotion; goalactive. v2 dependency on corrected Core custody wrapper; first build wrapper terminalfailed before any commands/receipt; not a compiler failure.",
+  "started_unix": 1794522215.204844,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794522215.2051992,
+      "exit": 0,
+      "finished_unix": 1794522215.2702966
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--example",
+        "oracle_server"
+      ],
+      "started_unix": 1794522215.2705085,
+      "exit": 0,
+      "finished_unix": 1794522393.517574
+    }
+  ],
+  "status": "focused_passed",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/e8c426a73a14c1d97851082b90b815da60d4ef82/oracle_server",
+  "binary_sha256": "f296acc1c432256047aca0e91ed85767af753c17441ff2cc14d6ed4b942ec4aa",
+  "finished_unix": 1794522393.8905158
+}

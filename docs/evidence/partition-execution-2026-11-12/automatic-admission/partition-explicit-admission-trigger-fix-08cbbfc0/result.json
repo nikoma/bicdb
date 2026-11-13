@@ -1,0 +1,101 @@
+{
+  "status": "explicit_apply_passed",
+  "source": "08cbbfc06b7e0a829ae9f39ecefac483b19daa7f",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/08cbbfc06b7e0a829ae9f39ecefac483b19daa7f/partition_upgrade_probe",
+  "binary_sha256": "9a05942e76830ef8ab39ecea1309c45f33695d0e3d42441975770e8732942ce7",
+  "started_unix": 1794496375.165619,
+  "cases": [
+    {
+      "mode": "embedded_memory",
+      "case": "apply_parent_heap",
+      "exit": 0,
+      "stdout": "embedded_memory-apply_parent_heap.stdout",
+      "stderr": "embedded_memory-apply_parent_heap.stderr",
+      "old_reader_exit": 1,
+      "old_reader_refused": true,
+      "byte_identity_preserved": true,
+      "changed_files": []
+    },
+    {
+      "mode": "embedded_memory",
+      "case": "apply_bad_child_bound",
+      "exit": 0,
+      "stdout": "embedded_memory-apply_bad_child_bound.stdout",
+      "stderr": "embedded_memory-apply_bad_child_bound.stderr",
+      "old_reader_exit": 1,
+      "old_reader_refused": true,
+      "byte_identity_preserved": true,
+      "changed_files": []
+    },
+    {
+      "mode": "embedded_memory",
+      "case": "apply_policy_keep_stored",
+      "exit": 0,
+      "stdout": "embedded_memory-apply_policy_keep_stored.stdout",
+      "stderr": "embedded_memory-apply_policy_keep_stored.stderr",
+      "old_reader_exit": 1,
+      "old_reader_refused": true,
+      "byte_identity_preserved": true,
+      "changed_files": []
+    },
+    {
+      "mode": "embedded_memory",
+      "case": "apply_policy_preserve_historical",
+      "exit": 0,
+      "stdout": "embedded_memory-apply_policy_preserve_historical.stdout",
+      "stderr": "embedded_memory-apply_policy_preserve_historical.stderr",
+      "old_reader_exit": 1,
+      "old_reader_refused": true,
+      "byte_identity_preserved": true,
+      "changed_files": []
+    },
+    {
+      "mode": "server_paged",
+      "case": "apply_parent_heap",
+      "exit": 0,
+      "stdout": "server_paged-apply_parent_heap.stdout",
+      "stderr": "server_paged-apply_parent_heap.stderr",
+      "old_reader_exit": 1,
+      "old_reader_refused": true,
+      "byte_identity_preserved": true,
+      "changed_files": []
+    },
+    {
+      "mode": "server_paged",
+      "case": "apply_bad_child_bound",
+      "exit": 0,
+      "stdout": "server_paged-apply_bad_child_bound.stdout",
+      "stderr": "server_paged-apply_bad_child_bound.stderr",
+      "old_reader_exit": 1,
+      "old_reader_refused": true,
+      "byte_identity_preserved": true,
+      "changed_files": []
+    },
+    {
+      "mode": "server_paged",
+      "case": "apply_policy_keep_stored",
+      "exit": 0,
+      "stdout": "server_paged-apply_policy_keep_stored.stdout",
+      "stderr": "server_paged-apply_policy_keep_stored.stderr",
+      "old_reader_exit": 1,
+      "old_reader_refused": true,
+      "byte_identity_preserved": true,
+      "changed_files": []
+    },
+    {
+      "mode": "server_paged",
+      "case": "apply_policy_preserve_historical",
+      "exit": 0,
+      "stdout": "server_paged-apply_policy_preserve_historical.stdout",
+      "stderr": "server_paged-apply_policy_preserve_historical.stderr",
+      "old_reader_exit": 1,
+      "old_reader_refused": true,
+      "byte_identity_preserved": true,
+      "changed_files": []
+    }
+  ],
+  "finished_unix": 1794496375.9510653,
+  "originals_unchanged": true,
+  "old_acknowledged_rows": 14,
+  "scope": "ExplicitoperatorAPIonly:8genuineold482fixturecopies, bothmodes,parentACKmigration+upsert/indexchecks, reviewedbadchildrelocation,bothreviewedpolicychoices+rawarchives,idempotentplanreceiptswithoutnewcommitsimmediatelyandafter2reopens,actualold482readerrefusal+byteidentity. Automaticentry/startup code nowimplemented; itsqualification is recordedseparately. Fullfeature/broad/application/HAqualification remainsopen."
+}

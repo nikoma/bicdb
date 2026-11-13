@@ -1,0 +1,111 @@
+{
+  "label": "partition-pk-batch-and-fixtures-focused",
+  "source": "57dcb89c2c1fdc6a423c58460d8e484e8a3c990e",
+  "base": "3ff8bf10a1f7de0518393d365b7ffd517e61a948",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "Final corrected seven PK/batch regressions on exact candidate runtime unchanged3ff plus four PG-valid broad SQL fixtures (original assertions retained, actual PG16 accepts correctedsetup/rejectsoriginalsetup). Prior3ff result3newbatchPASS +4PKfixturemissingindex failures retained; prior baselinev3 has0PASS7FAIL (six product, onefixture), not2PASS5FAIL. V4 baseline repeats exactfinalfixtures on f7fb before productionfixes. This run verifies actualordinary/childmodes/ACK/reopen and fourbroadfixturetestsonly. Two remaining original broad ALTER publication failures unmodified/open; full1464/10s/UI/HA separate.",
+  "continue_on_failure": true,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "primary_key_index_compatibility",
+      "--test",
+      "partition_statement_batches",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "sql",
+      "group6::postgres_attach_partition_is_metadata_only",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "sql",
+      "group6::postgres_full_text_search_types_are_string_compatible",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "sql",
+      "group6::postgres_keyless_partitioned_tables_use_hidden_internal_row_id",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "sql",
+      "group6::postgres_pg_get_partkeydef_renders_partition_key_definition",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-pk-batch-baseline-v4"
+  ],
+  "required_receipts": [],
+  "allow_isolated_builds": [
+    {
+      "pid": 473811,
+      "start_ticks": 163308064,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

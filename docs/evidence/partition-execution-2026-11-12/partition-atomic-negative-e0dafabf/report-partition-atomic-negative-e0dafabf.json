@@ -1,0 +1,30 @@
+{
+  "source": "e0dafabf590d66c1b8e4f6e78b3e7c0847c5f4b6",
+  "scope": "Actual f19 runtime with new mandatory atomic commit test only. Exclusiveautocommit previously could commitonephysicalleafat atime. No productionchanges inthissource; expectednegative evidence notqualification. Originalfsync/assertionretained.",
+  "started_unix": 1794482616.6426733,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_bounds",
+        "parent_mutations_use_one_commit_across_leaves",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794482616.6428459,
+      "exit": 101,
+      "finished_unix": 1794482621.0987418
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794482621.098951
+}

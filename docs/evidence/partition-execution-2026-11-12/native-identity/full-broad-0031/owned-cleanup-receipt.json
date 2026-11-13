@@ -1,0 +1,2046 @@
+{
+  "status": "completed",
+  "started_unix": 1794520233.577155,
+  "removed": [
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/bicdb_sql-cd1bc45651ba0e96",
+      "inode": 108576338,
+      "bytes": 418835536,
+      "mtime_ns": 1794511887754415124,
+      "allocated_bytes": 416923648
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/access_path_routing-cc07022042d0ddc4",
+      "inode": 108576576,
+      "bytes": 404224888,
+      "mtime_ns": 1794512811278792708,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/aggregate_scan_cap-36e11ce1e95b6d02",
+      "inode": 108577177,
+      "bytes": 404208880,
+      "mtime_ns": 1794514041447256273,
+      "allocated_bytes": 398565376
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/analyze_sampling-bfa340add4a0d96e",
+      "inode": 108576981,
+      "bytes": 404252968,
+      "mtime_ns": 1794513493108919645,
+      "allocated_bytes": 398606336
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/array_storage-06be67a35e93104a",
+      "inode": 108576996,
+      "bytes": 404355448,
+      "mtime_ns": 1794513531896438615,
+      "allocated_bytes": 398712832
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/authorization_canary-79b7ac19e392fd90",
+      "inode": 108577137,
+      "bytes": 404207928,
+      "mtime_ns": 1794513935081833149,
+      "allocated_bytes": 398565376
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/base_types-cc838421b6edf5ed",
+      "inode": 108577106,
+      "bytes": 404279456,
+      "mtime_ns": 1794513852122723175,
+      "allocated_bytes": 398639104
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/between_index_range-0f59f2c403e91348",
+      "inode": 108577140,
+      "bytes": 404241320,
+      "mtime_ns": 1794513944086953636,
+      "allocated_bytes": 398594048
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/binary_storage-8c26d40d86f2b8f7",
+      "inode": 108577176,
+      "bytes": 404331752,
+      "mtime_ns": 1794514035100171358,
+      "allocated_bytes": 398688256
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/bounded_fts-25a5abe00def463c",
+      "inode": 108577122,
+      "bytes": 404254072,
+      "mtime_ns": 1794513902697399852,
+      "allocated_bytes": 398610432
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/bounded_primary_key-43a1c9830942a445",
+      "inode": 108576929,
+      "bytes": 404254504,
+      "mtime_ns": 1794513352340036188,
+      "allocated_bytes": 398606336
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/bounded_range-9e839734e4123abf",
+      "inode": 108576332,
+      "bytes": 404272032,
+      "mtime_ns": 1794512752783008710,
+      "allocated_bytes": 398630912
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/broker_caller_provenance-3d748efb3c7fe75f",
+      "inode": 108576939,
+      "bytes": 404230464,
+      "mtime_ns": 1794513380205409020,
+      "allocated_bytes": 398585856
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/broker_sql-7d70acda09b63143",
+      "inode": 108576902,
+      "bytes": 404320728,
+      "mtime_ns": 1794513273488981178,
+      "allocated_bytes": 398675968
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/builtin_name_overloads-bce67bd581c8e12e",
+      "inode": 108576978,
+      "bytes": 404301896,
+      "mtime_ns": 1794513482370775971,
+      "allocated_bytes": 398659584
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/carrier_hub_compat-aa9477b57dcd8474",
+      "inode": 108576975,
+      "bytes": 404574840,
+      "mtime_ns": 1794513470575618154,
+      "allocated_bytes": 398934016
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/catalog_and_admin_authorization-86430ffb81c1843f",
+      "inode": 108577019,
+      "bytes": 404236504,
+      "mtime_ns": 1794513601164365403,
+      "allocated_bytes": 398589952
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/catalog_default_and_index_columns-68bfdb5363ac762e",
+      "inode": 108576980,
+      "bytes": 404303160,
+      "mtime_ns": 1794513487622846243,
+      "allocated_bytes": 398655488
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/catalog_journal_visibility-604f995f0399cd91",
+      "inode": 108577181,
+      "bytes": 404219648,
+      "mtime_ns": 1794514052494404067,
+      "allocated_bytes": 398577664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/catalog_projection-68f32defb809b362",
+      "inode": 108577047,
+      "bytes": 404215512,
+      "mtime_ns": 1794513680701429593,
+      "allocated_bytes": 398569472
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/catalog_scalar_predicates-86bd1b908d4fd8fd",
+      "inode": 108577179,
+      "bytes": 404204088,
+      "mtime_ns": 1794514047083331675,
+      "allocated_bytes": 398561280
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/cell_rows-230e549ba0df157e",
+      "inode": 108576344,
+      "bytes": 404431416,
+      "mtime_ns": 1794512774009293198,
+      "allocated_bytes": 398790656
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/centralized_authz-a15c873413d98cc3",
+      "inode": 108576736,
+      "bytes": 404201800,
+      "mtime_ns": 1794512980694063323,
+      "allocated_bytes": 398557184
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/cold_routine_compilation_stack-a50d12e870450ae2",
+      "inode": 108576740,
+      "bytes": 404445016,
+      "mtime_ns": 1794512986172136744,
+      "allocated_bytes": 398798848
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/column_references-2f1e66758420d582",
+      "inode": 108577187,
+      "bytes": 404211472,
+      "mtime_ns": 1794514069199627559,
+      "allocated_bytes": 398565376
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/comma_join_predicate-6f5111bdb862b019",
+      "inode": 108576634,
+      "bytes": 404226304,
+      "mtime_ns": 1794512854374370303,
+      "allocated_bytes": 398585856
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/commit_outcome_resolution-49aec10c43e99936",
+      "inode": 108576726,
+      "bytes": 404257896,
+      "mtime_ns": 1794512958769769479,
+      "allocated_bytes": 398614528
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/composite_text_in-61eb01ff2cbbcfd6",
+      "inode": 108576849,
+      "bytes": 404279464,
+      "mtime_ns": 1794513127482027636,
+      "allocated_bytes": 398639104
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/composite_types-1a6c2e112db3617c",
+      "inode": 108576984,
+      "bytes": 404341744,
+      "mtime_ns": 1794513498494991711,
+      "allocated_bytes": 398696448
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/computed_calendar_intervals-0912ff6eccddd261",
+      "inode": 108576343,
+      "bytes": 404202088,
+      "mtime_ns": 1794512780081374580,
+      "allocated_bytes": 398557184
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/concurrent_create_table-790b90ec6901a0be",
+      "inode": 108576643,
+      "bytes": 404426272,
+      "mtime_ns": 1794512870301583770,
+      "allocated_bytes": 398778368
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/conflict_upsert_scaling-8032ed12cba0a390",
+      "inode": 108577089,
+      "bytes": 404237712,
+      "mtime_ns": 1794513805778103093,
+      "allocated_bytes": 398589952
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/constraint_diagnostics-510a5fed9c219281",
+      "inode": 108577005,
+      "bytes": 404502208,
+      "mtime_ns": 1794513560102816010,
+      "allocated_bytes": 398856192
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/count_star_fast_path-966a1b0d6d87535a",
+      "inode": 108576904,
+      "bytes": 404507288,
+      "mtime_ns": 1794513279205057658,
+      "allocated_bytes": 398860288
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/cte_delete-b060eea3244f8ad1",
+      "inode": 108576859,
+      "bytes": 404249184,
+      "mtime_ns": 1794513155086396977,
+      "allocated_bytes": 398606336
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/cube_ddl-cf35ab43a057ba21",
+      "inode": 108576905,
+      "bytes": 404266696,
+      "mtime_ns": 1794513285096136479,
+      "allocated_bytes": 398618624
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/cube_read_authorization-4503106e4709d692",
+      "inode": 108577149,
+      "bytes": 404208240,
+      "mtime_ns": 1794513962275196990,
+      "allocated_bytes": 398565376
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/current_catalog_context-bf23bd99cc7683b8",
+      "inode": 108577029,
+      "bytes": 412215576,
+      "mtime_ns": 1794513629026738196,
+      "allocated_bytes": 406450176
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/database_ddl_comments-3d471a4f7703e734",
+      "inode": 108576997,
+      "bytes": 404212504,
+      "mtime_ns": 1794513537440512793,
+      "allocated_bytes": 398565376
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/ddl_authorization_holes-cd569c5564f22e96",
+      "inode": 108576754,
+      "bytes": 404216208,
+      "mtime_ns": 1794513024672652070,
+      "allocated_bytes": 398569472
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/deferred_foreign_keys-5abcec0b76dd45f0",
+      "inode": 108576315,
+      "bytes": 412247856,
+      "mtime_ns": 1794511691879790162,
+      "allocated_bytes": 406482944
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/deferred_trigger_rollback-d25060d688b762e2",
+      "inode": 108577085,
+      "bytes": 404239408,
+      "mtime_ns": 1794513793776942520,
+      "allocated_bytes": 398594048
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/domain_types-a01dca1a06059169",
+      "inode": 108576728,
+      "bytes": 404275736,
+      "mtime_ns": 1794512963881837994,
+      "allocated_bytes": 398630912
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/drop_constraint_indexes-28109a2076a9286f",
+      "inode": 108576971,
+      "bytes": 404531416,
+      "mtime_ns": 1794513459189465810,
+      "allocated_bytes": 398884864
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/eager_relation_privileges-8667299b26ceacca",
+      "inode": 108577023,
+      "bytes": 404213160,
+      "mtime_ns": 1794513612806521173,
+      "allocated_bytes": 398565376
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/ehr_routine_results-ec78e986b6ccec0a",
+      "inode": 108576744,
+      "bytes": 404229496,
+      "mtime_ns": 1794513002309352854,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/element_polymorphic_routines-8071e4d7e4b34aeb",
+      "inode": 108576884,
+      "bytes": 404265936,
+      "mtime_ns": 1794513223565313210,
+      "allocated_bytes": 398618624
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/empty_aggregates-0a4d992647ca81e4",
+      "inode": 108577125,
+      "bytes": 404211872,
+      "mtime_ns": 1794513907294461360,
+      "allocated_bytes": 398565376
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/exact_decimal_storage-332fd4068320f74c",
+      "inode": 108576989,
+      "bytes": 404222048,
+      "mtime_ns": 1794513515256215972,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/explain_authorization-c0e15ad1eae12a00",
+      "inode": 108577107,
+      "bytes": 404206688,
+      "mtime_ns": 1794513857592796363,
+      "allocated_bytes": 398561280
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/explain_matches_execution-48af8f23854a3b5b",
+      "inode": 108577147,
+      "bytes": 404265008,
+      "mtime_ns": 1794513957776136794,
+      "allocated_bytes": 398618624
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/exponent_operator-5365c90061ca66ac",
+      "inode": 108577077,
+      "bytes": 404202128,
+      "mtime_ns": 1794513769612619207,
+      "allocated_bytes": 398557184
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/extension_unicode_comments-61222c0649fb8472",
+      "inode": 108576944,
+      "bytes": 40917616,
+      "mtime_ns": 1794513383082447515,
+      "allocated_bytes": 40718336
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/extensions-6a09e2c75a02f6e4",
+      "inode": 108576731,
+      "bytes": 405865400,
+      "mtime_ns": 1794512927090344891,
+      "allocated_bytes": 400216064
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/external_sort_stream-c4ef759f06d96a0f",
+      "inode": 108576861,
+      "bytes": 404265896,
+      "mtime_ns": 1794513160699472079,
+      "allocated_bytes": 398622720
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/flashback-87269c34b292a3d0",
+      "inode": 108576909,
+      "bytes": 405662048,
+      "mtime_ns": 1794513290596210069,
+      "allocated_bytes": 399994880
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/foreign_key_authorization-20226577e314169e",
+      "inode": 108576985,
+      "bytes": 404220672,
+      "mtime_ns": 1794513503720061621,
+      "allocated_bytes": 398577664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/foreign_key_unchanged_updates-70e488178134779d",
+      "inode": 108555444,
+      "bytes": 404213112,
+      "mtime_ns": 1794511628937946664,
+      "allocated_bytes": 398569472
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/fts_block_postings-478f43b2e95c87ab",
+      "inode": 108577052,
+      "bytes": 404248528,
+      "mtime_ns": 1794513697751657721,
+      "allocated_bytes": 398602240
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/fts_direct_build-44ad14eda0614ec8",
+      "inode": 108576631,
+      "bytes": 404841720,
+      "mtime_ns": 1794512827714012983,
+      "allocated_bytes": 399196160
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/fts_query_budgets-cf14711bc2f8f850",
+      "inode": 108576867,
+      "bytes": 404235096,
+      "mtime_ns": 1794513177815701090,
+      "allocated_bytes": 398594048
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/fts_transaction_candidates-e6cdccde5ebb3910",
+      "inode": 108576925,
+      "bytes": 404250320,
+      "mtime_ns": 1794513341309888608,
+      "allocated_bytes": 398606336
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/full_text_search-afff0ea0a1cd13d8",
+      "inode": 108576964,
+      "bytes": 404353616,
+      "mtime_ns": 1794513442923248171,
+      "allocated_bytes": 398712832
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/generate_subscripts_from-0373dc3ba5064cb5",
+      "inode": 108576843,
+      "bytes": 404268256,
+      "mtime_ns": 1794513110786804258,
+      "allocated_bytes": 398626816
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/generated_boolean_filters-922abe5719848e83",
+      "inode": 108576296,
+      "bytes": 405558008,
+      "mtime_ns": 1794511663068404054,
+      "allocated_bytes": 399892480
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geo_g10_temporal-87331d8020de61c4",
+      "inode": 108576857,
+      "bytes": 404216600,
+      "mtime_ns": 1794513149287319387,
+      "allocated_bytes": 398569472
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geo_g11_hardening-32e773dd7cad499d",
+      "inode": 108576922,
+      "bytes": 404348048,
+      "mtime_ns": 1794513330104738685,
+      "allocated_bytes": 398704640
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geo_g1_wkb_multi-7580c12684d9e11f",
+      "inode": 108577031,
+      "bytes": 404303320,
+      "mtime_ns": 1794513634775815117,
+      "allocated_bytes": 398655488
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geo_g2_predicates-e0c64ac66878bcef",
+      "inode": 108577109,
+      "bytes": 404234568,
+      "mtime_ns": 1794513863336873218,
+      "allocated_bytes": 398589952
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geo_g3_spatial_join-d9728e4746d9769b",
+      "inode": 108576873,
+      "bytes": 404230264,
+      "mtime_ns": 1794513194090918849,
+      "allocated_bytes": 398589952
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geo_g4_h3-2bde39ac224cd9b7",
+      "inode": 108576822,
+      "bytes": 404228536,
+      "mtime_ns": 1794513066693214295,
+      "allocated_bytes": 398585856
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geo_g5_mvt-7e6999b5d4c42eb6",
+      "inode": 108577081,
+      "bytes": 404219824,
+      "mtime_ns": 1794513781683780716,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geo_g6_geocoder-dfd775eb06c58017",
+      "inode": 108576337,
+      "bytes": 404251992,
+      "mtime_ns": 1794512768290216548,
+      "allocated_bytes": 398610432
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geo_g7_travel_time-ed95e2970d44a027",
+      "inode": 108577039,
+      "bytes": 404259656,
+      "mtime_ns": 1794513658033126296,
+      "allocated_bytes": 398614528
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geo_g8_raster-2e3bcee05eee8053",
+      "inode": 108576580,
+      "bytes": 404216624,
+      "mtime_ns": 1794512821799933719,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geometric_indexes-7f36fa84281ef72b",
+      "inode": 108577152,
+      "bytes": 404285184,
+      "mtime_ns": 1794513966893258779,
+      "allocated_bytes": 398639104
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geometric_operations-3040a61f57b81ef3",
+      "inode": 108577017,
+      "bytes": 404228696,
+      "mtime_ns": 1794513595178285311,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geometric_point-9bbce1e5665a1ec4",
+      "inode": 108577033,
+      "bytes": 404240208,
+      "mtime_ns": 1794513640554892440,
+      "allocated_bytes": 398598144
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geometric_spatial_boundary-7a748d92a2145500",
+      "inode": 108576844,
+      "bytes": 404220856,
+      "mtime_ns": 1794513116378879079,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geometric_transport-4f12d27f85fcc53a",
+      "inode": 108577153,
+      "bytes": 404271480,
+      "mtime_ns": 1794513971486320233,
+      "allocated_bytes": 398626816
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geometric_types-284d413c2fa7aead",
+      "inode": 108576885,
+      "bytes": 404220736,
+      "mtime_ns": 1794513228581380324,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/hammerdb_corrected_workload-8bf87b6970bfa7e7",
+      "inode": 108576923,
+      "bytes": 404268664,
+      "mtime_ns": 1794513335570811820,
+      "allocated_bytes": 398626816
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/hash_index_range-dac0b8e6b6553973",
+      "inode": 108576908,
+      "bytes": 404219752,
+      "mtime_ns": 1794513296244285640,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/incident_observability-1512927016600e58",
+      "inode": 108576629,
+      "bytes": 404235704,
+      "mtime_ns": 1794512849191300836,
+      "allocated_bytes": 398589952
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/independent_commit_conflicts-157f41688bc7f100",
+      "inode": 108576863,
+      "bytes": 404214072,
+      "mtime_ns": 1794513166915555249,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/insight_union_projection-1808ab61dc0eaebf",
+      "inode": 108576714,
+      "bytes": 404257296,
+      "mtime_ns": 1794512932374415711,
+      "allocated_bytes": 398614528
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/integer_fractional_comparison-d4ef0b9b1b6ea77c",
+      "inode": 108576933,
+      "bytes": 404225944,
+      "mtime_ns": 1794513363405184237,
+      "allocated_bytes": 398577664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/interval_parameters-75e2facad296c5ee",
+      "inode": 108576999,
+      "bytes": 405538832,
+      "mtime_ns": 1794513543024587507,
+      "allocated_bytes": 399872000
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/intervention_regression-53e5eb8b929a4587",
+      "inode": 108577075,
+      "bytes": 404231392,
+      "mtime_ns": 1794513763293534659,
+      "allocated_bytes": 398589952
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/join_authz_bypass-881ce1fc456dd779",
+      "inode": 108577111,
+      "bytes": 404208024,
+      "mtime_ns": 1794513868495942244,
+      "allocated_bytes": 398565376
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/join_memory_budget-586b2cc25eedeb28",
+      "inode": 108577189,
+      "bytes": 404255104,
+      "mtime_ns": 1794514075586713009,
+      "allocated_bytes": 398614528
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/json_key_partial_index-d07b23a6100ba6d8",
+      "inode": 108577091,
+      "bytes": 404220384,
+      "mtime_ns": 1794513811777183360,
+      "allocated_bytes": 398577664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/json_storage-39ffe5bbb55a3675",
+      "inode": 108576830,
+      "bytes": 404427536,
+      "mtime_ns": 1794513077831363321,
+      "allocated_bytes": 398782464
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/json_wildcard_visibility-5295e706f087bde5",
+      "inode": 108577093,
+      "bytes": 404233352,
+      "mtime_ns": 1794513817731263024,
+      "allocated_bytes": 398585856
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/jsonb_composite-dfb3bc6da5c883ed",
+      "inode": 108577079,
+      "bytes": 404224344,
+      "mtime_ns": 1794513775626699674,
+      "allocated_bytes": 398577664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/jsonb_filter-b4196877fab3ddb6",
+      "inode": 108577063,
+      "bytes": 404256960,
+      "mtime_ns": 1794513727841060312,
+      "allocated_bytes": 398614528
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/jsonb_numeric_range-2e39911d5d35f6ed",
+      "inode": 108577099,
+      "bytes": 404219008,
+      "mtime_ns": 1794513835223497066,
+      "allocated_bytes": 398577664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/jsonb_parameter_types-ac32696ce2261ffa",
+      "inode": 108576846,
+      "bytes": 405542232,
+      "mtime_ns": 1794513121866952508,
+      "allocated_bytes": 399876096
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/jsonb_primary_keys-d140791a6a18fb7f",
+      "inode": 108576320,
+      "bytes": 404251568,
+      "mtime_ns": 1794511697203861511,
+      "allocated_bytes": 398606336
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/jsonb_srf-385795b8d5bc821b",
+      "inode": 108576912,
+      "bytes": 404372832,
+      "mtime_ns": 1794513301898361290,
+      "allocated_bytes": 398725120
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/jsonpath-59e91ffa5d718bdd",
+      "inode": 108576937,
+      "bytes": 404289992,
+      "mtime_ns": 1794513375023339685,
+      "allocated_bytes": 398643200
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/key_inventory_memory-9fa736e0b14fb43f",
+      "inode": 108576961,
+      "bytes": 404226064,
+      "mtime_ns": 1794513437180171330,
+      "allocated_bytes": 398585856
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/lateral_plpgsql_sources-f297e81c1f0bd969",
+      "inode": 108577163,
+      "bytes": 404214048,
+      "mtime_ns": 1794514000467707998,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/lateral_routine_sources-d3fafe744072eb64",
+      "inode": 108576851,
+      "bytes": 404229920,
+      "mtime_ns": 1794513132586095928,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/lean_l1_vacuum-80d941ec728c72c4",
+      "inode": 108576927,
+      "bytes": 404510304,
+      "mtime_ns": 1794513346673960377,
+      "allocated_bytes": 398864384
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/lean_l2_space_report-48ed27ee4ef386da",
+      "inode": 108577043,
+      "bytes": 404217712,
+      "mtime_ns": 1794513669645281664,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/lean_l3_hole_punch-1250bab92fef547d",
+      "inode": 108576931,
+      "bytes": 404229456,
+      "mtime_ns": 1794513357777108935,
+      "allocated_bytes": 398585856
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/lean_l4_fold_hygiene-02b7816b352cb073",
+      "inode": 108576690,
+      "bytes": 404219640,
+      "mtime_ns": 1794512901730004995,
+      "allocated_bytes": 398577664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/lean_l7_value_compression-27fd0d2d30e2783d",
+      "inode": 108576899,
+      "bytes": 404224632,
+      "mtime_ns": 1794513268049908404,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/legacy_public_view_names-eee1d47bd838a6f7",
+      "inode": 108577013,
+      "bytes": 404223536,
+      "mtime_ns": 1794513584067136646,
+      "allocated_bytes": 398577664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/locking_projection-d8a7651697c293ab",
+      "inode": 108576956,
+      "bytes": 404286912,
+      "mtime_ns": 1794513420661950320,
+      "allocated_bytes": 398643200
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/mutation_authority-bb527564910e357c",
+      "inode": 108576875,
+      "bytes": 404211224,
+      "mtime_ns": 1794513199328988933,
+      "allocated_bytes": 398569472
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/native_field_sql_null-079e4b7c1ad48215",
+      "inode": 108577073,
+      "bytes": 404206240,
+      "mtime_ns": 1794513757607458580,
+      "allocated_bytes": 398561280
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/nested_join_pair_budget-c430ae5efa2c4e11",
+      "inode": 108577049,
+      "bytes": 404208272,
+      "mtime_ns": 1794513686200503169,
+      "allocated_bytes": 398561280
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/network_cidr-ac5d8fdfe1e4e7f5",
+      "inode": 108576750,
+      "bytes": 404213824,
+      "mtime_ns": 1794513013596503873,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/network_indexes-cc35be6b9b17d214",
+      "inode": 108577062,
+      "bytes": 404264232,
+      "mtime_ns": 1794513722035982641,
+      "allocated_bytes": 398622720
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/network_inet-78cf337842af8caa",
+      "inode": 108576813,
+      "bytes": 404214008,
+      "mtime_ns": 1794513045986937250,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/network_mac-dad7768861ed8aaa",
+      "inode": 108577015,
+      "bytes": 404219840,
+      "mtime_ns": 1794513589633211119,
+      "allocated_bytes": 398577664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/network_operations-c66bd679f22adeb1",
+      "inode": 108576820,
+      "bytes": 404238472,
+      "mtime_ns": 1794513061687147315,
+      "allocated_bytes": 398598144
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/no_context_no_authority-73bbdc67484e6264",
+      "inode": 108576832,
+      "bytes": 404210072,
+      "mtime_ns": 1794513088466505617,
+      "allocated_bytes": 398569472
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/null_typed_arithmetic-83800cdb0ecafc89",
+      "inode": 108576578,
+      "bytes": 404206224,
+      "mtime_ns": 1794512816572863663,
+      "allocated_bytes": 398561280
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/numeric_power_sql-81b5d68ff0c90eab",
+      "inode": 108576605,
+      "bytes": 404212968,
+      "mtime_ns": 1794512833211086658,
+      "allocated_bytes": 398565376
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/numeric_round_scale-04b88ce0afe42a6a",
+      "inode": 108576348,
+      "bytes": 404210560,
+      "mtime_ns": 1794512785089441702,
+      "allocated_bytes": 398569472
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/object_ddl_authorization-6dca326fff5c0c8f",
+      "inode": 108577127,
+      "bytes": 404222728,
+      "mtime_ns": 1794513911976524005,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/observability_views-4e7413ccc371ded5",
+      "inode": 108577083,
+      "bytes": 404200768,
+      "mtime_ns": 1794513788036865719,
+      "allocated_bytes": 398553088
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/oid_aliases-e0940b06de099ed2",
+      "inode": 108576949,
+      "bytes": 404282440,
+      "mtime_ns": 1794513404195730006,
+      "allocated_bytes": 398639104
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/oid_semantics-bdf3d6fdba6073e9",
+      "inode": 108576887,
+      "bytes": 404219896,
+      "mtime_ns": 1794513234087453994,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/oracle_application_sql-44d96b2bc9694f71",
+      "inode": 108576741,
+      "bytes": 412335160,
+      "mtime_ns": 1794512991679210553,
+      "allocated_bytes": 406568960
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/oracle_invalid_routine_lifecycle-d2d4eeeeaaec4e6e",
+      "inode": 108576717,
+      "bytes": 412238248,
+      "mtime_ns": 1794512937978490821,
+      "allocated_bytes": 406474752
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/oracle_national_columns-ccc038a26a958aa7",
+      "inode": 108577011,
+      "bytes": 412209960,
+      "mtime_ns": 1794513578739065357,
+      "allocated_bytes": 406446080
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/oracle_partitioning-15428570e3b06a20",
+      "inode": 108576687,
+      "bytes": 412230152,
+      "mtime_ns": 1794512896714937779,
+      "allocated_bytes": 406466560
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/oracle_simple_case_profile-94c672b7b5b53e94",
+      "inode": 108577054,
+      "bytes": 412574104,
+      "mtime_ns": 1794513691878579141,
+      "allocated_bytes": 406806528
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/owner_privilege_metadata-93c7cc5721120e4e",
+      "inode": 108576895,
+      "bytes": 404251080,
+      "mtime_ns": 1794513256746757171,
+      "allocated_bytes": 398606336
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/ownership_authorization-f4db0ae98bccc322",
+      "inode": 108576865,
+      "bytes": 404229336,
+      "mtime_ns": 1794513172392628531,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_analyze_statistics-417274f6e1853471",
+      "inode": 108577025,
+      "bytes": 404223656,
+      "mtime_ns": 1794513618191593224,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_fts_scan-182f98a647492f65",
+      "inode": 108576959,
+      "bytes": 404223296,
+      "mtime_ns": 1794513431606096750,
+      "allocated_bytes": 398577664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_streaming_scan-f998fc02b67e7bec",
+      "inode": 108576891,
+      "bytes": 404244896,
+      "mtime_ns": 1794513245308604130,
+      "allocated_bytes": 398598144
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/parser_tree_depth-223c39c8399a7874",
+      "inode": 108576685,
+      "bytes": 404217872,
+      "mtime_ns": 1794512891388866395,
+      "allocated_bytes": 398577664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/partition_admission-1747b2d49e0f0f3f",
+      "inode": 108577170,
+      "bytes": 404461520,
+      "mtime_ns": 1794514023265013018,
+      "allocated_bytes": 398815232
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/partition_bounds-113e115c36ba7df7",
+      "inode": 108577174,
+      "bytes": 404392160,
+      "mtime_ns": 1794514029096091032,
+      "allocated_bytes": 398749696
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/partition_child_schema-33d3a3efa2e59454",
+      "inode": 108555416,
+      "bytes": 404629912,
+      "mtime_ns": 1794511617635795202,
+      "allocated_bytes": 398983168
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/partition_copy-144e964efbcb6c33",
+      "inode": 108576758,
+      "bytes": 404310640,
+      "mtime_ns": 1794513029952722716,
+      "allocated_bytes": 398663680
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/partition_execution-35da3c3818716a0f",
+      "inode": 108577192,
+      "bytes": 404305792,
+      "mtime_ns": 1794514081699794793,
+      "allocated_bytes": 398663680
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/partition_generated-bcab822da37b006d",
+      "inode": 108555437,
+      "bytes": 404657696,
+      "mtime_ns": 1794511607239655881,
+      "allocated_bytes": 399011840
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/partition_hash-fd2b00411bfddb5c",
+      "inode": 108576968,
+      "bytes": 404265688,
+      "mtime_ns": 1794513464686539360,
+      "allocated_bytes": 398622720
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/partition_row_locks-2f9efa0a40a5825e",
+      "inode": 108555636,
+      "bytes": 404237672,
+      "mtime_ns": 1794511657743332692,
+      "allocated_bytes": 398589952
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/partition_schema_changes-db436d97adaa57eb",
+      "inode": 108576305,
+      "bytes": 404293664,
+      "mtime_ns": 1794511675052564657,
+      "allocated_bytes": 398647296
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/partition_statement_batches-d744eadcb27dc088",
+      "inode": 108576300,
+      "bytes": 404252432,
+      "mtime_ns": 1794511669078484597,
+      "allocated_bytes": 398610432
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/partition_trigger_catalog-a2c2adbc1c1bb8dc",
+      "inode": 108577027,
+      "bytes": 404276504,
+      "mtime_ns": 1794513623521664539,
+      "allocated_bytes": 398635008
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/partition_trigger_events-b5d8313f9e8d7d72",
+      "inode": 108555604,
+      "bytes": 404273360,
+      "mtime_ns": 1794511645748171942,
+      "allocated_bytes": 398626816
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/partition_trigger_lifecycle-4f3c49d91c0b0b10",
+      "inode": 108576314,
+      "bytes": 404281368,
+      "mtime_ns": 1794511686360716200,
+      "allocated_bytes": 398639104
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/partition_trigger_visibility-ea149ec7af45f7f4",
+      "inode": 108576312,
+      "bytes": 404310704,
+      "mtime_ns": 1794511680854642412,
+      "allocated_bytes": 398663680
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/partition_upsert-a95d6f9bb3a5791f",
+      "inode": 108555583,
+      "bytes": 404279776,
+      "mtime_ns": 1794511640363099776,
+      "allocated_bytes": 398639104
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/pg_dump_identity_restore-d5b2651824939b45",
+      "inode": 108576853,
+      "bytes": 404212320,
+      "mtime_ns": 1794513138163170548,
+      "allocated_bytes": 398569472
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/pg_dump_schema_qualified_restore-1a6a713c12899a5e",
+      "inode": 108577156,
+      "bytes": 404436152,
+      "mtime_ns": 1794513976534387775,
+      "allocated_bytes": 398794752
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/pg_lsn-8bdfc8226c1d3404",
+      "inode": 108577001,
+      "bytes": 404232824,
+      "mtime_ns": 1794513548480660508,
+      "allocated_bytes": 398585856
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/pg_snapshot-ed66a642f9f0cc6f",
+      "inode": 108577113,
+      "bytes": 404259048,
+      "mtime_ns": 1794513874838027100,
+      "allocated_bytes": 398614528
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/pg_wewobo_compat-539d4ad603c40c78",
+      "inode": 108577124,
+      "bytes": 406477416,
+      "mtime_ns": 1794513880615104396,
+      "allocated_bytes": 400805888
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/pk_in_list_lookup-d9ea78e83a15df15",
+      "inode": 108576352,
+      "bytes": 404240176,
+      "mtime_ns": 1794512790103508903,
+      "allocated_bytes": 398594048
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/plan_diagnostics-7a24b6ccb03a4d34",
+      "inode": 108576734,
+      "bytes": 404325960,
+      "mtime_ns": 1794512969172908908,
+      "allocated_bytes": 398684160
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/platform_correctness_audit-9c96b4835ea89e77",
+      "inode": 108577118,
+      "bytes": 405914312,
+      "mtime_ns": 1794513886297180421,
+      "allocated_bytes": 400244736
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/plpgsql_temporal_comparison-b85f6e2767fed88d",
+      "inode": 108576991,
+      "bytes": 404216712,
+      "mtime_ns": 1794513520940292024,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/postgres_dynamic_execute-86f0e24e00f0548f",
+      "inode": 108576942,
+      "bytes": 404250680,
+      "mtime_ns": 1794513388200515994,
+      "allocated_bytes": 398610432
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/predicate_contradiction-0490e64b1b58deb6",
+      "inode": 108577056,
+      "bytes": 404309168,
+      "mtime_ns": 1794513703940740530,
+      "allocated_bytes": 398663680
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/predicate_projection-7b537f011d3a86ef",
+      "inode": 108576957,
+      "bytes": 412189104,
+      "mtime_ns": 1794513426231024833,
+      "allocated_bytes": 406425600
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/prepared_typed_join-14c8560dca0e9129",
+      "inode": 108576742,
+      "bytes": 404203984,
+      "mtime_ns": 1794512996798279116,
+      "allocated_bytes": 398561280
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/primary_key_index_compatibility-2f73fe4b013438fc",
+      "inode": 108576323,
+      "bytes": 404531904,
+      "mtime_ns": 1794511702866937404,
+      "allocated_bytes": 398884864
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/projection_admin-fe569a904fe2c4a1",
+      "inode": 108576879,
+      "bytes": 404291824,
+      "mtime_ns": 1794513205715074377,
+      "allocated_bytes": 398647296
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/projection_pushdown-df1bea1c75d9771f",
+      "inode": 108576720,
+      "bytes": 404281968,
+      "mtime_ns": 1794512943480564563,
+      "allocated_bytes": 398635008
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/projection_query_surface-b1f591ecc99b60b6",
+      "inode": 108576724,
+      "bytes": 404258184,
+      "mtime_ns": 1794512953694701460,
+      "allocated_bytes": 398610432
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/projection_rollup_sql-0f09395f03a05de9",
+      "inode": 108576837,
+      "bytes": 404295096,
+      "mtime_ns": 1794513093929578712,
+      "allocated_bytes": 398647296
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/pseudo_types-bef3307690199f21",
+      "inode": 108577065,
+      "bytes": 404242368,
+      "mtime_ns": 1794513733677138397,
+      "allocated_bytes": 398594048
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/public_schema-7550db83b3d2148d",
+      "inode": 108576372,
+      "bytes": 404241064,
+      "mtime_ns": 1794512800270645170,
+      "allocated_bytes": 398598144
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/query_crash_hardening-0b010ebe2e666248",
+      "inode": 108577057,
+      "bytes": 404229584,
+      "mtime_ns": 1794513709800818937,
+      "allocated_bytes": 398585856
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/query_rule_results-00514bad5c1d55f9",
+      "inode": 108576733,
+      "bytes": 404235024,
+      "mtime_ns": 1794512975085988160,
+      "allocated_bytes": 398589952
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/quoted_public_storage_names-08401f3385ad4d29",
+      "inode": 108576818,
+      "bytes": 404457480,
+      "mtime_ns": 1794513056579078970,
+      "allocated_bytes": 398807040
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/raise_notice-3647c85d1164218b",
+      "inode": 108576974,
+      "bytes": 404272224,
+      "mtime_ns": 1794513476536697912,
+      "allocated_bytes": 398626816
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/ranked_fts_topk-703da367b72ee7d6",
+      "inode": 108576898,
+      "bytes": 404307704,
+      "mtime_ns": 1794513262487833985,
+      "allocated_bytes": 398659584
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/raw_ddl_authorization-b823a6c1cfe84efb",
+      "inode": 108576993,
+      "bytes": 404214184,
+      "mtime_ns": 1794513526480366149,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/raw_ddl_batches-1eab6ceb3b15a5ba",
+      "inode": 108577003,
+      "bytes": 404220600,
+      "mtime_ns": 1794513554190736908,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/read_committed_lock_refresh-fecbb92c8e62032c",
+      "inode": 108577157,
+      "bytes": 404231112,
+      "mtime_ns": 1794513982611469085,
+      "allocated_bytes": 398585856
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/read_committed_upsert_grants-e04381826a1a8870",
+      "inode": 108577146,
+      "bytes": 404450304,
+      "mtime_ns": 1794513939671894562,
+      "allocated_bytes": 398807040
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/read_committed_upsert_primary-74c7ad996a38bdc1",
+      "inode": 108576878,
+      "bytes": 404223184,
+      "mtime_ns": 1794513211397150402,
+      "allocated_bytes": 398577664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/read_committed_upsert_signed_arbiters-a9bb73d099f8f169",
+      "inode": 108576641,
+      "bytes": 404647992,
+      "mtime_ns": 1794512838679159945,
+      "allocated_bytes": 399003648
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/read_only_transactions-7fba983a75017bcf",
+      "inode": 108577067,
+      "bytes": 404234816,
+      "mtime_ns": 1794513739297213593,
+      "allocated_bytes": 398589952
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/record_conflicts_sql-4f70fe6fdf998de4",
+      "inode": 108577165,
+      "bytes": 404593248,
+      "mtime_ns": 1794514005892780584,
+      "allocated_bytes": 398946304
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/recursive_query_stack-158fd08772d240cd",
+      "inode": 108576838,
+      "bytes": 412182128,
+      "mtime_ns": 1794513099740656463,
+      "allocated_bytes": 406417408
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/recycle_bin-793640e1e69f9ae7",
+      "inode": 108576893,
+      "bytes": 404259096,
+      "mtime_ns": 1794513250999680276,
+      "allocated_bytes": 398618624
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/recycle_bin_recovery-89023d9dcaed836f",
+      "inode": 108576970,
+      "bytes": 404735792,
+      "mtime_ns": 1794513454196399004,
+      "allocated_bytes": 399089664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/regexp_split_to_table-20c27a98beec2ae2",
+      "inode": 108576692,
+      "bytes": 404211128,
+      "mtime_ns": 1794512906684071393,
+      "allocated_bytes": 398565376
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/renamed_foreign_keys-9993e42cc2b535a1",
+      "inode": 108576889,
+      "bytes": 404219720,
+      "mtime_ns": 1794513239633528199,
+      "allocated_bytes": 398577664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/renamed_table_triggers-2ce16f17395288d8",
+      "inode": 108576840,
+      "bytes": 404236200,
+      "mtime_ns": 1794513105041727390,
+      "allocated_bytes": 398594048
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/rls_boolean_depth-7b808e59606db6d1",
+      "inode": 108577097,
+      "bytes": 404243824,
+      "mtime_ns": 1794513829739423691,
+      "allocated_bytes": 398598144
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/rls_explain_counts-209ee91dc82b985a",
+      "inode": 108576703,
+      "bytes": 404214728,
+      "mtime_ns": 1794512921507270063,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/rls_index_candidates-9361e92a625204e0",
+      "inode": 108576812,
+      "bytes": 404358360,
+      "mtime_ns": 1794513040585864985,
+      "allocated_bytes": 398716928
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/rls_policy_typing-a144c890838b1a64",
+      "inode": 108576827,
+      "bytes": 404210096,
+      "mtime_ns": 1794513083126434168,
+      "allocated_bytes": 398565376
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/rls_write_path-e33fef570b008af5",
+      "inode": 108576647,
+      "bytes": 404245256,
+      "mtime_ns": 1794512875898658785,
+      "allocated_bytes": 398598144
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/role_drop_dependencies-40e24afff1200afb",
+      "inode": 108576913,
+      "bytes": 404225296,
+      "mtime_ns": 1794513307623437890,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/rollback_index_admission-fca906f5a1c01558",
+      "inode": 108576816,
+      "bytes": 404251224,
+      "mtime_ns": 1794513051688013529,
+      "allocated_bytes": 398610432
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routine_aggregate_into-6941cfe7ab85ccfc",
+      "inode": 108577144,
+      "bytes": 404220112,
+      "mtime_ns": 1794513953266076450,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routine_assignment_types-ef277ddce5e1d57b",
+      "inode": 108576637,
+      "bytes": 404236984,
+      "mtime_ns": 1794512859597440306,
+      "allocated_bytes": 398589952
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routine_compiler_directives-9c8a426be98b3019",
+      "inode": 108576951,
+      "bytes": 404237552,
+      "mtime_ns": 1794513409610802459,
+      "allocated_bytes": 398589952
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routine_cte_case_types-694e9d0d2025e90a",
+      "inode": 108576953,
+      "bytes": 404237488,
+      "mtime_ns": 1794513415349879246,
+      "allocated_bytes": 398594048
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routine_expression_stack-fa8148f1df07ea9d",
+      "inode": 108576639,
+      "bytes": 404214584,
+      "mtime_ns": 1794512864688508540,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routine_header_metadata-3926da5018d6e212",
+      "inode": 108576608,
+      "bytes": 404245592,
+      "mtime_ns": 1794512843730227643,
+      "allocated_bytes": 398598144
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routine_interval_arguments-92c10ad86a78ddc6",
+      "inode": 108577183,
+      "bytes": 404208256,
+      "mtime_ns": 1794514057970477329,
+      "allocated_bytes": 398565376
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routine_named_exception_conditions-84531311b9b81658",
+      "inode": 108576881,
+      "bytes": 404229744,
+      "mtime_ns": 1794513217372230348,
+      "allocated_bytes": 398585856
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routine_owner_execution_identity-e2457e6c44c46106",
+      "inode": 108576917,
+      "bytes": 404225168,
+      "mtime_ns": 1794513319260593593,
+      "allocated_bytes": 398577664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routine_pattern_context-f25583f780c9e963",
+      "inode": 108577129,
+      "bytes": 404214648,
+      "mtime_ns": 1794513916593585780,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routine_privilege_lists-73148115c9d3cdef",
+      "inode": 108576915,
+      "bytes": 404226096,
+      "mtime_ns": 1794513313129511560,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routine_row_transaction_identity-99fd7d4886747b2e",
+      "inode": 108576936,
+      "bytes": 404254944,
+      "mtime_ns": 1794513369180261506,
+      "allocated_bytes": 398610432
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routine_table_emission-c99d7ec123f00856",
+      "inode": 108577045,
+      "bytes": 404224656,
+      "mtime_ns": 1794513675088354491,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routine_time_zone-61c3360c56ad8c3b",
+      "inode": 108577069,
+      "bytes": 404210064,
+      "mtime_ns": 1794513745570297525,
+      "allocated_bytes": 398565376
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routing_authorization-0cbc3eee447a710d",
+      "inode": 108577131,
+      "bytes": 404223192,
+      "mtime_ns": 1794513921282648518,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/schema_create_privilege-5c387e832e40fa6d",
+      "inode": 108577167,
+      "bytes": 404249616,
+      "mtime_ns": 1794514011772859259,
+      "allocated_bytes": 398606336
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/schema_table_rename-3adef5cc527bffec",
+      "inode": 108577059,
+      "bytes": 412222648,
+      "mtime_ns": 1794513716047902521,
+      "allocated_bytes": 406458368
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/select_row_locks-f8ba8ec227e0ca2f",
+      "inode": 108576339,
+      "bytes": 404349376,
+      "mtime_ns": 1794512758479085053,
+      "allocated_bytes": 398704640
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/selective_outer_join_filters-f16ae55dab149c32",
+      "inode": 108577162,
+      "bytes": 404298216,
+      "mtime_ns": 1794513994524628481,
+      "allocated_bytes": 398651392
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/server_paged_sql-c6a36dc8d7766408",
+      "inode": 108576747,
+      "bytes": 404226640,
+      "mtime_ns": 1794513007707425079,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/session_statement_snapshots-c0b76c6f9e35979b",
+      "inode": 108576753,
+      "bytes": 404272408,
+      "mtime_ns": 1794513019198578828,
+      "allocated_bytes": 398626816
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/set_role_admin_function_bypass-b6ac16cfd3400957",
+      "inode": 108576855,
+      "bytes": 404206840,
+      "mtime_ns": 1794513143756245382,
+      "allocated_bytes": 398561280
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/set_role_drops_privilege-5c6560c0012c8629",
+      "inode": 108576947,
+      "bytes": 404200744,
+      "mtime_ns": 1794513398617655373,
+      "allocated_bytes": 398553088
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/shared_foreign_key_references-e6aab4e530186e2f",
+      "inode": 108555617,
+      "bytes": 404452648,
+      "mtime_ns": 1794511651578250072,
+      "allocated_bytes": 398807040
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/shared_sequences-247b66cbdc506baa",
+      "inode": 108577134,
+      "bytes": 404270768,
+      "mtime_ns": 1794513925804709022,
+      "allocated_bytes": 398626816
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/sis_compatibility-96eb4d10f15c4900",
+      "inode": 108576334,
+      "bytes": 404239360,
+      "mtime_ns": 1794512763283149440,
+      "allocated_bytes": 398594048
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/skip_locked_join-91fdf82b7bc046b2",
+      "inode": 108577193,
+      "bytes": 404217792,
+      "mtime_ns": 1794514088141880979,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/small_regressions-2e9c9d0d1d887146",
+      "inode": 108577022,
+      "bytes": 404256312,
+      "mtime_ns": 1794513607404448894,
+      "allocated_bytes": 398614528
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/spatial_pack_sql-c5eeee15b4b02402",
+      "inode": 108576419,
+      "bytes": 404261880,
+      "mtime_ns": 1794512805612716768,
+      "allocated_bytes": 398618624
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/special_value_storage-572db3c2d3d92192",
+      "inode": 108577071,
+      "bytes": 404260976,
+      "mtime_ns": 1794513751646378822,
+      "allocated_bytes": 398618624
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/sql-b5b5280148df8e19",
+      "inode": 108577210,
+      "bytes": 410192464,
+      "mtime_ns": 1794514096501992825,
+      "allocated_bytes": 404520960
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/sql_text_identifiers-227b7c0984147353",
+      "inode": 108576330,
+      "bytes": 404245624,
+      "mtime_ns": 1794512747976944296,
+      "allocated_bytes": 398602240
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/sql_text_round_trip-b820557df8bdd976",
+      "inode": 108577142,
+      "bytes": 404244448,
+      "mtime_ns": 1794513948579013738,
+      "allocated_bytes": 398598144
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/streaming_aggregates-fbe04dc824d135a6",
+      "inode": 108577041,
+      "bytes": 404235288,
+      "mtime_ns": 1794513663910204930,
+      "allocated_bytes": 398594048
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/streaming_grouping-fcdbc33d730eae06",
+      "inode": 108577117,
+      "bytes": 404251088,
+      "mtime_ns": 1794513891865254920,
+      "allocated_bytes": 398606336
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/streaming_rls_guard-93628c2e3f2cefa4",
+      "inode": 108576696,
+      "bytes": 404227848,
+      "mtime_ns": 1794512911588137120,
+      "allocated_bytes": 398585856
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/table_row_routines-6f74ff9595cf675b",
+      "inode": 108577035,
+      "bytes": 404241312,
+      "mtime_ns": 1794513646493971904,
+      "allocated_bytes": 398594048
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/temporal_mutation_predicates-0aebe7480d892cba",
+      "inode": 108577135,
+      "bytes": 412193088,
+      "mtime_ns": 1794513930497771814,
+      "allocated_bytes": 406429696
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/temporal_storage-1027a052f5a1a145",
+      "inode": 108576919,
+      "bytes": 404392168,
+      "mtime_ns": 1794513324441662914,
+      "allocated_bytes": 398745600
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/timezone_catalog_hash-6d208c4af394f5b6",
+      "inode": 108577101,
+      "bytes": 404222480,
+      "mtime_ns": 1794513841011574510,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/topk_order_by-5ebdea2659693cc3",
+      "inode": 108577095,
+      "bytes": 404222168,
+      "mtime_ns": 1794513823738343397,
+      "allocated_bytes": 398577664
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/transaction_system_types-486f1962c5fed303",
+      "inode": 108577196,
+      "bytes": 404234752,
+      "mtime_ns": 1794514102377071425,
+      "allocated_bytes": 398594048
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/transaction_uniqueness-e6dda03e02b4e43c",
+      "inode": 108576869,
+      "bytes": 404209912,
+      "mtime_ns": 1794513183204773195,
+      "allocated_bytes": 398569472
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/trigger_authorization-3802767d0f4af330",
+      "inode": 108555351,
+      "bytes": 404217368,
+      "mtime_ns": 1794511623237870277,
+      "allocated_bytes": 398569472
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/trusted_identity_triggers-1bc84e0146b22c73",
+      "inode": 108555500,
+      "bytes": 404272320,
+      "mtime_ns": 1794511634731024298,
+      "allocated_bytes": 398630912
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/type_consistency-e9f68c0efa34e437",
+      "inode": 108576683,
+      "bytes": 405747952,
+      "mtime_ns": 1794512881169729432,
+      "allocated_bytes": 400080896
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/type_durability-27237aa9e2b23420",
+      "inode": 108576946,
+      "bytes": 406142312,
+      "mtime_ns": 1794513393565587777,
+      "allocated_bytes": 400474112
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/typed_catalog_comparisons-0707877d24601b0d",
+      "inode": 108576969,
+      "bytes": 413669568,
+      "mtime_ns": 1794513449018329722,
+      "allocated_bytes": 407879680
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/typed_comparison-eeca13f945bb0763",
+      "inode": 108577159,
+      "bytes": 404266984,
+      "mtime_ns": 1794513988586549030,
+      "allocated_bytes": 398618624
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/typed_comparison_boundaries-eb2cd2621cce541e",
+      "inode": 108577121,
+      "bytes": 404263096,
+      "mtime_ns": 1794513897537330811,
+      "allocated_bytes": 398618624
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/typed_comparison_matrix-01f48bcde77b3b5b",
+      "inode": 108577171,
+      "bytes": 404633376,
+      "mtime_ns": 1794514017616937449,
+      "allocated_bytes": 398987264
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/typed_scalar_storage-ddd7ece116dee663",
+      "inode": 108576871,
+      "bytes": 404233040,
+      "mtime_ns": 1794513188692846624,
+      "allocated_bytes": 398589952
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/typed_storage_migration-eb2255ade44d48f3",
+      "inode": 108577103,
+      "bytes": 404248248,
+      "mtime_ns": 1794513846547648581,
+      "allocated_bytes": 398602240
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/unique_update_order-f7fac222a73e8a8c",
+      "inode": 108577087,
+      "bytes": 404240264,
+      "mtime_ns": 1794513800023026092,
+      "allocated_bytes": 398598144
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/user_defined_ranges-1a909900364cc858",
+      "inode": 108576682,
+      "bytes": 404297056,
+      "mtime_ns": 1794512886681803308,
+      "allocated_bytes": 398651392
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/user_type_management-b9ddb70036a06267",
+      "inode": 108577008,
+      "bytes": 404293968,
+      "mtime_ns": 1794513566167897159,
+      "allocated_bytes": 398647296
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/user_type_oid_durability-1a210ed8ced6364f",
+      "inode": 108576987,
+      "bytes": 405749144,
+      "mtime_ns": 1794513510116147199,
+      "allocated_bytes": 400084992
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/uuid_storage-589eac3860402a83",
+      "inode": 108576824,
+      "bytes": 404284872,
+      "mtime_ns": 1794513072187287805,
+      "allocated_bytes": 398643200
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/version_identity-996df3db9817b87e",
+      "inode": 108576700,
+      "bytes": 404226672,
+      "mtime_ns": 1794512916424201936,
+      "allocated_bytes": 398581760
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/view_column_lineage-0397f83f94ed1a0a",
+      "inode": 108576761,
+      "bytes": 404216064,
+      "mtime_ns": 1794513035286794085,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/view_dependencies-09eadb7b52f8b154",
+      "inode": 108576358,
+      "bytes": 404236808,
+      "mtime_ns": 1794512795068575449,
+      "allocated_bytes": 398589952
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/view_owner_execution_identity-e3594d74a41b68fa",
+      "inode": 108577185,
+      "bytes": 404215008,
+      "mtime_ns": 1794514063324548959,
+      "allocated_bytes": 398573568
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/wildcard_projection-4346ebac5d5103e9",
+      "inode": 108577010,
+      "bytes": 404280208,
+      "mtime_ns": 1794513572260978683,
+      "allocated_bytes": 398635008
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/write_path_authorization-7ede9209de9a4e29",
+      "inode": 108577037,
+      "bytes": 404268216,
+      "mtime_ns": 1794513652101046926,
+      "allocated_bytes": 398622720
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/xml-5e572afc5608508a",
+      "inode": 108576722,
+      "bytes": 404258792,
+      "mtime_ns": 1794512948968638118,
+      "allocated_bytes": 398614528
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/bicdb_pgwire-61c66ae3360ff7e5",
+      "inode": 108577264,
+      "bytes": 482911192,
+      "mtime_ns": 1794515349688774517,
+      "allocated_bytes": 476565504
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/catalog_acl_types-5642e1220248c58a",
+      "inode": 108577230,
+      "bytes": 454811352,
+      "mtime_ns": 1794515220257035867,
+      "allocated_bytes": 448512000
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/cognee_pg18_diff-45ed6b4bd424cfe6",
+      "inode": 108577226,
+      "bytes": 454910632,
+      "mtime_ns": 1794515207240861020,
+      "allocated_bytes": 448610304
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/concurrent_upsert-4cc6481755dc1c84",
+      "inode": 108577224,
+      "bytes": 455342736,
+      "mtime_ns": 1794515200694773087,
+      "allocated_bytes": 449044480
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/connectors-b338ca6a18e9a010",
+      "inode": 108577214,
+      "bytes": 454942904,
+      "mtime_ns": 1794515164785290718,
+      "allocated_bytes": 448647168
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/embedded_ha-e76a635099b1c567",
+      "inode": 108577208,
+      "bytes": 419857656,
+      "mtime_ns": 1794515170793371424,
+      "allocated_bytes": 414081024
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/fixed_snapshot_boundary-693c92d1cf3512b7",
+      "inode": 108577240,
+      "bytes": 454855280,
+      "mtime_ns": 1794515251524455880,
+      "allocated_bytes": 448552960
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/fixed_snapshot_index_visibility-e1931d7b20af34a4",
+      "inode": 108577221,
+      "bytes": 454791248,
+      "mtime_ns": 1794515233070207986,
+      "allocated_bytes": 448491520
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/large_objects_fastpath-fa8a68650bc3464c",
+      "inode": 108577223,
+      "bytes": 452847736,
+      "mtime_ns": 1794515270890716026,
+      "allocated_bytes": 446566400
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/live_queries-b682c2bba45f2adb",
+      "inode": 108577258,
+      "bytes": 455375232,
+      "mtime_ns": 1794515314284298931,
+      "allocated_bytes": 449073152
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/lock_wait_admission-ae65a56087f07b94",
+      "inode": 108577252,
+      "bytes": 455486208,
+      "mtime_ns": 1794515291910998392,
+      "allocated_bytes": 449183744
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/online_backups-2910ac93ffac8db4",
+      "inode": 108577262,
+      "bytes": 454954712,
+      "mtime_ns": 1794515330585517904,
+      "allocated_bytes": 448655360
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/operator_api-a892f963e1ca80c0",
+      "inode": 108577254,
+      "bytes": 461042888,
+      "mtime_ns": 1794515299711103171,
+      "allocated_bytes": 454664192
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/oracle_hr-bd715adb30e73a2b",
+      "inode": 108577220,
+      "bytes": 460903520,
+      "mtime_ns": 1794515187413594682,
+      "allocated_bytes": 454602752
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/procedural_migration-c9d51964674ab7aa",
+      "inode": 108577217,
+      "bytes": 454678840,
+      "mtime_ns": 1794515226299117031,
+      "allocated_bytes": 448380928
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/protocol-b3e0685e9414be4e",
+      "inode": 108577260,
+      "bytes": 465430440,
+      "mtime_ns": 1794515324290433343,
+      "allocated_bytes": 459091968
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/read_committed_arbiters-4f67c3740e47ddc2",
+      "inode": 108577242,
+      "bytes": 454718512,
+      "mtime_ns": 1794515257675538507,
+      "allocated_bytes": 448421888
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/read_only_transactions-687b2334a8e8c95e",
+      "inode": 108577238,
+      "bytes": 455127416,
+      "mtime_ns": 1794515245190370795,
+      "allocated_bytes": 448827392
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/rewrite_rule_portal_describe-86a735dff054c035",
+      "inode": 108577232,
+      "bytes": 454768008,
+      "mtime_ns": 1794515264384628630,
+      "allocated_bytes": 448466944
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/routine_exclusive_access-2af7fe018e14258f",
+      "inode": 108577237,
+      "bytes": 454815928,
+      "mtime_ns": 1794515277630806565,
+      "allocated_bytes": 448516096
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/sequence_lock_progress-7cb5900cd2b00b7c",
+      "inode": 108577222,
+      "bytes": 454998656,
+      "mtime_ns": 1794515193622678088,
+      "allocated_bytes": 448696320
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/serializable_dependencies-d4d332b8a026703a",
+      "inode": 108577228,
+      "bytes": 455271784,
+      "mtime_ns": 1794515213771948754,
+      "allocated_bytes": 448970752
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/tls_channel_binding-83f856412e41df5f",
+      "inode": 108577250,
+      "bytes": 455956304,
+      "mtime_ns": 1794515284630900597,
+      "allocated_bytes": 449646592
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/verification-795c7aff04643975",
+      "inode": 108577236,
+      "bytes": 455310392,
+      "mtime_ns": 1794515238912286462,
+      "allocated_bytes": 449003520
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/wewobo_compat-970d684c6b9d0829",
+      "inode": 108577256,
+      "bytes": 454719664,
+      "mtime_ns": 1794515307297205075,
+      "allocated_bytes": 448421888
+    },
+    {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/writable_repeatable_read-0283ebcb7d073d18",
+      "inode": 108577218,
+      "bytes": 454995704,
+      "mtime_ns": 1794515177376459854,
+      "allocated_bytes": 448692224
+    }
+  ],
+  "skipped": [],
+  "scope": "Onlyoldsuccessful5aaSQL/wireELFsafterfull0031CoreSQLwirePASS. Exclusive metadata source lock, exactinode/size/mtime/nlink/ELF, current490protection+allprocessFD/maps. Neverdependencies/currentrunnable/frozenprobes/otherworktrees.",
+  "available_before_bytes": 152994856960,
+  "finished_unix": 1794520235.3213146,
+  "reclaimed_allocated_bytes": 116695814144,
+  "available_after_bytes": 269695725568,
+  "remaining_target_bytes": {
+    "target-tc": 484881956559,
+    "target-metadata-describe": 77494622209
+  }
+}

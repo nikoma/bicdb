@@ -1,0 +1,72 @@
+{
+  "source": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+  "scope": "First broad current private partition/admission correctness batch (allCore, allSQL, allPGwire unit+integration tests), exactsource and inherited487version only, unmerged. Original application1464/unchanged10swaits, UI400backup/restore, independentprocess/VM/crash/Nativeauthority/HA/storage qualifications separate and still required. All actual failures retained; --no-fail-fast collects targets. OneCargoJob, incrementaloff, monitored16GiB cgroup/14GiBhigh with10GiBhost/1GiBcgroupheadroom; preserveotherowners. No standardbinary/release/deployment built by this testbatch.",
+  "started_unix": 1794498585.674856,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "--tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794498585.6749904,
+      "exit": 101,
+      "finished_unix": 1794499476.1848974
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "--tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794499476.185123,
+      "exit": 101,
+      "finished_unix": 1794501534.6147459
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--lib",
+        "--tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794501534.6150944,
+      "exit": 101,
+      "finished_unix": 1794502166.242125
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794502166.2422817
+}

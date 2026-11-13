@@ -1,0 +1,198 @@
+{
+  "README.md": {
+    "bytes": 4990,
+    "sha256": "ba5a429e3f4c5f36bcf5d742119504284c3510f5f1456b0ebc7c80b8c992fd6d"
+  },
+  "collector.py": {
+    "bytes": 10074,
+    "sha256": "9688203fa2d944b36ef82d78f90878d1c9cec3cfa418f2d9c4392e080568fa2d"
+  },
+  "native-birth-retained-wal-baseline/raw-manifest.json": {
+    "bytes": 662,
+    "sha256": "a2d983d2f8e548348cfdcde49da1e8dc6c922af09c8735a418319ee9a5ca02ac"
+  },
+  "native-birth-retained-wal-baseline/receipt.json": {
+    "bytes": 958,
+    "sha256": "7e76336c2eaf0ecbe340ac5d265a5dc70c800ebe298f35c769e295fede087bda"
+  },
+  "native-birth-retained-wal-baseline/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-birth-retained-wal-baseline/spec.json": {
+    "bytes": 890,
+    "sha256": "711572c49cea4d70c31d04bc2c19c1b9de101d3dbeec512c58156ae8965d098b"
+  },
+  "native-birth-retained-wal-baseline/validation.log.gz": {
+    "bytes": 16829,
+    "sha256": "352643aba95dcc2b77451f90afbfd9c0ab02d4e2ee505d5efcaa0128cc0e78ad"
+  },
+  "native-birth-retained-wal-baseline-v2/raw-manifest.json": {
+    "bytes": 664,
+    "sha256": "5bbf01352418f13e0c5ad74f5e1478cccd50bb81495b9e6e7f9e8c379d0f10b4"
+  },
+  "native-birth-retained-wal-baseline-v2/receipt.json": {
+    "bytes": 1240,
+    "sha256": "06b73b161b31639142b2a29ab04c5c81fcad5863caba1d9c01e4c2710fd85977"
+  },
+  "native-birth-retained-wal-baseline-v2/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-birth-retained-wal-baseline-v2/spec.json": {
+    "bytes": 1223,
+    "sha256": "66269f5add11b3a5bd6d26fb4a8ceee0cd74273f0a9feeada2e2f4a15b62b167"
+  },
+  "native-birth-retained-wal-baseline-v2/validation.log.gz": {
+    "bytes": 16997,
+    "sha256": "72062228fb63d8cf293f456cc496eaffda2e07b6b9f5deee1a8e0e03091ca418"
+  },
+  "native-birth-retained-wal-baseline-v3/raw-manifest.json": {
+    "bytes": 664,
+    "sha256": "39194687fbf3df6821eb79844dbe680f10e5b96eb837dc5594725c9bebec4402"
+  },
+  "native-birth-retained-wal-baseline-v3/receipt.json": {
+    "bytes": 1515,
+    "sha256": "c4a10c46d0c1ed67f8fa47f09cd9fd945694c3f30deefdc8a4e52652cfae0c12"
+  },
+  "native-birth-retained-wal-baseline-v3/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-birth-retained-wal-baseline-v3/spec.json": {
+    "bytes": 1496,
+    "sha256": "f4613e37aefbd96386a04d40e369abd80f9b2b20a1bfeddfc0f6eb520a7436c6"
+  },
+  "native-birth-retained-wal-baseline-v3/validation.log.gz": {
+    "bytes": 17241,
+    "sha256": "2e55993d70c5c5fff9c0e505e7dee6f877432159f74c46acb6e60efa0de59002"
+  },
+  "native-birth-wal-capture-focused-v1/raw-manifest.json": {
+    "bytes": 664,
+    "sha256": "85590f767e3495c60bcac2405069c94414707c6b2b60d9fbae9313f003e5d2d6"
+  },
+  "native-birth-wal-capture-focused-v1/receipt.json": {
+    "bytes": 1808,
+    "sha256": "a303499846a447e16940f3514155b0295eebeef59fb1d8613fc41724cf75a2ef"
+  },
+  "native-birth-wal-capture-focused-v1/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-birth-wal-capture-focused-v1/spec.json": {
+    "bytes": 2953,
+    "sha256": "30b8f7147705335a24ae5a9ddccbdf6e3398f7c1674045c7ed763ab6841d7de9"
+  },
+  "native-birth-wal-capture-focused-v1/validation.log.gz": {
+    "bytes": 60162,
+    "sha256": "a57db1c70c4541e1d39b67dabe151419ec9df6161d888ebf76e847be4f425487"
+  },
+  "native-birth-wal-capture-focused-v2/raw-manifest.json": {
+    "bytes": 664,
+    "sha256": "3b896ff1ff48534d89d7c664f53ae6d536784fab1dace4d2bc355848f925e670"
+  },
+  "native-birth-wal-capture-focused-v2/receipt.json": {
+    "bytes": 2274,
+    "sha256": "32d94169a431cf84e604da8cfd63477de0f90f0803d763ac6c6f15252a9fb5f4"
+  },
+  "native-birth-wal-capture-focused-v2/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-birth-wal-capture-focused-v2/spec.json": {
+    "bytes": 3188,
+    "sha256": "e070dbddc3efc4b1ad214f4c0254b42b968e6feebd1279e7ae982511e1927e29"
+  },
+  "native-birth-wal-capture-focused-v2/validation.log.gz": {
+    "bytes": 60438,
+    "sha256": "5b71b82eb36d2ac7c07f8b8775d696e50dd4fd4d0d8951b9499b871bcc1c4847"
+  },
+  "native-birth-wal-capture-focused-v3/raw-manifest.json": {
+    "bytes": 665,
+    "sha256": "9bf37944905042d948ba9020f4227760c432c36f9028faf61227117e4030c3b9"
+  },
+  "native-birth-wal-capture-focused-v3/receipt.json": {
+    "bytes": 4724,
+    "sha256": "28447a168a66e1095edd59933af1861d3ff1becfde5dc22b31b77903f846e607"
+  },
+  "native-birth-wal-capture-focused-v3/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-birth-wal-capture-focused-v3/spec.json": {
+    "bytes": 3658,
+    "sha256": "1ea87c120c37cc84ccde7343f84ccedba66772246e8dd962cc8bd8fe00f7291b"
+  },
+  "native-birth-wal-capture-focused-v3/validation.log.gz": {
+    "bytes": 151812,
+    "sha256": "637ca9717ecbfec5325ffb2f25f5794dabab15eabb34958b6f9721d9a1c3f894"
+  },
+  "native-birth-wal-capture-focused-v4/raw-manifest.json": {
+    "bytes": 665,
+    "sha256": "b1ad9619b69848f841828674e9c18f92c732ff8f97b86e84fcfbba6bcb568161"
+  },
+  "native-birth-wal-capture-focused-v4/receipt.json": {
+    "bytes": 5066,
+    "sha256": "ddbe19d3e94e20ea29134c7b3809aa92d0046e861c0c54da5d70ac246c81a6ee"
+  },
+  "native-birth-wal-capture-focused-v4/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-birth-wal-capture-focused-v4/spec.json": {
+    "bytes": 3999,
+    "sha256": "8e580166c9e1170a29027168b9170c71b08ca49950849897dfdc414307f3f7d2"
+  },
+  "native-birth-wal-capture-focused-v4/validation.log.gz": {
+    "bytes": 150800,
+    "sha256": "ed0a7adbc8423e12b31907430bdbbcfb5dea908e16392c3317cd64837326a3b5"
+  },
+  "native-birth-wal-capture-focused-v5/raw-manifest.json": {
+    "bytes": 667,
+    "sha256": "70c2ee287a709fda111edb3d71695f39c6b031a5fec389a11e14f7cf264123a1"
+  },
+  "native-birth-wal-capture-focused-v5/receipt.json": {
+    "bytes": 3107,
+    "sha256": "653aac07ea29aa003b5bdc5b7707996bdd8f2c9f8e93bfa19928f4d1e5d8ae96"
+  },
+  "native-birth-wal-capture-focused-v5/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-birth-wal-capture-focused-v5/spec.json": {
+    "bytes": 4176,
+    "sha256": "cb179820c096ceb5807dbf94b81aec3859005b70065abdc0826b7927aadac34f"
+  },
+  "native-birth-wal-capture-focused-v5/validation.log.gz": {
+    "bytes": 212901,
+    "sha256": "0971334df831782a4a5a951fab10877335d3202045bbaec6c24dac4a5752a24f"
+  },
+  "native-birth-wal-capture-focused-v6/raw-manifest.json": {
+    "bytes": 665,
+    "sha256": "237e13785cdc079bdb080f0e4aa0052e099baef3fda4fc5325e18eef259b48cf"
+  },
+  "native-birth-wal-capture-focused-v6/receipt.json": {
+    "bytes": 5571,
+    "sha256": "e6467f1e9a0203edfa9f43ad7ee42a50d1b16235af39c34e52bcfdf7b4048195"
+  },
+  "native-birth-wal-capture-focused-v6/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-birth-wal-capture-focused-v6/spec.json": {
+    "bytes": 4458,
+    "sha256": "6f4e9616ae2bb31893be1b0a0219e72e26db4ed9b1c6334a8ada73e2caef7cee"
+  },
+  "native-birth-wal-capture-focused-v6/validation.log.gz": {
+    "bytes": 152287,
+    "sha256": "6874b72b12da3fbdfcdd9c142fbb181465777320cf0ed4feb1e86ad6a26aabb8"
+  },
+  "submit_s3_isolation_batch.py": {
+    "bytes": 7879,
+    "sha256": "06f8a0128af88f4e520690cbc175bf31f552559d900c72df06d6390775a30206"
+  },
+  "summary.json": {
+    "bytes": 5974,
+    "sha256": "3e47c8a98458ef114a085eeb4a379d3325774801ae0eed11f7a580472c120821"
+  }
+}

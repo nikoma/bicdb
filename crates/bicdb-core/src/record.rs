@@ -1291,6 +1291,32 @@ pub enum CollectionMode {
     TimeSeries,
 }
 
+fn is_false_bool(value: &bool) -> bool {
+    !value
+}
+
+/// Durable Native control data, installed only when an accepted import
+/// actually allocates its target. Decoding this data grants no capability.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeImportedBackingOrigin {
+    pub(crate) version: u32,
+    pub(crate) source_root: uuid::Uuid,
+    pub(crate) source_root_sha256: String,
+    pub(crate) source_birth: uuid::Uuid,
+    pub(crate) source_namespace: uuid::Uuid,
+    pub(crate) source_storage: String,
+    pub(crate) source_contract_sha256: String,
+    pub(crate) source_sequence: u64,
+    pub(crate) source_frame_checksum: [u8; 32],
+    pub(crate) target_root: uuid::Uuid,
+    pub(crate) target_birth: uuid::Uuid,
+    pub(crate) target_namespace: uuid::Uuid,
+    pub(crate) target_storage: String,
+    pub(crate) generation: uuid::Uuid,
+    pub(crate) pending: bool,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CollectionMeta {
     pub name: String,
@@ -1325,6 +1351,21 @@ pub struct CollectionMeta {
     /// Portable schema/replication metadata must not transfer this identity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub local_namespace_id: Option<uuid::Uuid>,
+    /// Allocation-time identity of this local backing, written only while
+    /// `native_collection_birth_v1` is active. Unlike a migrated namespace ID,
+    /// this is never assigned to an existing collection. It is an identity,
+    /// not an import receipt, source attestation or recovery authorization.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_backing_birth_id: Option<uuid::Uuid>,
+    /// Native root active at actual allocation, never assigned later.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_backing_origin_root: Option<uuid::Uuid>,
+    /// Private Native creation publication still needs its catalog-stream
+    /// decision. Import metadata must never adopt this local pending state.
+    #[serde(default, skip_serializing_if = "is_false_bool")]
+    pub native_catalog_allocation_pending: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_imported_backing_origin: Option<NativeImportedBackingOrigin>,
 }
 
 impl CollectionMeta {
@@ -1338,6 +1379,10 @@ impl CollectionMeta {
     pub fn portable_contract(&self) -> Self {
         let mut portable = self.clone();
         portable.local_namespace_id = None;
+        portable.native_backing_birth_id = None;
+        portable.native_backing_origin_root = None;
+        portable.native_catalog_allocation_pending = false;
+        portable.native_imported_backing_origin = None;
         portable
     }
 
@@ -1353,6 +1398,10 @@ impl CollectionMeta {
             storage_name: None,
             renamed_from: None,
             local_namespace_id: None,
+            native_backing_birth_id: None,
+            native_backing_origin_root: None,
+            native_catalog_allocation_pending: false,
+            native_imported_backing_origin: None,
         }
     }
 
@@ -1368,6 +1417,10 @@ impl CollectionMeta {
             storage_name: None,
             renamed_from: None,
             local_namespace_id: None,
+            native_backing_birth_id: None,
+            native_backing_origin_root: None,
+            native_catalog_allocation_pending: false,
+            native_imported_backing_origin: None,
         }
     }
 }

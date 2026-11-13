@@ -1,0 +1,49 @@
+{
+  "source": "f19ddd769b708ae01503308fa00f68974dc89cf5",
+  "scope": "Evolving partition batch:9bounds/routing/deleteUSINGrollback controls +8executionpositives unchanged. Source326 actual8boundsPASS+6execPASS2FAIL (UPDATE/DELETE). NewDELETE candidates carryphysicalsource anddedupephysicalsource+id; Native readcommittedrefresh/grants anddelete batchesusephysicalheap, SQLRLS/grants/selection useaccessedparent. UPDATE/hash/upsert/triggers/upgrade stillincomplete; no broad/final/app/HA qualification.",
+  "started_unix": 1794482080.5082698,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_bounds",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794482080.5084558,
+      "exit": 0,
+      "finished_unix": 1794482159.9882293
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_execution",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794482159.988443,
+      "exit": 101,
+      "finished_unix": 1794482165.465327
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794482165.465562
+}

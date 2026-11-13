@@ -1,0 +1,27 @@
+{
+  "status": "passed",
+  "started_unix": 1794403502.1275089,
+  "protected_application_schema_mutated": false,
+  "cases": [
+    {
+      "statement": "SELECT header_definer()",
+      "sqlstate": "42501",
+      "message": "permission denied for function header_secret"
+    },
+    {
+      "statement": "CALL header_definer_proc()",
+      "sqlstate": "42501",
+      "message": "permission denied for function header_secret"
+    },
+    {
+      "statement": "SELECT * FROM header_definer_rows()",
+      "sqlstate": "42501",
+      "message": "permission denied for function header_secret"
+    }
+  ],
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "explicit_argument_calls_passed": 3,
+  "granted_default_calls_passed": 3,
+  "temporary_schema_and_role_removed": true,
+  "finished_unix": 1794403502.3224678
+}

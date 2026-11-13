@@ -1,0 +1,36 @@
+{
+  "repo": "/root/bicdb-sql-rename-journal",
+  "label": "private-sql-catalog-read-control-2970861b",
+  "source": "2970861b7bfaae7bedd18ba44e5dec497953b99f",
+  "base": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+  "source_ref": "refs/bicdb-proof/private-sql-catalog-read-control-2970861b",
+  "wait_units": [
+    "bicdb-private-catalog-current471-integration-d1c7e16a"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-private-catalog-current471-integration-d1c7e16a.json",
+      "equals": {
+        "source": "d1c7e16abea4911de99280bc2d8924b2eb529d3b",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "scope": "Tests-only SQLcatalogreadercontrol on integratedprivate471runtime d1c. Nativefullcollection scope reservesSQLschema catalog, ordinarySQLpointread/pg_classscan/publicDescribe mustrefuse40001 beforecoldorwarmcachehits; SQLliteralSELECT1 andunrelatednativeACKmustcontinue. Scope release restoresvalidquery/metadata. Sixindependentcold/warmtests intendedbothstores; recordactualreachedcells/nofalsefullmatrixpass. Nativecoreexistingreservations intentionallynotSQLvisibility; addmissingSQLhostreadercontractbeforeproducerrelaxesanyglobalgate. Core rowscope/ownerreadonlycontext/metadataeffectbounds andfullDescribeproducerstillopen. No sourcepublicationversionreservedforprivatebranch, notpublicPR147finalsource257. Originalappassertions10stimeoutunchanged.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "catalog_read_admission",
+      "--",
+      "--test-threads=1"
+    ]
+  ]
+}

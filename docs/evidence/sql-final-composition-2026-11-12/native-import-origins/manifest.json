@@ -1,0 +1,29 @@
+{
+  "source": "895419dc4274b0988eaf5b3f81049e22361864ef",
+  "scope": "receiver6 plus related55 focused PASS; ten receiver IO injections; prior fullCore11 cold-copy failures remain open",
+  "files": {
+    "README.md": "6f1de36356387cae041f81efdcd61b64e56dc9dc8bb34446a1499c9ea000f7e9",
+    "raw/native-import-allocation-v1-spec.json": "225fbf3940813207cef3de3766c804a03b277bc8ac69bbf6aa9f02e292033219",
+    "raw/native-import-allocation-v2-spec.json": "b098e4e501ec33ac6aeb071238f1a3c1ed51264566ed2b3cb21ad80ad2edaef5",
+    "raw/native-import-allocation-v3-spec.json": "4b6ca88c781b2e946e77c09006286c1746624a3118b3a40c7687e06d4ea4f9f0",
+    "raw/native-import-allocation-v4-spec.json": "058e61d5e121b06e8553304be52780cf00ec0250ed20f489bf6a8c193b3884af",
+    "raw/native-import-origins-related-spec.json": "4df2276da1dceea5fa702dc217053d6c13fce2cf85c60a94019317162c3487eb",
+    "raw/native-import-recovery-publish-order-baseline-spec.json": "4f174ef72dcd05e7306e6e3831f3b5e3b01794c50e8c85815f94a9b9a6f88193",
+    "raw/original-promotion-assertion-preservation.json": "221a868f2e1e074c3eec3bd969d7243dae661e91413c7947c203d145f3878ccc",
+    "raw/receiver-runtime.patch": "8d9c74a5d85fdb9d04e40be8683d84ac20aeaa092128b7d6e446f1ad46e9f31e",
+    "raw/report-native-import-allocation-v1.json": "8cf2bafc04de0cbff921686b24b62b445b66b159fc2c8b0a0aea4bb3b305bb71",
+    "raw/report-native-import-allocation-v2.json": "ea94648993ffc3494881a85f1db208567ed9dedc421f66663f8b99e3d85946f2",
+    "raw/report-native-import-allocation-v3.json": "54186766784e7f36fd0b114b0145dc0ab4667d3a9fbc6d38f93eb1e878b8b2dd",
+    "raw/report-native-import-allocation-v4.json": "d41d17fff1ec56f77fa337194f2ab5b42dc60877723c4faa200dbdedaa6a9f6d",
+    "raw/report-native-import-origins-related.json": "e7737d7eb5118a6f155200580ea7d165b4fb72be7050d04ed7ca9fd5aa668ca3",
+    "raw/report-native-import-recovery-publish-order-baseline.json": "dd82ef081db7f7b83229e83fafcda5bd72c2436b92fed0f130439aa19b76cad3",
+    "raw/source-native_import_origins-tests.rs": "3ed4adaf15a560d0601750ac59cb342780d0bd9e5a3e271e05a8381382807a3d",
+    "raw/source-native_import_origins.rs": "990216ea37c19817ba24c63a31e3a42c8bcd30fff0e502b0f854f0dcdc46b2e1",
+    "raw/tc-step-native-import-allocation-v1.log": "0cbb0f12b3bf5faa52a0dcfe9d03545da8afa1e721235ef4bc06ad064c9f168b",
+    "raw/tc-step-native-import-allocation-v2.log": "c0bbe2cd2c027a62639091f509386a2804e59b36e24d15a91193fd33a5f386f5",
+    "raw/tc-step-native-import-allocation-v3.log": "e0bcdc337e7bf9e0778eb33e9101517809e72d9ed7833642f1f696d25139fec8",
+    "raw/tc-step-native-import-allocation-v4.log": "2a3c524407ae32ce2285a18257c685e3798cff1e1d0df2f2365846efcebd1dae",
+    "raw/tc-step-native-import-origins-related.log": "358889767032e46ecfc189cf0bba2883ee2fd99030ecc25ccb6764a0695a17b3",
+    "raw/tc-step-native-import-recovery-publish-order-baseline.log": "f50c6f82b66365bcbf297c9258d2ca61359231f89fd59daf958a63ce0f740591"
+  }
+}

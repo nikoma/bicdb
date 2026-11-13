@@ -1,0 +1,27 @@
+{
+  "repo": "/root/bicdb-sql-rename-journal",
+  "label": "private-sql-catalog-owner-control-47f1b038",
+  "source": "47f1b0384ca54210b81ce67a64ebfed1a2309d0c",
+  "base": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+  "source_ref": "refs/bicdb-proof/private-sql-catalog-owner-control-47f1b038",
+  "wait_units": [
+    "bicdb-private-catalog-record-positive-c5edfd49"
+  ],
+  "scope": "Tests-only nextSQLownerread-context integration on c5edexactNativecatalogrows runtime. Five tests: cold/warm unrelatedSQLandDescribemustcontinue under Source+destinationdata/meta reservations whileSourcepoint/Describerefuse; importedNativeownerSQLmustreadownmetadata; ownerreadcontextmustchangeacrossCOMMITinsidesingleSQLbatch; existingexplicitSQLcatalogreadmustpinmetadatauntiltxends. ExactNativeRows positivejob runs first, actualoutcome recordedseparately; recordreachedcells. Do notpretendSQLproducerorwirecachedDescribealreadyimplemented. Private471notpublicationversionreserved,noglobalownerquiescencegate relaxed.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "catalog_read_owner",
+      "--",
+      "--test-threads=1"
+    ]
+  ]
+}

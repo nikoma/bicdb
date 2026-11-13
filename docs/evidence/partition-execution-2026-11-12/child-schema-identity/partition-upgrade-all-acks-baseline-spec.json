@@ -1,0 +1,41 @@
+{
+  "label": "partition-upgrade-all-acks-baseline",
+  "source": "4508ece82ca18dcc32ab2eba9be0da23bbf72897",
+  "base": "3867be587b35c207762dd03344108e1609ddde71",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "Test-only over3867 currentmain489 integration. Five independentstationaryleafACK requirements beforefence/certificate/commit: CHECK/NOTNULL/nonPKUNIQUE/FKincludinginitiallydeferred/canonicalNativeprimarykeybinding. Everyrefusal retains exactrawschemas/ACKs; CHECKtworeopens. Syntheticoldrawmetadatafixture explicitlynot actualoldbinaryfixture; immutableold482fixtures separate. Expectedcounterexamples: currentonlymovedrowsvalidated witholdlegacyparentcolumninheritance, stationaryACKs nevervalidated. Baseline mustbeobserved, no successassumed. AllfullcampaignscopeACTIVE.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "stationary_leaf_",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-generated-add-main489-focused"
+  ],
+  "required_receipts": [],
+  "allow_isolated_builds": [
+    {
+      "pid": 3624130,
+      "start_ticks": 163844992,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

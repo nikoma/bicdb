@@ -1,0 +1,29 @@
+{
+  "source": "0aa660fe35e2955815eacb335e5235e0949b1c5b",
+  "scope": "Actual314productruntime with5mandatorynativePG16lifecyclepositives,tests-only0aa. Parentconstrainttriggeracceptance/cloning/deferredcommitfailureatomicity; functionRESTRICTpreservesenforcement; CASCADEcompleteclones+localtriggers,rollback,coldreopen;multi-functionmissing preflight42883. Expecteddependency/cascadefailuresretained, no originalassertionchanges orapp/HA/featurecompletion.",
+  "started_unix": 1794487000.2822027,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_trigger_lifecycle",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794487000.2823317,
+      "exit": 101,
+      "finished_unix": 1794487005.0990965
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794487005.0992615
+}

@@ -220,6 +220,7 @@ fn learner_snapshot_and_commit_suffix_are_durable_idempotent_and_filtered() {
     let record = Record::new(&inside_id).with_metadata(json!({"version": 1}));
     let batch_bytes = serde_json::to_vec(&record).unwrap().len();
     let batch = RangeSnapshotBatch {
+        required_reader_features: Vec::new(),
         collection: "documents".to_string(),
         range_id: range.id,
         range_epoch: range.epoch,

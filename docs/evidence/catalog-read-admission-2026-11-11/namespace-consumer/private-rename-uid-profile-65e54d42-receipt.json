@@ -1,0 +1,66 @@
+{
+  "source": "65e54d425e8710a158ffdeabd182d7b4e2775f9e",
+  "scope": "Private final local-consumer/profile integration focus after actual72da negative0pass2fail and aee80da2 fivecommands6testsPASS. All rename journal controls and trusted profile initialization before BEGIN, repeated profile validation with live unrelated Native owner, SSI CatalogBinding incarnation integration and existing catalog reader closure. Existing original assertions retained; direct Native owner fixtures now initialize physical identities at trusted pre-transaction boundary. No global producer/recovery admission relaxed. Streamed localUUID translation remains missing, so no replication/promotion/application qualification claimed. Actual6fa all13journal tests PASS; new profile control1PASS1FAIL because it assumed full Oracle startup profile initializer admits live Native owners. Existing simple_case_migration::ensure requires quiescence before ready-marker validation. Keep production boundary unchanged; assert namespace helper is idempotent with live owners, PostgreSQL profile succeeds, Oracle full startup migration explicitly refuses then succeeds after owner ends. This is correction of new fixture assumption, not a change to original application assertions or relaxation of runtime admission.",
+  "started_unix": 1794426522.553853,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_journal::tests::",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794426522.554086,
+      "exit": 0,
+      "finished_unix": 1794426652.750062
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "rename_namespace_profile_tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794426652.7502425,
+      "exit": 0,
+      "finished_unix": 1794426653.8338096
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "sql_serializable",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794426653.8340273,
+      "exit": 101,
+      "finished_unix": 1794426679.5176146
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794426679.5178611
+}

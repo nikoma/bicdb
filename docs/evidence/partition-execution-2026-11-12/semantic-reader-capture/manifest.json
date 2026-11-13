@@ -1,0 +1,83 @@
+{
+  "source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+  "files": [
+    {
+      "path": "semantic-reader-capture-baseline-receipt.json",
+      "sha256": "fcf2f8ab2319ddd6b19023b3988d0da7d0ff5f9e0c4dee4766c60ed6a6f048fd",
+      "bytes": 1112,
+      "original_remote_path": "/root/bicdb-durability-s3/report-semantic-reader-capture-baseline.json",
+      "raw_sha256": "fcf2f8ab2319ddd6b19023b3988d0da7d0ff5f9e0c4dee4766c60ed6a6f048fd",
+      "raw_bytes": 1112
+    },
+    {
+      "path": "semantic-reader-capture-baseline-original.log.gz",
+      "sha256": "3483cf5fa14206fc8b846ce737dfbbb7b32febbeb58163715a4a7007b186f6db",
+      "bytes": 16829,
+      "original_remote_path": "/root/bicdb-durability-s3/tc-step-semantic-reader-capture-baseline.log",
+      "raw_sha256": "9054039636f18a4d8da660e5821ed549667dda3c8479052397a39a587725b2f9",
+      "raw_bytes": 151117
+    },
+    {
+      "path": "semantic-reader-capture-baseline.json",
+      "sha256": "36ae46ec34999e138963b726e7fd461d7f20d2e0ce9e5623d885b068acd66365",
+      "bytes": 1716
+    },
+    {
+      "path": "semantic-reader-capture-baseline-runner.py",
+      "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b",
+      "bytes": 5033
+    },
+    {
+      "path": "semantic-reader-capture-focused-receipt.json",
+      "sha256": "cc5984ec0903e7dc7bdb7ffa9bdf4463546435455a9d0b1505dc08081b63ed88",
+      "bytes": 1576,
+      "original_remote_path": "/root/bicdb-durability-s3/report-semantic-reader-capture-focused.json",
+      "raw_sha256": "cc5984ec0903e7dc7bdb7ffa9bdf4463546435455a9d0b1505dc08081b63ed88",
+      "raw_bytes": 1576
+    },
+    {
+      "path": "semantic-reader-capture-focused-original.log.gz",
+      "sha256": "e58fecd8703cf011d79227b6e1708c001cb8e86ee28c4b3db8bec87af586e650",
+      "bytes": 31251,
+      "original_remote_path": "/root/bicdb-durability-s3/tc-step-semantic-reader-capture-focused.log",
+      "raw_sha256": "e523e583195f4144c5032b45054143b14c1720a737e475d627b8b43d3e106fce",
+      "raw_bytes": 294766
+    },
+    {
+      "path": "semantic-reader-capture-focused.json",
+      "sha256": "12454907e4f1e95a0c017e6e2e6137f96898c382a75bca5135ae71a14f729c15",
+      "bytes": 1987
+    },
+    {
+      "path": "semantic-reader-capture-focused-runner.py",
+      "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b",
+      "bytes": 5033
+    },
+    {
+      "path": "semantic-reader-existing-image-regressions-receipt.json",
+      "sha256": "5ced535f0d15fa55748a6a632a3d5b66cadbd091ef2f92b986772694534df012",
+      "bytes": 1738,
+      "original_remote_path": "/root/bicdb-durability-s3/report-semantic-reader-existing-image-regressions.json",
+      "raw_sha256": "5ced535f0d15fa55748a6a632a3d5b66cadbd091ef2f92b986772694534df012",
+      "raw_bytes": 1738
+    },
+    {
+      "path": "semantic-reader-existing-image-regressions-original.log.gz",
+      "sha256": "8930eecebdcc1e347103eec27d6525d62c156d92e4254bf35a68e4fc7d15ff4b",
+      "bytes": 33263,
+      "original_remote_path": "/root/bicdb-durability-s3/tc-step-semantic-reader-existing-image-regressions.log",
+      "raw_sha256": "0575b3fd5fc7732d72030275a4077c45bf9b2122d51615718675bf3251dee8e1",
+      "raw_bytes": 303984
+    },
+    {
+      "path": "semantic-reader-existing-image-regressions.json",
+      "sha256": "39b72f85d4d85e7a01594b04aa89357545fda0a14305047db0947ad46514fada",
+      "bytes": 2164
+    },
+    {
+      "path": "semantic-reader-existing-image-regressions-runner.py",
+      "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b",
+      "bytes": 5033
+    }
+  ]
+}

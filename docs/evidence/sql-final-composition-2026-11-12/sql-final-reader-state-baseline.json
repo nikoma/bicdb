@@ -1,0 +1,46 @@
+{
+  "label": "sql-final-reader-state-baseline",
+  "source": "54bf4151bc888ab2d3015b5e1316ba5ab8374694",
+  "base": "c727a6fade74c070384a9191fbf9ac0a455111c2",
+  "repo": "/root/bicdb-sql-final-composition",
+  "scope": "Test-only over exact compiled c727 production; preserve required Native semantic replication live-state positive with real source+standby frames/ACK/fullflags and two reopens (only claimed if reached). Native partition cache expected stale after durable imported flag. No fullgoal, application, portableorigin, oldreader, HA/capacity or release/deployment claim. Original application assertions/waits unchanged.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "replicated_semantic_requirements_activate_live_native_reader_state_and_keep_acks",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "required_receipts": [
+    {
+      "path": "report-sql-final-composition-compile.json",
+      "equals": {
+        "source": "c727a6fade74c070384a9191fbf9ac0a455111c2",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "allow_isolated_builds": [
+    {
+      "pid": 3447154,
+      "start_ticks": 165215890,
+      "repo": "/root/bicdb-durability-s3/repo-metadata-describe",
+      "target": "/root/bicdb-durability-s3/target-metadata-describe"
+    }
+  ],
+  "wait_units": [
+    "bicdb-sql-final-composition-compile"
+  ]
+}

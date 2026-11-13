@@ -220,6 +220,32 @@ impl SqlEngine<'_> {
             .tx
             .ok_or_else(|| SqlError::Unsupported("locking SELECT requires a transaction".into()))?;
         let wait_duration = oracle::lock_waits::duration(self.db_ref(), query)?;
+        let physical_sources = targets
+            .iter()
+            .map(|(_, alias, schema, _, _)| {
+                if schema.partitioning.is_none() {
+                    return Ok(None);
+                }
+                let slot = slot_row_column_index(columns, &format!("{alias}.tableoid"))
+                    .ok_or_else(|| {
+                        SqlError::Unsupported(
+                            "partition locking input lost physical table identity".into(),
+                        )
+                    })?;
+                let mut by_oid = BTreeMap::new();
+                for table in partition::physical_tables(self.db_ref(), schema)? {
+                    if by_oid
+                        .insert(table_relation_oid(&table), table.name)
+                        .is_some()
+                    {
+                        return Err(SqlError::InvalidSql(
+                            "partition tree has ambiguous physical relation OIDs".into(),
+                        ));
+                    }
+                }
+                Ok(Some((slot, by_oid)))
+            })
+            .collect::<Result<Vec<_>>>()?;
         let key_slots = targets
             .iter()
             .map(|(_, alias, _, keys, _)| {
@@ -258,7 +284,20 @@ impl SqlEngine<'_> {
             let mut ids = Vec::with_capacity(targets.len());
             // UPDATE USING policies are additional to SELECT visibility for
             // a locking read. Check every target before reserving any row.
-            for ((table, _, schema, keys, _), slots) in targets.iter().zip(&key_slots) {
+            for (((table, _, schema, keys, _), slots), sources) in
+                targets.iter().zip(&key_slots).zip(&physical_sources)
+            {
+                let physical = match sources {
+                    Some((slot, by_oid)) => sql_value_i64(&row[*slot])
+                        .and_then(|oid| by_oid.get(&oid))
+                        .map(String::as_str)
+                        .ok_or_else(|| {
+                            SqlError::InvalidSql(
+                                "locking row does not belong to the admitted partition tree".into(),
+                            )
+                        })?,
+                    None => table.as_str(),
+                };
                 let id = if keys.is_empty() {
                     match &row[slots[0]] {
                         SqlValue::String(id) => id.clone(),
@@ -279,11 +318,17 @@ impl SqlEngine<'_> {
                             .collect::<Vec<_>>(),
                     )?
                 };
-                let Some(record) = self.get_record(table, &id)? else {
+                let Some(record) = self.get_raw_record_cached(physical, &id)? else {
                     skip = true;
                     break;
                 };
                 if !rls_allows_record_with_schema(
+                    self,
+                    table,
+                    PolicyAction::Select,
+                    &record,
+                    Some(schema),
+                )? || !rls_allows_record_with_schema(
                     self,
                     table,
                     PolicyAction::Update,
@@ -293,13 +338,13 @@ impl SqlEngine<'_> {
                     skip = true;
                     break;
                 }
-                ids.push(id);
+                ids.push((physical, id));
             }
             if skip {
                 continue;
             }
             let candidate_mark = tx.rollback_mark();
-            for ((table, _, _, _, nonblock), id) in targets.iter().zip(ids) {
+            for ((_, _, _, _, nonblock), (table, id)) in targets.iter().zip(ids) {
                 if nonblock.is_none() {
                     self.check_cancellation()?;
                     // Oracle's WAIT budget starts anew for each contended

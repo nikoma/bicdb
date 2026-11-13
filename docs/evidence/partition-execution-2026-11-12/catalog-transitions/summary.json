@@ -1,0 +1,96 @@
+{
+  "recorded_unix": 1794502731.8087337,
+  "delivery": "Private unmerged branch, inherited1.0.488-beta, no delivery versionreserved, no standardCLI/server/release/deployment. Remote main remains d1d816afe0446b2a614c38004738d3d1c8bbc547 version488.",
+  "original_broad_c358": {
+    "source": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+    "core_first_command": {
+      "passed": 1378,
+      "failed": 1,
+      "ignored": 12,
+      "groups": 127,
+      "helper_provenance": "Three helper-dependent families used stale external examples. Entire three-family results replaced for qualification only by exactc358 freshly built helper rerun40PASS0FAIL3ignored. Original failing run and case preserved; do not relabel original commandpassed."
+    },
+    "sql": {
+      "passed": 2531,
+      "failed": 6,
+      "ignored": 4,
+      "groups": 259,
+      "failures": [
+        "group5::alter_column_type_propagates_partition_rows_and_rejects_dependencies",
+        "group6::alter_table_parent_column_is_visible_on_existing_partitions_and_indexes",
+        "group6::postgres_attach_partition_is_metadata_only",
+        "group6::postgres_full_text_search_types_are_string_compatible",
+        "group6::postgres_keyless_partitioned_tables_use_hidden_internal_row_id",
+        "group6::postgres_pg_get_partkeydef_renders_partition_key_definition"
+      ]
+    },
+    "wire": {
+      "passed": 490,
+      "failed": 1,
+      "ignored": 2,
+      "groups": 26,
+      "failure": "pgwire_buffered_transaction_replays_split_schema_chunks: PK lacks partitionkey0A000; same invalidshape proved on actualPG16. NativeReference doesnotqualify allALTERINDEXATTACH behavior."
+    }
+  },
+  "pk_and_batch": {
+    "pre_fix_runtime": "f7fb98883ed22039c8a625b0e897862b0716a2a0",
+    "valid_counterexample_source": "a4ce8ac31afa5c630254e10b97f10705ccbf83c9",
+    "valid_counterexample_result": {
+      "passed": 1,
+      "failed": 6
+    },
+    "fixed_runtime": "3ff8bf10a1f7de0518393d365b7ffd517e61a948",
+    "corrected_final_test_source": "57dcb89c2c1fdc6a423c58460d8e484e8a3c990e",
+    "final_results": {
+      "seven_pk_and_batch": {
+        "passed": 7,
+        "failed": 0
+      },
+      "four_valid_sql_fixtures": {
+        "passed": 4,
+        "failed": 0
+      }
+    },
+    "prior_focused": "97priorSQLfocusedPASS at3ff, productionexact57; pendingcc84 changesinvalidateautomaticreuse",
+    "actual_product_counterexample": "A false-predicate replacement PK made read-only SQL return [] for two acknowledged rows. Old startup also accepted partial and wrongNULLpolicy backings. Strict shared constraint matcher refuses incompatible backing; readplansscanratherthanomit; trusted exactNative repair tested.",
+    "fixture_history": [
+      "90cb: movedStorageMode test compilefailure",
+      "63202: private execute_statement used instead of public execute_statement_ast; compilefailure",
+      "e170:0PASS7FAIL, six product plus exclusioncontrol missingchildindex; a later spec erroneously said2PASS5FAIL, corrected here and v4 scope",
+      "3ff candidate:3batchPASS and4PKfixturemissingchildindex failures; existing97focusedchecksPASS.",
+      "a4ce correctedbaseline: explicit ensure_primary_key_indexes before replacing realbacking; same required assertions and oldruntime,1PASS6FAIL."
+    ]
+  },
+  "alter_schema": {
+    "pre_fix_runtime": "57dcb89c2c1fdc6a423c58460d8e484e8a3c990e",
+    "counterexample_source": "8dcad32b2da608dd106002e13c584176b098d342",
+    "counterexample_result": {
+      "new_six": {
+        "passed": 1,
+        "failed": 5
+      },
+      "original_two": {
+        "passed": 0,
+        "failed": 2
+      }
+    },
+    "implementation_source": "cc84f24fa263965d89697f36a96a9112a16d4016",
+    "status": "first13focused_and_original2_passed_remainingSQLandProtocolLive",
+    "unit": "bicdb-partition-schema-change-focused",
+    "scope": "Native single decision for parent/leafschemas, allconverted/default/generated rows and certificate, whole-tree retryable undo, prospectiveforestvalidation. Serial/identity ADD and otherchildlifecycle/constraint/authority/processVM/HA gates still required.",
+    "new_six_result": {
+      "passed": 6,
+      "failed": 0
+    },
+    "original_two_result": {
+      "passed": 2,
+      "failed": 0
+    },
+    "seven_pk_and_batch_result": {
+      "passed": 7,
+      "failed": 0
+    }
+  },
+  "native_reference": "Actual PostgreSQL16.13 immutable image71e27... rejects originalinvalidPKs0A000 and absentleafinserts23514, accepts validsetups and parentTYPE/ADD controls; scratchcontainerremoved.",
+  "full_campaign": "Original1464Oracle/PG application assertions/10swaits, fullUI400encryptedbackup+restore/reopens, Nativeportableproducer, independentACKprocess/fault/VM/HA/P1P2 remain ACTIVE. LocalSQLpartitioning doesnotproveautosharding/rebalance."
+}

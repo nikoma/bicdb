@@ -1,0 +1,34 @@
+{
+  "source": "a68fe5f37d697555d7c337005aac4785e5887f70",
+  "binary_sha256": "8c2aeb480d1434127817c61e63eeb065b4f6ce8ecf0d4ad3e4b6e29ee34ec50b",
+  "scope": "Historical exact private a68 runtime on fresh paged store, no protected fixture. Actual NativePG16 comparison on owned clone in rolled-back new schema. Not an application acceptance or final-current-source result.",
+  "actual_gaps": [
+    "Parent SELECT omits child acknowledged row",
+    "Parent INSERT is not routed to matching child",
+    "Out-of-bound child INSERT accepted; native expects23514",
+    "ATTACH PARTITION DEFAULT42601",
+    "Separate parent/child storage observations repeat through2cleanreopens"
+  ],
+  "not_fixed_by_existing_index_or_metadata_changes": true,
+  "all_owned_processes_stopped": true,
+  "inputs": {
+    "database-0.log": "418da8c08d0dff0b32040cb7b6b772afa290d9c0a5d97e034de07749cde0a61d",
+    "database-13.log": "1dae2a89b5cb5afceeb8f204e2e4d4a693a70336c1cfa6d85a861c1faa7570ae",
+    "database-15.log": "add17cdb4eccd6be0449030d2e22759921f262a2ef774fb797d95dac5f9a2abf",
+    "native-pg16-control/control.sql": "7de0161f8430e6e1fc571ba083e0201f38771b2cef2160580066374451ca9bbb",
+    "native-pg16-control/result.json": "f1cd9f51f0744f6cc6e22b618725ac64dc66f8ee579219ba9943e67da38c2617",
+    "native-pg16-control/stderr": "81618489ca41f0d75cedf769917db5d0fda07b008dd21093f44f88d56f83060f",
+    "native-pg16-control/stdout": "5cbd21848a97b45d58ecf4ce50b7591a69d0eaf1a387f428b242ec3c90312b3c",
+    "producer.py": "51a29745f21c042ddf53644ecbf724ab8151723e213c04a7a3197a829344d24f",
+    "result.json": "4ca49536d5e086387daf0f28c5182987fde495f6d6597d3c1ddd91e02c6a4779"
+  },
+  "recorded_unix": 1794468375.8238442,
+  "actual_public_main_control": {
+    "source": "f43583da4c34209e810c5e6a8f5925831b2949a1",
+    "version": "1.0.482-beta",
+    "result_file": "actual-main482-result.json",
+    "sha256": "452014d08fc9babb1f865333db7af3dce5cb6d24e9bacf704db376b0acf2a777",
+    "result": "Same parent-read omission, absent parent-insert routing, accepted out-of-bound child insert and ATTACH DEFAULT42601. Both clean reopens retained data; actual nativePG16controlcorrect. All owned diagnostic servers stopped.",
+    "scope": "Actual standard raw release482, not privateSQLdiagnosticbinary. Main485 metadata-only enginefix does not itself implement partitionrouting."
+  }
+}

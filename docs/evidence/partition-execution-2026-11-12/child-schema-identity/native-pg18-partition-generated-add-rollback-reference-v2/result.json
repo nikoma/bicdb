@@ -1,0 +1,14 @@
+{
+  "status": "reference_passed",
+  "container": "bicdb-pg18-add-rollback-fd6402b416",
+  "image": "sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636",
+  "sql": "control.sql",
+  "started_unix": 1794507012.810216,
+  "exit": 0,
+  "version": "PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+  "finished_unix": 1794507014.2625878,
+  "scope": "ActualPG18.4 declaredtarget, owned384MiB/no-network/tmpfs. Assert failedidentityexhaustion2200H leaves no column/sequence and allACKs; successfulrecursiveidentity+duplicateglobal/schemadefaultACL thenSAVEPOINTrollback removessequence+column+transientrow andretainsACKs; serialexistingrows/shareddirect+routedallocation. Scratchschema/role rolledback; no application modifications.",
+  "container_removed": true,
+  "cleanup_stdout": "bicdb-pg18-add-rollback-fd6402b416\n",
+  "cleanup_stderr": ""
+}

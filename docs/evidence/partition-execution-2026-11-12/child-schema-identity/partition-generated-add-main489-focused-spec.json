@@ -1,0 +1,63 @@
+{
+  "label": "partition-generated-add-main489-focused",
+  "source": "3867be587b35c207762dd03344108e1609ddde71",
+  "base": "372cbf03d17a88d6a37169796ebc7f5f2b369d69",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "Currentprivateintegration actualmain489 b939441 plusnewatomicrecursiveSERIAL/IDENTITY andallpreviouspartitionwork. Both Native modules/runtime state andallold/newdurablerequiredflags retained atmerge3c20. Source489inherited; no newdeliveryversion. NewACLtest nowexercisesreal SET ROLE seq_reader/nextval110/RESETROLE ratherthanunimplemented has_sequence_privilege probe; firstfailure preserved and independentbuiltin gap remainsOPEN. Expectedvalue derives twoexistingACKs100/105; savepointundo/data/schema/sequence/grants/tworeopens assertions unchanged. Exhaustionfixture explicitMIN0 as actualPG18v2PASS. NewCorefoundation meansoldCore1391PASS not proof ofcurrentCore. Focused25+2parser+Nativeflags targeted only; all broader/native/app/HA gatesremainACTIVE.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "identity_sequence_options::tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "partition_child_schema",
+      "--test",
+      "partition_schema_changes",
+      "--test",
+      "primary_key_index_compatibility",
+      "--test",
+      "partition_statement_batches",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-generated-add-valid-focused"
+  ],
+  "required_receipts": [],
+  "allow_isolated_builds": [
+    {
+      "pid": 3624130,
+      "start_ticks": 163844992,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

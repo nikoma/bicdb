@@ -1,0 +1,41 @@
+{
+  "label": "sql-owner-publication-original95-probe-build",
+  "source": "82a8311156e2293a92e7cf9c1ffd70d1df92d57a",
+  "base": "4c9c90476e14dc4a589b05f7d7259d167965399d",
+  "source_ref": "refs/bicdb-proof/sql-owner-publication-original95-82a83111",
+  "repo": "/root/bicdb-sql-final-composition",
+  "scope": "Explicit frozen debugserver fornewrealretainedrename/certificatepublication fixes. Requires currentpositiveandrelatedchecksPASS; unchangedoriginal95diagnostic separate anddoesnotreplacefull1464 orportableorigin/HAqualification. Inherited490developmentversion,no CLI/release/deploy/P2promotion/spend.",
+  "wait_units": [
+    "bicdb-sql-partition-owner-publication-related",
+    "bicdb-native-identity-finance492-authority-version-final"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-sql-partition-owner-publication-related.json",
+      "equals": {
+        "source": "82a8311156e2293a92e7cf9c1ffd70d1df92d57a",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "commands": [
+    [
+      "python3",
+      "scripts/bump-version.py",
+      "--check"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "build",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-pgwire",
+      "--example",
+      "oracle_server"
+    ]
+  ],
+  "copy_example": "oracle_server"
+}

@@ -1,0 +1,28 @@
+{
+  "source": "ece30483348520de9ef34ed0140720bc9f392175",
+  "scope": "Tests-only PostgreSQL ACL identity/default creation grant gate. Existingtable granted priorreader then defaults switchto laterreader; rename mustnotgrantlaterreader access, rollbackmustnotleaveorphan access ondestname reuse; genuinelynewtable doesgetnewdefaults. Intended2storesxcommit/rollback+reopen, stopsfirstnegativefailure. Actual SETROLE SELECT permission checked, notintrospectiononly. NativeOracleimplicitDDL excluded. First36negative returnskept atdenialhelper butcallsite stageunspecified; diagnostics nowinclude role/table withoutchangingassertion orruntime. NeeddistinguishbeforeRename vsafterRename beforeattributingcause.",
+  "started_unix": 1794393320.5584383,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_default_privileges",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794393320.5586145,
+      "exit": 101,
+      "finished_unix": 1794393323.6446755
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794393323.6448915
+}

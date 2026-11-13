@@ -1,0 +1,16 @@
+{
+  "label": "partition-multi-function-atomic-negative",
+  "source": "6ea72af54ac1d1b20f6a72540fc75d6786ec0806",
+  "reported_batch_status": "failed",
+  "passed": 0,
+  "failed_tests": 1,
+  "ignored": 0,
+  "compile_errors": false,
+  "scope": "MandatoryoneSQLmultifunctiondropatomicpublicationcountercheck overexact21runtime; newtestonly. Expected2Nativecommitsinsteadof1 retained. Countercheckisnotfullprocessfault/physicaldurabilityproof.",
+  "raw_log": {
+    "archive": "tc-step-partition-multi-function-atomic-negative.log.gz",
+    "uncompressed_bytes": 82021,
+    "sha256": "f55abac3bfa786726512c1646b26337e50694771a5a52c5e37aa92bd90b01e2d",
+    "gzip_sha256": "5f73d42969b1742da6553af7b08cd9085a2d84ff22654edd70d4b86193844433"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "label": "private-catalog-record-control-73b120fc",
+  "repo": "/root/bicdb-sql-rename-journal",
+  "source": "73b120fc68f416ffbf97be464b49ba68dc7b65f8",
+  "base": "c173fa783fb8323fe02c41fb7eda96f130bc29c3",
+  "source_ref": "refs/bicdb-proof/private-catalog-record-control-73b120fc",
+  "wait_units": [
+    "bicdb-private-sql-catalog-read-positive-86f12f19"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-private-sql-catalog-read-positive-86f12f19.json",
+      "equals": {
+        "source": "86f12f19feae2f0c83547c636bf9660e89930fc6",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "scope": "Tests-only next Nativecatalogrecord requirement with localadaptermappingrequestedrecordIDs to EXISTINGcollectiononlyreservation; production86unchangedandall3commands50focusedPASSincludingSQLcold/warmfences. Thischaracterizes whyrecordsneeded: unrelatedrecordshouldread, out-of-scopeinternalupdateandmixedbatchmustrefusebeforelocks/writes, existingdifferentmetadatarecordobservationmustnotpreventreservation, disjointownersmustpublishtheirownrowdespiteoverlappingsamecollection. Fiveindependenttests intendedbothstores, recordactualfirstfailedcells. AdapterwillbechangedtonewresourceAPIwhileassertionsretained. NotclaimexistingcollectionAPIpromisesrecords. GlobalSQLNativeownerrecoverygate stillunchanged; SQLproducer/exactmetadata-row/ownercontext/wireDescribeintegrationremainOPEN. Source471private,nopublicationversionreserved.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "catalog_record_scope",
+      "--",
+      "--test-threads=1"
+    ]
+  ]
+}

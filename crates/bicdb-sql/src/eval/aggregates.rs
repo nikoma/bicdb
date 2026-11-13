@@ -3534,6 +3534,7 @@ pub(crate) fn partitioning_schema_from_expr(expr: &Expr) -> Result<PartitioningS
     Ok(PartitioningSchema {
         strategy,
         key_columns,
+        execution_version: None,
     })
 }
 

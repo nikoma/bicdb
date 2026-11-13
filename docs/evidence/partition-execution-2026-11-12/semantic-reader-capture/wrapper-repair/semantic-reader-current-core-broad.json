@@ -1,0 +1,78 @@
+{
+  "label": "semantic-reader-current-core-broad",
+  "source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+  "base": "73f18e76faaf631bf3e2d48239814be1e788eb9a",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "Full current Core library+integration qualification after stable actual Native semantic reader contract fix e8c426a7. Explicit source-current Core helper builds and custody before suite; original test assertions/timeouts preserved. Prior0031 Core/SQL/wire results remain source-scoped, not substituted. Wait completed original broad+safe owned-cache cleanup and unchanged format/image module success; no concurrent compilers. Not application, portable collection origin, legacy logical propagation, physical HA/capacity, release/deployment or merged-source qualification. Full goal active/P2off/no new spend.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "build",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--example",
+      "durability_child",
+      "--example",
+      "chaos_child",
+      "--example",
+      "ha_state_child"
+    ],
+    [
+      "python3",
+      "-c",
+      "import pathlib,json,hashlib,os,subprocess,time\nroot=pathlib.Path('/root/bicdb-durability-s3');source=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip();assert source=='e8c426a73a14c1d97851082b90b815da60d4ef82'\nfiles={}\nfor name in ['durability_child','chaos_child','ha_state_child']:\n p=pathlib.Path(os.environ['CARGO_TARGET_DIR'])/'debug/examples'/name;data=p.read_bytes();flags={flag:flag.encode() in data for flag in ['sql_partition_execution_v1','decimal_predicate_comparison_v1','application_unique_scope_transition_v1']};assert all(flags.values()),(name,flags);files[name]={'path':str(p),'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data),'required_features':flags}\nproof={'source':source,'files':files,'recorded_unix':time.time(),'scope':'Explicit current-source Core helper build succeeded; helper custody only, not CLI/release/deployment.'};out=root/'semantic-reader-current-Core-helpers.json';assert not out.exists();out.write_text(json.dumps(proof,indent=2)+'\n');print(json.dumps(proof))\n"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "--tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-native490-superseded-metadata-cleanup",
+    "bicdb-semantic-reader-existing-image-regressions"
+  ],
+  "required_receipts": [
+    {
+      "path": "host-control/native490-superseded-metadata-ELF-cleanup.json",
+      "equals": {
+        "status": "completed"
+      }
+    },
+    {
+      "path": "report-semantic-reader-existing-image-regressions.json",
+      "equals": {
+        "source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+        "status": "focused_passed"
+      }
+    },
+    {
+      "path": "report-partition-native-identity-main489-broad.json",
+      "equals": {
+        "source": "0031d1976ece1be2d6139ea9972fbf49069b1590",
+        "status": "focused_passed"
+      }
+    }
+  ],
+  "allow_isolated_builds": [],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock",
+  "source_ref": "refs/bicdb-proof/semantic-reader-core-e8c426a7"
+}

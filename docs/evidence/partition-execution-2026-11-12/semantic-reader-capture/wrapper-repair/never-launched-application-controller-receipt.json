@@ -1,0 +1,13 @@
+{
+  "source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+  "development_version": "1.0.489-beta",
+  "status": "failed",
+  "diagnostic_unmerged": true,
+  "application_qualified": false,
+  "release_published": false,
+  "deployed": false,
+  "assertions_bytecode_waits_unchanged": true,
+  "started_unix": 1794519868.2229888,
+  "error": "FileNotFoundError(2, 'No such file or directory')",
+  "failed_unix": 1794520298.6419406
+}

@@ -1,0 +1,29 @@
+{
+  "source": "6886d0faad3a5f73be50211b648685fdc0bbe438",
+  "scope": "Mandatory7nativePostgreSQL16.13positivecontrols; actuala15runtime plus tests/evidenceonly. Source/destination suppression and trigger-side reads of prior writes/deletions during INSERT,UPDATE movement,DELETE; actualACK/RETURNING/audit+2reopens,bothstores. Preserve baselinefailures; no app/HA/completionclaim.",
+  "started_unix": 1794486417.0302646,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_trigger_visibility",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794486417.0304928,
+      "exit": 101,
+      "finished_unix": 1794486422.6686885
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794486422.6689396
+}

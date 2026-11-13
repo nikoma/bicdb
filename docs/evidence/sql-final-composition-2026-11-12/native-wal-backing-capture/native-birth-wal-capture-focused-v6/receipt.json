@@ -1,0 +1,159 @@
+{
+  "source": "ccde585361dcdbf65bd9da698a21ccba94941b09",
+  "scope": "Write-time Native backing contracts are part of the same WAL commit as their writes, including prepared-WAL fast path. Actual bounded durable batch/live exporters retain historical backing identity across rename/name reuse/drop and restart. Private checksum-bound in-process capture is not decoded from JSON, not source root authentication/import/recovery authority. New lifecycle/unborn/async/forgery/dropped-fence controls plus prior Native birth5/image6/local8/snapshot3 and legacy WAL serialization tests. Original SQL promotion acceptance remains OPEN; no source/main/application/release/deployment or full broad/fault qualification. Currentv2 adds separate native_wal_backing_capture_v1 local compatibility fence and explicit future-only activation (birth-aware older writers must reject the additional WAL semantics); first-vector Native commit captures the planned dimension and exact full payload. No old WAL retrofits, source-root authentication or import authority. Tests7 WAL+5 priorbirth, both modes, plus focused regressions. New original SQL promotion test unchanged/not claimed PASS. v1 exporter fix advanced both originals then discovered real local-recovery corruption after restart: old retained WAL was replayed into the new same-name backing. v3 rebinds captured local WAL by actual immutable birth/namespace pair before row replay; rejects changed pairs and skips genuinely dropped pairs. No logical/storage-name fallback, donor import mapping or source authentication. Legacy/unborn WAL gets no invented provenance and retains existing semantics. v4 adds actual write/sync EIO controls in both modes: never export beyond acknowledged durable prefix while fenced; uncertain recovery only complete row or absent; independent Native ACK, birth and two reopens unchanged. These four injected IO cases are focused in-process controls, not independent process-crash/KVM campaign qualification. v5 added real cold-open pair-corruption controls and exposed materialized paged histories bypassing pair validation. v6 keeps a compact deduplicated identity history even when materialized row/per-tx data is discarded; validates all retained immutable pairs before local replay. Current14 Native birth/WAL cases + prior image/namespace/legacyserialization/snapshot regressions. Independent source authentication, both import producers, origin mappings, SQL resolver and original promoted positive remain open.",
+  "started_unix": 1794534677.0206223,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794534677.0209732,
+      "exit": 0,
+      "finished_unix": 1794534677.09224
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "check",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "-p",
+        "bicdb-sql",
+        "-p",
+        "bicdb-pgwire",
+        "--all-targets"
+      ],
+      "started_unix": 1794534677.0924418,
+      "exit": 0,
+      "finished_unix": 1794534829.3154035
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "native_collection_birth::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794534829.3157005,
+      "exit": 0,
+      "finished_unix": 1794534895.2676167
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "range_image_bindings::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794534895.2680862,
+      "exit": 0,
+      "finished_unix": 1794534896.086333
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "local_namespace_identity::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794534896.0865266,
+      "exit": 0,
+      "finished_unix": 1794534896.5958035
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "tx_frame_ref_matches_owned_serialization",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794534896.596013,
+      "exit": 0,
+      "finished_unix": 1794534896.777856
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "compact_wal::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794534896.7780995,
+      "exit": 0,
+      "finished_unix": 1794534897.051677
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "sql_rename_snapshot_fence",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794534897.0520349,
+      "exit": 0,
+      "finished_unix": 1794534941.436783
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794534941.437053
+}

@@ -1,0 +1,29 @@
+{
+  "source": "8d6faa0f01530ec5ee1b9c3700b10308f0f7e0b2",
+  "scope": "Actual22runtime with5mandatorynewUPSERTpositives only. Physicalexistingconflict,DO NOTHINGwith/withoutarbiter,parentRLS,RETURNING/cardinality/crosspartition0A000+withinleafkeymove,midstatementrollback; bothstoresACK+2reopens. Expectedmissingparentphysicalarbitration failuresretained. No productcodechange or originalassertionweakening.",
+  "started_unix": 1794484060.501034,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_upsert",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794484060.5012045,
+      "exit": 101,
+      "finished_unix": 1794484064.991291
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794484064.9914937
+}

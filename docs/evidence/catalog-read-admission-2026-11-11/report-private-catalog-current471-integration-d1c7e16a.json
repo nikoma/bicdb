@@ -1,0 +1,111 @@
+{
+  "source": "d1c7e16abea4911de99280bc2d8924b2eb529d3b",
+  "scope": "Privateb2qualified routine/default/rename branch integrates frozen public471257 (includespublic4691129 and470c895) cleanly asd1c, sourceversion471private withno publicationversionreserved. Main469actualatstart; public471CIstillpendingseparate. Sameproduction4default/metadatafilesalreadyidentical, preservedNative scoped foundation andportableframe3 journalprivatechanges. Focus inheritedcoreP0/restore/deadlines integration against Nativehostreservation/lifecycle/effectbounds/grants/isolation, SQLroutineclosure/defaults/permissions/ACL/reopen, originalprocessmatrix58cuts116reopens anddurableframe/journal/live replication. FullSQLlibb2prior891/419 remainsqualifiedonlyb2, notthisnewcoreintegration. GlobalSQLcatalogproducer/metadata-rowread/effect/Describe gates stillopen; unrelatedwritercontrolnotfixedfromtokenalone. No currentstandardbinary/release/deployment orapp/VM/HAqualification.",
+  "started_unix": 1794405857.215766,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794405857.216004,
+      "exit": 0,
+      "finished_unix": 1794405857.2637932
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_host_scope",
+        "--test",
+        "catalog_scope_admission",
+        "--test",
+        "mutation_grants",
+        "--test",
+        "transaction_isolation",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794405857.263939,
+      "exit": 0,
+      "finished_unix": 1794405887.4233162
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_routine_header_dependencies",
+        "--test",
+        "rename_routine_row_types",
+        "--test",
+        "rename_default_privileges",
+        "--test",
+        "routine_header_metadata",
+        "--test",
+        "table_row_routines",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794405887.4235098,
+      "exit": 0,
+      "finished_unix": 1794406004.6790698
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794406004.6793299,
+      "exit": 0,
+      "finished_unix": 1794406160.3579655
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "live_replication",
+        "--test",
+        "replication_durable_frames",
+        "--test",
+        "replication_journal"
+      ],
+      "started_unix": 1794406160.3582022,
+      "exit": 0,
+      "finished_unix": 1794406197.4203262
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794406197.420557
+}

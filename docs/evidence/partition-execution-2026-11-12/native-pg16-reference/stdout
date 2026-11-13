@@ -1,0 +1,37 @@
+server_version|16.13 (Debian 16.13-1.pgdg13+1)
+BEGIN
+CREATE SCHEMA
+SET
+CREATE TABLE
+CREATE TABLE
+INSERT 0 1
+parent_includes_child|{1}
+INSERT 0 1
+insert_routed_child|{1,2}
+DO
+CREATE TABLE
+INSERT 0 1
+ALTER TABLE
+INSERT 0 1
+default_retains_and_routes|{11,50}
+parent_union|{1,2,11,50}
+CREATE ROLE
+CREATE TABLE
+ALTER TABLE
+CREATE POLICY
+CREATE TABLE
+INSERT 0 2
+rls_flags|secured|t
+rls_flags|secured_child|f
+GRANT
+GRANT
+SET
+parent_policy_and_parent_grant|{2}
+DO
+RESET
+GRANT
+SET
+direct_child_uses_own_policy|{1,2}
+RESET
+ROLLBACK
+no_owned_schema_or_role_persisted|t

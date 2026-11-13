@@ -1,0 +1,306 @@
+{
+  "events": [
+    {
+      "op": "INSERT",
+      "new": 1,
+      "old": null,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "low"
+    },
+    {
+      "op": "INSERT",
+      "new": 1,
+      "old": null,
+      "phase": "AFTER",
+      "trigger": "parent_a",
+      "relation": "low"
+    },
+    {
+      "op": "INSERT",
+      "new": 2,
+      "old": null,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "low"
+    },
+    {
+      "op": "INSERT",
+      "new": 2,
+      "old": null,
+      "phase": "AFTER",
+      "trigger": "parent_a",
+      "relation": "low"
+    },
+    {
+      "op": "UPDATE",
+      "new": 11,
+      "old": 1,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "low"
+    },
+    {
+      "op": "DELETE",
+      "new": null,
+      "old": 1,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "low"
+    },
+    {
+      "op": "INSERT",
+      "new": 11,
+      "old": null,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "high"
+    },
+    {
+      "op": "DELETE",
+      "new": null,
+      "old": 1,
+      "phase": "AFTER",
+      "trigger": "parent_a",
+      "relation": "low"
+    },
+    {
+      "op": "INSERT",
+      "new": 11,
+      "old": null,
+      "phase": "AFTER",
+      "trigger": "parent_a",
+      "relation": "high"
+    },
+    {
+      "op": "DELETE",
+      "new": null,
+      "old": 2,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "low"
+    },
+    {
+      "op": "DELETE",
+      "new": null,
+      "old": 2,
+      "phase": "AFTER",
+      "trigger": "parent_a",
+      "relation": "low"
+    },
+    {
+      "op": "INSERT",
+      "new": 11,
+      "old": null,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "high"
+    },
+    {
+      "op": "UPDATE",
+      "new": 11,
+      "old": 11,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "high"
+    },
+    {
+      "op": "UPDATE",
+      "new": 11,
+      "old": 11,
+      "phase": "AFTER",
+      "trigger": "parent_a",
+      "relation": "high"
+    }
+  ],
+  "clones": [
+    {
+      "name": "parent_a",
+      "table": "high",
+      "has_parent": true
+    },
+    {
+      "name": "parent_b",
+      "table": "high",
+      "has_parent": true
+    },
+    {
+      "name": "parent_a",
+      "table": "low",
+      "has_parent": true
+    },
+    {
+      "name": "parent_b",
+      "table": "low",
+      "has_parent": true
+    },
+    {
+      "name": "parent_a",
+      "table": "p",
+      "has_parent": false
+    },
+    {
+      "name": "parent_b",
+      "table": "p",
+      "has_parent": false
+    }
+  ],
+  "surviving_ack": [
+    {
+      "k": 12,
+      "payload": "within-leaf"
+    }
+  ],
+  "new_child_clones": [
+    {
+      "name": "local_after",
+      "table": "attached",
+      "has_parent": false
+    },
+    {
+      "name": "parent_a",
+      "table": "attached",
+      "has_parent": true
+    },
+    {
+      "name": "parent_b",
+      "table": "attached",
+      "has_parent": true
+    },
+    {
+      "name": "parent_a",
+      "table": "later",
+      "has_parent": true
+    },
+    {
+      "name": "parent_b",
+      "table": "later",
+      "has_parent": true
+    }
+  ],
+  "disabled_lineage": [
+    {
+      "mode": "D",
+      "table": "attached"
+    },
+    {
+      "mode": "D",
+      "table": "high"
+    },
+    {
+      "mode": "D",
+      "table": "later"
+    },
+    {
+      "mode": "D",
+      "table": "low"
+    },
+    {
+      "mode": "D",
+      "table": "p"
+    }
+  ],
+  "detached_triggers": [
+    "local_after"
+  ],
+  "multirow_events": [
+    {
+      "op": "INSERT",
+      "new": 3,
+      "old": null,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "low"
+    },
+    {
+      "op": "INSERT",
+      "new": 13,
+      "old": null,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "high"
+    },
+    {
+      "op": "INSERT",
+      "new": 3,
+      "old": null,
+      "phase": "AFTER",
+      "trigger": "parent_a",
+      "relation": "low"
+    },
+    {
+      "op": "INSERT",
+      "new": 13,
+      "old": null,
+      "phase": "AFTER",
+      "trigger": "parent_a",
+      "relation": "high"
+    }
+  ],
+  "mixed_upsert_events": [
+    {
+      "op": "INSERT",
+      "new": 3,
+      "old": null,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "low"
+    },
+    {
+      "op": "UPDATE",
+      "new": 3,
+      "old": 3,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "low"
+    },
+    {
+      "op": "INSERT",
+      "new": 14,
+      "old": null,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "high"
+    },
+    {
+      "op": "INSERT",
+      "new": 12,
+      "old": null,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "high"
+    },
+    {
+      "op": "UPDATE",
+      "new": 12,
+      "old": 12,
+      "phase": "BEFORE",
+      "trigger": "parent_b",
+      "relation": "high"
+    },
+    {
+      "op": "UPDATE",
+      "new": 3,
+      "old": 3,
+      "phase": "AFTER",
+      "trigger": "parent_a",
+      "relation": "low"
+    },
+    {
+      "op": "INSERT",
+      "new": 14,
+      "old": null,
+      "phase": "AFTER",
+      "trigger": "parent_a",
+      "relation": "high"
+    },
+    {
+      "op": "UPDATE",
+      "new": 12,
+      "old": 12,
+      "phase": "AFTER",
+      "trigger": "parent_a",
+      "relation": "high"
+    }
+  ]
+}

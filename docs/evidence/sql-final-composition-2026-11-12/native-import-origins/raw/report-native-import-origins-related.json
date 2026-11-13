@@ -1,0 +1,251 @@
+{
+  "source": "895419dc4274b0988eaf5b3f81049e22361864ef",
+  "scope": "Stable receiver runtime895: reuse six new focused receiver PASS. Compile all Page/Core/SQL/pgwire targets; related Native origin, source-creation, birth/WAL, namespace, image, empty legacy-WAL byte serialization, semantic-reader guards, Page lock, original live-Native profile startup and SQL authority checks. Known prior full Core c932898P11F9I remainsopen: all11 physical cold-copy custody refusals need actual authorized Native restore producer, no assertions changed/disabled. Not full Core/SQL/wire regressions, original promoted SQL positive, peer network authentication, protected-image mapping, record lineage, process/KVM or application acceptance.",
+  "started_unix": 1794543221.3767521,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "check",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-page",
+        "-p",
+        "bicdb-core",
+        "-p",
+        "bicdb-sql",
+        "-p",
+        "bicdb-pgwire",
+        "--all-targets"
+      ],
+      "started_unix": 1794543221.3768764,
+      "exit": 0,
+      "finished_unix": 1794543370.6569247
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "native_origin::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794543370.6571574,
+      "exit": 0,
+      "finished_unix": 1794543372.295419
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "native_catalog_allocations::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794543372.2956698,
+      "exit": 0,
+      "finished_unix": 1794543375.0801413
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "native_collection_birth::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794543375.0803218,
+      "exit": 0,
+      "finished_unix": 1794543378.466691
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "local_namespace_identity::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794543378.4668806,
+      "exit": 0,
+      "finished_unix": 1794543379.201292
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "range_image_bindings::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794543379.2016048,
+      "exit": 0,
+      "finished_unix": 1794543380.5628133
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "tx_frame_ref_matches_owned_serialization",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794543380.5631082,
+      "exit": 0,
+      "finished_unix": 1794543380.7667408
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "mutation_reader_contract_tests::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794543380.7670722,
+      "exit": 0,
+      "finished_unix": 1794543381.9074295
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "semantic_reader_capture_tests::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794543381.9077213,
+      "exit": 0,
+      "finished_unix": 1794543383.5122142
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-page",
+        "--lib",
+        "lock::tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794543383.5126128,
+      "exit": 0,
+      "finished_unix": 1794543395.78768
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "clean_postgres_profile_check_preserves_an_unrelated_live_native_transaction",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794543395.7879908,
+      "exit": 0,
+      "finished_unix": 1794543574.4129019
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "mutation_authority",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794543574.4131796,
+      "exit": 0,
+      "finished_unix": 1794543693.4927125
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794543693.4930685
+}

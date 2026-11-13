@@ -1939,6 +1939,45 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn native_image_install_refuses_different_semantic_reader_requirements_before_writes() {
+        for activate in [
+            crate::format::enable_decimal_predicate_comparison_v1
+                as fn(&std::path::Path) -> Result<()>,
+            crate::format::enable_application_unique_scope,
+        ] {
+            let fixture = Fixture::new();
+            let target = fixture.target();
+            let target_path = target.read().data_path().to_path_buf();
+            // Persist only the actual format requirement, without inventing
+            // any schema, origin, migration certificate or image authority.
+            activate(&target_path).unwrap();
+            let format_before = std::fs::read(target_path.join("format.json")).unwrap();
+            let sequence = target.read().last_commit_seq();
+            let namespace = target.read().local_namespace_identity("items").unwrap();
+            let mut store = fixture.store();
+            let error = match fixture.try_begin(&mut store, Uuid::now_v7()) {
+                Err(error) => error,
+                Ok(_) => panic!("image install accepted different semantic reader requirements"),
+            };
+            assert!(
+                error
+                    .to_string()
+                    .contains("exact preinstalled portable schema/catalog/reader contract"),
+                "{error}"
+            );
+            assert_eq!(target.read().last_commit_seq(), sequence);
+            assert_eq!(
+                target.read().local_namespace_identity("items").unwrap(),
+                namespace
+            );
+            assert_eq!(
+                std::fs::read(target_path.join("format.json")).unwrap(),
+                format_before
+            );
+        }
+    }
+
+    #[test]
     fn actual_native_r0_copy_removes_extra_rows_and_preserves_target_namespace_identity() {
         let mut fixture = Fixture::new();
         let target = fixture.target();
@@ -1963,6 +2002,7 @@ pub(crate) mod tests {
                 fixture.range(),
                 &CollectionMeta::standard("items"),
                 &RangeSnapshotBatch {
+                    required_reader_features: Vec::new(),
                     collection: "items".into(),
                     range_id: fixture.range().id,
                     range_epoch: fixture.range().epoch,
@@ -2097,6 +2137,7 @@ pub(crate) mod tests {
                     &other,
                     &CollectionMeta::standard("items"),
                     &RangeSnapshotBatch {
+                        required_reader_features: Vec::new(),
                         collection: "items".into(),
                         range_id: other.id,
                         range_epoch: other.epoch,
@@ -2117,6 +2158,7 @@ pub(crate) mod tests {
                 &selected,
                 &CollectionMeta::standard("items"),
                 &RangeSnapshotBatch {
+                    required_reader_features: Vec::new(),
                     collection: "items".into(),
                     range_id: selected.id,
                     range_epoch: selected.epoch,
@@ -2365,6 +2407,7 @@ pub(crate) mod tests {
                 fixture.range(),
                 &CollectionMeta::standard("items"),
                 &RangeSnapshotBatch {
+                    required_reader_features: Vec::new(),
                     collection: "items".into(),
                     range_id: fixture.range().id,
                     range_epoch: fixture.range().epoch,

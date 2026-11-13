@@ -1,0 +1,14 @@
+{
+  "status": "reference_passed",
+  "container": "bicdb-pg18-child-dml-1d94c577ce",
+  "image": "sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636",
+  "sql": "control.sql",
+  "started_unix": 1794505363.7266665,
+  "exit": 0,
+  "version": "PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+  "finished_unix": 1794505365.198908,
+  "scope": "Actual declared-target PG18.4 owned384MiB/no-network/tmpfs reference; rolledback scratch schema. Child local defaults/direct versus routed INSERT, preservation through parent ADD/TYPE, explicit parent SET/DROP DEFAULT propagation and independently authored child keys; parent SELECT FOR UPDATE, INSERT duplicate refusal, PK-changing UPDATE, DELETE and movement between differing child PKs with savepoint rollback. No application modifications.",
+  "container_removed": true,
+  "cleanup_stdout": "bicdb-pg18-child-dml-1d94c577ce\n",
+  "cleanup_stderr": ""
+}

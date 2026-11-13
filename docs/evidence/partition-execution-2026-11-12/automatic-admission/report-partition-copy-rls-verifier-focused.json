@@ -1,0 +1,29 @@
+{
+  "source": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+  "scope": "Test-only verifierpolicy correction: COPY INSERT/RLS/grant checks execute with no SELECT policy; after allowed/refused writes finish, owner explicitly grants verifier SELECT visibility, then unchangedACKpostconditionandrawleafcounts. Production/examples/Cargo exact8ed; previous8ed30oldstorecasesPASS, focused96PASS1verificationfixtureFAIL retained. Nativefcf6 andremaining94SQLfocusedtests reusedsource-exact; rerunCOPY3.",
+  "started_unix": 1794498574.2630043,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_copy",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794498574.2631884,
+      "exit": 0,
+      "finished_unix": 1794498580.3667262
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794498580.3670287
+}

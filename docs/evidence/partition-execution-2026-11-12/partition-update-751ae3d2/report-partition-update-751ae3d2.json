@@ -1,0 +1,49 @@
+{
+  "source": "751ae3d25195efe2013d8387d5c6a59cbd424150",
+  "scope": "Evolvingbatch:13bounds/atomiccommit/update PK/FROM/RETURNING/rollback/RLS controls +8executionpositives unchanged. Statement TX now required forpartitions; UPDATE candidates carryphysicalsource, physicalNativegrant/readcommitted refresh, reconstructtypedkeyidentity androute stageddelete/insert withimmediate destinationchecks. Oldsourceatomicnegative retained. Hash/upsert/triggers/upgrade/locks/concurrency/broad gatespending; notfinalqualification.",
+  "started_unix": 1794482622.5273044,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_bounds",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794482622.5274951,
+      "exit": 0,
+      "finished_unix": 1794482702.9122767
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_execution",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794482702.9124832,
+      "exit": 0,
+      "finished_unix": 1794482708.413054
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794482708.4132745
+}

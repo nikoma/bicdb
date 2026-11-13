@@ -1,0 +1,50 @@
+{
+  "source": "a68fe5f37d697555d7c337005aac4785e5887f70",
+  "tests": 95,
+  "passed": 93,
+  "failures": [
+    {
+      "test": {
+        "name": "testPartitionRelatedProcesses",
+        "classname": "org.idempiere.test.base.MTableTest",
+        "time": "47.702"
+      },
+      "failure": {
+        "message": "expected: <true> but was: <false>",
+        "type": "org.opentest4j.AssertionFailedError"
+      }
+    },
+    {
+      "test": {
+        "name": "testGetPartitionName",
+        "classname": "org.idempiere.test.base.MTableTest",
+        "time": "7.133"
+      },
+      "failure": {
+        "message": "expected: <true> but was: <false>",
+        "type": "org.opentest4j.AssertionFailedError"
+      }
+    }
+  ],
+  "errors": 0,
+  "baseline_unchanged": true,
+  "processes_stopped": true,
+  "original_assertions_and_timeouts_unchanged": true,
+  "application_qualified": false,
+  "classification": "Metadata now advances to unsupported ATTACH PARTITION DEFAULT. Rollback then cannot rebuild an index while foreign transactions are pending; subsequent query retains catalog fence. These are actionable BicDB defects, distinct from migrated-fixture Native18 control2BP01.",
+  "inputs": {
+    "TEST-org.idempiere.test.base.MRelationTypeTest.xml": "7951bde84778feeac55bbf0ee26476e71f57323731840371bf422ff99b49c45c",
+    "database.log.gz": "d9d80a856e062e95924391c9109ed1e241d62619f0c010136e826306c133a7c0",
+    "jvm.log.gz": "a24d7b175b59815fe97fa74bdabda464b9ee1675c6a543bd0caad713d887f8a8",
+    "TEST-org.idempiere.test.base.MQueryTest.xml": "ecf936ae3b521b91297b97a29053099b27d73ad8639e341c932fd7554280ee75",
+    "TEST-org.idempiere.test.base.MProcessTest.xml": "50c5607cd0dab18315147d9a1669325fffdd8a3bb1792d342b2f022c9bd44bee",
+    "TEST-org.idempiere.test.base.MStorageTest.xml": "94d6c812a08bf7b4e6b4b72d5a8d2b5bf43bae7326e53518311d8e75c5bc7574",
+    "TEST-org.idempiere.test.base.MTabTest.xml": "1919b5313dd664819d3fabdc19748b108711c6149fe742eeaee90d7b93e7ddb7",
+    "producer.json": "b59dd6e571e6c67486f0b9d1b0450bbbfdeb368b8b88a485fb458390798e4c9d",
+    "class-load.log.gz": "4ea102f7edbe7aa2855ddbec0ce95bf6953247e6aefd93dd23bd780e2d6cc8cd",
+    "query-trace.log.gz": "1db46e65ec0d5f6a2a5d993974d970a3875032b997b5780aaaac7943a4daf4a2",
+    "TEST-org.idempiere.test.base.MTableTest.xml": "2a8c1cc2fc6d9c003cbb9d61fe5c7dc5660adc2d2a5ce9ee5213dc63f2eda609",
+    "original-run.json": "8293cfd01aa76a65cde34e201b450e889a49c2ec6c4a5ee9f3108b4210e76bac"
+  },
+  "collected_unix": 1794462772.1160467
+}

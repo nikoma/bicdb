@@ -2945,6 +2945,13 @@ fn postgres_full_text_search_types_are_string_compatible() {
             "#,
         )
         .unwrap();
+    // A partitioned parent has no heap destination in PostgreSQL. Keep the
+    // original generated-column/type assertions on an actual LIST leaf.
+    session
+        .execute(
+            "CREATE TABLE p_ci_build_names_101 PARTITION OF p_ci_build_names FOR VALUES IN (101)",
+        )
+        .unwrap();
     session
         .execute(
             "INSERT INTO p_ci_build_names (build_id, partition_id, project_id, name) \
@@ -3022,6 +3029,9 @@ fn postgres_keyless_partitioned_tables_use_hidden_internal_row_id() {
             ) PARTITION BY RANGE (date)
             "#,
         )
+        .unwrap();
+    session
+        .execute("CREATE TABLE backup_finding_evidences_2026 PARTITION OF backup_finding_evidences FOR VALUES FROM ('2026-01-01') TO ('2027-01-01')")
         .unwrap();
     session
         .execute(
@@ -3103,14 +3113,14 @@ fn postgres_attach_partition_is_metadata_only() {
     session
         .execute(
             "CREATE TABLE analytics_cycle_analytics_issue_stage_events \
-             (id bigint PRIMARY KEY, partition_id bigint NOT NULL) \
+             (id bigint, partition_id bigint NOT NULL, PRIMARY KEY(id, partition_id)) \
              PARTITION BY HASH (partition_id)",
         )
         .unwrap();
     session
         .execute(
             "CREATE TABLE gitlab_partitions_static.analytics_cycle_analytics_issue_stage_events_00 \
-             (id bigint PRIMARY KEY, partition_id bigint NOT NULL)",
+             (id bigint, partition_id bigint NOT NULL, PRIMARY KEY(id, partition_id))",
         )
         .unwrap();
     assert_eq!(
@@ -3226,8 +3236,9 @@ fn postgres_pg_get_partkeydef_renders_partition_key_definition() {
     session
         .execute(
             "CREATE TABLE ai_audit_events (
-                id bigint PRIMARY KEY,
-                created_at timestamp with time zone NOT NULL
+                id bigint,
+                created_at timestamp with time zone NOT NULL,
+                PRIMARY KEY(id, created_at)
              ) PARTITION BY RANGE (created_at)",
         )
         .unwrap();

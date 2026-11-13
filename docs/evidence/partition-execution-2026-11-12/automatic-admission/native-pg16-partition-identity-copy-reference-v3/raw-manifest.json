@@ -1,0 +1,32 @@
+{
+  "stdout": {
+    "stored_as": "stdout.gz",
+    "raw_bytes": 415,
+    "raw_sha256": "9d751fd38d151a3fc107e37ca904d7adb5b4a445018c0a0a914c36d5d58e5f80"
+  },
+  "result.json": {
+    "stored_as": "result.json",
+    "raw_bytes": 820,
+    "raw_sha256": "25206f17f9852a17c1252715122843e1627c9ac092fd52d7cda29fc3846e0d42"
+  },
+  "stderr": {
+    "stored_as": "stderr.gz",
+    "raw_bytes": 0,
+    "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "container.stderr": {
+    "stored_as": "container.stderr.gz",
+    "raw_bytes": 1610,
+    "raw_sha256": "056955c91d0044c673ac859c6393a9da118f850eaa4f4ecb15f67dd5777e865c"
+  },
+  "container.stdout": {
+    "stored_as": "container.stdout.gz",
+    "raw_bytes": 2336,
+    "raw_sha256": "cc361ec608efca625f0c3e40815b55ef29349d48114a446233c0c62f222e1246"
+  },
+  "control.sql": {
+    "stored_as": "control.sql",
+    "raw_bytes": 2303,
+    "raw_sha256": "6a6811d19d644df7b7b9fcb0311cb1b489fc0fac22e5475e5f3c1d206d543f46"
+  }
+}

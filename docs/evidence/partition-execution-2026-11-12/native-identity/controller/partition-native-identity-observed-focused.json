@@ -1,0 +1,70 @@
+{
+  "label": "partition-native-identity-observed-focused",
+  "source": "0031d1976ece1be2d6139ea9972fbf49069b1590",
+  "base": "a05c66fbc0d39441e1e1d21c2bd667ba9b96cd98",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "Native-authorized samecollection physicalidentity update batch. Real Native locked preimage+bothaddresses grantbounds+explicitidcolumn; oneUpdate budget/audit, actualold/new address audit, tenant/workspace/immutable/version checks; atomicwrite/lock/audit/grantrollback onfailure. SQLusesNativeAPI onlysamephysicalcollection protectedkeychange, keepsblobowners/FTS andvalidatesfullUPDATEconstraints. MutationDenied42501. Nativebaseline2P2F retained. Corechanged: previous1699Core/broad5aa/recoveryVM not automaticqualificationofnewAPI. FocusnewNativegrantsnegatives+actualpositive+bounds+stalesnapshot+rollback andoriginalSQLcontrols; fullgoalACTIVE, no merge/release/productionclaim. Followuphardening: actualNative current source preimage and observed-version ceiling; user-supplied futurestatement snapshot cannot override Nativeversion/tenantchecks. Targetkeepsownobservation. Addactualpeer-source-update/u64MAX negative. AddlateSQLCHECK23514 mustrollbackphysicalrowmove+audits+fulloldrecordhash/reopens. OriginalNativebaseline2P2F preserved. FirstcandidateCore11PASS, SQLstilllive atsubmission; do not restart it. Corechanged,broad5aa oldsourceonly; finalfocusedmustexecute.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "mutation_grants",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "partition_native_authority",
+      "--test",
+      "mutation_authority",
+      "--test",
+      "partition_generated",
+      "--test",
+      "partition_upsert",
+      "--test",
+      "partition_child_schema",
+      "--test",
+      "jsonb_primary_keys",
+      "--test",
+      "trusted_identity_triggers",
+      "--test",
+      "read_committed_upsert_grants",
+      "--test",
+      "read_committed_upsert_signed_arbiters",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-native-identity-update-focused"
+  ],
+  "required_receipts": [],
+  "continue_on_failure": true,
+  "allow_isolated_builds": [
+    {
+      "pid": 2891109,
+      "start_ticks": 164428829,
+      "repo": "/root/bicdb-durability-s3/repo-metadata-describe",
+      "target": "/root/bicdb-durability-s3/target-metadata-describe"
+    }
+  ]
+}

@@ -9,6 +9,7 @@ fn setup(sql: &mut SqlSession<'_>) {
 fn parent_rename_keeps_references_with_a_legacy_compatibility_view_and_restart() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();
+    bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
     let mut sql = SqlSession::new(&mut db);
     setup(&mut sql);
     sql.execute("ALTER TABLE legacy_foods RENAME TO foods; CREATE VIEW legacy_foods AS SELECT * FROM foods; INSERT INTO meals VALUES(1,1)").unwrap();
@@ -36,6 +37,7 @@ fn parent_rename_keeps_references_with_a_legacy_compatibility_view_and_restart()
 fn transactional_parent_and_child_renames_restore_dependencies_at_savepoint_and_rollback() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();
+    bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
     let mut sql = SqlSession::new(&mut db);
     setup(&mut sql);
     sql.execute("BEGIN; ALTER TABLE legacy_foods RENAME TO foods; SAVEPOINT renamed; ALTER TABLE meals RENAME TO meal_entries; INSERT INTO meal_entries VALUES(1,1)").unwrap();
@@ -58,6 +60,7 @@ fn transactional_parent_and_child_renames_restore_dependencies_at_savepoint_and_
 fn self_referencing_parent_rename_preserves_the_foreign_key() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();
+    bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
     let mut sql = SqlSession::new(&mut db);
     sql.execute("CREATE TABLE tree(id INT PRIMARY KEY,parent INT REFERENCES tree(id)); INSERT INTO tree VALUES(1,NULL); ALTER TABLE tree RENAME TO renamed_tree; INSERT INTO renamed_tree VALUES(2,1)").unwrap();
     assert_eq!(
@@ -78,6 +81,7 @@ fn self_referencing_parent_rename_preserves_the_foreign_key() {
 fn committed_parent_rename_keeps_deferred_validation_and_cascades() {
     let root = tempfile::tempdir().unwrap();
     let mut db = BicDb::open(root.path()).unwrap();
+    bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
     let mut sql = SqlSession::new(&mut db);
     sql.execute("CREATE TABLE parents(id INT PRIMARY KEY); CREATE TABLE children(id INT PRIMARY KEY,parent INT REFERENCES parents(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED); BEGIN; ALTER TABLE parents RENAME TO renamed_parents; COMMIT; BEGIN; INSERT INTO children VALUES(1,1); INSERT INTO renamed_parents VALUES(1); COMMIT").unwrap();
     sql.execute("DELETE FROM renamed_parents WHERE id=1")

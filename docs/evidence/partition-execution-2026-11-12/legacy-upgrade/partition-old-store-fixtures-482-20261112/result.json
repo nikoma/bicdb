@@ -1,0 +1,1017 @@
+{
+  "status": "old_binary_fixtures_created",
+  "source": "f43583da4c34209e810c5e6a8f5925831b2949a1",
+  "source_version": "1.0.482-beta",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts/f43583da4c34209e810c5e6a8f5925831b2949a1/bicdb",
+  "binary_sha256": "31f3f86f3d43c04e7dcfa060fde43f71d8271727219a561fa1b3b14f2d61b556",
+  "started_unix": 1794489029.735138,
+  "cases": [
+    {
+      "mode": "embedded_memory",
+      "name": "parent_heap",
+      "directory": "/root/bicdb-durability-s3/partition-old-store-fixtures-482-20261112/embedded_memory-parent_heap",
+      "commands": [
+        {
+          "sql": "CREATE TABLE p(k INT PRIMARY KEY,payload TEXT) PARTITION BY RANGE(k)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE TABLE high PARTITION OF p FOR VALUES FROM(10) TO(20)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE INDEX p_payload_idx ON p(payload)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE INDEX\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE INDEX low_payload_idx ON low(payload)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE INDEX\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE INDEX high_payload_idx ON high(payload)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE INDEX\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "INSERT INTO p VALUES(1,'parent-low-ack'),(11,'parent-high-ack')",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"INSERT 0 2\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "INSERT INTO low VALUES(2,'child-low-ack')",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"INSERT 0 1\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "INSERT INTO high VALUES(12,'child-high-ack')",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"INSERT 0 1\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM p ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [\n    [\n      1,\n      \"parent-low-ack\"\n    ],\n    [\n      11,\n      \"parent-high-ack\"\n    ]\n  ],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM low ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [\n    [\n      2,\n      \"child-low-ack\"\n    ]\n  ],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM high ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [\n    [\n      12,\n      \"child-high-ack\"\n    ]\n  ],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT tablename,policyname,qual FROM pg_policies ORDER BY tablename,policyname",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"tablename\",\n    \"policyname\",\n    \"qual\"\n  ],\n  \"rows\": []\n}\n",
+          "stderr": ""
+        }
+      ],
+      "status": "old_binary_fixture_closed",
+      "files": {
+        ".backup-write.lock": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "collections.json": {
+          "bytes": 655,
+          "sha256": "59038c9da7835f704cee7c665bdaeacb83035619acc3b7d82ec44ffad8d361b7"
+        },
+        "events/events.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "format.json": {
+          "bytes": 167,
+          "sha256": "81e9e5eefc2dc0a7836d9701a9c17416ca1303b975aec96cd66e3e53eb7881c0"
+        },
+        "incarnations.log": {
+          "bytes": 1551,
+          "sha256": "3c6578049def8ac0594e05f96430c908ead78488c93fe6cc30f999f2c3748310"
+        },
+        "index-maintenance.json": {
+          "bytes": 1296,
+          "sha256": "af0c755e958b4d5d47d1be484f8ab2ea7acf4f7bc71430a00e225f242c4706a9"
+        },
+        "indexes.json": {
+          "bytes": 913,
+          "sha256": "2cee151f1e096a9a7861ae68b267ac574529f760a11398a4954039fc6d05e692"
+        },
+        "mesh_signing_key.json": {
+          "bytes": 127,
+          "sha256": "93aa474170772fb185252c8f496874f56e1be30e7d21aa821117563d20c8169c"
+        },
+        "segments/__bicdb_pg_schema.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "segments/__bicdb_pg_user_type_oids.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "segments/high.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "segments/low.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "segments/p.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "store.lock": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "sync_state.json": {
+          "bytes": 340,
+          "sha256": "abcc0a3754d92cab992583c106c28f838bbde1e16f3210df15f8145181654430"
+        },
+        "transactions.log": {
+          "bytes": 10148,
+          "sha256": "991bea44132d43acd92c3f1d40a58c3191624b86bb2f554d5a61bd71448fe9ac"
+        }
+      },
+      "format": {
+        "format_version": 2,
+        "min_reader_version": 1,
+        "min_writer_version": 2,
+        "feature_flags": [
+          "format_metadata_v2"
+        ],
+        "storage_mode": "embedded_memory"
+      }
+    },
+    {
+      "mode": "embedded_memory",
+      "name": "bad_child_bound",
+      "directory": "/root/bicdb-durability-s3/partition-old-store-fixtures-482-20261112/embedded_memory-bad_child_bound",
+      "commands": [
+        {
+          "sql": "CREATE TABLE p(k INT PRIMARY KEY,payload TEXT) PARTITION BY RANGE(k)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE TABLE high PARTITION OF p FOR VALUES FROM(10) TO(20)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "INSERT INTO low VALUES(11,'out-of-bound-child-ack')",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"INSERT 0 1\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM p ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM low ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [\n    [\n      11,\n      \"out-of-bound-child-ack\"\n    ]\n  ],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM high ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT tablename,policyname,qual FROM pg_policies ORDER BY tablename,policyname",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"tablename\",\n    \"policyname\",\n    \"qual\"\n  ],\n  \"rows\": []\n}\n",
+          "stderr": ""
+        }
+      ],
+      "status": "old_binary_fixture_closed",
+      "files": {
+        ".backup-write.lock": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "collections.json": {
+          "bytes": 655,
+          "sha256": "59038c9da7835f704cee7c665bdaeacb83035619acc3b7d82ec44ffad8d361b7"
+        },
+        "events/events.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "format.json": {
+          "bytes": 167,
+          "sha256": "81e9e5eefc2dc0a7836d9701a9c17416ca1303b975aec96cd66e3e53eb7881c0"
+        },
+        "incarnations.log": {
+          "bytes": 952,
+          "sha256": "06a58087b7bc3fd5901ec00271f5da3e3e4836a11da07f087b3e9b3e81e17c8c"
+        },
+        "index-maintenance.json": {
+          "bytes": 332,
+          "sha256": "388607cd2a312d511e1b9b0838389572e5409233fd16500aa0975acc214de069"
+        },
+        "indexes.json": {
+          "bytes": 231,
+          "sha256": "2776237c37238ee3e69f48cbb00d6651a50c6b41e00addd24f8daebcb8da6231"
+        },
+        "mesh_signing_key.json": {
+          "bytes": 127,
+          "sha256": "eaa788b466117ab97f86dc9832163539ad5513d4e14b0cb31395255eec39b9a3"
+        },
+        "segments/__bicdb_pg_schema.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "segments/__bicdb_pg_user_type_oids.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "segments/high.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "segments/low.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "segments/p.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "store.lock": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "sync_state.json": {
+          "bytes": 340,
+          "sha256": "cf2b97285d6c202e1696a632ea5dcd3c1e73164643833d185af811a81144d6b9"
+        },
+        "transactions.log": {
+          "bytes": 4816,
+          "sha256": "3db844c508561f12e0098daf3b769a35f956eab91f6a181b71cd5429df213bdc"
+        }
+      },
+      "format": {
+        "format_version": 2,
+        "min_reader_version": 1,
+        "min_writer_version": 2,
+        "feature_flags": [
+          "format_metadata_v2"
+        ],
+        "storage_mode": "embedded_memory"
+      }
+    },
+    {
+      "mode": "embedded_memory",
+      "name": "independent_child_policy",
+      "directory": "/root/bicdb-durability-s3/partition-old-store-fixtures-482-20261112/embedded_memory-independent_child_policy",
+      "commands": [
+        {
+          "sql": "CREATE TABLE p(k INT PRIMARY KEY,payload TEXT) PARTITION BY RANGE(k)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE TABLE high PARTITION OF p FOR VALUES FROM(10) TO(20)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "INSERT INTO low VALUES(2,'low-policy-ack')",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"INSERT 0 1\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "INSERT INTO high VALUES(11,'high-policy-ack')",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"INSERT 0 1\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE ROLE legacy_reader",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE ROLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "GRANT SELECT ON p,low,high TO legacy_reader",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"GRANT\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "ALTER TABLE p ENABLE ROW LEVEL SECURITY",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"ALTER TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "ALTER TABLE p FORCE ROW LEVEL SECURITY",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"ALTER TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE POLICY parent_guard ON p FOR SELECT USING(k<10)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE POLICY\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "ALTER TABLE high ENABLE ROW LEVEL SECURITY",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"ALTER TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE POLICY authored_child ON high FOR SELECT USING(k=11)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE POLICY\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SET ROLE legacy_reader; SELECT k,payload FROM p ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SET ROLE legacy_reader; SELECT k,payload FROM low ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [\n    [\n      2,\n      \"low-policy-ack\"\n    ]\n  ],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SET ROLE legacy_reader; SELECT k,payload FROM high ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM p ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM low ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [\n    [\n      2,\n      \"low-policy-ack\"\n    ]\n  ],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM high ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT tablename,policyname,qual FROM pg_policies ORDER BY tablename,policyname",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"tablename\",\n    \"policyname\",\n    \"qual\"\n  ],\n  \"rows\": [\n    [\n      \"high\",\n      \"parent_guard\",\n      \"(k < 10)\"\n    ],\n    [\n      \"low\",\n      \"parent_guard\",\n      \"(k < 10)\"\n    ],\n    [\n      \"p\",\n      \"parent_guard\",\n      \"(k < 10)\"\n    ]\n  ]\n}\n",
+          "stderr": ""
+        }
+      ],
+      "status": "old_binary_fixture_closed",
+      "files": {
+        ".backup-write.lock": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "collections.json": {
+          "bytes": 924,
+          "sha256": "834822c5ae5e33f4d2c072a0c3ef426a89eb2ac0fa946b68fde713c822e4a535"
+        },
+        "events/events.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "format.json": {
+          "bytes": 167,
+          "sha256": "81e9e5eefc2dc0a7836d9701a9c17416ca1303b975aec96cd66e3e53eb7881c0"
+        },
+        "incarnations.log": {
+          "bytes": 2273,
+          "sha256": "06da0f950c6e22f157fbf73478469d014a489c01812bbff95d1207babc01e60e"
+        },
+        "index-maintenance.json": {
+          "bytes": 332,
+          "sha256": "8fabb05ab779590e4c00de32f39f3353e1d4801268a8f2584639ebc2d849bc33"
+        },
+        "indexes.json": {
+          "bytes": 231,
+          "sha256": "2776237c37238ee3e69f48cbb00d6651a50c6b41e00addd24f8daebcb8da6231"
+        },
+        "mesh_signing_key.json": {
+          "bytes": 127,
+          "sha256": "8b30c0711c4f8b1eae536f612aaadc857c475e6ee8e6b4bc4cdbdb79e785c56b"
+        },
+        "segments/__bicdb_pg_privileges.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "segments/__bicdb_pg_roles.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "segments/__bicdb_pg_schema.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "segments/__bicdb_pg_user_type_oids.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "segments/high.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "segments/low.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "segments/p.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "store.lock": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "sync_state.json": {
+          "bytes": 340,
+          "sha256": "10a168c2080084d612a3b19176b6153f40a5d2d4bd63ed903596f827525e651c"
+        },
+        "transactions.log": {
+          "bytes": 19033,
+          "sha256": "da833bf8c820140775af1940905c924e98e09a7a2d4c18f8d76bd26c66931eb3"
+        }
+      },
+      "format": {
+        "format_version": 2,
+        "min_reader_version": 1,
+        "min_writer_version": 2,
+        "feature_flags": [
+          "format_metadata_v2"
+        ],
+        "storage_mode": "embedded_memory"
+      }
+    },
+    {
+      "mode": "server_paged",
+      "name": "parent_heap",
+      "directory": "/root/bicdb-durability-s3/partition-old-store-fixtures-482-20261112/server_paged-parent_heap",
+      "commands": [
+        {
+          "sql": "CREATE TABLE p(k INT PRIMARY KEY,payload TEXT) PARTITION BY RANGE(k)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE TABLE high PARTITION OF p FOR VALUES FROM(10) TO(20)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE INDEX p_payload_idx ON p(payload)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE INDEX\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE INDEX low_payload_idx ON low(payload)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE INDEX\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE INDEX high_payload_idx ON high(payload)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE INDEX\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "INSERT INTO p VALUES(1,'parent-low-ack'),(11,'parent-high-ack')",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"INSERT 0 2\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "INSERT INTO low VALUES(2,'child-low-ack')",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"INSERT 0 1\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "INSERT INTO high VALUES(12,'child-high-ack')",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"INSERT 0 1\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM p ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [\n    [\n      1,\n      \"parent-low-ack\"\n    ],\n    [\n      11,\n      \"parent-high-ack\"\n    ]\n  ],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM low ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [\n    [\n      2,\n      \"child-low-ack\"\n    ]\n  ],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM high ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [\n    [\n      12,\n      \"child-high-ack\"\n    ]\n  ],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT tablename,policyname,qual FROM pg_policies ORDER BY tablename,policyname",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"tablename\",\n    \"policyname\",\n    \"qual\"\n  ],\n  \"rows\": []\n}\n",
+          "stderr": ""
+        }
+      ],
+      "status": "old_binary_fixture_closed",
+      "files": {
+        ".backup-write.lock": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "btree-index-builds/1ea18e9f0895e49d95752dc184860989c8c19a2400e171df786c9698aa84e0f3.json": {
+          "bytes": 703,
+          "sha256": "6d9d1e200d495e1be940b14081ab733a1b00ccc24a92c67b3fceb7ed161a01e7"
+        },
+        "btree-index-builds/393d793e4bf8d95e6aff8f01dfe25cc073ff8dabddd1d773a7e08aae15430fdc.json": {
+          "bytes": 712,
+          "sha256": "c976ec63d6a4494b865e60acff5e2c29a8a78930f762abfd7b387bc4e772351c"
+        },
+        "btree-index-builds/f1f33c0affd1259ee8946cb0bf2ca03c9ccdfba1c7ebe2d72fc5ac52225e8c52.json": {
+          "bytes": 709,
+          "sha256": "96a6795c4caaccca3485738e626e5580237e265739c490745c6213e25df2516f"
+        },
+        "collections.json": {
+          "bytes": 655,
+          "sha256": "59038c9da7835f704cee7c665bdaeacb83035619acc3b7d82ec44ffad8d361b7"
+        },
+        "commit-seq.floor": {
+          "bytes": 9,
+          "sha256": "68b5e2f10fde10ee7e12626cad6dbcb872f7da7c36ba20087f4d4371d5339f44"
+        },
+        "events/events.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "format.json": {
+          "bytes": 192,
+          "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+        },
+        "fts-index-generations.json": {
+          "bytes": 280,
+          "sha256": "60b4b1cd33c9d8b42cb9f322772b9094f071670fa2ea4344a22ba80eac2127ee"
+        },
+        "incarnations.log": {
+          "bytes": 1789,
+          "sha256": "c3ad49263a307c5c85cfd4423ac463661a291c42b819b02de35110a844fa03fc"
+        },
+        "index-maintenance.json": {
+          "bytes": 332,
+          "sha256": "8d27cc94f22fc884a19f9e5d3dcb708c92e1e6d36b0fe06489d96ae5e91cfbb4"
+        },
+        "indexes.json": {
+          "bytes": 913,
+          "sha256": "2cee151f1e096a9a7861ae68b267ac574529f760a11398a4954039fc6d05e692"
+        },
+        "mesh_signing_key.json": {
+          "bytes": 127,
+          "sha256": "f2fec1272c73a21b94d2102652d940910b720f83c9f65f32bc40302d5cb30b4a"
+        },
+        "paged/store.lock": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "paged/store.pages": {
+          "bytes": 40960,
+          "sha256": "f6198a04d11630ac578efd01046721ec110156beadbaee6bcc1a444a7935b330"
+        },
+        "paged/store.wal": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "server.shutdown": {
+          "bytes": 10,
+          "sha256": "fad09ae2fcd83c7f17f2def09e7174504067139512d0f74b986d8b4b295bd148"
+        },
+        "store.lock": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "sync_state.json": {
+          "bytes": 340,
+          "sha256": "7f9decefc0fd708112d3458bb720794adc3f4ec117ffbc83db4ec03bc074810a"
+        },
+        "transactions.log": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "format": {
+        "format_version": 2,
+        "min_reader_version": 1,
+        "min_writer_version": 2,
+        "feature_flags": [
+          "format_metadata_v2",
+          "server_paged_storage"
+        ],
+        "storage_mode": "server_paged"
+      }
+    },
+    {
+      "mode": "server_paged",
+      "name": "bad_child_bound",
+      "directory": "/root/bicdb-durability-s3/partition-old-store-fixtures-482-20261112/server_paged-bad_child_bound",
+      "commands": [
+        {
+          "sql": "CREATE TABLE p(k INT PRIMARY KEY,payload TEXT) PARTITION BY RANGE(k)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE TABLE high PARTITION OF p FOR VALUES FROM(10) TO(20)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "INSERT INTO low VALUES(11,'out-of-bound-child-ack')",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"INSERT 0 1\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM p ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM low ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [\n    [\n      11,\n      \"out-of-bound-child-ack\"\n    ]\n  ],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM high ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT tablename,policyname,qual FROM pg_policies ORDER BY tablename,policyname",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"tablename\",\n    \"policyname\",\n    \"qual\"\n  ],\n  \"rows\": []\n}\n",
+          "stderr": ""
+        }
+      ],
+      "status": "old_binary_fixture_closed",
+      "files": {
+        ".backup-write.lock": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "collections.json": {
+          "bytes": 655,
+          "sha256": "59038c9da7835f704cee7c665bdaeacb83035619acc3b7d82ec44ffad8d361b7"
+        },
+        "commit-seq.floor": {
+          "bytes": 6,
+          "sha256": "3baf0b12ae630355e1554e70f703e50237d8d1e40a6b3ea7ef7668f25fb92b2c"
+        },
+        "events/events.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "format.json": {
+          "bytes": 192,
+          "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+        },
+        "incarnations.log": {
+          "bytes": 1190,
+          "sha256": "fd64cbafdc05c80b293432e4ea43501624005fd3559ab507c4df7bd1bdbbb0ff"
+        },
+        "index-maintenance.json": {
+          "bytes": 332,
+          "sha256": "8ce733825639be2dc2f05638393e84974c655b5c365c2ed9a934447f66b03786"
+        },
+        "indexes.json": {
+          "bytes": 231,
+          "sha256": "2776237c37238ee3e69f48cbb00d6651a50c6b41e00addd24f8daebcb8da6231"
+        },
+        "mesh_signing_key.json": {
+          "bytes": 127,
+          "sha256": "22a5c24a82600c820c774852318608bd0b66e8150c4808090e884cfbc79d0b17"
+        },
+        "paged/store.lock": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "paged/store.pages": {
+          "bytes": 40960,
+          "sha256": "d69e272888423fc5845bcc828df2387bd78bb670d5a75d3b4d368ac784aba5f6"
+        },
+        "paged/store.wal": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "server.shutdown": {
+          "bytes": 10,
+          "sha256": "b9068d355c153a7f6bebbac916c6335911f8d81bfd716dd5182104bb7a49e110"
+        },
+        "store.lock": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "sync_state.json": {
+          "bytes": 340,
+          "sha256": "2345cbb4915d33e30c5fa472990304ff2ca32226928fb8c910878f31c44fd81c"
+        },
+        "transactions.log": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "format": {
+        "format_version": 2,
+        "min_reader_version": 1,
+        "min_writer_version": 2,
+        "feature_flags": [
+          "format_metadata_v2",
+          "server_paged_storage"
+        ],
+        "storage_mode": "server_paged"
+      }
+    },
+    {
+      "mode": "server_paged",
+      "name": "independent_child_policy",
+      "directory": "/root/bicdb-durability-s3/partition-old-store-fixtures-482-20261112/server_paged-independent_child_policy",
+      "commands": [
+        {
+          "sql": "CREATE TABLE p(k INT PRIMARY KEY,payload TEXT) PARTITION BY RANGE(k)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE TABLE high PARTITION OF p FOR VALUES FROM(10) TO(20)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "INSERT INTO low VALUES(2,'low-policy-ack')",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"INSERT 0 1\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "INSERT INTO high VALUES(11,'high-policy-ack')",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"INSERT 0 1\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE ROLE legacy_reader",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE ROLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "GRANT SELECT ON p,low,high TO legacy_reader",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"GRANT\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "ALTER TABLE p ENABLE ROW LEVEL SECURITY",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"ALTER TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "ALTER TABLE p FORCE ROW LEVEL SECURITY",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"ALTER TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE POLICY parent_guard ON p FOR SELECT USING(k<10)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE POLICY\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "ALTER TABLE high ENABLE ROW LEVEL SECURITY",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"ALTER TABLE\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "CREATE POLICY authored_child ON high FOR SELECT USING(k=11)",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [],\n  \"rows\": [],\n  \"command_tag\": \"CREATE POLICY\"\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SET ROLE legacy_reader; SELECT k,payload FROM p ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SET ROLE legacy_reader; SELECT k,payload FROM low ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [\n    [\n      2,\n      \"low-policy-ack\"\n    ]\n  ],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SET ROLE legacy_reader; SELECT k,payload FROM high ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM p ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 105369410,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM low ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [\n    [\n      2,\n      \"low-policy-ack\"\n    ]\n  ],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 52153766,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT k,payload FROM high ORDER BY k",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"k\",\n    \"payload\"\n  ],\n  \"rows\": [],\n  \"column_types\": [\n    \"int4\",\n    \"text\"\n  ],\n  \"column_metadata\": [\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 1,\n      \"type_modifier\": -1\n    },\n    {\n      \"table_oid\": 28896144,\n      \"attribute_number\": 2,\n      \"type_modifier\": -1\n    }\n  ]\n}\n",
+          "stderr": ""
+        },
+        {
+          "sql": "SELECT tablename,policyname,qual FROM pg_policies ORDER BY tablename,policyname",
+          "exit": 0,
+          "stdout": "{\n  \"columns\": [\n    \"tablename\",\n    \"policyname\",\n    \"qual\"\n  ],\n  \"rows\": [\n    [\n      \"high\",\n      \"parent_guard\",\n      \"(k < 10)\"\n    ],\n    [\n      \"low\",\n      \"parent_guard\",\n      \"(k < 10)\"\n    ],\n    [\n      \"p\",\n      \"parent_guard\",\n      \"(k < 10)\"\n    ]\n  ]\n}\n",
+          "stderr": ""
+        }
+      ],
+      "status": "old_binary_fixture_closed",
+      "files": {
+        ".backup-write.lock": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "collections.json": {
+          "bytes": 924,
+          "sha256": "834822c5ae5e33f4d2c072a0c3ef426a89eb2ac0fa946b68fde713c822e4a535"
+        },
+        "commit-seq.floor": {
+          "bytes": 9,
+          "sha256": "3ec1e437bfe1515fcb5e8716d9269941a5014519fc54099f98f29138fa4e9e17"
+        },
+        "events/events.seg": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "format.json": {
+          "bytes": 192,
+          "sha256": "54f5d977028abbac7ea27f18181076c5ca63c6f052bbea62c647aec3a9302123"
+        },
+        "incarnations.log": {
+          "bytes": 2511,
+          "sha256": "672333da6caba117e5ee31ab4681688809b682ea4efdd693f61016abea9db509"
+        },
+        "index-maintenance.json": {
+          "bytes": 332,
+          "sha256": "578aeacc02c4657130363d36af33182b1d03e8f8a554f0cc1d377d6a36676f4f"
+        },
+        "indexes.json": {
+          "bytes": 231,
+          "sha256": "2776237c37238ee3e69f48cbb00d6651a50c6b41e00addd24f8daebcb8da6231"
+        },
+        "mesh_signing_key.json": {
+          "bytes": 127,
+          "sha256": "c996c87e870a7c21fff06e812f3ee054868bffdc5dad9b2deec9fb42006066ed"
+        },
+        "paged/store.lock": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "paged/store.pages": {
+          "bytes": 49152,
+          "sha256": "558d4d0b6f8a5deddfeb551d6aaec931ba50198896d3b6a5d8761fc8150a13e0"
+        },
+        "paged/store.wal": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "server.shutdown": {
+          "bytes": 10,
+          "sha256": "b9068d355c153a7f6bebbac916c6335911f8d81bfd716dd5182104bb7a49e110"
+        },
+        "store.lock": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "sync_state.json": {
+          "bytes": 340,
+          "sha256": "a412db9e4a51069bf6355854e05e1c920d4f06568d931e3de90359b9c3d176f0"
+        },
+        "transactions.log": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "format": {
+        "format_version": 2,
+        "min_reader_version": 1,
+        "min_writer_version": 2,
+        "feature_flags": [
+          "format_metadata_v2",
+          "server_paged_storage"
+        ],
+        "storage_mode": "server_paged"
+      }
+    }
+  ],
+  "finished_unix": 1794489032.438502,
+  "scope": "Six genuine oldmerged482CLI-created SQLpartitionstores; bothmodes; 14independentACKs expected total. Originalclosedstores immutable inputs to future copies; no fabricatedcatalog/index generations. No candidatequalification yet."
+}

@@ -1,0 +1,43 @@
+{
+  "source": "79531c74fc01dbcf0ea199e9ffb39a31b93dd8d0",
+  "scope": "Production byte-identical7e (6native/CALL/compiled+15wire+FK/catalogreader/journal focusedPASS, overall70PASS11FAIL). All11 retained related-target failures stopped on required legacy UUID startup migration with liveSQLowner. Add only trusted initializer before first database use in standalone embedding fixtures. Removing only19new startupcalls restores every original fixture byte, verifiedhashproof; noSQLstrings/assertions/waits/versions changed. Publicprofile initializer alreadydoes startupactivation. Preserve Nativequiescence and missing/nil-image refusal. Collect every remaining actual semantic failure across8relatedtargets; not broad/application/replica qualification.",
+  "started_unix": 1794434489.8849185,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--no-fail-fast",
+        "--test",
+        "schema_table_rename",
+        "--test",
+        "table_rename_views",
+        "--test",
+        "rename_pending_composites",
+        "--test",
+        "renamed_foreign_keys",
+        "--test",
+        "renamed_table_triggers",
+        "--test",
+        "rename_routine_row_types",
+        "--test",
+        "rename_routine_header_dependencies",
+        "--test",
+        "rename_default_privileges",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794434489.8852935,
+      "exit": 0,
+      "finished_unix": 1794434602.5653157
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794434602.5655093
+}

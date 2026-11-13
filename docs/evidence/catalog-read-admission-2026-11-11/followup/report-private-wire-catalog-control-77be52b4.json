@@ -1,0 +1,28 @@
+{
+  "source": "77be52b44153e5b2a501e09610bbf082a708bd59",
+  "scope": "Tests-only real TCP pgwire reader contract. Manual PostgreSQL startup/simple query/Parse/Describe/Sync, native root owner reserves Source+destination data and exact schema rows. Cold/warm builtin literal and unrelated rows mustcontinue whileSource queryrefuses40001; cachedunrelatedstatementDescribe mustcontinue andcachedSourceDescribe mustrefusewithoutRowDescription. SourceScope release restoresSource1. Eachcase closesconnection/listener beforesemantic assertions; bothstores intended, recordreachedcells. Original10sapplicationtimeouts/fsync unchanged; no globalproducer gate relaxed. Prior05b3SQLfocus39+891lib4ignored+419general allpass; readonlydefault3controls alsoallpass, no productionfixneededthere.",
+  "started_unix": 1794417601.547368,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "catalog_read_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794417601.5475764,
+      "exit": 101,
+      "finished_unix": 1794417737.25784
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794417737.2580335
+}

@@ -1,0 +1,16 @@
+{
+  "README.md": "46ea40a8beb9c0556e89982a7c6f0fa3950b1d431e8e5fdb2b032583724e5210",
+  "native-rename-default-privileges-control.json": "8d5d07bd556940653cbce4f2a603280f51d770927f444edd384a3fbe4f4fdbfc",
+  "report-catalog-host-demotion-negative-2cbcf517.json": "9aa6b7d3a776cd7a05e4e9df8c2d25a92cebd77879086035686cf84da41ce1be",
+  "report-catalog-host-effect-bound-negative-97bdaf8b.json": "cf6aac5adb831e66b533ea152de3c8730cbb15dfe35b4ba6730160b9ce569698",
+  "report-catalog-host-effect-bound-positive-2e5566b2.json": "2860bd562eebed9fbd5b4b0b4af57f27e7b246fb9e2c9ff2bfdf0e5b6761cb5f",
+  "report-catalog-host-effect-bound-positive-dd9d199e.json": "87de1c9d97b74b4cc5f6a68597841ce0bcd24731a173821bdbb7f89ecb873346",
+  "report-rename-default-privileges-negative-36a136d6.json": "c6b565f7b2b3f6653fbdf2af5ce0c7b3fbabc61164d507acfbed8d585fa51696",
+  "report-rename-default-privileges-negative-v2-ece30483.json": "102b8cca75a8ff96a04bb25c98d8c96c0ee9e40d5e2dc6471e8f15dafe06ab88",
+  "report-rename-host-ownership-and-acl-0ca35a4d.json": "7dd22265ef63d97a10e88f76e4cf690b0a2025b6a99db23890c01ef6343ff15b",
+  "report-rename-host-ownership-and-acl-21e26367.json": "62832764f2bea31e732943378c39462eb003add297c726b2d3f81e3c69406e7d",
+  "report-rename-host-ownership-and-acl-5188e977.json": "62229b9106e7bd00617a44c05df97efaec186d505e8cbf5eb2f4a9599cf7260e",
+  "report-rename-host-scope-lifecycle-c5625c39.json": "335d9955b6d532fa02e7644ffb8546df3ae14b2a37c8512938a8b69bd1654668",
+  "summary.json": "b29c7e45020903d14ef91e78727276ca8a456cda8d23361427bfdae59df7762d",
+  "test-observations.json": "77257468a6cc9599b8f27c24971073a4f1c8faf271e61deb812ee149a3d62780"
+}

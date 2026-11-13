@@ -1,0 +1,39 @@
+{
+  "label": "partition-child-schema-baseline",
+  "source": "bfd40351e8d268e5ed28138f1bc5e0fda9a0a9ba",
+  "base": "cc84f24fa263965d89697f36a96a9112a16d4016",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "New four NativePG16-observed child-schema requirements on unchangedcc84production (bfdtestonly). Directvsrouteddefaults, unrelatedparentADD/TYPE preservation, column-specificSET/DROPDEFAULT propagation/oneNativecommit, independentchildPK underkeylessparent and physicalparentroute. Bothmodes/two reopens and originalACKs; expected product counterexamples, not qualification. ExactstandardCoreCargoPID1433706birth163475016 onlyparallelallow, separatemetadatarepo/target and28GiBhost floor; monitor12GiB/10GiBhost.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "partition_child_schema",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [],
+  "required_receipts": [],
+  "allow_isolated_builds": [
+    {
+      "pid": 1433706,
+      "start_ticks": 163475016,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

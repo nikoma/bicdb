@@ -1,0 +1,30 @@
+{
+  "source": "0ca35a4df121a4acb8c63aa9715e368192ab4033",
+  "scope": "Private focused ownership and permission batch. Actual negative controls retained: ece30483 leaks changed creation defaults onto renamed table; 21e26367 fixes that but fails valid leading ALTER DEFAULT PRIVILEGES migration batch; 2cbcf517 leaves retained host scope closing after demoted commit refusal. This head leaves multi-statement default privileges to existing SQL-safe split dispatcher and routes standby commit errors through shared scope reopening. Original assertions unchanged. Checks all 9 host lifecycle tests, native reservation races, rename and default ACL regressions, read-only and snapshot behavior, native grants/isolation, and replication/fault regressions. Runtime host admission foundation only; full SQL scoped producer/metadata/type/routine/Describe bridge remains OPEN. Not full workspace, VM, application acceptance, deployed binary, or production qualification.",
+  "started_unix": 1794394558.3630667,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_host_scope",
+        "--test",
+        "catalog_scope_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794394558.3632555,
+      "exit": 101,
+      "finished_unix": 1794394583.4745421
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794394583.4747498
+}

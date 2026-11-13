@@ -1,0 +1,30 @@
+{
+  "source": "2262454a38e25c14e0bcecc95b86c8afccff4383",
+  "scope": "Retain real receiver stores from nativeWAL/range snapshot/schema+snapshot paths in bothtargetstores, plus unflaggedcontrols and expectednativevalue. Runtimecode/deps unchanged fromc3cefocused. Generatedprivatefixture only, noVMorqualification claim. Separate independent olderprocess proof must consume these stores; this command alone only produces/current-reader-verifies fixtures. fa5d helper failed compilation before any fixture/probe; explicitTLSfields and Arc<Record> comparison fixed; runtimecode unchanged.",
+  "started_unix": 1794387183.086684,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "run",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--example",
+        "bootstrap_reader_fixture",
+        "--",
+        "/root/bicdb-durability-s3/bootstrap-reader-fixtures-2262454a"
+      ],
+      "started_unix": 1794387183.0867786,
+      "exit": 0,
+      "finished_unix": 1794387184.083755
+    }
+  ],
+  "status": "focused_passed",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/2262454a38e25c14e0bcecc95b86c8afccff4383/bootstrap_reader_fixture",
+  "binary_sha256": "3b2d684e2503420ba95b4bbdffe28770e4aae9c1222a7ac8efe69f036c27fd53",
+  "finished_unix": 1794387184.115867
+}

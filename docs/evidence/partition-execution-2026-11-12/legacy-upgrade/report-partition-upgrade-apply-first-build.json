@@ -1,0 +1,28 @@
+{
+  "source": "eccbe7140332cfca0a620b796e312e5db5e44b7f",
+  "scope": "Buildonly firstexplicitlocalupgradeAPI: exactsnapshot/decision/relocationpreflight; fencebeforepublication; oneNativeTXmoves/marker/policyarchive/clones/certificate; currentNativeconstraints/indexeffects,publicNativecontextsretained. Newmanualapplyprobechecks4scenariosx2modes+2reopensagainstrealold482copies. AutomaticSQLentry/startupadmission, typedmarkers,generic-savepreservation andremainingfault/namespace/auth/HA gates notimplementedyet; no featurecompletion/delivery.",
+  "started_unix": 1794492135.185932,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--example",
+        "partition_upgrade_probe"
+      ],
+      "started_unix": 1794492135.1860871,
+      "exit": 0,
+      "finished_unix": 1794492214.2986393
+    }
+  ],
+  "status": "focused_passed",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/eccbe7140332cfca0a620b796e312e5db5e44b7f/partition_upgrade_probe",
+  "binary_sha256": "ec539a42e2387d0b5ef7d896e32ddccd19eae218fcd6678c4ee0a7e117b6443a",
+  "finished_unix": 1794492214.595485
+}

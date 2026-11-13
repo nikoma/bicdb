@@ -1,0 +1,24 @@
+{
+  "label": "native-catalog-allocation-source-v4",
+  "repo": "/root/bicdb-sql-final-composition",
+  "source": "c932a98bc86aa221ece871cc6e7d79a3ef0e8efa",
+  "base": "de10b2e33d127d3f82a3201111fb2666319295f9",
+  "scope": "Seven actual Native source allocation regressions, both storage modes. v3 five PASS/two setup failures preserved: recovery checkpoints before returning, so fixture hold must be explicitly persisted before EIO, and protected capture needs an actual verified schema digest. Corrected both preconditions; all identity/ACK/export/refusal assertions retained. Async existing completed collection create stays idempotent; pending/new publication requires fsync. Not authenticated target mapping, SQL promotion acceptance or process/KVM qualification.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "db::native_catalog_allocations::tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ]
+}

@@ -1,0 +1,75 @@
+\set ON_ERROR_STOP on
+BEGIN;
+CREATE SCHEMA partition_child_reference;
+SET LOCAL search_path=partition_child_reference,pg_catalog;
+CREATE TABLE p(k INT PRIMARY KEY,payload TEXT DEFAULT 'parent',qty INT DEFAULT 10) PARTITION BY RANGE(k);
+CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10);
+CREATE TABLE high(k INT PRIMARY KEY,payload TEXT DEFAULT 'high',qty INT DEFAULT 20);
+ALTER TABLE p ATTACH PARTITION high FOR VALUES FROM(10) TO(20);
+ALTER TABLE low ALTER COLUMN payload SET DEFAULT 'low';
+INSERT INTO low(k) VALUES(1);
+INSERT INTO p(k) VALUES(2);
+INSERT INTO high(k) VALUES(11);
+SELECT 'initial',k,payload,qty FROM p ORDER BY k;
+ALTER TABLE p ADD COLUMN note TEXT DEFAULT 'new';
+INSERT INTO low(k) VALUES(3);
+INSERT INTO high(k) VALUES(12);
+SELECT 'after_add',k,payload,qty,note FROM p ORDER BY k;
+ALTER TABLE p ALTER COLUMN payload TYPE VARCHAR(40) USING payload||'!';
+INSERT INTO low(k) VALUES(4);
+INSERT INTO high(k) VALUES(13);
+SELECT 'after_type',k,payload,qty,note FROM p ORDER BY k;
+ALTER TABLE p ALTER COLUMN qty SET DEFAULT 30;
+INSERT INTO low(k) VALUES(5);
+INSERT INTO high(k) VALUES(14);
+SELECT 'after_parent_default',k,payload,qty,note FROM p ORDER BY k;
+ALTER TABLE p ALTER COLUMN qty DROP DEFAULT;
+INSERT INTO low(k) VALUES(6);
+INSERT INTO high(k) VALUES(15);
+SELECT 'after_parent_drop_default',k,payload,qty,note FROM p ORDER BY k;
+CREATE TABLE keyless(k INT,payload INT) PARTITION BY RANGE(k);
+CREATE TABLE ownkey(k INT,payload INT PRIMARY KEY);
+ALTER TABLE keyless ATTACH PARTITION ownkey FOR VALUES FROM(0) TO(10);
+INSERT INTO ownkey VALUES(1,10);
+DO $$BEGIN
+ BEGIN
+  INSERT INTO ownkey VALUES(2,10);
+  RAISE EXCEPTION 'independent child PK was ignored';
+ EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'independent child PK refused %',SQLSTATE;
+ END;
+END$$;
+SELECT 'ownkey',contype,conname FROM pg_constraint WHERE conrelid='ownkey'::regclass ORDER BY conname;
+CREATE TABLE write_parent(k INT,payload TEXT) PARTITION BY RANGE(k);
+CREATE TABLE write_low(k INT,payload TEXT PRIMARY KEY);
+ALTER TABLE write_parent ATTACH PARTITION write_low FOR VALUES FROM(0) TO(10);
+INSERT INTO write_low VALUES(1,'one');
+INSERT INTO write_parent VALUES(2,'two');
+SELECT 'locked',k,payload FROM write_parent ORDER BY k FOR UPDATE;
+UPDATE write_parent SET payload='renamed' WHERE k=1 RETURNING 'updated',k,payload;
+DELETE FROM write_parent WHERE payload='two' RETURNING 'deleted',k;
+DO $$BEGIN
+ IF (SELECT count(*) FROM write_parent WHERE k=1 AND payload='renamed')<>1 OR (SELECT count(*) FROM write_parent)<>1 THEN RAISE EXCEPTION 'independent child update/delete lost ACK'; END IF;
+ BEGIN
+  INSERT INTO write_parent VALUES(3,'renamed');
+  RAISE EXCEPTION 'routed duplicate independent child key accepted';
+ EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'routed child PK refused %',SQLSTATE;
+ END;
+END$$;
+CREATE TABLE move_parent(k INT,payload TEXT) PARTITION BY RANGE(k);
+CREATE TABLE move_low(k INT,payload TEXT PRIMARY KEY);
+CREATE TABLE move_high(k INT,payload TEXT,PRIMARY KEY(k,payload));
+ALTER TABLE move_parent ATTACH PARTITION move_low FOR VALUES FROM(0) TO(10);
+ALTER TABLE move_parent ATTACH PARTITION move_high FOR VALUES FROM(10) TO(20);
+INSERT INTO move_low VALUES(1,'ack');
+INSERT INTO move_high VALUES(13,'other');
+UPDATE move_parent SET k=12 WHERE k=1 RETURNING 'moved',k,payload;
+SAVEPOINT move_s;
+UPDATE move_parent SET k=2 WHERE k=12;
+SELECT 'pending_move',k,payload FROM move_low;
+ROLLBACK TO move_s;
+RELEASE move_s;
+SELECT 'restored_move',k,payload FROM move_parent ORDER BY k;
+DO $$BEGIN
+ IF (SELECT count(*) FROM move_low)<>0 OR (SELECT count(*) FROM move_high)<>2 OR (SELECT count(*) FROM move_parent WHERE k=12 AND payload='ack')<>1 OR (SELECT count(*) FROM move_parent WHERE k=13 AND payload='other')<>1 THEN RAISE EXCEPTION 'different child keys or rollback lost ACK'; END IF;
+END$$;
+ROLLBACK;

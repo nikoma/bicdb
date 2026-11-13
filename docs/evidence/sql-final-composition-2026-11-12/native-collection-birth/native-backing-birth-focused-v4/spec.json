@@ -1,0 +1,117 @@
+{
+  "label": "native-backing-birth-focused-v4",
+  "source": "68de99c6450518e8d67d83b1118d2e7afa4e7374",
+  "base": "d2c85d9879b2bb895bf87aecb68ba749613b19d3",
+  "repo": "/root/bicdb-sql-final-composition",
+  "scope": "Native future-only collection birth batch, actual schema refresh fix preserving target birth instead of dropping it, new5 Native lifecycle/schema/snapshot/frame/restart controls, protected capture6, existing namespace8(+1 historicalignored), relevant Core/SQL/wire alltargets compile and existing Native cluster-schema integration regressions. The unchanged promoted undecided rename positive remains a separate expected OPEN gate. No source attestation, durable import mapping, portable recovery authority, main/application/release/deployment qualification claimed.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "python3",
+      "scripts/bump-version.py",
+      "--check"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "check",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "-p",
+      "bicdb-sql",
+      "-p",
+      "bicdb-pgwire",
+      "--all-targets"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "native_collection_birth::",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "range_image_bindings::",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "local_namespace_identity::",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "sql_rename_snapshot_fence",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "promoted_primary_recovers_an_undecided_replicated_rename_before_sql_writes",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-native-backing-birth-schema-refresh-baseline"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-native-backing-birth-schema-refresh-baseline.json",
+      "equals": {
+        "source": "d2c85d9879b2bb895bf87aecb68ba749613b19d3",
+        "status": "failed"
+      }
+    }
+  ]
+}

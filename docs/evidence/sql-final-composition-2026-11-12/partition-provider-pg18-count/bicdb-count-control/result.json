@@ -1,0 +1,59 @@
+{
+  "source": "82a8311156e2293a92e7cf9c1ffd70d1df92d57a",
+  "status": "observed",
+  "scope": "Freshownedstore; exactproviderparentconstraintCOUNT; no originalbaseline/testbytesmodified, no applicationacceptanceclaim. V1failedharness strippedSQLquotes; itsownedserverstopped, failurepreserved.",
+  "pid": 4137528,
+  "queries": [
+    {
+      "sql": "CREATE SCHEMA adempiere",
+      "rows": []
+    },
+    {
+      "sql": "SET search_path TO adempiere, public",
+      "rows": []
+    },
+    {
+      "sql": "CREATE TABLE parent(k INT NOT NULL,v TEXT NOT NULL) PARTITION BY LIST(k)",
+      "rows": []
+    },
+    {
+      "sql": "SELECT current_setting('server_version'),bicdb_version()",
+      "rows": [
+        [
+          "18.4",
+          "1.0.490-beta"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT conname,contype::text FROM pg_constraint WHERE conrelid='parent'::regclass ORDER BY conname",
+      "rows": [
+        [
+          "__bicdb_s_5992dd91c241b5b7d628a7e3b48620ec93c84402055595724bd625d4b937c6b3_706172656e74_k_not_null",
+          "n"
+        ],
+        [
+          "__bicdb_s_5992dd91c241b5b7d628a7e3b48620ec93c84402055595724bd625d4b937c6b3_706172656e74_v_not_null",
+          "n"
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT COUNT(*) FROM pg_constraint c WHERE conrelid=LOWER('parent')::regclass",
+      "rows": [
+        [
+          2
+        ]
+      ]
+    },
+    {
+      "sql": "SELECT COUNT(*) FROM pg_constraint c WHERE conrelid=LOWER('parent')::regclass AND contype<>'n'",
+      "rows": [
+        [
+          0
+        ]
+      ]
+    }
+  ],
+  "owned_server_stopped": true
+}

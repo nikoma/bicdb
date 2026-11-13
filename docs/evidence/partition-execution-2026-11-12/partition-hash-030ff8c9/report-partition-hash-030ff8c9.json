@@ -1,0 +1,89 @@
+{
+  "source": "030ff8c91c01f2810abd2f90fdaa5a9f88a0ec35",
+  "scope": "Evolvingpartitionbatch: actualNativePG16physicalINSERT/tableoid106hashvectors forint/text/float/mixed inclNULL/negative/longUTF8/NaN/Infinity; bothstores+2reopens anddirectwrongleaf23514; mixed2/4moduli. Existing13bounds+8executionandtimezonehashcontrolsretained. Hashcommon scalarssupported; numeric/temporal/UDT/hashopclasses andupsert/triggers/upgrade/locks/concurrency/broad remainpending. Prior75121PASS, olde0atomic2commitscounterexampleretained. No fullbatch/app/HAcompletionclaim.",
+  "started_unix": 1794482954.7346256,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_hash",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794482954.734812,
+      "exit": 0,
+      "finished_unix": 1794483035.336129
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_bounds",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483035.3363328,
+      "exit": 0,
+      "finished_unix": 1794483043.4516125
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_execution",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483043.4518397,
+      "exit": 0,
+      "finished_unix": 1794483051.1617296
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "timezone_catalog_hash",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483051.161951,
+      "exit": 0,
+      "finished_unix": 1794483056.9379425
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794483056.9382014
+}

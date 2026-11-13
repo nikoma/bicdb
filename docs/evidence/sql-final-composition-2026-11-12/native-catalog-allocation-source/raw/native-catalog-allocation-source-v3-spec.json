@@ -1,0 +1,24 @@
+{
+  "label": "native-catalog-allocation-source-v3",
+  "repo": "/root/bicdb-sql-final-composition",
+  "source": "de10b2e33d127d3f82a3201111fb2666319295f9",
+  "base": "fe0ebfae874aa04a04f0152626822d9e0b5e0609",
+  "scope": "Actual Native source allocation producer seven focused regressions, both storage modes. v2 had four PASS and two fixture failures: paged-only format enabled on EmbeddedMemory, and history retention not restored before retry commit. Both corrected without weakening producer/identity/ACK assertions; v2 evidence retained. Also check async reopen refuses publication before catalog changes. This is not target mapping/authenticated import/SQL promotion or independent process/KVM qualification.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "db::native_catalog_allocations::tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ]
+}

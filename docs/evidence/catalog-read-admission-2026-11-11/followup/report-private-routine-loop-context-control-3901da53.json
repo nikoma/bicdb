@@ -1,0 +1,28 @@
+{
+  "source": "3901da53e7928af000817f2042659fd886824213",
+  "scope": "Tests-only next routine owner transition requirement after current658 preflight batch (core25 +SQL37 focused passed; broad live). Repeated WHILE conditions with rowtype casts or scalar subqueries must select actual post-COMMIT owner instead of an enclosing structural statement stale readframe. Real procedure inserts two separate committed rows; no pendingtransaction afterCALL, bothstores intended. Record actualoutcome; no claim failure until executed, no assertions or global gate changed. Existingfullpublic471 app/HA/VM results separate.",
+  "started_unix": 1794415950.3842583,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "catalog_read_routine_transitions",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794415950.3843572,
+      "exit": 101,
+      "finished_unix": 1794415954.2707348
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794415954.2709148
+}

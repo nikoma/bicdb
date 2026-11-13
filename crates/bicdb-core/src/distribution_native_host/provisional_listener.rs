@@ -19,7 +19,7 @@ pub use registration::NativeRegisteredReplicaReceiverStatus;
 pub(crate) use registration::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
 pub(crate) use registration::{
     NativeAssignedDataAdmission, NativeAssignedDataPolicyOrigin,
-    NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission,
+    NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission, NativeRegisteredRemoteImageStep,
     NativeRegisteredReplicaAdmission,
 };
 pub(crate) use registration::{

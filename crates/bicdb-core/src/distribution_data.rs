@@ -80,6 +80,8 @@ mod native_range_read;
 mod native_ready;
 #[cfg(feature = "tls-replication")]
 mod registered_metadata_catchup;
+#[cfg(feature = "tls-replication")]
+mod remote_image_target;
 pub(crate) use native_range_read::{
     ActualServiceNativeReadEvidence, ActualServiceNativeReadProbeEvidence,
 };

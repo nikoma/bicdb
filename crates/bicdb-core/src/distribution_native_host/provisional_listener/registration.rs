@@ -20,7 +20,7 @@ use registered_replica::NativeRegisteredReplicaReceiver;
 pub use registered_replica::NativeRegisteredReplicaReceiverStatus;
 pub(crate) use registered_replica::{
     NativeAssignedDataPolicyOrigin, NativeAssignedRegisteredClosedFence,
-    NativeRegisteredReplicaAdmission,
+    NativeRegisteredRemoteImageStep, NativeRegisteredReplicaAdmission,
 };
 mod maintenance;
 use initial_data::NativeInitialDataHost;

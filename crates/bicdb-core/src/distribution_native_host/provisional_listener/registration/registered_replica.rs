@@ -9,7 +9,9 @@ use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use std::sync::Weak;
 
 mod closed_fence;
+mod remote_image;
 pub(crate) use closed_fence::NativeAssignedRegisteredClosedFence;
+pub(crate) use remote_image::NativeRegisteredRemoteImageStep;
 mod assigned_policy;
 pub(crate) use assigned_policy::NativeAssignedDataPolicyOrigin;
 

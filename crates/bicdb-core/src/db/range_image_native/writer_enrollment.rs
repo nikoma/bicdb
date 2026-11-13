@@ -540,6 +540,18 @@ impl BicDb {
         result.require_borrowed(self, &hook)?;
         Ok(result)
     }
+    /// A remote Registered image request cannot adopt a possibly durable
+    /// policy whose hook publication has not completed. Necessary refusal
+    /// only, called outside the native journal; this grants no image writes.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_registered_remote_image_writer_absence(
+        &self,
+        original: &NativeRegisteredReceiverHook,
+    ) -> Result<()> {
+        original.require_current(self)?;
+        self.require_never_installed_receiver_writer_records()?;
+        original.require_current(self)
+    }
     #[cfg(feature = "tls-replication")]
     pub(crate) fn with_assigned_closed_writer_exclusion<R>(
         &self,

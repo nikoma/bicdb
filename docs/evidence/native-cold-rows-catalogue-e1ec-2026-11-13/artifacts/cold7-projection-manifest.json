@@ -1,0 +1,229 @@
+{
+  "format_version": 1,
+  "included_members": [
+    {
+      "bytes": 20574,
+      "path": "fault-state/native-registered-fifth-image-01a1d669-9d69-7dd3-b237-d308ac74cac7/ack-ledger.json",
+      "sha256": "dfaa6088db3623493fae0de4a158e173df2d10aeea4eec79b2d4ce37f5f8de7f"
+    },
+    {
+      "bytes": 537,
+      "path": "fault-state/native-registered-fifth-image-01a1d669-9d69-7dd3-b237-d308ac74cac7/execution-identity.json",
+      "sha256": "3e4fea08fbdeefbd788ad031867b81171b1075308e48cfd0d153d74830c51337"
+    },
+    {
+      "bytes": 142210,
+      "path": "fault-state/native-registered-fifth-image-01a1d669-9d69-7dd3-b237-d308ac74cac7/fence-ledger.json",
+      "sha256": "a39c4724d25635de665f91bfb278b5ce5842275437615d4ef20b2853aa1589f7"
+    },
+    {
+      "bytes": 122642,
+      "path": "fault-state/native-registered-fifth-image-01a1d669-9d69-7dd3-b237-d308ac74cac7/registered-proposal-1.json",
+      "sha256": "1d23a57b1360d912182535e43def4ea441391e586b550329b1e9805c8676823f"
+    },
+    {
+      "bytes": 38617,
+      "path": "fault-state/native-registered-fifth-image-01a1d669-9d69-7dd3-b237-d308ac74cac7/remote-old-ledger.json",
+      "sha256": "77eec968f0cecbc13cb300174b8f3162e54bac5b5515975d2a491a74eee03a25"
+    },
+    {
+      "bytes": 78330,
+      "path": "fault-state/native-registered-fifth-image-01a1d669-9d69-7dd3-b237-d308ac74cac7/source-frame-ledger.json",
+      "sha256": "2294f09b333d1016fe3118473a5892f6accae8dee07249503fa6e230006464ce"
+    },
+    {
+      "bytes": 633,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/actual-applied-known-marker.json",
+      "sha256": "f6817e66484190dce2f81fc9ecca1e5e5a730ad6ecd143e46f64c6b45906efd5"
+    },
+    {
+      "bytes": 13266,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/actual-applied-known-marker.pre.json",
+      "sha256": "89270e028f93acbc0cfcca253ab924603a0dde3cdfd622858b2fd185cfc0f79e"
+    },
+    {
+      "bytes": 135557,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/child.stderr.log",
+      "sha256": "d26a57b9e16935938575f65f8083dc65b4ffd2f0c65e97ca75578f17c80bd2a5"
+    },
+    {
+      "bytes": 289,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/child.stdout.log",
+      "sha256": "f56b775e4fddc53d0e425d1c1b9efcc2457d05fec39a1067f4a0e74d65732a98"
+    },
+    {
+      "bytes": 32764,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/registered-row-cold-preservation.json",
+      "sha256": "dcf392b1158bcfc3871e6dc96cd126be25c4c59a1e089eb43c0684ad72a9db48"
+    },
+    {
+      "bytes": 1071,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/registered-row-cold-readonly-wal-facts.json",
+      "sha256": "69ce48c1e4f8a1a814d0d4a3e7a7b7bb7d0c354f056bc796b4059ef9d2ed2487"
+    },
+    {
+      "bytes": 12973,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/stopped-target-custody-inventory.json",
+      "sha256": "d84b3052628a40705650b3bc4aeccb006c7fa981abd0ee8f1ad40665044ed7d8"
+    },
+    {
+      "bytes": 196,
+      "path": "rustc.txt",
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    {
+      "bytes": 287193,
+      "path": "selected-tests.log",
+      "sha256": "0eadafa919f9c305aea33f0e841860e9d8aca3fccc381d6e2d1b496deab244f9"
+    },
+    {
+      "bytes": 41,
+      "path": "source-revision.txt",
+      "sha256": "67df47aeb6a5f22b2d678b5bd5ec6a02eafc5ec1552e878578f9a506912480ca"
+    },
+    {
+      "bytes": 288107,
+      "path": "tests.log",
+      "sha256": "acd24591f4b415edafa40a72d99197a87bc0f2ca6f2776198afdbca5924f1f5b"
+    }
+  ],
+  "omitted_members": [
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/.backup-write.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 8665,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/cluster-range-write-log.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "8a159da7280b8bd5222568fc583ff0c5a19002d8ef75acfbbc5352e456379b03"
+    },
+    {
+      "bytes": 418,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/collections.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "65ff011373091410a0784c69da5a55bc130f0c1ed3d539c98f253304705475ff"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/events/events.seg",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 556,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/format.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "26f8751bdaf058a5d34ee6ea94d1481010d313605aaf7ff2f5bdb6d197e074b7"
+    },
+    {
+      "bytes": 238,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/incarnations.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "bd61d2a3a6dbe481e39af2204da2e31122570e002ef953d09d6270f765747cd5"
+    },
+    {
+      "bytes": 127,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/mesh_signing_key.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "ccc6e8615f9d4ac265cf1d62540678f81fea018d8f9cc1998adbbee3ffaac01c"
+    },
+    {
+      "bytes": 11339,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/native-learner-metadata/cluster-metadata-consensus.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "ee4ef594f2c4dd58484d9a616537be9f4b4c35b65fdc69bc36865e7032f7599d"
+    },
+    {
+      "bytes": 5247,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/native-learner-metadata/native-learner-metadata-original-c.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "50eda191a07723340693c83aec0becf639d5ec48e5afa1ffb5d2e45d89cde940"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/native-learner-metadata/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/native-range-catalogue-owner/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 1831,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/native-unassigned-learner.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "b7cabcf024c6c2dcc5eb888295d0af4805885fcd09cd7714fef89026dc9c6052"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/paged/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 98304,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/paged/store.pages",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "f83260675d69d22db51bbf38fb4933f6680b15b7f92300781c62cd5739ca0cab"
+    },
+    {
+      "bytes": 247320,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/paged/store.wal",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "71e73116534aace9872efea6aea8e90943e521cd81a6ed2c06693f8199b6e75f"
+    },
+    {
+      "bytes": 1084,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/range-image-factory.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "928c6364c3fa7a72a0bee7a139fface2c994fa87144adb6f5f4ec4f0cf4639bb"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/sync.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 340,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/sync_state.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "86c2eb88a5b4523e393297b063745d5ad6d102973c5bf09e895f6cbfea2f0864"
+    },
+    {
+      "bytes": 568,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/custody/stopped-target-before-first-open/transactions.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e22ef4c4acc0545072527146176d2391ffadcac1d6452858eb5dd30535b89693"
+    },
+    {
+      "bytes": 568,
+      "path": "fault-state/native-registered-row-cold-preservation-01a1d669-9421-73a3-a7ac-2da265e0466f/retained-original-logical-wal.bin",
+      "reason": "outside explicit public logical-ledger/report/toolchain whitelist",
+      "sha256": "e22ef4c4acc0545072527146176d2391ffadcac1d6452858eb5dd30535b89693"
+    }
+  ],
+  "original_archive_unchanged": true,
+  "original_fixture_db_custody_present": true,
+  "original_zip_bytes": 140874,
+  "original_zip_sha256": "72bc86052384d59c1c2bdf1c590a7b29301caacb7b534b54438c12c830c0506b",
+  "projection_fixture_db_custody_present": false,
+  "projection_policy": "Only explicit logical JSON ledgers/reports and source/toolchain/test logs; entire DB/custody trees and custody manifests excluded",
+  "projection_zip_bytes": 112294,
+  "projection_zip_sha256": "a1b5a04be33f724181be4665fcbedcd116f033657c9ba35904550db5a0ed1bd5",
+  "projector_sha256": "e88fe0977435e9796d84b2e45e901bb07db6983f66486aa0e8cb8275a1e97c15",
+  "qualification": "No completed target Image, cold replay, physical HA, Serving or production qualification is implied by retained custody or this projection",
+  "source_commit": "e1ecfeab71d3f1e104530e9d6aa3bf37971abd65"
+}

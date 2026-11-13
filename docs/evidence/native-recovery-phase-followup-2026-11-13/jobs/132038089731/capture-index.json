@@ -1,0 +1,27 @@
+{
+  "source_revision": "fd4d0595d70e82dff20889c19918e34dbd42575d",
+  "run_id": 43469675906,
+  "job_id": 132038089731,
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "raw_bytes": 2547249,
+  "raw_sha256": "c507d60227a429c3a4b72e59d9951d57f40582d3b2e01a973d0da38db8b64edc",
+  "compressed_sha256": "23d0ce8e519a8c43c38cc884f166295b479cfd8222ee89f9eaa5c314a15fb32d",
+  "test_summaries": [
+    "2026-11-13T17:11:08.1759784Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 1037 filtered out; finished in 9.95s"
+  ],
+  "test_observations": [
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_catalogue_same_owner_preserves_rows",
+      "result": "ok"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_after_fsync_cancel_fresh_same_attempt",
+      "result": "ok"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_directory_sync_error_retries_exact_catalogue",
+      "result": "ok"
+    }
+  ]
+}

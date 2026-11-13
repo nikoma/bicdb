@@ -1,0 +1,40 @@
+{
+  "source_revision": "ea7d8e3494d788fc9b1c88bb87101df2ba1d0d45",
+  "run_id": 43472582176,
+  "run_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T17:29:39.190234+00:00",
+  "selector": "native_registered_fifth_remote_image_actual_stored_history_rows_beyond_b0_preserve_other_range",
+  "passed": [
+    "formatting",
+    "licensing",
+    "public dependency boundary",
+    "focused selector validation"
+  ],
+  "failed": {
+    "workspace_alltargets_compile": "E0277: NativeRegisteredRemoteRowTransactionGrant missing Debug",
+    "core_projection_helper_compile": "same E0277 before test listing/execution"
+  },
+  "not_tested": [
+    "focused Rust history/row test",
+    "workflow consumer compilation",
+    "actual target history/row apply",
+    "readiness/Serving",
+    "physical failure/rebalance/scale-out"
+  ],
+  "rust_tests_executed": 0,
+  "actual_row_fixture_available": false,
+  "safe_fixture_projection_created": false,
+  "raw_job_indices": [
+    "/tmp/bicdb-native-foundations-ci/ea7-registered-history-rows-alltargets-job132048033766-index.json",
+    "/tmp/bicdb-native-foundations-ci/ea7-registered-history-rows-core-job132048081792-index.json"
+  ],
+  "run_metadata": "/tmp/bicdb-native-foundations-ci/ea7-registered-history-rows-run43472582176-terminal.json",
+  "prepared_fix_commit": "a5ffc9d15ce75b2b6b0d987c7ea61f184cfe8988",
+  "fix_local_checks": [
+    "rustfmt",
+    "git diff --check",
+    "bump-version --check: 29 packages 1.0.494-beta, no tracked version changes"
+  ],
+  "successor_dispatched": false,
+  "original_failed_run_unchanged": true
+}

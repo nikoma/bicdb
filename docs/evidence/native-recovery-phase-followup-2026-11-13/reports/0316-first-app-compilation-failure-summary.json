@@ -1,0 +1,17 @@
+{
+  "source_commit": "031681576891112929f65f77b09787e56120b41c",
+  "run": 43465672013,
+  "core_job": 132024082465,
+  "all_target_job": 132024038303,
+  "classification": "failed_compilation",
+  "test_selected_or_executed": false,
+  "failure": "E0308 diagnostic first_app_diagnostic.rs136 returned &Option<String> where Option<_> required",
+  "fix_commit": "d09d1ca494cfb5d629817cafb18b88388f2f1403",
+  "fixture_state_or_db_evidence_present": false,
+  "qualification": false,
+  "artifact_members": [
+    "selected-tests.log",
+    "rustc.txt",
+    "source-revision.txt"
+  ]
+}

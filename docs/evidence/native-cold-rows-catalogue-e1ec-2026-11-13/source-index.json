@@ -1,0 +1,33 @@
+{
+  "source_revision": "e1ecfeab71d3f1e104530e9d6aa3bf37971abd65",
+  "source_tree": "5eda7016ac2787c2cc96e6319944c8cd8c84267e",
+  "source_package_version": "1.0.494-beta",
+  "scope": "Three exact-source terminal focused runs only; no current-main/release/deployment claim",
+  "paths_sha256": {
+    ".github/workflows/tests.yml": "8a3ffcb78e8cc4d2dd1ccd3c5e063d33c922e66fd604ea7dd0a21f830e51ccf8",
+    "Cargo.toml": "7c756098550cdd9c86d781044c6427a369dc9983ce9296df07ed4d720ae7a3ad",
+    "crates/bicdb-core/src/db.rs": "b75d849cdcdc4a9aaeaaf58d9edfc462bf759bb8322b58ebfcc7994643668b7d",
+    "crates/bicdb-core/src/db/native_wal_apply.rs": "ff50daf2f8bf2b920a67f0ae705496ead81389316d444e034455e36a995381e5",
+    "crates/bicdb-core/src/db/range_image_install/registered_remote.rs": "9acf433cf04ed1e01769558fc09429fb611efa281c7139fb390dc20f1e7e1f05",
+    "crates/bicdb-core/src/db/range_image_native/registered_remote_image/rows.rs": "594c4f0ddfa7d4b45023429b3ab4d8ae586d9ebfb25558d1914709a77adf003d",
+    "crates/bicdb-core/src/db/registered_row_retention.rs": "43b38de65145d31447505ea7eac4f865467664a2c470845a746acaa16a8cb90a",
+    "crates/bicdb-core/src/db/registered_row_wal_inspection.rs": "c5ed13eeeceb27395f2086a7a4646638bb2eecb781ba9c156589ed074324b7fb",
+    "crates/bicdb-core/src/db/replication_live.rs": "b97b9e488436d7e3fe49d2c9ea73062ad994ba314af731817a68bfb2770accfe",
+    "crates/bicdb-core/src/db/spatial_paged.rs": "b52edc8ceb0ea2ca2f85a71f1db99ef6a77eeaac8bc150e47413d9162c6b544c",
+    "crates/bicdb-core/src/distribution_data/registered_remote_catalogue.rs": "adc02b8748743d54c09c9efae33bce4f5df95f5fb53cd350c0ebf3c4028eb6d8",
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_attempt/remote_catalogue.rs": "d5df27df74bb57574dcdb6ba49ed5a045afca6dd800889fb91943462ccb581c8",
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_final_image_tests/catalogue_tests.rs": "749bdadf09f20014772b96ef5ec55931efc0ec71ac767a1c3af60f9a450b4ff2",
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_image_tests.rs": "27c0b7ea658af0eaf1e3284d88bdefe5ed601e1846da8aac3de41ed5405b9f6c",
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_image_tests/cold_preservation_tests.rs": "0d2928df3aabd7c07c6d1fec71cb9c60ea3a32d6181b7200aaceb2bed4a37db2",
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_image_tests/cold_preservation_tests/stopped_custody.rs": "c556e689120fb949a6dddabf7f62910c3eb43abfdf38f2168538ba29ffb8ba40",
+    "crates/bicdb-core/src/distribution_range_consensus/native_image_base/registered_remote.rs": "ce0cbc29d78fbf91223bf09bb0e93e8d2df0933fe4d0d2bf60a15dc933c5d8bd",
+    "crates/bicdb-core/src/format.rs": "d6f5fb3aa6297004217483e2f66ea600c76ffd10c526dde77a2d7122491eea76",
+    "crates/bicdb-core/src/paged_collection.rs": "55371fa3cc72ba0db0f4329650eead2232a2180c0247ae68493ad6ac34b226d1",
+    "crates/bicdb-core/src/storage.rs": "eeece5ddf6b753a661af7cac57f71697e057d32661c9f8c4780cf633801df50e"
+  },
+  "excluded": [
+    "Later e6b native-base diagnostics and source-only reviews",
+    "Earlier failed Azure experiment and 7ac failures remain unchanged in their own archives",
+    "Frozen d690 and phase evidence packets are not modified"
+  ]
+}

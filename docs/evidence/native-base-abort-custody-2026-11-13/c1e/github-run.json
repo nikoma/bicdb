@@ -1,0 +1,353 @@
+{
+  "conclusion": "failure",
+  "createdAt": "2026-11-13T21:25:31Z",
+  "databaseId": 43510565054,
+  "headSha": "c1e4b3a4e8e7ad33c688436830f9af10a4203cc5",
+  "jobs": [
+    {
+      "completedAt": "2026-11-13T21:26:06Z",
+      "conclusion": "success",
+      "databaseId": 132179404056,
+      "name": "Formatting",
+      "startedAt": "2026-11-13T21:25:35Z",
+      "status": "completed",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run dtolnay/rust-toolchain@1.96.0",
+          "number": 3,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run cargo fmt --all -- --check",
+          "number": 4,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4",
+          "number": 8,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 9,
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/nikoma/bicdb/actions/runs/43510565054/job/132179404056"
+    },
+    {
+      "completedAt": "2026-11-13T21:26:14Z",
+      "conclusion": "success",
+      "databaseId": 132179404521,
+      "name": "Public repository has no private dependencies",
+      "startedAt": "2026-11-13T21:25:35Z",
+      "status": "completed",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "number": 3,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Install boundary scanner",
+          "number": 4,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Enforce open-core dependency direction",
+          "number": 5,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4",
+          "number": 10,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 11,
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/nikoma/bicdb/actions/runs/43510565054/job/132179404521"
+    },
+    {
+      "completedAt": "2026-11-13T21:25:45Z",
+      "conclusion": "success",
+      "databaseId": 132179404609,
+      "name": "Licensing invariants",
+      "startedAt": "2026-11-13T21:25:35Z",
+      "status": "completed",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "scripts/validate-licensing.sh",
+          "number": 3,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4",
+          "number": 6,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 7,
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/nikoma/bicdb/actions/runs/43510565054/job/132179404609"
+    },
+    {
+      "completedAt": "2026-11-13T21:25:39Z",
+      "conclusion": "success",
+      "databaseId": 132179404626,
+      "name": "Validate focused test selectors",
+      "startedAt": "2026-11-13T21:25:35Z",
+      "status": "completed",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Reject incompatible or malformed selectors",
+          "number": 2,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 3,
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/nikoma/bicdb/actions/runs/43510565054/job/132179404626"
+    },
+    {
+      "completedAt": "2026-11-13T21:31:38Z",
+      "conclusion": "success",
+      "databaseId": 132179404645,
+      "name": "Community-only workspace compiles, tests included",
+      "startedAt": "2026-11-13T21:25:35Z",
+      "status": "completed",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "number": 3,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run Swatinem/rust-cache@v2",
+          "number": 4,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "cargo check --workspace --all-targets",
+          "number": 5,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Workflow consumer compiles without Core defaults",
+          "number": 6,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run Swatinem/rust-cache@v2",
+          "number": 11,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4",
+          "number": 12,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 13,
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/nikoma/bicdb/actions/runs/43510565054/job/132179404645"
+    },
+    {
+      "completedAt": "2026-11-13T21:33:54Z",
+      "conclusion": "failure",
+      "databaseId": 132179457808,
+      "name": "Focused Core library (native_registered_fifth_remote_native_base_actual_)",
+      "startedAt": "2026-11-13T21:25:41Z",
+      "status": "completed",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "number": 3,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run Swatinem/rust-cache@v2",
+          "number": 4,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Build projection chaos helper",
+          "number": 5,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Record source and list selected Core library tests",
+          "number": 6,
+          "status": "completed"
+        },
+        {
+          "conclusion": "failure",
+          "name": "Execute selected Core library tests",
+          "number": 7,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Retain focused source, log and opted-in fault-state evidence",
+          "number": 8,
+          "status": "completed"
+        },
+        {
+          "conclusion": "skipped",
+          "name": "Post Run Swatinem/rust-cache@v2",
+          "number": 15,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4",
+          "number": 16,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 17,
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/nikoma/bicdb/actions/runs/43510565054/job/132179457808"
+    },
+    {
+      "completedAt": "2026-11-13T21:25:39Z",
+      "conclusion": "skipped",
+      "databaseId": 132179459565,
+      "name": "Focused PGwire library (${{ inputs.pgwire_filter }})",
+      "startedAt": "2026-11-13T21:25:39Z",
+      "status": "completed",
+      "steps": [],
+      "url": "https://github.com/nikoma/bicdb/actions/runs/43510565054/job/132179459565"
+    },
+    {
+      "completedAt": "2026-11-13T21:25:39Z",
+      "conclusion": "skipped",
+      "databaseId": 132179459680,
+      "name": "matrix.suite.name",
+      "startedAt": "2026-11-13T21:25:39Z",
+      "status": "completed",
+      "steps": [],
+      "url": "https://github.com/nikoma/bicdb/actions/runs/43510565054/job/132179459680"
+    },
+    {
+      "completedAt": "2026-11-13T21:25:39Z",
+      "conclusion": "skipped",
+      "databaseId": 132179460492,
+      "name": "Focused CLI integration (${{ inputs.cli_target }})",
+      "startedAt": "2026-11-13T21:25:39Z",
+      "status": "completed",
+      "steps": [],
+      "url": "https://github.com/nikoma/bicdb/actions/runs/43510565054/job/132179460492"
+    }
+  ],
+  "status": "completed",
+  "updatedAt": "2026-11-13T21:33:54Z",
+  "url": "https://github.com/nikoma/bicdb/actions/runs/43510565054"
+}

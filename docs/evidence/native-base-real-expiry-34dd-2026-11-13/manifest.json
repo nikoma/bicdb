@@ -1,0 +1,78 @@
+{
+  "format_version": 1,
+  "source_revision": "34dded55efef6ed989cdf7d141d5751d4f2a2391",
+  "source_package_version": "1.0.494-beta",
+  "run": 43502925624,
+  "core_job": 132153142118,
+  "all_targets_job": 132153086320,
+  "runtime_result": {
+    "passed": 1,
+    "failed": 1,
+    "suite_seconds": 18.06,
+    "duration_is_RTO": false
+  },
+  "classification": "confirmed same-open proven-aborted native metadata publication resumption liveness defect; after-commit same-xid control passes",
+  "job_indices": [
+    "jobs/34d-portable-real-expiry-core-job132153142118-index.json",
+    "jobs/34d-portable-real-expiry-alltargets-job132153086320-index.json"
+  ],
+  "source_APP_returned_API_ACKs": 4,
+  "future_fix_included": false,
+  "database_opened_by_verifier": false,
+  "production_qualified": false,
+  "files": {
+    "README.md": {
+      "bytes": 8341,
+      "sha256": "0780547816e69a4da3151a1ceeec23a8790871e656e9356fc3dda1512f0d2938"
+    },
+    "artifacts/projection-manifest.json": {
+      "bytes": 69598,
+      "sha256": "797162c7f41d4d1f632df8e46c7f9923a18b39d707ea12bdde290ee12167fc5a"
+    },
+    "artifacts/public-logical.zip": {
+      "bytes": 391140,
+      "sha256": "3c378baa1d877254de40b8bb9f25ec7f4d3b4df0922893bddafe0b80e8bd41f8"
+    },
+    "jobs/34d-portable-real-expiry-alltargets-job132153086320-index.json": {
+      "bytes": 2853,
+      "sha256": "f6e0344c22cbb1f09ad5bfeea5882b4209bc6707be09a868dc4447b4ec90a21a"
+    },
+    "jobs/34d-portable-real-expiry-alltargets-job132153086320.log.gz": {
+      "bytes": 332732,
+      "sha256": "4cb1ce3bd097c637677dabc8ec3580c3ce2ce84d8b6da5bcf6184da1830ac3f5"
+    },
+    "jobs/34d-portable-real-expiry-core-job132153142118-index.json": {
+      "bytes": 6338,
+      "sha256": "e0f6bf014b8f23fe2c6b20897b7125da7dfc394ea4cf28e046d04a5c83ccdfef"
+    },
+    "jobs/34d-portable-real-expiry-core-job132153142118.log.gz": {
+      "bytes": 286312,
+      "sha256": "9bf18bb3409fd6c629dd4dd7a8f225307aeede2d91493a768cf53d5fbb75dcd1"
+    },
+    "provenance/independent-verification.json": {
+      "bytes": 1480,
+      "sha256": "4777dbea2fc91226d4e3ceca6e55eb62a0ece9f465b0f13bf322b0421e91eadd"
+    },
+    "provenance/private-reconciliation-receipt.json": {
+      "bytes": 4792,
+      "sha256": "83a4114016b7cc1029fc424604201a0e87cfba3fe329ae92a254567a43f57539"
+    },
+    "provenance/run-terminal.json": {
+      "bytes": 10099,
+      "sha256": "161e0b1b5182c1a474622b75ba279b1b8362b0db0b4a7ef916351b2cf883f810"
+    },
+    "source-index.json": {
+      "bytes": 3281,
+      "sha256": "780ff58ea07d92850f3044dd88b25c10c225b77b25bd72955881977883fc0657"
+    },
+    "verify.py": {
+      "bytes": 7097,
+      "sha256": "e3228dd2082c674c7748f050bf3a50ac35d56dd85785b8b5020672ea09b752b3"
+    },
+    "verify_cases.py": {
+      "bytes": 13438,
+      "sha256": "aa070299da4d54f8abde1403ccb15630c202145274c3c9272fe9e821a920a7b3"
+    }
+  },
+  "selector": "native_registered_fifth_remote_native_base_actual_expiry_"
+}

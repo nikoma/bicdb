@@ -1,0 +1,54 @@
+{
+  "source_revision": "d6908095e0d347e563ef68801f49e52dba35452d",
+  "scope": "Two d690 component runs only; expected refusals are passed guards, not failed production operations.",
+  "issues": [
+    {
+      "id": "BASE-OUTCOMES",
+      "classification": "passed",
+      "evidence": "Base4 four actual component controls; no Serving",
+      "next_test": "Complete separate real catalogue adoption/NEW/decision/Open and ordinary enrolled recovery/Ready before APP; prove actual first ACK and full Strong read, then a populated SAME-State second range."
+    },
+    {
+      "id": "ROWS-WAL-LEASE",
+      "classification": "passed",
+      "evidence": "Rows5 plus three actual retained-lease reports; explicit ServerPaged checkpoint on healthy AppliedKnown case only",
+      "next_test": "Independent cold pending-intent preservation/reconciliation; same-open leases do not survive process death as authority."
+    },
+    {
+      "id": "COLD-RECOVERY",
+      "classification": "not_tested",
+      "evidence": "findings/cold-source-10d.json is a proposal/source investigation, not an executed cold test",
+      "next_test": "Actual child reaches fsynced external AppliedKnown/pre-RowsHeader marker; SIGKILL and wait for directory lock release. Fresh evidence-preserving open must refuse unresolved debt before generic replay/cut, retaining logical WAL and exact intent/TxID/hash. No graceful close/live reopen."
+    },
+    {
+      "id": "CONTROLLED-MOVEMENT-AND-IO",
+      "classification": "not_tested",
+      "evidence": "Finite component tests; service/native journal may remain held across fsync",
+      "next_test": "Pause actual selected-range disk I/O at a deterministic boundary and verify independent range operations continue or bounded explicit diagnosis; then resume one relocation without oscillation."
+    },
+    {
+      "id": "INDEX-FTS-QUEUE-AUDIT",
+      "classification": "not_tested",
+      "evidence": "Index definitions pinned; independent full index/FTS/queue/memory asset parity unqualified",
+      "next_test": "Enable actual index/FTS/audit/CDC/broker/job counters, import under real faults and compare records/results and operation IDs. Do not infer fresh business-event generation merely from a missing WAL projection flag."
+    },
+    {
+      "id": "TRANSPARENT-SQL",
+      "classification": "not_tested",
+      "evidence": "Independent main498 source/design review; abstract helpers are not production coordinator/executor",
+      "next_test": "Unchanged stock PG client at one endpoint performs cross-range accounting transaction/join while actual prepared/decision replies and coordinator are lost; reconcile exact operation UUID/payload, never application shard routing."
+    },
+    {
+      "id": "PHYSICAL-SCALE-OUT",
+      "classification": "not_tested",
+      "evidence": "These two runs are shared-host CI; original Azure scale-out qualification remains failed",
+      "next_test": "After correctness gates, isolated independent four-to-five-node campaign with same external ledger, actual data+leadership convergence, phase-specific faults, stable post-convergence throughput at equal tail-latency/error budget. Archive metadata and tear down resources."
+    },
+    {
+      "id": "COLD-SOURCE-LOSS-CAUSE",
+      "classification": "inconclusive",
+      "evidence": "No cold process experiment in this packet; no durable-data-loss or replayed-new-business-event defect inferred",
+      "next_test": "Use pinned source/counters and real cold cut before declaring a failure or cause."
+    }
+  ]
+}

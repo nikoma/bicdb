@@ -1,0 +1,573 @@
+{
+  "schema": "bicdb-native-operator-closure-design-review-v1",
+  "created_utc": "2026-11-13T22:23:31.692711+00:00",
+  "classification": "READONLY source/design review; proposed slices, no implementation or runtime qualification",
+  "sources": {
+    "main500": "a06e09336c70fecbc38232d677c330984959388f",
+    "integrated": "981b7eef7447783270a1db4b8c967aa596cc132e",
+    "frozen_prototype": "81733c1fa601fea3bcac1ad5efac8435dd02b090",
+    "excluded": [
+      "driver hot-joint/version-gate WIP",
+      "optional later diagnostic fixture changes"
+    ]
+  },
+  "verdict": "A real native metadata CLI and authenticated OLD/image-frame RPCs exist. The integrated source does not yet attach those components into an automatic native 4-to-5 relocation controller. It also lacks a Registered image-to-joint-NEW/first-Serving bridge and remote joint phase adapters. Existing generic balanced-controller APIs cannot bypass the native data quorum/fencing contract.",
+  "implemented_entry_map": [
+    {
+      "stage": "ordinary serve balance path",
+      "source": "crates/bicdb-cli/src/main.rs::cli_host_services -> bicdb-pgwire/distribution_controller.rs::BalancedDistributionHostService::start -> PgWireHostContext::start_distribution_controller -> checkpoint_driver.rs",
+      "actual": "Builds a generic ClusterSupervisor + CapacityPlacement and TransportClusterRelocationDriver<TcpClusterRelocationTransport>. Balanced defaults: 250 ms, four steps/tick, four replica moves/two per node. Generic snapshot/catch-up/promotion/cleanup exists.",
+      "boundary": "This is not NativeMetadataControlHost and does not drive Registered A ownership or native joint phases. Native listeners deliberately refuse generic snapshot/import/repair/cleanup. Do not attach a second generic store or claim this old driver completes native relocation."
+    },
+    {
+      "stage": "native INITIAL node process",
+      "source": "native_metadata_command.rs::Command::ServeFresh / Action::{Prepare,Launch,Elect,EnableControl,OpenInitialData}; distribution_native_host/operator.rs::NativeMetadataHost::{start_fresh_metadata_only,apply}",
+      "actual": "Retains the actual fresh factory, native metadata launch, listener, control and supervisor. OpenInitialData installs the real INITIAL writer/runtime and published Event Append/Get/typed Strong dispatcher after local leader readiness. CLI process loop maintains metadata enrollment and refreshes the initial writer registry.",
+      "boundary": "Fresh-only owner. No normal SQL listener is started by this command. No native relocation-maintenance action/loop is present."
+    },
+    {
+      "stage": "fifth metadata node and replica receiver",
+      "source": "native_metadata_command.rs::Command::JoinFresh { replica_receiver }; distribution_native_host/operator_learner.rs::NativeMetadataLearnerHost; registration.rs / registration/maintenance.rs",
+      "actual": "Real CONFIG registration, native learner birth/catch-up, quorum promotion and owned receiver use mutual TLS and protected StoreUUID/birth. RegisteredReplica remains APP/Strong closed.",
+      "boundary": "Enrollment/promotion is metadata capacity, not materialized data or first writer policy. The learner CLI supports metadata/status/receiver lifecycle, not native image work."
+    },
+    {
+      "stage": "native OLD network",
+      "source": "distribution_transport.rs::ClusterDataRequest::NativeRemoteOld -> initial_data_listener.rs -> NativeInitialDataAdmission::observe_remote_old; native_old.rs::TcpClusterRelocationTransport::request_remote_native_old",
+      "actual": "Production TCP variants Constrain/Close/Observe obtain actual authenticated caller, receiver-local fresh role/OWN outside engine locks and retained original native OLD closure. Client validates original request, TLS/native birth, plan/scope and all returned constraints.",
+      "boundary": "Source-side only INITIAL admission in this source. Observe does not create a closure. Close initiation remains restricted by the actual recovery-purpose contract. The controller must request/retain real closures before asking the donor collector to collect."
+    },
+    {
+      "stage": "donor OLD collection and capture",
+      "source": "registration.rs::{collect_initial_remote_old_at_actual_donor,retain_initial_image_from_remote_old}; initial_data.rs::{collect_remote_old_at_actual_donor_inner,retain_remote_image_from_remote_old}; distribution_range_image/remote_source.rs::NativeRetainedRemoteImageSource::{publish,manifest}",
+      "actual": "Actual donor rereads every OLD peer via authenticated Observe, takes final fresh OWN after frame collection, preserves commands/pending obligations, and retains real capture/session before publication. Original process/session custody is distinct from bounded RPC requests.",
+      "boundary": "These APIs are crate-local; their callers outside their definitions are fixtures, not the operator process loop. No start/lookup RPC exposes this process-owned producer."
+    },
+    {
+      "stage": "source image network",
+      "source": "distribution_transport.rs::NativeRemoteImageSourceFrame; native_image_source.rs::request_remote_image_source_frame; initial_data.rs::observe_remote_image_source_frame; remote_source.rs::NativeRemoteImageSourceRegistry::observe_frame",
+      "actual": "Manifest/History/Rows/Finish fetches use real pinned mutual TLS, actual native destination and current independently acquired source/target OWN. from_actual_manifest creates an immutable target-local NativeRemoteImageFact only from an actual authenticated Manifest exchange.",
+      "boundary": "The client requires a complete expected manifest including its checksum/session in order to request Manifest. This is fetch-after-discovery, not a start/discovery API. Do not use an invented empty/hash-zero manifest or deserialize a RemoteFact."
+    },
+    {
+      "stage": "target Registered import owner",
+      "source": "registration/registered_replica/remote_attempt.rs::{prepare_registered_remote_install_attempt,publish_registered_remote_proposal}; remote_installing.rs::publish_registered_remote_installing; remote_mutation.rs::advance_registered_remote_image; remote_catalogue.rs::adopt_registered_remote_catalogue_floor",
+      "actual": "Original receiver retains per-range A attempt, exact MF Arc, actual runtime freeze rotation, proposal/Installing intent and outcomes before writes. History, rows, independent target scan, final native publication, native base and catalogue-floor adoption have actual producers. Each new request independently checks role/OWN/MStore and original local owner.",
+      "boundary": "Only fixture callers drive these image operations. Target image work ends at a still-CLOSED CatalogueFloor. No automatic source-requestor/work-queue API exists in NativeMetadataHost or NativeMetadataLearnerHost."
+    },
+    {
+      "stage": "local joint primitives",
+      "source": "distribution_range_handoff/joint/{materialized,decision}.rs; joint/bridge/{phase,publication}.rs and publication/{open_phase,release_phase}.rs",
+      "actual": "Typed OLD/NEW materialization, both-data-majority decision (new leader included), actual preparation/activation/Open/release and post-quorum writer-policy gates exist. They use actual in-process service/owner objects. Fresh phases preserve ALL final participants; they do not replace missing local state with Ready DTOs.",
+      "boundary": "Target NEW requires ActualServiceNativeJointNewEvidence backed by existing NativeImageCatalogueFinalization. NativeJointServingLease has Survivor or local Image only. The Registered remote final/base/catalogue + retained A has no corresponding NEW/lease/phase producer at this head. into_new_serving_owners returns foreign service Arcs, which cannot be implemented by serializing them across processes."
+    },
+    {
+      "stage": "real native APP/Strong reuse",
+      "source": "initial_data.rs::advance; distribution_native_read/event_dispatch.rs; distribution_native_read/strong.rs; distribution_range_consensus.rs::resolve_range",
+      "actual": "Existing INITIAL Event Append/Get/Strong data plane has genuine routing and enrolled quorum/recovered-epoch checks; strong reads do not fall through to bare local absence.",
+      "boundary": "Registered and AssignedClosed listener modes remain closed and immutable. A valid image or joint metadata stage cannot publish this data plane. New target requires actual completed first writer enrollment and normal recovered/read quorum before APP; every Strong still needs its own request-bound proof."
+    }
+  ],
+  "missing_attachment_map": [
+    {
+      "id": "C1",
+      "missing": "Native automatic placement/controller entry",
+      "exact_need": "Add an owned NativeMetadataHost/NativeMetadataLearnerHost relocation-maintenance entry, or a process-owned worker created by those actual owners. Reuse the pure CapacityPlacement/build_failure_repair_plan policy and topology validators; add native typed MStore proposal adapters for learner allocation, decision certification, frozen promotion/final membership, activation/cleanup. Use actual current leader OWN + protected same-open actor/publication-version point at each local mutation. Commit through existing metadata consensus and publish only committed topology.",
+      "do_not": "Do not reopen a generic DistributionStore beside the owned native MStore, or treat a calculated candidate/decoded topology as data authority. DistributionStore::require_legacy_relocation_mutation expressly refuses enforced native membership/cleanup."
+    },
+    {
+      "id": "C2",
+      "missing": "Native capacity/liveness input for planning",
+      "exact_need": "Wire authenticated node heartbeat/capacity/used-byte observations into the owned native metadata control loop, with incarnation/certificate fencing and bounded coalescing. The generic planner relies on ClusterNode.last_heartbeat_ms/capacity/used_bytes. NativeMetadataSupervisor/control.heartbeat perform metadata Append consensus, not the generic distribution heartbeat/capacity publication.",
+      "scope": "This is an attachment requirement for a future native planner, not evidence that the current metadata-only supervisor is broken."
+    },
+    {
+      "id": "C3",
+      "missing": "Source start/discovery and same-session resume",
+      "exact_need": "Add a distinct bounded authenticated StartOrDescribeNativeImageSource request keyed by actual committed relocation/session/nonce + target birth + stable target attempt. Recipient re-derives actual local donor role/OWN/plan, checks actual retained native OLD closure, collects authenticated OLD facts at the donor, and retains NativeRetainedRemoteImageSource BEFORE attempting capture/publication. Reply returns only immutable manifest DATA and exact retained attempt status. Client validates actual TLS/native destination and every plan/birth/request binding before minting the authenticated Manifest wrapper. Lost replies return/reconcile the same retained session, never a new birth/attempt.",
+      "do_not": "No DTO -> local lineage/capture/quorum grant; no hash-zero expected manifest bootstrap. A target can request data but must not acquire metadata/range-leader initiator authority by making this request."
+    },
+    {
+      "id": "C4",
+      "missing": "Target-process pull/requestor and per-range operation queue",
+      "exact_need": "Owned target worker obtains fresh actual target-role witness and target OWN outside engine/service/table locks, requests authenticated frames, creates the target-local RemoteFact through from_actual_manifest, and retains the same MF/A installation. It invokes existing proposal/Installing/history/row/verification/final/base/catalogue methods as bounded steps. On retry it obtains a new request from retained A; it never reconstructs NoDomain after a proposal or retags expired role/frame authority. Preserve unknown outcomes and cursor/intents before returning status.",
+      "boundary": "A local target worker can drive image mutation directly; it does not require a network endpoint that grants arbitrary row writes."
+    },
+    {
+      "id": "C5",
+      "missing": "Registered image -> NEW/decision/first writer local bridge",
+      "exact_need": "Add a distinct typed Registered phase origin and lease bound to original receiver, retained A, actual native base/final/current+archive/catalogue, local slot/open and current MStore. Produce actual NEW materialization and exact decision candidate/xid/outcome before native writes; continue preparation/activation/Open/release through this distinct owner. First writer policy must consume ALL released final members and independently fresh post-quorum metadata. Retain installed real State/guard before fallible postchecks, then obtain ordinary enrolled read quorum/recovered coordinator before APP.",
+      "do_not": "Do not cast RemoteFact into local SourceRangeImageLineage or force the Registered record into the existing local Image lease. The separate driver WIP is outside this reviewed source; its existence is not evidence of this bridge here."
+    },
+    {
+      "id": "C6",
+      "missing": "Authenticated joint-phase RPC producers, verifiers and collectors",
+      "exact_need": "Extend ClusterDataRequest/Response with bounded phase operations such as ObserveNew, Publish/ObserveDecision, PrepareServing, Activate/ObserveActivation, Arm/ObserveOpen, Release/ObserveReleased. Each handler receives DATA and authenticated peer identity, acquires fresh actual recipient role/OWN, consumes its retained local phase owner under exact original scopes and current MStore point, retains candidate/native xid/outcome before I/O, and returns request-correlated immutable facts. Dedicated client wrappers require the real TLS exchange; remote quorum collectors preserve complete old/new membership, command obligations, original request tokens and independent post-quorum checks.",
+      "do_not": "Existing PrepareNativeReady/CompleteNativeRecovery/ObserveCurrentNativeRange concern normal recovery and cannot be counted as joint NEW/decision/Open/release votes. Never serialize local Arc/service/freeze/lease capabilities or construct them from a checksummed reply."
+    },
+    {
+      "id": "C7",
+      "missing": "Source retirement and truthful convergence",
+      "exact_need": "After proven activated/Open/released final membership, add typed source export-pin/OLD owner retirement and range-scoped physical deletion/tombstone/empty audit, then metadata AwaitingCleanup -> Cleaned. Retain exact deletion progress and uncertain outcomes. New source-session retirement must require those proofs before removing registry entries or freeing physical pins. Report membership/leader/data balance separately from completion and only count a relocation converged after actual cleanup obligations finish.",
+      "evidence": "NativeJointHandoffStageV1 names AwaitingCleanup/Cleaned and validates their proof fields, but this source has no producer that advances those fields; current native methods stop at AwaitingActivation. NativeRemoteImageSourceRegistry retains a maximum of eight sessions and has no removal/retirement API. Generic cleanup is refused by native listeners."
+    },
+    {
+      "id": "C8",
+      "missing": "Serving listener/status integration",
+      "exact_need": "Create an explicit actual Serving listener/dispatcher publication from the real completed local owner; do not broaden an old Registered or AssignedClosed listener through a mutable boolean/Weak upgrade. Status must expose replica-ready, leader-ready and strong-read-ready independently plus actual phase, range/epoch, pending native outcomes and last bounded error. Existing EventClient may handle physical range routing; ordinary pgwire remains a separate integration problem."
+    }
+  ],
+  "scheduling_checkpoint_and_failure_rules": [
+    "One retained operation per selected range/session; fair bounded queue across ranges/nodes with explicit concurrency/byte limits and backoff. Subsequent attempts use new independent finite request authority, not longer TTLs or a recursive retry loop inside one request.",
+    "Network/role/OWN acquisition and remote collection happen outside engine, service, journal and table locks. Last local mutation publication still requires an actual current MStore/version point; a same-open identity or prior successful check is not freshness.",
+    "All ambiguous native proposal/base/catalogue/row outcomes retain the same original candidate/xid/bytes. Retire/retry only under the exact proven-abort contract; unknown/committed/poisoned/reopened owners cannot become a fresh transaction.",
+    "Existing auto_checkpoint_if_due is already called after Registered mutation scopes drop, and normal commit/checkpoint paths exist. Preserve actual same-open WAL pins and restrictive durable row index: the controller must not trim them to make progress. A five-second protocol deadline does not bound a stalled kernel fsync.",
+    "Fair queuing alone cannot establish independent-range availability: current Registered mutation paths hold a service guard and native journal across durable I/O. A deterministic stalled-I/O test must prove other range APP/Strong/control operations progress or keep that availability gate open.",
+    "Lost source-session reply, source death and target restart are separate cases. Preserve durable closure/pending debt; do not clear a fence or recreate a factory because the initiating RPC ended."
+  ],
+  "minimum_independent_slices": [
+    {
+      "slice": "S1 native planning and truthful status",
+      "covers": [
+        "C1",
+        "C2"
+      ],
+      "acceptance": "Five actual native CLI processes: fifth joins automatically; current leader produces a bounded committed learner plan from authenticated current capacity/liveness. All affected data remains closed until later producers prove readiness. No external test controller edits topology or shard placement."
+    },
+    {
+      "slice": "S2 real donor start/discovery plus target pull to CLOSED catalogue floor",
+      "covers": [
+        "C3",
+        "C4"
+      ],
+      "acceptance": "Separate donor/target OS processes and real TLS only. Start/Describe retry returns the same actual session/MF, and target progresses through history/rows/independent verification/final/base/catalogue using its own retained A and fresh per-step requests. Wrong donor/target/birth/scope, revoked process/hook/MStore and reply cancellation refuse without new attempts. No Serving claim."
+    },
+    {
+      "slice": "S3 local Registered joint bridge, then network joint phase adapters",
+      "covers": [
+        "C5",
+        "C6"
+      ],
+      "acceptance": "First complete a genuine local registered owner bridge, then replace every foreign service Arc in multi-member collection with actual authenticated phase exchanges while retaining local owners on their recipient processes. Preserve old local tests. Qualify both OLD/NEW decision majorities and complete final participant preparation/Open/release with fresh post-quorum authority; test lost replies at each native/catalogue boundary."
+    },
+    {
+      "slice": "S4 first actual APP and Strong, then a populated second range",
+      "covers": [
+        "C8"
+      ],
+      "acceptance": "After ALL-release + first policy, obtain ordinary readiness, return a real APP ACK and full Strong read from unchanged EventClient. Only then move a second already-populated range onto the same node using original installed State/coordinator/hook and selected-range ownership. Preserve first range ACKs and read consistency. Two closed images or two empty ranges do not pass."
+    },
+    {
+      "slice": "S5 source retirement and converged placement",
+      "covers": [
+        "C7"
+      ],
+      "acceptance": "Prove typed pin retirement, actual source tombstone/empty-range audit, no stale writer, restored RF/placement, no unfinished relocation, leadership serving actual work and stable physical-byte redistribution. More than eight completed serial moves must not exhaust leaked session custody; no timeout eviction."
+    },
+    {
+      "slice": "S6 strict restart/cold reconciliation",
+      "covers": [
+        "restart/cold gates"
+      ],
+      "acceptance": "Kill/restart each actual node process at proposal, row intent/WAL/applied-progress, final/base/catalogue, decision/Open/release/policy and source cleanup boundaries. Recover from protected native decisions/archives and independently current metadata without reconstructing grants from DATA. Cold pending rows currently refuse before generic replay/cut; implement and test their explicit repair path separately. Preserve exact unknown outcomes."
+    },
+    {
+      "slice": "S7 isolated physical 4-to-5 qualification",
+      "covers": [
+        "physical experiment"
+      ],
+      "acceptance": "Pinned release binary on isolated independent VMs/failure domains with separately durable external ledger. Unchanged client workload, automatic movement, actual faults, all ACK/uncertain/failed/retry operations reconciled, zero false absence and no lost ACKs. Compare four-node steady state against fully converged five-node steady state at the same latency/error budget. Relocation throughput and post-convergence throughput are distinct. Original Azure failure remains preserved."
+    }
+  ],
+  "distinct_gates": {
+    "startup": "INITIAL native operator is fresh-only. Existing learner reopen is metadata-only: NativeColdLearnerMetadataHost explicitly supports both an enrolled metadata learner and an already Registered metadata voter, but the factory/current context still requires no data-range assignment. It is not a persisted INITIAL/Assigned data-owner restart path. Ordinary serve does not substitute for the original native process owner.",
+    "second_populated_range": "Registered image methods explicitly reject self.assigned.is_some() or self.data.is_some(). SAME-State writer DATA continuation primitives preserve actual installed State, but do not by themselves provide an Assigned image target or a normal operator/controller source/target surface. A real populated move after first Serving/ACK/Strong is mandatory.",
+    "cold": "No reopening raw forensic copies. Main500 plain physical-root copies are refused; use the official stopped-copy custody authorization when intentionally restoring. That authorization is neither source retirement nor node/range authority. Current pending-row startup preservation is refusal, not completed repair/availability.",
+    "general_SQL": "Native CLI starts Event Append/Get and typed read surfaces, not arbitrary PostgreSQL execution. Initial native listener explicitly refuses scan/SQL/effects. RangeWriteCoordinator::resolve_range rejects cross-range write intents and nonleader local admission. No ordinary PostgreSQL gateway routing, general cross-range joins or recoverable multi-range SQL coordinator is established by the native move path.",
+    "capacity": "Capacity/replica/leader redistribution and request-load balancing are separate. Start with existing bounded placement and prove one relocation converges; resource telemetry or later hotspot policy must not be presented as throughput gain. No physical results were run in this review."
+  },
+  "no_actions": [
+    "No feature edits",
+    "No build or Rust type check",
+    "No CI dispatch",
+    "No version bump",
+    "No push/merge",
+    "No engine opening or private evidence mutation"
+  ],
+  "source_pins": [
+    {
+      "path": "crates/bicdb-cli/src/main.rs",
+      "head_git_blob": "6b84d60c341dafde3b0cbc5e0861a1a17b84bcde",
+      "head_sha256": "5c1eaf4f96c47d8e9c1a690919a9b9eff6a11bb7b20f2da77640fb07fca8b883",
+      "main500_git_blob": "6b84d60c341dafde3b0cbc5e0861a1a17b84bcde",
+      "main500_sha256": "5c1eaf4f96c47d8e9c1a690919a9b9eff6a11bb7b20f2da77640fb07fca8b883",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-cli/src/native_metadata_command.rs",
+      "head_git_blob": "e729bc3d738263d97d49285683ee9df6ab8e98c4",
+      "head_sha256": "9c36f303dd7f3d6bb94ef2d895773e2e5168995dd411354dcf92f50eb0b8a8bb",
+      "main500_git_blob": "e729bc3d738263d97d49285683ee9df6ab8e98c4",
+      "main500_sha256": "9c36f303dd7f3d6bb94ef2d895773e2e5168995dd411354dcf92f50eb0b8a8bb",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/distribution_controller.rs",
+      "head_git_blob": "1935a1e824c9392161ce949ceb840b8405ad89cf",
+      "head_sha256": "5b7b37a7262a653ef95724152df89e1bdf5bd005e62d79e63105d6b2094c78ac",
+      "main500_git_blob": "1935a1e824c9392161ce949ceb840b8405ad89cf",
+      "main500_sha256": "5b7b37a7262a653ef95724152df89e1bdf5bd005e62d79e63105d6b2094c78ac",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/checkpoint_driver.rs",
+      "head_git_blob": "82dd26dabd5439f6b34fa3f074f2dbab211b3aa5",
+      "head_sha256": "059ad193367694b57d1be277e70f59c0b2b27e459edfe600c7b783fd06fa0486",
+      "main500_git_blob": "82dd26dabd5439f6b34fa3f074f2dbab211b3aa5",
+      "main500_sha256": "059ad193367694b57d1be277e70f59c0b2b27e459edfe600c7b783fd06fa0486",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/operator.rs",
+      "head_git_blob": "9f43b09487dfa976928c5602208e4acec3435ac5",
+      "head_sha256": "346d6d50f2d52ce7f5ef16fb789d28b24cb6b622fd8dc681ad732b7ee829e51c",
+      "main500_git_blob": "9f43b09487dfa976928c5602208e4acec3435ac5",
+      "main500_sha256": "346d6d50f2d52ce7f5ef16fb789d28b24cb6b622fd8dc681ad732b7ee829e51c",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/operator_learner.rs",
+      "head_git_blob": "58016ce64c05baf0e1940dc71ecb52269080c773",
+      "head_sha256": "b5531ae06a0769b0e787cce4ea9a6705bba9563134a9ce7ee01e1f9cc94d69ae",
+      "main500_git_blob": "58016ce64c05baf0e1940dc71ecb52269080c773",
+      "main500_sha256": "b5531ae06a0769b0e787cce4ea9a6705bba9563134a9ce7ee01e1f9cc94d69ae",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/learner_cold.rs",
+      "head_git_blob": "fde078cb6cd2f42f4ba60f2f17785e8ac65658fe",
+      "head_sha256": "e17741fa5e180d2a2aab9fa185a8d0c96d406a440ea162dbf737f02da7acb274",
+      "main500_git_blob": "fde078cb6cd2f42f4ba60f2f17785e8ac65658fe",
+      "main500_sha256": "e17741fa5e180d2a2aab9fa185a8d0c96d406a440ea162dbf737f02da7acb274",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/learner_factory/registered_catchup.rs",
+      "head_git_blob": "0725e8cce480a2c27a8422f7e7b7eb7ee62385e3",
+      "head_sha256": "d7d86034966828f3af16fb52fc6fa4646ab200e76ef61babf5aeb139e29e8f36",
+      "main500_git_blob": "0725e8cce480a2c27a8422f7e7b7eb7ee62385e3",
+      "main500_sha256": "d7d86034966828f3af16fb52fc6fa4646ab200e76ef61babf5aeb139e29e8f36",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/metadata_supervisor.rs",
+      "head_git_blob": "faeac7ec07c28ab665efebfcbc520387bae20957",
+      "head_sha256": "293624b2aae842ff7439bbfa8df0772ae4eee1716b168026a4cc11dda9ea01bf",
+      "main500_git_blob": "faeac7ec07c28ab665efebfcbc520387bae20957",
+      "main500_sha256": "293624b2aae842ff7439bbfa8df0772ae4eee1716b168026a4cc11dda9ea01bf",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/control_backend.rs",
+      "head_git_blob": "99d16480f6b514c8dc81ae460890d2d5d201dc04",
+      "head_sha256": "2dfa1c9fe8ede4db07da7cac1f6f9f1befa8302d06c0df7b8f815c7892be0e2d",
+      "main500_git_blob": "99d16480f6b514c8dc81ae460890d2d5d201dc04",
+      "main500_sha256": "2dfa1c9fe8ede4db07da7cac1f6f9f1befa8302d06c0df7b8f815c7892be0e2d",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration.rs",
+      "head_git_blob": "e345eb3f8f0b02c7fea9fc713b0a144fea9d0d51",
+      "head_sha256": "05a3c6539f669e4791d6407d35a4f9d9c6d6b68a783a5f3d85910c9bff1f1ebf",
+      "main500_git_blob": "5acc0094e70af147c0a9f93ef5944787f02ed826",
+      "main500_sha256": "72bd2df2fd40b5158bb70047366144163e32f7d73bba223fbaf24d4121c7d134",
+      "identical_to_main500": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/maintenance.rs",
+      "head_git_blob": "711e47ef2157581b25a047c90259dcb4b4547fef",
+      "head_sha256": "0f1a2f22e6ddd4f5a057406d231d84d122359ae46a915deaced3c3608a4a1576",
+      "main500_git_blob": "711e47ef2157581b25a047c90259dcb4b4547fef",
+      "main500_sha256": "0f1a2f22e6ddd4f5a057406d231d84d122359ae46a915deaced3c3608a4a1576",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data.rs",
+      "head_git_blob": "68840e238fb632d21901a60b883284246d7bc0fa",
+      "head_sha256": "f764cadd4c9a15e32b2f4c1e4858ea6d75229552e8c3d04bf61b779931100350",
+      "main500_git_blob": "76a29895dfa323614af83bde9b658f38f56d6a30",
+      "main500_sha256": "4805aa47b2ec87bf361381b6aeac867f3c4fde7a9ff65b8301222f3030cacee3",
+      "identical_to_main500": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/old_step/remote_old.rs",
+      "head_git_blob": "5ad76caef1ac49d1e4ce48284f8a644497e350d5",
+      "head_sha256": "3ff349dba9c64e002b7fa0dcaba8005a73d90212ff6a4c30a3fcc900e3b674ce",
+      "main500_path_present": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica.rs",
+      "head_git_blob": "a312ccf476768650880eef63315615ae44aba16b",
+      "head_sha256": "7752d24f22a9b2fbd34207cb8c0eff9d1fab838150eb2759b996b4a35490fd83",
+      "main500_git_blob": "148bbba594092e87abc0415d1719d1e733618dad",
+      "main500_sha256": "5a26e5ffd99287e7144303df3624500fd7fefc1db6bb8c75fdd0e503c9cb5e73",
+      "identical_to_main500": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_attempt.rs",
+      "head_git_blob": "92c42b35ef0755c887ae35329d92062eb0fa275e",
+      "head_sha256": "55eab0455bee30a544ca4ef80f8684f1c112dd60eb4512bf05da3b0d8bb1caf4",
+      "main500_path_present": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_attempt/remote_mutation.rs",
+      "head_git_blob": "eabec5956472454b46c9c756caf7b1db89af2aac",
+      "head_sha256": "4ebd5665cafa582fc491f13355ddc248e36118998d557747647097ff36d622b8",
+      "main500_path_present": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_attempt/remote_catalogue.rs",
+      "head_git_blob": "22a5f65e4a650101edb1e24ef588a87dccea5809",
+      "head_sha256": "d5df27df74bb57574dcdb6ba49ed5a045afca6dd800889fb91943462ccb581c8",
+      "main500_path_present": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/assigned_data.rs",
+      "head_git_blob": "be0ef7d7caac317a9fe18ed83c11369d7fa40ba8",
+      "head_sha256": "41b1002d032942f6d607f7ae530f1b5884d9e74dedc7970f77ecde051d3d5c26",
+      "main500_git_blob": "52ffca3972d77d575bb86d07777a2fc57edca228",
+      "main500_sha256": "b51a8b45d695ab1f3277850ef7948d7280792188b94af33162a4aaff9da164a1",
+      "identical_to_main500": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/writer_data_domain.rs",
+      "head_git_blob": "90c125d971c85304030e6a9231ba3a5771faf8ef",
+      "head_sha256": "caa238828ef53a886ae2c5e6f5e6b2929184480811ce4efd84d1408b53fd6fb1",
+      "main500_path_present": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport.rs",
+      "head_git_blob": "48e31c327628d82077d18eddc26fce738246813f",
+      "head_sha256": "704dd154ce26816f8d7b21af635f9489957d4c5e1974289ef85d108a440616b0",
+      "main500_git_blob": "c4817aa271766b1944799849ce8eed8d8e1d093a",
+      "main500_sha256": "5818da06482694fbb73043ec52a2aea30c0846e43f0d471b761c4a848337cc49",
+      "identical_to_main500": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport/native_old.rs",
+      "head_git_blob": "d612c2097d0a43cc9c2fc7e80311e73f9b0741e3",
+      "head_sha256": "572c71d7d1d6499fb020881a5f9e15465f0cde224004cb2271be1a773bedf5ce",
+      "main500_path_present": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport/native_image_source.rs",
+      "head_git_blob": "a34067bd27348680b30cdc530531579e85d0fa4a",
+      "head_sha256": "fa7b7b8906200ca5ff3df64129a543e68eaaaf5e16534ed5a1a569c4641f9d71",
+      "main500_git_blob": "ef5fbf2bcf0fd140936caf794aeee5518db28457",
+      "main500_sha256": "614281460e12d2f3c706fb774b866663fe9675778ac96827af5f4b36110d7f35",
+      "identical_to_main500": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport/initial_data_listener.rs",
+      "head_git_blob": "c8c2ad5c8f25640058b7bf77d61d174a6b74109e",
+      "head_sha256": "297ee23c21d94f79fcfc1d4bc59fa93478379b616f63426b3f6d4ac2eeb6400e",
+      "main500_git_blob": "e1c92f2e5f38594a41abc9d050809c119ffe9612",
+      "main500_sha256": "767351a5e3eaa4cc0d12534f680b6547a35d667374eff5464de8a372565a1e52",
+      "identical_to_main500": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport/registered_replica_listener.rs",
+      "head_git_blob": "d0555d4a2755d1fb1168abeceae82466f70442f6",
+      "head_sha256": "e211a333cf84cee2088eb8e824914f0409410eacd3ea4cc605f41fdd31ce65b1",
+      "main500_git_blob": "d0555d4a2755d1fb1168abeceae82466f70442f6",
+      "main500_sha256": "e211a333cf84cee2088eb8e824914f0409410eacd3ea4cc605f41fdd31ce65b1",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport/assigned_data_listener.rs",
+      "head_git_blob": "1f0760e455dea0e0593f93a7163776a9b39abbde",
+      "head_sha256": "b53cf7aa88c65a9f4748867ccb7496651f0d86400308d6513bfda0c7d0d7d5b0",
+      "main500_git_blob": "1f0760e455dea0e0593f93a7163776a9b39abbde",
+      "main500_sha256": "b53cf7aa88c65a9f4748867ccb7496651f0d86400308d6513bfda0c7d0d7d5b0",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_image/remote_source.rs",
+      "head_git_blob": "5d434b85decabeae883b772e751533644594d3f4",
+      "head_sha256": "d056b3597b3980dfba844fdc8b36877b5b3645c603da42495ecb9dd2f84eb8e3",
+      "main500_git_blob": "e87de33be9f79ecca2bd26c18e0d268d9e9979e8",
+      "main500_sha256": "afcf7d7d1b6c78f8287078a9ccf9927a774ea104cf1e5b5e330c193cda5ac19a",
+      "identical_to_main500": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_image/remote_target.rs",
+      "head_git_blob": "94b9893393f4516d10aebbac2db1f72b0832aea5",
+      "head_sha256": "3c60137e54c3f1375cb2bd11862e98c9b9b529d9d283b98459e425dac7b61fdd",
+      "main500_git_blob": "85c802b2d953ee8ee6a95f6be8f73e3f429c2b4d",
+      "main500_sha256": "27588620a3ee13f12e2eece1ac692c80bc22dbcb9d69173bc57e564941f8328f",
+      "identical_to_main500": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/materialized.rs",
+      "head_git_blob": "11d37b92eb2e2f1e6e81b6c06bb303b764c0e870",
+      "head_sha256": "81b3cc94e909e420faefd781f1a8291bb118f1c5d60b3ad9a3edf7ab7e3950d6",
+      "main500_git_blob": "11d37b92eb2e2f1e6e81b6c06bb303b764c0e870",
+      "main500_sha256": "81b3cc94e909e420faefd781f1a8291bb118f1c5d60b3ad9a3edf7ab7e3950d6",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/decision.rs",
+      "head_git_blob": "b9ec1a0ee69924b1fe29958a712d00e8601af50e",
+      "head_sha256": "4810db29bb8d2766570bf2c78204d1b473cb837be76ea4a70509e298714f5b8a",
+      "main500_git_blob": "b9ec1a0ee69924b1fe29958a712d00e8601af50e",
+      "main500_sha256": "4810db29bb8d2766570bf2c78204d1b473cb837be76ea4a70509e298714f5b8a",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/runtime.rs",
+      "head_git_blob": "bc7b3c196b0aa715d40178d347cb4efe3db1c3cd",
+      "head_sha256": "104b297342541926dfac80fe3fabc95d62f0597a9cc825aa154b90ba964feb57",
+      "main500_git_blob": "0492d90ef226463b141ffd657837cedf149a184a",
+      "main500_sha256": "8b0d167bec50b04931ef667959272c969361e0caf1522a658dfd3addbbd8e152",
+      "identical_to_main500": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/phase.rs",
+      "head_git_blob": "d6bd49924c2b22b61e087a2aa36b9843a1376429",
+      "head_sha256": "67f5a7a334bbdbcbadad08823a86f25f9780d8250938e04cff4f732c5e39465a",
+      "main500_git_blob": "d6bd49924c2b22b61e087a2aa36b9843a1376429",
+      "main500_sha256": "67f5a7a334bbdbcbadad08823a86f25f9780d8250938e04cff4f732c5e39465a",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/publication/open_phase.rs",
+      "head_git_blob": "cc91ce7d9e34718646dc83f08847a013879e6ff9",
+      "head_sha256": "7ecb9456a32188be7f90caac038bd17716f3099708b3e30be3e8d75d33a00488",
+      "main500_git_blob": "e9dbf3658374742b5779c4969906f396a832760c",
+      "main500_sha256": "ac04c4c6f6f425c54ad8825296c4ede87600883144a531ef47abbd0073607a85",
+      "identical_to_main500": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/publication/release_phase.rs",
+      "head_git_blob": "1739ff1e8a9e80654ccc10ba8b5f45c6ca363376",
+      "head_sha256": "0bb34c77fb417a923d0de35bb8dec9e9611297c2168b59713845973641c5994b",
+      "main500_git_blob": "fd40abc28810ddb07aad1b80c582ef16982bc7b9",
+      "main500_sha256": "68a90260974123791d7d8db6c8991e012aef045dbc954769071ef995bee92137",
+      "identical_to_main500": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/publication/release_phase/writer_policy.rs",
+      "head_git_blob": "f11d10fa11209c6361b54c6b5cfdf7ab9b07c98c",
+      "head_sha256": "4cef869afdca95dc391e8816704976d0d87b067d6db95fd1f8d4cd6921ae3a07",
+      "main500_path_present": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff/bridge.rs",
+      "head_git_blob": "998d9b30218b546276f34f447dc7bcf49ef5f35f",
+      "head_sha256": "777c4ec7e1d3a958c52d9977ffa10b89f83017403e01c09eb8d522b40d8e1414",
+      "main500_git_blob": "7479d35410f07875bc14c77a46daf5582bf0fcb8",
+      "main500_sha256": "012b846a8a494464caecc73615f9fcadfa1a42bf5bf138ea9cb5afd616cefd79",
+      "identical_to_main500": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution/native_joint_handoff.rs",
+      "head_git_blob": "eb7e476f0fd5e28d93e0ce346ef922b1817c97bf",
+      "head_sha256": "981efcba0216c67750e705ea99cc9b220b1ba14cfa8cb6d291158f5f88f3e19e",
+      "main500_git_blob": "eb7e476f0fd5e28d93e0ce346ef922b1817c97bf",
+      "main500_sha256": "981efcba0216c67750e705ea99cc9b220b1ba14cfa8cb6d291158f5f88f3e19e",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_supervisor.rs",
+      "head_git_blob": "a486f2d0312f998c47c84f8ba60efb3c0b34f2bf",
+      "head_sha256": "51ca9ec5100e4c99f2afa32cc84f6a3353be5105a36b3bf9b6f977ea54f129c7",
+      "main500_git_blob": "a486f2d0312f998c47c84f8ba60efb3c0b34f2bf",
+      "main500_sha256": "51ca9ec5100e4c99f2afa32cc84f6a3353be5105a36b3bf9b6f977ea54f129c7",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution.rs",
+      "head_git_blob": "bdbd3a8cbcbc897fd82a8b60d79241d9775fb33a",
+      "head_sha256": "fb4d1daebaffb32fdb328d449efae969962e861a292e4ee728c9c2a16e5837c8",
+      "main500_git_blob": "bdbd3a8cbcbc897fd82a8b60d79241d9775fb33a",
+      "main500_sha256": "fb4d1daebaffb32fdb328d449efae969962e861a292e4ee728c9c2a16e5837c8",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_consensus.rs",
+      "head_git_blob": "b21b46ec7ce21f2b018f11a93d203108670daa51",
+      "head_sha256": "8e6e2c54e55eccaa82c729917504a6979e1c308b8dc5e475fb37b7c09045ea4c",
+      "main500_git_blob": "b21b46ec7ce21f2b018f11a93d203108670daa51",
+      "main500_sha256": "8e6e2c54e55eccaa82c729917504a6979e1c308b8dc5e475fb37b7c09045ea4c",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_consensus/native_metadata_store/registration.rs",
+      "head_git_blob": "73b713a802f4646c441e50a0e81f582e6a7137f2",
+      "head_sha256": "58f6a3129f123d58993333a3b1668661d22152147b82e97a7f06a39c35e4408f",
+      "main500_git_blob": "73b713a802f4646c441e50a0e81f582e6a7137f2",
+      "main500_sha256": "58f6a3129f123d58993333a3b1668661d22152147b82e97a7f06a39c35e4408f",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_consensus/native_metadata_store/learner_cold.rs",
+      "head_git_blob": "552cd4cf419176dbec4f2d0af80e1b6d7c836c21",
+      "head_sha256": "723539ce7c46d12c69616fbcb86596bb8b883f47b0e3849825333a6f36ccc359",
+      "main500_git_blob": "552cd4cf419176dbec4f2d0af80e1b6d7c836c21",
+      "main500_sha256": "723539ce7c46d12c69616fbcb86596bb8b883f47b0e3849825333a6f36ccc359",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/registered_remote_image.rs",
+      "head_git_blob": "eb76a3b8b0e6085cce742dd3bf1a56349991b2b0",
+      "head_sha256": "c5722b7bd10c2b2df3d2478399c756e4a5b1c1a25d0dcf9399b003e1f70e807a",
+      "main500_path_present": false
+    },
+    {
+      "path": "crates/bicdb-core/src/db/registered_row_retention.rs",
+      "head_git_blob": "725f4ab183ab2a8873f43cff8d65a6b506ce6113",
+      "head_sha256": "43b38de65145d31447505ea7eac4f865467664a2c470845a746acaa16a8cb90a",
+      "main500_path_present": false
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/assigned_install.rs",
+      "head_git_blob": "7c7acb2ca4546870581f0e4ea43b94e8625bb6fe",
+      "head_sha256": "c35bd9a2c97ff4d93f6f4edb8f28fa63399bca9583eeb06d14ea36cf7ff6cb9e",
+      "main500_git_blob": "bba7480d02504e97dec5e29a1be286f04241870f",
+      "main500_sha256": "999bd79fbcad01bdd0e9d520dabb56c5997c27f941b8ba1ff2a4573af85da71e",
+      "identical_to_main500": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_read/event_dispatch.rs",
+      "head_git_blob": "880b08687577ee4c1a5cd6930ed100b7404895c5",
+      "head_sha256": "d77265c579f29094bda68adc6f917f5422e302e651553ea15cdaca8f223c4d38",
+      "main500_git_blob": "880b08687577ee4c1a5cd6930ed100b7404895c5",
+      "main500_sha256": "d77265c579f29094bda68adc6f917f5422e302e651553ea15cdaca8f223c4d38",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_read/strong.rs",
+      "head_git_blob": "a3c25c661bd335894675fcc442b6152493cba416",
+      "head_sha256": "1b2cea0c3984168d2db4ef0becfe32f0e3796efe1d42f4e6db973297d433e51e",
+      "main500_git_blob": "a3c25c661bd335894675fcc442b6152493cba416",
+      "main500_sha256": "1b2cea0c3984168d2db4ef0becfe32f0e3796efe1d42f4e6db973297d433e51e",
+      "identical_to_main500": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "head_git_blob": "d55cd54b73e1d8f5e9c77274e81e5a1e16896bb9",
+      "head_sha256": "73dca09cf34378557051bb8e8ef63d4de4a960b81ec81f5a84bf6b507f865670",
+      "main500_git_blob": "8bad54d896c4e727f5696b9f0442a4d49aaa7d93",
+      "main500_sha256": "c3c2b3aff37423cfafafb54d3892d4c1989b26602c27b3aa566e2297cb80603b",
+      "identical_to_main500": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_events.rs",
+      "head_git_blob": "2b74233b982cf253112824bdd76d1052bf69967e",
+      "head_sha256": "1a7d2fcef974e75b72392e7bf28fac1c07f57a87c81e5d947ae1a69627ba6079",
+      "main500_git_blob": "2b74233b982cf253112824bdd76d1052bf69967e",
+      "main500_sha256": "1a7d2fcef974e75b72392e7bf28fac1c07f57a87c81e5d947ae1a69627ba6079",
+      "identical_to_main500": true
+    }
+  ]
+}

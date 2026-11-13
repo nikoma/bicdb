@@ -1,0 +1,73 @@
+{
+  "checked_at_utc": "2026-11-13T21:40:14.769864+00:00",
+  "source": "c1e4b3a4e8e7ad33c688436830f9af10a4203cc5",
+  "run": 43510565054,
+  "core_job": 132179457808,
+  "raw_artifact_sha256": "587683f6ec471634e1f59baaab8c554504480b745d19b5af2e85e7660ef3ea1c",
+  "runtime_result": "5PASS5FAIL88.92s",
+  "source_API_ACKs": 20,
+  "cases": [
+    {
+      "case": "TargetNativeBaseAbortSyncFailed",
+      "source_API_ACKs": 2,
+      "actual_native_status": "Aborted",
+      "observed_component": "actual sync failure; sticky WriteFailed, same publisher retained",
+      "runtime_test_status": "FAILED at diagnostic assertion284; later assertions not executed"
+    },
+    {
+      "case": "TargetNativeBaseAbortBudget",
+      "source_API_ACKs": 2,
+      "verified_component": "8 retired / 9 issued, explicit exhaustion without replacement"
+    },
+    {
+      "case": "TargetNativeBaseInvalidated",
+      "source_API_ACKs": 2,
+      "additional_outcome_report": "not present; refer exact original test result/old retained reports"
+    },
+    {
+      "case": "TargetNativeBaseCommitSyncUnknown",
+      "source_API_ACKs": 2,
+      "actual_native_status": "InProgress",
+      "observed_component": "actual sync failure; sticky WriteFailed, same publisher retained",
+      "runtime_test_status": "FAILED at diagnostic assertion284; later assertions not executed"
+    },
+    {
+      "case": "TargetNativeBaseCanceled",
+      "source_API_ACKs": 2,
+      "additional_outcome_report": "not present; refer exact original test result/old retained reports"
+    },
+    {
+      "case": "TargetNativeBase",
+      "source_API_ACKs": 2,
+      "additional_outcome_report": "not present; refer exact original test result/old retained reports"
+    },
+    {
+      "case": "TargetNativeBaseWithoutFinal",
+      "source_API_ACKs": 2,
+      "additional_outcome_report": "not present; refer exact original test result/old retained reports"
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryAfterCommit",
+      "source_API_ACKs": 2,
+      "verified_component": "committed same-xid reconciliation",
+      "original_native_xid": 21,
+      "current_native_xid": 21
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryAfterPut",
+      "source_API_ACKs": 2,
+      "verified_component": "healthy same-open abort replacement, exact retired bytes",
+      "original_native_xid": 21,
+      "current_native_xid": 23
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryBeforePut",
+      "source_API_ACKs": 2,
+      "verified_component": "healthy same-open abort replacement, exact retired bytes",
+      "original_native_xid": 21,
+      "current_native_xid": 22
+    }
+  ],
+  "scope": "original ZIP facts only; no engine open; no final acceptance or production qualification",
+  "production_qualified": false
+}

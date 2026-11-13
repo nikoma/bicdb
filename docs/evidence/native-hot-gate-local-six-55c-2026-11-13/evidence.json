@@ -1,0 +1,59 @@
+{
+  "format_version": 1,
+  "source": "55c50e07c0f36ee7314342b4c8653988f444a835",
+  "source_version": "1.0.500-beta",
+  "run": 43523702442,
+  "url": "https://github.com/nikoma/bicdb/actions/runs/43523702442",
+  "core_job": 132224155429,
+  "workspace_job": 132224127271,
+  "artifact": 14083514559,
+  "artifact_sha256": "aa14896868d770919d5eb27aaffefa12b51e42d933677859107b39f962d7f38d",
+  "artifact_bytes": 57797,
+  "selected": [
+    "distribution_consensus::publication_version::tests::metadata_publication_version_changed_error_without_persist_cannot_be_cleared",
+    "distribution_consensus::publication_version::tests::metadata_publication_version_failed_persistence_stays_poisoned_after_harmless_persist",
+    "distribution_consensus::publication_version::tests::metadata_publication_version_nested_failed_change_cannot_be_hidden_by_outer_persist",
+    "distribution_consensus::publication_version::tests::metadata_publication_version_nested_outer_completion_and_noop_do_not_self_invalidate",
+    "distribution_consensus::publication_version::tests::metadata_publication_version_original_open_owner_drop_revokes_retained_point",
+    "distribution_consensus::publication_version::tests::metadata_publication_version_short_guard_refuses_authority_change_before_assignment"
+  ],
+  "selected_count": 6,
+  "executed_passed": 6,
+  "executed_failed": 0,
+  "reported_test_seconds": 0.0,
+  "unit_scope": "LOCAL metadata publication gate unit tests; no cluster MStore/NEW/APP/Strong/controller/physical proof",
+  "complete_original_artifact_included": true,
+  "artifact_runtime_custody_present": false,
+  "projection_claimed": false,
+  "members": [
+    {
+      "path": "rustc.txt",
+      "bytes": 196,
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    {
+      "path": "selected-tests.log",
+      "bytes": 326856,
+      "sha256": "11f7985a6c668abaf35c1c029c20f182a21c0fd25a1828432c1b8529efe1484f"
+    },
+    {
+      "path": "source-revision.txt",
+      "bytes": 41,
+      "sha256": "21f8771323c10e037fec5ec868bc5d0971933e20c6538b68f6d26d7d692d0522"
+    },
+    {
+      "path": "tests.log",
+      "bytes": 327736,
+      "sha256": "942cbd25d1ecb48df5472d5a19ac06979b6ba4e343fd8684902aa1fb6d855b0a"
+    }
+  ],
+  "source_file": "crates/bicdb-core/src/distribution_consensus/publication_version.rs",
+  "source_file_sha256": "522ea571fc2e282c65ea2921a0279a1db2bf992a05f1696ad8b483f168f692c5",
+  "original_failed_source": "d5fead60a42348edeaaab59bf28e603d685a9303",
+  "original_failed_run": 43521850216,
+  "original_compile_error_count": 6,
+  "original_tests_executed": 0,
+  "source_merge_release_deployment_verified": false,
+  "qualification": false,
+  "github_raw_access_scope": "public-repository GitHub Actions artifact under GitHub access/retention; not owner-only confidentiality"
+}

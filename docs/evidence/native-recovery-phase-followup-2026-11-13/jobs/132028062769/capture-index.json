@@ -1,0 +1,12 @@
+{
+  "source_revision": "d09d1ca494cfb5d629817cafb18b88388f2f1403",
+  "run_id": 43466821238,
+  "job_id": 132028062769,
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "raw_bytes": 2580141,
+  "raw_sha256": "1e8fcc8b6d29cd88ca9f585004f48bdc449c09073ada569d37aadbdaa8319121",
+  "compressed_sha256": "ec8d7e56c4eb2296a12efc212cd8e5e24b7cdf25037a9a721f99511bd7204744",
+  "test_summaries": [],
+  "test_observations": []
+}

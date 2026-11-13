@@ -1,0 +1,72 @@
+diff --git a/.github/workflows/tests.yml b/.github/workflows/tests.yml
+index 681ecb80e..77037dae9 100644
+--- a/.github/workflows/tests.yml
++++ b/.github/workflows/tests.yml
+@@ -169,6 +169,13 @@ jobs:
+         suite:
+           - name: bicdb-core
+             args: -p bicdb-core
++          # Multi-node native fixtures start three to five TLS nodes each and
++          # assert the product's real-time protocol budgets. Four of them at
++          # once on one runner measure runner contention, not the protocol,
++          # so they run one at a time in their own job. Nothing is skipped:
++          # this job and the parallel job together cover every Core test.
++          - name: bicdb-core native multi-node (serial)
++            args: -p bicdb-core --lib
+           - name: bicdb-sql
+             args: -p bicdb-sql
+           - name: bicdb-pgwire
+@@ -195,11 +202,23 @@ jobs:
+       # its out-of-process crash helper exists. No other suite needs the full
+       # workspace's examples, so build exactly that helper in the core job.
+       - name: Build projection chaos helper
+-        if: matrix.suite.name == 'bicdb-core'
+-        run: cargo build -p bicdb-core --example chaos_child --locked
++        if: startsWith(matrix.suite.name, 'bicdb-core')
++        run: cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
+       - name: cargo test ${{ matrix.suite.args }}
+-        if: matrix.suite.name != 'bicdb-sql' && matrix.suite.name != 'rest of workspace'
++        if: matrix.suite.name == 'bicdb-pgwire'
+         run: cargo test ${{ matrix.suite.args }} --locked -- --test-threads=4
++      - name: cargo test bicdb-core without the serial native multi-node fixtures
++        if: matrix.suite.name == 'bicdb-core'
++        run: >-
++          cargo test --config 'profile.dev.package."*".opt-level=2' ${{ matrix.suite.args }} --locked -- --test-threads=4
++          --skip distribution_native_host::
++          --skip range_image_native::rf3_fixture::
++      - name: cargo test bicdb-core native multi-node fixtures one at a time
++        if: matrix.suite.name == 'bicdb-core native multi-node (serial)'
++        run: >-
++          cargo test --config 'profile.dev.package."*".opt-level=2' ${{ matrix.suite.args }} --locked --
++          distribution_native_host:: range_image_native::rf3_fixture::
++          --test-threads=1
+       - name: cargo test bicdb-sql with bounded linked artifacts
+         if: matrix.suite.name == 'bicdb-sql'
+         run: ./scripts/run-cargo-test-targets-bounded.sh bicdb-sql
+@@ -230,7 +249,7 @@ jobs:
+       - uses: dtolnay/rust-toolchain@stable
+       - uses: Swatinem/rust-cache@v2
+       - name: Build projection chaos helper
+-        run: cargo build -p bicdb-core --example chaos_child --locked
++        run: cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
+       - name: Record source and list selected Core library tests
+         shell: bash
+         run: |
+@@ -241,7 +260,7 @@ jobs:
+           mkdir -p "$RUNNER_TEMP/native-core-evidence"
+           git rev-parse HEAD > "$RUNNER_TEMP/native-core-evidence/source-revision.txt"
+           rustc --version --verbose > "$RUNNER_TEMP/native-core-evidence/rustc.txt"
+-          cargo test -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --list \
++          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --list \
+             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/selected-tests.log"
+           python3 - <<'PY'
+           import os, pathlib
+@@ -258,7 +277,7 @@ jobs:
+           export BICDB_TEST_EVIDENCE_ROOT="$RUNNER_TEMP/native-core-evidence/fault-state"
+           export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
+           mkdir -p "$BICDB_TEST_EVIDENCE_ROOT"
+-          cargo test -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=4 --show-output \
++          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=4 --show-output \
+             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/tests.log"
+       - name: Retain focused source, log and opted-in fault-state evidence
+         if: always()

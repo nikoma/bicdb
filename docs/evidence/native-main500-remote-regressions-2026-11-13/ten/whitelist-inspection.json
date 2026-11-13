@@ -1,0 +1,1187 @@
+{
+  "source": "b6398fb075eed7c93a71ab25a52fad3f936421e5",
+  "run": 43517610071,
+  "exact_registered_reports_inspected": [
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8bf8-7ec3-952e-41967a808682/registered-final-image-before-assertions.json",
+      "bytes": 209504,
+      "sha256": "ad4dd261d1165085904a88541cd620055f0cebeb6e4ba76f9e5eff554f663ff9",
+      "top_fields": [
+        "after",
+        "before",
+        "canceled",
+        "cold_or_physical_qualification",
+        "independent_actual_primary_scan",
+        "independent_index_parity",
+        "no_native_floor_catalogue_adoption_ready_or_serving",
+        "original_target_b",
+        "owner_after",
+        "owner_before",
+        "pointer",
+        "progress"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8bf8-7ec3-952e-41967a808682/registered-image-before-final-assertions.json",
+      "bytes": 188717,
+      "sha256": "863313f30c9164ef57b77f42d9d39f415f8c0a0f68a202cf675b30f3307b85e1",
+      "top_fields": [
+        "acknowledged_record_observed_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "after_error",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "expected_acknowledged_record",
+        "fault_outcomes",
+        "final_assertions_not_yet_run",
+        "observed_before_final_assertions",
+        "other_range_initially_populated",
+        "owner_error",
+        "record_read_error",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8bf8-7ec3-952e-41967a808682/registered-image-history-and-rows.json",
+      "bytes": 188184,
+      "sha256": "155e1ee040837de58e4026191711adf85700a7473ab8d7c93f87f31eb9ff71ef",
+      "top_fields": [
+        "acknowledged_record_verified_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "fault_outcomes",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8bf8-7ec3-952e-41967a808682/registered-native-base-abort-recovery-outcome.json",
+      "bytes": 9170897,
+      "sha256": "670fc6befbc603b014d67c4cc4d753a7868347d288d9f204961f15b7d9c6a2c4",
+      "top_fields": [
+        "actual_aborted_requests",
+        "after_exhausted_request",
+        "before",
+        "before_exhausted_request",
+        "budget_request_windows",
+        "default_entry_and_byte_caps_unchanged",
+        "exact_budget_error",
+        "no_cold_or_serving_qualification",
+        "no_eviction_or_new_native_attempt",
+        "source_case",
+        "version"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8bf8-7ec3-952e-41967a808682/registered-native-image-critical-outcome.json",
+      "bytes": 901946,
+      "sha256": "4f58c0590461f3b1571c7c559f8f22367c4bacaa95cb7842ec565e36ead907dc",
+      "top_fields": null,
+      "bounded_array_items": 2
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8bf8-7ec3-952e-41967a808682/registered-proposal-1.json",
+      "bytes": 122625,
+      "sha256": "c1656b5a95f8572dbe3bc086e8d7164b8a55c2ff41d3af4a3ec6722231d31c0f",
+      "top_fields": [
+        "actual_A_lease",
+        "after",
+        "before",
+        "exact_error",
+        "first_outcome",
+        "native_after_first",
+        "native_before",
+        "no_catalogue_installing",
+        "no_rows_or_serving",
+        "pointer",
+        "record_after_first"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c1e-72f2-9d72-86e2c1aceea8/registered-final-image-before-assertions.json",
+      "bytes": 209504,
+      "sha256": "a2ef8789a9c92609ac65b1c321807ce09c7bfbc200f956f41639ae2c6708e01b",
+      "top_fields": [
+        "after",
+        "before",
+        "canceled",
+        "cold_or_physical_qualification",
+        "independent_actual_primary_scan",
+        "independent_index_parity",
+        "no_native_floor_catalogue_adoption_ready_or_serving",
+        "original_target_b",
+        "owner_after",
+        "owner_before",
+        "pointer",
+        "progress"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c1e-72f2-9d72-86e2c1aceea8/registered-image-before-final-assertions.json",
+      "bytes": 188717,
+      "sha256": "210a7089fe1125669f94d73a5b292e245f0f12f942f8ed4f2ce7dd362155eb1f",
+      "top_fields": [
+        "acknowledged_record_observed_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "after_error",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "expected_acknowledged_record",
+        "fault_outcomes",
+        "final_assertions_not_yet_run",
+        "observed_before_final_assertions",
+        "other_range_initially_populated",
+        "owner_error",
+        "record_read_error",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c1e-72f2-9d72-86e2c1aceea8/registered-image-history-and-rows.json",
+      "bytes": 188184,
+      "sha256": "9ec0d36e48de5aeefc1810d0bc10d6ae2e1250cf6f8e8367fa314b0680d309d5",
+      "top_fields": [
+        "acknowledged_record_verified_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "fault_outcomes",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c1e-72f2-9d72-86e2c1aceea8/registered-native-base-abort-recovery-outcome.json",
+      "bytes": 452342,
+      "sha256": "d9155c01abc73a281e29c0ad855c06255aff101793ff31491b68f5c5a42add25",
+      "top_fields": [
+        "actual_cut_events",
+        "actual_io_fault",
+        "after_first_failure",
+        "after_fresh_request",
+        "after_health_status",
+        "before",
+        "first_error_debug",
+        "first_exact_error",
+        "first_health_status",
+        "first_request_windows",
+        "fresh_error_debug",
+        "fresh_exact_error",
+        "fresh_request_windows",
+        "issued_native_xid",
+        "no_cold_or_serving_qualification",
+        "no_health_reset_or_engine_reopen",
+        "original_a_and_metadata_owner_retained",
+        "post_failure_payload_visibility_not_asserted_on_fenced_handle",
+        "source_case",
+        "version"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c1e-72f2-9d72-86e2c1aceea8/registered-native-image-critical-outcome.json",
+      "bytes": 901950,
+      "sha256": "b9a50f73579a3e0ec83ebcf6127dbf367e15aafc37e05147cd51aed22871be93",
+      "top_fields": null,
+      "bounded_array_items": 2
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c1e-72f2-9d72-86e2c1aceea8/registered-proposal-1.json",
+      "bytes": 122603,
+      "sha256": "d00f252053f8d960b1c021dc97db6b0c33b6625f4e980950d49c4a8f54813786",
+      "top_fields": [
+        "actual_A_lease",
+        "after",
+        "before",
+        "exact_error",
+        "first_outcome",
+        "native_after_first",
+        "native_before",
+        "no_catalogue_installing",
+        "no_rows_or_serving",
+        "pointer",
+        "record_after_first"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c2d-7530-b6d1-308531e75f4f/registered-final-image-before-assertions.json",
+      "bytes": 209652,
+      "sha256": "b2ff7f6dd91f1ab834de1903a648ea37f71c1109fd7b05adc64bb346c042bba1",
+      "top_fields": [
+        "after",
+        "before",
+        "canceled",
+        "cold_or_physical_qualification",
+        "independent_actual_primary_scan",
+        "independent_index_parity",
+        "no_native_floor_catalogue_adoption_ready_or_serving",
+        "original_target_b",
+        "owner_after",
+        "owner_before",
+        "pointer",
+        "progress"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c2d-7530-b6d1-308531e75f4f/registered-image-before-final-assertions.json",
+      "bytes": 188865,
+      "sha256": "4d9dac4b0803350bffd60a8a76edfeb7b3b36f1beb1470640c4584a830845a3e",
+      "top_fields": [
+        "acknowledged_record_observed_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "after_error",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "expected_acknowledged_record",
+        "fault_outcomes",
+        "final_assertions_not_yet_run",
+        "observed_before_final_assertions",
+        "other_range_initially_populated",
+        "owner_error",
+        "record_read_error",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c2d-7530-b6d1-308531e75f4f/registered-native-base-abort-recovery-outcome.json",
+      "bytes": 455388,
+      "sha256": "03b60cba3a452ca053abd4a833ea6c7b793dbcd86a3dec3a09e4b2bfbbf55c96",
+      "top_fields": [
+        "actual_cut_events",
+        "actual_io_fault",
+        "after_first_failure",
+        "after_fresh_request",
+        "after_health_status",
+        "before",
+        "first_error_debug",
+        "first_exact_error",
+        "first_health_status",
+        "first_request_windows",
+        "fresh_error_debug",
+        "fresh_exact_error",
+        "fresh_request_windows",
+        "issued_native_xid",
+        "no_cold_or_serving_qualification",
+        "no_health_reset_or_engine_reopen",
+        "original_a_and_metadata_owner_retained",
+        "post_failure_payload_visibility_not_asserted_on_fenced_handle",
+        "source_case",
+        "version"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c2d-7530-b6d1-308531e75f4f/registered-image-history-and-rows.json",
+      "bytes": 188332,
+      "sha256": "3e4c9499f3ae61404608aadb57d55440c2eb5a7e2dde62afb807ffdad91ee9fb",
+      "top_fields": [
+        "acknowledged_record_verified_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "fault_outcomes",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c2d-7530-b6d1-308531e75f4f/registered-native-image-critical-outcome.json",
+      "bytes": 902245,
+      "sha256": "e9f9cb6acce87aedd639814e167c3b3719e145f641fdcf9139155af388562dba",
+      "top_fields": null,
+      "bounded_array_items": 2
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c2d-7530-b6d1-308531e75f4f/registered-proposal-1.json",
+      "bytes": 122722,
+      "sha256": "faea6be027b5dc5a7444eceb1ecd534c129a5c6e8f0b27e8c0905aeaa17bd056",
+      "top_fields": [
+        "actual_A_lease",
+        "after",
+        "before",
+        "exact_error",
+        "first_outcome",
+        "native_after_first",
+        "native_before",
+        "no_catalogue_installing",
+        "no_rows_or_serving",
+        "pointer",
+        "record_after_first"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c2e-7913-be32-71d87f70c7ab/registered-final-image-before-assertions.json",
+      "bytes": 209654,
+      "sha256": "c5498935d9858c0af00c41aa94e37a4ff4b9a3efdcaac164143ae1d8481128b6",
+      "top_fields": [
+        "after",
+        "before",
+        "canceled",
+        "cold_or_physical_qualification",
+        "independent_actual_primary_scan",
+        "independent_index_parity",
+        "no_native_floor_catalogue_adoption_ready_or_serving",
+        "original_target_b",
+        "owner_after",
+        "owner_before",
+        "pointer",
+        "progress"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c2e-7913-be32-71d87f70c7ab/registered-image-before-final-assertions.json",
+      "bytes": 188867,
+      "sha256": "5df0f982f69ab46adb2883085934db05ae3c5e78b6a424d725317858f9e6a326",
+      "top_fields": [
+        "acknowledged_record_observed_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "after_error",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "expected_acknowledged_record",
+        "fault_outcomes",
+        "final_assertions_not_yet_run",
+        "observed_before_final_assertions",
+        "other_range_initially_populated",
+        "owner_error",
+        "record_read_error",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c2e-7913-be32-71d87f70c7ab/registered-native-base-before-assertions.json",
+      "bytes": 295438,
+      "sha256": "381f578cc824d18414cc9b014fd4352ce58a699589db04f1a073e883839b9ee6",
+      "top_fields": [
+        "actual_native",
+        "after",
+        "before",
+        "canceled",
+        "catalogue_floor_adopted",
+        "cold_recovery_or_physical_qualification",
+        "expected_final_pointer",
+        "first_progress",
+        "native_floor_published",
+        "owner_after",
+        "owner_before",
+        "second_progress",
+        "serving"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c2e-7913-be32-71d87f70c7ab/registered-image-history-and-rows.json",
+      "bytes": 188334,
+      "sha256": "3d3c9a710c0108b1fef924040d8378c9d811e66b1c0ceaeb2fda10bd935a8d8c",
+      "top_fields": [
+        "acknowledged_record_verified_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "fault_outcomes",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c2e-7913-be32-71d87f70c7ab/registered-native-base-invalidated-integrity.json",
+      "bytes": 22572,
+      "sha256": "2c47206a042ac0c6f471d92f932addcff6a571ca9866d92aa3b8d336936b8b5a",
+      "top_fields": [
+        "actual_image_generations",
+        "actual_native",
+        "cold_owner_reconstruction",
+        "current_image_error",
+        "durable_floor_survives_image_invalidation",
+        "integrity_range_index",
+        "original_native",
+        "serving"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c2e-7913-be32-71d87f70c7ab/registered-native-image-critical-outcome.json",
+      "bytes": 2145755,
+      "sha256": "f38a96b25e5f799ba80961ee2c237823e2f690efcdf27f969968c8a1eea708a8",
+      "top_fields": null,
+      "bounded_array_items": 4
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c2e-7913-be32-71d87f70c7ab/registered-proposal-1.json",
+      "bytes": 122730,
+      "sha256": "e1249318ce624b934cd55026441e7cc7bb3b58dcb589cbac0d8bb6a46ec38d75",
+      "top_fields": [
+        "actual_A_lease",
+        "after",
+        "before",
+        "exact_error",
+        "first_outcome",
+        "native_after_first",
+        "native_before",
+        "no_catalogue_installing",
+        "no_rows_or_serving",
+        "pointer",
+        "record_after_first"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-e63c-75e1-94eb-e5c00fa0da29/registered-final-image-before-assertions.json",
+      "bytes": 209672,
+      "sha256": "5b5f85cceee6acb2bb1b451577c2d5ca06d22acce30294f4174083d16bd81f5c",
+      "top_fields": [
+        "after",
+        "before",
+        "canceled",
+        "cold_or_physical_qualification",
+        "independent_actual_primary_scan",
+        "independent_index_parity",
+        "no_native_floor_catalogue_adoption_ready_or_serving",
+        "original_target_b",
+        "owner_after",
+        "owner_before",
+        "pointer",
+        "progress"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-e63c-75e1-94eb-e5c00fa0da29/registered-image-before-final-assertions.json",
+      "bytes": 188885,
+      "sha256": "8cee20d1912c604715c6fd3dc69300435ea804888432d67f6106399bf65b82c1",
+      "top_fields": [
+        "acknowledged_record_observed_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "after_error",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "expected_acknowledged_record",
+        "fault_outcomes",
+        "final_assertions_not_yet_run",
+        "observed_before_final_assertions",
+        "other_range_initially_populated",
+        "owner_error",
+        "record_read_error",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-e63c-75e1-94eb-e5c00fa0da29/registered-image-history-and-rows.json",
+      "bytes": 188352,
+      "sha256": "91b2c63c98994bab5b213bc9c14ad9d8c33ee7beae691b120367da43a8f28600",
+      "top_fields": [
+        "acknowledged_record_verified_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "fault_outcomes",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-e63c-75e1-94eb-e5c00fa0da29/registered-native-base-before-assertions.json",
+      "bytes": 295455,
+      "sha256": "d322687d3bc38f237a78f002a6d723ec42ab4e70adb087066a7413d5ea9ccb89",
+      "top_fields": [
+        "actual_native",
+        "after",
+        "before",
+        "canceled",
+        "catalogue_floor_adopted",
+        "cold_recovery_or_physical_qualification",
+        "expected_final_pointer",
+        "first_progress",
+        "native_floor_published",
+        "owner_after",
+        "owner_before",
+        "second_progress",
+        "serving"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-e63c-75e1-94eb-e5c00fa0da29/registered-native-image-critical-outcome.json",
+      "bytes": 2145820,
+      "sha256": "8373b3174c031eda83d9d5c6ffef57702570bec442f4ebd7ea8e04de3013f10d",
+      "top_fields": null,
+      "bounded_array_items": 4
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-e63c-75e1-94eb-e5c00fa0da29/registered-proposal-1.json",
+      "bytes": 122757,
+      "sha256": "978bb2bdaf7122cff85196ac5419d07b48ff59f0636b09f2fd247b1f5da79282",
+      "top_fields": [
+        "actual_A_lease",
+        "after",
+        "before",
+        "exact_error",
+        "first_outcome",
+        "native_after_first",
+        "native_before",
+        "no_catalogue_installing",
+        "no_rows_or_serving",
+        "pointer",
+        "record_after_first"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-e642-7c23-bd05-bfcd165f04ea/registered-final-image-before-assertions.json",
+      "bytes": 209648,
+      "sha256": "0723a31ecff09a76ae5c3afe65b2ef076570f739041cde39bba988b61cb282b7",
+      "top_fields": [
+        "after",
+        "before",
+        "canceled",
+        "cold_or_physical_qualification",
+        "independent_actual_primary_scan",
+        "independent_index_parity",
+        "no_native_floor_catalogue_adoption_ready_or_serving",
+        "original_target_b",
+        "owner_after",
+        "owner_before",
+        "pointer",
+        "progress"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-e642-7c23-bd05-bfcd165f04ea/registered-image-before-final-assertions.json",
+      "bytes": 188861,
+      "sha256": "d2035f9d085f2a4b05de51f14f5e80c3f7ff53f2649c536323a125bede8ff026",
+      "top_fields": [
+        "acknowledged_record_observed_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "after_error",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "expected_acknowledged_record",
+        "fault_outcomes",
+        "final_assertions_not_yet_run",
+        "observed_before_final_assertions",
+        "other_range_initially_populated",
+        "owner_error",
+        "record_read_error",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-e642-7c23-bd05-bfcd165f04ea/registered-image-history-and-rows.json",
+      "bytes": 188328,
+      "sha256": "cf69341d733aef20278fb91b28311691bb2485c1019f8b76158a80bc8f21a4ff",
+      "top_fields": [
+        "acknowledged_record_verified_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "fault_outcomes",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-e642-7c23-bd05-bfcd165f04ea/registered-native-base-before-assertions.json",
+      "bytes": 373414,
+      "sha256": "9cd33a419143a09fbd616f7cca0b9d8efb2f3266ba84fcd9d22afeb77aa8bacc",
+      "top_fields": [
+        "actual_native",
+        "after",
+        "before",
+        "canceled",
+        "catalogue_floor_adopted",
+        "cold_recovery_or_physical_qualification",
+        "expected_final_pointer",
+        "first_progress",
+        "native_floor_published",
+        "owner_after",
+        "owner_before",
+        "second_progress",
+        "serving"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-e642-7c23-bd05-bfcd165f04ea/registered-native-image-critical-outcome.json",
+      "bytes": 2813614,
+      "sha256": "ff5d433a71627451f307158ddd8c47b911d51a2990764a98e1151081b70ec3e0",
+      "top_fields": null,
+      "bounded_array_items": 5
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-e642-7c23-bd05-bfcd165f04ea/registered-native-base-canceled.json",
+      "bytes": 89347,
+      "sha256": "95b48b44dd35813ff75ed2ac72830f07c3b2ca998fa82b7dd51069ce34c3a58a",
+      "top_fields": [
+        "actual_native",
+        "catalogue_adoption_or_serving",
+        "exact_error",
+        "expected_final_pointer",
+        "retained"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-e642-7c23-bd05-bfcd165f04ea/registered-proposal-1.json",
+      "bytes": 122729,
+      "sha256": "d7b769379e7849c16f690514ed4a97063957f2eb8aa0382586ea40a6c950597d",
+      "top_fields": [
+        "actual_A_lease",
+        "after",
+        "before",
+        "exact_error",
+        "first_outcome",
+        "native_after_first",
+        "native_before",
+        "no_catalogue_installing",
+        "no_rows_or_serving",
+        "pointer",
+        "record_after_first"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-ea04-7f52-85aa-4e7aa3961227/registered-image-before-final-assertions.json",
+      "bytes": 188855,
+      "sha256": "24214e37de3fc3b4759c2dc43d4850e8a677fed6394c0d0d760432347a301dc5",
+      "top_fields": [
+        "acknowledged_record_observed_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "after_error",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "expected_acknowledged_record",
+        "fault_outcomes",
+        "final_assertions_not_yet_run",
+        "observed_before_final_assertions",
+        "other_range_initially_populated",
+        "owner_error",
+        "record_read_error",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-ea04-7f52-85aa-4e7aa3961227/registered-image-history-and-rows.json",
+      "bytes": 188322,
+      "sha256": "cc2aa2f3179e78d89ee0e62ad8f89d35a247e4bf49cd68bc769886512da2ef15",
+      "top_fields": [
+        "acknowledged_record_verified_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "fault_outcomes",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-ea04-7f52-85aa-4e7aa3961227/registered-proposal-1.json",
+      "bytes": 122689,
+      "sha256": "305cd50d714cfbc09da9e3608bcd3f0014c12c2e350b323c5b347b7c14549e20",
+      "top_fields": [
+        "actual_A_lease",
+        "after",
+        "before",
+        "exact_error",
+        "first_outcome",
+        "native_after_first",
+        "native_before",
+        "no_catalogue_installing",
+        "no_rows_or_serving",
+        "pointer",
+        "record_after_first"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-ea04-7f52-85aa-4e7aa3961227/registered-native-base-missing-final.json",
+      "bytes": 97716,
+      "sha256": "7132221ce2f69e6a25037ed23fdcd6e7739b1f5c7137758710e9148322a4f878",
+      "top_fields": [
+        "before",
+        "exact_error",
+        "no_native_floor_or_serving",
+        "owner_after",
+        "owner_before"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-02e6-7922-8077-135f74792cc1/registered-final-image-before-assertions.json",
+      "bytes": 209616,
+      "sha256": "69f1eaecec7a94b235ba64048afd6138842bf4ef83d235b301c196f2c01fdbd6",
+      "top_fields": [
+        "after",
+        "before",
+        "canceled",
+        "cold_or_physical_qualification",
+        "independent_actual_primary_scan",
+        "independent_index_parity",
+        "no_native_floor_catalogue_adoption_ready_or_serving",
+        "original_target_b",
+        "owner_after",
+        "owner_before",
+        "pointer",
+        "progress"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-02e6-7922-8077-135f74792cc1/registered-image-before-final-assertions.json",
+      "bytes": 188829,
+      "sha256": "d74a30d655d44361f846b8d0d3847866f11c9c974b6ec7cb009a0769d719541d",
+      "top_fields": [
+        "acknowledged_record_observed_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "after_error",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "expected_acknowledged_record",
+        "fault_outcomes",
+        "final_assertions_not_yet_run",
+        "observed_before_final_assertions",
+        "other_range_initially_populated",
+        "owner_error",
+        "record_read_error",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-02e6-7922-8077-135f74792cc1/registered-image-history-and-rows.json",
+      "bytes": 188296,
+      "sha256": "ba22c21921c8ab69c7623daeabe12012e8eb3661d7d643aef775f21f8b1f82f5",
+      "top_fields": [
+        "acknowledged_record_verified_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "fault_outcomes",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-02e6-7922-8077-135f74792cc1/registered-native-base-real-role-expiry-outcome.json",
+      "bytes": 841668,
+      "sha256": "54ba9ae8efd1e1c004d4a1de9954204bcd2a9a2fbb5fe393fe694b932b9a69b5",
+      "top_fields": [
+        "actual_cut_events",
+        "actual_target_attempt",
+        "after_first_expiry",
+        "after_fresh_request",
+        "before",
+        "desired_acceptance_original_a_resumes_after_proven_abort_or_same_committed_xid",
+        "first_error_debug",
+        "first_exact_error",
+        "first_progress",
+        "first_request_windows",
+        "issued_native_xid",
+        "no_cold_powerloss_or_serving_qualification",
+        "original_e1ec_failure_cause_claimed",
+        "original_xid_after_retry",
+        "parent_budget_ms_unchanged",
+        "real_original_role_deadline_wait_not_fake_cancel",
+        "request_order_unchanged",
+        "retry_error_debug",
+        "retry_exact_error",
+        "retry_progress",
+        "retry_request_windows",
+        "same_manifest_sha256",
+        "same_open_native_classification",
+        "source_case",
+        "version"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-02e6-7922-8077-135f74792cc1/registered-native-image-critical-outcome.json",
+      "bytes": 902170,
+      "sha256": "6a132aa5f3ce7bb5e359ec2d7af65e31e792d06805e5c443d291844d2ad3362b",
+      "top_fields": null,
+      "bounded_array_items": 2
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-02e6-7922-8077-135f74792cc1/registered-proposal-1.json",
+      "bytes": 122672,
+      "sha256": "3cc4bb100e399cadb7f5379b335e34eadb1a3ec2a19f4e395ebc96947e5925b0",
+      "top_fields": [
+        "actual_A_lease",
+        "after",
+        "before",
+        "exact_error",
+        "first_outcome",
+        "native_after_first",
+        "native_before",
+        "no_catalogue_installing",
+        "no_rows_or_serving",
+        "pointer",
+        "record_after_first"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-3134-74b3-98c4-bfb8a8f57885/registered-final-image-before-assertions.json",
+      "bytes": 209614,
+      "sha256": "f957273889f343c4c52dd9c58f7b978d52cf0f1ab6bd23c7356cc6d15826603a",
+      "top_fields": [
+        "after",
+        "before",
+        "canceled",
+        "cold_or_physical_qualification",
+        "independent_actual_primary_scan",
+        "independent_index_parity",
+        "no_native_floor_catalogue_adoption_ready_or_serving",
+        "original_target_b",
+        "owner_after",
+        "owner_before",
+        "pointer",
+        "progress"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-3134-74b3-98c4-bfb8a8f57885/registered-image-history-and-rows.json",
+      "bytes": 188294,
+      "sha256": "86a3ce249aead15be005d41a1b08b3dcd15592d3177a13d6095a269e84044953",
+      "top_fields": [
+        "acknowledged_record_verified_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "fault_outcomes",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-3134-74b3-98c4-bfb8a8f57885/registered-image-before-final-assertions.json",
+      "bytes": 188827,
+      "sha256": "9aa894c0bb67f76d5cc131b18e2a1cad1709210abe455e5cd7f83e614552ee2c",
+      "top_fields": [
+        "acknowledged_record_observed_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "after_error",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "expected_acknowledged_record",
+        "fault_outcomes",
+        "final_assertions_not_yet_run",
+        "observed_before_final_assertions",
+        "other_range_initially_populated",
+        "owner_error",
+        "record_read_error",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-3134-74b3-98c4-bfb8a8f57885/registered-native-base-real-role-expiry-outcome.json",
+      "bytes": 912102,
+      "sha256": "483088e5b25aa530db2e5ea1e33bf2698f197fdd085e9ba49e9048626fbf8f6f",
+      "top_fields": [
+        "actual_cut_events",
+        "actual_target_attempt",
+        "after_first_expiry",
+        "after_fresh_request",
+        "before",
+        "desired_acceptance_original_a_resumes_after_proven_abort_or_same_committed_xid",
+        "first_error_debug",
+        "first_exact_error",
+        "first_progress",
+        "first_request_windows",
+        "issued_native_xid",
+        "no_cold_powerloss_or_serving_qualification",
+        "original_e1ec_failure_cause_claimed",
+        "original_xid_after_retry",
+        "parent_budget_ms_unchanged",
+        "real_original_role_deadline_wait_not_fake_cancel",
+        "request_order_unchanged",
+        "retry_error_debug",
+        "retry_exact_error",
+        "retry_progress",
+        "retry_request_windows",
+        "same_manifest_sha256",
+        "same_open_native_classification",
+        "source_case",
+        "version"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-3134-74b3-98c4-bfb8a8f57885/registered-native-image-critical-outcome.json",
+      "bytes": 902166,
+      "sha256": "349a64b77a6d8ebf61a34e921c16a7b1e7f39fe6fa5b952f455a27b84c50e5f9",
+      "top_fields": null,
+      "bounded_array_items": 2
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-3134-74b3-98c4-bfb8a8f57885/registered-proposal-1.json",
+      "bytes": 122698,
+      "sha256": "f647f5834ac96b6ef1aeab0271f6473e342df827830dfed22f2fe40acaacf40b",
+      "top_fields": [
+        "actual_A_lease",
+        "after",
+        "before",
+        "exact_error",
+        "first_outcome",
+        "native_after_first",
+        "native_before",
+        "no_catalogue_installing",
+        "no_rows_or_serving",
+        "pointer",
+        "record_after_first"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-3f89-7371-b800-5e8ab0ce786c/registered-final-image-before-assertions.json",
+      "bytes": 209604,
+      "sha256": "bd6f10558b745e3f5e1e278e46ea1f47c346049161c58dbc4721a86c517e9bad",
+      "top_fields": [
+        "after",
+        "before",
+        "canceled",
+        "cold_or_physical_qualification",
+        "independent_actual_primary_scan",
+        "independent_index_parity",
+        "no_native_floor_catalogue_adoption_ready_or_serving",
+        "original_target_b",
+        "owner_after",
+        "owner_before",
+        "pointer",
+        "progress"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-3f89-7371-b800-5e8ab0ce786c/registered-image-before-final-assertions.json",
+      "bytes": 188817,
+      "sha256": "3a71d3d5d9104f4382c340292f811030cda151c1c21f2d6b4ae071d1dcdea5e4",
+      "top_fields": [
+        "acknowledged_record_observed_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "after_error",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "expected_acknowledged_record",
+        "fault_outcomes",
+        "final_assertions_not_yet_run",
+        "observed_before_final_assertions",
+        "other_range_initially_populated",
+        "owner_error",
+        "record_read_error",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-3f89-7371-b800-5e8ab0ce786c/registered-image-history-and-rows.json",
+      "bytes": 188284,
+      "sha256": "765e4f3490df12c00ae0efa73f9e8f580566b1dea9f47cdfa4d73abfb2a4a8c9",
+      "top_fields": [
+        "acknowledged_record_verified_locally",
+        "actual_owner",
+        "actual_source_seal",
+        "after",
+        "before",
+        "cold_recovery_or_physical_qualification",
+        "fault_outcomes",
+        "rows",
+        "strong_read_or_serving_proven"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-3f89-7371-b800-5e8ab0ce786c/registered-native-base-real-role-expiry-outcome.json",
+      "bytes": 912024,
+      "sha256": "490499087b432d28503568695241e1c1a58aea855af5d9ac2c48e0390cbe3be6",
+      "top_fields": [
+        "actual_cut_events",
+        "actual_target_attempt",
+        "after_first_expiry",
+        "after_fresh_request",
+        "before",
+        "desired_acceptance_original_a_resumes_after_proven_abort_or_same_committed_xid",
+        "first_error_debug",
+        "first_exact_error",
+        "first_progress",
+        "first_request_windows",
+        "issued_native_xid",
+        "no_cold_powerloss_or_serving_qualification",
+        "original_e1ec_failure_cause_claimed",
+        "original_xid_after_retry",
+        "parent_budget_ms_unchanged",
+        "real_original_role_deadline_wait_not_fake_cancel",
+        "request_order_unchanged",
+        "retry_error_debug",
+        "retry_exact_error",
+        "retry_progress",
+        "retry_request_windows",
+        "same_manifest_sha256",
+        "same_open_native_classification",
+        "source_case",
+        "version"
+      ],
+      "bounded_array_items": null
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-3f89-7371-b800-5e8ab0ce786c/registered-native-image-critical-outcome.json",
+      "bytes": 902145,
+      "sha256": "a52af0d2851d058b445e6266f2be551cb799d09e12fbf860930692bb47724e4a",
+      "top_fields": null,
+      "bounded_array_items": 2
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-3f89-7371-b800-5e8ab0ce786c/registered-proposal-1.json",
+      "bytes": 122668,
+      "sha256": "9149fbdb983ddb5017bbb6f7269ccadf932b10856b68c484c412e5b726d7ce5b",
+      "top_fields": [
+        "actual_A_lease",
+        "after",
+        "before",
+        "exact_error",
+        "first_outcome",
+        "native_after_first",
+        "native_before",
+        "no_catalogue_installing",
+        "no_rows_or_serving",
+        "pointer",
+        "record_after_first"
+      ],
+      "bounded_array_items": null
+    }
+  ],
+  "suspicious_field_names": [
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8bf8-7ec3-952e-41967a808682/terminal.json",
+      "field": "/custody/tls_private_root_excluded",
+      "kind": "bool"
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c1e-72f2-9d72-86e2c1aceea8/terminal.json",
+      "field": "/custody/tls_private_root_excluded",
+      "kind": "bool"
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c2d-7530-b6d1-308531e75f4f/terminal.json",
+      "field": "/custody/tls_private_root_excluded",
+      "kind": "bool"
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-8c2e-7913-be32-71d87f70c7ab/terminal.json",
+      "field": "/custody/tls_private_root_excluded",
+      "kind": "bool"
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-e63c-75e1-94eb-e5c00fa0da29/terminal.json",
+      "field": "/custody/tls_private_root_excluded",
+      "kind": "bool"
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-e642-7c23-bd05-bfcd165f04ea/terminal.json",
+      "field": "/custody/tls_private_root_excluded",
+      "kind": "bool"
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d703-ea04-7f52-85aa-4e7aa3961227/terminal.json",
+      "field": "/custody/tls_private_root_excluded",
+      "kind": "bool"
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-02e6-7922-8077-135f74792cc1/terminal.json",
+      "field": "/custody/tls_private_root_excluded",
+      "kind": "bool"
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-3134-74b3-98c4-bfb8a8f57885/terminal.json",
+      "field": "/custody/tls_private_root_excluded",
+      "kind": "bool"
+    },
+    {
+      "member": "fault-state/native-registered-fifth-image-01a1d704-3f89-7371-b800-5e8ab0ce786c/terminal.json",
+      "field": "/custody/tls_private_root_excluded",
+      "kind": "bool"
+    }
+  ],
+  "suspicious_fields_review": "Only terminal custody-policy boolean tls_private_root_excluded, not key material; all raw custody excluded. TLS key_path strings are original excluded paths, not key bytes.",
+  "private_PEM_marker_found": false,
+  "entire_custody_subtrees_and_manifest_excluded": true,
+  "not_general_secret_scanner": true,
+  "unforced_continuation_reports": 0,
+  "unforced_continuation_prerequisite": "not tested; no natural late commit observed",
+  "github_raw_access_scope": "public-repository Actions artifact under GitHub access/retention; locally restricted copies do not establish owner-only GitHub confidentiality"
+}

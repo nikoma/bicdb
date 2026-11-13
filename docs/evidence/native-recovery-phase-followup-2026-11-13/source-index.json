@@ -1,0 +1,58 @@
+[
+  {
+    "commit": "7f2c5f0abc4b2a65700971e41ec362c5da0fbb03",
+    "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs",
+    "line": 862,
+    "claim": "Original round recording failure",
+    "url": "https://github.com/nikoma/bicdb/blob/7f2c5f0abc4b2a65700971e41ec362c5da0fbb03/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs#L862"
+  },
+  {
+    "commit": "7f2c5f0abc4b2a65700971e41ec362c5da0fbb03",
+    "path": "crates/bicdb-core/src/distribution_range_handoff/joint/old_quorum.rs",
+    "line": 127,
+    "claim": "Original MQ checked before close issuance",
+    "url": "https://github.com/nikoma/bicdb/blob/7f2c5f0abc4b2a65700971e41ec362c5da0fbb03/crates/bicdb-core/src/distribution_range_handoff/joint/old_quorum.rs#L127"
+  },
+  {
+    "commit": "7f2c5f0abc4b2a65700971e41ec362c5da0fbb03",
+    "path": "crates/bicdb-core/src/distribution_consensus.rs",
+    "line": 630,
+    "claim": "Transport MQ liveness predicate",
+    "url": "https://github.com/nikoma/bicdb/blob/7f2c5f0abc4b2a65700971e41ec362c5da0fbb03/crates/bicdb-core/src/distribution_consensus.rs#L630"
+  },
+  {
+    "commit": "6d5fe913fb6bdb032c53801b52ad6161fe6d0d95",
+    "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/old_round_expiry_tests.rs",
+    "line": 1,
+    "claim": "Actual expiry and fresh-count control",
+    "url": "https://github.com/nikoma/bicdb/blob/6d5fe913fb6bdb032c53801b52ad6161fe6d0d95/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/old_round_expiry_tests.rs#L1"
+  },
+  {
+    "commit": "6d5fe913fb6bdb032c53801b52ad6161fe6d0d95",
+    "path": "crates/bicdb-core/src/distribution_transport.rs",
+    "line": 1150,
+    "claim": "Actual ingress IO deadline",
+    "url": "https://github.com/nikoma/bicdb/blob/6d5fe913fb6bdb032c53801b52ad6161fe6d0d95/crates/bicdb-core/src/distribution_transport.rs#L1150"
+  },
+  {
+    "commit": "6d5fe913fb6bdb032c53801b52ad6161fe6d0d95",
+    "path": "crates/bicdb-core/src/distribution_consensus.rs",
+    "line": 663,
+    "claim": "Actual remote context deadline clamp",
+    "url": "https://github.com/nikoma/bicdb/blob/6d5fe913fb6bdb032c53801b52ad6161fe6d0d95/crates/bicdb-core/src/distribution_consensus.rs#L663"
+  },
+  {
+    "commit": "fd4d0595d70e82dff20889c19918e34dbd42575d",
+    "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_installing_tests.rs",
+    "line": 1,
+    "claim": "Actual catalogue Installing controls",
+    "url": "https://github.com/nikoma/bicdb/blob/fd4d0595d70e82dff20889c19918e34dbd42575d/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_installing_tests.rs#L1"
+  },
+  {
+    "commit": "7349adaaa987042e164ca06bb7e9eb8522fdb851",
+    "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_proposal_tests.rs",
+    "line": 1,
+    "claim": "Actual proposal and reader-fence controls",
+    "url": "https://github.com/nikoma/bicdb/blob/7349adaaa987042e164ca06bb7e9eb8522fdb851/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_proposal_tests.rs#L1"
+  }
+]

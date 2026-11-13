@@ -1,0 +1,64 @@
+{
+  "recorded_at_utc": "2026-11-13T23:52:54.134144+00:00",
+  "delivery_base": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+  "source_version": "1.0.504-beta",
+  "checks": [
+    {
+      "name": "frozen packet portable verifiers",
+      "result": "passed",
+      "count": 9,
+      "verifiers": [
+        "docs/evidence/native-recovery-phase-followup-2026-11-13/verify.py",
+        "docs/evidence/native-registered-base-rows-d690-2026-11-13/verify.py",
+        "docs/evidence/native-cold-rows-catalogue-e1ec-2026-11-13/verify.py",
+        "docs/evidence/native-original-catalogue-wal-e1ec-2026-11-13/verify.py",
+        "docs/evidence/native-base-real-expiry-34dd-2026-11-13/verify.py",
+        "docs/evidence/native-base-abort-custody-2026-11-13/verify.py",
+        "docs/evidence/native-main500-remote-regressions-2026-11-13/verify.py",
+        "docs/evidence/native-hot-gate-compile-d5f-2026-11-13/verify.py",
+        "docs/evidence/native-hot-gate-local-six-55c-2026-11-13/verify.py"
+      ]
+    },
+    {
+      "name": "unchanged packet bytes",
+      "result": "passed",
+      "files": 253
+    },
+    {
+      "name": "foreign501/502/503 release preservation",
+      "result": "passed"
+    },
+    {
+      "name": "relative links in changed audit/release",
+      "result": "passed"
+    },
+    {
+      "name": "new main502 complete-log SHA256/decompressed lines",
+      "result": "passed"
+    },
+    {
+      "name": "official source-version synchronization",
+      "result": "passed",
+      "packages": 29
+    },
+    {
+      "name": "open-core dependency boundary",
+      "result": "passed"
+    },
+    {
+      "name": "license invariants",
+      "result": "passed"
+    },
+    {
+      "name": "diff whitespace",
+      "result": "passed"
+    }
+  ],
+  "scope": "Documentation/evidence/version metadata validation only; not Rust runtime tests, physical qualification, binary production or deployment. Hosted checks for the final delivered SHA are separate.",
+  "validation_command_error": {
+    "attempt": "python3 scripts/validate-licensing.sh",
+    "result": "invocation failed: shell script was passed to Python",
+    "corrected_command": "bash scripts/validate-licensing.sh",
+    "corrected_result": "passed; no file change"
+  }
+}

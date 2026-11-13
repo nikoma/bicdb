@@ -1,0 +1,40 @@
+// Expected verified identity bytes, not an implementation of the accessor.
+export const subjects = [
+  '5cf7d176-1c08-4d95-8c46-2df0be03441f',
+  'operator:legacy-510/path',
+  '操作者:α/零',
+  '\u00e9',
+  'e\u0301',
+  '00042',
+  '42',
+  '9223372036854775808',
+];
+export const signatureVectors = [
+  {name:'positional_argument',patch:{arguments:[{name:null,value:{op:'literal',value:'spoof'}}],argument_types:['string'],argument_item_types:[null]}},
+  {name:'named_argument',patch:{arguments:[{name:'subject',value:{op:'literal',value:'spoof'}}],argument_types:['string'],argument_item_types:[null]}},
+  {name:'metadata_without_argument',patch:{argument_types:['string']}},
+  {name:'item_metadata_without_argument',patch:{argument_item_types:[null]}},
+  {name:'wrong_result_type',patch:{result_type:'int'}},
+  {name:'missing_result_type',patch:{result_type:null}},
+  {name:'method_override',patch:{method:'spoof'}},
+  {name:'result_projection',patch:{result_projection:{fields:[]}}},
+];
+export const authVectors = [
+  'anonymous public helper denied',
+  'protected missing bearer denied',
+  'wrong issuer denied',
+  'wrong audience denied',
+  'expired bearer denied',
+  'operator without custodian denied',
+  'custodian without operator denied',
+  'body/header identity cannot override verified actor',
+  'tenant/workspace optional String values preserved',
+  'foreign tenant object read/review denied',
+  'same exact maker/controller subject denied',
+  '00042 and42 remain distinct verified reviewers',
+  'nested owner service sees exact same subject/grants/tenant/workspace in caller transaction',
+  'numeric current_user behavior unchanged',
+  'signed missing-feature package denied',
+  'old reader denies unknown authenticated_principal feature',
+  'restart/cold preserves opaque identity evidence and imported calls',
+];

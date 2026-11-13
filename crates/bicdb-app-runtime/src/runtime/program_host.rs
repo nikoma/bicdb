@@ -2618,6 +2618,14 @@ impl<'a> CapabilityApplicationProgramHost<'a> {
             "encrypt" => self.field_crypto(target, &arguments, true),
             "decrypt" => self.field_crypto(target, &arguments, false),
             "auth.current_user" => self.current_user(),
+            "auth.current_principal" => {
+                if !arguments.is_empty() {
+                    return Err(AppRuntimeError::InvalidRequest(
+                        "auth.current_principal requires exactly zero arguments".to_string(),
+                    ));
+                }
+                self.current_principal()
+            }
             "auth.register" => self.auth_register(target, &arguments),
             "auth.login" => self.auth_login(target, &arguments),
             "auth.issue_tokens" => self.auth_issue_tokens(target, &arguments),
@@ -5816,6 +5824,31 @@ impl<'a> CapabilityApplicationProgramHost<'a> {
             .read_runtime_cache(transaction, &storage_key)
             .map(|value| Value::Bool(value.is_some()));
         self.finish_runtime_cache_transaction(owned, result)
+    }
+
+    pub(crate) fn current_principal(&self) -> Result<Value> {
+        let actor = self.host.actor();
+        let subject = actor
+            .user_id
+            .as_ref()
+            .filter(|subject| {
+                !subject.is_empty() && actor.authentication_method.as_deref() != Some("anonymous")
+            })
+            .ok_or_else(|| {
+                AppRuntimeError::CapabilityDenied(
+                    "auth.current_principal requires an authenticated subject actor".to_string(),
+                )
+            })?;
+        // This is the exact subject and effective grants in the existing verified
+        // actor. Never parse a numeric id, normalize text, infer a service/email
+        // identity, or read caller-supplied claims from the request envelope.
+        Ok(json!({
+            "subject": subject,
+            "roles": actor.roles,
+            "scopes": actor.scopes,
+            "tenant_id": actor.tenant_id,
+            "workspace_id": actor.workspace_id,
+        }))
     }
 
     pub(crate) fn current_user(&self) -> Result<Value> {

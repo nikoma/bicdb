@@ -12,8 +12,9 @@ mod exact_decimal_list_sum;
 pub use exact_decimal_list_sum::{exact_decimal_list_sum_value, MAX_EXACT_DECIMAL_LIST_SUM_ITEMS};
 mod exact_decimal_units;
 pub use exact_decimal_units::{
-    exact_decimal_sum_units_value, exact_prorate_units_value, nearest_native_display_ratio_value,
-    ExactDecimalUnitsSum,
+    exact_decimal_sum_units_value, exact_prorate_native_units_value, exact_prorate_units_value,
+    exact_units_from_limbs_value, nearest_native_display_ratio_value,
+    nearest_native_full_display_ratio_value, ExactDecimalUnitsSum,
 };
 mod exact_proportional_interval;
 pub use decimal_input::{json_decimal_exact, parse_decimal_exact};

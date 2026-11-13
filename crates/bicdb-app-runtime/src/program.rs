@@ -1558,6 +1558,9 @@ impl Evaluator<'_> {
             | "finance.proportional_interval"
             | "finance.prorate_units"
             | "finance.display_ratio_units"
+            | "finance.prorate_native_units"
+            | "finance.display_native_ratio_units"
+            | "finance.units_from_limbs"
             | "finance.abs"
             | "finance.tax_exclusive"
             | "finance.tax_inclusive"
@@ -2809,6 +2812,14 @@ fn carrier_finance(target: &str, values: &[Value]) -> Result<Value> {
         "finance.prorate_units" => bicdb_core::exact_prorate_units_value(values)
             .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string())),
         "finance.display_ratio_units" => bicdb_core::nearest_native_display_ratio_value(values)
+            .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string())),
+        "finance.prorate_native_units" => bicdb_core::exact_prorate_native_units_value(values)
+            .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string())),
+        "finance.display_native_ratio_units" => {
+            bicdb_core::nearest_native_full_display_ratio_value(values)
+                .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string()))
+        }
+        "finance.units_from_limbs" => bicdb_core::exact_units_from_limbs_value(values)
             .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string())),
         "finance.abs" => {
             let value = decimal(first()?, target)?;

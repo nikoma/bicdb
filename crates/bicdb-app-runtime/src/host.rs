@@ -6393,6 +6393,32 @@ fn lower_carrier_invariant_expression(
             target,
             arguments,
             ..
+        } if target == "finance.units_from_limbs" => {
+            let lowered = arguments
+                .iter()
+                .map(|argument| {
+                    lower_carrier_invariant_expression(
+                        application,
+                        subject_resource,
+                        bindings,
+                        &argument.value,
+                    )
+                    .map(Box::new)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            NativeInvariantExpression::UnitsFromLimbs {
+                arguments: lowered.try_into().map_err(|_| {
+                    AppRuntimeError::InvalidPackage(
+                        "native unit formatter requires exactly six actual Int operands".into(),
+                    )
+                })?,
+            }
+        }
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            arguments,
+            ..
         } if target == "finance.proportional_interval" => {
             if arguments.len() != 6 {
                 return Err(AppRuntimeError::InvalidPackage(

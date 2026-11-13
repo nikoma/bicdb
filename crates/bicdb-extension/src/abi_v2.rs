@@ -3259,6 +3259,9 @@ impl ApplicationManifestV2 {
                     "finance.sum_units",
                     "finance.prorate_units",
                     "finance.display_ratio_units",
+                    "finance.prorate_native_units",
+                    "finance.display_native_ratio_units",
+                    "finance.units_from_limbs",
                 ],
             ) && !self
                 .required_features
@@ -5225,7 +5228,12 @@ fn validate_carrier_expression(expression: &ApplicationExpressionV1) -> Result<(
             if *kind == ApplicationCallKindV1::Builtin
                 && matches!(
                     target.as_str(),
-                    "finance.sum_units" | "finance.prorate_units" | "finance.display_ratio_units"
+                    "finance.sum_units"
+                        | "finance.prorate_units"
+                        | "finance.display_ratio_units"
+                        | "finance.prorate_native_units"
+                        | "finance.display_native_ratio_units"
+                        | "finance.units_from_limbs"
                 )
             {
                 validate_exact_decimal_units_call(expression)?;
@@ -6745,14 +6753,19 @@ fn validate_exact_decimal_units_call(expression: &ApplicationExpressionV1) -> Re
     use ApplicationExpressionTypeV1::{Decimal, Int, Other, String as Text};
     let (expected, items, output): (&[_], &[_], _) = match target.as_str() {
         "finance.sum_units" => (&[Other, Int], &[Some(Decimal), None], Text),
-        "finance.prorate_units" => (
+        "finance.prorate_units" | "finance.prorate_native_units" => (
             &[Text, Text, Decimal, Int, Int],
             &[None, None, None, None, None],
             Decimal,
         ),
-        "finance.display_ratio_units" => {
+        "finance.display_ratio_units" | "finance.display_native_ratio_units" => {
             (&[Text, Text, Int, Int], &[None, None, None, None], Decimal)
         }
+        "finance.units_from_limbs" => (
+            &[Int, Int, Int, Int, Int, Int],
+            &[None, None, None, None, None, None],
+            Text,
+        ),
         _ => return invalid("unknown exact units builtin"),
     };
     if method.is_some()
@@ -6928,6 +6941,11 @@ fn invariant_scalar_operand_type(
         } if target == "finance.proportional_interval" => {
             Some(ApplicationExpressionTypeV1::Decimal)
         }
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            ..
+        } if target == "finance.units_from_limbs" => Some(ApplicationExpressionTypeV1::String),
         ApplicationExpressionV1::Aggregate {
             function: ApplicationAggregateFunctionV1::Count,
             ..
@@ -7084,6 +7102,31 @@ fn validate_invariant_expression(
             }
             recurse(left, bindings, dependencies)?;
             recurse(right, bindings, dependencies)
+        }
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            arguments,
+            ..
+        } if target == "finance.units_from_limbs" => {
+            validate_exact_decimal_units_call(expression)?;
+            if !application
+                .required_features
+                .contains(&ApplicationFeature::ExactDecimalUnits)
+            {
+                return invalid(
+                    "native unit formatter requires signed exact_decimal_units feature",
+                );
+            }
+            for argument in arguments {
+                recurse(&argument.value, bindings, dependencies)?;
+                if invariant_scalar_operand_type(application, subject, bindings, &argument.value)
+                    != Some(ApplicationExpressionTypeV1::Int)
+                {
+                    return invalid("native unit formatter operands must be actual nonnullable signed Int fields or Int expressions");
+                }
+            }
+            Ok(())
         }
         ApplicationExpressionV1::Call {
             kind: ApplicationCallKindV1::Builtin,

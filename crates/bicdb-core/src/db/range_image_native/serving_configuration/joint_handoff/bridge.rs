@@ -3,7 +3,7 @@
 use super::*;
 use crate::distribution_range_consensus::NativeJointBridgeCatalogue;
 use crate::distribution_range_handoff::CommittedNativeJointDecisionObservation;
-use crate::distribution_range_image_install::NativeImageCatalogueFinalization;
+use crate::distribution_range_image_install::NativeJointImageMaterialization;
 
 mod activation;
 mod publication_scope;
@@ -213,7 +213,7 @@ impl NativeJointServingPreparation {
         store: &RangeWriteStore,
         committed: &CommittedNativeJointDecisionObservation,
         catalogue: &NativeJointBridgeCatalogue,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
         #[cfg(test)]
@@ -271,11 +271,16 @@ impl BicDb {
         committed: &CommittedNativeJointDecisionObservation,
         store: &RangeWriteStore,
         catalogue: &NativeJointBridgeCatalogue,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<NativeJointServingPreparation> {
         parent.check()?;
+        #[cfg(feature = "tls-replication")]
+        let _registered_identity = image
+            .and_then(|i| i.registered_target())
+            .map(|t| self.borrow_registered_joint_identity(t.clone()))
+            .transpose()?;
         catalogue.require_current(store, self, committed, image, frozen)?;
         let data = committed.data();
         let id = data.old_range().id;
@@ -385,6 +390,7 @@ impl BicDb {
             record = old;
         } else {
             self.in_paged_transaction(|paged, xid| {
+                committed.require_native_publication_metadata(self, store)?;
                 record.native_page_xid = xid;
                 record.checksum_sha256 = record.checksum()?;
                 record.validate()?;
@@ -417,6 +423,14 @@ impl BicDb {
         catalogue.require_current(store, self, committed, image, frozen)?;
         parent.check()?;
         receipt.require_current(self, store, committed, catalogue, image, frozen)?;
+        committed.require_native_publication_metadata(self, store)?;
+        // The actual post-write pointer/archive/lineage and original hook/A
+        // are reborrowed together, then retained through the memory-only gate.
+        let physical =
+            receipt.publication_read_scope(self, store, committed, catalogue, image, frozen)?;
+        let version = committed.native_publication_guard()?;
+        drop(version);
+        drop(physical);
         Ok(receipt)
     }
 }

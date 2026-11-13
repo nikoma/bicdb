@@ -22,9 +22,11 @@ pub use registered_replica::NativeRegisteredReplicaReceiverStatus;
 pub(crate) use registered_replica::{
     NativeAssignedDataPolicyOrigin, NativeAssignedRegisteredClosedFence,
     NativeRegisteredRemoteImageStep, NativeRegisteredRemoteInstallPreflight,
-    NativeRegisteredRemoteProposalPoint, NativeRegisteredRemoteTransactionRequest,
-    NativeRegisteredRemoteTransferRequest, NativeRegisteredReplicaAdmission,
-    NativeRegisteredSelectedRangeNoDomain,
+    NativeRegisteredRemoteJointOwner, NativeRegisteredRemoteJointReleaseOwner,
+    NativeRegisteredRemoteJointTarget, NativeRegisteredRemoteProposalPoint,
+    NativeRegisteredRemoteTransactionRequest, NativeRegisteredRemoteTransferRequest,
+    NativeRegisteredReplicaAdmission, NativeRegisteredSelectedRangeNoDomain,
+    NativeRegisteredServingDataPolicyOrigin,
 };
 mod maintenance;
 use initial_data::NativeInitialDataHost;

@@ -19,6 +19,8 @@ pub(crate) use activation_scope::NativeActivationReadScope;
 mod activation_decision;
 mod joint_handoff;
 pub(crate) use activation_decision::NativeActivationDecisionReceipt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint_handoff::NativeRegisteredJointDecisionAttempt;
 pub(in crate::db::range_image_native) use joint_handoff::{
     NativeClosedWriterFact, NativeClosedWriterPoint, NativeJointServingDomain,
 };

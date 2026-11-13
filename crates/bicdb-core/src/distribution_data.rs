@@ -56,12 +56,19 @@ mod metadata_ingress;
 mod native_assigned_policy;
 mod native_durability;
 pub(crate) use metadata_ingress::NativeMetadataIngressRegistration;
+mod native_joint_metadata;
+pub(crate) use native_joint_metadata::{
+    ActualNativeJointMetadataPoint, ActualNativeJointMetadataPublicationGuard,
+};
 mod native_joint_handoff;
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_joint_handoff::ActualServiceNativeRegisteredJointNewEvidence;
 #[cfg(feature = "tls-replication")]
 pub(crate) use native_joint_handoff::NativeJointOldRetainedOutcome;
 mod native_writer;
 #[cfg(feature = "tls-replication")]
 pub(crate) use native_assigned_policy::NativeAssignedImagePolicyEvidence;
+pub(crate) use native_writer::NativeAssignedServiceWriterPublication;
 #[cfg(feature = "tls-replication")]
 mod registered_closed_fence;
 #[cfg(feature = "tls-replication")]

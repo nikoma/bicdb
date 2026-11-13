@@ -110,9 +110,14 @@ impl NativeJointServingPublicationRound {
                 "native bridge publication changed decision or local native history",
             ));
         }
-        self.phase = admission.phase.clone();
-        self.pending.remove(&node);
-        self.receipts.insert(node, Arc::new(receipt));
+        let retired = {
+            let _version = admission.committed().native_publication_guard()?;
+            let old_phase = std::mem::replace(&mut self.phase, admission.phase.clone());
+            self.pending.remove(&node);
+            let old_receipt = self.receipts.insert(node, Arc::new(receipt));
+            (old_phase, old_receipt)
+        };
+        drop(retired);
         Ok(())
     }
     /// Actual native producer succeeds, then the test loses its reply before
@@ -282,15 +287,23 @@ impl NativeJointPublishedServingQuorum {
             remaining,
             &cancellation,
         )?;
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &local.service,
+            &metadata,
+            business,
+            &cancellation,
+        )?;
         let fresh = {
             let service = local
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("joint open metadata service busy"))?;
-            service.observe_committed_native_joint_decision(
+            local.actual.observe_fresh_committed_with_point(
+                &service,
                 metadata,
                 business,
                 self.data().old_range().id,
+                metadata_point,
             )?
         };
         let cancellation = cancellation.child_with_deadline(fresh.deadline());
@@ -384,21 +397,26 @@ impl NativeJointOpenAdmission {
         store: &crate::distribution_range_consensus::RangeWriteStore,
     ) -> Result<crate::db::NativeJointWriterDomain> {
         self.require_live()?;
-        self.local.actual.require_original_writer(database, store)?;
+        self.local
+            .actual
+            .require_original_phase_owner(database, store)?;
         let domain = self.local.actual.writer_domain().clone();
         domain.require_current(database, store, self.data().activation_range())?;
         self.require_live()?;
         Ok(domain)
     }
-    pub(crate) fn original_writer_for_activation(
+    pub(crate) fn original_phase_owner_for_activation(
         &self,
         database: &crate::BicDb,
         store: &crate::distribution_range_consensus::RangeWriteStore,
-    ) -> Result<(Arc<crate::db::NativeWriterHostState>, std::path::PathBuf)> {
+    ) -> Result<(crate::db::NativeJointPhaseOwner, std::path::PathBuf)> {
         self.require_live()?;
-        let actual = self.local.actual.require_original_writer(database, store)?;
-        let (original, root) = self.local.actual.original_writer_for_continuation()?;
-        if !Arc::ptr_eq(&actual, &original) {
+        let actual = self
+            .local
+            .actual
+            .require_original_phase_owner(database, store)?;
+        let (original, root) = self.local.actual.original_phase_owner_for_continuation()?;
+        if !actual.same_actual(&original) {
             return Err(invalid("joint activation changed preparation writer"));
         }
         self.require_live()?;

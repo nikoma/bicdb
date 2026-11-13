@@ -485,3 +485,5 @@ impl BicDb {
 
 mod decision;
 pub(crate) use decision::NativeJointDecisionReceipt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use decision::NativeRegisteredJointDecisionAttempt;

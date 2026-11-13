@@ -30,6 +30,8 @@ pub(crate) use remote_old_collect::{
     NativeRemoteOldCutCertificate, NativeRemoteOldImageProof, NativeRemoteOldRound,
 };
 
+mod decision_owners;
+use decision_owners::NativeJointOldDecisionOwners;
 mod materialized;
 pub(crate) use materialized::{
     NativeJointMaterializedFacts, NativeJointMaterializedQuorums, NativeJointNewObservation,

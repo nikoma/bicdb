@@ -201,7 +201,49 @@ pub(crate) enum RangeMutationAuthority<'a> {
     Controlled(&'a ControlledFrozenMutationPermit),
 }
 
+/// Borrowed actual local gate slots for one concrete final arm. Captured
+/// BEFORE metadata publication guard, never a quorum or Serving grant.
+pub(crate) struct NativeRangeArmPublicationBorrow<'a> {
+    _ranges: parking_lot::MutexGuard<'a, BTreeMap<RangeId, RangeState>>,
+    _generations: parking_lot::MutexGuard<'a, BTreeMap<RangeId, (Uuid, Weak<AtomicBool>)>>,
+}
 impl RangeMutationGate {
+    pub(crate) fn borrow_native_arm_publication<'a>(
+        &'a self,
+        range: RangeId,
+        generation: &RangeServingGeneration,
+        already_armed: bool,
+    ) -> Result<NativeRangeArmPublicationBorrow<'a>> {
+        if range != generation.range_id
+            || !Weak::ptr_eq(&generation.inner, &Arc::downgrade(&self.inner))
+        {
+            return Err(invalid("native arm changed actual local gate/generation"));
+        }
+        let ranges = self
+            .inner
+            .ranges
+            .try_lock()
+            .ok_or_else(|| invalid("native arm range slots busy"))?;
+        if !already_armed {
+            require_readable_gate(&self.inner, ranges.get(&range))?;
+        }
+        let generations = self
+            .inner
+            .serving_generations
+            .try_lock()
+            .ok_or_else(|| invalid("native arm generation slots busy"))?;
+        if !generation.live.load(Ordering::Acquire)
+            || generations
+                .get(&range)
+                .is_none_or(|(id, _)| *id != generation.generation)
+        {
+            return Err(invalid("native arm generation invalidated"));
+        }
+        Ok(NativeRangeArmPublicationBorrow {
+            _ranges: ranges,
+            _generations: generations,
+        })
+    }
     // Called only under ranges, by actual mutator admission. Retain stamps
     // after idle RangeState removal to prevent None -> writer -> None ABA.
     // Reads never allocate. Exhaustion refuses new mutation identities.

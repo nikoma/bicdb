@@ -13,6 +13,7 @@ pub(super) struct AssignedCleanup {
     attempt: Option<NativeAssignedWriterInstallAttempt>,
     listener: Option<ClusterDataServerHandle>,
     _image: Option<NativeJointServingLease>,
+    _registered: Option<RegisteredServingPolicy>,
     writer_data_domains: super::super::writer_data_domain::NativeHostWriterDataDomains,
 }
 impl AssignedCleanup {
@@ -23,6 +24,7 @@ impl AssignedCleanup {
             attempt: owner.attempt.take(),
             listener: owner.listener.take(),
             _image: owner.image.take(),
+            _registered: owner.registered.take(),
             writer_data_domains: std::mem::take(&mut owner.writer_data_domains),
         }
     }

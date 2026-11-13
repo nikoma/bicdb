@@ -38,7 +38,7 @@ impl ActualServiceNativeJointPreparedEvidence {
                 .ok_or_else(|| data_error("joint image release service busy"))?;
             {
                 let database = checked_database_read(&actual.db, &actual.storage_policy)?;
-                self.require_original_writer(&database, &actual.range_writes)?;
+                self.require_original_phase_owner(&database, &actual.range_writes)?;
             }
             actual.require_native_joint_image_release(image, frozen.as_frozen(), &activation)?;
             self.require_original_writer_lifetime()?;
@@ -232,6 +232,23 @@ impl ClusterDataNodeService {
         frozen: &FrozenRangeMutationPermit,
         activation: &NativeJointCatalogueActivationReceipt,
     ) -> Result<()> {
+        self.require_joint_image_materialization_release(image, frozen, activation)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_registered_joint_image_release(
+        &self,
+        image: &Arc<crate::distribution_native_host::NativeRegisteredRemoteJointTarget>,
+        frozen: &FrozenRangeMutationPermit,
+        activation: &NativeJointCatalogueActivationReceipt,
+    ) -> Result<()> {
+        self.require_joint_image_materialization_release(image, frozen, activation)
+    }
+    fn require_joint_image_materialization_release(
+        &self,
+        image: &dyn NativeJointImageMaterialization,
+        frozen: &FrozenRangeMutationPermit,
+        activation: &NativeJointCatalogueActivationReceipt,
+    ) -> Result<()> {
         self.require_local_native_joint_activation(activation)?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         image.require_materialized_fact_current(&database, &self.range_writes, frozen)?;
@@ -273,6 +290,23 @@ impl ClusterDataNodeService {
     pub(crate) fn require_fresh_native_joint_image_release(
         &self,
         image: &NativeImageCatalogueFinalization,
+        frozen: &FrozenRangeMutationPermit,
+        admission: &crate::distribution_range_handoff::NativeJointReleaseAdmission,
+    ) -> Result<()> {
+        self.require_fresh_joint_image_materialization(image, frozen, admission)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_fresh_registered_joint_image_release(
+        &self,
+        image: &Arc<crate::distribution_native_host::NativeRegisteredRemoteJointTarget>,
+        frozen: &FrozenRangeMutationPermit,
+        admission: &crate::distribution_range_handoff::NativeJointReleaseAdmission,
+    ) -> Result<()> {
+        self.require_fresh_joint_image_materialization(image, frozen, admission)
+    }
+    fn require_fresh_joint_image_materialization(
+        &self,
+        image: &dyn NativeJointImageMaterialization,
         frozen: &FrozenRangeMutationPermit,
         admission: &crate::distribution_range_handoff::NativeJointReleaseAdmission,
     ) -> Result<()> {

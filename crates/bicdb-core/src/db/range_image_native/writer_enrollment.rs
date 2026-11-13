@@ -15,11 +15,19 @@ pub(crate) use data_domains::{
     NativeClosedWriterDomain, NativeWriterDataDomainPolicy, NativeWriterDataDomainTransition,
     NativeWriterServingDomainPublication,
 };
+mod joint_phase_owner;
+pub(crate) use joint_phase_owner::NativeJointPhaseOwner;
 mod joint_domain;
+#[cfg(feature = "tls-replication")]
+mod registered_joint;
 #[cfg(feature = "tls-replication")]
 mod registered_no_domain;
 #[cfg(feature = "tls-replication")]
 mod registered_remote_attempt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_joint::{
+    NativeRegisteredJointExclusionScope, NativeRegisteredJointIdentityBorrow,
+};
 #[cfg(feature = "tls-replication")]
 mod registered_remote_mutation;
 #[cfg(feature = "tls-replication")]
@@ -35,6 +43,8 @@ mod old_constraints;
 mod registry_refresh;
 #[cfg(feature = "tls-replication")]
 pub(crate) use assigned_install::NativeAssignedWriterInstallAttempt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use assigned_install::NativeFirstPolicyPublicationCandidate;
 pub(crate) use joint_domain::NativeJointWriterDomain;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

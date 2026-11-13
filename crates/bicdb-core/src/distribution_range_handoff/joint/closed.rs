@@ -17,6 +17,9 @@ pub(crate) struct NativeJointOldObservation {
     service: Arc<Mutex<ClusterDataNodeService>>,
 }
 impl NativeJointOldObservation {
+    pub(super) fn actual_service(&self) -> &Arc<Mutex<ClusterDataNodeService>> {
+        &self.service
+    }
     pub(crate) fn plan(&self) -> &Arc<NativeJointHandoffPlan> {
         &self.plan
     }

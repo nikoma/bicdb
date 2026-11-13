@@ -15,7 +15,7 @@ pub(crate) struct ActualServiceNativeJointReleaseEvidence {
     committed: CommittedNativeJointDecisionObservation,
     native: Arc<crate::db::NativeJointServingBridgeReceipt>,
     activation: NativeJointCatalogueActivationFact,
-    writer: Arc<crate::db::NativeWriterHostState>,
+    writer: crate::db::NativeJointPhaseOwner,
     writer_domain: crate::db::NativeJointWriterDomain,
     root: std::path::PathBuf,
     frozen_owner: Option<Uuid>,
@@ -61,6 +61,12 @@ impl ActualServiceNativeJointReleaseEvidence {
             "local_node_id": self.native.local_node_id(),
         }))
     }
+    pub(crate) fn actual_released_publication_point(
+        &self,
+    ) -> Result<(Arc<crate::db::NativeJointActivatedOpenGuard>, Uuid, String)> {
+        self.require_released_open()?;
+        self.continuity.actual_released_publication_point()
+    }
     pub(crate) fn observe_released_continuity(
         &self,
         store: &crate::distribution_range_consensus::RangeWriteStore,
@@ -76,10 +82,10 @@ impl ActualServiceNativeJointReleaseEvidence {
     }
     pub(crate) fn require_original_writer_identity(
         &self,
-        original: &Arc<crate::db::NativeWriterHostState>,
+        original: &crate::db::NativeJointPhaseOwner,
     ) -> Result<()> {
         self.require_live()?;
-        if !Arc::ptr_eq(original, &self.writer) {
+        if !original.same_actual(&self.writer) {
             return Err(data_error(
                 "joint release cannot replace preparation's original actual writer",
             ));
@@ -148,13 +154,13 @@ impl ActualServiceNativeJointReleaseEvidence {
             .require_current_with_historical_cut_scope(scope)?;
         self.activation
             .require_current_with_historical_cut_scope(scope, store)?;
-        let writer = store.native_writer_host_state()?;
+        let writer = self.writer_domain.phase_owner();
         self.writer_domain.require_current(
             database,
             store,
             self.native.data().activation_range(),
         )?;
-        if !Arc::ptr_eq(&writer, &self.writer) {
+        if !writer.same_actual(&self.writer) {
             return Err(data_error(
                 "joint release current writer registration/open/member changed",
             ));
@@ -208,11 +214,30 @@ impl ClusterDataNodeService {
         native: Arc<crate::db::NativeJointServingBridgeReceipt>,
         owner: NativeJointReleaseOwnerView<'_>,
     ) -> Result<ActualServiceNativeJointReleaseEvidence> {
-        let committed = self.observe_joint_decision_with_writer_domain(
+        self.observe_joint_release_member_with_domain_and_point(
+            writer_domain,
+            host,
+            business,
+            native,
+            owner,
+            None,
+        )
+    }
+    pub(crate) fn observe_joint_release_member_with_domain_and_point(
+        &self,
+        writer_domain: &crate::db::NativeJointWriterDomain,
+        host: HostMetadataReadObservation,
+        business: Uuid,
+        native: Arc<crate::db::NativeJointServingBridgeReceipt>,
+        owner: NativeJointReleaseOwnerView<'_>,
+        point: Option<Arc<crate::distribution_data::ActualNativeJointMetadataPoint>>,
+    ) -> Result<ActualServiceNativeJointReleaseEvidence> {
+        let committed = self.observe_joint_decision_with_writer_domain_and_point(
             writer_domain,
             host,
             business,
             native.data().old_range().id,
+            point,
         )?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
@@ -226,7 +251,7 @@ impl ClusterDataNodeService {
         let activation = self
             .range_writes
             .observe_native_joint_activation_fact_at_historical_cut(&scope, native.clone())?;
-        let writer = self.range_writes.native_writer_host_state()?;
+        let writer = writer_domain.phase_owner();
         writer_domain.require_current(
             &database,
             &self.range_writes,
@@ -275,6 +300,13 @@ impl ClusterDataNodeService {
 }
 
 impl ClusterDataNodeService {
+    pub(crate) fn require_joint_release_metadata_point(
+        &self,
+        committed: &CommittedNativeJointDecisionObservation,
+        db: &BicDb,
+    ) -> Result<()> {
+        committed.require_native_publication_metadata(db, &self.range_writes)
+    }
     pub(crate) fn require_fresh_native_joint_release(
         &self,
         admission: &crate::distribution_range_handoff::NativeJointReleaseAdmission,

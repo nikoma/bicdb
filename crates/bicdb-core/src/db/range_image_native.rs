@@ -59,6 +59,8 @@ pub(crate) use registered_remote_image::{
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeAssignedWriterInstallAttempt;
 #[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeFirstPolicyPublicationCandidate;
+#[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredClosedPersistScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredNoDomainScope;
@@ -74,10 +76,16 @@ pub(crate) use writer_enrollment::{
     NativeClosedWriterDomain, NativeWriterDataDomainPolicy, NativeWriterDataDomainTransition,
     NativeWriterServingDomainPublication,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::{
+    NativeRegisteredJointExclusionScope, NativeRegisteredJointIdentityBorrow,
+};
 mod serving_configuration;
 pub(crate) use native_read::{
     NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use serving_configuration::NativeRegisteredJointDecisionAttempt;
 pub(crate) use serving_configuration::{
     NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,
     NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
@@ -2309,4 +2317,4 @@ mod tests {
     }
 }
 
-pub(crate) use writer_enrollment::NativeJointWriterDomain;
+pub(crate) use writer_enrollment::{NativeJointPhaseOwner, NativeJointWriterDomain};

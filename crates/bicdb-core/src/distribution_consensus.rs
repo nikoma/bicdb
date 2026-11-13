@@ -27,6 +27,8 @@ pub const DEFAULT_CLUSTER_METADATA_CONSENSUS_STATE: &str = "cluster-metadata-con
 const MAX_RESTORE_ACTIVATION_ACKNOWLEDGEMENTS: u64 = 100_000;
 pub const METADATA_READ_AUTHORITY_PROTOCOL_VERSION: u32 = 1;
 pub const METADATA_READ_ACQUISITION_PROTOCOL_VERSION: u32 = 1;
+mod publication_version;
+pub(crate) use publication_version::{NativeMetadataPublicationGuard, NativeMetadataVersionPoint};
 mod host_read;
 mod native_metadata_store;
 mod native_supervisor;
@@ -1331,6 +1333,8 @@ pub struct MetadataConsensusStore {
     state: MetadataConsensusState,
     match_index: BTreeMap<ClusterNodeId, u64>,
     last_leader_contact_ms: u64,
+    // Close phase versions before dropping the native metadata owner.
+    publication_version: publication_version::MetadataPublicationVersionOwner,
     native_owner: Option<native_metadata_store::NativeMetadataStoreOwner>,
 }
 
@@ -1340,6 +1344,7 @@ impl MetadataConsensusStore {
         request: &MetadataReadAcquireRequest,
         participant: &MetadataReadParticipant,
     ) -> Result<crate::RangeDescriptor> {
+        self.publication_version.require_ready()?;
         validate_acquire_requester(request, &self.state.committed_topology)?;
         let node = &self.state.committed_topology.nodes[&request.requester_node_id];
         let identity = MetadataReadVoterIdentity {
@@ -1543,9 +1548,11 @@ impl MetadataConsensusStore {
             match_index: BTreeMap::new(),
             last_leader_contact_ms: unix_time_ms(),
             native_owner: None,
+            publication_version: publication_version::MetadataPublicationVersion::new(),
         };
         store.reset_match_indexes();
         store.persist()?;
+        store.finish_publication_version_initialization()?;
         Ok(store)
     }
 
@@ -1604,6 +1611,7 @@ impl MetadataConsensusStore {
     }
 
     fn validate_read_context(&self, context: &MetadataReadContext) -> Result<()> {
+        self.publication_version.require_ready()?;
         self.require_native_metadata_actor_current(true)?;
         if context.failed || Instant::now() >= context.deadline {
             return Err(metadata_error("read authority context failed or expired"));
@@ -1633,6 +1641,7 @@ impl MetadataConsensusStore {
         budget: Duration,
         local: &MetadataReadParticipant,
     ) -> Result<MetadataReadContext> {
+        self.publication_version.require_ready()?;
         self.require_native_metadata_actor_current(true)?;
         let started = Instant::now();
         if read_request_id.is_nil() || budget.is_zero() || budget > Duration::from_secs(300) {
@@ -1726,6 +1735,7 @@ impl MetadataConsensusStore {
         &mut self,
         request: MetadataReadProbeRequest,
     ) -> Result<MetadataReadProbeResponse> {
+        self.publication_version.require_ready()?;
         if request.protocol_version != METADATA_READ_AUTHORITY_PROTOCOL_VERSION
             || request.context_id.is_nil()
             || request.read_request_id.is_nil()
@@ -1926,31 +1936,41 @@ impl MetadataConsensusStore {
     }
 
     pub fn observe_remote_term(&mut self, term: u64) -> Result<bool> {
+        self.authority_operation(|store| store.observe_remote_term_versioned_inner(term))
+    }
+    fn observe_remote_term_versioned_inner(&mut self, term: u64) -> Result<bool> {
         if term <= self.state.current_term {
             return Ok(false);
         }
-        self.step_down(term, None);
+        self.step_down(term, None)?;
         self.mark_election_activity();
         self.persist()?;
         Ok(true)
     }
 
     pub fn relinquish_leadership(&mut self) -> Result<bool> {
+        self.authority_operation(|store| store.relinquish_leadership_versioned_inner())
+    }
+    fn relinquish_leadership_versioned_inner(&mut self) -> Result<bool> {
         if self.state.role == MetadataConsensusRole::Follower {
             return Ok(false);
         }
-        self.step_down(self.state.current_term, None);
+        self.step_down(self.state.current_term, None)?;
         self.mark_election_activity();
         self.persist()?;
         Ok(true)
     }
 
     pub fn start_election(&mut self) -> Result<MetadataVoteRequest> {
+        self.authority_operation(|store| store.start_election_versioned_inner())
+    }
+    fn start_election_versioned_inner(&mut self) -> Result<MetadataVoteRequest> {
         self.require_native_metadata_actor_current(true)?;
         let voters = topology_voters(&self.state.committed_topology);
         if !voters.contains(&self.state.node_id) {
             return Err(metadata_error("non-voter cannot start an election"));
         }
+        self.invalidate_authority_before_change()?;
         self.state.current_term = self.state.current_term.saturating_add(1);
         self.state.role = MetadataConsensusRole::Candidate;
         self.state.voted_for = Some(self.state.node_id.clone());
@@ -1970,13 +1990,19 @@ impl MetadataConsensusStore {
         &mut self,
         request: MetadataVoteRequest,
     ) -> Result<MetadataVoteResponse> {
+        self.authority_operation(|store| store.handle_vote_request_versioned_inner(request))
+    }
+    fn handle_vote_request_versioned_inner(
+        &mut self,
+        request: MetadataVoteRequest,
+    ) -> Result<MetadataVoteResponse> {
         self.require_native_metadata_owner_current()?;
         self.ensure_cluster(&request.cluster_id)?;
         if request.term < self.state.current_term {
             return Ok(self.vote_response(false));
         }
         if request.term > self.state.current_term {
-            self.step_down(request.term, None);
+            self.step_down(request.term, None)?;
         }
         let voters = topology_voters(&self.state.committed_topology);
         let candidate_is_voter = voters.contains(&request.candidate_id);
@@ -1991,7 +2017,10 @@ impl MetadataConsensusStore {
             && may_vote
             && self.require_native_metadata_actor_current(true).is_ok();
         if granted {
-            self.state.voted_for = Some(request.candidate_id);
+            if self.state.voted_for.as_ref() != Some(&request.candidate_id) {
+                self.invalidate_authority_before_change()?;
+                self.state.voted_for = Some(request.candidate_id);
+            }
             self.mark_election_activity();
         }
         self.persist()?;
@@ -1999,6 +2028,9 @@ impl MetadataConsensusStore {
     }
 
     pub fn become_leader(&mut self, votes: &BTreeSet<ClusterNodeId>) -> Result<()> {
+        self.authority_operation(|store| store.become_leader_versioned_inner(votes))
+    }
+    fn become_leader_versioned_inner(&mut self, votes: &BTreeSet<ClusterNodeId>) -> Result<()> {
         self.require_native_metadata_actor_current(true)?;
         if self.state.role != MetadataConsensusRole::Candidate {
             return Err(metadata_error("only a candidate can become leader"));
@@ -2009,6 +2041,7 @@ impl MetadataConsensusStore {
         if !votes.contains(&self.state.node_id) {
             return Err(metadata_error("candidate vote set omits the local node"));
         }
+        self.invalidate_authority_before_change()?;
         self.state.role = MetadataConsensusRole::Leader;
         self.state.leader_id = Some(self.state.node_id.clone());
         self.mark_election_activity();
@@ -2033,6 +2066,12 @@ impl MetadataConsensusStore {
     }
 
     pub fn propose_topology(&mut self, topology: ClusterTopology) -> Result<MetadataLogEntry> {
+        self.authority_operation(|store| store.propose_topology_versioned_inner(topology))
+    }
+    fn propose_topology_versioned_inner(
+        &mut self,
+        topology: ClusterTopology,
+    ) -> Result<MetadataLogEntry> {
         self.require_native_metadata_actor_current(true)?;
         if self.state.role != MetadataConsensusRole::Leader {
             return Err(metadata_error("only the leader can propose topology"));
@@ -2076,6 +2115,7 @@ impl MetadataConsensusStore {
             topology,
             restore_activation: None,
         };
+        self.invalidate_authority_before_change()?;
         self.state.log.push(entry.clone());
         self.match_index
             .insert(self.state.node_id.clone(), entry.index);
@@ -2088,6 +2128,14 @@ impl MetadataConsensusStore {
     /// record. The topology is intentionally unchanged. A leader cannot
     /// publish this decision concurrently with another topology/control entry.
     pub fn propose_restore_activation(
+        &mut self,
+        activation: MetadataRestoreActivation,
+    ) -> Result<MetadataLogEntry> {
+        self.authority_operation(|store| {
+            store.propose_restore_activation_versioned_inner(activation)
+        })
+    }
+    fn propose_restore_activation_versioned_inner(
         &mut self,
         activation: MetadataRestoreActivation,
     ) -> Result<MetadataLogEntry> {
@@ -2139,6 +2187,7 @@ impl MetadataConsensusStore {
             topology,
             restore_activation: Some(activation),
         };
+        self.invalidate_authority_before_change()?;
         self.state.log.push(entry.clone());
         self.match_index
             .insert(self.state.node_id.clone(), entry.index);
@@ -2232,6 +2281,12 @@ impl MetadataConsensusStore {
         &mut self,
         request: MetadataAppendRequest,
     ) -> Result<MetadataAppendResponse> {
+        self.authority_operation(|store| store.handle_append_request_versioned_inner(request))
+    }
+    fn handle_append_request_versioned_inner(
+        &mut self,
+        request: MetadataAppendRequest,
+    ) -> Result<MetadataAppendResponse> {
         self.require_native_metadata_owner_current()?;
         self.ensure_cluster(&request.cluster_id)?;
         if request.term < self.state.current_term {
@@ -2264,7 +2319,7 @@ impl MetadataConsensusStore {
             next = entry.index.checked_add(1);
         }
         self.validate_native_birth_append(&request)?;
-        self.step_down(request.term, Some(request.leader_id));
+        self.step_down(request.term, Some(request.leader_id))?;
         let snapshot_frontier = request
             .snapshot
             .as_ref()
@@ -2308,10 +2363,12 @@ impl MetadataConsensusStore {
                 .position(|existing| existing.index == incoming.index)
             {
                 if self.state.log[position] != incoming {
+                    self.invalidate_authority_before_change()?;
                     self.state.log.truncate(position);
                     self.state.log.push(incoming);
                 }
             } else if incoming.index == self.last_log_index().saturating_add(1) {
+                self.invalidate_authority_before_change()?;
                 self.state.log.push(incoming);
             } else {
                 self.persist()?;
@@ -2414,12 +2471,21 @@ impl MetadataConsensusStore {
         expected_node_id: &ClusterNodeId,
         response: &MetadataAppendResponse,
     ) -> Result<bool> {
+        self.authority_operation(|store| {
+            store.record_append_response_versioned_inner(expected_node_id, response)
+        })
+    }
+    fn record_append_response_versioned_inner(
+        &mut self,
+        expected_node_id: &ClusterNodeId,
+        response: &MetadataAppendResponse,
+    ) -> Result<bool> {
         self.ensure_cluster(&response.cluster_id)?;
         if &response.node_id != expected_node_id {
             return Err(metadata_error("append response node identity mismatch"));
         }
         if response.term > self.state.current_term {
-            self.step_down(response.term, None);
+            self.step_down(response.term, None)?;
             self.persist()?;
             return Ok(false);
         }
@@ -2520,6 +2586,7 @@ impl MetadataConsensusStore {
                 Some(activation),
             )?;
         }
+        self.invalidate_authority_before_change()?;
         self.state.commit_index = entry.index;
         self.state.base_index = entry.index;
         self.state.base_term = entry.term;
@@ -2530,7 +2597,7 @@ impl MetadataConsensusStore {
         self.state
             .log
             .retain(|candidate| candidate.index > entry.index);
-        self.demote_native_retired_metadata_actor();
+        self.demote_native_retired_metadata_actor()?;
         self.reset_match_indexes();
         Ok(())
     }
@@ -2585,8 +2652,11 @@ impl MetadataConsensusStore {
             candidate.log.clear();
         }
         validate_state(&candidate)?;
-        self.state = candidate;
-        self.demote_native_retired_metadata_actor();
+        if self.state != candidate {
+            self.invalidate_authority_before_change()?;
+            self.state = candidate;
+        }
+        self.demote_native_retired_metadata_actor()?;
         Ok(())
     }
 
@@ -2632,13 +2702,20 @@ impl MetadataConsensusStore {
             .insert(self.state.node_id.clone(), self.last_log_index());
     }
 
-    fn step_down(&mut self, term: u64, leader_id: Option<ClusterNodeId>) {
+    fn step_down(&mut self, term: u64, leader_id: Option<ClusterNodeId>) -> Result<()> {
+        if term > self.state.current_term
+            || self.state.role != MetadataConsensusRole::Follower
+            || self.state.leader_id != leader_id
+        {
+            self.invalidate_authority_before_change()?;
+        }
         if term > self.state.current_term {
             self.state.current_term = term;
             self.state.voted_for = None;
         }
         self.state.role = MetadataConsensusRole::Follower;
         self.state.leader_id = leader_id;
+        Ok(())
     }
 
     fn ensure_cluster(&self, cluster_id: &ClusterId) -> Result<()> {
@@ -2674,6 +2751,17 @@ impl MetadataConsensusStore {
     }
 
     fn persist(&self) -> Result<()> {
+        let token = self.publication_version.begin_persistence()?;
+        let result = self.persist_versioned_inner();
+        match result {
+            Err(error) => {
+                self.publication_version.persistence_failed();
+                Err(error)
+            }
+            Ok(()) => self.publication_version.persisted(token),
+        }
+    }
+    fn persist_versioned_inner(&self) -> Result<()> {
         validate_state(&self.state)?;
         // A legacy learner may have learned its own enforced birth since
         // open. Its cached ownerless mode cannot persist/ack that transition

@@ -76,16 +76,60 @@ impl NativeWriterServingDomainPublication {
             ));
         }
         self.closed.writer.require_lifetime()?;
-        // Native readback and protected owned-MStore postcheck are complete.
-        // Only this original State's selected range becomes effective; other
-        // ranges and all native evidence remain unchanged.
-        let mut domains = self.closed.writer.data_domains.write();
-        domains
-            .serving
-            .insert(self.closed.range().id, actual.clone());
-        domains.pending.remove(&self.closed.range().id);
-        self.publication = Publication::Published(actual);
-        Ok(())
+        // Reborrow the actual SAME DB/service/Store/hook/journal and native
+        // released cut after the outside-engine MStore postcheck. This proof
+        // cannot be replaced by a cached boolean/receipt or another State.
+        let service = self
+            .closed
+            .service
+            .upgrade()
+            .ok_or_else(|| invalid("Serving original service ended before publish"))?;
+        let service_guard = service
+            .try_lock()
+            .ok_or_else(|| invalid("Serving original service busy before publish"))?;
+        let database = service_guard.database();
+        let db = database
+            .try_read()
+            .ok_or_else(|| invalid("Serving original DB busy before publish"))?;
+        let _admission = db
+            .serializable_commit_admission
+            .try_write()
+            .ok_or_else(|| invalid("Serving publication admission busy"))?;
+        let hook = db
+            .commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("Serving original hook busy before publish"))?;
+        self.closed
+            .writer
+            .require_borrowed_original_hook(&db, &hook)?;
+        policy.require_local(&db, &service, self.closed.slot.id())?;
+        let physical = admission.native().historical_cut_scope(&db)?;
+        service_guard.with_writer_data_domain_store(&db, |store| {
+            admission.require_local_with_store_scope(store, &physical)?;
+            require_serving_record_current(&db, &self.closed.writer, &actual.record)?;
+            let mut domains = self
+                .closed
+                .writer
+                .data_domains
+                .try_write()
+                .ok_or_else(|| invalid("Serving actual range policy slots busy"))?;
+            let retired;
+            {
+                let _policy_version = policy.publication_version_guard()?;
+                let _phase_version = admission.native_publication_guard()?;
+                let old_domain = domains
+                    .serving
+                    .insert(self.closed.range().id, actual.clone());
+                domains.pending.remove(&self.closed.range().id);
+                let old_attempt = std::mem::replace(
+                    &mut self.publication,
+                    Publication::Published(actual.clone()),
+                );
+                retired = (old_domain, old_attempt);
+            }
+            drop(retired);
+            Ok(())
+        })
     }
     fn advance_local(
         &mut self,

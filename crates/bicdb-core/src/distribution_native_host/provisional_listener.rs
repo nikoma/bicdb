@@ -24,9 +24,11 @@ pub(crate) use registration::{
 pub(crate) use registration::{
     NativeAssignedDataAdmission, NativeAssignedDataPolicyOrigin,
     NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission, NativeRegisteredRemoteImageStep,
-    NativeRegisteredRemoteInstallPreflight, NativeRegisteredRemoteProposalPoint,
-    NativeRegisteredRemoteTransactionRequest, NativeRegisteredRemoteTransferRequest,
-    NativeRegisteredReplicaAdmission, NativeRegisteredSelectedRangeNoDomain,
+    NativeRegisteredRemoteInstallPreflight, NativeRegisteredRemoteJointOwner,
+    NativeRegisteredRemoteJointReleaseOwner, NativeRegisteredRemoteJointTarget,
+    NativeRegisteredRemoteProposalPoint, NativeRegisteredRemoteTransactionRequest,
+    NativeRegisteredRemoteTransferRequest, NativeRegisteredReplicaAdmission,
+    NativeRegisteredSelectedRangeNoDomain, NativeRegisteredServingDataPolicyOrigin,
 };
 pub(crate) use registration::{
     NativeInitialDataAdmission, NativeInitialOldStep, NativeMetadataControlHost,

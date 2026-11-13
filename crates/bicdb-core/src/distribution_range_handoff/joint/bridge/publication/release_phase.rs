@@ -13,13 +13,19 @@ pub(crate) use writer_policy::NativeJointServingPolicyAdmission;
 enum ReleaseOwner {
     Survivor(Arc<NativeJointHandoffRuntime>),
     Image(parking_lot::Mutex<NativeJointImageReleaseOwner>),
+    #[cfg(feature = "tls-replication")]
+    Registered(
+        parking_lot::Mutex<
+            crate::distribution_native_host::NativeRegisteredRemoteJointReleaseOwner,
+        >,
+    ),
 }
 struct ReleaseMember {
     service: Arc<Mutex<ClusterDataNodeService>>,
     native: Arc<crate::db::NativeJointServingBridgeReceipt>,
     activation: Arc<NativeJointCatalogueActivationReceipt>,
     // Retain only the original registration, never the Prepared/Frozen owner.
-    writer: Arc<crate::db::NativeWriterHostState>,
+    writer: crate::db::NativeJointPhaseOwner,
     writer_domain: crate::db::NativeJointWriterDomain,
     writer_root: std::path::PathBuf,
     owner: ReleaseOwner,
@@ -61,6 +67,31 @@ impl NativeJointPublishedServingQuorum {
         survivors: BTreeMap<ClusterNodeId, Arc<NativeJointHandoffRuntime>>,
         image: NativeJointImageReleaseOwner,
     ) -> Result<NativeJointReleaseContinuation> {
+        self.retain_release_continuation_inner(
+            activations,
+            survivors,
+            ReleaseOwner::Image(parking_lot::Mutex::new(image)),
+        )
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn retain_registered_release_continuation(
+        &self,
+        activations: BTreeMap<ClusterNodeId, Arc<NativeJointCatalogueActivationReceipt>>,
+        survivors: BTreeMap<ClusterNodeId, Arc<NativeJointHandoffRuntime>>,
+        image: crate::distribution_native_host::NativeRegisteredRemoteJointReleaseOwner,
+    ) -> Result<NativeJointReleaseContinuation> {
+        self.retain_release_continuation_inner(
+            activations,
+            survivors,
+            ReleaseOwner::Registered(parking_lot::Mutex::new(image)),
+        )
+    }
+    fn retain_release_continuation_inner(
+        &self,
+        activations: BTreeMap<ClusterNodeId, Arc<NativeJointCatalogueActivationReceipt>>,
+        survivors: BTreeMap<ClusterNodeId, Arc<NativeJointHandoffRuntime>>,
+        image: ReleaseOwner,
+    ) -> Result<NativeJointReleaseContinuation> {
         self.prepared.require_original_caller()?;
         if self.receipts.keys().ne(self.data().new_members().keys())
             || activations.keys().ne(self.receipts.keys())
@@ -99,7 +130,7 @@ impl NativeJointPublishedServingQuorum {
             let service = self.prepared.observations[node].service.clone();
             let (writer, writer_root) = self.prepared.observations[node]
                 .actual
-                .original_writer_for_continuation()?;
+                .original_phase_owner_for_continuation()?;
             writer.require_store(&writer_root, activation.store_open_id())?;
 
             if activation.native_bridge_sha256() != native.checksum_sha256()
@@ -116,8 +147,21 @@ impl NativeJointPublishedServingQuorum {
                 let owner = image
                     .take()
                     .ok_or_else(|| invalid("joint image owner missing"))?;
-                owner.require_same_service(&service)?;
-                ReleaseOwner::Image(parking_lot::Mutex::new(owner))
+                match &owner {
+                    ReleaseOwner::Image(image) => image
+                        .try_lock()
+                        .ok_or_else(|| invalid("joint retained image owner busy"))?
+                        .require_same_service(&service)?,
+                    #[cfg(feature = "tls-replication")]
+                    ReleaseOwner::Registered(image) => image
+                        .try_lock()
+                        .ok_or_else(|| invalid("Registered retained image owner busy"))?
+                        .require_same_service(&service)?,
+                    ReleaseOwner::Survivor(_) => {
+                        return Err(invalid("joint image target cannot use survivor owner"))
+                    }
+                }
+                owner
             } else {
                 let runtime = survivors
                     .get(node)
@@ -190,6 +234,11 @@ impl NativeJointReleaseContinuation {
             ReleaseOwner::Image(owner) => owner
                 .try_lock()
                 .ok_or_else(|| invalid("joint image release owner busy"))?
+                .with_current_release_owner(&member.native, operation),
+            #[cfg(feature = "tls-replication")]
+            ReleaseOwner::Registered(owner) => owner
+                .try_lock()
+                .ok_or_else(|| invalid("Registered joint release owner busy"))?
                 .with_current_release_owner(&member.native, operation),
         }
     }
@@ -270,16 +319,23 @@ impl NativeJointReleasePhaseRound {
             remaining(&self.cancellation)?,
             &self.cancellation,
         )?;
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &member.service,
+            &host,
+            business,
+            &self.cancellation,
+        )?;
         let evidence = self.continuation.with_owner(node, |service, owner| {
             let actual = service
                 .try_lock()
                 .ok_or_else(|| invalid("joint release service busy"))?;
-            let evidence = actual.observe_joint_release_member_with_domain(
+            let evidence = actual.observe_joint_release_member_with_domain_and_point(
                 &member.writer_domain,
                 host,
                 business,
                 member.native.clone(),
                 owner,
+                metadata_point,
             )?;
             evidence.require_original_writer_identity(&member.writer)?;
             Ok(evidence)
@@ -313,6 +369,50 @@ impl NativeJointReleasePhaseRound {
     }
 }
 impl NativeJointReleasePhaseQuorum {
+    /// Necessary memory-custody retirement only, NOT source data cleanup or a
+    /// Frozen/Serving grant. Every final member is actually Open under fresh MQ.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_remote_old_owner_retirement(
+        &self,
+        old: &Arc<NativeRemoteOldCutCertificate>,
+    ) -> Result<()> {
+        self.require_live()?;
+        old.require_current()?;
+        if self.continuation.data.plan_sha256()? != old.plan().checksum_sha256()?
+            || self.continuation.data.old_closed != old.source_image_materialized_facts()?
+        {
+            return Err(invalid(
+                "joint retirement changed actual remote OLD obligations",
+            ));
+        }
+        for node in self.members.keys() {
+            self.require_member_current(node)?;
+        }
+        self.require_live()
+    }
+    pub(crate) fn require_actual_old_owner_retirement(
+        &self,
+        old: &Arc<NativeJointOldObservation>,
+    ) -> Result<()> {
+        self.require_live()?;
+        old.require_current()?;
+        if !self
+            .continuation
+            .data
+            .new_members()
+            .contains_key(old.node_id())
+            || self.continuation.data.plan_sha256()? != old.plan().checksum_sha256()?
+            || self.continuation.data.old_closed.get(old.node_id())
+                != Some(&old.materialized_facts())
+        {
+            return Err(invalid("joint retirement must retain retired-source freeze and exact original survivor facts"));
+        }
+        for node in self.members.keys() {
+            self.require_member_current(node)?;
+        }
+        self.require_live()
+    }
+
     fn require_live(&self) -> Result<()> {
         self.cancellation.check()?;
         self.continuation.require_original()?;
@@ -358,16 +458,23 @@ impl NativeJointReleasePhaseQuorum {
             remaining(&self.cancellation)?,
             &self.cancellation,
         )?;
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &member.service,
+            &host,
+            business,
+            &self.cancellation,
+        )?;
         let post = self.continuation.with_owner(&node, |service, owner| {
             let actual = service
                 .try_lock()
                 .ok_or_else(|| invalid("joint release post-QQ service busy"))?;
-            let evidence = actual.observe_joint_release_member_with_domain(
+            let evidence = actual.observe_joint_release_member_with_domain_and_point(
                 &member.writer_domain,
                 host,
                 business,
                 member.native.clone(),
                 owner,
+                metadata_point,
             )?;
             evidence.require_original_writer_identity(&member.writer)?;
             Ok(evidence)
@@ -395,6 +502,12 @@ impl NativeJointReleasePhaseQuorum {
     }
 }
 impl NativeJointReleaseAdmission {
+    pub(crate) fn native_publication_guard(
+        &self,
+    ) -> Result<Option<crate::distribution_data::ActualNativeJointMetadataPublicationGuard<'_>>>
+    {
+        self.post.committed().native_publication_guard()
+    }
     pub(crate) fn writer_domain(&self) -> &crate::db::NativeJointWriterDomain {
         &self.phase.continuation.members[&self.local].writer_domain
     }
@@ -437,6 +550,7 @@ impl NativeJointReleaseAdmission {
         owner: NativeJointReleaseOwnerView<'_>,
     ) -> Result<()> {
         self.require_live()?;
+        service.require_joint_release_metadata_point(self.post.committed(), scope.database())?;
         self.phase.members[&self.local].require_current_with_scope(service, scope, owner)?;
         self.post
             .require_current_with_scope(service, scope, owner)?;
@@ -449,6 +563,9 @@ impl NativeJointReleaseAdmission {
         owner: NativeJointReleaseOwnerView<'_>,
     ) -> Result<()> {
         self.require_live()?;
+        self.post
+            .committed()
+            .require_native_publication_metadata(scope.database(), store)?;
         self.phase.members[&self.local].require_current_with_store_scope(store, scope, owner)?;
         self.post
             .require_current_with_store_scope(store, scope, owner)?;
@@ -481,6 +598,11 @@ impl NativeJointReleaseAdmission {
                 .try_lock()
                 .ok_or_else(|| invalid("joint release image owner busy"))?
                 .release_with_fresh_phase(self),
+            #[cfg(feature = "tls-replication")]
+            ReleaseOwner::Registered(owner) => owner
+                .try_lock()
+                .ok_or_else(|| invalid("Registered release owner busy"))?
+                .release_with_fresh_phase(self),
         }
     }
     #[cfg(test)]
@@ -498,6 +620,11 @@ impl NativeJointReleaseAdmission {
             ReleaseOwner::Image(owner) => owner
                 .try_lock()
                 .ok_or_else(|| invalid("joint release image owner busy"))?
+                .test_release_with_fresh_phase_after_drop(self),
+            #[cfg(feature = "tls-replication")]
+            ReleaseOwner::Registered(owner) => owner
+                .try_lock()
+                .ok_or_else(|| invalid("Registered release owner busy"))?
                 .test_release_with_fresh_phase_after_drop(self),
             ReleaseOwner::Survivor(_) => Err(invalid("actual drop control requires image target")),
         }

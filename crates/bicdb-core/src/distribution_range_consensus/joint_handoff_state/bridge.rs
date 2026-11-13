@@ -2,7 +2,7 @@
 //! materialization, new-data vote, membership bridge or serving permission.
 use super::*;
 use crate::distribution_range_handoff::CommittedNativeJointDecisionObservation;
-use crate::distribution_range_image_install::NativeImageCatalogueFinalization;
+use crate::distribution_range_image_install::NativeJointImageMaterialization;
 use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 
 pub(crate) struct NativeJointBridgeCatalogue {
@@ -63,7 +63,7 @@ impl NativeJointBridgeCatalogue {
         store: &RangeWriteStore,
         database: &crate::BicDb,
         committed: &CommittedNativeJointDecisionObservation,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
     ) -> Result<()> {
         store.require_native_joint_bridge_base(database, committed, image, frozen)?;
@@ -88,7 +88,7 @@ impl RangeWriteStore {
     pub(crate) fn closed_writer_local_promise(
         &self,
         data: &crate::distribution_range_handoff::NativeJointDecisionData,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
     ) -> Result<Option<crate::distribution_range_handoff::RangeHandoffPromise>> {
         self.require_native_writer_host_base()?;
         let range = data.old_range().id;
@@ -134,7 +134,7 @@ impl RangeWriteStore {
         &self,
         database: &crate::BicDb,
         committed: &CommittedNativeJointDecisionObservation,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
         committed.require_current(database)?;
@@ -149,14 +149,14 @@ impl RangeWriteStore {
         &self,
         database: &crate::BicDb,
         native: &crate::db::NativeJointDecisionReceipt,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
         native.require_current(database)?;
         let data = native.data();
         let range = data.old_range().id;
         self.require_native_catalog_durability(database.data_path())?;
-        self.require_native_writer_host_base()?;
+        self.require_native_joint_host_base(database, range)?;
         let local = data
             .new_members()
             .get(&self.catalog.node_id)
@@ -231,7 +231,7 @@ impl RangeWriteStore {
         &self,
         database: &crate::BicDb,
         native: &crate::db::NativeJointDecisionReceipt,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<BTreeMap<u64, NativeReadCatalogueDecision>> {
         self.require_decided_joint_catalogue_base(database, native, image, frozen)?;
@@ -244,7 +244,7 @@ impl RangeWriteStore {
         &self,
         database: &crate::BicDb,
         committed: &CommittedNativeJointDecisionObservation,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<NativeJointBridgeCatalogue> {
         self.require_native_joint_bridge_base(database, committed, image, frozen)?;

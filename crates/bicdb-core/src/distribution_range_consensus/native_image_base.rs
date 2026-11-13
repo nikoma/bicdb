@@ -8,7 +8,8 @@ mod registered_remote;
 pub(crate) use registered_remote::test_registered_remote_adoption_after_fsync;
 #[cfg(feature = "tls-replication")]
 pub(crate) use registered_remote::{
-    NativeRegisteredRemoteCataloguePoint, NativeRegisteredRemoteCataloguePublication,
+    NativeRegisteredRemoteCatalogueMaterialization, NativeRegisteredRemoteCataloguePoint,
+    NativeRegisteredRemoteCataloguePublication,
 };
 
 pub(super) const NATIVE_IMAGE_CATALOG_FORMAT: u32 = 6;

@@ -10,6 +10,8 @@ use crate::distribution_native_host::{
 };
 use crate::distribution_range_consensus::NativeRegisteredRemoteInstallingFence;
 use std::sync::Arc;
+mod joint_materialization;
+pub(crate) use joint_materialization::NativeRegisteredRemoteCatalogueMaterialization;
 
 /// Lexical references to the ORIGINAL retained native-base publication. This
 /// has no DTO constructor, lifetime extension, writer or serving authority.

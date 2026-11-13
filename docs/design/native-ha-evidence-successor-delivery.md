@@ -1,18 +1,19 @@
 # HA evidence successor: prepared docs-only delivery
 
-This candidate starts from actual main **1.0.491-beta**,
-`be388fdb20c53ea47ca57003aa7df9087a3ee0a1`. Its imported evidence and status
-files are copied exactly from unmerged integration source
-`07a96d4b6f7958711b48a60deb957aba508eace1`. The delivery contains documentation,
-offline evidence verifiers and retained evidence bytes; it carries no native
+This **1.0.493-beta documentation candidate** is based on verified main
+**1.0.492-beta**, `e37c666660c2ce599fff516c1de9351706154b53` (PR165).
+The original preparatory commit `00322d88c2acc101cee6725e902def2e5cf20664`
+started from main491 and copied its historical evidence and status files from
+unmerged integration `07a96d4b6f7958711b48a60deb957aba508eace1`.
+The current status and this delivery receipt are refreshed for the actual
+492 baseline and the later source-scoped result below.
+
+The delivery contains documentation, offline evidence verifiers, retained
+evidence bytes and synchronized source-version metadata. It carries no native
 runtime, application test, workflow or capability-policy change. Rust files
 inside an evidence packet are historical source exhibits, not compiled inputs.
-
-Version **1.0.493-beta** is a proposed delivery position, not a reserved or
-published version. The owner must first complete the independent 492 merge,
-then rebase this documentation candidate, confirm the next unused version,
-perform the synchronized version bump and validate that final head. This
-preparatory commit deliberately retains main491 version metadata.
+The 492 runtime and identity-update safeguards remain unchanged. Source version
+493 does not mean the unmerged native candidates were released or deployed.
 
 ## Revision-scoped results preserved
 
@@ -24,6 +25,15 @@ preparatory commit deliberately retains main491 version metadata.
 | [Four-case passive diagnostic](../evidence/native-current-joint-fence-fourcase-2026-11-13/README.md) | `5812d575…`, run43343984328: **4/0**, 67.70s; compile/consumer pass | Whole workflow **failed formatting**. Diagnostic-only source does not establish a production correction for the earlier 3/1 timing failure. |
 | [One unavailable peer](../evidence/native-hot-one-peer-loss-2026-11-13/README.md) | `ae584588…`, run43345593406: **0/1**, 21.74s; compile/consumer pass | Actual Unknown, two peer materializations, stopped n1 and surviving metadata QQ precede the failed required health gate. No next ACK. |
 | [Genuine fifth assigned receiver](../evidence/native-registered-fifth-required-2026-11-13/README.md) | `a98c6a6b…`, run43343369839: **0/1**, 4.31s; compile/consumer pass | Both handoff fences return NoWriter while caller/role remain live. Two source ACKs and four original guards remain; target unchanged. Explicit Core assignment is not automatic relocation. |
+
+The later CLOSED-fence source `da56e489a…`, run43351805110, executed the
+unchanged genuine fifth prerequisite successfully, plus eight controls. The
+whole cohort remains **failed 9/1**, 17.87 seconds: a foreign-database control
+expected different error wording from the actual earlier identity refusal. Its
+later assertions were not reached. The test-only `550c23d04…` correction is
+source-reviewed and awaiting execution at this documentation cut. The
+[source audit](native-assigned-registered-closed-fence-source.md) retains the
+exact raw-log/private-artifact hashes. No image or serving result follows.
 
 The [current status](../ha-milestone1-status-2026-11-12.md) retains the original
 Azure **FAILED** qualification and separates implemented, tested, qualified and
@@ -58,7 +68,6 @@ controls, not additional native runtime tests or independent execution
 authenticity. Native pages, signing material and private custody archives are
 not republished by this delivery; packet-specific limits remain authoritative.
 
-After the owner492 merge, the final delivery additionally requires the normal
-version-bump/check commands and repository-required checks on its exact final
-head. Reusing the retained native results must preserve their original source
+The final delivery requires the normal synchronized version-bump/check commands
+and repository-required checks on its exact final head. Reusing the retained native results must preserve their original source
 identities; documentation/version validation is not a new native runtime pass.

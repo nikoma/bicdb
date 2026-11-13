@@ -143,7 +143,15 @@ pub struct HttpServerHandle {
     pub address: SocketAddr,
     shutdown: Option<oneshot::Sender<()>>,
     task: tokio::task::JoinHandle<std::io::Result<()>>,
+    /// Observes the per-listener request state without keeping it alive.
+    /// Every connection and in-flight request owns a clone of that state,
+    /// and through it the application runtime and its database.
+    request_state: std::sync::Weak<Mutex<BTreeMap<String, RateWindow>>>,
 }
+
+/// Upper bound for connection tasks to release the listener's request state
+/// after the accept loop has already completed its graceful shutdown.
+const HTTP_SHUTDOWN_STATE_RELEASE_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 impl HttpServerHandle {
     pub async fn shutdown(mut self) -> Result<()> {
@@ -153,6 +161,17 @@ impl HttpServerHandle {
         self.task
             .await
             .map_err(|error| AppRuntimeError::Provider(error.to_string()))??;
+        // The accept loop finishes as soon as each connection task signals
+        // completion, which happens just before that task drops its service
+        // and the request state inside it. Returning at that point lets a
+        // caller observe a still-shared runtime and database. Wait for the
+        // last owner to go away so shutdown means the listener holds nothing.
+        let started = Instant::now();
+        while self.request_state.strong_count() > 0
+            && started.elapsed() < HTTP_SHUTDOWN_STATE_RELEASE_LIMIT
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+        }
         Ok(())
     }
 }
@@ -810,6 +829,7 @@ impl ApplicationRuntime {
             trusted_handler,
             policy,
         };
+        let request_state = Arc::downgrade(&state.rate_windows);
         let router = http_router(state);
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let task = tokio::spawn(async move {
@@ -826,6 +846,7 @@ impl ApplicationRuntime {
             address,
             shutdown: Some(shutdown_tx),
             task,
+            request_state,
         })
     }
 
@@ -891,6 +912,7 @@ impl ApplicationRuntime {
             trusted_handler,
             policy,
         };
+        let request_state = Arc::downgrade(&state.rate_windows);
         let router = http_router(state);
         let handle = axum_server::Handle::new();
         let shutdown_handle = handle.clone();
@@ -909,6 +931,7 @@ impl ApplicationRuntime {
             address,
             shutdown: Some(shutdown_tx),
             task,
+            request_state,
         })
     }
 }

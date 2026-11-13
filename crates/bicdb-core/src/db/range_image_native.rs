@@ -29,7 +29,9 @@ pub(crate) use history_stage::ClosedImageOriginalWriter;
 mod installed_anchor;
 mod native_read;
 mod writer_enrollment;
-pub(crate) use writer_enrollment::{InstalledNativeWriterHostGuard, NativeWriterHostState};
+pub(crate) use writer_enrollment::{
+    InstalledNativeWriterHostGuard, NativeRegisteredReceiverHook, NativeWriterHostState,
+};
 mod serving_configuration;
 pub(crate) use native_read::{
     NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,

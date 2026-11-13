@@ -12,7 +12,9 @@ use crate::distribution_range_recovery::{RecoveryEpochFenceRequest, RecoveryRole
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
+mod closed_fence_controls;
 mod custody;
+use closed_fence_controls::Case;
 
 fn budget(ms: u64) -> CancellationToken {
     CancellationToken::uncancelable()
@@ -170,6 +172,9 @@ fn key_in(topology: &ClusterTopology, range: crate::RangeId) -> String {
 
 #[test]
 fn native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_baseline() {
+    run_registered_image_baseline(Case::Required);
+}
+fn run_registered_image_baseline(case: Case) {
     let mut f = EnrollmentFixture::new();
     let (factory, mut host) = f.factory("actual-registered-fifth-image-target");
     assert!(factory.spec.initial_ranges.is_empty());
@@ -675,6 +680,23 @@ fn native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_ba
         }
         phase = "required_fence_acceptance";
         assert_eq!(succeeded,2,"REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute");
+        if case != Case::Required {
+            phase = "captured_valid_registered_closed_fence_control";
+            closed_fence_controls::run(
+                case,
+                &mut host,
+                &factory,
+                &target_service,
+                &services[0],
+                &target_provider,
+                &clients,
+                &pending,
+                &ranges,
+                &output,
+                &mut reports,
+                &f.networks[4],
+            );
+        }
     }));
     let capture = custody::capture(&output, &databases, &services, &metadata);
     let (captured, capture_error) = match capture {

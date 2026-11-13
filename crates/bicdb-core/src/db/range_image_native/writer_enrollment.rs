@@ -241,6 +241,77 @@ impl NativeWriterHostState {
     }
 }
 
+/// Necessary original registration continuity, captured only from the actual
+/// Registered receiver's original empty hook. Never a writer or fence grant.
+pub(crate) struct NativeRegisteredReceiverHook {
+    registration: Weak<CommitAdmissionRegistration>,
+    actual_open: Weak<()>,
+}
+impl NativeRegisteredReceiverHook {
+    #[cfg(test)]
+    pub(crate) fn test_keep_original_registration(
+        &self,
+    ) -> Result<impl std::any::Any + Send + Sync> {
+        self.registration
+            .upgrade()
+            .ok_or_else(|| invalid("actual original registration ended before test"))
+    }
+
+    fn require_borrowed(
+        &self,
+        database: &BicDb,
+        hook: &crate::db::commit_admission_hook::CommitAdmissionSlot,
+    ) -> Result<()> {
+        let original = self
+            .registration
+            .upgrade()
+            .ok_or_else(|| invalid("original registered receiver hook ended"))?;
+        if self.actual_open.upgrade().is_none()
+            || !Weak::ptr_eq(
+                &self.actual_open,
+                &database.native_metadata_owner_open_lifetime(),
+            )
+            || !Arc::ptr_eq(&original, hook.registration())
+            || hook.is_some()
+            || hook.native_writer().is_some()
+            || original.is_active()
+        {
+            return Err(invalid(
+                "original registered receiver hook changed; restored None cannot rebase it",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_current(&self, database: &BicDb) -> Result<()> {
+        let hook = database
+            .commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("registered receiver hook busy"))?;
+        self.require_borrowed(database, &hook)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn with_persist<R>(
+        &self,
+        database: &BicDb,
+        capability: &crate::distribution_native_host::NativeAssignedRegisteredClosedFence<'_>,
+        operation: impl FnOnce() -> Result<R>,
+    ) -> Result<R> {
+        // This guard also excludes generic install/clear (which do not take
+        // serializable_commit_admission). Do not recursively inspect the hook
+        // inside the callback: it performs ONLY the actual raw refusal persist.
+        let hook = database
+            .commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("registered receiver hook busy before persist"))?;
+        self.require_borrowed(database, &hook)?;
+        capability.require_live()?;
+        let result = operation()?;
+        self.require_borrowed(database, &hook)?;
+        capability.require_live()?;
+        Ok(result)
+    }
+}
+
 /// Necessary installed-host continuity proof. It grants no current role,
 /// snapshot, data quorum or row/absence permission.
 #[derive(Debug)]
@@ -398,6 +469,63 @@ impl BicDb {
             }
         }
         store.require_verified_native_catalogue_custody(self.data_path())
+    }
+    pub(crate) fn capture_registered_receiver_hook(&self) -> Result<NativeRegisteredReceiverHook> {
+        let _admission = self
+            .serializable_commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("receiver admission busy at original capture"))?;
+        let hook = self
+            .commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("receiver hook busy at original capture"))?;
+        self.require_never_installed_receiver_writer_records()?;
+        let result = NativeRegisteredReceiverHook {
+            registration: Arc::downgrade(hook.registration()),
+            actual_open: self.native_metadata_owner_open_lifetime(),
+        };
+        result.require_borrowed(self, &hook)?;
+        Ok(result)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn with_assigned_closed_writer_exclusion<R>(
+        &self,
+        capability: &crate::distribution_native_host::NativeAssignedRegisteredClosedFence<'_>,
+        operation: impl FnOnce() -> Result<R>,
+    ) -> Result<R> {
+        let _admission = self
+            .serializable_commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("assigned CLOSED receiver writer admission busy"))?;
+        capability.require_database(self)?;
+        self.require_never_installed_receiver_writer()?;
+        let result = operation()?;
+        self.require_never_installed_receiver_writer()?;
+        capability.require_database(self)?;
+        Ok(result)
+    }
+    fn require_never_installed_receiver_writer(&self) -> Result<()> {
+        if self.commit_admission_ready() {
+            return Err(invalid("assigned CLOSED receiver refuses installed writer"));
+        }
+        self.require_never_installed_receiver_writer_records()
+    }
+    fn require_never_installed_receiver_writer_records(&self) -> Result<()> {
+        let _journal = self.try_native_image_journal()?;
+        if self
+            .read_native_range_image_record::<NativeWriterPolicyRecord>(POLICY_POINTER)?
+            .is_some()
+            || self
+                .read_native_range_image_record::<NativeWriterPolicyRecord>(
+                    "writer-enrollment/previous",
+                )?
+                .is_some()
+        {
+            return Err(invalid(
+                "assigned CLOSED receiver refuses installed or historical writer policy",
+            ));
+        }
+        Ok(())
     }
     pub(crate) fn actual_native_writer_enforcement_version(&self) -> Result<u32> {
         self.check_recovery_state()?;

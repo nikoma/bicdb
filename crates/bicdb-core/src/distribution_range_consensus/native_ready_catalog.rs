@@ -83,6 +83,17 @@ impl RangeWriteStore {
         frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
     ) -> Result<RecoveryImageHistoryObligationsV1> {
         self.require_persisted_recovery_scope(scope)?;
+        let result = self.observe_recovery_image_obligations_body(db, native, scope, frozen)?;
+        self.require_persisted_recovery_scope(scope)?;
+        Ok(result)
+    }
+    pub(super) fn observe_recovery_image_obligations_body(
+        &self,
+        db: &crate::BicDb,
+        native: &NativeRecoveryAdmission,
+        scope: &RecoveryFenceScope,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+    ) -> Result<RecoveryImageHistoryObligationsV1> {
         native.require_current(db)?;
         let saved = &self.catalog.recovery_fences[&scope.range_id];
         if !self.fsync
@@ -173,7 +184,6 @@ impl RangeWriteStore {
             sparse_committed_command_sha256,
         };
         observed.require_shape(scope, &self.progress(scope.range_id))?;
-        self.require_persisted_recovery_scope(scope)?;
         Ok(observed)
     }
     /// Compaction may remove a command payload while the durable current-

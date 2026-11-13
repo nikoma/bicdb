@@ -198,6 +198,14 @@ impl NativeAbortProtocol {
     pub(super) fn store_id(&self) -> Uuid {
         self.store_id
     }
+    pub(super) fn require_unstarted_registered_receiver(&self) -> Result<()> {
+        if !self.ranges.is_empty() {
+            return Err(range_write_error(
+                "assigned CLOSED receiver with existing writer-start domains is unsupported",
+            ));
+        }
+        Ok(())
+    }
     pub(super) fn validate(&self) -> Result<()> {
         if self.store_id.is_nil() {
             return Err(range_write_error("native abort catalogue StoreID is nil"));

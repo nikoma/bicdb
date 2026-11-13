@@ -105,8 +105,9 @@ pub(crate) use range_image_native::{
     NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
     NativeLogicalHistoryStepV1, NativeRangeInstallSafety, NativeRangePendingApply,
     NativeRangePrefixObservation, NativeRecoveredServingReceipt, NativeRecoveryAbortedReceipt,
-    NativeRecoveryAdmission, NativeRecoveryAppliedReceipt, NativeWriterHostState,
-    RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage, StagedNativeHistoryProof,
+    NativeRecoveryAdmission, NativeRecoveryAppliedReceipt, NativeRegisteredReceiverHook,
+    NativeWriterHostState, RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
+    StagedNativeHistoryProof,
 };
 pub(crate) use range_image_native::{
     NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,

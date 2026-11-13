@@ -615,6 +615,31 @@ impl RecoveryRoleAdmission {
             handoff_target_identity,
         })
     }
+    /// Compare two independently sealed observations; projection never mints a
+    /// role or upgrades a topology DTO into authority.
+    pub(crate) fn require_own_host_metadata(
+        &self,
+        observed: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+    ) -> Result<()> {
+        self.require_live_request()?;
+        observed.require_live_request(business)?;
+        if observed.requester_node_id() != self.local_node_id()
+            || observed.requester_incarnation() != self.local_member_incarnation()
+            || observed.term() != self.metadata_term()
+            || observed.read_index() != self.metadata_read_index()
+            || observed.committed_topology(business)?
+                != self
+                    .witness
+                    .committed_topology(self.business_request_id(), self.recipient_challenge())?
+            || observed.restore_activation(business)? != self.restore_activation()
+        {
+            return Err(invalid(
+                "assigned receiver OWN metadata differs from original recovery role",
+            ));
+        }
+        self.require_live_request()
+    }
     pub(crate) fn native_store_birth(
         &self,
         node: &ClusterNodeId,

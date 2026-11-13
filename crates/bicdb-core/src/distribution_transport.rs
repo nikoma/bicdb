@@ -1715,11 +1715,14 @@ fn handle_cluster_data_connection(
                 .ok_or_else(|| transport_error("recovery requires an authenticated member"))?;
             let token =
                 CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
-            return runtime
-                .fence_epoch(caller, &request, &token)
-                .map(|observation| {
-                    ClusterDataResponse::RecoveryEpochFence(observation.into_reply())
-                });
+            let observation = match registered_replica {
+                Some(admission) => {
+                    runtime.fence_registered_replica(admission, caller, &request, &token)
+                }
+                None => runtime.fence_epoch(caller, &request, &token),
+            };
+            return observation
+                .map(|actual| ClusterDataResponse::RecoveryEpochFence(actual.into_reply()));
         }
         if let ClusterDataRequest::RecoveryFencedProbe { request } = request.request {
             let runtime = recovery_runtime

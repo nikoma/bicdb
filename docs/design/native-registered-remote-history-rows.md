@@ -109,3 +109,34 @@ request deadlines do not establish a physical RTO or a bound on disk I/O.
 The actual service mutex and native journal remain held across fsync here;
 these tests do not establish independent progress for another range when I/O
 stalls. That operational isolation gate remains open.
+
+## Separate source-fixture correction after the failed concurrent cohort
+
+The exact `7ac4f2672` five-selector run `43478288480` failed overall:
+1 passed and 4 failed. Each failed control stopped while counting a local OLD
+closure after that collector's finite metadata observation expired. Those four
+row-fault controls were not tested in that cohort. Its original source, logs
+and artifacts remain unchanged; switching a later fixture does not make that
+run pass or demonstrate cluster availability.
+
+The five later `TargetImageRows*` fixtures now use the existing production
+remote OLD path. Fresh mutation requests close every actual OLD member, their
+original deadlines expire, and a real retained donor independently requests
+read-only authenticated observations from every OLD member before producing
+its remote cut certificate. The donor must be an actual OLD member; this
+fixture additionally selects a nonleader that is not the retiring source.
+Every observed native floor, committed/pending command and ancestry constraint
+remains mandatory in the production collector. Unknown closure refuses the
+certificate. Before/after native records are retained for every OLD member;
+read-only collection must preserve their exact bytes and native transaction
+identities. The original source acknowledgment ledger and target assertions
+are unchanged.
+
+This is a caller correction to exercise the genuine production remote lane.
+It neither renews a local OLD observation nor changes the local OLD API's
+issuance contract. Existing local OLD tests retain their original path.
+No request, role or network timeout is increased. A requested five-second MQ
+budget can be shortened by the actual listener's finite network deadline;
+the shared TLS fixture currently configures 1,500 ms per exchange. The changed
+fixtures require fresh runtime validation; source inspection is not a passing
+fault test or physical qualification result.

@@ -78,6 +78,21 @@ fn native_registered_fifth_remote_old_constraint_only_guarded_capture_is_not_clo
         Some(SourceCase::RemoteConstraintCapture),
     );
 }
+// The later target-history/row cases exercise the actual production remote
+// collector. Local OLD API cases retain their original finite issuance
+// contract and are deliberately not switched to this lane.
+pub(super) fn uses_actual_remote_old_seed(case: SourceCase) -> bool {
+    matches!(
+        case,
+        SourceCase::RemoteOldFrames
+            | SourceCase::RemoteOldRetainedNative
+            | SourceCase::TargetImageRows
+            | SourceCase::TargetImageRowsWithoutAudit
+            | SourceCase::TargetImageRowsPreWalCanceled
+            | SourceCase::TargetImageRowsPostWalCanceled
+            | SourceCase::TargetImageRowsApplyFailed
+    )
+}
 fn actual_role(
     provider: &MetadataReadProvider,
     actor: &crate::distribution_consensus::MetadataReadParticipant,
@@ -532,10 +547,68 @@ fn remote_old_seed(
     let source = (0..4).find(|i| node(*i) == donor).unwrap();
     assert_ne!(donor, plan.old_range().leader);
     assert_ne!(&donor, plan.retiring_source());
+    // Independently retain every real protected native receipt before the
+    // fresh readonly collector. Its result must not re-close any OLD node or
+    // allocate another native xid after the mutation requests have expired.
+    let native_before = plan
+        .old_members()
+        .keys()
+        .map(|recipient| {
+            let index = (0..4).find(|i| node(*i) == *recipient).unwrap();
+            let database = services[index].lock().database();
+            let record = database
+                .read()
+                .test_native_old_close_record(plan.old_range().id)
+                .unwrap()
+                .expect("each actual OLD Close retained its native receipt");
+            (recipient.to_string(), record)
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+    assert_eq!(native_before.len(), plan.old_members().len());
+    let collect_index = journal.len();
+    journal.push(serde_json::json!({
+        "operation":"remote_old_fresh_all_closed_collection",
+        "actual_donor":donor, "plan_sha256":plan.checksum_sha256().unwrap(),
+        "range_id":plan.old_range().id, "old_members":plan.old_members().keys().collect::<Vec<_>>(),
+        "original_mutation_requests_expired":true,
+        "native_before":native_before, "outcome":"not_started",
+        "all_closed_and_irreversible_constraints_required":true,
+    }));
+    evidence(&output.join("remote-old-ledger.json"), journal).unwrap();
     let parent = budget(5000);
-    let actual = controls[source]
-        .collect_initial_remote_old_at_actual_donor(plan.old_range().id, &parent)
-        .unwrap();
+    let result =
+        controls[source].collect_initial_remote_old_at_actual_donor(plan.old_range().id, &parent);
+    let native_after = plan
+        .old_members()
+        .keys()
+        .map(|recipient| {
+            let index = (0..4).find(|i| node(*i) == *recipient).unwrap();
+            let database = services[index].lock().database();
+            let record = database
+                .read()
+                .test_native_old_close_record(plan.old_range().id)
+                .unwrap()
+                .expect("readonly collection cannot remove an actual OLD receipt");
+            (recipient.to_string(), record)
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+    journal[collect_index]["outcome"] = if result.is_ok() {
+        "returned_actual_all_old_certificate"
+    } else {
+        "error_no_certificate"
+    }
+    .into();
+    journal[collect_index]["exact_error"] =
+        serde_json::to_value(result.as_ref().err().map(ToString::to_string)).unwrap();
+    journal[collect_index]["native_after"] = serde_json::to_value(&native_after).unwrap();
+    journal[collect_index]["native_receipts_unchanged"] =
+        serde_json::json!(native_after == native_before);
+    evidence(&output.join("remote-old-ledger.json"), journal).unwrap();
+    assert_eq!(
+        native_after, native_before,
+        "readonly collection preserves exact native xids/bytes"
+    );
+    let actual = result.unwrap();
     assert_eq!(actual.selected_source_id(), &donor);
     let mut actual = Some(actual);
     let retained = controls[source]
@@ -745,13 +818,18 @@ pub(super) fn exercise(
             continue;
         }
         let mut runtimes = Vec::new();
-        let (source, retained, original_old_expiry) = if matches!(
-            case,
-            SourceCase::RemoteOldFrames | SourceCase::RemoteOldRetainedNative
-        ) {
+        let (source, retained, original_old_expiry) = if uses_actual_remote_old_seed(case) {
             // The metadata round supplied purpose DATA only. It never records
             // local service observations and never finishes a local OLD QQ.
             drop(round);
+            journal.push(serde_json::json!({
+                "operation":"source_seed_selection", "case":format!("{case:?}"),
+                "changed_seed":"actual_production_remote_old", "range_id":range.id,
+                "plan_sha256":plan.checksum_sha256().unwrap(),
+                "local_old_issuance_contract_unchanged":true,
+                "target_row_fault_not_yet_exercised":true,
+            }));
+            evidence(&output.join("remote-old-ledger.json"), &journal).unwrap();
             remote_old_seed(
                 matches!(case, SourceCase::RemoteOldRetainedNative),
                 controls,

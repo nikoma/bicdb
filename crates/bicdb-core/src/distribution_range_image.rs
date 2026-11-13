@@ -23,6 +23,8 @@ use crate::distribution_range_mutation::{
 use crate::{BicDb, BicDbError, CancellationToken, CollectionMeta, Result};
 
 mod history_export;
+#[cfg(test)]
+pub(crate) mod initial_wait_tests;
 pub(crate) use history_export::{RangeImageHistoryCursorV1, RangeImageHistoryStepV1};
 mod closed_image_source;
 #[cfg(feature = "tls-replication")]
@@ -363,6 +365,7 @@ impl RangeImageCapture {
             wait_budget,
             cancellation,
             None,
+            None,
         )
     }
     /// Share an ACTUAL existing source read lease; never acquire a second pin
@@ -384,6 +387,33 @@ impl RangeImageCapture {
             wait_budget,
             cancellation,
             Some(pin),
+            None,
+        )
+    }
+    /// The actual remote publication wait observes BOTH original tokens, but
+    /// the resulting capture retains only the long-session cancellation. A
+    /// finished 5s publication request is never a relocated 8GiB image lease.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn begin_with_source_pin_and_initial_wait(
+        db: Arc<RwLock<BicDb>>,
+        cut: impl Into<NativeRangeImageSourceCut>,
+        frozen: Arc<FrozenRangeMutationPermit>,
+        lineage: SourceRangeImageLineage,
+        wait_budget: Duration,
+        session: &CancellationToken,
+        initial_request: &CancellationToken,
+        pin: Arc<SourceCaptureReadPin>,
+    ) -> Result<Self> {
+        initial_request.check()?;
+        Self::begin_internal(
+            db,
+            cut.into(),
+            frozen,
+            lineage,
+            wait_budget.min(Duration::from_secs(5)),
+            session,
+            Some(pin),
+            Some(initial_request),
         )
     }
     fn begin_internal(
@@ -394,6 +424,7 @@ impl RangeImageCapture {
         wait_budget: Duration,
         cancellation: &CancellationToken,
         existing_pin: Option<Arc<SourceCaptureReadPin>>,
+        initial_request: Option<&CancellationToken>,
     ) -> Result<Self> {
         if wait_budget.is_zero()
             || wait_budget > MAX_CAPTURE_WAIT
@@ -403,6 +434,9 @@ impl RangeImageCapture {
         }
         let wait = cancellation.child_with_deadline(Instant::now() + wait_budget);
         wait.check()?;
+        if let Some(request) = initial_request {
+            request.check()?;
+        }
         // The old-data-quorum cut does not itself qualify a native image.
         // Require the actual persisted base's exact metadata transition too.
         cut.validate_source_lineage_configuration(&lineage)?;
@@ -435,8 +469,15 @@ impl RangeImageCapture {
                 source_read_pin,
             )
         };
+        #[cfg(test)]
+        if initial_request.is_some() {
+            initial_wait_tests::cancel_at_actual_wait(&db, cut.range().id, cut.nonce());
+        }
         loop {
             wait.check()?;
+            if let Some(request) = initial_request {
+                request.check()?;
+            }
             let reached = {
                 let database = read_database(&db)?;
                 gate.validate_quiescent_frozen(cut.range().id, &frozen)?;
@@ -450,6 +491,10 @@ impl RangeImageCapture {
             // No database/service latch is held across this bounded wait.
             std::thread::sleep(WAIT_POLL);
         }
+        if let Some(request) = initial_request {
+            wait.check()?;
+            request.check()?;
+        }
         let catalog_bytes = canonical_range_image_catalog(
             cut.cluster_id(),
             cut.range(),
@@ -461,6 +506,10 @@ impl RangeImageCapture {
         let wire_chain_sha256 = hex::encode(Sha256::digest(b"bicdb.range-image.wire.v1\0"));
         let range_index = RangeIndexCut::certified(&cut);
         let complete = bindings.collections().is_empty();
+        if let Some(request) = initial_request {
+            wait.check()?;
+            request.check()?;
+        }
         Ok(Self {
             closed_image_lifetime: Arc::new(()),
             original_cancellation: cancellation.clone(),

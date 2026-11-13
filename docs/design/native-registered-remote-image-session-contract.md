@@ -130,3 +130,27 @@ that wrapper, a source lineage, or target mutation permission. Source-owner loss
 closes future source operations; issued same-cut facts retain their historical
 meaning. Session publication, remote OLD collector, target controlled Tx and
 actual finalization/readiness consumers are still absent in this first leaf.
+
+## Original initial-wait cancellation correction
+
+Source review of `ef5d030a4` found that clipping a wait duration to the publish
+request deadline did not observe that request's explicit cancellation, and an
+unbounded caller could still choose a wait greater than 5s. The dedicated actual
+capture entry now accepts TWO original tokens: the long-session token remains
+the capture's retained cancellation; the ephemeral initial-request token is
+checked at entry, each shippable-prefix wait iteration, after that wait and at
+return. The dedicated wait is capped at 5s even when the caller has no deadline.
+No uncancelable substitute, token renewal or generic cancellation API is added.
+Existing capture entry points pass no extra initial request and preserve their
+validation/retained-token semantics. The poll is 10ms outside engine latches;
+this does not claim a hard bound on an already-running filesystem operation.
+
+Two source-only regressions reuse the actual four-member native OLD-closure
+fixture. A keyed, RAII-removed fault cancels the real publish token AFTER actual
+DB/pin/reservation acquisition at the wait boundary; the still-live long session
+cannot make capture succeed, and native point/B/namespace/acknowledged row stay
+unchanged. A separate actual capture finishes, then its original publish token
+is canceled while the long session stays live; complete actual native history
+export still succeeds with all original OLD-closure assertions. These are lower
+capture-producer controls, not a remote source-session/TLS/image acceptance run.
+A consumed failed cut stays quarantined; exact restart/resume remains OPEN.

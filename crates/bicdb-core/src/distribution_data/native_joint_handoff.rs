@@ -292,6 +292,24 @@ pub(crate) struct ActualServiceNativeJointCaptureInputs {
     pin: Arc<SourceCaptureReadPin>,
 }
 impl ActualServiceNativeJointCaptureInputs {
+    pub(crate) fn begin_with_initial_wait(
+        self,
+        budget: std::time::Duration,
+        session: &CancellationToken,
+        initial_request: &CancellationToken,
+    ) -> Result<crate::distribution_range_image::RangeImageCapture> {
+        crate::distribution_range_image::RangeImageCapture::begin_with_source_pin_and_initial_wait(
+            self.database,
+            self.cut,
+            self.frozen,
+            self.lineage,
+            budget,
+            session,
+            initial_request,
+            self.pin,
+        )
+    }
+
     pub(crate) fn begin(
         self,
         budget: std::time::Duration,

@@ -205,6 +205,7 @@ pub(crate) struct NativeRemoteImageSourceSession {
     capture: Option<RangeImageCapture>,
     manifest: Option<NativeRemoteImageManifestV1>,
     target_attempt: Uuid,
+    source_session: Uuid,
     capture_attempted: bool,
     published: bool,
     original_session: CancellationToken,
@@ -234,6 +235,7 @@ impl NativeRemoteImageSourceSession {
             coordinator,
             old,
             target_attempt,
+            source_session: Uuid::now_v7(),
             original_session: original_session.clone(),
             actual_open: None,
             slot: None,
@@ -299,7 +301,7 @@ impl NativeRemoteImageSourceSession {
         self.slot = Some(slot);
         self.metadata_store_id = Some(proof.store_id());
         let now = Instant::now();
-        let wait_budget = wait_budget.min(
+        let wait_budget = wait_budget.min(Duration::from_secs(5)).min(
             original_publish_request
                 .deadline()
                 .map_or(wait_budget, |end| end.saturating_duration_since(now)),
@@ -309,10 +311,11 @@ impl NativeRemoteImageSourceSession {
             return Err(BicDbError::QueryTimedOut);
         }
         self.capture_attempted = true;
-        self.capture = Some(
-            self.old
-                .begin_capture(wait_budget, &self.original_session)?,
-        );
+        self.capture = Some(self.old.begin_capture_with_initial_wait(
+            wait_budget,
+            &self.original_session,
+            original_publish_request,
+        )?);
         // Retain the capture BEFORE any post-capture failure. No failed publish
         // can drop these pins and then silently mint a replacement session.
         let capture = self.capture.as_ref().unwrap();
@@ -338,7 +341,7 @@ impl NativeRemoteImageSourceSession {
         let plan = self.old.plan();
         let mut manifest = NativeRemoteImageManifestV1 {
             version: 1,
-            source_session: Uuid::now_v7(),
+            source_session: self.source_session,
             target_attempt: self.target_attempt,
             handoff_session: capture.cut.session_id(),
             nonce: capture.cut.nonce(),

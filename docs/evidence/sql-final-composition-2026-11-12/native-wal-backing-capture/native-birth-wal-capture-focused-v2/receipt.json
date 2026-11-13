@@ -1,0 +1,59 @@
+{
+  "source": "87581e659b7d3bef38a341a7a6cd50be1e885a4a",
+  "scope": "Write-time Native backing contracts are part of the same WAL commit as their writes, including prepared-WAL fast path. Actual bounded durable batch/live exporters retain historical backing identity across rename/name reuse/drop and restart. Private checksum-bound in-process capture is not decoded from JSON, not source root authentication/import/recovery authority. New lifecycle/unborn/async/forgery/dropped-fence controls plus prior Native birth5/image6/local8/snapshot3 and legacy WAL serialization tests. Original SQL promotion acceptance remains OPEN; no source/main/application/release/deployment or full broad/fault qualification. Currentv2 adds separate native_wal_backing_capture_v1 local compatibility fence and explicit future-only activation (birth-aware older writers must reject the additional WAL semantics); first-vector Native commit captures the planned dimension and exact full payload. No old WAL retrofits, source-root authentication or import authority. Tests7 WAL+5 priorbirth, both modes, plus focused regressions. New original SQL promotion test unchanged/not claimed PASS.",
+  "started_unix": 1794533424.606995,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794533424.6073365,
+      "exit": 0,
+      "finished_unix": 1794533424.6770608
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "check",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "-p",
+        "bicdb-sql",
+        "-p",
+        "bicdb-pgwire",
+        "--all-targets"
+      ],
+      "started_unix": 1794533424.6772923,
+      "exit": 0,
+      "finished_unix": 1794533572.2993405
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "native_collection_birth::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794533572.2996407,
+      "exit": 101,
+      "finished_unix": 1794533633.7724545
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794533633.7726407
+}

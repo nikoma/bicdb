@@ -49,6 +49,19 @@ pub(crate) enum NativeRangeCertificateEvidence {
         restore_activation: Option<crate::distribution_consensus::MetadataRestoreActivation>,
         scope_sha256: String,
     },
+    AbortPromiseQuorum {
+        recovery_nonce: Uuid,
+        configuration_sha256: String,
+        current_range_epoch: u64,
+        metadata_context_id: Uuid,
+    },
+    CompletedDecisionMaterializationQuorum {
+        recovery_nonce: Uuid,
+        configuration_sha256: String,
+        current_range_epoch: u64,
+        metadata_context_id: Uuid,
+        completed_decision_sha256: String,
+    },
     HistoricalCurrentCertificateQuorum {
         recovery_nonce: Uuid,
         configuration_sha256: String,
@@ -90,7 +103,35 @@ impl NativeRangeCertificateEvidence {
                 ));
             }
         }
-        if let Self::HistoricalCurrentCertificateQuorum {
+        if let Self::CompletedDecisionMaterializationQuorum {
+            completed_decision_sha256,
+            ..
+        } = self
+        {
+            if completed_decision_sha256.len() != 64
+                || !completed_decision_sha256
+                    .bytes()
+                    .all(|b| b.is_ascii_hexdigit())
+            {
+                return Err(range_write_error(
+                    "damaged actual completed-decision provenance",
+                ));
+            }
+        }
+        if let Self::CompletedDecisionMaterializationQuorum {
+            recovery_nonce,
+            configuration_sha256,
+            current_range_epoch,
+            metadata_context_id,
+            ..
+        }
+        | Self::HistoricalCurrentCertificateQuorum {
+            recovery_nonce,
+            configuration_sha256,
+            current_range_epoch,
+            metadata_context_id,
+        }
+        | Self::AbortPromiseQuorum {
             recovery_nonce,
             configuration_sha256,
             current_range_epoch,
@@ -162,10 +203,16 @@ impl NativeRangeCommandIntent {
         known: &KnownNativeRecoveryPrefix,
     ) -> Result<NativeRangeCommitCertificate> {
         admission.require_live_request()?;
+        known.require_completed_decision_link(admission)?;
         let command = admission.command();
         command.validate()?;
         let current = admission.current_range();
         let base = known.base_range();
+        if admission.completed_decision().is_some()
+            && (base.epoch != current.epoch || base.leader != current.leader)
+        {
+            return Err(range_write_error("completed materialization first scope requires unchanged actual INITIAL physical epoch/leader; transitioned domains need their own sealed producer"));
+        }
         let voter_ids = |range: &RangeDescriptor| {
             range
                 .replicas
@@ -224,6 +271,10 @@ impl NativeRangeCommandIntent {
                 "historical native has no actual distinct current certification majority",
             ));
         }
+        let completion_digest = admission
+            .completed_decision()
+            .map(|p| p.decision_sha256())
+            .transpose()?;
         let scope = crate::distribution_range_image::bounded_json(
             &(
                 "bicdb.native.historical-apply.scope.v1",
@@ -238,6 +289,19 @@ impl NativeRangeCommandIntent {
             ),
             MAX_NATIVE_SCOPE_BYTES,
         )?;
+        let scope_sha256 = if let Some(completed) = &completion_digest {
+            let extended = crate::distribution_range_image::bounded_json(
+                &(
+                    "bicdb.native.completed-decision-materialization.scope.v1",
+                    &scope,
+                    completed,
+                ),
+                MAX_NATIVE_SCOPE_BYTES,
+            )?;
+            hex::encode(Sha256::digest(extended))
+        } else {
+            hex::encode(Sha256::digest(scope))
+        };
         let intent = Self {
             command_id: command.command_id.clone(),
             command_checksum_sha256: command.checksum_sha256.clone(),
@@ -253,18 +317,29 @@ impl NativeRangeCommandIntent {
             restore_activation: known.restore_activation().cloned(),
             members,
             schema_sha256: known.schema_sha256().to_string(),
-            scope_sha256: hex::encode(Sha256::digest(scope)),
+            scope_sha256,
+        };
+        let evidence = if let Some(completed_decision_sha256) = completion_digest {
+            NativeRangeCertificateEvidence::CompletedDecisionMaterializationQuorum {
+                recovery_nonce: admission.recovery_nonce(),
+                configuration_sha256: admission.scope().configuration_sha256.clone(),
+                current_range_epoch: current.epoch,
+                metadata_context_id: admission.context_id(),
+                completed_decision_sha256,
+            }
+        } else {
+            NativeRangeCertificateEvidence::HistoricalCurrentCertificateQuorum {
+                recovery_nonce: admission.recovery_nonce(),
+                configuration_sha256: admission.scope().configuration_sha256.clone(),
+                current_range_epoch: current.epoch,
+                metadata_context_id: admission.context_id(),
+            }
         };
         Ok(NativeRangeCommitCertificate {
             intent,
             certified_voters,
             required_quorum,
-            evidence: NativeRangeCertificateEvidence::HistoricalCurrentCertificateQuorum {
-                recovery_nonce: admission.recovery_nonce(),
-                configuration_sha256: admission.scope().configuration_sha256.clone(),
-                current_range_epoch: current.epoch,
-                metadata_context_id: admission.context_id(),
-            },
+            evidence,
         })
     }
 

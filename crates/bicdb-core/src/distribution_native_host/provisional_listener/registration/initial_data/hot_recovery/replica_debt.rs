@@ -1,0 +1,427 @@
+//! Retained replica obligations after leader availability. No leader range
+//! reservation is held while an absent/lagging peer is contacted or replayed.
+use super::*;
+
+pub(super) struct ReplicaDebt {
+    scope: RecoveryFenceScope,
+    command: RangeWriteCommand,
+    range: crate::RangeDescriptor,
+    members: Vec<ClusterNodeId>,
+    next: BTreeMap<ClusterNodeId, Phase>,
+    binding: NativeHotReplicaBinding,
+    cursor: usize,
+    pending: BTreeSet<ClusterNodeId>,
+    progress: BTreeMap<ClusterNodeId, serde_json::Value>,
+    semantic_veto: BTreeMap<ClusterNodeId, Phase>,
+    retry_after: BTreeMap<ClusterNodeId, Instant>,
+    peer_opens: BTreeMap<ClusterNodeId, HotRecoveryPeerOpen>,
+    // Last continuation attempt per follower. A SETTLED follower (activated,
+    // nothing pending, no veto) is only re-observed at a slow cadence: each
+    // observation occupies that follower's recovery context, and while it is
+    // occupied the follower refuses the ordinary native apply instruction.
+    tracked_at: BTreeMap<ClusterNodeId, Instant>,
+}
+/// Cadence of re-observing a settled follower. Unsettled followers keep the
+/// one-per-attempt cadence.
+const SETTLED_TRACKING_INTERVAL: Duration = Duration::from_secs(5);
+impl ReplicaDebt {
+    pub(super) fn diagnostic(&self, boundary: &str) -> serde_json::Value {
+        serde_json::json!({"phase":"ReplicaDebt","range_id":self.range.id,
+            "recovery_nonce":self.scope.recovery_nonce,"anchor_index":self.command.index,
+            "public_ready_published":true,"replica_debt_pending":self.pending,
+            "actual_progress":self.progress,"boundary":boundary,"tracked_after_catchup":true,
+            "recipient_next":self.next.iter().map(|(n,p)|(n.to_string(),format!("{p:?}"))).collect::<BTreeMap<_,_>>(),
+            "diagnostic_not_authority":true})
+    }
+    /// Every follower was last actually observed activated and at the source
+    /// cut and no refusal is retained: this session owes nothing further.
+    pub(super) fn converged(&self) -> bool {
+        self.pending.is_empty() && self.semantic_veto.is_empty()
+    }
+    pub(super) fn from_published(job: Job) -> Self {
+        // A follower that actually acknowledged every phase through Activate
+        // inside the published session owes nothing: it is settled from the
+        // start. Only followers with a retained next phase are pending.
+        let pending = job
+            .members
+            .iter()
+            .filter(|n| **n != job.range.leader && job.recipient_next.contains_key(*n))
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let published_at = Instant::now();
+        let tracked_at = job
+            .members
+            .iter()
+            .filter(|n| **n != job.range.leader && !pending.contains(*n))
+            .map(|n| (n.clone(), published_at))
+            .collect();
+        Self {
+            scope: job.scope,
+            command: job.command,
+            range: job.range,
+            members: job.members,
+            next: job.recipient_next,
+            binding: job.replica_binding.expect("captured before actual Publish"),
+            cursor: 0,
+            pending,
+            progress: BTreeMap::new(),
+            semantic_veto: job.semantic_veto,
+            // New real continuation probes once with fresh authority. Prior
+            // transport cooldowns are not permissions or durable phase facts.
+            retry_after: BTreeMap::new(),
+            peer_opens: job.peer_opens,
+            tracked_at,
+        }
+    }
+    fn settled(&self, node: &ClusterNodeId) -> bool {
+        !self.pending.contains(node)
+            && !self.semantic_veto.contains_key(node)
+            && !self.next.contains_key(node)
+    }
+}
+impl NativeHotRecoveryMaintenance {
+    pub(super) fn run_replica_debt(
+        &self,
+        debt: &mut ReplicaDebt,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.live(parent)?;
+        #[cfg(test)]
+        let _test_schedule = self
+            .debt_schedule_test
+            .try_lock()
+            .ok_or_else(|| invalid("actual replica debt scheduling held by test owner"))?;
+        let members = debt
+            .members
+            .iter()
+            .filter(|n| **n != self.initial.seed.spec.node_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        if members.is_empty() {
+            return Ok(());
+        }
+        let mut selected = None;
+        for _ in 0..members.len() {
+            let candidate = members[debt.cursor % members.len()].clone();
+            debt.cursor = (debt.cursor + 1) % members.len();
+            if debt.settled(&candidate)
+                && debt
+                    .tracked_at
+                    .get(&candidate)
+                    .is_some_and(|at| at.elapsed() < SETTLED_TRACKING_INTERVAL)
+            {
+                continue;
+            }
+            selected = Some(candidate);
+            break;
+        }
+        let Some(node) = selected else {
+            return Ok(());
+        };
+        let was_settled = debt.settled(&node);
+        debt.tracked_at.insert(node.clone(), Instant::now());
+        if !debt.semantic_veto.contains_key(&node)
+            && debt
+                .retry_after
+                .get(&node)
+                .is_some_and(|at| Instant::now() < *at)
+        {
+            self.record(
+                serde_json::json!({"phase":"ReplicaDebt","range_id":debt.range.id,
+                "target":node,"public_ready_published":true,"replica_debt_pending":debt.pending,
+                "deferred_transport_probe":true,"diagnostic_not_authority":true}),
+            );
+            return Ok(());
+        }
+        let result = (|| -> Result<()> {
+            // One selected physical recipient per bounded fair attempt; no
+            // leader active_ranges reservation or engine latch crosses IO.
+            for _ in 0..8 {
+                self.live(parent)?;
+                let role = self.fresh_role(&debt.range, debt.scope.recovery_nonce, parent)?;
+                debt.scope.require_role(&role)?;
+                let phase_parent = parent.child_with_deadline(role.deadline());
+                self.coordinator.require_hot_replica_binding(
+                    &self.runtime,
+                    &self.host,
+                    &debt.binding,
+                    &role,
+                    &phase_parent,
+                )?;
+                let phase = debt.next.get(&node).copied();
+                match phase {
+                    Some(Phase::Complete) | Some(Phase::Activate) => {
+                        let phase = phase.unwrap();
+                        let budget_ms = Self::remaining(&phase_parent)?.saturating_sub(250).max(1);
+                        let request = HotRecoveryPhaseRequest::Complete {
+                            request: NativeCompletionRequest {
+                                scope: debt.scope.clone(),
+                                challenge: Uuid::now_v7(),
+                                budget_ms,
+                            },
+                            activate: phase == Phase::Activate,
+                        };
+                        let actual = self.initial.transport.hot_recovery_phase_observation(
+                            &node,
+                            request,
+                            debt.command.index,
+                            Duration::from_millis(budget_ms),
+                            &phase_parent,
+                        )?;
+                        let original = debt.peer_opens.get(&node).ok_or_else(|| {
+                            invalid("replica continuation has no original observed physical open")
+                        })?;
+                        original.require_same(actual.observed_open())?;
+                        self.live(&phase_parent)?;
+                        role.require_live_request()?;
+                        self.coordinator.require_hot_replica_binding(
+                            &self.runtime,
+                            &self.host,
+                            &debt.binding,
+                            &role,
+                            &phase_parent,
+                        )?;
+                        if phase == Phase::Complete {
+                            debt.next.insert(node.clone(), Phase::Activate);
+                        } else {
+                            debt.next.remove(&node);
+                        }
+                        if debt.semantic_veto.get(&node) == Some(&phase) {
+                            debt.semantic_veto.remove(&node);
+                        }
+                        debt.retry_after.remove(&node);
+                        #[cfg(test)]
+                        eprintln!("NATIVE_HOT_REPLICA_CONTINUATION target={} phase={:?} range={} anchor={} no_leader_reservation=true", node,phase,debt.range.id,debt.command.index);
+                    }
+                    None => {
+                        let budget_ms = Self::remaining(&phase_parent)?.saturating_sub(250).max(1);
+                        let open = self.initial.transport.hot_recovery_phase_observation(
+                            &node,
+                            HotRecoveryPhaseRequest::Complete {
+                                request: NativeCompletionRequest {
+                                    scope: debt.scope.clone(),
+                                    challenge: Uuid::now_v7(),
+                                    budget_ms,
+                                },
+                                activate: true,
+                            },
+                            debt.command.index,
+                            Duration::from_millis(budget_ms),
+                            &phase_parent,
+                        )?;
+                        let original = debt.peer_opens.get(&node).ok_or_else(|| {
+                            invalid("tracked replica has no original observed physical open")
+                        })?;
+                        original.require_same(open.observed_open())?;
+                        self.live(&phase_parent)?;
+                        let progress = self.coordinator.repair_hot_native_replica_step(
+                            &self.runtime,
+                            &self.host,
+                            &debt.binding,
+                            &role,
+                            &node,
+                            original,
+                            &phase_parent,
+                        )?;
+                        self.live(&phase_parent)?;
+                        let fresh =
+                            self.fresh_role(&debt.range, debt.scope.recovery_nonce, parent)?;
+                        debt.scope.require_role(&fresh)?;
+                        self.coordinator.require_hot_replica_binding(
+                            &self.runtime,
+                            &self.host,
+                            &debt.binding,
+                            &fresh,
+                            &phase_parent,
+                        )?;
+                        // Recheck actual target open AFTER recertification /
+                        // materialization too; a captured birth/UUID is not a
+                        // current slot or a cold-open serving grant.
+                        let budget_ms = Self::remaining(&phase_parent)?.saturating_sub(250).max(1);
+                        let current = self.initial.transport.hot_recovery_phase_observation(
+                            &node,
+                            HotRecoveryPhaseRequest::Complete {
+                                request: NativeCompletionRequest {
+                                    scope: debt.scope.clone(),
+                                    challenge: Uuid::now_v7(),
+                                    budget_ms,
+                                },
+                                activate: true,
+                            },
+                            debt.command.index,
+                            Duration::from_millis(budget_ms),
+                            &phase_parent,
+                        )?;
+                        original.require_same(current.observed_open())?;
+                        self.live(&phase_parent)?;
+                        fresh.require_live_request()?;
+                        self.coordinator.require_hot_replica_binding(
+                            &self.runtime,
+                            &self.host,
+                            &debt.binding,
+                            &fresh,
+                            &phase_parent,
+                        )?;
+                        let at_cut = progress.at_observed_source_cut();
+                        debt.progress.insert(node.clone(), progress.diagnostic());
+                        if debt.semantic_veto.get(&node) == Some(&Phase::Replica) {
+                            debt.semantic_veto.remove(&node);
+                        }
+                        debt.retry_after.remove(&node);
+                        if at_cut {
+                            debt.pending.remove(&node);
+                            return Ok(());
+                        }
+                        debt.pending.insert(node.clone());
+                    }
+                    Some(Phase::Fence | Phase::Certify | Phase::Apply | Phase::Prepare) => {
+                        let budget_ms = Self::remaining(&phase_parent)?.saturating_sub(250).max(1);
+                        let request =
+                            crate::distribution_range_recovery::NativeCompletedMaterializeRequest {
+                                historical: RecoveryHistoricalCommandRequest {
+                                    scope: debt.scope.clone(),
+                                    command: debt.command.clone(),
+                                    budget_ms,
+                                },
+                                challenge: Uuid::now_v7(),
+                            };
+                        let actual = self.initial.transport.hot_recovery_phase_observation(
+                            &node,
+                            HotRecoveryPhaseRequest::MaterializeCompleted(request),
+                            debt.command.index,
+                            Duration::from_millis(budget_ms),
+                            &phase_parent,
+                        )?;
+                        if let Some(original) = debt.peer_opens.get(&node) {
+                            original.require_same(actual.observed_open())?;
+                        } else {
+                            // A missing old reply was never an open identity.
+                            // This first observation is allowed only through
+                            // the receiver's sealed retained INITIAL owner,
+                            // actual current slot/original writer and real
+                            // completed QQ+native predecessor/Ready producer.
+                            // It is not a cold-open permission or DTO proof.
+                            debt.peer_opens
+                                .insert(node.clone(), actual.observed_open().clone());
+                        }
+                        self.live(&phase_parent)?;
+                        role.require_live_request()?;
+                        self.coordinator.require_hot_replica_binding(
+                            &self.runtime,
+                            &self.host,
+                            &debt.binding,
+                            &role,
+                            &phase_parent,
+                        )?;
+                        // Only actual full native preparation, not a phase
+                        // counter, makes the next operation Complete.
+                        debt.next.insert(node.clone(), Phase::Complete);
+                        debt.semantic_veto.remove(&node);
+                        debt.retry_after.remove(&node);
+                        #[cfg(test)]
+                        eprintln!("NATIVE_HOT_REPLICA_COMPLETED_MATERIALIZATION target={} range={} anchor={} actual_native_prepared=true no_active_fence_authority_cast=true no_leader_reservation=true",node,debt.range.id,debt.command.index);
+                    }
+                    Some(Phase::Publish | Phase::Replica) => {
+                        return Err(invalid("invalid retained recipient phase"));
+                    }
+                }
+            }
+            Ok(())
+        })();
+        if let Err(error) = &result {
+            // A failed re-observation of a settled follower proves no new
+            // obligation; it is retried at the slow cadence. Only a follower
+            // that already owed something stays on the fast cadence.
+            if !was_settled {
+                debt.pending.insert(node.clone());
+            }
+            if matches!(error, crate::BicDbError::Io(io) if matches!(
+                io.kind(),
+                std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+            )) {
+                // Ordering hint only: ordinary admission contacts this silent
+                // follower last. Nothing is counted, granted or retired.
+                self.coordinator
+                    .note_native_voter_stalled(&node, Instant::now() + Duration::from_secs(10));
+            }
+            if HotRecoveryPeerFailure::from_error(error).is_some()
+                && !debt.semantic_veto.contains_key(&node)
+            {
+                debt.retry_after
+                    .insert(node.clone(), Instant::now() + Duration::from_secs(10));
+            } else if local_source_transient(error) {
+                // This ORIGIN's own momentarily busy latch or in-flight
+                // native command is not a statement by the follower. The
+                // obligation stays pending and is retried; no veto, no skip.
+            } else if was_settled {
+                // A settled follower's refusal of a re-observation creates no
+                // obligation and blocks nothing; it is asked again at the
+                // slow cadence.
+            } else if !matches!(
+                error,
+                crate::BicDbError::QueryCanceled | crate::BicDbError::QueryTimedOut
+            ) {
+                // Early phases now run real completed materialization. Retain
+                // their semantic refusal too; subsequent socket loss cannot
+                // erase it or turn this known peer into a backoff-only hint.
+                debt.semantic_veto
+                    .entry(node.clone())
+                    .or_insert(debt.next.get(&node).copied().unwrap_or(Phase::Replica));
+            }
+        }
+        self.record(serde_json::json!({"phase":"ReplicaDebt","range_id":debt.range.id,
+            "recovery_nonce":debt.scope.recovery_nonce,"anchor_index":debt.command.index,
+            "target":node,"public_ready_published":true,"replica_debt_pending":debt.pending,
+            "recipient_next":debt.next.iter().map(|(n,p)|(n.to_string(),format!("{p:?}"))).collect::<BTreeMap<_,_>>(),
+            "semantic_veto":debt.semantic_veto.iter().map(|(n,p)|(n.to_string(),format!("{p:?}"))).collect::<BTreeMap<_,_>>(),
+            "actual_progress":debt.progress,"completed_this_attempt":result.is_ok(),
+            "error":result.as_ref().err().map(ToString::to_string),
+            "tracked_after_catchup":true,"no_leader_reservation_during_peer_io":true,
+            "diagnostic_not_authority":true}));
+        // Keep tracking after current convergence: later ordinary ACKs may
+        // leave a lagging follower without another user request to repair it.
+        result
+    }
+}
+
+/// Exact refusals produced only by this origin's own source-side checks
+/// before or between peer exchanges. A peer's refusal always arrives wrapped
+/// in its authenticated RPC rejection and can never equal one of these.
+fn local_source_transient(error: &crate::BicDbError) -> bool {
+    matches!(error, crate::BicDbError::Cluster(message) if matches!(
+        message.as_str(),
+        "hot replica source service busy"
+            | "hot replica source DB busy"
+            | "hot replica source topology busy"
+            | "hot suffix topology busy"
+            | "native range image: unfinished native command; source range image unavailable"
+    ))
+}
+
+#[cfg(test)]
+pub(crate) struct NativeHotDebtScheduleHold<'a> {
+    _actual: parking_lot::MutexGuard<'a, ()>,
+    _not_send: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+#[cfg(test)]
+impl NativeHotRecoveryMaintenance {
+    pub(crate) fn hold_debt_schedule_for_test(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<NativeHotDebtScheduleHold<'_>> {
+        if parent.deadline().is_none() {
+            return Err(invalid("test debt hold requires finite acquisition"));
+        }
+        loop {
+            parent.check()?;
+            if let Some(actual) = self.debt_schedule_test.try_lock() {
+                parent.check()?;
+                return Ok(NativeHotDebtScheduleHold {
+                    _actual: actual,
+                    _not_send: std::marker::PhantomData,
+                });
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+}

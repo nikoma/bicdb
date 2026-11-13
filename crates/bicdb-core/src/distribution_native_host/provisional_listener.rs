@@ -6,8 +6,27 @@ use crate::distribution_transport::{
 };
 use crate::{ClusterDataNodeService, ClusterNetworkTransportConfig};
 use parking_lot::Mutex;
+mod control_backend;
+pub(in crate::distribution_native_host) use control_backend::NativeMetadataControlBackend;
+mod learner_enrollment;
 mod metadata_startup;
+mod registration;
+pub(crate) use learner_enrollment::NativeLearnerMetadataEnrollment;
 pub(crate) use metadata_startup::NativeInitialWriterEnrollment;
+pub(in crate::distribution_native_host) use registration::NativeMetadataMaintenanceReport;
+pub use registration::NativeRegisteredReplicaReceiverStatus;
+#[cfg(test)]
+pub(crate) use registration::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
+pub(crate) use registration::{
+    NativeAssignedDataAdmission, NativeAssignedDataPolicyOrigin,
+    NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission,
+    NativeRegisteredReplicaAdmission,
+};
+pub(crate) use registration::{
+    NativeInitialDataAdmission, NativeInitialOldStep, NativeMetadataControlHost,
+    NativeMetadataRegistrationController,
+};
+pub use registration::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
 
 pub(crate) struct NativeProvisionalHost {
     listener: Option<ClusterDataServerHandle>,
@@ -124,6 +143,13 @@ impl NativeProvisionalHost {
         Ok(configuration)
     }
 
+    pub(super) fn stop_retained(&mut self, parent: &CancellationToken) -> Result<()> {
+        if let Some(listener) = self.listener.as_mut() {
+            self.drained = Some(listener.stop_and_drain(parent)?);
+        }
+        self.listener.take();
+        Ok(())
+    }
     pub(crate) fn shutdown(mut self) -> Result<()> {
         if let Some(listener) = self.listener.take() {
             listener.join()?;
@@ -155,7 +181,8 @@ impl NativeInitialConsensusLaunch {
         if network.dev_localhost_plaintext {
             return Err(invalid("initial consensus needs pinned mutual TLS"));
         }
-        let address: std::net::SocketAddr = self.topology.read().nodes[&self.seed.spec.node_id]
+        let address: std::net::SocketAddr = self.topology.read_recursive().nodes
+            [&self.seed.spec.node_id]
             .address
             .parse()
             .map_err(|_| invalid("initial consensus needs numeric planned address"))?;

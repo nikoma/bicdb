@@ -352,7 +352,7 @@ fn native_catalog_existing_legacy_async_service_refuses_cq_after_actual_format_a
         before
     );
     assert_eq!(
-        service.range_writes.state(&cmd).unwrap(),
+        service.range_writes.current_mut().state(&cmd).unwrap(),
         RangeWriteState::Committed
     );
     assert!(ClusterDataNodeService::open(

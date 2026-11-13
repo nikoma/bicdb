@@ -1,0 +1,12 @@
+{
+  "id": 43352756475,
+  "head_sha": "550c23d0458ab7a4e10af94d1cc625a7eb69bb89",
+  "head_branch": "qual/native-registered-fifth-550c23d04-all10",
+  "status": "completed",
+  "conclusion": "success",
+  "event": "workflow_dispatch",
+  "run_attempt": 1,
+  "html_url": "https://github.com/nikoma/bicdb/actions/runs/43352756475",
+  "created_at": "2026-11-13T02:31:25Z",
+  "updated_at": "2026-11-13T02:38:28Z"
+}

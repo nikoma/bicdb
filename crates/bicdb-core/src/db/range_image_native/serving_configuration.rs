@@ -10,8 +10,22 @@ use crate::distribution_range_consensus::{
 };
 use crate::distribution_range_recovery::{ClosedNativeReadyQuorum, RecoveryRoleAdmission};
 
+mod observer_scope;
+pub(crate) use observer_scope::NativeReadyObserverReadScope;
+mod completion_scope;
+pub(crate) use completion_scope::NativeCompletionReadScope;
+mod activation_scope;
+pub(crate) use activation_scope::NativeActivationReadScope;
 mod activation_decision;
+mod joint_handoff;
 pub(crate) use activation_decision::NativeActivationDecisionReceipt;
+pub(in crate::db::range_image_native) use joint_handoff::NativeJointServingDomain;
+pub(crate) use joint_handoff::{
+    NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
+    NativeJointDecisionReceipt, NativeJointHistoricalCutScope, NativeJointOldCloseReceipt,
+    NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
+    NativeJointServingBridgeReceipt, NativeJointServingPreparation,
+};
 
 #[cfg(test)]
 mod floor_tests;
@@ -23,6 +37,8 @@ pub(super) struct NativeRecoveredServingConfiguration {
     birth_id: Uuid,
     birth_sha256: String,
     physical_base_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    joint_decision_sha256: Option<String>,
     scope: RecoveryFenceScope,
     range: RangeDescriptor,
     local_node_id: ClusterNodeId,
@@ -44,6 +60,10 @@ fn replicas(
         .collect()
 }
 impl NativeRecoveredServingConfiguration {
+    /// Immutable checksum DATA for an already validated borrowed record.
+    pub(super) fn checksum_sha256(&self) -> &str {
+        &self.checksum_sha256
+    }
     pub(super) fn range(&self) -> &RangeDescriptor {
         &self.range
     }
@@ -74,10 +94,16 @@ impl NativeRecoveredServingConfiguration {
             || self.local_node_id != birth.spec.node_id
             || self.local_member_incarnation != base.local_member_incarnation
             || base.restore_activation != birth.spec.restore_activation
-            || !matches!(
-                self.scope.purpose,
-                MetadataRecoveryRolePurpose::NormalRecovery
-            )
+            || match (&self.scope.purpose, &self.joint_decision_sha256) {
+                (MetadataRecoveryRolePurpose::NormalRecovery, None) => false,
+                (
+                    MetadataRecoveryRolePurpose::CurrentJointRecovery {
+                        joint_decision_sha256,
+                    },
+                    Some(anchor),
+                ) => joint_decision_sha256 != anchor || !digest(anchor),
+                _ => true,
+            }
             || self.scope.range_id != self.range.id
             || self.scope.range_epoch != self.range.epoch
             || self.scope.initiator_node_id != self.range.leader
@@ -85,9 +111,11 @@ impl NativeRecoveredServingConfiguration {
             || self.range.start_token != base.range.start_token
             || self.range.end_token != base.range.end_token
             || self.range.placement != base.range.placement
-            || self.range.replicas.len() != base.range.replicas.len()
+            || (self.joint_decision_sha256.is_none()
+                && self.range.replicas.len() != base.range.replicas.len())
             || replicas(&self.range).len() != self.range.replicas.len()
-            || replicas(&self.range) != replicas(&base.range)
+            || (self.joint_decision_sha256.is_none()
+                && replicas(&self.range) != replicas(&base.range))
             || self.logical_genesis_sha256 != base.logical_genesis_sha256
             || !digest(&self.activation_history_sha256)
             || !digest(&self.native_receipt_at_activation_sha256)
@@ -200,21 +228,68 @@ impl NativeServingDecision<'_> {
             Self::Activated(q) => q.require_recipient_role(fresh),
         }
     }
-    fn require_local_prepared(
-        &self,
-        p: &PreparedNativeRecoveryReady,
-        db: &BicDb,
-        s: &RangeWriteStore,
-        f: &RecoveryRoleAdmission,
-    ) -> Result<()> {
-        match self {
-            Self::Closed(q) => q.require_local_prepared(p, db, s, f),
-            Self::Completed(q) => q.require_local_prepared(p, db, s, f),
-            Self::Activated(q) => q.require_local_prepared(p, db, s, f),
+    fn require_local_prepared_in_scope(&self, scope: &NativeCompletionReadScope<'_>) -> Result<()> {
+        let prepared = scope.prepared();
+        self.require_recipient_role(scope.role())?;
+        prepared.require_current_for_completion_scope(scope)?;
+        let (saved, r, h0, h) = match self {
+            Self::Closed(q) => (
+                q.scope(),
+                q.range_index(),
+                q.logical_genesis_sha256(),
+                q.logical_history_sha256(),
+            ),
+            Self::Completed(q) => (
+                q.scope(),
+                q.range_index(),
+                q.logical_genesis_sha256(),
+                q.logical_history_sha256(),
+            ),
+            Self::Activated(q) => (
+                q.scope(),
+                q.range_index(),
+                q.logical_genesis_sha256(),
+                q.logical_history_sha256(),
+            ),
+        };
+        if !prepared.scope().same_session(saved)
+            || prepared.range_index() != r
+            || prepared.logical_genesis_sha256() != h0
+            || prepared.logical_history_sha256() != h
+        {
+            return Err(invalid(
+                "actual completion scope differs from sealed quorum point/session",
+            ));
         }
+        self.require_recipient_role(scope.role())
     }
 }
 impl BicDb {
+    fn require_recovered_serving_joint_binding(
+        &self,
+        birth: &NativeDatabaseBirth,
+        base: &NativeRangeBaseBinding,
+        record: &NativeRecoveredServingConfiguration,
+    ) -> Result<()> {
+        if let Some(expected) = &record.joint_decision_sha256 {
+            if !format::native_current_joint_recovery_active(&self.path)? {
+                return Err(invalid("joint recovered serving lacks reader fence"));
+            }
+            let joint = self
+                .read_native_joint_serving_domain(birth, base)?
+                .ok_or_else(|| invalid("joint recovered serving lost protected native domain"))?;
+            if joint.decision_sha256() != expected
+                || crate::distribution_native_read::canonical_range(joint.range())
+                    != crate::distribution_native_read::canonical_range(&record.range)
+                || record.activation_index <= joint.range_index()
+            {
+                return Err(invalid(
+                    "joint recovered serving differs from actual protected NEW domain",
+                ));
+            }
+        }
+        Ok(())
+    }
     pub(super) fn read_native_recovered_serving_configuration(
         &self,
         birth: &NativeDatabaseBirth,
@@ -234,6 +309,7 @@ impl BicDb {
             ));
         }
         record.validate_historical_floor(birth, base)?;
+        self.require_recovered_serving_joint_binding(birth, base, &record)?;
         let actual_index = prefix.map_or(base.range_index, |p| p.range_index());
         let actual_visibility = prefix.map_or(base.actual_local_visibility_sequence, |p| {
             p.actual_local_visibility_sequence()
@@ -256,6 +332,38 @@ impl BicDb {
             ));
         }
         Ok(Some(record))
+    }
+    /// Same-call serving observation only. The typed scope owns the actual
+    /// journal/lineage; its native current record and immutable archive must
+    /// still agree. No historical record becomes Ready or a read permission.
+    pub(in crate::db::range_image_native) fn require_native_serving_read_archive(
+        &self,
+        scope: &NativeServingObservationScope<'_>,
+    ) -> Result<()> {
+        let actual = scope.lineage(self)?;
+        let current = self.read_native_recovered_serving_configuration(
+            &actual.birth,
+            &actual.base,
+            actual.prefix.as_ref(),
+        )?;
+        if current != actual.serving {
+            return Err(invalid(
+                "serving read actual current serving pointer changed",
+            ));
+        }
+        if let Some(record) = current {
+            let archive: NativeRecoveredServingConfiguration = self
+                .read_native_range_image_record(&history_key(
+                    record.range.id,
+                    &record.checksum_sha256,
+                ))?
+                .ok_or_else(|| invalid("serving read immutable serving archive missing"))?;
+            archive.validate_historical_floor(&actual.birth, &actual.base)?;
+            if archive != record {
+                return Err(invalid("serving read actual current/archive differ"));
+            }
+        }
+        Ok(())
     }
     /// Historical completion anchor only. The actual native head may exceed
     /// R; this cannot become NativeReady or a current-prefix/read permit.
@@ -290,6 +398,56 @@ impl BicDb {
             observer.local_member_incarnation(),
         )?;
         observer.require_native_identity(&native)?;
+        let anchor_members = match &scope.purpose {
+            MetadataRecoveryRolePurpose::CurrentJointRecovery {
+                joint_decision_sha256,
+            } => {
+                // An installed image retains its immutable OLD physical
+                // membership. This historical NEW-domain anchor is bound to
+                // the independently protected joint bridge, never a metadata
+                // member list or a reinterpretation of that physical base.
+                if actual.current_joint_decision_sha256() != Some(joint_decision_sha256.as_str())
+                    || record.joint_decision_sha256.as_deref()
+                        != Some(joint_decision_sha256.as_str())
+                {
+                    return Err(invalid(
+                        "activated joint completion anchor changed protected joint decision",
+                    ));
+                }
+                let archived: NativeRecoveredServingConfiguration = self
+                    .read_native_range_image_record(&history_key(
+                        scope.range_id,
+                        &record.checksum_sha256,
+                    ))?
+                    .ok_or_else(|| {
+                        invalid("immutable joint activated serving archive is missing")
+                    })?;
+                archived.validate_historical_floor(&actual.birth, &actual.base)?;
+                if &archived != record {
+                    return Err(invalid("joint activated serving current/archive differ"));
+                }
+                let members = actual.native_write_members()?;
+                #[cfg(test)]
+                eprintln!(
+                    "ACTUAL_JOINT_ACTIVATED_ANCHOR_MEMBERS node={} R={} H={} B={} physical_members={:?} protected_effective_members={:?} actual_observer_members={:?} joint_sha={}",
+                    observer.local_node_id(), r, h,
+                    record.local_visibility_at_activation,
+                    actual.base_members().keys().collect::<Vec<_>>(),
+                    members.keys().collect::<Vec<_>>(),
+                    observer.member_credentials().keys().collect::<Vec<_>>(),
+                    joint_decision_sha256,
+                );
+                if members.len() != observer.member_credentials().len() {
+                    return Err(invalid(
+                        "activated joint completion anchor changed protected voter count",
+                    ));
+                }
+                members
+            }
+            // Preserve the existing ordinary same-voter domain. A CurrentJoint
+            // observation does not widen NormalRecovery's physical contract.
+            _ => actual.base_members().clone(),
+        };
         if record.checksum_sha256 != serving_sha
             || !record.scope.same_session(scope)
             || !record.binds_current_base(&actual.base)
@@ -302,7 +460,7 @@ impl BicDb {
             || observer.expected_schema_sha256() != Some(actual.schema_sha256())
             || actual.restore_activation() != observer.restore_activation()
             || observer.member_credentials().iter().any(|(id, m)| {
-                actual.base_members().get(id).is_none_or(|a| {
+                anchor_members.get(id).is_none_or(|a| {
                     a.incarnation != m.incarnation
                         || a.tls_certificate_sha256 != m.active_certificate_sha256
                         || a.pending_tls_certificate_sha256 != m.pending_certificate_sha256
@@ -335,8 +493,33 @@ impl BicDb {
         scope: &RecoveryFenceScope,
         expected_checksum: &str,
     ) -> Result<NativeRecoveredServingReceipt> {
+        #[cfg(test)]
+        let physical_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-serving-owned-materialization",
+            );
+        #[cfg(test)]
+        let probe_physical = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+            "observer-serving-physical-repeat",
+        );
         physical.require_owned_materialization_current(self)?;
+        #[cfg(test)]
+        crate::distribution_range_recovery::NativeProbeTraceSpan::finish(probe_physical);
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(physical_trace);
+        #[cfg(test)]
+        let lineage_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-serving-actual-current-lineage",
+            );
+
+        #[cfg(test)]
+        let probe_lineage = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+            "observer-serving-current-lineage",
+        );
         let actual = self.current_native_range_source_lineage(scope.range_id)?;
+        #[cfg(test)]
+        crate::distribution_range_recovery::NativeProbeTraceSpan::finish(probe_lineage);
         let record = actual
             .serving
             .ok_or_else(|| invalid("completed refusal has no actual native serving record"))?;
@@ -353,14 +536,42 @@ impl BicDb {
                 "completed native record differs from actual pinned materialization",
             ));
         }
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(lineage_trace);
+        #[cfg(test)]
+        let admission_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-serving-admission-mint",
+            );
+        #[cfg(test)]
+        let probe_admission = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+            "observer-serving-admission",
+        );
         let native = self.native_recovery_admission(
             &record.scope.cluster_id,
             record.scope.bootstrap_id,
             &record.local_node_id,
             record.local_member_incarnation,
         )?;
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(admission_trace);
+        #[cfg(test)]
+        let receipt_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
+                "refresh-serving-receipt-full-current",
+            );
+        #[cfg(test)]
+        crate::distribution_range_recovery::NativeProbeTraceSpan::finish(probe_admission);
+        #[cfg(test)]
+        let probe_receipt = crate::distribution_range_recovery::NativeProbeTraceSpan::current(
+            "observer-serving-receipt-current",
+        );
         let receipt = NativeRecoveredServingReceipt { native, record };
         receipt.require_current(self)?;
+        #[cfg(test)]
+        crate::distribution_range_recovery::NativeProbeTraceSpan::finish(probe_receipt);
+        #[cfg(test)]
+        crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(receipt_trace);
         Ok(receipt)
     }
     /// Caller retains the actual owned Prepared pin/freeze throughout both
@@ -415,16 +626,57 @@ impl BicDb {
         quorum: NativeServingDecision<'_>,
         fresh: &RecoveryRoleAdmission,
     ) -> Result<NativeRecoveredServingReceipt> {
-        prepared.require_current_under_role(self, store, fresh)?;
+        let receipt = self.with_native_completion_read_scope(prepared, store, fresh, |scope| {
+            self.persist_native_serving_in_completion_scope(scope, &quorum)
+        })?;
         quorum.require_recipient_role(fresh)?;
-        quorum.require_local_prepared(prepared, self, store, fresh)?;
-        if !matches!(fresh.purpose(), MetadataRecoveryRolePurpose::NormalRecovery) {
-            return Err(invalid(
-                "same-voter recovery cannot activate a handoff configuration",
-            ));
+        Ok(receipt)
+    }
+    fn persist_native_serving_in_completion_scope(
+        &self,
+        scope: &NativeCompletionReadScope<'_>,
+        quorum: &NativeServingDecision<'_>,
+    ) -> Result<NativeRecoveredServingReceipt> {
+        let prepared = scope.prepared();
+        let store = scope.store();
+        let fresh = scope.role();
+        scope.require_identity(prepared, store, fresh)?;
+        #[cfg(test)]
+        let mut preflight_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-native-preflight",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
+        // require_local_prepared below is a strict superset: it checks THIS
+        // Prepared under THIS fresh role/Store/DB and additionally matches the
+        // sealed quorum's exact point. Retain pure scope/lifetime preflight;
+        // do not repeat the identical deep physical check in this borrow.
+        prepared.scope().require_role(fresh)?;
+        quorum.require_recipient_role(fresh)?;
+        quorum.require_local_prepared_in_scope(scope)?;
+        let joint_fact = match fresh.purpose() {
+            MetadataRecoveryRolePurpose::NormalRecovery => None,
+            MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => {
+                Some(store.require_current_joint_domain_in_completion_scope(scope)?)
+            }
+            _ => return Err(invalid(
+                "recovered serving requires ordinary or actual protected current-joint recovery",
+            )),
+        };
+        #[cfg(test)]
+        {
+            preflight_trace.complete();
+            drop(preflight_trace);
         }
-        let journal = self.try_native_image_journal()?;
-        let lineage = self.current_native_range_source_lineage(fresh.current_range().id)?;
+        #[cfg(test)]
+        let mut journal_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-native-journal-actual-publication",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
+        let lineage = scope.lineage();
         lineage.require_native_serving_role_floor(fresh)?;
         let base = &lineage.base;
         let mut canonical_range = fresh.current_range().clone();
@@ -436,6 +688,9 @@ impl BicDb {
             birth_id: lineage.birth.birth_id,
             birth_sha256: lineage.birth.checksum_sha256.clone(),
             physical_base_sha256: base.checksum_sha256.clone(),
+            joint_decision_sha256: joint_fact
+                .as_ref()
+                .map(|fact| fact.binding().joint_decision_sha256.clone()),
             scope: prepared.scope().clone(),
             range: canonical_range,
             local_node_id: fresh.local_node_id().clone(),
@@ -449,6 +704,7 @@ impl BicDb {
         };
         record.checksum_sha256 = record.checksum()?;
         record.validate_current_grant(&lineage.birth, base)?;
+        self.require_recovered_serving_joint_binding(&lineage.birth, base, &record)?;
         if lineage.serving.as_ref().is_some_and(|old| {
             old.range.epoch > record.range.epoch
                 || old.activation_index > record.activation_index
@@ -495,7 +751,13 @@ impl BicDb {
             }
             let current_key = native_key(&key(record.range.id));
             let encoded = bounded_json(&record, MAX_NATIVE_RECEIPT_BYTES)?;
+            quorum.require_recipient_role(fresh)?;
+            // Shared invalidation is possible even under the journal. Repeat
+            // the existing domain-specific boundary immediately before WAL;
+            // CurrentJoint includes its saved original-writer/hook fence.
+            prepared.require_produced_completion_boundary(self, store, fresh)?;
             self.in_paged_transaction(|paged, xid| {
+                quorum.require_recipient_role(fresh)?;
                 for (history, bytes) in &append {
                     paged
                         .store()
@@ -510,17 +772,43 @@ impl BicDb {
             })?
             .ok_or_else(|| invalid("native serving publication has no page store"))?;
         }
-        drop(journal);
-        let native = self.native_recovery_admission(
-            fresh.cluster_id(),
-            fresh.bootstrap_id(),
-            fresh.local_node_id(),
-            fresh.local_member_incarnation(),
-        )?;
-        let receipt = NativeRecoveredServingReceipt { native, record };
-        receipt.require_current(self)?;
+        #[cfg(test)]
+        eprintln!("ACTUAL_RECOVERY_COMPLETE_NATIVE_WAL_RETURNED node={} nonce={} R={} H={} B={} serving_sha={} rewritten={} remaining_ms={}", fresh.local_node_id(), prepared.scope().recovery_nonce, record.activation_index, record.activation_history_sha256, record.local_visibility_at_activation, record.checksum_sha256, lineage.serving.as_ref()!=Some(&record), fresh.deadline().saturating_duration_since(std::time::Instant::now()).as_millis());
+        #[cfg(test)]
+        {
+            journal_trace.complete();
+            drop(journal_trace);
+        }
+        #[cfg(test)]
+        let mut readback_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-complete-native-readback-final-current",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
+        // Read the actual NEW current pointer AND immutable archive under the
+        // SAME journal. The original lineage is physical/native evidence only;
+        // its pre-WAL serving pointer is never relabelled as poststate.
+        let receipt = scope.observe_serving(&record.checksum_sha256)?;
+        if receipt.record != record {
+            return Err(invalid(
+                "actual native completion readback differs from published record",
+            ));
+        }
+        scope.require_unchanged_native_point()?;
         quorum.require_recipient_role(fresh)?;
-        prepared.require_current_under_role(self, store, fresh)?;
+        prepared.require_current_for_completion_scope(scope)?;
+        #[cfg(test)]
+        {
+            readback_trace.complete();
+            drop(readback_trace);
+        }
         Ok(receipt)
     }
 }
+
+#[cfg(test)]
+mod activated_anchor_tests;
+
+#[cfg(test)]
+mod serving_read_scope_tests;

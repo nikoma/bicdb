@@ -27,8 +27,47 @@ pub(super) fn finish_actual_current_image_resume(
     expected_h: &str,
     parent: &CancellationToken,
 ) -> serde_json::Value {
-    let source_id = node("n0");
+    finish_actual_current_image_resume_at_source(
+        node("n0"),
+        fixture,
+        providers,
+        runtimes,
+        initiator,
+        range,
+        scope,
+        proposal,
+        previously_unknown,
+        acknowledged,
+        acknowledged_sha,
+        target_uid,
+        expected_h,
+        parent,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+pub(super) fn finish_actual_current_image_resume_at_source(
+    source_id: ClusterNodeId,
+    fixture: &ActualNativeRf3Fixture,
+    providers: &BTreeMap<ClusterNodeId, Arc<MetadataReadProvider>>,
+    runtimes: &BTreeMap<ClusterNodeId, Arc<RangeRecoveryRuntime>>,
+    initiator: &MetadataReadParticipant,
+    range: &RangeDescriptor,
+    scope: &RecoveryFenceScope,
+    proposal: NativeCurrentImageProposalPointer,
+    previously_unknown: &crate::distribution_range_consensus::RangeWriteCommand,
+    acknowledged: &str,
+    acknowledged_sha: &str,
+    target_uid: Uuid,
+    expected_h: &str,
+    parent: &CancellationToken,
+) -> serde_json::Value {
     let target_id = node("n1");
+    let (expected_target_native, expected_target_raw) =
+        super::interrupted_normal_repair::expected_target_seed(fixture);
+    let seed: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(fixture.root.path().join("interrupted-before-close.json")).unwrap(),
+    )
+    .unwrap();
     let mut quorum = CurrentImageResumeQuorumRound::begin(
         fresh_role(providers, initiator, range, scope.recovery_nonce),
         target_id.clone(),
@@ -59,7 +98,10 @@ pub(super) fn finish_actual_current_image_resume(
     let installing = runtimes[&target_id]
         .acquire_current_image_installing_fence(initiator, &installing_request, parent)
         .unwrap();
-    assert_eq!(installing.evidence().progress.last_index, 0);
+    assert_eq!(
+        installing.evidence().progress.last_index,
+        expected_target_raw
+    );
     assert_eq!(
         installing
             .evidence()
@@ -68,7 +110,7 @@ pub(super) fn finish_actual_current_image_resume(
             .as_ref()
             .unwrap()
             .range_index,
-        0
+        expected_target_native
     );
     assert_eq!(
         installing.evidence().current_sparse_commands.get(&2),
@@ -157,6 +199,10 @@ pub(super) fn finish_actual_current_image_resume(
         )
         .unwrap();
     let target_service = &fixture.services[&target_id];
+    let previous_stage_sha = fixture.databases[&target_id]
+        .read()
+        .native_history_stage_state_commitment(range.id)
+        .unwrap();
     let install = target_service
         .lock()
         .begin_native_range_image_install(
@@ -168,6 +214,37 @@ pub(super) fn finish_actual_current_image_resume(
             parent,
         )
         .unwrap();
+    if source_id == node("n2") {
+        if let Some(previous_sha) = previous_stage_sha {
+            let archive = fixture.databases[&target_id]
+                .read()
+                .test_native_history_substitution_archive(range.id)
+                .unwrap();
+            assert_eq!(
+                archive["previous_header_sha256"], previous_sha,
+                "substitution must retain EXACT previous received/audited stage"
+            );
+            if expected_target_native == 1 {
+                assert_eq!(archive["previous_target_point"][0], 1);
+                assert_eq!(
+                    archive["previous_target_point"][1],
+                    seed["acknowledged_logical_history_sha256"]
+                );
+                assert_eq!(archive["previous_target_point_matched"], false);
+                assert_eq!(
+                    archive["previous_verified_entries"], 0,
+                    "old nonempty native ACK commitment was unmatched before cold P2 resume"
+                );
+            }
+            assert_eq!(archive["previous_history_sha256"], expected_h);
+            assert_eq!(archive["current_history_sha256"], expected_h);
+            assert!(
+                archive["previous_source_range_index"].as_u64().unwrap()
+                    <= archive["current_source_range_index"].as_u64().unwrap()
+            );
+            eprintln!("ACTUAL_CURRENT_QUORUM_HISTORY_SUBSTITUTION {archive}");
+        }
+    }
     drop(source);
     drop(role);
     let verified = materialize_actual_current_repair_image(
@@ -189,6 +266,12 @@ pub(super) fn finish_actual_current_image_resume(
     assert_eq!(verified.base().range_index(), 2);
     assert_eq!(verified.base().logical_history_sha256(), expected_h);
     let target_b = verified.base().target_snapshot_bound().get();
+    if expected_target_native == 1 {
+        assert!(
+            target_b > 2,
+            "actual target delete/import sequences must remain distinct from source/rangeR2"
+        );
+    }
     assert_ne!(
         target_b, 2,
         "actual local MVCC bound must not be replaced with rangeR2"

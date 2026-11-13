@@ -22,6 +22,25 @@ pub(crate) struct KnownNativeRecoveryPrefix {
     catalog: RecoveryLocalHistoricalApplyObservation,
 }
 impl KnownNativeRecoveryPrefix {
+    pub(crate) fn require_completed_decision_link(
+        &self,
+        admission: &RecoveryApplyAdmission,
+    ) -> Result<()> {
+        if admission.completed_decision().is_none() {
+            return Ok(());
+        }
+        if self.catalog.command_id() != admission.command().command_id
+            || self.catalog.command_sha256() != admission.command().checksum_sha256
+            || self.catalog.command_index() != admission.command().index
+            || !self.catalog.scope().same_session(admission.scope())
+            || self.catalog.role_context_id() != admission.context_id()
+        {
+            return Err(invalid(
+                "completed certificate has another actual Known-prefix command/session binding",
+            ));
+        }
+        require_completed_native_history_link(admission, &self.lineage)
+    }
     pub(crate) fn cluster_id(&self) -> &ClusterId {
         self.lineage.cluster_id()
     }
@@ -88,7 +107,47 @@ fn require_current_historical_apply(
     Ok(observation)
 }
 
+fn require_completed_native_history_link(
+    admission: &RecoveryApplyAdmission,
+    lineage: &SourceRangeImageLineage,
+) -> Result<()> {
+    let Some(completed) = admission.completed_decision() else {
+        return Ok(());
+    };
+    completed.require_live()?;
+    let command = admission.command();
+    if lineage.logical_genesis_sha256() != completed.logical_genesis_sha256() {
+        return Err(invalid(
+            "actual target genesis differs from completed decision quorum",
+        ));
+    }
+    if lineage.range_index().checked_add(1) == Some(command.index) {
+        let exact = history::NativeLogicalHistoryEntryV1::applied(
+            command.range_id,
+            command.index,
+            lineage.logical_history_sha256(),
+            &command.checksum_sha256,
+        )?;
+        if exact.commitment_sha256 != completed.logical_history_sha256() {
+            return Err(invalid(
+                "actual target predecessor/command ancestry contradicts completed decision quorum",
+            ));
+        }
+    } else if lineage.range_index() != command.index
+        || lineage.logical_history_sha256() != completed.logical_history_sha256()
+    {
+        return Err(invalid("completed materialization requires exact actual predecessor or already-materialized point"));
+    }
+    Ok(())
+}
 impl BicDb {
+    fn require_completed_native_history_point(
+        &self,
+        admission: &RecoveryApplyAdmission,
+        lineage: &SourceRangeImageLineage,
+    ) -> Result<()> {
+        require_completed_native_history_link(admission, lineage)
+    }
     /// No network, drain or global sequence wait occurs under these borrowed
     /// guards. Runtime acquires/drains the same-session freeze beforehand.
     #[allow(clippy::too_many_arguments)]
@@ -167,6 +226,7 @@ impl BicDb {
                 ));
             }
         }
+        self.require_completed_native_history_point(admission, &lineage)?;
         catalog.require_current(store, self, native, role, admission)?;
         Ok(KnownNativeRecoveryPrefix {
             database_incarnation: self.incarnation.clone(),
@@ -189,6 +249,8 @@ pub(super) struct RecoveryNativeAttemptBinding {
     recovery_nonce: Uuid,
     configuration_sha256: String,
     metadata_context_id: Uuid,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    completed_decision_sha256: Option<String>,
 }
 impl RecoveryNativeAttemptBinding {
     pub(super) fn validate_prefix(
@@ -197,12 +259,35 @@ impl RecoveryNativeAttemptBinding {
         materialized: &MaterializedNativeCommand,
         evidence: &NativeRangeCertificateEvidence,
     ) -> Result<()> {
+        let actual_evidence = match evidence {
+            NativeRangeCertificateEvidence::HistoricalCurrentCertificateQuorum {
+                recovery_nonce,
+                configuration_sha256,
+                metadata_context_id,
+                ..
+            } => {
+                self.completed_decision_sha256.is_none()
+                    && *recovery_nonce == self.recovery_nonce
+                    && configuration_sha256 == &self.configuration_sha256
+                    && *metadata_context_id == self.metadata_context_id
+            }
+            NativeRangeCertificateEvidence::CompletedDecisionMaterializationQuorum {
+                recovery_nonce,
+                configuration_sha256,
+                metadata_context_id,
+                completed_decision_sha256,
+                ..
+            } => {
+                self.completed_decision_sha256.as_ref() == Some(completed_decision_sha256)
+                    && *recovery_nonce == self.recovery_nonce
+                    && configuration_sha256 == &self.configuration_sha256
+                    && *metadata_context_id == self.metadata_context_id
+            }
+            _ => false,
+        };
         if self.command_sha256 != command_sha256
             || self.local_database_incarnation != materialized.database_incarnation
-            || !matches!(evidence,NativeRangeCertificateEvidence::HistoricalCurrentCertificateQuorum {
-                recovery_nonce,configuration_sha256,metadata_context_id,..}
-                if *recovery_nonce==self.recovery_nonce && *configuration_sha256==self.configuration_sha256
-                    && *metadata_context_id==self.metadata_context_id)
+            || !actual_evidence
         {
             return Err(invalid(
                 "native recovered prefix actual attempt/certificate/WAL provenance differs",
@@ -220,6 +305,10 @@ impl RecoveryNativeAttemptBinding {
             || self.local_database_incarnation.is_empty()
             || self.local_database_incarnation.len() > 128
             || self.command_sha256 != pending.command_checksum_sha256
+            || self
+                .completed_decision_sha256
+                .as_ref()
+                .is_some_and(|h| h.len() != 64 || !h.bytes().all(|b| b.is_ascii_hexdigit()))
             || self.configuration_sha256.len() != 64
             || self
                 .previous_pending_sha256
@@ -253,6 +342,7 @@ impl KnownNativeRecoveryPrefix {
         )?;
         self.catalog
             .require_current(store, database, native, role, admission)?;
+        database.require_completed_native_history_point(admission, &self.lineage)?;
         database.validate_source_range_image_lineage_contract(
             &self.lineage,
             admission.command().range_id,
@@ -305,6 +395,7 @@ impl BicDb {
         if !matches!(
             certificate.evidence(),
             NativeRangeCertificateEvidence::HistoricalCurrentCertificateQuorum { .. }
+                | NativeRangeCertificateEvidence::CompletedDecisionMaterializationQuorum { .. }
         ) || intent.command_id() != command.command_id
             || intent.command_checksum_sha256() != command.checksum_sha256
             || intent.range_index()
@@ -317,6 +408,14 @@ impl BicDb {
             return Err(invalid(
                 "native recovery intent/certificate differs from exact next command",
             ));
+        }
+        // Persist the sticky root-level old-reader fence BEFORE any new
+        // pending/attempt/WAL receipt, even if later ordinary R4 hides this
+        // completed-decision kind from the current prefix. No portable flag.
+        if admission.completed_decision().is_some() {
+            crate::format::enable_native_completed_decision_materialization(&self.path)?;
+            admission.require_live_request()?;
+            known.require_current(self, store, native, role, admission, frozen, controlled)?;
         }
         let previous_attempt = known
             .pending
@@ -356,6 +455,10 @@ impl BicDb {
                 recovery_nonce: admission.recovery_nonce(),
                 configuration_sha256: admission.scope().configuration_sha256.clone(),
                 metadata_context_id: admission.context_id(),
+                completed_decision_sha256: admission
+                    .completed_decision()
+                    .map(|p| p.decision_sha256())
+                    .transpose()?,
             }),
             checksum_sha256: String::new(),
         };
@@ -481,6 +584,7 @@ impl NativeRecoveryAppliedReceipt {
                 "actual historical native receipt scope/open/command changed",
             ));
         }
+        database.require_completed_native_history_point(admission, &self.lineage)?;
         database.validate_source_range_image_lineage(
             &self.lineage,
             command.range_id,

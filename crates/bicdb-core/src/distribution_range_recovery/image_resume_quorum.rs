@@ -168,6 +168,9 @@ pub(crate) struct FreshCurrentImageResumeAuthority {
     votes: BTreeMap<ClusterNodeId, CurrentImageResumeVote>,
 }
 impl FreshCurrentImageResumeAuthority {
+    pub(crate) fn history_coverage_cancellation(&self) -> CancellationToken {
+        self.cancellation.child()
+    }
     pub(crate) fn require_live(&self) -> Result<()> {
         self.cancellation.check()?;
         self.role.require_live_request()

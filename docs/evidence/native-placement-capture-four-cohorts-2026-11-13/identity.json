@@ -1,0 +1,113 @@
+{
+  "751": {
+    "source": "751fc28f45c849e0bdb9085744e123409cb0b580",
+    "run": 43354081271,
+    "workflow": "success",
+    "artifact": 14004684180,
+    "zip_sha256": "c7408c407847b886a8f83d230c5f8f220d7fb2d50482f78b860b27246ad7ccd3",
+    "counts": [
+      10,
+      0,
+      0,
+      984,
+      16.89
+    ],
+    "tests": {
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_durable_invalidation_is_not_unknown_absence": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_receiver_stop_refused": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_foreign_database_refused": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_sink_fsync_then_original_cancel_retains_refusal": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_sink_io_unknown_exact_live_refsync": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_captured_original_caller_cancel_refused": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_store_slot_restore_refused": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_generic_ingress_stays_strict": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_baseline": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_original_empty_hook_aba_refused": "ok"
+    },
+    "core_job": 131651839472,
+    "zip_bytes": 2446828,
+    "zip_entries": 1043,
+    "verified_files": 960,
+    "verified_bytes": 29152656
+  },
+  "80a": {
+    "source": "80aabf0fa5f25d8da652825e1c7927d67ce77934",
+    "run": 43356111432,
+    "workflow": "failure",
+    "artifact": 14006341679,
+    "zip_sha256": "6bdebf5c8f0f580200ed7eee5d78ba065f2a02cf0bbd07ee9453bfc7a376cc00",
+    "counts": [
+      0,
+      2,
+      0,
+      994,
+      4.56
+    ],
+    "tests": {
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::placement_cases::native_registered_fifth_placement_actual_metadata_leader_can_initiate": "FAILED",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::placement_cases::native_registered_fifth_placement_actual_planner_retiree_is_not_initiator": "FAILED"
+    },
+    "core_job": 131658467851,
+    "zip_bytes": 435073,
+    "zip_entries": 209,
+    "verified_files": 192,
+    "verified_bytes": 5821300
+  },
+  "5de": {
+    "source": "5de01e7e8916f3da9ea377484755ef12662f22ca",
+    "run": 43357622068,
+    "workflow": "success",
+    "artifact": 14006394476,
+    "zip_sha256": "e94c09e4c187f99469dcb67ec0f5ea1541cd6138b847123ca8c89aa497475268",
+    "counts": [
+      13,
+      0,
+      0,
+      984,
+      30.34
+    ],
+    "tests": {
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_durable_invalidation_is_not_unknown_absence": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_nonleader_rpc_initiator_refused": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_foreign_database_refused": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_receiver_stop_refused": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_sink_fsync_then_original_cancel_retains_refusal": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_sink_io_unknown_exact_live_refsync": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_store_slot_restore_refused": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_captured_original_caller_cancel_refused": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_generic_ingress_stays_strict": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::placement_cases::native_registered_fifth_placement_actual_metadata_leader_can_initiate": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_baseline": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_original_empty_hook_aba_refused": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::placement_cases::native_registered_fifth_placement_actual_planner_retiree_is_not_initiator": "ok"
+    },
+    "core_job": 131663347398,
+    "zip_bytes": 3109287,
+    "zip_entries": 1352,
+    "verified_files": 1248,
+    "verified_bytes": 37891198
+  },
+  "212": {
+    "source": "21259881268b1ae84b0c87b2211d519eaaf06703",
+    "run": 43357200474,
+    "workflow": "success",
+    "artifact": 14006816760,
+    "zip_sha256": "7db80961e77a4300e5a63ca1557790e9c9b3fd78c5b812302a8d176cfa3bca52",
+    "counts": [
+      2,
+      0,
+      0,
+      994,
+      2.61
+    ],
+    "tests": {
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::native_joint_actual_old_capture_initial_request_cancel_at_wait_refused": "ok",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::native_joint_actual_old_capture_finished_publish_cancel_does_not_renew_or_end_session": "ok"
+    },
+    "core_job": 131661983398,
+    "zip_bytes": 42178,
+    "zip_entries": 4,
+    "verified_files": 0,
+    "verified_bytes": 0
+  }
+}

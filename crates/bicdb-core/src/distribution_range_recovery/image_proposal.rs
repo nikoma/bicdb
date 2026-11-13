@@ -5,6 +5,7 @@ use super::*;
 use crate::db::{LocalNativeRecoveryReady, NativeRangePrefixObservation};
 use crate::BicDb;
 use serde::{Deserialize, Serialize};
+use sha2::Digest;
 
 const VERSION: u32 = 1;
 const MAX_AUDIT_BYTES: usize = 8 * 1024 * 1024;
@@ -22,6 +23,11 @@ fn semantic(mut range: RangeDescriptor) -> RangeDescriptor {
 #[serde(deny_unknown_fields)]
 pub(crate) enum HistoricalCurrentImageVoterKind {
     Ordinary,
+    InstallingReplacement {
+        proposal: crate::distribution_range_consensus::NativeCurrentImageProposalPointer,
+        intent_sha256: String,
+        original_acceptance_sha256: String,
+    },
     Installing {
         proposal: crate::distribution_range_consensus::NativeCurrentImageProposalPointer,
         intent_sha256: String,
@@ -139,6 +145,20 @@ impl HistoricalCurrentImageAcceptanceV1 {
                         "ordinary audit cannot claim Installing preimage points",
                     ))
                 }
+                HistoricalCurrentImageVoterKind::InstallingReplacement {
+                    proposal,
+                    intent_sha256,
+                    original_acceptance_sha256,
+                } => {
+                    proposal.validate()?;
+                    if id != &self.target_id
+                        || !digest(intent_sha256)
+                        || !digest(original_acceptance_sha256)
+                        || vote.progress.current_epoch > self.range.epoch
+                    {
+                        return Err(invalid("invalid replacement Installing historical audit"));
+                    }
+                }
                 HistoricalCurrentImageVoterKind::Installing {
                     proposal,
                     intent_sha256,
@@ -186,7 +206,11 @@ impl HistoricalCurrentImageAcceptanceV1 {
                 || vote.native_database_incarnation.len() > 128
                 || vote.progress.node_id != *id
                 || vote.progress.range_id != self.range.id
-                || vote.progress.current_epoch != self.range.epoch
+                || (vote.progress.current_epoch != self.range.epoch
+                    && !matches!(
+                        vote.kind,
+                        HistoricalCurrentImageVoterKind::InstallingReplacement { .. }
+                    ))
                 || vote.progress.last_index > self.source_range_index
                 || vote.native.range_id != self.range.id
             {
@@ -448,6 +472,154 @@ impl VerifiedCurrentImageResumeHistory {
                                     format_version: if sparse.is_some() { 2 } else { 1 },
                                     node_id: id.clone(),
                                     range_id: evidence.scope.range_id,
+                                    last_index: evidence.progress.last_index,
+                                    compacted_through: evidence.progress.compacted_through,
+                                    native_point,
+                                    pending_native: pending,
+                                    irreversible_command_sha256: evidence.irreversible_union()?,
+                                    sparse_committed_command_sha256: sparse,
+                                },
+                            }
+                        }
+                    };
+                    Ok((id.clone(), projected))
+                })
+                .collect::<Result<BTreeMap<_, _>>>()?,
+        };
+
+        record.validate()?;
+        self.require_current(source, db, store)?;
+        Ok(HistoricalCurrentImageSourceAcceptance { record })
+    }
+}
+
+impl VerifiedCurrentImageReplacementHistory {
+    pub(crate) fn historical_current_image_acceptance(
+        &self,
+        source: &LocalNativeRecoveryReady,
+        db: &BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<HistoricalCurrentImageSourceAcceptance> {
+        self.require_current(source, db, store)?;
+        let authority = self.authority();
+        let role = authority.role();
+        let native = source.native_admission();
+        native.require_current(db)?;
+        let record = HistoricalCurrentImageAcceptanceV1 {
+            format_version: VERSION,
+            scope: authority.scope().clone(),
+            range: semantic(role.current_range().clone()),
+            members: authority.member_credentials().clone(),
+            source_id: source.role().local_node_id().clone(),
+            source_member_incarnation: source.role().local_member_incarnation(),
+            source_birth_id: native.birth_id(),
+            source_birth_sha256: native.birth_sha256().to_string(),
+            source_database_incarnation: native.database_incarnation().to_string(),
+            target_id: authority.target().clone(),
+            source_range_index: source.range_index(),
+            source_native_receipt_sha256: source.native_receipt_sha256().to_string(),
+            source_native_visibility_db_sequence: source.visibility().get(),
+            logical_genesis_sha256: source.logical_genesis_sha256().to_string(),
+            logical_history_sha256: source.logical_history_sha256().to_string(),
+            schema_sha256: role
+                .expected_schema_sha256()
+                .ok_or_else(|| invalid("historical source acceptance lacks schema"))?
+                .to_string(),
+            restore_activation: role.restore_activation().cloned(),
+            metadata_context_id: role.context_id(),
+            metadata_term: role.metadata_term(),
+            metadata_read_index: role.metadata_read_index(),
+            voters: authority
+                .votes()
+                .iter()
+                .map(|(id, vote)| {
+                    let projected = match vote {
+                        InstallingCommittedVote::Ordinary(observation) => {
+                            let peer = observation.authenticated_peer();
+                            HistoricalCurrentImageVoterAudit {
+                                kind: HistoricalCurrentImageVoterKind::Ordinary,
+                                additional_native_points: vec![],
+                                member_incarnation: observation.member_incarnation(),
+                                peer_certificate_sha256: peer
+                                    .certificate_sha256()
+                                    .map(str::to_string),
+                                peer_plaintext_loopback: peer.plaintext_loopback(),
+                                store_open_id: observation.store_open_id(),
+                                native_database_incarnation: observation
+                                    .native_database_incarnation()
+                                    .to_string(),
+                                progress: observation.progress().clone(),
+                                native: observation.native().clone(),
+                                image_history: observation.image_history().clone(),
+                            }
+                        }
+                        InstallingCommittedVote::Installing(observation) => {
+                            let evidence = observation.evidence();
+                            let peer = observation.authenticated_peer();
+                            let mut points = evidence
+                                .preimage
+                                .native_point
+                                .iter()
+                                .chain(evidence.native_point.iter())
+                                .cloned()
+                                .collect::<Vec<_>>();
+                            points.sort_by_key(|p| p.range_index);
+                            let native_point = points.pop();
+                            let pending = evidence.pending.clone().or_else(|| {
+                                match (
+                                    evidence.preimage.pending_index,
+                                    evidence.preimage.pending_command_sha256.clone(),
+                                ) {
+                                    (Some(index), Some(command_checksum_sha256)) => {
+                                        Some(RecoveryNativePendingHistoryV1 {
+                                            index,
+                                            command_checksum_sha256,
+                                            materialized: evidence
+                                                .preimage
+                                                .materialized_pending_index
+                                                == Some(index),
+                                        })
+                                    }
+                                    _ => None,
+                                }
+                            });
+                            // Every retained unordered obligation is explicit;
+                            // no old raw count stands in for a native prefix.
+                            let complete = evidence.irreversible_union()?;
+                            let sparse = Some(
+                                complete
+                                    .iter()
+                                    .filter(|(i, _)| **i > evidence.progress.last_index)
+                                    .map(|(i, h)| (*i, h.clone()))
+                                    .collect::<BTreeMap<_, _>>(),
+                            );
+                            HistoricalCurrentImageVoterAudit {
+                                kind: HistoricalCurrentImageVoterKind::InstallingReplacement {
+                                    proposal: evidence.proposal.clone(),
+                                    intent_sha256: evidence.intent_sha256.clone(),
+                                    original_acceptance_sha256: hex::encode(sha2::Sha256::digest(
+                                        crate::distribution_range_image::bounded_json(
+                                            &evidence.historical_source,
+                                            MAX_AUDIT_BYTES,
+                                        )?,
+                                    )),
+                                },
+                                additional_native_points: points,
+                                member_incarnation: evidence.member_incarnation,
+                                peer_certificate_sha256: peer
+                                    .certificate_sha256()
+                                    .map(str::to_string),
+                                peer_plaintext_loopback: peer.plaintext_loopback(),
+                                store_open_id: evidence.store_open_id,
+                                native_database_incarnation: evidence
+                                    .native_database_incarnation
+                                    .clone(),
+                                progress: evidence.progress.clone(),
+                                native: evidence.native.clone(),
+                                image_history: RecoveryImageHistoryObligationsV1 {
+                                    format_version: if sparse.is_some() { 2 } else { 1 },
+                                    node_id: id.clone(),
+                                    range_id: evidence.current_scope.range_id,
                                     last_index: evidence.progress.last_index,
                                     compacted_through: evidence.progress.compacted_through,
                                     native_point,

@@ -7,6 +7,7 @@ use super::*;
 /// quorum proof nor a replacement for validating the borrowed database.
 #[derive(Clone, Debug)]
 pub(crate) struct ClusterServiceOpenGuard {
+    metadata_ingress: Arc<super::metadata_ingress::NativeMetadataIngressRegistry>,
     open: std::sync::Weak<()>,
     health: Arc<bicdb_page::DurabilityHealth>,
     database_root: PathBuf,
@@ -20,6 +21,7 @@ pub(crate) struct ClusterServiceOpenGuard {
 impl ClusterServiceOpenGuard {
     fn capture(database: &BicDb) -> Result<Self> {
         Ok(Self {
+            metadata_ingress: Arc::default(),
             open: database.native_metadata_owner_open_lifetime(),
             health: database.native_metadata_owner_health()?,
             database_root: database.data_path().canonicalize()?,
@@ -32,6 +34,23 @@ impl ClusterServiceOpenGuard {
             return Err(data_error("cluster service actual database open ended"));
         }
         self.health.check().map_err(crate::error::durability_error)
+    }
+    /// Bound to this actual service/open, the actual attached metadata Arc and
+    /// current range Store slot. No topology declaration can register ingress.
+    pub(crate) fn register_metadata_ingress(
+        &self,
+        metadata: &Arc<Mutex<crate::distribution_consensus::MetadataConsensusStore>>,
+        slot: super::RangeWriteServiceSlotGuard,
+    ) -> Result<Arc<super::NativeMetadataIngressRegistration>> {
+        self.require_live()?;
+        self.metadata_ingress.register(metadata, slot)
+    }
+    pub(crate) fn has_live_metadata_ingress(
+        &self,
+        metadata: &Arc<Mutex<crate::distribution_consensus::MetadataConsensusStore>>,
+    ) -> Result<bool> {
+        self.require_live()?;
+        self.metadata_ingress.has_live_for(metadata)
     }
     pub(crate) fn require_database(&self, database: &BicDb) -> Result<()> {
         self.require_live()?;
@@ -214,6 +233,7 @@ impl ClusterDataNodeService {
     }
     pub(crate) fn require_native_catalog_database(&self, database: &BicDb) -> Result<()> {
         self.storage_policy.require_database(database)?;
+        self.range_writes.require_actual_abort_catalogue(database)?;
         self.range_writes
             .require_native_catalog_durability(database.data_path())
     }

@@ -346,6 +346,18 @@ impl BicDb {
     }
 
     pub(crate) fn rollback_transaction(&self, tx: &mut Transaction) -> Result<()> {
+        self.rollback_transaction_without_outcome_receipt(tx)?;
+        tx.receipt_aborted();
+        Ok(())
+    }
+
+    // Actual lock/state cleanup, with outcome publication left to the caller.
+    // Native prepare-only rejection cannot publish Aborted until its protected
+    // no-effect intent has completed the real durability boundary.
+    pub(super) fn rollback_transaction_without_outcome_receipt(
+        &self,
+        tx: &mut Transaction,
+    ) -> Result<()> {
         if tx.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
@@ -355,7 +367,6 @@ impl BicDb {
         let locked_keys = tx.locked_keys.get_mut().take_all();
         release_owned_write_locks(&self.write_locks, tx.id, &locked_keys);
         tx.state = TxState::Aborted;
-        tx.receipt_aborted();
         Ok(())
     }
 

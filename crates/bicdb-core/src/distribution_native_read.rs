@@ -13,6 +13,11 @@ use uuid::Uuid;
 mod event_dispatch;
 #[cfg(feature = "tls-replication")]
 mod event_wire;
+
+// STRONG_TRACE_BEGIN
+#[cfg(test)]
+pub(crate) mod trace;
+// STRONG_TRACE_END
 mod quorum;
 mod rpc;
 #[cfg(feature = "tls-replication")]
@@ -24,7 +29,9 @@ pub(crate) use event_wire::{
     NativeEventGetReply, NativeEventGetRequest, NativeEventGetResult,
     NativeEventGetUnavailableCode, NativeEventReadMode, NativeEventRoute, NativeEventValue,
 };
-pub(crate) use quorum::{NativeReadQuorumCandidate, NativeReadQuorumRound};
+pub(crate) use quorum::{
+    NativeInitialDataReadQuorum, NativeReadQuorumCandidate, NativeReadQuorumRound,
+};
 pub(crate) use rpc::{
     require_peer, NativeRangeReadObservation, NativeRangeReadProbeReply,
     NativeRangeReadProbeRequest,
@@ -201,6 +208,9 @@ impl LocalNativeRangeReadObservation {
     }
     pub(crate) fn local_visibility(&self) -> &crate::db::NativeReadLocalDbSequence {
         self.physical.local_visibility()
+    }
+    pub(crate) fn cancellation(&self) -> &CancellationToken {
+        &self.cancellation
     }
     pub(crate) fn require_lifetime(&self) -> Result<()> {
         self.cancellation.check()?;

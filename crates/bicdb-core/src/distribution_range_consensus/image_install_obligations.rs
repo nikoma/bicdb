@@ -83,6 +83,43 @@ impl TargetImageCatalogHistoryObligations {
         &self.irrevocable_commands
     }
 
+    /// Exact protected activation is the ONLY allowed epoch-only transition.
+    /// All retained command states, watermarks and full provenance remain bound.
+    pub(super) fn require_after_native_joint_activation(
+        &self,
+        store: &RangeWriteStore,
+        scope: &crate::db::NativeJointBridgeReadScope<'_>,
+        fact: &NativeJointCatalogueActivationFact,
+    ) -> Result<()> {
+        fact.require_current_with_scope(scope, store)?;
+        let native = fact.native();
+        let actual = store.progress(self.range_id);
+        if self.store_open_id != fact.store_open_id()
+            || self.range_id != native.data().old_range().id
+            || self.range_log_sha256 != native.preparation_catalogue_sha256()
+            || actual.current_epoch != native.data().activation_range().epoch
+            || self.current_epoch > actual.current_epoch
+        {
+            return Err(range_write_error(
+                "joint catalogue epoch transition has no exact protected preparation/activation",
+            ));
+        }
+        let normalized = store.observe_image_obligations_at_original_joint_epoch(
+            self.range_id,
+            Some(self.current_epoch),
+        )?;
+        if normalized.store_open_id != self.store_open_id
+            || normalized.cluster_id != self.cluster_id
+            || normalized.node_id != self.node_id
+            || normalized.root != self.root
+            || normalized.range_log_sha256 != self.range_log_sha256
+        {
+            return Err(range_write_error(
+                "joint activation changed catalogue beyond its exact protected epoch transition",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn require_current(&self, store: &RangeWriteStore) -> Result<()> {
         let current = store.image_install_catalog_history_obligations(self.range_id)?;
         if current.store_open_id != self.store_open_id
@@ -106,8 +143,18 @@ impl RangeWriteStore {
         &self,
         range_id: RangeId,
     ) -> Result<TargetImageCatalogHistoryObligations> {
+        self.observe_image_obligations_at_original_joint_epoch(range_id, None)
+    }
+    fn observe_image_obligations_at_original_joint_epoch(
+        &self,
+        range_id: RangeId,
+        protected_original_epoch: Option<u64>,
+    ) -> Result<TargetImageCatalogHistoryObligations> {
         self.require_durable_recovery_catalog()?;
-        let progress = self.progress(range_id);
+        let mut progress = self.progress(range_id);
+        if let Some(epoch) = protected_original_epoch {
+            progress.current_epoch = epoch;
+        }
         let mut observations = Vec::new();
         let mut irrevocable_commands = BTreeMap::new();
         if let Some(log) = self.catalog.ranges.get(&range_id) {
@@ -147,9 +194,15 @@ impl RangeWriteStore {
                 insert_irrevocable(&mut irrevocable_commands, *index, &marker.command_sha256)?;
             }
         }
+        for (index, checksum) in self.archived_joint_certifications(range_id)? {
+            insert_irrevocable(&mut irrevocable_commands, index, &checksum)?;
+        }
         // This validates every complete sparse record and its actual ordered
         // history conflicts before exporting its checksum as an obligation.
         for (index, checksum) in self.sparse_irreversible_commands(range_id)? {
+            insert_irrevocable(&mut irrevocable_commands, index, &checksum)?;
+        }
+        for (index, checksum) in self.installing_certification_obligations(range_id)? {
             insert_irrevocable(&mut irrevocable_commands, index, &checksum)?;
         }
         let sparse = self
@@ -205,6 +258,41 @@ impl RangeWriteStore {
                 },
                 &("bicdb-image-history-extended-v1", certifications, sparse),
             )?;
+        }
+        if let Some(current) = self
+            .catalog
+            .installing_committed_certifications
+            .as_ref()
+            .and_then(|m| m.get(&range_id))
+            .filter(|m| !m.is_empty())
+        {
+            digest.update(crate::distribution_range_image::bounded_json(
+                &("Installing-existing-committed-provenance-v1", current),
+                MAX_EXTENDED_OBSERVATION_BYTES,
+            )?);
+        }
+        if let Some(h) = self
+            .catalog
+            .installing_recovery_handovers
+            .as_ref()
+            .and_then(|m| m.get(&range_id))
+            .filter(|m| !m.is_empty())
+        {
+            digest.update(crate::distribution_range_image::bounded_json(
+                &("Installing-refusal-handover-history-v1", h),
+                MAX_EXTENDED_OBSERVATION_BYTES,
+            )?);
+        }
+        if let Some(joint) = self
+            .catalog
+            .current_joint_recoveries
+            .as_ref()
+            .and_then(|m| m.get(&range_id))
+        {
+            digest.update(crate::distribution_range_image::bounded_json(
+                &("current-joint-refusal-archive-v1", joint),
+                MAX_EXTENDED_OBSERVATION_BYTES,
+            )?);
         }
         let range_log_sha256 = hex::encode(digest.finalize());
         Ok(TargetImageCatalogHistoryObligations {

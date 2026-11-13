@@ -214,6 +214,14 @@ pub enum BicDbError {
         detail: String,
     },
 
+    /// Opt-in diagnostic persistence failed. This is not a database commit
+    /// identity. A possibly dispatched request must be reconciled independently.
+    #[error("cluster RPC evidence failure (may_have_dispatched={may_have_dispatched}): {detail}; observed dispatch is fenced")]
+    RpcEvidenceFailure {
+        may_have_dispatched: bool,
+        detail: String,
+    },
+
     /// An archiver (`archive` is `commit_log` or `page_log`) failed at
     /// `site`. The database stays writable: acknowledged commits never
     /// depend on the archive, and the local logs it would have released are

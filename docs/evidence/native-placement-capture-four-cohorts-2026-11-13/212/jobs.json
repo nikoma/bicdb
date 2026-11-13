@@ -1,0 +1,29 @@
+[
+  {
+    "label": "format",
+    "job": 131661959162,
+    "name": "Formatting",
+    "status": "completed",
+    "conclusion": "success",
+    "raw_bytes": 30054,
+    "raw_sha256": "3a8ab6e75dd5c71b535a208f9a82d4c63ef7a5cfda79f5a387605309e41d0d9d"
+  },
+  {
+    "label": "compile",
+    "job": 131661958748,
+    "name": "Community-only workspace compiles, tests included",
+    "status": "completed",
+    "conclusion": "success",
+    "raw_bytes": 2375402,
+    "raw_sha256": "d8c3e36916b81efcbd05598584c3d256776bd7aa937aa9817ff91809d600a75e"
+  },
+  {
+    "label": "core",
+    "job": 131661983398,
+    "name": "Focused Core library (native_joint_actual_old_capture_)",
+    "status": "completed",
+    "conclusion": "success",
+    "raw_bytes": 1632751,
+    "raw_sha256": "157762c82669f4ddc3cf46492e90bfa3364270ef0b8d1f2951b1348187646f13"
+  }
+]

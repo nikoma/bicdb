@@ -1,0 +1,9 @@
+{
+  "id": 43357200474,
+  "head_sha": "21259881268b1ae84b0c87b2211d519eaaf06703",
+  "head_branch": "qual/native-capture-wait-212598812-main492",
+  "status": "completed",
+  "conclusion": "success",
+  "event": "workflow_dispatch",
+  "html_url": "https://github.com/nikoma/bicdb/actions/runs/43357200474"
+}

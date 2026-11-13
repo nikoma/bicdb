@@ -1,0 +1,295 @@
+commit 80aabf0fa5f25d8da652825e1c7927d67ce77934
+Author:     nikoma <niko.manek@gmail.com>
+AuthorDate: Thu Nov 12 18:59:44 2026 -0800
+Commit:     nikoma <niko.manek@gmail.com>
+CommitDate: Thu Nov 12 18:59:44 2026 -0800
+
+    test: require registered fences for actual planner retirement and metadata leader
+
+diff --git a/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs b/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs
+index 7be30bc62..c2a7904ec 100644
+--- a/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs
++++ b/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs
+@@ -14,7 +14,9 @@ use std::collections::BTreeMap;
+ 
+ mod closed_fence_controls;
+ mod custody;
++mod placement_cases;
+ use closed_fence_controls::Case;
++use placement_cases::AssignmentMode;
+ 
+ fn budget(ms: u64) -> CancellationToken {
+     CancellationToken::uncancelable()
+@@ -175,6 +177,9 @@ fn native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_ba
+     run_registered_image_baseline(Case::Required);
+ }
+ fn run_registered_image_baseline(case: Case) {
++    run_registered_image_baseline_with_placement(case, AssignmentMode::OriginalLeader);
++}
++fn run_registered_image_baseline_with_placement(case: Case, assignment: AssignmentMode) {
+     let mut f = EnrollmentFixture::new();
+     let (factory, mut host) = f.factory("actual-registered-fifth-image-target");
+     assert!(factory.spec.initial_ranges.is_empty());
+@@ -296,6 +301,7 @@ fn run_registered_image_baseline(case: Case) {
+     // Keep the actual original guards outside catch_unwind too: diagnostic
+     // capture must not drop them on a partial setup/operation failure.
+     let mut original_writers = Vec::new();
++    let mut automatic_plan = None;
+     let mut ranges = promoted
+         .ranges
+         .values()
+@@ -325,7 +331,18 @@ fn run_registered_image_baseline(case: Case) {
+             .map(|control| control.test_retained_initial_data_writer_guard().unwrap())
+             .collect::<Vec<_>>();
+         let current = metadata[0].lock().committed_topology().clone();
+-        ranges = current.ranges.values().take(2).cloned().collect();
++        let selected = placement_cases::select(&current, &configs[0], assignment);
++        ranges = selected.0;
++        automatic_plan = selected.1;
++        if let Some(plan) = &automatic_plan {
++            evidence(&output.join("automatic-placement-plan.json"), &serde_json::json!({
++                "input_topology":current,"input_config":configs[0],"plan":plan,
++                "planner_now_ms":current.nodes.values().map(|n|n.last_heartbeat_ms).max().unwrap(),
++                "liveness_clock_is_fixture_topology_clock_not_physical_measurement":true,
++                "leader_transfers_not_applied_before_real_joint_proofs":true,
++                "test_only_consensus_proposal_adapter_not_automatic_controller":true
++            })).unwrap();
++        }
+         let gateway = crate::ClusterEventClient::new(&configs[0], current.clone())
+             .unwrap()
+             .with_request_timeout(Duration::from_secs(2))
+@@ -384,7 +401,10 @@ fn run_registered_image_baseline(case: Case) {
+             );
+         }
+         phase = "commit_two_data_learner_assignments";
+-        let pending = assign_two_ranges(&current, &ranges);
++        let pending = match &automatic_plan {
++            Some(plan) => placement_cases::pending(&current, &ranges, plan),
++            None => assign_two_ranges(&current, &ranges),
++        };
+         let entry = metadata[0]
+             .lock()
+             .propose_topology(pending.clone())
+@@ -472,8 +492,12 @@ fn run_registered_image_baseline(case: Case) {
+                 .find(|plan| plan.range_id == original.id)
+                 .unwrap();
+             let session = relocation.handoff_session.as_ref().unwrap();
+-            let actor = clients[(0..4).find(|i| node(*i) == original.leader).unwrap()]
+-                .local_metadata_read_participant();
++            let initiator_index = if assignment == AssignmentMode::MetadataLeader {
++                0
++            } else {
++                (0..4).find(|i| node(*i) == original.leader).unwrap()
++            };
++            let actor = clients[initiator_index].local_metadata_read_participant();
+             let business = Uuid::now_v7();
+             let challenge = Uuid::now_v7();
+             let purpose =
+@@ -493,11 +517,12 @@ fn run_registered_image_baseline(case: Case) {
+                 "logical_id":Uuid::now_v7(),"operation":"recovery_epoch_fence_observation","phase":"intent",
+                 "range":range.id,"range_epoch":range.epoch,"topology_generation":pending.generation,
+                 "actual_source":{"node_id":actor.node_id(),"incarnation":actor.member_incarnation(),
+-                    "certificate_sha256":actor.certificate_sha256(),"plaintext_loopback":actor.plaintext_loopback()},"source_address":pending.nodes[&range.leader].address,
++                    "certificate_sha256":actor.certificate_sha256(),"plaintext_loopback":actor.plaintext_loopback()},"source_address":pending.nodes[actor.node_id()].address,
++                "retiring_replica":relocation.source,"current_range_leader":range.leader,"assignment_mode":format!("{assignment:?}"),
+                 "actual_target":node(4),"target_address":pending.nodes[&node(4)].address,
+                 "business_id":business,"recipient_challenge":challenge,"purpose":purpose,
+                 "configured_parent_budget_ms":5000,"configured_request_budget_ms":4000,
+-                "configured_source_network":f.networks[(0..4).find(|i|node(*i)==range.leader).unwrap()],
++                "configured_source_network":f.networks[initiator_index],
+                 "configured_target_network":f.networks[4],"configuration":pending,
+                 "logical_ledger_not_raw_wire":true,"before":before,
+                 "rows_copied":false,"serving_granted":false,"outcome":"not_started"}));
+@@ -559,15 +584,14 @@ fn run_registered_image_baseline(case: Case) {
+             parent.check().unwrap();
+             role.require_live_request().unwrap();
+             let sent = Instant::now();
+-            let response = clients[(0..4).find(|i| node(*i) == range.leader).unwrap()]
+-                .recovery_epoch_fence_observation(
+-                    &node(4),
+-                    &RecoveryEpochFenceRequest {
+-                        scope: scope.clone(),
+-                        budget_ms: 4000,
+-                    },
+-                    &parent,
+-                );
++            let response = clients[initiator_index].recovery_epoch_fence_observation(
++                &node(4),
++                &RecoveryEpochFenceRequest {
++                    scope: scope.clone(),
++                    budget_ms: 4000,
++                },
++                &parent,
++            );
+             let elapsed = sent.elapsed();
+             let caller_live = parent.check();
+             let role_live = role.require_live_request();
+@@ -712,7 +736,7 @@ fn run_registered_image_baseline(case: Case) {
+             .unwrap_or_else(|| "non-string actual baseline panic".into())
+     });
+     let terminal = serde_json::json!({"source":std::env::var("BICDB_TEST_SOURCE_SHA").ok(),"package_version":env!("CARGO_PKG_VERSION"),
+-        "phase":phase,"required_baseline_succeeded":result.is_ok(),"reports":reports,"ack_ledger":ledger,
++        "phase":phase,"required_baseline_succeeded":result.is_ok(),"reports":reports,"ack_ledger":ledger,"assignment_mode":format!("{assignment:?}"),"actual_automatic_plan":automatic_plan,
+         "primary_error":primary_error,"existing_metadata_only_validator_refusal":metadata_only_refusal,
+         "original_root":f.root.path(),"factory_root":original_factory_path,
+         "initial_ranges":factory.spec.initial_ranges,"original_birth":original_birth,
+diff --git a/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/placement_cases.rs b/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/placement_cases.rs
+new file mode 100644
+index 000000000..31592abbf
+--- /dev/null
++++ b/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/placement_cases.rs
+@@ -0,0 +1,102 @@
++//! Required cases: actual planner retirement and actual metadata-leader caller.
++//! A topology candidate is data, never image/quorum/serving authority.
++use super::*;
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub(super) enum AssignmentMode {
++    OriginalLeader,
++    AutomaticReplicaPlan,
++    MetadataLeader,
++}
++pub(super) fn select(
++    topology: &ClusterTopology,
++    config: &crate::DistributionConfig,
++    mode: AssignmentMode,
++) -> (Vec<crate::RangeDescriptor>, Option<crate::RebalancePlan>) {
++    if mode != AssignmentMode::AutomaticReplicaPlan {
++        return (topology.ranges.values().take(2).cloned().collect(), None);
++    }
++    let options = crate::RebalanceOptions {
++        max_replica_moves: 2,
++        ..Default::default()
++    };
++    // Use the actual fixture's committed membership clock. These are placement
++    // hints; real TLS/role/MStore/native admission still gates each mutation.
++    let now = topology
++        .nodes
++        .values()
++        .map(|n| n.last_heartbeat_ms)
++        .max()
++        .unwrap();
++    let plan = crate::build_rebalance_plan(topology, config, &options, now).unwrap();
++    assert_eq!(plan.topology_generation, topology.generation);
++    assert_eq!(
++        plan.replica_moves.len(),
++        2,
++        "actual planner did not offer two moves: {plan:?}"
++    );
++    assert!(plan.unplaced_ranges.is_empty());
++    let ranges = plan
++        .replica_moves
++        .iter()
++        .map(|movement| {
++            assert_eq!(
++                movement.target,
++                node(4),
++                "do not rewrite actual planner targets"
++            );
++            assert_eq!(movement.reason, crate::ReplicaMoveReason::LoadBalance);
++            let range = topology.range_by_id(movement.range_id).unwrap();
++            assert_eq!(movement.expected_epoch, range.epoch);
++            assert!(movement.source.as_ref().is_some_and(|s| range
++                .replicas
++                .iter()
++                .any(|r| &r.node_id == s && r.role == RangeReplicaRole::Voter)));
++            range.clone()
++        })
++        .collect::<Vec<_>>();
++    assert!(
++        plan.replica_moves
++            .iter()
++            .zip(&ranges)
++            .any(|(movement, range)| movement.source.as_ref() != Some(&range.leader)),
++        "required nonleader-retirement condition not reached; do not substitute a leader-only plan"
++    );
++    (ranges, Some(plan))
++}
++pub(super) fn pending(
++    current: &ClusterTopology,
++    ranges: &[crate::RangeDescriptor],
++    plan: &crate::RebalancePlan,
++) -> ClusterTopology {
++    assert_eq!(plan.topology_generation, current.generation);
++    let mut candidate = assign_two_ranges(current, ranges);
++    // Reuse only the fixture's Pending allocator. Preserve the real planner's
++    // selected retirement/target/reason unchanged. Actual native consensus
++    // commits this candidate; no file-store or planned count grants a fence.
++    for movement in &plan.replica_moves {
++        let proposal = candidate
++            .relocations
++            .values_mut()
++            .find(|r| r.range_id == movement.range_id)
++            .unwrap();
++        assert_eq!(proposal.expected_epoch, movement.expected_epoch);
++        assert_eq!(proposal.target, movement.target);
++        proposal.source = movement.source.clone();
++        proposal.reason = movement.reason;
++        proposal.plan_id = plan.id.clone();
++    }
++    candidate.applied_rebalance_plans.push_back(plan.id.clone());
++    candidate.validate().unwrap();
++    candidate
++}
++#[test]
++fn native_registered_fifth_placement_actual_planner_retiree_is_not_initiator() {
++    run_registered_image_baseline_with_placement(
++        Case::Required,
++        AssignmentMode::AutomaticReplicaPlan,
++    );
++}
++#[test]
++fn native_registered_fifth_placement_actual_metadata_leader_can_initiate() {
++    run_registered_image_baseline_with_placement(Case::Required, AssignmentMode::MetadataLeader);
++}
+diff --git a/docs/design/native-automatic-plan-fence-admission.md b/docs/design/native-automatic-plan-fence-admission.md
+new file mode 100644
+index 000000000..322c516d7
+--- /dev/null
++++ b/docs/design/native-automatic-plan-fence-admission.md
+@@ -0,0 +1,46 @@
++# Automatic placement: retiring replica and authenticated initiator
++
++Source baseline751fc28f4 (actualmain492 composed) passed its original ten
++registered CLOSED-fence tests. Those tests use a manual Pending allocation
++whose retiring source equals the current range leader, and send from that
++leader. They do not cover the full automatic planner contract.
++
++`build_rebalance_plan` (`distribution.rs`) chooses `PlannedReplicaMove.source`
++by replica load or repair need. `DistributionStore::apply_rebalance_plan` copies
++that node into `RangeRelocation.source`: it is the RETIRING replica. It may be
++a nonleader. Native joint scope separately calls it `old_source`; the actual
++image donor is selected by real OLD closure/cut evidence and can differ.
++
++The strict existing `MetadataRecoveryRoleRequest::validate_configuration`
++allows CommittedHandoff initiation by the actual current range leader OR the
++actual metadata leader, with exact session/nonce/target binding. The registered
++CLOSED-fence capability additionally requires plan.source==initiator==range
++leader. That extra assumption conflicts with valid planned retirement and
++metadata-leader orchestration. It has not yet been changed by this test batch.
++
++Two REQUIRED-success regressions reuse the actual four INITIAL hosts/TLS,
++genuine fifth enrollment/owned MStore/promotion/Registered receiver, original
++four writer guards, two complete source APP ACKs, actual native consensus
++Pending commit, full per-attempt intent/results and custody. The original two-
++fence required assertion and all original 2s/4s/5s API budgets remain.
++
++* The automatic-plan case invokes the real planner for two moves on the actual
++  committed membership; it preserves selected ranges, source/target/reason,
++  expected epochs and plan identity. At least one real selected retiree MUST
++  differ from the range leader. It does not replace that plan with leader-only
++  moves. The fixture's committed heartbeat clock supplies planner liveness
++  hints, explicitly not physical timing or authority. A test-only Pending
++  adapter commits the planner-selected candidates through actual metadata
++  consensus. This is not a production automatic-controller test.
++* The metadata-leader case uses the actual node0 TLS client/identity as both
++  the witnessed initiator and the actual fence sender, while the range leader
++  and retiree remain node1/node2. It does not spoof an initiator ID.
++
++Each actual fence must succeed while its original caller/role remain live.
++Errors remain required failures, not accepted safety successes. Unsuccessful
++fences must leave the target unchanged; source ACK/full rows and original
++writer identity checks execute before the final required gate. The original
++ten-case mode remains the default; no production path or authority predicate
++is changed by this source. No image, rows, NEW quorum, target APP/Strong,
++controller convergence, node replacement, physical RPO/RTO or qualification
++claim follows from these focused ingress regressions.

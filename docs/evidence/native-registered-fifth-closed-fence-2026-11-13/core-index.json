@@ -1,0 +1,185 @@
+{
+  "source_revision": "da56e489a34c1776e97a4ea089c1f250215cf8dc",
+  "requested_source": "da56e489a34c1776e97a4ea089c1f250215cf8dc",
+  "authoritative_source_verified": true,
+  "run_id": 43351805110,
+  "job_id": 131644446840,
+  "job_name": "Focused Core library (native_registered_fifth_)",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T02:29:16.539045+00:00",
+  "raw_bytes": 4284708,
+  "raw_sha256": "1466c4cbbfadfa2ee9c2994690e3c418464db22fea5a5e463a73e26e82300a44",
+  "compressed_file": "da5-da5-registered-fifth-closed-fence-all10-first-job131644446840.log.gz",
+  "compressed_sha256": "0df932480977f9c058b58baeeb3a1e5a16cc64a9a7b818622ebec3f2755d97c4",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-13T02:28:57.2298455Z test result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 980 filtered out; finished in 17.87s"
+  ],
+  "failure_context": [
+    {
+      "line": 21426,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T02:28:57.2294142Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T02:28:57.2294313Z",
+        "2026-11-13T02:28:57.2295223Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_foreign_database_refused' (7443) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/closed_fence_controls.rs:150:13:",
+        "2026-11-13T02:28:57.2296330Z cluster error: native range image: native recovery birth/bootstrap/local member binding mismatch",
+        "2026-11-13T02:28:57.2296765Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "2026-11-13T02:28:57.2296975Z",
+        "2026-11-13T02:28:57.2296978Z",
+        "2026-11-13T02:28:57.2297034Z failures:",
+        "2026-11-13T02:28:57.2297739Z     distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_foreign_database_refused",
+        "2026-11-13T02:28:57.2298261Z",
+        "2026-11-13T02:28:57.2298455Z test result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 980 filtered out; finished in 17.87s",
+        "2026-11-13T02:28:57.2298749Z",
+        "2026-11-13T02:28:57.2299218Z error: test failed, to rerun pass `-p bicdb-core --lib`",
+        "2026-11-13T02:28:57.2310570Z ##[error]Process completed with exit code 101.",
+        "2026-11-13T02:28:57.2365280Z ##[group]Run actions/upload-artifact@v4",
+        "2026-11-13T02:28:57.2365494Z with:"
+      ]
+    }
+  ],
+  "test_observations": [
+    {
+      "line": 18272,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_foreign_database_refused",
+      "result": "FAILED"
+    },
+    {
+      "line": 18274,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_durable_invalidation_is_not_unknown_absence",
+      "result": "ok"
+    },
+    {
+      "line": 18278,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_sink_fsync_then_original_cancel_retains_refusal",
+      "result": "ok"
+    },
+    {
+      "line": 18280,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_receiver_stop_refused",
+      "result": "ok"
+    },
+    {
+      "line": 20213,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_store_slot_restore_refused",
+      "result": "ok"
+    },
+    {
+      "line": 20217,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_sink_io_unknown_exact_live_refsync",
+      "result": "ok"
+    },
+    {
+      "line": 20219,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_captured_original_caller_cancel_refused",
+      "result": "ok"
+    },
+    {
+      "line": 20222,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_generic_ingress_stays_strict",
+      "result": "ok"
+    },
+    {
+      "line": 21186,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_baseline",
+      "result": "ok"
+    },
+    {
+      "line": 21188,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_original_empty_hook_aba_refused",
+      "result": "ok"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T02:23:26Z",
+      "completed_at": "2026-11-13T02:23:27Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T02:23:27Z",
+      "completed_at": "2026-11-13T02:23:30Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T02:23:30Z",
+      "completed_at": "2026-11-13T02:23:39Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T02:23:39Z",
+      "completed_at": "2026-11-13T02:23:48Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T02:23:48Z",
+      "completed_at": "2026-11-13T02:27:15Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T02:27:15Z",
+      "completed_at": "2026-11-13T02:28:39Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 7,
+      "started_at": "2026-11-13T02:28:39Z",
+      "completed_at": "2026-11-13T02:28:57Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T02:28:57Z",
+      "completed_at": "2026-11-13T02:28:59Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-13T02:28:59Z",
+      "completed_at": "2026-11-13T02:28:59Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T02:28:59Z",
+      "completed_at": "2026-11-13T02:28:59Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T02:28:59Z",
+      "completed_at": "2026-11-13T02:28:59Z"
+    }
+  ]
+}

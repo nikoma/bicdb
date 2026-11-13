@@ -68,6 +68,7 @@ impl NativeActivationDecisionRecord {
             || !matches!(
                 self.scope.purpose,
                 MetadataRecoveryRolePurpose::NormalRecovery
+                    | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
             )
             || self.scope.range_id != self.range.id
             || self.scope.range_epoch != self.range.epoch
@@ -142,10 +143,23 @@ impl NativeActivationDecisionRecord {
     ) -> Result<()> {
         native.require_current(db)?;
         let actual = db.current_native_range_source_lineage(self.scope.range_id)?;
+        self.require_native_binding_from_lineage(db, native, current_serving, &actual)
+    }
+    fn require_native_binding_from_lineage(
+        &self,
+        db: &BicDb,
+        native: &NativeRecoveryAdmission,
+        current_serving: bool,
+        actual: &SourceRangeImageLineage,
+    ) -> Result<()> {
         // Ordinary activation binds data voters, not every metadata member
         // retained in birth ancestry. Historical reuse remains bound to the
         // physical same-voter domain validated by the archived serving floor.
-        let actual_members = if current_serving {
+        let actual_members = if current_serving
+            || matches!(
+                self.scope.purpose,
+                MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+            ) {
             actual.native_write_members()?
         } else {
             actual.physical_range_members()?
@@ -199,6 +213,7 @@ impl NativeActivationDecisionRecord {
             })?
         };
         serving.validate_historical_floor(&actual.birth, &actual.base)?;
+        db.require_recovered_serving_joint_binding(&actual.birth, &actual.base, &serving)?;
         if serving.checksum_sha256 != self.native_serving_sha256
             || !serving.scope.same_session(&self.scope)
             || serving.activation_index != self.range_index
@@ -251,6 +266,36 @@ impl NativeActivationDecisionReceipt {
         let _journal = db.try_native_image_journal()?;
         self.require_current_under_journal(db)
     }
+    pub(crate) fn require_current_in_activation_scope(
+        &self,
+        scope: &NativeActivationReadScope<'_>,
+    ) -> Result<()> {
+        scope.require_native_admission(&self.native)?;
+        self.record.validate()?;
+        self.record.require_native_binding_from_lineage(
+            scope.database(),
+            &self.native,
+            true,
+            scope.lineage(),
+        )?;
+        self.require_pointer_archive(scope.database())
+    }
+    fn require_pointer_archive(&self, db: &BicDb) -> Result<()> {
+        let current = db
+            .read_native_range_image_record::<NativeActivationDecisionRecord>(&decision_key(
+                self.record.scope.range_id,
+            ))?
+            .ok_or_else(|| invalid("actual protected activation decision is missing"))?;
+        let archived = db
+            .read_native_range_image_record::<NativeActivationDecisionRecord>(
+                &decision_history_key(self.record.scope.range_id, &self.record.checksum_sha256),
+            )?
+            .ok_or_else(|| invalid("immutable protected activation decision is missing"))?;
+        if current != self.record || archived != self.record {
+            return Err(invalid("protected activation decision changed/reopened"));
+        }
+        Ok(())
+    }
     fn require_current_under_journal(&self, db: &BicDb) -> Result<()> {
         self.record.require_native_domain(db, &self.native, true)?;
         let current = db
@@ -269,6 +314,10 @@ impl NativeActivationDecisionReceipt {
         Ok(())
     }
 }
+enum NativeActivationDecisionValidation<'borrow, 'scope> {
+    Standalone,
+    Scoped(&'borrow NativeActivationReadScope<'scope>),
+}
 impl BicDb {
     pub(crate) fn persist_native_activation_decision(
         &self,
@@ -277,9 +326,60 @@ impl BicDb {
         quorum: &NativeCompletionQuorum,
         fresh: &RecoveryRoleAdmission,
     ) -> Result<NativeActivationDecisionReceipt> {
-        quorum.require_local_prepared(prepared, self, store, fresh)?;
-        let serving = prepared.require_completed_for_activation(self, store, fresh)?;
-        serving.require_current(self)?;
+        self.persist_native_activation_decision_inner(
+            prepared,
+            store,
+            quorum,
+            fresh,
+            NativeActivationDecisionValidation::Standalone,
+        )
+    }
+    pub(crate) fn persist_native_activation_decision_in_scope(
+        &self,
+        scope: &NativeActivationReadScope<'_>,
+    ) -> Result<NativeActivationDecisionReceipt> {
+        scope.require_identity(self, scope.prepared(), scope.store(), scope.role())?;
+        let receipt = self.persist_native_activation_decision_inner(
+            scope.prepared(),
+            scope.store(),
+            scope.quorum(),
+            scope.role(),
+            NativeActivationDecisionValidation::Scoped(scope),
+        )?;
+        // Actual NEW current+archive readback under THIS journal, followed by
+        // full physical/domain exit validation before the historical receipt escapes.
+        receipt.require_current_in_activation_scope(scope)?;
+        Ok(receipt)
+    }
+    fn persist_native_activation_decision_inner(
+        &self,
+        prepared: &PreparedNativeRecoveryReady,
+        store: &RangeWriteStore,
+        quorum: &NativeCompletionQuorum,
+        fresh: &RecoveryRoleAdmission,
+        validation: NativeActivationDecisionValidation<'_, '_>,
+    ) -> Result<NativeActivationDecisionReceipt> {
+        #[cfg(test)]
+        let mut preflight_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-native-preflight",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
+        let serving = match &validation {
+            NativeActivationDecisionValidation::Standalone => {
+                quorum.require_local_prepared(prepared, self, store, fresh)?;
+                let serving = prepared.require_completed_for_activation(self, store, fresh)?;
+                serving.require_current(self)?;
+                serving
+            }
+            NativeActivationDecisionValidation::Scoped(scope) => {
+                scope.require_identity(self, prepared, store, fresh)?;
+                prepared.require_current_in_activation_scope(scope)?;
+                let sha = prepared.completed_serving_sha_for_activation(store)?;
+                scope.observe_serving(&sha)?
+            }
+        };
         let provenance = quorum.decision_provenance()?;
         provenance.validate(prepared.scope(), fresh.member_credentials())?;
         let native = self.native_recovery_admission(
@@ -288,12 +388,36 @@ impl BicDb {
             fresh.local_node_id(),
             fresh.local_member_incarnation(),
         )?;
-        let _journal = self.try_native_image_journal()?;
+        #[cfg(test)]
+        {
+            preflight_trace.complete();
+            drop(preflight_trace);
+        }
+        // Scoped callers already own the SAME journal. Standalone callers
+        // retain the original independent full path.
+        let journal = match &validation {
+            NativeActivationDecisionValidation::Standalone => {
+                Some(self.try_native_image_journal()?)
+            }
+            NativeActivationDecisionValidation::Scoped(scope) => {
+                scope.journal().require_database(self)?;
+                None
+            }
+        };
         let pointer = decision_key(prepared.scope().range_id);
         let old =
             self.read_native_range_image_record::<NativeActivationDecisionRecord>(&pointer)?;
         if let Some(old) = &old {
-            old.require_native_domain(self, &native, false)?;
+            match &validation {
+                NativeActivationDecisionValidation::Standalone => {
+                    old.require_native_domain(self, &native, false)?
+                }
+                NativeActivationDecisionValidation::Scoped(scope) => {
+                    old.validate()?;
+                    scope.require_native_admission(&native)?;
+                    old.require_native_binding_from_lineage(self, &native, false, scope.lineage())?;
+                }
+            }
             old.require_fresh_anchor(fresh.metadata_term(), fresh.metadata_read_index())?;
             let archived = self
                 .read_native_range_image_record::<NativeActivationDecisionRecord>(
@@ -317,9 +441,50 @@ impl BicDb {
                     native,
                     record: old.clone(),
                 };
-                receipt.require_current_under_journal(self)?;
+                #[cfg(test)]
+                let mut readback_trace =
+                    crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                        "recovery-activate-native-under-journal-readback-idempotent",
+                        fresh.local_node_id(),
+                        fresh.deadline(),
+                    );
+                match &validation {
+                    NativeActivationDecisionValidation::Standalone => {
+                        receipt.require_current_under_journal(self)?
+                    }
+                    NativeActivationDecisionValidation::Scoped(scope) => {
+                        receipt.require_current_in_activation_scope(scope)?
+                    }
+                }
+                #[cfg(test)]
+                {
+                    readback_trace.complete();
+                    drop(readback_trace);
+                }
                 quorum.require_recipient_role(fresh)?;
+                if let NativeActivationDecisionValidation::Scoped(scope) = &validation {
+                    scope.parent().check()?;
+                    return Ok(receipt);
+                }
+                // CurrentJoint's full Prepared validator opens its own native
+                // read scope. Do not recursively try-lock this journal.
+                drop(journal);
+                #[cfg(test)]
+                let mut prepared_trace =
+                    crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                        "recovery-activate-post-journal-prepared-current-idempotent",
+                        fresh.local_node_id(),
+                        fresh.deadline(),
+                    );
                 prepared.require_current_under_role(self, store, fresh)?;
+                #[cfg(test)]
+                {
+                    prepared_trace.complete();
+                    drop(prepared_trace);
+                }
+                receipt.require_current(self)?;
+                prepared.require_produced_completion_boundary(self, store, fresh)?;
+                quorum.require_recipient_role(fresh)?;
                 return Ok(receipt);
             }
             if old.range.epoch > fresh.current_range().epoch
@@ -373,7 +538,24 @@ impl BicDb {
         // hidden-record publication throughout. The callback performs only
         // bounded metadata validation and page operations, then readback
         // revalidates the full actual binding before returning any receipt.
-        record.require_native_binding(self, &native, true)?;
+        match &validation {
+            NativeActivationDecisionValidation::Standalone => {
+                record.require_native_binding(self, &native, true)?
+            }
+            NativeActivationDecisionValidation::Scoped(scope) => {
+                scope.require_native_admission(&native)?;
+                record.require_native_binding_from_lineage(self, &native, true, scope.lineage())?;
+            }
+        }
+        #[cfg(test)]
+        let mut wal_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+            "recovery-activate-native-WAL",
+            fresh.local_node_id(),
+            fresh.deadline(),
+        );
+        if let NativeActivationDecisionValidation::Scoped(scope) = &validation {
+            scope.require_identity(self, prepared, store, fresh)?;
+        }
         self.in_paged_transaction(|paged, xid| {
             record.native_page_xid = xid;
             record.checksum_sha256 = record.checksum()?;
@@ -408,10 +590,66 @@ impl BicDb {
             Ok(())
         })?
         .ok_or_else(|| invalid("activation decision has no native page store"))?;
+        #[cfg(test)]
+        {
+            wal_trace.complete();
+            drop(wal_trace);
+            eprintln!("ACTUAL_RECOVERY_ACTIVATE_NATIVE_WAL_RETURNED node={} nonce={} R={} activation_sha={} xid={} remaining_ms={}", fresh.local_node_id(), prepared.scope().recovery_nonce, prepared.range_index(), record.checksum_sha256, record.native_page_xid, fresh.deadline().saturating_duration_since(std::time::Instant::now()).as_millis());
+        }
         let receipt = NativeActivationDecisionReceipt { native, record };
-        receipt.require_current_under_journal(self)?;
+        #[cfg(test)]
+        let mut readback_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-native-under-journal-readback-fresh",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
+        match &validation {
+            NativeActivationDecisionValidation::Standalone => {
+                receipt.require_current_under_journal(self)?
+            }
+            NativeActivationDecisionValidation::Scoped(scope) => {
+                receipt.require_current_in_activation_scope(scope)?
+            }
+        }
+        #[cfg(test)]
+        {
+            readback_trace.complete();
+            drop(readback_trace);
+        }
         quorum.require_recipient_role(fresh)?;
+        if let NativeActivationDecisionValidation::Scoped(scope) = &validation {
+            scope.parent().check()?;
+            return Ok(receipt);
+        }
+        // Preserve actual WAL + current/archive readback under this guard,
+        // then run the unchanged full physical/domain validator outside it.
+        drop(journal);
+        #[cfg(test)]
+        let mut prepared_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-post-journal-prepared-current-fresh",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         prepared.require_current_under_role(self, store, fresh)?;
+        #[cfg(test)]
+        {
+            prepared_trace.complete();
+            drop(prepared_trace);
+        }
+        #[cfg(test)]
+        let mut final_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-return-decision-recheck-fresh",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
+        receipt.require_current(self)?;
+        prepared.require_produced_completion_boundary(self, store, fresh)?;
+        quorum.require_recipient_role(fresh)?;
+        #[cfg(test)]
+        final_trace.complete();
         Ok(receipt)
     }
 }
@@ -445,6 +683,87 @@ impl BicDb {
         }
         let receipt = NativeActivationDecisionReceipt { native, record };
         receipt.require_current_under_journal(self)?;
+        Ok(receipt)
+    }
+    /// Actual metadata-WAL fault injection, no DTO/proof factory. The test
+    /// deletes ONLY the immutable archive paired with the actual current
+    /// decision under this SAME owned journal, then must refuse any open.
+    #[cfg(test)]
+    pub(crate) fn test_remove_native_activation_archive_in_scope(
+        &self,
+        scope: &NativeActivationReadScope<'_>,
+    ) -> Result<()> {
+        scope.require_identity(self, scope.prepared(), scope.store(), scope.role())?;
+        let record = self
+            .read_native_range_image_record::<NativeActivationDecisionRecord>(&decision_key(
+                scope.prepared().scope().range_id,
+            ))?
+            .ok_or_else(|| invalid("fault cut needs actual protected activation decision"))?;
+        let key = decision_history_key(record.scope.range_id, &record.checksum_sha256);
+        let archived = self
+            .read_native_range_image_record::<NativeActivationDecisionRecord>(&key)?
+            .ok_or_else(|| invalid("fault cut needs actual immutable activation archive"))?;
+        if archived != record {
+            return Err(invalid("fault cut prerequisite archive differs"));
+        }
+        self.in_paged_transaction(|paged, xid| {
+            paged
+                .store()
+                .delete(xid, &native_key(&key))
+                .map_err(|error| BicDbError::PagedStorage(error.to_string()))?;
+            Ok(())
+        })?
+        .ok_or_else(|| invalid("fault cut has no actual native page store"))?;
+        if self
+            .read_native_range_image_record::<NativeActivationDecisionRecord>(&key)?
+            .is_some()
+        {
+            return Err(invalid(
+                "actual activation archive deletion did not persist",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn observe_native_activation_decision_in_scope(
+        &self,
+        scope: &NativeActivationReadScope<'_>,
+        expected_sha: &str,
+    ) -> Result<NativeActivationDecisionReceipt> {
+        scope.require_identity(self, scope.prepared(), scope.store(), scope.role())?;
+        let fresh = scope.role();
+        let native = self.native_recovery_admission(
+            fresh.cluster_id(),
+            fresh.bootstrap_id(),
+            fresh.local_node_id(),
+            fresh.local_member_incarnation(),
+        )?;
+        let record = self
+            .read_native_range_image_record::<NativeActivationDecisionRecord>(&decision_key(
+                scope.prepared().scope().range_id,
+            ))?
+            .ok_or_else(|| invalid("no actual protected native activation decision"))?;
+        let serving = scope
+            .prepared()
+            .completed_serving_sha_for_activation(scope.store())?;
+        if record.checksum_sha256 != expected_sha
+            || !record.scope.same_session(scope.prepared().scope())
+            || record.native_serving_sha256 != serving
+            || record.range_index != scope.prepared().range_index()
+            || record.logical_genesis_sha256 != scope.prepared().logical_genesis_sha256()
+            || record.logical_history_sha256 != scope.prepared().logical_history_sha256()
+            || record.range != canonical(fresh.current_range())
+            || record.members != *fresh.member_credentials()
+            || fresh.expected_schema_sha256() != Some(record.schema_sha256.as_str())
+            || fresh.restore_activation() != record.restore_activation.as_ref()
+        {
+            return Err(invalid(
+                "activation decision differs from exact current scope/role/native point",
+            ));
+        }
+        record.require_fresh_anchor(fresh.metadata_term(), fresh.metadata_read_index())?;
+        let receipt = NativeActivationDecisionReceipt { native, record };
+        receipt.require_current_in_activation_scope(scope)?;
+        scope.parent().check()?;
         Ok(receipt)
     }
     pub(crate) fn observe_native_activation_decision_for_role(

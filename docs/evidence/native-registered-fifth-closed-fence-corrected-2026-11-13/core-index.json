@@ -1,0 +1,19 @@
+{
+  "run_id": 43352756475,
+  "job_id": 131647532734,
+  "source_revision": "550c23d0458ab7a4e10af94d1cc625a7eb69bb89",
+  "job_name": "Focused Core library (native_registered_fifth_)",
+  "job_conclusion": "success",
+  "raw_bytes": 4364622,
+  "raw_sha256": "204810d935bdb5c43d693eb0908376823c6d50d5c9eb2986d98accbb13a2b739",
+  "gzip_bytes": 426290,
+  "gzip_sha256": "bd6e498060da53279ae6cd18201faf50c3cd1575c518c1498e01bfbe17f74fe4",
+  "result_lines": [
+    "2026-11-13T02:38:14.1808124Z test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 980 filtered out; finished in 22.45s"
+  ],
+  "panics": [],
+  "test_results": [],
+  "strong_trace_lines": 4816,
+  "recovery_probe_trace_lines": 0,
+  "native_engine_opened_or_replayed_by_capture": false
+}

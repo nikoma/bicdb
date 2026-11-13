@@ -173,7 +173,7 @@ impl NativeJointOldRound {
         }
         for facts in &self.constraints {
             self.metadata.authority.require_live()?;
-            if facts.actual_resolved > r || facts.actual_compacted > r {
+            if facts.actual_last > r || facts.actual_resolved > r || facts.actual_compacted > r {
                 return Err(invalid(
                     "observed actual logical floor is beyond the complete selected native cut",
                 ));
@@ -181,7 +181,7 @@ impl NativeJointOldRound {
             if let Some((index, genesis, history)) = &facts.native_point {
                 selected.require_ancestor(*index, genesis, history)?;
             }
-            for (index, checksum) in &facts.commands {
+            for (index, checksum) in facts.commands.iter().chain(&facts.unresolved_commands) {
                 if *index > r || selected.command_at(*index)?.as_deref() != Some(checksum.as_str())
                 {
                     return Err(invalid("selected old native cut omits/conflicts with an observed irreversible CQ/pending command"));

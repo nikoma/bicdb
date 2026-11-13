@@ -103,6 +103,7 @@ impl TcpClusterRelocationTransport {
             || reply.constraints.birth_id != native_birth.birth_id()
             || reply.constraints.birth_sha256 != native_birth.birth_sha256()
             || reply.constraints.commands.len() > 4096
+            || reply.constraints.unresolved_commands.len() > 4096
         {
             return Err(transport_error(
                 "remote OLD actual response/request/identity/constraints differ",

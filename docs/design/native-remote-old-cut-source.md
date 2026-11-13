@@ -145,3 +145,27 @@ unknown-outcome reconciliation. A partial native receipt without completed raw
 confirmation/read pin is not published as a complete closure by readonly
 Observe; exact fresh Close continuation is required. General constraint-only
 minorities, unavailable peers and cold reissue are still OPEN.
+
+## Possible-commit tails remain obligations
+
+The OLD close producer already requires raw `last_index == native R` and
+`resolved_through == native R`. A peer with an unresolved raw tail therefore
+cannot cast a closed OLD vote. The preexisting irreversible export included
+CQ/Applied, archived/sparse/current-certification and native-pending command
+checksums, but omitted the identities of raw Prepared/Committed entries.
+
+The constraints precursor now exports actual Prepared/Committed command hashes
+in a separate `unresolved_commands` map. It does not promote them to CQ. Both
+local and remote cut selection require the observed `actual_last` to be no
+higher than the donor's real R, and every unresolved command to appear with
+its exact checksum as an actual Applied entry in the donor's immutable spine.
+A future or conflicting tail refuses; a canonical abort does not silently
+authorize discarding a possibly committed prepared variant. This is a
+conservative refusal, not a complete abort/tail-reconciliation protocol.
+
+The existing real range-log observation regression now asserts the distinct
+Prepared and Committed states, changing observation digest, unchanged unresolved
+identity, actual last/resolved watermarks and absence of a fabricated CQ. It
+has not run for this leaf. The all-OLD certificate still requires all peers
+closed. A constraints-only minority needs a separate actual guarded producer
+and a distinct majority lane before it can use these preserved obligations.

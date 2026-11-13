@@ -120,6 +120,7 @@ impl NativeRemoteOldRound {
         let constraints = &reply.constraints;
         if constraints.scope_sha256 != plan.checksum_sha256()?
             || constraints.node_id != reply.node_id
+            || constraints.actual_last > self.source.range_index()
             || constraints.actual_resolved > self.source.range_index()
             || constraints.actual_compacted > self.source.range_index()
         {
@@ -131,7 +132,14 @@ impl NativeRemoteOldRound {
             self.source
                 .require_remote_ancestor(*index, h0, h, &self.original_caller)?;
         }
-        for (index, hash) in &constraints.commands {
+        // A Prepared/Committed peer tail may already be acknowledged elsewhere.
+        // Conservatively require the exact applied command in this REAL donor
+        // spine. No absent/aborted/future entry is treated as uncommitted here.
+        for (index, hash) in constraints
+            .commands
+            .iter()
+            .chain(&constraints.unresolved_commands)
+        {
             if *index > self.source.range_index()
                 || self
                     .source

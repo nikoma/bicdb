@@ -122,15 +122,52 @@ pub(super) fn apply(
     let result = (|| -> Result<()> {
         move_source(session, old, new)?;
         stage("backing");
-        delete_schema(session.db_mut()?, old)?;
-        stage("old_schema_removed");
-        *schema = updated;
-        // The relation keeps its identity and ACL. Creation defaults may
-        // have changed since it was created; applying them to this new name
-        // would grant access that the original relation never had. Its exact
-        // old/new catalog rows are already covered by the durable journal.
-        save_schema(session.db_mut()?, schema)?;
-        stage("new_schema_saved");
+        // A certified partition forest is validated as a whole at every
+        // publication. A parent with attached children cannot disappear and
+        // reappear in separate steps: publish the old name's removal, the
+        // new name and every re-pointed child link as one decision.
+        let mut attached = Vec::new();
+        if previous.partitioning.is_some() {
+            for mut child in list_schemas(session.db_ref())? {
+                if let Some(partition) = &mut child.partition_of {
+                    if partition.parent_table == old {
+                        partition.parent_table = new.into();
+                        attached.push(child);
+                    }
+                }
+            }
+        }
+        if attached.is_empty() {
+            delete_schema(session.db_mut()?, old)?;
+            stage("old_schema_removed");
+            *schema = updated;
+            // The relation keeps its identity and ACL. Creation defaults may
+            // have changed since it was created; applying them to this new name
+            // would grant access that the original relation never had. Its exact
+            // old/new catalog rows are already covered by the durable journal.
+            save_schema(session.db_mut()?, schema)?;
+            stage("new_schema_saved");
+        } else {
+            *schema = updated;
+            let mut changes = vec![
+                (SCHEMA_COLLECTION, old.to_string(), None),
+                (
+                    SCHEMA_COLLECTION,
+                    new.to_string(),
+                    Some(prepare_schema_record(session.db_mut()?, schema)?),
+                ),
+            ];
+            for child in &attached {
+                changes.push((
+                    SCHEMA_COLLECTION,
+                    child.name.clone(),
+                    Some(prepare_schema_record(session.db_mut()?, child)?),
+                ));
+            }
+            session.publish_partition_catalog(changes, true)?;
+            stage("old_schema_removed");
+            stage("new_schema_saved");
+        }
         for mut sequence in list_sequences(session.db_ref())? {
             if sequence.owned_by_table.as_deref() == Some(old) {
                 sequence.owned_by_table = Some(new.into());

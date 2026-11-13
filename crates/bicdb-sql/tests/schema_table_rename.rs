@@ -194,6 +194,68 @@ fn postgres_parent_rename_keeps_partition_links_after_name_reuse_and_reopen() {
 }
 
 #[test]
+fn postgres_parent_rename_with_attached_partitions_rolls_back_with_its_transaction() {
+    let query = "SELECT parent.relname, child.relname
+                 FROM pg_catalog.pg_inherits i
+                 JOIN pg_catalog.pg_class parent ON parent.oid = i.inhparent
+                 JOIN pg_catalog.pg_class child ON child.oid = i.inhrelid
+                 ORDER BY child.relname";
+    let links = |parent: &str| {
+        ["child_one", "child_two"]
+            .into_iter()
+            .map(|child| {
+                vec![
+                    SqlValue::String(parent.into()),
+                    SqlValue::String(child.into()),
+                ]
+            })
+            .collect::<Vec<_>>()
+    };
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let config = DbConfig::default().with_storage_mode(mode);
+        let mut db = BicDb::open_with_config(root.path(), config.clone()).unwrap();
+        {
+            let mut sql = SqlSession::new(&mut db);
+            for statement in [
+                "CREATE TABLE tree_parent(id INT) PARTITION BY LIST (id)",
+                "CREATE TABLE child_one PARTITION OF tree_parent FOR VALUES IN (1)",
+                "CREATE TABLE child_two PARTITION OF tree_parent FOR VALUES IN (2)",
+                "INSERT INTO tree_parent VALUES (1), (2)",
+            ] {
+                sql.execute(statement).unwrap();
+            }
+            sql.execute("BEGIN").unwrap();
+            sql.execute("ALTER TABLE tree_parent RENAME TO tree_renamed")
+                .unwrap();
+            assert_eq!(sql.execute(query).unwrap().rows, links("tree_renamed"));
+            sql.execute("ROLLBACK").unwrap();
+            assert_eq!(sql.execute(query).unwrap().rows, links("tree_parent"));
+            assert_eq!(
+                sql.execute("SELECT count(*) FROM tree_parent")
+                    .unwrap()
+                    .rows,
+                vec![vec![SqlValue::Int(2)]]
+            );
+            sql.execute("BEGIN").unwrap();
+            sql.execute("ALTER TABLE tree_parent RENAME TO tree_renamed")
+                .unwrap();
+            sql.execute("COMMIT").unwrap();
+        }
+        drop(db);
+        let mut db = BicDb::open_with_config(root.path(), config).unwrap();
+        let mut sql = SqlSession::new(&mut db);
+        assert_eq!(sql.execute(query).unwrap().rows, links("tree_renamed"));
+        assert_eq!(
+            sql.execute("SELECT count(*) FROM tree_renamed")
+                .unwrap()
+                .rows,
+            vec![vec![SqlValue::Int(2)]]
+        );
+    }
+}
+
+#[test]
 fn postgres_reuses_renamed_table_name_without_reusing_the_old_primary_index() {
     let indexes = "SELECT tablename, indexname FROM pg_catalog.pg_indexes
                    WHERE schemaname = 'rename_pk' ORDER BY tablename";

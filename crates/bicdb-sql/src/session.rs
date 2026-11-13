@@ -4439,7 +4439,7 @@ impl<'db> SqlSession<'db> {
             .take()
             .map(|tx| tx.rollback().map_err(SqlError::from))
             .unwrap_or(Ok(()));
-        let ddl_rollback = self.rollback_ddl_to_len(0);
+        let ddl_rollback = self.rollback_ddl_after_transaction_end();
         self.savepoints.clear();
         self.rollback_guc_transaction();
         tx_rollback?;
@@ -4469,7 +4469,7 @@ impl<'db> SqlSession<'db> {
                 if let Some(tx) = self.tx.take() {
                     let _ = tx.rollback();
                 }
-                let _ddl_rollback = self.rollback_ddl_to_len(0);
+                let _ddl_rollback = self.rollback_ddl_after_transaction_end();
                 self.savepoints.clear();
                 self.rollback_guc_transaction();
                 return Err(error);
@@ -4481,7 +4481,7 @@ impl<'db> SqlSession<'db> {
             match tx.commit_with_sequence() {
                 Ok(sequence) => committed_sequence = sequence,
                 Err(error) => {
-                    let _ddl_rollback = self.rollback_ddl_to_len(0);
+                    let _ddl_rollback = self.rollback_ddl_after_transaction_end();
                     self.savepoints.clear();
                     self.rollback_guc_transaction();
                     return Err(error.into());
@@ -5312,6 +5312,15 @@ impl<'db> SqlSession<'db> {
             self.ddl_undo.push(DdlUndo::RestoreTrigger { trigger });
         }
         Ok(existed)
+    }
+
+    /// Undo every DDL effect once the owning transaction is gone. The running
+    /// statement bound its metadata reads to that transaction; undo reads as
+    /// the session's next statement would, with no owner. Scoped rename undo
+    /// keeps entering its own retained scope.
+    fn rollback_ddl_after_transaction_end(&mut self) -> Result<()> {
+        let _reads = self.db_ref().enter_catalog_read_access(None)?;
+        self.rollback_ddl_to_len(0)
     }
 
     pub(crate) fn rollback_ddl_to_len(&mut self, len: usize) -> Result<()> {

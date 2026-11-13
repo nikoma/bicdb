@@ -506,6 +506,8 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
     persist_header(db, &header)?;
     while header.remaining.unwrap() > 0 {
         let index = header.remaining.unwrap() - 1;
+        // The last image this step has fully undone; a catalog batch lowers it.
+        let mut undone_to = index;
         let record = db
             .get(IMAGES, &image_id(&header, index))?
             .ok_or_else(|| invalid("missing before-image"))?;
@@ -518,19 +520,67 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
                 previous,
             } => {
                 let name = backing_name(db, &storage, namespace_id)?;
-                let current = db.get(&name, &id)?;
-                if serde_json::to_value(current.as_deref())? != serde_json::to_value(&previous)? {
-                    if name == SCHEMA_COLLECTION || name == TRIGGER_COLLECTION {
-                        let collection = if name == SCHEMA_COLLECTION {
-                            SCHEMA_COLLECTION
-                        } else {
-                            TRIGGER_COLLECTION
+                if name == SCHEMA_COLLECTION || name == TRIGGER_COLLECTION {
+                    // A certified partition forest is validated as a whole at
+                    // every publication, so its descriptors cannot be restored
+                    // one row at a time: a renamed parent and its re-pointed
+                    // children only agree again together. Restore each run of
+                    // adjacent catalog images as one decision. A crash before
+                    // the cursor advances replays rows that already match.
+                    let mut rows = vec![(name, id, previous)];
+                    while undone_to > 0 {
+                        let record = db
+                            .get(IMAGES, &image_id(&header, undone_to - 1))?
+                            .ok_or_else(|| invalid("missing before-image"))?;
+                        let Effect::Row {
+                            storage,
+                            namespace_id,
+                            id,
+                            previous,
+                        } = serde_json::from_value(record.metadata.clone())?
+                        else {
+                            break;
                         };
-                        partition_admission::publish_catalog_changes(
-                            db,
-                            vec![(collection, id.clone(), previous)],
-                        )?;
-                    } else {
+                        let name = backing_name(db, &storage, namespace_id)?;
+                        if name != SCHEMA_COLLECTION && name != TRIGGER_COLLECTION {
+                            break;
+                        }
+                        rows.push((name, id, previous));
+                        undone_to -= 1;
+                    }
+                    let mut changes = Vec::new();
+                    for (name, id, previous) in &rows {
+                        let current = db.get(name, id)?;
+                        if serde_json::to_value(current.as_deref())?
+                            != serde_json::to_value(previous)?
+                        {
+                            let collection = if name == SCHEMA_COLLECTION {
+                                SCHEMA_COLLECTION
+                            } else {
+                                TRIGGER_COLLECTION
+                            };
+                            changes.push((collection, id.clone(), previous.clone()));
+                        }
+                    }
+                    if !changes.is_empty() {
+                        partition_admission::publish_catalog_changes(db, changes)?;
+                    }
+                    for (name, id, _) in &rows {
+                        if name == SCHEMA_COLLECTION {
+                            sql_schema_list_cache_invalidate(db);
+                            let restored = db.get(name, id)?;
+                            let schema = restored
+                                .map(|record| {
+                                    serde_json::from_value::<TableSchema>(record.metadata.clone())
+                                })
+                                .transpose()?;
+                            sql_schema_cache_set(db, id, schema.map(std::sync::Arc::new));
+                        }
+                    }
+                } else {
+                    let current = db.get(&name, &id)?;
+                    if serde_json::to_value(current.as_deref())? != serde_json::to_value(&previous)?
+                    {
                         match previous {
                             Some(row) => {
                                 db.insert(&name, row)?;
@@ -540,16 +590,6 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
                             }
                         }
                     }
-                }
-                if name == SCHEMA_COLLECTION {
-                    sql_schema_list_cache_invalidate(db);
-                    let restored = db.get(&name, &id)?;
-                    let schema = restored
-                        .map(|record| {
-                            serde_json::from_value::<TableSchema>(record.metadata.clone())
-                        })
-                        .transpose()?;
-                    sql_schema_cache_set(db, &id, schema.map(std::sync::Arc::new));
                 }
             }
             Effect::Rename {
@@ -574,7 +614,7 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
                 }
             }
         }
-        header.remaining = Some(index);
+        header.remaining = Some(undone_to);
         persist_header(db, &header)?;
     }
     db.delete(HEADERS, &header.id)?;

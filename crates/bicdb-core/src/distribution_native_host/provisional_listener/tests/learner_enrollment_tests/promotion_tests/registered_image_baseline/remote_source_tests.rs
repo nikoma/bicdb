@@ -11,7 +11,7 @@ use crate::distribution_range_image::{
 };
 use crate::distribution_transport::AuthenticatedNativeRemoteImageSourceFrame;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(super) enum SourceCase {
     Frames,
     CancelAfterIssuedFrame,
@@ -675,6 +675,7 @@ pub(super) fn exercise(
     let target_before = state(&factory.database, pending, &node(4), ranges).unwrap();
     let mut journal = Vec::new();
     let mut retained_sources = Vec::new();
+    let mut finished_ranges = std::collections::BTreeSet::new();
     let mut last_manifest = None;
     let mut retained_runtimes = Vec::new();
     let mut retained_remote_facts: Vec<Arc<NativeRemoteImageFact>> = Vec::new();
@@ -1066,6 +1067,7 @@ pub(super) fn exercise(
             assert_eq!(seal.record_count, records.len() as u64);
             assert_eq!(seal.range_index, 1);
             assert_eq!(seal.history_entries, 2);
+            finished_ranges.insert(original.id);
             if matches!(
                 case,
                 SourceCase::TargetTransfer
@@ -1180,15 +1182,21 @@ pub(super) fn exercise(
     }
     assert_eq!(retained_sources.len(), 2);
     assert!(!factory.database.read().commit_admission_ready());
+    let target_after = state(&factory.database, pending, &node(4), ranges).unwrap();
+    assert_eq!(
+        target_after, target_before,
+        "source streaming changed actual target state"
+    );
     evidence(&output.join("source-frames-result.json"), &serde_json::json!({
         "actual_two_range_manifest_observations":true,
-        "actual_two_range_history_rows_seals":matches!(case,SourceCase::Frames | SourceCase::RemoteOldFrames | SourceCase::RemoteOldRetainedNative),
+        "actual_two_range_history_rows_seals":finished_ranges.len()==2,
+        "actual_finished_range_ids":finished_ranges,
         "actual_session_cancel_after_issued_manifest":matches!(case,SourceCase::CancelAfterIssuedFrame),
         "actual_hosted_process_cancel_after_healthy_frames":matches!(case,SourceCase::Frames | SourceCase::RemoteOldFrames | SourceCase::RemoteOldRetainedNative),
         "original_finite_old_and_publish_acquisitions_ended":true,
         "source_seed":if matches!(case,SourceCase::RemoteOldFrames | SourceCase::RemoteOldRetainedNative){"actual node-local CLOSE RPC then donor-fetched pinned TLS historical OLD; ALL-old component"}else{"genuine local native OLD QQ, NOT remote collector"},
         "actual_fifth_target_unchanged":true,"target_rows_installed":false,"serving_granted":false,
-        "target_before":target_before,"actual_frame_count":journal.iter().filter(|r|r["operation"]=="source_image_frame").count(),
+        "target_before":target_before,"target_after":target_after,"actual_frame_count":journal.iter().filter(|r|r["operation"]=="source_image_frame").count(),
         "actual_remote_old_close_logical_calls":journal.iter().filter(|r|r["operation"]=="remote_old_close").count(),
         "actual_remote_old_close_retry_logical_calls":journal.iter().filter(|r|r["operation"]=="remote_old_close_retry").count(),
         "actual_post_native_cancel_and_exact_fresh_retry":matches!(case,SourceCase::RemoteOldRetainedNative),

@@ -310,6 +310,18 @@ fn run_registered_image_baseline_with_placement_and_source(
         .unwrap_or_else(|| f.root.path().join("registered-image-diagnostics"))
         .join(format!("native-registered-fifth-image-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&output).unwrap();
+    evidence(
+        &output.join("execution-identity.json"),
+        &serde_json::json!({
+            "actual_rust_test_thread": std::thread::current().name().map(str::to_owned),
+            "source_commit": std::env::var("BICDB_TEST_SOURCE_SHA").ok(),
+            "package_version": env!("CARGO_PKG_VERSION"),
+            "source_case": source_case.map(|value| format!("{value:?}")),
+            "assignment_mode": format!("{assignment:?}"),
+            "identity_is_correlation_not_authority": true,
+        }),
+    )
+    .unwrap();
     let mut phase = "four_initial_control";
     let mut reports = Vec::new();
     let mut ledger = Vec::new();

@@ -242,6 +242,7 @@ impl<'a> NativeServingObservationScope<'a> {
             self.request.range.id,
             self.point.range_index,
         )?;
+        self.database.require_native_serving_read_archive(self)?;
         self.store
             .require_actual_abort_controls_in_read_scope(self)?;
         self.catalogue.require_current(

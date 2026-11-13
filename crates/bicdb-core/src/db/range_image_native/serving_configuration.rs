@@ -805,3 +805,6 @@ impl BicDb {
 
 #[cfg(test)]
 mod activated_anchor_tests;
+
+#[cfg(test)]
+mod serving_read_scope_tests;

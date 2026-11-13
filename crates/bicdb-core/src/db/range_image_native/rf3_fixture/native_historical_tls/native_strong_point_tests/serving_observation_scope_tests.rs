@@ -42,11 +42,18 @@ fn seed() -> (EnforcedNetwork, RangeDescriptor) {
     (fixture, range)
 }
 fn snapshot(fixture: &EnforcedNetwork, range: &RangeDescriptor) -> serde_json::Value {
+    snapshot_at(fixture, range, 2)
+}
+fn snapshot_at(
+    fixture: &EnforcedNetwork,
+    range: &RangeDescriptor,
+    expected_r: u64,
+) -> serde_json::Value {
     let mut values = BTreeMap::new();
     for id in [node("n0"), node("n1"), node("n2")] {
         let db = fixture.native.databases[&id].read();
         let actual = db.current_native_range_source_lineage(range.id).unwrap();
-        assert_eq!(actual.range_index(), 2);
+        assert_eq!(actual.range_index(), expected_r);
         let mut rows = db.scan_collection("items").unwrap();
         rows.sort_by(|a, b| a.id.cmp(&b.id));
         let raw = std::fs::read(
@@ -219,3 +226,5 @@ fn native_serving_observation_scope_actual_tls_reply_and_fresh_finish() {
     fixture.idle();
     assert_eq!(snapshot(&fixture, &range), before);
 }
+
+mod normal_serving_record_tests;

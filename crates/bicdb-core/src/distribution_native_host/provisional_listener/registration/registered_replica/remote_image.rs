@@ -26,6 +26,55 @@ pub(crate) struct NativeRegisteredRemoteImageStep<'request> {
     phase: CancellationToken,
     _local: std::marker::PhantomData<std::rc::Rc<()>>,
 }
+/// Same original bounded request, but no Frozen reference/Arc. Consuming the
+/// lexical step never renews any role/OWN deadline. The live frame is supplied
+/// independently at every boundary and must point to the actual MF owner.
+pub(crate) struct NativeRegisteredRemoteTransferRequest {
+    pub(super) role: HandoffRoleAdmission,
+    pub(super) own: HostMetadataReadObservation,
+    pub(super) business: Uuid,
+    pub(super) member: NativeOwnedMetadataMemberObservation,
+    pub(super) plan: NativeJointHandoffPlan,
+    parent: CancellationToken,
+    phase: CancellationToken,
+}
+impl NativeRegisteredRemoteTransferRequest {
+    pub(crate) fn role(&self) -> &HandoffRoleAdmission {
+        &self.role
+    }
+    pub(crate) fn own(&self) -> &HostMetadataReadObservation {
+        &self.own
+    }
+    pub(crate) fn business(&self) -> Uuid {
+        self.business
+    }
+    pub(crate) fn plan(&self) -> &NativeJointHandoffPlan {
+        &self.plan
+    }
+    pub(crate) fn cancellation(&self) -> &CancellationToken {
+        &self.phase
+    }
+    pub(crate) fn member(&self) -> &NativeOwnedMetadataMemberObservation {
+        &self.member
+    }
+    pub(crate) fn require_live(
+        &self,
+        source: &Arc<NativeRemoteImageFact>,
+        frame: &NativeRemoteImageStep<'_>,
+    ) -> Result<()> {
+        self.parent.check()?;
+        self.phase.check()?;
+        frame.require_request_live()?;
+        if !std::ptr::eq(Arc::as_ref(source), frame.source()) {
+            return Err(invalid(
+                "remote transfer frame is not the retained actual MF owner",
+            ));
+        }
+        self.role
+            .role()
+            .require_own_host_metadata(&self.own, self.business)
+    }
+}
 
 fn canonical(mut range: crate::RangeDescriptor) -> crate::RangeDescriptor {
     range.approximate_bytes = 0;
@@ -201,6 +250,17 @@ impl NativeMetadataControlHost {
     }
 }
 impl NativeRegisteredRemoteImageStep<'_> {
+    pub(super) fn into_transfer_request(self) -> NativeRegisteredRemoteTransferRequest {
+        NativeRegisteredRemoteTransferRequest {
+            role: self.role,
+            own: self.own,
+            business: self.business,
+            member: self.member,
+            plan: self.plan,
+            parent: self.parent.clone(),
+            phase: self.phase,
+        }
+    }
     /// Necessary actual selected-range absence only. The existing authenticated
     /// frame, role, OWN and actual runtime freeze remain borrowed by this step.
     pub(crate) fn observe_selected_no_domain(

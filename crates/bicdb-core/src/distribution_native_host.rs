@@ -601,6 +601,7 @@ pub use provisional_listener::NativeRegisteredReplicaReceiverStatus;
 pub(crate) use provisional_listener::{
     NativeAssignedDataAdmission, NativeAssignedDataPolicyOrigin,
     NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission, NativeRegisteredRemoteImageStep,
+    NativeRegisteredRemoteInstallPreflight, NativeRegisteredRemoteTransferRequest,
     NativeRegisteredReplicaAdmission, NativeRegisteredSelectedRangeNoDomain,
 };
 

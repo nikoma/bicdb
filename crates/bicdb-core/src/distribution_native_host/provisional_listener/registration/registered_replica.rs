@@ -10,10 +10,13 @@ use std::sync::Weak;
 
 mod closed_fence;
 mod no_domain;
+mod remote_attempt;
 mod remote_image;
 pub(crate) use closed_fence::NativeAssignedRegisteredClosedFence;
 pub(crate) use no_domain::NativeRegisteredSelectedRangeNoDomain;
+pub(crate) use remote_attempt::NativeRegisteredRemoteInstallPreflight;
 pub(crate) use remote_image::NativeRegisteredRemoteImageStep;
+pub(crate) use remote_image::NativeRegisteredRemoteTransferRequest;
 mod assigned_policy;
 pub(crate) use assigned_policy::NativeAssignedDataPolicyOrigin;
 
@@ -48,6 +51,12 @@ pub(crate) struct NativeRegisteredReplicaAdmission {
     closed_fence_ready: Weak<AtomicBool>,
 }
 impl NativeRegisteredReplicaAdmission {
+    #[cfg(test)]
+    pub(crate) fn test_keep_original_registration(
+        &self,
+    ) -> Result<impl std::any::Any + Send + Sync> {
+        self.original_hook.test_keep_original_registration()
+    }
     pub(crate) fn require_live(&self) -> Result<()> {
         if !self
             .live
@@ -93,6 +102,10 @@ pub(super) struct NativeRegisteredReplicaReceiver {
     drained: Option<DrainedClusterDataListener>,
     listener: Option<ClusterDataServerHandle>,
     stopping: bool,
+    remote_attempts: std::collections::BTreeMap<
+        crate::RangeId,
+        remote_attempt::NativeRegisteredRemoteInstallAttempt,
+    >,
 }
 #[derive(Clone)]
 pub(super) struct RegisteredAssignedParts {
@@ -261,6 +274,7 @@ impl NativeRegisteredReplicaReceiver {
             drained: None,
             listener: None,
             stopping: false,
+            remote_attempts: Default::default(),
         })
     }
     fn advance(

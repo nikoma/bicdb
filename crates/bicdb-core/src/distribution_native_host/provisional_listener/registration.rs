@@ -21,7 +21,8 @@ use registered_replica::NativeRegisteredReplicaReceiver;
 pub use registered_replica::NativeRegisteredReplicaReceiverStatus;
 pub(crate) use registered_replica::{
     NativeAssignedDataPolicyOrigin, NativeAssignedRegisteredClosedFence,
-    NativeRegisteredRemoteImageStep, NativeRegisteredReplicaAdmission,
+    NativeRegisteredRemoteImageStep, NativeRegisteredRemoteInstallPreflight,
+    NativeRegisteredRemoteTransferRequest, NativeRegisteredReplicaAdmission,
     NativeRegisteredSelectedRangeNoDomain,
 };
 mod maintenance;

@@ -23,6 +23,42 @@ pub(crate) struct NativeRegisteredSelectedRangeNoDomain<'a> {
     backend: Weak<NativeMetadataControlBackend>,
     _local: std::marker::PhantomData<std::rc::Rc<()>>,
 }
+pub(super) struct RegisteredRemoteNativePreflight {
+    pub(super) native: NativeRecoveryAdmission,
+    pub(super) bindings: RangeImageDbBindings,
+    catalogue: NativeRegisteredRangeCatalogueAbsence,
+    safety: crate::db::NativeRangeInstallSafety,
+    metadata_store: Uuid,
+}
+impl RegisteredRemoteNativePreflight {
+    pub(super) fn catalogue(&self) -> &NativeRegisteredRangeCatalogueAbsence {
+        &self.catalogue
+    }
+    pub(super) fn safety(&self) -> &crate::db::NativeRangeInstallSafety {
+        &self.safety
+    }
+    pub(super) fn require_current(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        scope: &NativeRegisteredNoDomainScope<'_>,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        member: &NativeOwnedMetadataMemberObservation,
+    ) -> Result<()> {
+        if member.store_id() != self.metadata_store
+            || self.native.birth_id() != scope.native().birth_id()
+        {
+            return Err(invalid(
+                "remote transfer changed original protected member/native preflight",
+            ));
+        }
+        member.require_database_point(db)?;
+        db.validate_range_image_bindings(&self.bindings)?;
+        scope.require_selected_rows_absent(role.current_range(), &self.bindings)?;
+        self.catalogue.require_current(store, db, scope, role)?;
+        scope.require_install_safety(&self.safety)
+    }
+}
 impl NativeRegisteredReplicaAdmission {
     /// Role and OWN are the actual caller's existing request, acquired BEFORE
     /// all engine guards. This does not acquire another network observation.
@@ -167,6 +203,64 @@ impl NativeRegisteredReplicaAdmission {
     }
 }
 impl NativeRegisteredSelectedRangeNoDomain<'_> {
+    pub(crate) fn role(&self) -> &HandoffRoleAdmission {
+        self.role
+    }
+    pub(crate) fn original_freeze_owner(&self) -> Uuid {
+        self.frozen.owner()
+    }
+    pub(crate) fn plan(&self) -> Result<NativeJointHandoffPlan> {
+        self.require_live()?;
+        NativeJointHandoffPlan::from_actual_role_and_own(self.role.role(), self.own, self.business)
+    }
+    pub(super) fn into_remote_native_preflight(self) -> Result<RegisteredRemoteNativePreflight> {
+        self.into_remote_native_preflight_with(|_original, _db, _store, _scope| Ok(()))
+            .map(|(actual, ())| actual)
+    }
+    pub(super) fn into_remote_native_preflight_with<R>(
+        self,
+        operation: impl for<'scope> FnOnce(
+            &Self,
+            &BicDb,
+            &RangeWriteStore,
+            &'scope NativeRegisteredNoDomainScope<'_>,
+        ) -> Result<R>,
+    ) -> Result<(RegisteredRemoteNativePreflight, R)> {
+        self.require_metadata_current()?;
+        let actual = self
+            .service
+            .upgrade()
+            .ok_or_else(|| invalid("remote preflight actual service ended"))?;
+        let (safety, prepared) = {
+            let service = actual
+                .try_lock()
+                .ok_or_else(|| invalid("remote preflight service busy"))?;
+            let database = service.database();
+            let db = database
+                .try_read()
+                .ok_or_else(|| invalid("remote preflight database busy"))?;
+            self.with_native_exclusion(&db, |scope| {
+                service.with_writer_data_domain_store(&db, |store| {
+                    self.require_database_store(&db, store, scope)?;
+                    let safety = scope.observe_install_safety()?;
+                    let prepared = operation(&self, &db, store, scope)?;
+                    self.require_database_store(&db, store, scope)?;
+                    Ok((safety, prepared))
+                })
+            })?
+        };
+        self.require_metadata_current()?;
+        Ok((
+            RegisteredRemoteNativePreflight {
+                native: self.native,
+                bindings: self.bindings,
+                catalogue: self.catalogue,
+                safety,
+                metadata_store: self.proof.store_id(),
+            },
+            prepared,
+        ))
+    }
     #[cfg(test)]
     pub(crate) fn test_keep_original_registration(
         &self,

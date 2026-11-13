@@ -2,6 +2,15 @@
 use super::*;
 impl NativeUnassignedLearnerHost {
     #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_registered_image_control_mut(
+        &mut self,
+    ) -> Result<&mut NativeMetadataControlHost> {
+        self.metadata_transition
+            .control
+            .as_mut()
+            .ok_or_else(|| invalid("actual Registered image control absent"))
+    }
+    #[cfg(test)]
     pub(in crate::distribution_native_host) fn test_registered_image_control(
         &self,
     ) -> Result<&NativeMetadataControlHost> {

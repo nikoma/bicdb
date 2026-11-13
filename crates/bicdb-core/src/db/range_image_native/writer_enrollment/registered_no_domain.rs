@@ -15,6 +15,24 @@ pub(crate) struct NativeRegisteredNoDomainScope<'a> {
     journal: NativeImageJournalGuard<'a>,
 }
 impl NativeRegisteredNoDomainScope<'_> {
+    pub(crate) fn observe_install_safety(&self) -> Result<NativeRangeInstallSafety> {
+        self.require_database(self.database)?;
+        self.database.native_range_install_safety_under_journal(
+            self.native,
+            self.range,
+            self.frozen,
+            &self.journal,
+        )
+    }
+    pub(crate) fn require_install_safety(&self, original: &NativeRangeInstallSafety) -> Result<()> {
+        self.require_database(self.database)?;
+        original.require_current_under_journal(
+            self.database,
+            self.native,
+            self.frozen,
+            &self.journal,
+        )
+    }
     pub(crate) fn range_id(&self) -> RangeId {
         self.range
     }

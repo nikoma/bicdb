@@ -22,6 +22,10 @@ pub(super) enum SourceCase {
     TargetNoDomainHookRevoked,
     TargetNoDomainMemberChanged,
     TargetNoDomainSchemaRevoked,
+    TargetTransfer,
+    TargetTransferBusy,
+    TargetTransferCanceled,
+    TargetTransferHookRevoked,
     RemoteConstraintCapture,
 }
 #[test]
@@ -653,7 +657,7 @@ pub(super) fn exercise(
     services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
     metadata: &[Arc<Mutex<crate::MetadataConsensusStore>>],
     target: &Arc<TcpClusterRelocationTransport>,
-    target_control: &NativeMetadataControlHost,
+    target_control: &mut NativeMetadataControlHost,
     target_runtime: &Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>,
     target_service: &Arc<Mutex<crate::ClusterDataNodeService>>,
     target_metadata: &Arc<Mutex<crate::MetadataConsensusStore>>,
@@ -673,7 +677,7 @@ pub(super) fn exercise(
     let mut retained_sources = Vec::new();
     let mut last_manifest = None;
     let mut retained_runtimes = Vec::new();
-    let mut retained_remote_facts: Vec<NativeRemoteImageFact> = Vec::new();
+    let mut retained_remote_facts: Vec<Arc<NativeRemoteImageFact>> = Vec::new();
     for (original, acknowledged) in ranges.iter().zip(ledger) {
         let range = pending.range_by_id(original.id).unwrap();
         let relocation = pending
@@ -945,7 +949,8 @@ pub(super) fn exercise(
                 "{refused}"
             );
         } else {
-            let remote_fact = NativeRemoteImageFact::from_actual_manifest(actual).unwrap();
+            let remote_fact =
+                Arc::new(NativeRemoteImageFact::from_actual_manifest(actual).unwrap());
             assert_eq!(
                 remote_fact.manifest().checksum_sha256,
                 manifest.checksum_sha256
@@ -1063,6 +1068,34 @@ pub(super) fn exercise(
             assert_eq!(seal.history_entries, 2);
             if matches!(
                 case,
+                SourceCase::TargetTransfer
+                    | SourceCase::TargetTransferBusy
+                    | SourceCase::TargetTransferCanceled
+                    | SourceCase::TargetTransferHookRevoked
+            ) {
+                target_transfer_tests::exercise(
+                    case,
+                    target_control,
+                    target_runtime,
+                    target_service,
+                    target_metadata,
+                    target,
+                    remote_fact.clone(),
+                    &actual,
+                    &plan,
+                    &MetadataReadProvider::new(target_metadata.clone(), target.clone()).unwrap(),
+                    &actor,
+                    factory,
+                    pending,
+                    ranges,
+                    output,
+                );
+                // These source tests establish actual ownership only. A range
+                // now owns A, so the next source-only loop cannot pretend N.
+                return;
+            }
+            if matches!(
+                case,
                 SourceCase::TargetNoDomain
                     | SourceCase::TargetNoDomainHookRevoked
                     | SourceCase::TargetNoDomainMemberChanged
@@ -1164,3 +1197,4 @@ pub(super) fn exercise(
     })).unwrap();
 }
 mod target_no_domain_tests;
+mod target_transfer_tests;

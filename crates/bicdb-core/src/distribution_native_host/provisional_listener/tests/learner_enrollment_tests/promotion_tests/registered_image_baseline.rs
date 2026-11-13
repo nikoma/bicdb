@@ -724,6 +724,7 @@ fn run_registered_image_baseline_with_placement_and_source(
         assert_eq!(succeeded,2,"REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute");
         if let Some(source_case) = source_case {
             phase = "actual_local_old_quorum_seeded_remote_source_frames";
+            let target_runtime = host.test_registered_receiver_parts().unwrap().1;
             remote_source_tests::exercise(
                 source_case,
                 &controls,
@@ -731,8 +732,8 @@ fn run_registered_image_baseline_with_placement_and_source(
                 &services,
                 &metadata,
                 &target_transport,
-                host.test_registered_image_control().unwrap(),
-                &host.test_registered_receiver_parts().unwrap().1,
+                host.test_registered_image_control_mut().unwrap(),
+                &target_runtime,
                 &target_service,
                 &target_metadata,
                 &factory,

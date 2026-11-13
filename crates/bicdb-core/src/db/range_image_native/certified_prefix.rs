@@ -552,7 +552,7 @@ impl BicDb {
         let journal = self.try_native_image_journal()?;
         self.native_range_install_safety_under_journal(admission, range_id, frozen, &journal)
     }
-    fn native_range_install_safety_under_journal(
+    pub(in crate::db::range_image_native) fn native_range_install_safety_under_journal(
         &self,
         admission: &NativeRecoveryAdmission,
         range_id: RangeId,

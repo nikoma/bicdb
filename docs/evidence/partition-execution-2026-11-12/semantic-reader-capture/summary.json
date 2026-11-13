@@ -1,0 +1,76 @@
+{
+  "baseline_source": "73f18e76faaf631bf3e2d48239814be1e788eb9a",
+  "baseline": {
+    "passed": 0,
+    "failed": 3,
+    "ignored": 0,
+    "scope": "Three real product failures: each test stopped at its first EmbeddedMemory capture; ServerPaged was not reached at baseline."
+  },
+  "implementation_source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+  "focused": {
+    "passed_invocations": 9,
+    "distinct_passed": 8,
+    "failed": 0,
+    "ignored": 0,
+    "scope": "3 format capture tests each Embedded+Paged and two reopens;1 actual protected binding test over all3 flags with ACK/namespace checks and two reopens;1 Native installer rejection test for Decimal and application-unique mismatches;3 prior binding/gate/snapshot tests. Binding semantic test repeated once."
+  },
+  "limits": [
+    "No full Core broad result for changed reader contract yet.",
+    "No new CLI, release, deployment or main merge.",
+    "No target auto-installation of reader requirements or legacy logical replication propagation.",
+    "No portable collection-origin producer, original rename promotion positive, old-reader acceptance, application or physical HA/scaleout qualification."
+  ],
+  "goal": "active; P2 production disabled; no new cloud spend/promotion",
+  "existing_modules": {
+    "passed": 35,
+    "failed": 0,
+    "ignored": 0
+  },
+  "combined_distinct_tests_passed": 39,
+  "combined_invocations_passed": 44,
+  "test_names": [
+    "db::range_image_bindings::tests::native_semantic_reader_requirements_invalidate_prior_image_bindings",
+    "db::range_image_bindings::tests::range_image_bindings_reject_schema_roundtrip_and_new_backing",
+    "db::range_image_bindings::tests::range_image_gate_rejects_bare_frozen_copy_and_requires_owned_controlled_scope",
+    "db::range_image_bindings::tests::range_image_scan_budget_advances_over_nonmatching_keys_and_preserves_all_rows",
+    "distribution_range_image_install::current_repair_tests::actual_adopted_image_compacted_marker_conflict_refuses_native_preparation",
+    "distribution_range_image_install::current_repair_tests::actual_prepared_serving_record_survives_a_second_current_voter_image_attempt",
+    "distribution_range_image_install::current_repair_tests::actual_rf3_nonempty_current_voter_repair_uses_same_catalogue_and_keeps_recovery_closed",
+    "distribution_range_image_install::current_repair_tests::actual_rf3_nonempty_finalized_image_prepares_without_an_unfenced_window",
+    "distribution_range_image_install::lease_tests::actual_runtime_lease_full_image_adoption_returns_only_control_and_preserves_all_refusals",
+    "distribution_range_image_install::lease_tests::actual_runtime_lease_post_intent_drop_refuses_untouched_return",
+    "distribution_range_image_install::lease_tests::actual_runtime_lease_untouched_cancel_drop_requires_fresh_authority_and_keeps_recovery_fenced",
+    "distribution_range_image_install::proposal_tests::actual_protected_proposal_orphan_preserves_native_point_and_reopens_without_intent",
+    "distribution_range_image_install::tests::actual_capture_refuses_outstanding_controlled_callback_then_succeeds_after_drain",
+    "distribution_range_image_install::tests::actual_installed_r1_floor_survives_physical_invalidation_and_reopen_without_readiness",
+    "distribution_range_image_install::tests::actual_native_image_catalogue_adoption_ambiguous_persist_needs_real_refsync_before_receipt",
+    "distribution_range_image_install::tests::actual_native_image_catalogue_adoption_folds_real_rows_but_keeps_every_admission_refused",
+    "distribution_range_image_install::tests::actual_native_image_catalogue_adoption_reopens_and_reissues_same_materialized_snapshot",
+    "distribution_range_image_install::tests::actual_native_image_catalogue_adoption_retry_is_idempotent_without_reapplying_rows",
+    "distribution_range_image_install::tests::actual_native_image_catalogue_finalization_retains_real_base_and_rejects_foreign_freeze",
+    "distribution_range_image_install::tests::actual_native_r0_copy_removes_extra_rows_and_preserves_target_namespace_identity",
+    "distribution_range_image_install::tests::actual_native_r1025_install_preserves_full_history_after_command_payload_compaction",
+    "distribution_range_image_install::tests::actual_native_r1_install_uses_target_local_visibility_and_preserves_other_range_rows",
+    "distribution_range_image_install::tests::native_completed_crash_window_reopens_source_and_target_and_reissues_only_exact_attempt",
+    "distribution_range_image_install::tests::native_completed_nonzero_handoff_window_reaudits_history_and_reissues_exact_anchor",
+    "distribution_range_image_install::tests::native_image_install_refuses_different_semantic_reader_requirements_before_writes",
+    "distribution_range_image_install::tests::native_partial_attempt_refuses_recreated_namespace_until_fresh_authorized_attempt",
+    "distribution_range_image_install::tests::partial_native_attempt_reopen_stays_unready_and_new_attempt_rejects_late_chunks",
+    "distribution_range_image_install::tests::reborrow_tests::native_image_reborrow_begin_checks_actual_admission_before_replacement_bindings",
+    "distribution_range_image_install::tests::reborrow_tests::native_image_reborrow_recover_checks_actual_admission_before_replacement_bindings",
+    "format::local_identity_format_tests::namespace_identity_all_format_writers_share_canonical_root_lock",
+    "format::local_identity_format_tests::namespace_identity_concurrent_capability_and_flush_writers_preserve_all_flags",
+    "format::local_identity_format_tests::namespace_identity_does_not_advertise_unknown_native_readers",
+    "format::local_identity_format_tests::namespace_identity_metadata_replacements_keep_sticky_fences_durable",
+    "format::semantic_reader_capture_tests::application_unique_scope_requirement_survives_native_reader_capture",
+    "format::semantic_reader_capture_tests::decimal_comparison_requirement_survives_native_reader_capture",
+    "format::semantic_reader_capture_tests::partition_execution_requirement_survives_native_reader_capture",
+    "fts_format::tests::generation_v2_remains_readable_after_v3_publication",
+    "fts_format::tests::sealed_filter_terms_are_stable_and_validate_input",
+    "fts_format::tests::stored_text_round_trips_and_is_bounded"
+  ],
+  "full_Core_broad": {
+    "unit": "bicdb-semantic-reader-current-core-broad",
+    "state": "submitted; waits terminal prior broad+owned cleanup+modulePASS; no passing result claimed"
+  }
+}

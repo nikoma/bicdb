@@ -107,6 +107,31 @@ pub(crate) fn register_cte(qualifier: &str, columns: &[String], cte: &CteResult)
     register_columns(qualifier, columns, &cte.column_types);
 }
 
+/// A schema-qualified table reference cannot bind to an alias of a different
+/// physical relation. The row layout alone loses that distinction: scanning
+/// `other AS source` produces `source.payload` slots, which must not satisfy
+/// `public.source.payload` from an outer query. Consult only this query's frame;
+/// an outer row retains its own scope and is tried separately by the evaluator.
+pub(crate) fn current_schema_qualifier_matches(parts: &[String]) -> Option<bool> {
+    let [_, qualifier, _] = parts else {
+        return None;
+    };
+    let relation = crate::relation_name_from_parts(&parts[..2]).ok()?;
+    FRAMES.with(|frames| {
+        let frames = frames.borrow();
+        let frame = frames.last()?;
+        let mut matches = None;
+        for (alias, types) in &frame.relations {
+            if !alias.eq_ignore_ascii_case(qualifier) {
+                continue;
+            }
+            let same = matches!(types, RelationTypes::Schema(schema) if schema.name == relation);
+            matches = Some(matches.unwrap_or(true) && same);
+        }
+        matches
+    })
+}
+
 /// The declared type of `qualifier.column` as registered by the innermost
 /// frame that knows `qualifier`: `None` = no frame registered the qualifier
 /// (the caller may resolve it another way), `Some(None)` = registered but

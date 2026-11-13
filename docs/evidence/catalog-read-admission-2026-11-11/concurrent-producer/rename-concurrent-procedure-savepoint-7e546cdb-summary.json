@@ -1,0 +1,119 @@
+{
+  "source": "7e546cdb45fb91f94837913af3da58300d366245",
+  "status": "failed",
+  "counts": [
+    {
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 15,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "FAILED",
+      "passed": 0,
+      "failed": 1,
+      "ignored": 0
+    },
+    {
+      "status": "FAILED",
+      "passed": 0,
+      "failed": 2,
+      "ignored": 0
+    },
+    {
+      "status": "FAILED",
+      "passed": 1,
+      "failed": 2,
+      "ignored": 0
+    },
+    {
+      "status": "FAILED",
+      "passed": 0,
+      "failed": 2,
+      "ignored": 0
+    },
+    {
+      "status": "FAILED",
+      "passed": 2,
+      "failed": 2,
+      "ignored": 0
+    },
+    {
+      "status": "FAILED",
+      "passed": 1,
+      "failed": 1,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "FAILED",
+      "passed": 4,
+      "failed": 1,
+      "ignored": 0
+    }
+  ],
+  "passed": 70,
+  "failed": 11,
+  "ignored": 0,
+  "files": {
+    "report-rename-concurrent-procedure-savepoint-7e546cdb.json": {
+      "bytes": 3558,
+      "sha256": "1a5255f12f517ef1f759bb09a5653be49e781e57183e9390a49126d44456e6da"
+    },
+    "tc-step-rename-concurrent-procedure-savepoint-7e546cdb.log": {
+      "bytes": 457297,
+      "sha256": "3020e3218f10920ebfa8e946f5e60824374fb12dd7fc317b068110abb7482d7c"
+    }
+  },
+  "scope": "Coherent private producer closure:4885 actualwire commit/autocommit/fullrollback passed; failures identifiedwireSAVEPOINT lost businessowner, interpretedCALL/WASM autocommit forgot host finalization, and original standalone embedding fixture omitted required trusted UUID startup initialization. Preserve all capturedfailures. Attach/return same pendingowner throughwireundo even onerror, finalize auto procedure decisions afterdurability, add compiled-wrapper real SQL+ACK test without changing compiler declared-type guard, and add startupinitializer beforefixture owners without changing business/reopen assertions. Core production byte-identical4885 (its25scopecontrolsPASS); collect new6native/CALL/compiled,15wireinclRR/SSI,FK/cache/readowner/journal and related rename targets. Full source app/HA/VM/replica mapping remain open.",
+  "main_delivered": false,
+  "application_qualified": false,
+  "observed_unix": 1794434263.879895
+}

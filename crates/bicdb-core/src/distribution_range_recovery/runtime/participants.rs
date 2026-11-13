@@ -7,6 +7,12 @@ use std::sync::mpsc;
 
 const WORKERS: usize = 4;
 const ATTEMPTS: usize = 2;
+/// How long a finished collection waits for its workers to leave. Each worker
+/// holds the operation's range context, so until it exits the next recovery
+/// step on this range is refused as busy although the operation has returned.
+/// Idle workers leave as soon as they are scheduled; only a worker still
+/// inside a peer exchange can outlast this, and then busy is the truth.
+const WORKER_EXIT_WAIT: Duration = Duration::from_millis(250);
 struct Job {
     phase: u64,
     node: ClusterNodeId,
@@ -19,10 +25,26 @@ struct ParticipantPool {
     cancellation: CancellationToken,
     workers: usize,
     next_phase: u64,
+    handles: Vec<std::thread::JoinHandle<()>>,
 }
 impl Drop for ParticipantPool {
     fn drop(&mut self) {
         self.cancellation.cancel();
+        // Disconnect both channels so a worker waiting for a job or for room
+        // to report leaves at once instead of at its next poll.
+        let (jobs, _unused) = mpsc::sync_channel(1);
+        drop(std::mem::replace(&mut self.jobs, jobs));
+        let (_unused, results) = mpsc::sync_channel(1);
+        drop(std::mem::replace(&mut self.results, results));
+        let until = Instant::now() + WORKER_EXIT_WAIT;
+        for handle in self.handles.drain(..) {
+            while !handle.is_finished() && Instant::now() < until {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            if handle.is_finished() {
+                let _ = handle.join();
+            }
+        }
     }
 }
 impl ParticipantPool {
@@ -42,12 +64,13 @@ impl ParticipantPool {
         let (tx, results) = mpsc::sync_channel(workers.max(1));
         // Construct the cancellation owner before spawning: a partial spawn
         // failure cancels already-started workers and retains their permits.
-        let pool = Self {
+        let mut pool = Self {
             jobs,
             results,
             cancellation,
             workers,
             next_phase: 0,
+            handles: Vec::with_capacity(workers),
         };
         for _ in 0..workers {
             let rx = Arc::clone(&rx);
@@ -55,7 +78,7 @@ impl ParticipantPool {
             let transport = Arc::clone(transport.as_ref().unwrap());
             let token = pool.cancellation.clone();
             let permit = Arc::clone(operation);
-            std::thread::Builder::new()
+            let handle = std::thread::Builder::new()
                 .name("range-recovery-observer".into())
                 .spawn(move || {
                     let _permit = permit;
@@ -77,6 +100,7 @@ impl ParticipantPool {
                         }
                     }
                 })?;
+            pool.handles.push(handle);
         }
         Ok(pool)
     }

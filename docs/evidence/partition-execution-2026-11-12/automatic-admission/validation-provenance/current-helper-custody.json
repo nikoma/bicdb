@@ -1,0 +1,28 @@
+{
+  "source": "c3588bf8b029ac8579f1336bf9d170d231648f29",
+  "files": {
+    "durability_child": {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/examples/durability_child",
+      "sha256": "8d318c2d067880fee5e90cb04070446661ce1d69d26e8e2f286ee56fadfaa25b",
+      "bytes": 44712192,
+      "mtime": 1794500508.4218142,
+      "has_sql_partition_required_feature": true
+    },
+    "chaos_child": {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/examples/chaos_child",
+      "sha256": "e756dd975a41eef62a7acd337dd41c4359d33581a36737f99d260e5417f12f95",
+      "bytes": 43258128,
+      "mtime": 1794500507.2407994,
+      "has_sql_partition_required_feature": true
+    },
+    "ha_state_child": {
+      "path": "/root/bicdb-durability-s3/target-metadata-describe/debug/examples/ha_state_child",
+      "sha256": "81170a76e5b54ed5709670b06f710d346956de0ae01edcd7b5e7b5c804a6beca",
+      "bytes": 42749560,
+      "mtime": 1794500505.9227827,
+      "has_sql_partition_required_feature": true
+    }
+  },
+  "recorded_unix": 1794500508.6484187,
+  "scope": "Exactsourcecheckout+successfulprecedingbuild3exampletargets; currentdurabilityELFincludesrequiredSQLformatflagmissingfromoldstandardhelper. Process-localruntime/custodyonly, noartifactpromotion."
+}

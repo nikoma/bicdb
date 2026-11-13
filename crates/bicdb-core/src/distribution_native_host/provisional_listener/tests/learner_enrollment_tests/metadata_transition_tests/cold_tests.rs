@@ -38,6 +38,12 @@ fn copy_closed(source: &Path, target: &Path) {
         .unwrap()
         .sync_all()
         .unwrap();
+    // A closed store is restored the way an operator must restore it: the
+    // genuine source authorizes its copy's physical rebind. A raw copy stays
+    // refused; see the Native origin root tests.
+    if source.join("native-origin-root-v1.json").is_file() {
+        crate::authorize_native_cold_restore(source, target).unwrap();
+    }
 }
 fn open_cold(f: &EnrollmentFixture, root: &Path) -> NativeColdLearnerMetadataHost {
     let parent = CancellationToken::uncancelable();

@@ -363,6 +363,10 @@ const UNKNOWN_CTE_COLUMN: &str = "\u{0}bicdb_unknown_cte_columns";
 impl SqlEngine<'_> {
     /// Reject column references no relation in scope provides (42703/42P01).
     pub(crate) fn check_statement_column_references(&self, statement: &Statement) -> Result<()> {
+        crate::session::recycle_bin::ensure_replica_catalog_statement_ready(
+            self.db_ref(),
+            statement,
+        )?;
         if !column_reference_check_enabled() {
             return Ok(());
         }

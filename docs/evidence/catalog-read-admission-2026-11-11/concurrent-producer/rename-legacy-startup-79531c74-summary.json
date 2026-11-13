@@ -1,0 +1,71 @@
+{
+  "source": "79531c74fc01dbcf0ea199e9ffb39a31b93dd8d0",
+  "status": "focused_passed",
+  "counts": [
+    {
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "passed": 24,
+  "failed": 0,
+  "ignored": 0,
+  "files": {
+    "report-rename-legacy-startup-79531c74.json": {
+      "bytes": 1649,
+      "sha256": "b5efde685059c4e3121e37ae82b7a314fad6c6a7be6a8671fe35252dd752db96"
+    },
+    "tc-step-rename-legacy-startup-79531c74.log": {
+      "bytes": 93435,
+      "sha256": "4e8927b4f263d766175e0127eff2c3d2f6f437464054cbb8d1c2eff5aaa44625"
+    }
+  },
+  "scope": "Production byte-identical7e (6native/CALL/compiled+15wire+FK/catalogreader/journal focusedPASS, overall70PASS11FAIL). All11 retained related-target failures stopped on required legacy UUID startup migration with liveSQLowner. Add only trusted initializer before first database use in standalone embedding fixtures. Removing only19new startupcalls restores every original fixture byte, verifiedhashproof; noSQLstrings/assertions/waits/versions changed. Publicprofile initializer alreadydoes startupactivation. Preserve Nativequiescence and missing/nil-image refusal. Collect every remaining actual semantic failure across8relatedtargets; not broad/application/replica qualification.",
+  "main_delivered": false,
+  "application_qualified": false,
+  "observed_unix": 1794434843.7342963
+}

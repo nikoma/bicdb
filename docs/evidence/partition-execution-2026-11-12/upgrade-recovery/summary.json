@@ -1,0 +1,116 @@
+{
+  "recorded_unix": 1794509419.927639,
+  "state": "Private unmerged partition source. FullgoalACTIVE; no newRootdeliveryversion/CLI/release/deployment.",
+  "main": {
+    "commit": "b9394418bdf9d87864c2c12d6fe81bb7d4039d53",
+    "version": "1.0.489-beta",
+    "pr": 157,
+    "candidate": "2ae800454d57b5f5660a36d27a8f309d0ebb4e9a",
+    "tree_equals_candidate": true,
+    "verified_GitHub_tests": {
+      "run": 43260701749,
+      "conclusion": "success",
+      "required_jobs_success": 9,
+      "focused_manual_jobs_skipped": 2
+    },
+    "verified_GitHub_Rails": {
+      "run": 43260701703,
+      "job": 131330865644,
+      "conclusion": "success"
+    },
+    "scope": "GitHub connectedtools actualPR/workflows/jobs inspected; localgitmerge/candidate treeequal andlocalmainFF/versioncheck29packages0changes. Theseowner/mainchecksdo notqualify privatepartitionchanges."
+  },
+  "sources": {
+    "combined_main489_runtime": "6c16e66e742bb575041aebce4086ebf434b9fe64",
+    "private_head": "430067f7fed0b0fefacc6e2fef71e8aa27097c2c",
+    "process_example": "fa7a2c593f2fc0aee77781c56a277a0f3a96ad11",
+    "IO_example": "430067f7fed0b0fefacc6e2fef71e8aa27097c2c",
+    "production_equivalence": "production-equivalence.json"
+  },
+  "focused": {
+    "earlier3867": {
+      "parser_units": 2,
+      "schema_key_integration": 25,
+      "failed": 0
+    },
+    "6c": {
+      "admission_units": 13,
+      "schema_key_integration": 25,
+      "failed": 0
+    },
+    "baseline4508": {
+      "passed": 0,
+      "failed": 5,
+      "scope": "Test-only over3867: all5invalidstationaryACKsets wronglycertified.",
+      "compile_d210": "E0425 preflightcallmisplacedinfreshactivation, correctedin6c. Notruntimeproof."
+    }
+  },
+  "implementation": "Purebounded preflight uses proposedv1childownschemas beforefence, checksallstationary+movedACKs/localvalidatedconstraints/canonicalphysicalPK/uncacheduniquenesskeys/FKfinalvirtualparentrows/EXCLUDE. HonorsstationaryNOTVALIDCHECK/FKexemptions; newwriteenforcementproven. No ACKdrop/rekey/guessedorigin. Completeforest data/schema/cert andownednewsequence/defaultACL atomicpublication+retryableundo fromprecedingbatch retained.",
+  "genuine_old482": {
+    "default": 8,
+    "explicit_operator": 8,
+    "entry_and_startup": 14,
+    "total_case_invocations": 30,
+    "independent_original_ACKs": 14,
+    "scope": "Actualold482CLI-generated stores, copiesonly, alloriginalfilesSHA verifiedunchanged. Fullrecordhashes,Nativeindexes,tworeopens;actualold482readerrefusesupgradedcopieswithoutchangingbytes. Independentcanonicalpercaseresult verifier, notjustwrapper exit."
+  },
+  "process_cut_matrix": {
+    "cases": 152,
+    "passed": 152,
+    "failed": 0,
+    "source": "fa7a2c593f2fc0aee77781c56a277a0f3a96ad11",
+    "embedded_memory": 56,
+    "server_paged": 96,
+    "stable_old": 88,
+    "stable_new": 64,
+    "scope": "Allfourlegacycases perMode inclbothreviewedpolicychoices; original14ACKs independentlylinked. ActualcutreachedSIGABRT. Fencewrite/sync/rename/dirsync;Nativepublicationwrite/sync;Pagedbeforedecision/txlogdurable/pageapply/marker/syncpublish;afterexternalfsyncedmigrationACK. Eachbothprocessabort andspecifiedpage-WAL-tail/directoryvolatileemulation. Exactcompleteold/newfullrecords+rawschemas,3stableopens,Nativeindexes,oldreaderbyteidentity. EmulationisnotactualVMpowercut."
+  },
+  "IO_failure_matrix": {
+    "cases": 96,
+    "passed": 96,
+    "failed": 0,
+    "source": "430067f7fed0b0fefacc6e2fef71e8aa27097c2c",
+    "stable_old": 96,
+    "scope": "ActualscopedEIOone-shot/persistent, samefourlegacycasesperMode;fencewrite/sync/rename/dirsync+Nativepublicationtxlogwrite/sync. Actualfaultfired;applyreturnsErr/noACK;dropinjectionthenfailedhandlerefuseslegitimateNativewrite; exitwithoutgracefuldbclose. IndependentprocessverifiesexactoldACK/catalogstate+3opens+indexes+oldreaderbyteidentity. NotcompletephysicalfaultorVMqualification."
+  },
+  "independent_verifier": "report-partition-process-io-6c-independent.json inside original-source-scoped-results.tar.gz verifies exactcoverage/no duplicates/allobservations/canonicalresults/binarySHA/originalmanifests,248caseinvocations. Countsareoverlappingtests,notuniqueACKs.",
+  "prior_broad_cc84": {
+    "Core": {
+      "passed": 1391,
+      "failed": 0,
+      "ignored": 13
+    },
+    "SQL": {
+      "passed": 2550,
+      "failed": 0,
+      "ignored": 4
+    },
+    "wire": {
+      "passed": 491,
+      "failed": 0,
+      "ignored": 2
+    },
+    "scope": "Terminalallcommands0 atcc84, beforemain489 integration/laterSQLchanges. Historicalscopedproofonly."
+  },
+  "current_broad": {
+    "unit": "bicdb-partition-ack-main489-broad",
+    "source": "6c16e66e742bb575041aebce4086ebf434b9fe64",
+    "status": "LIVE atlastobserved specificMainPID150399; currenthelpersbuild/hashPASS, allCorelib+tests running. SQL/wire notreached.",
+    "scope": "No assumedpass, no restartdueobservation. Preservefullsuitecollection; no runtimechange6c..430. ActiveRAMmonitor/j1/16GiBcap/incrementaloff."
+  },
+  "resource_cleanup": {
+    "superseded_test_ELFs": 411,
+    "superseded_test_ELF_bytes": 119072952320,
+    "unused_preview_probes": 2,
+    "unused_preview_probe_bytes": 528105472,
+    "total_reclaimed_allocated_bytes": 119601057792,
+    "remaining_targets_last_measured_bytes": {
+      "target-tc": 474911608832,
+      "target-metadata-describe": 68436078592
+    },
+    "scope": "Onlytask-owned exactterminaloldoutputsnotincurrentrun; Native/metadata source locks, no activeFD/maps, exactELF/path/source/size/mtime/hash/nlinkproof asapplicable. Currentreplayprobes/oldCLI/currentrunnable/compatbinaries/dependencies/others preserved. Activebroadcanchange cachemeasurement."
+  },
+  "remaining": "Original1464Oracle/PG inventories+unchanged10swaits, fullUI400encryptedbackup/fullrestore/reopens, Nativeportablecollectionoriginproducer+SQLrenameintegration, allotherpartitionlifecycle/constraints/namespace/hash/Nativeauthority/replication/VM/HA gates, finalsourceversionCImergepush. P2off; no cloudspend orproductionpromotion. Localpartitioningnotdistributedautosharding/rebalance/capacityqualification.",
+  "validation": "Localcargo fmt --all -- --check PASS, versioncheck29packages4890changes PASS, gitdiffcheck PASS at430; selectedruntime treeequivalenceverified. GenuineNativePG18.4 referencecontrols PASS; notBicDBruntimeproof.",
+  "binary_state": "S3exact6cqualification-artifacts-debug holdsupgrade/startupprobes;fa holdsprocesscutprobe,430holdsIOprobe. Thesearetestartifacts. RootstandardrunnableCLIremainsmain482f43583da4c34209e810c5e6a8f5925831b2949a1 sha31f3f86f3d43c04e7dcfa060fde43f71d8271727219a561fa1b3b14f2d61b556; main488ownerNodeaddonseparate."
+}

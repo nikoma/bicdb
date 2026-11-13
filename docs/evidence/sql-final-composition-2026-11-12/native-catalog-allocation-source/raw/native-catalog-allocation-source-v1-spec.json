@@ -1,0 +1,24 @@
+{
+  "label": "native-catalog-allocation-source-v1",
+  "repo": "/root/bicdb-sql-final-composition",
+  "source": "a4f41b7e7a7cdeb5df61f947a0b740ad5b9b8eb9",
+  "base": "5594663d3757ce2fad1340028e5b430088b29a24",
+  "scope": "Actual Native source allocation producer first batch. Six new regressions cover both storage modes, creation before data, two exports/two opens, no late or forged-row adoption, same-name reuse, actual WAL write/sync EIO, marker-clear EIO and retained-WAL feature fencing. Not target identity mapping, imported authority, independent process/KVM or SQL promotion acceptance.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "db::native_catalog_allocations::tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "source": "d9ff5aea602a0629e72a6b4248fa6c0dc6535767",
+  "scope": "Actual030runtime plus newmandatory primary-key correlatedEXISTS positive onrealouterheap (functionFROMdeclines memoeligibility). Own temporaryGitindex constructs proof tree; no product sourceediting; expectemptyparentindexcounterexample. No originalassertionweakening.",
+  "started_unix": 1794483227.0007088,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_execution",
+        "parent_primary_key_exists_probes",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483227.0008888,
+      "exit": 101,
+      "finished_unix": 1794483231.3320062
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794483231.332215
+}

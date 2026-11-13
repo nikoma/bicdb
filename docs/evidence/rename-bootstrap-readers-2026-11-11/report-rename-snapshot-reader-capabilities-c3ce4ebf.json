@@ -1,0 +1,127 @@
+{
+  "source": "c3ce4ebf092595573302d054ed3dd95fabf9dac3",
+  "scope": "Coherent private bootstrap capability batch after59f55 tests-only actual snapshot/schema failures. Snapshot captures sorted portable flags; protected records-v1 wire shape makes frozen legacy decoder failclosed while emptyflag oldwire stays byteidentical. Both mutable/shared native apply validate+persist flags before rows. SchemaBundle checksums flags and uses format2 only withflags; unflagged format1 checksum remains identical. Compatibility fingerprint includes flags and invalidates when changed; same-schema bootstrap plus signed activation installs before schema, preserves sticky subsets. New positive/native schema/learner/live regressions, not real oldbinary/networkmixedversion/VM/powerloss acceptance. First237ed batch: snapshot and legacywire pass, schema export verify rejects because canonical verifier omitted newflags; fixed canonical signature/payload in thissource; no assertion changed.",
+  "started_unix": 1794386974.0763004,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "sql_rename_snapshot_fence"
+      ],
+      "started_unix": 1794386974.0763998,
+      "exit": 0,
+      "finished_unix": 1794386998.6285217
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "snapshot_reader_tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794386998.628739,
+      "exit": 0,
+      "finished_unix": 1794387025.1012013
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "schema_compatibility_tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794387025.101358,
+      "exit": 0,
+      "finished_unix": 1794387025.5804422
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "distribution_snapshot",
+        "--test",
+        "distribution_learner",
+        "--test",
+        "relocation_snapshot_authorization",
+        "--test",
+        "sql_rename_replication_fence"
+      ],
+      "started_unix": 1794387025.580684,
+      "exit": 0,
+      "finished_unix": 1794387030.814166
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "format::tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794387030.8143857,
+      "exit": 0,
+      "finished_unix": 1794387030.9532146
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "live_replication",
+        "--test",
+        "replication_durable_frames",
+        "--test",
+        "replication_journal"
+      ],
+      "started_unix": 1794387030.9534762,
+      "exit": 0,
+      "finished_unix": 1794387059.9770849
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794387059.97738
+}

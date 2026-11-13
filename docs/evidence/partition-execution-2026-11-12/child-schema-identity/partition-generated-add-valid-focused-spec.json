@@ -1,0 +1,47 @@
+{
+  "label": "partition-generated-add-valid-focused",
+  "source": "372cbf03d17a88d6a37169796ebc7f5f2b369d69",
+  "base": "8739d3e638a2e51faba20f2443c26eb6f598efae",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "ActualtargetPG18.4 recursive SERIAL/IDENTITY: pure newownedsequence allocation during complete row/schema validation, one Native data/schema/sequence/defaultACL/certificate decision, complete retryableforest+auxiliary undo. Newpopulatedserial+singleNativecommit, exhaustednewidentity no changes/tworeopens, duplicate global/schema defaultACL+savepointundo controls; all prior9child and2parser tests unchanged. No broad/fullapplication/HA deliveryclaim. Core remains exactcc84 unchanged. ActualNativePG18v1 referencefixtureinvalidMIN1==MAX1, retainedfailed. V2explicitMIN0passestarget2200H/exactACKpreservation+rollback+defaultACL+sharedserial controls. OnlynewexhaustionfixtureaddsMIN0; productionexact8739, allrequiredassertionspreserved. Docsrecordtargetcorrectionandmain489independentmerge; no489integrationqualificationyet.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "partition_child_schema",
+      "--test",
+      "partition_schema_changes",
+      "--test",
+      "primary_key_index_compatibility",
+      "--test",
+      "partition_statement_batches",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-generated-add-atomic-focused"
+  ],
+  "required_receipts": [],
+  "allow_isolated_builds": [
+    {
+      "pid": 3624130,
+      "start_ticks": 163844992,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

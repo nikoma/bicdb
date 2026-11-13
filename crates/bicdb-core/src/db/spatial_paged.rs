@@ -2251,6 +2251,7 @@ impl BicDb {
 
     pub(crate) fn ensure_writable(&self, operation: &str) -> Result<()> {
         self.check_recovery_state()?;
+        self.observe_native_origin_root()?;
         if !self.config.load_secondary_indexes {
             return Err(BicDbError::ReadOnlyStandby(format!(
                 "{operation} is refused on a primary-record-only handle opened without secondary indexes"
@@ -2863,6 +2864,7 @@ impl BicDb {
             commit_seq,
             &tx.writes,
             &pending_publishes,
+            &tx.native_catalog_allocations,
             &record_audit_events,
             &sync_ops,
             prepared,

@@ -50,14 +50,23 @@ fn mix(a: &mut u32, b: &mut u32, c: &mut u32) {
 }
 
 pub(crate) fn hash_text_extended(text: &str, seed: i64) -> i64 {
-    let bytes = text.as_bytes();
+    hash_bytes_extended(text.as_bytes(), seed as u64) as i64
+}
+
+pub(crate) fn hash_int8_extended(value: i64, seed: u64) -> u64 {
+    let high = (value >> 32) as u32;
+    let folded = (value as u32) ^ if value >= 0 { high } else { !high };
+    hash_bytes_extended(&folded.to_le_bytes(), seed)
+}
+
+pub(crate) fn hash_bytes_extended(bytes: &[u8], seed: u64) -> u64 {
     let mut a = 0x9e3779b9u32
         .wrapping_add(bytes.len() as u32)
         .wrapping_add(3923095);
     let mut b = a;
     let mut c = a;
     if seed != 0 {
-        a = a.wrapping_add(((seed as u64) >> 32) as u32);
+        a = a.wrapping_add((seed >> 32) as u32);
         b = b.wrapping_add(seed as u32);
         mix(&mut a, &mut b, &mut c);
     }
@@ -89,5 +98,5 @@ pub(crate) fn hash_text_extended(text: &str, seed: i64) -> i64 {
     b = b.wrapping_sub(a.rotate_left(14));
     c ^= b;
     c = c.wrapping_sub(b.rotate_left(24));
-    ((u64::from(b) << 32) | u64::from(c)) as i64
+    (u64::from(b) << 32) | u64::from(c)
 }

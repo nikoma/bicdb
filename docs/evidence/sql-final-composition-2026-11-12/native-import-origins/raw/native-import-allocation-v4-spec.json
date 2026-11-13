@@ -1,0 +1,24 @@
+{
+  "label": "native-import-allocation-v4",
+  "repo": "/root/bicdb-sql-final-composition",
+  "source": "895419dc4274b0988eaf5b3f81049e22361864ef",
+  "base": "406385bd022d6ef1a86b2bbc6b99302dcacc9e5f",
+  "scope": "Exact final receiver batch six focused tests both storage modes, including6originalactualEIO+2recoveryWALcopyEIO. Real baseline606 ordering regression0P1F exposed completed provenance before rewrite durability. Fix rewrites exact recovered WAL through sync/rename/dirsync before catalog completion and before any open WAL cut. Root factory setup preserves standby role; opaque actual source only, no JSON/metadata/existing-unowned adoption; native target pair/generation durable with WALdecision, full source pair uniqueness; retained WAL fence aftermapped backingdrop. Not peer network auth/protected image mapping/journalpublisher+recordlineage/SQLresolver/promotedSQL acceptance or process/KVM. Preserve all11 c932 physicalcoldcopy broad failures. v3 had a compile-only missing durability binding because the shared health was previously created later; no assertions ran. Move the same single shared health setup ahead of Native recovery publication; preserve compile error evidence.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "db::native_import_origins::tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ]
+}

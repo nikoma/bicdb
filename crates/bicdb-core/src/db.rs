@@ -1,6 +1,10 @@
 mod access_mutation;
 mod branching;
+mod catalog_admission;
 mod collection_rename;
+pub use catalog_admission::{
+    CatalogCreatedCollectionUndo, CatalogReadAccess, CatalogScopeAccess, CatalogScopeToken,
+};
 mod commit_snapshot;
 mod decimal_predicate;
 mod deferred_materialize;
@@ -9,7 +13,22 @@ mod native_calendar;
 use exact_decimal_sum::ExactDecimalSum;
 mod local_namespace_identity;
 mod mutation_identity;
+mod native_catalog_allocations;
+mod native_collection_birth;
+mod native_import_origins;
+mod native_origin;
+pub(crate) use native_origin::NativeOriginObservation;
+pub(crate) use native_origin::{
+    authorize_materialized_copy as authorize_materialized_native_copy,
+    refuse_foreign_root_preflight as refuse_unauthorized_native_copy,
+};
+pub use native_origin::{authorize_native_cold_restore, NativeColdRestoreOutcome};
+mod native_wal_backings;
+mod sql_partition_execution;
+pub use sql_partition_execution::CollectionCacheStamp;
 mod native_wal_apply;
+#[cfg(test)]
+mod snapshot_reader_tests;
 pub use deferred_materialize::DeferredMaterializeStats;
 pub(crate) use native_wal_apply::admission_mutations_sha256;
 pub use native_wal_apply::NativeWalApplyReceipt;
@@ -264,7 +283,7 @@ pub const DEFAULT_REPLICATION_STATE: &str = "replication-state.json";
 pub const DEFAULT_MODEL_REGISTRY: &str = "model-registry.json";
 pub const DEFAULT_MEMORY_INDEX_CATALOG: &str = "memory-indexes.json";
 pub const SCHEMA_COMPATIBILITY_FORMAT_VERSION: u32 = 1;
-pub const CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION: u32 = 1;
+pub const CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION: u32 = 2;
 pub const SIGNED_CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION: u32 = 1;
 pub const CLUSTER_SCHEMA_STAGE_FORMAT_VERSION: u32 = 1;
 pub const CLUSTER_SCHEMA_ACTIVATION_FORMAT_VERSION: u32 = 1;
@@ -652,6 +671,8 @@ pub struct ClusterSchemaBundle {
     pub indexes: Vec<IndexDefinition>,
     pub structural_records: Vec<ClusterSchemaCatalogRecord>,
     pub checksum_sha256: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_reader_features: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -1027,6 +1048,8 @@ impl ClusterSchemaBundle {
             collections: &'a [CollectionMeta],
             indexes: &'a [IndexDefinition],
             structural_records: &'a [ClusterSchemaCatalogRecord],
+            #[serde(skip_serializing_if = "<[String]>::is_empty")]
+            required_reader_features: &'a [String],
         }
         Ok(hex::encode(sha2::Sha256::digest(serde_json::to_vec(
             &Payload {
@@ -1035,18 +1058,37 @@ impl ClusterSchemaBundle {
                 collections: &portable_collections,
                 indexes: &self.indexes,
                 structural_records: &self.structural_records,
+                required_reader_features: &self.required_reader_features,
             },
         )?)))
     }
 
     pub fn verify(&self) -> Result<()> {
-        if self.format_version != CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION
+        let expected_format = if self.required_reader_features.is_empty() {
+            1
+        } else {
+            CLUSTER_SCHEMA_BUNDLE_FORMAT_VERSION
+        };
+        if self.format_version != expected_format
             || self.fingerprint.format_version != SCHEMA_COMPATIBILITY_FORMAT_VERSION
         {
             return Err(BicDbError::Cluster(format!(
                 "unsupported cluster schema bundle format {}/{}",
                 self.format_version, self.fingerprint.format_version
             )));
+        }
+        format::validate_replicated_reader_features(&self.required_reader_features)?;
+        for meta in &self.collections {
+            format::validate_collection_reader_features(
+                &meta.name,
+                &self.required_reader_features,
+            )?;
+        }
+        for record in &self.structural_records {
+            format::validate_collection_reader_features(
+                &record.collection,
+                &self.required_reader_features,
+            )?;
         }
         if self.structural_records.len() > MAX_CLUSTER_SCHEMA_BUNDLE_RECORDS {
             return Err(BicDbError::Cluster(format!(
@@ -1135,6 +1177,7 @@ impl ClusterSchemaBundle {
             &self.collections,
             &self.indexes,
             &self.structural_records,
+            &self.required_reader_features,
         )?;
         if calculated != self.fingerprint {
             return Err(BicDbError::Cluster(
@@ -1167,6 +1210,7 @@ fn calculate_schema_compatibility_fingerprint(
     collections: &[CollectionMeta],
     indexes: &[IndexDefinition],
     structural_records: &[ClusterSchemaCatalogRecord],
+    required_reader_features: &[String],
 ) -> Result<SchemaCompatibilityFingerprint> {
     #[derive(Serialize)]
     struct StructuralRecord<'a> {
@@ -1181,6 +1225,8 @@ fn calculate_schema_compatibility_fingerprint(
         user_collections: Vec<CollectionMeta>,
         indexes: Vec<&'a IndexDefinition>,
         structural_records: Vec<StructuralRecord<'a>>,
+        #[serde(skip_serializing_if = "<[String]>::is_empty")]
+        required_reader_features: &'a [String],
     }
 
     let mut user_collections = collections
@@ -1206,6 +1252,7 @@ fn calculate_schema_compatibility_fingerprint(
         user_collections,
         indexes,
         structural_records,
+        required_reader_features,
     };
     let fingerprint = SchemaCompatibilityFingerprint {
         format_version: SCHEMA_COMPATIBILITY_FORMAT_VERSION,
@@ -3989,6 +4036,13 @@ pub struct BicDb {
     config: DbConfig,
     // Opt-in, sticky local format capability; never a portable reader flag.
     local_namespace_identity_active: bool,
+    native_collection_birth_active: bool,
+    native_wal_backing_capture_active: bool,
+    native_origin: Option<native_origin::NativeOriginRoot>,
+    fresh_directory_created: bool,
+    native_catalog_allocation_facts_active: bool,
+    native_imported_backing_origins_active: bool,
+    sql_partition_execution_v1_active: AtomicBool,
     ha_state: HaState,
     replication_state: ReplicationApplyState,
     consensus_state: ConsensusState,
@@ -4091,6 +4145,7 @@ pub struct BicDb {
     // `Drop` (for abandoned/conflict-dropped pending txns) without dereferencing
     // `db`, mirroring `write_locks`/`active_snapshots`.
     tx_states: Arc<ShardedMutexMap<u64, TxState>>,
+    catalog_admission: Arc<catalog_admission::CatalogAdmission>,
     /// Distinguishes this open database from any other in the process, so
     /// per-thread commit bookkeeping cannot be attributed to the wrong one.
     /// A counter rather than the address, because a freed `BicDb`'s address can
@@ -7756,6 +7811,14 @@ pub(crate) enum TxFrame {
         // Defaults to 0 for transaction logs written before commit sequencing.
         #[serde(default)]
         commit_seq: u64,
+        /// Actual local allocation contracts captured by this Native decision.
+        /// Empty for legacy/unborn backings, never inferred during replay.
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        native_backings: BTreeMap<String, CollectionMeta>,
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        native_catalog_allocations: BTreeMap<String, CollectionMeta>,
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        native_imported_allocations: BTreeMap<String, CollectionMeta>,
     },
     #[serde(rename = "tx_commit_materialized")]
     CommitMaterialized {
@@ -7812,6 +7875,12 @@ struct TxFrameWire {
     len: Option<usize>,
     #[serde(default)]
     commit_seq: u64,
+    #[serde(default)]
+    native_backings: BTreeMap<String, CollectionMeta>,
+    #[serde(default)]
+    native_catalog_allocations: BTreeMap<String, CollectionMeta>,
+    #[serde(default)]
+    native_imported_allocations: BTreeMap<String, CollectionMeta>,
 }
 
 fn decode_tx_frame(payload: &[u8]) -> Result<TxFrame> {
@@ -7864,6 +7933,13 @@ fn decode_tx_frame(payload: &[u8]) -> Result<TxFrame> {
             tx_id: wire.tx_id,
             timestamp: wire.timestamp.ok_or_else(|| missing("timestamp"))?,
             commit_seq: wire.commit_seq,
+            native_backings: native_wal_backings::validated(wire.native_backings)?,
+            native_catalog_allocations: native_catalog_allocations::validated(
+                wire.native_catalog_allocations,
+            )?,
+            native_imported_allocations: native_import_origins::validated_decisions(
+                wire.native_imported_allocations,
+            )?,
         },
         TxFrameKind::TxCommitMaterialized => TxFrame::CommitMaterialized {
             tx_id: wire.tx_id,
@@ -8307,6 +8383,12 @@ enum TxFrameRef<'a> {
         tx_id: TransactionId,
         timestamp: i64,
         commit_seq: u64,
+        #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+        native_backings: &'a BTreeMap<String, CollectionMeta>,
+        #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+        native_catalog_allocations: &'a BTreeMap<String, CollectionMeta>,
+        #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+        native_imported_allocations: &'a BTreeMap<String, CollectionMeta>,
     },
 }
 
@@ -9175,6 +9257,8 @@ struct RetainedReplicationCommit {
     timestamp: i64,
     writes: Vec<ReplicationWrite>,
     audit_events: Vec<Event>,
+    native_backings: BTreeMap<String, CollectionMeta>,
+    native_catalog_allocations: BTreeMap<String, CollectionMeta>,
 }
 
 fn tx_write_to_replication_write(
@@ -9441,7 +9525,9 @@ pub struct Transaction {
     observed_record_versions: Mutex<FxHashMap<String, FxHashMap<String, u64>>>,
     // Owned capabilities prevent a reused logical/storage name from receiving
     // writes authored against a dropped or renamed-away collection.
-    collection_incarnations: Mutex<FxHashMap<String, Arc<()>>>,
+    collection_incarnations: Arc<catalog_admission::Bindings>,
+    catalog_admission: Arc<catalog_admission::CatalogAdmission>,
+    catalog_actor_scope: Option<u64>,
     /// Opt-in SQL profiles may report write conflicts at the statement
     /// boundary. Commit validation remains mandatory in either mode.
     statement_write_conflicts: bool,
@@ -9537,6 +9623,7 @@ pub struct Transaction {
     constraint_modes: Mutex<Vec<(String, bool)>>,
     mutation_grants: BTreeMap<MutationGrantId, MutationGrant>,
     native_write_issuers: Mutex<BTreeMap<usize, Option<String>>>,
+    native_catalog_allocations: BTreeMap<String, CollectionMeta>,
     next_mutation_grant: u64,
     commit_validators: Vec<NativeCommitValidator>,
     // Trusted active-owner native guards, shared without cloning their ASTs.
@@ -10460,7 +10547,9 @@ impl BicDb {
     /// Persist a reader compatibility fence before writing transition intent.
     pub fn enable_application_unique_scope(&mut self) -> Result<()> {
         self.ensure_writable("enable application unique scope transition")?;
-        format::enable_application_unique_scope(&self.path)
+        self.install_replicated_reader_features(&[
+            format::APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG.into()
+        ])
     }
 
     /// Fence old readers before activating the versioned scalar/native guard contract.
@@ -10542,6 +10631,7 @@ impl BicDb {
         // can write to `path`, including the format-version migration below.
         let effective_mode = format::ensure_storage_mode_compatible(&path, &config.storage_mode)?;
         format::verify_open_compatible(&path)?;
+        native_origin::refuse_foreign_root_preflight(&path)?;
         // Also read-only, and also before any directory is created: the paged
         // engine cannot honour encryption at rest yet, and a refused open must
         // not leave `encryption.json` behind (see ADR-004).
@@ -10550,7 +10640,7 @@ impl BicDb {
             &effective_mode,
             encryption_config.as_ref(),
         )?;
-        fs::create_dir_all(&path)?;
+        let fresh_directory_created = native_origin::create_directory(&path)?;
 
         // Claim the directory before anything reads or writes state in it. A
         // second writer here is unrecoverable rather than merely racy, so this
@@ -10561,6 +10651,8 @@ impl BicDb {
                 path.display()
             ))
         })?;
+        native_origin::complete_authorized_restore(&path, &directory_lock)?;
+        let native_origin = native_origin::load_active(&path, &directory_lock)?;
         // A core fence protects raw SQL and every other opener, not merely the
         // application host. Unknown/malformed states quarantine the store.
         if !application_scope_recovery {
@@ -10643,6 +10735,15 @@ impl BicDb {
             paged.set_index_aliases(fts_generations.indexes.clone());
         }
 
+        // One durability state per database: the page store's when there is
+        // one, so a failure in the page log, the page file or the
+        // transaction log fences all of them.
+        let durability = paged_records
+            .as_ref()
+            .map_or_else(bicdb_page::DurabilityHealth::new, |paged| {
+                paged.store().durability_health().clone()
+            });
+        durability.set_marker_path(path.join(DURABILITY_FAILURE_MARKER));
         let ha_state = load_ha_state(&path)?;
         let consensus_state = load_consensus_state(&path, &config.consensus, config.fsync)?;
         let mut tx_recovery = recover_transaction_log(
@@ -10684,11 +10785,100 @@ impl BicDb {
         let replication_state =
             load_replication_state(&path, &config.replication, tx_recovery.last_commit_seq)?;
         open_trace!("tx_recovery");
-        let metas = load_catalog(&path.join(DEFAULT_COLLECTION_CATALOG), &encryption)?;
-        let local_namespace_identity_active = format::read_or_legacy_metadata(&path)?
-            .feature_flags
-            .contains(format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG);
+        let mut metas = load_catalog(&path.join(DEFAULT_COLLECTION_CATALOG), &encryption)?;
+        let format_capabilities = format::read_or_legacy_metadata(&path)?.feature_flags;
+        let local_namespace_identity_active =
+            format_capabilities.contains(format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG);
+        let native_collection_birth_active =
+            format_capabilities.contains(format::NATIVE_COLLECTION_BIRTH_FEATURE_FLAG);
+        let native_wal_backing_capture_active =
+            format_capabilities.contains(format::NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG);
+        let native_catalog_allocation_facts_active =
+            format_capabilities.contains(format::NATIVE_CATALOG_ALLOCATION_FACTS_FEATURE_FLAG);
+        let native_imported_backing_origins_active =
+            format_capabilities.contains(format::NATIVE_IMPORTED_BACKING_ORIGINS_FEATURE_FLAG);
+        if !native_imported_backing_origins_active
+            && !tx_recovery.native_imported_allocations.is_empty()
+        {
+            return Err(BicDbError::FormatCompatibility(
+                "Native imported allocation WAL requires its format fence".into(),
+            ));
+        }
+        if native_imported_backing_origins_active
+            && (native_origin.is_none() || !native_wal_backing_capture_active)
+        {
+            return Err(BicDbError::FormatCompatibility(
+                "Native imported allocation has no actual origin/WAL fence".into(),
+            ));
+        }
+        let mut completed_import_catalog = metas.clone();
+        let native_import_catalog_repaired = native_import_origins::repair_pending(
+            &mut completed_import_catalog,
+            &tx_recovery.native_imported_allocations,
+        )?;
+        native_import_origins::validate_catalog(&metas, native_imported_backing_origins_active)?;
+        if tx_recovery.requires_native_catalog_allocations
+            && !native_catalog_allocation_facts_active
+        {
+            return Err(BicDbError::FormatCompatibility(
+                "Native catalog allocation facts require their publisher format fence".into(),
+            ));
+        }
+        if native_catalog_allocation_facts_active
+            && (!native_wal_backing_capture_active || native_origin.is_none())
+        {
+            return Err(BicDbError::FormatCompatibility(
+                "Native allocation publication has no origin/WAL capture fence".into(),
+            ));
+        }
+        if native_wal_backing_capture_active && !native_collection_birth_active {
+            return Err(BicDbError::FormatCompatibility(
+                "Native WAL backing capture has no collection birth format fence".into(),
+            ));
+        }
+        if tx_recovery.requires_native_collection_birth && !native_wal_backing_capture_active {
+            return Err(BicDbError::FormatCompatibility(
+                "Native WAL backing identities require the write capture format fence".into(),
+            ));
+        }
+        let sql_partition_execution_v1_active =
+            format_capabilities.contains(format::SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG);
         local_namespace_identity::validate_catalog(&metas, local_namespace_identity_active)?;
+        native_collection_birth::validate_catalog(
+            &metas,
+            native_collection_birth_active,
+            local_namespace_identity_active,
+        )?;
+        native_wal_backings::rebind_recovery_writes(&mut tx_recovery, &metas)?;
+        native_origin::validate_catalog(&metas, native_origin.as_ref())?;
+        native_catalog_allocations::validate_catalog(
+            &metas,
+            native_catalog_allocation_facts_active,
+        )?;
+        native_origin::validate_recorded_roots(
+            &tx_recovery.native_origin_roots,
+            native_origin.as_ref(),
+        )?;
+        if native_import_catalog_repaired {
+            // Recovery may have read a commit left only in the page cache by
+            // a failed fsync. Make those exact bytes durable before publishing
+            // completed allocation provenance, or before any open-time WAL
+            // cut can discard the only copy of that allocation decision.
+            copy_transaction_log_tail(&path.join(DEFAULT_TRANSACTION_LOG), 0, true)?;
+            metas = completed_import_catalog;
+            metas.sort_by(|left, right| left.name.cmp(&right.name));
+            write_sidecar(
+                &path.join(DEFAULT_COLLECTION_CATALOG),
+                FrameKind::Index,
+                &serde_json::to_vec_pretty(&CollectionCatalog {
+                    collections: metas.clone(),
+                })?,
+                true,
+                &encryption,
+                "catalog",
+                storage::FailClosed::Always(&durability),
+            )?;
+        }
         // Physical storage names must be known before any row is read, and an
         // interrupted rename (renamed_from still set) maps index definitions
         // still recorded under the old name.
@@ -11420,15 +11610,6 @@ impl BicDb {
         };
 
         open_trace!("events+graphs+sync_state");
-        // One durability state per database: the page store's when there is
-        // one, so a failure in the page log, the page file or the
-        // transaction log fences all of them.
-        let durability = paged_records
-            .as_ref()
-            .map_or_else(bicdb_page::DurabilityHealth::new, |paged| {
-                paged.store().durability_health().clone()
-            });
-        durability.set_marker_path(path.join(DURABILITY_FAILURE_MARKER));
         let tx_log = TxLogHandle::new(
             path.join(DEFAULT_TRANSACTION_LOG),
             tx_recovery.last_commit_seq,
@@ -11473,6 +11654,13 @@ impl BicDb {
             native_metadata_open_lifetime: Arc::new(()),
             config,
             local_namespace_identity_active,
+            native_collection_birth_active,
+            native_wal_backing_capture_active,
+            sql_partition_execution_v1_active: AtomicBool::new(sql_partition_execution_v1_active),
+            native_origin,
+            fresh_directory_created,
+            native_catalog_allocation_facts_active,
+            native_imported_backing_origins_active,
             ha_state,
             replication_state,
             consensus_state,
@@ -11511,6 +11699,7 @@ impl BicDb {
                 tx_recovery.states,
                 orch_shard_count(),
             )),
+            catalog_admission: Arc::new(catalog_admission::CatalogAdmission::default()),
             next_tx_id: AtomicU64::new(tx_recovery.next_tx_id),
             // MVCC visibility watermark in commit_seq units (snapshots read it).
             instance_id: NEXT_DB_INSTANCE_ID.fetch_add(1, AtomicOrdering::Relaxed),
@@ -11581,7 +11770,9 @@ impl BicDb {
     /// Fence older SQL runtimes before publishing invalid routine metadata.
     pub fn enable_oracle_invalid_routines_v1(&mut self) -> Result<()> {
         self.ensure_writable("enable Oracle invalid routine metadata")?;
-        let result = format::enable_oracle_invalid_routines(&self.path);
+        let result = self.install_replicated_reader_features(&[
+            format::ORACLE_INVALID_ROUTINES_FEATURE_FLAG.into(),
+        ]);
         self.check_recovery_state()?;
         result
     }
@@ -11590,9 +11781,41 @@ impl BicDb {
     /// Older readers must refuse stores whose pending DDL they cannot recover.
     pub fn enable_sql_catalog_intents(&mut self) -> Result<()> {
         self.ensure_writable("enable SQL catalog intents")?;
-        let result = format::enable_sql_catalog_intents(&self.path);
+        let result = self
+            .install_replicated_reader_features(&[format::SQL_CATALOG_INTENTS_FEATURE_FLAG.into()]);
         self.check_recovery_state()?;
         result
+    }
+
+    /// Fence readers that cannot replay generic SQL rename before-images.
+    /// The SQL host must call this before its first rename journal write. This
+    /// only installs the format capability; it does not perform DDL recovery.
+    pub fn enable_sql_rename_intents(&mut self) -> Result<()> {
+        self.ensure_writable("enable SQL rename intents")?;
+        let result = self
+            .install_replicated_reader_features(&[format::SQL_RENAME_INTENTS_FEATURE_FLAG.into()]);
+        self.check_recovery_state()?;
+        result
+    }
+
+    pub(crate) fn install_replicated_reader_features(&self, features: &[String]) -> Result<()> {
+        if format::install_replicated_reader_features(&self.path, features)? {
+            // Capabilities affect interpretation even when no SQL structural
+            // record changes. Recompute placement/readiness identity.
+            self.schema_compatibility.invalidate();
+        }
+        // Shared snapshot/import paths install the durable capability without
+        // exclusive access to BicDb. Publish its live state only after that
+        // installation and schema invalidation have completed. This bit is
+        // still neither a SQL migration certificate nor replica authority.
+        if features
+            .iter()
+            .any(|feature| feature == format::SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG)
+        {
+            self.sql_partition_execution_v1_active
+                .store(true, AtomicOrdering::Release);
+        }
+        Ok(())
     }
 
     /// Require a healthy, quiescent database before startup catalog repair.
@@ -12291,6 +12514,7 @@ impl BicDb {
         // primary's failed batch), and such a commit can still be lost.
         let shippable = self.replication_shippable_seq();
         let commits = self.replication_commits_from_retained_wal(shippable)?;
+        let reader_features = format::required_reader_features(&self.path)?;
         if let Some(oldest) = commits.first().map(|commit| commit.commit_seq) {
             if commit_seq < oldest.saturating_sub(1) {
                 return Err(replication_error(format!(
@@ -12312,7 +12536,7 @@ impl BicDb {
                     commit.timestamp,
                     commit.writes,
                 );
-                Ok(if self.config.replication.record_journal {
+                let frame = if self.config.replication.record_journal {
                     frame.with_journal(
                         self.replication_journal_events(&commit.audit_events)?
                             .ok_or_else(|| {
@@ -12321,7 +12545,13 @@ impl BicDb {
                     )
                 } else {
                     frame
-                })
+                };
+                let frame = frame.with_required_reader_features(reader_features.clone())?;
+                self.capture_native_wal_export(
+                    frame,
+                    commit.native_backings,
+                    commit.native_catalog_allocations,
+                )
             })
             .collect::<Result<Vec<_>>>()?)
     }
@@ -12481,6 +12711,8 @@ impl BicDb {
         )?;
         let mut writes: BTreeMap<u64, Vec<TxWrite>> = BTreeMap::new();
         let mut audit: BTreeMap<u64, Vec<Event>> = BTreeMap::new();
+        let mut native_backings_by_tx = BTreeMap::new();
+        let mut native_allocations_by_tx = BTreeMap::new();
         let mut commits: Vec<(u64, u64, i64)> = Vec::new();
         for (_, _, payload) in frames {
             let tx_frame = decode_tx_frame(&payload)?;
@@ -12503,9 +12735,14 @@ impl BicDb {
                     tx_id,
                     timestamp,
                     commit_seq,
+                    native_backings,
+                    native_catalog_allocations,
+                    ..
                 } => {
                     if commit_seq <= through_seq {
                         commits.push((commit_seq, tx_id.0, timestamp));
+                        native_backings_by_tx.insert(tx_id.0, native_backings);
+                        native_allocations_by_tx.insert(tx_id.0, native_catalog_allocations);
                     } else {
                         writes.remove(&tx_id.0);
                         audit.remove(&tx_id.0);
@@ -12514,6 +12751,8 @@ impl BicDb {
                 TxFrame::Abort { tx_id, .. } => {
                     writes.remove(&tx_id.0);
                     audit.remove(&tx_id.0);
+                    native_backings_by_tx.remove(&tx_id.0);
+                    native_allocations_by_tx.remove(&tx_id.0);
                     commits.retain(|(_, committed_tx_id, _)| *committed_tx_id != tx_id.0);
                 }
                 TxFrame::Truncate { tx_id, len } => {
@@ -12532,13 +12771,16 @@ impl BicDb {
         let mut retained = Vec::with_capacity(commits.len());
         for (commit_seq, tx_id, timestamp) in commits {
             let tx_writes = writes.remove(&tx_id).unwrap_or_default();
+            let native_backings = native_backings_by_tx.remove(&tx_id).unwrap_or_default();
             let writes = tx_writes
                 .iter()
                 .map(|write| {
-                    let collection_meta = self
-                        .collections
-                        .get(&write.collection)
-                        .map(|state| state.read().meta.clone());
+                    let collection_meta =
+                        native_backings.get(&write.collection).cloned().or_else(|| {
+                            self.collections
+                                .get(&write.collection)
+                                .map(|state| state.read().meta.clone())
+                        });
                     tx_write_to_replication_write(collection_meta, write)
                 })
                 .collect::<Result<Vec<_>>>()?;
@@ -12548,6 +12790,10 @@ impl BicDb {
                 timestamp,
                 writes,
                 audit_events: audit.remove(&tx_id).unwrap_or_default(),
+                native_backings,
+                native_catalog_allocations: native_allocations_by_tx
+                    .remove(&tx_id)
+                    .unwrap_or_default(),
             });
         }
         Ok(retained)
@@ -12669,6 +12915,7 @@ impl BicDb {
         self.require_native_generic_import_allowed()?;
         self.range_mutations.validate(range.id, authority)?;
         Self::validate_range_snapshot_fields(range, collection_meta, batch)?;
+        self.install_replicated_reader_features(&batch.required_reader_features)?;
         if !self.collections.contains_key(&batch.collection) {
             validate_collection_name(&batch.collection)?;
             let local_meta = self.new_local_collection_metadata(collection_meta);
@@ -12693,6 +12940,7 @@ impl BicDb {
         batch: &RangeSnapshotBatch,
     ) -> Result<()> {
         validate_collection_meta_namespaces(collection_meta)?;
+        batch.verify_reader_requirements()?;
         if batch.range_id != range.id || batch.range_epoch != range.epoch {
             return Err(BicDbError::Cluster(format!(
                 "snapshot batch range/epoch {}/{} does not match {}/{}",
@@ -12783,6 +13031,7 @@ impl BicDb {
                 batch.collection
             )));
         }
+        self.install_replicated_reader_features(&batch.required_reader_features)?;
         if batch.records.is_empty() {
             return Ok(0);
         }
@@ -12835,6 +13084,8 @@ impl BicDb {
         self.require_native_generic_import_allowed()?;
         self.range_mutations.validate(range.id, authority)?;
         let filtered = filter_commit_frame_for_range(frame, range)?;
+        Self::validate_replication_reader_requirements(&filtered)?;
+        self.install_replicated_reader_features(&filtered.required_reader_features)?;
         self.ensure_replication_frame_collections(&filtered)?;
         self.apply_range_commit_frame_as_local_preinstalled_with_mutation(range, frame, authority)
     }
@@ -12862,6 +13113,8 @@ impl BicDb {
         self.require_native_generic_import_allowed()?;
         self.range_mutations.validate(range.id, authority)?;
         let filtered = filter_commit_frame_for_range(frame, range)?;
+        Self::validate_replication_reader_requirements(&filtered)?;
+        self.install_replicated_reader_features(&filtered.required_reader_features)?;
         for write in &filtered.writes {
             validate_replication_collection_meta(write)?;
             let state = self.collection_state(&write.collection)?;
@@ -13052,6 +13305,8 @@ impl BicDb {
         }
         if frame.protocol_version != crate::replication::REPLICATION_PROTOCOL_VERSION
             && frame.protocol_version != crate::replication::REPLICATION_JOURNAL_PROTOCOL_VERSION
+            && frame.protocol_version
+                != crate::replication::REPLICATION_READER_FEATURES_PROTOCOL_VERSION
         {
             return Err(replication_error(format!(
                 "unsupported replication protocol version {}",
@@ -13059,8 +13314,10 @@ impl BicDb {
             )));
         }
         self.validate_replication_journal(&frame.journal)?;
+        Self::validate_replication_reader_requirements(frame)?;
         let current = self.last_applied_commit_seq();
         if frame.commit_seq <= current {
+            self.install_replicated_reader_features(&frame.required_reader_features)?;
             return Ok(ReplicationApplyReport {
                 applied: 0,
                 duplicates: 1,
@@ -13076,18 +13333,24 @@ impl BicDb {
         }
 
         self.verify_replication_attachments(frame)?;
+        let native_import = self.accept_native_import(frame)?;
+        let native_import_decisions =
+            self.prepare_native_import_allocations(native_import.as_ref())?;
+        self.install_replicated_reader_features(&frame.required_reader_features)?;
         self.ensure_replication_frame_collections(frame)?;
         let writes = replication_writes_to_tx_writes(frame)?;
         self.stage_pending_replication_catalog(frame)?;
-        self.apply_imported_replication_commit_with_mutation(
+        self.apply_imported_replication_commit_with_native_allocations(
             frame.tx_id,
             frame.commit_seq,
             frame.timestamp,
             &writes,
             &frame.journal,
             authority,
+            &native_import_decisions,
         )?;
         self.apply_replicated_catalog_ops(frame)?;
+        self.finish_native_import_allocations(&native_import_decisions)?;
         self.finish_pending_replication_catalog()?;
         self.record_replication_apply_success(frame)?;
         Ok(ReplicationApplyReport {
@@ -13297,9 +13560,11 @@ impl BicDb {
         self.ensure_writable("create collection")?;
         validate_collection_name(name)?;
         if self.collections.contains_key(name) {
+            self.finish_native_catalog_allocation(name)?;
             return Ok(());
         }
 
+        self.check_native_catalog_allocation_publication()?;
         let _database_mutation = self.range_mutations.try_enter_database()?;
         self.invalidate_native_range_images_before_mutation(None, "create collection")?;
         let storage_name = self.storage_name_for_new(name);
@@ -13315,6 +13580,11 @@ impl BicDb {
             storage_name: storage_name.clone(),
             renamed_from: None,
             local_namespace_id: self.fresh_local_namespace_identity(),
+            native_backing_birth_id: self.fresh_native_collection_birth(),
+            native_backing_origin_root: self.fresh_native_backing_origin_root(),
+            native_imported_backing_origin: None,
+            native_catalog_allocation_pending: self.native_catalog_allocation_logging_active()
+                && name != collection_rename::CATALOG_LOG_COLLECTION,
         };
         if let Some(storage) = storage_name {
             self.set_storage_alias(name, &storage);
@@ -13322,13 +13592,18 @@ impl BicDb {
         self.collections
             .insert(name.to_string(), RwLock::new(CollectionState::new(meta)));
         self.persist_catalog()?;
-        if name != collection_rename::CATALOG_LOG_COLLECTION {
-            self.log_catalog_op(collection_rename::CatalogOp::Create {
-                name: name.to_string(),
-                mode: logged_mode,
-            })?;
-        }
         self.schema_compatibility.invalidate();
+        if name != collection_rename::CATALOG_LOG_COLLECTION {
+            let allocation = self.pending_native_catalog_allocation(name)?;
+            self.log_catalog_op_with_allocation(
+                collection_rename::CatalogOp::Create {
+                    name: name.to_string(),
+                    mode: logged_mode,
+                },
+                allocation,
+            )?;
+            self.clear_native_catalog_allocation_pending(name)?;
+        }
         Ok(())
     }
 
@@ -15910,7 +16185,11 @@ impl Transaction {
             || self.write_len() != 0
             || self.lock_len() != 0
             || !self.observed_record_versions.lock().is_empty()
-            || !self.collection_incarnations.lock().is_empty()
+            || self
+                .collection_incarnations
+                .lock()
+                .values()
+                .any(|binding| binding.snapshot_observed)
         {
             return Err(BicDbError::TransactionConflict(
                 "statement snapshot can only be deferred before transaction access".into(),
@@ -16901,10 +17180,62 @@ impl Transaction {
         latest.into_values().flatten().collect()
     }
 
+    /// Whether the caller has buffered an upsert or deletion for this key.
+    /// Unlike an overlaid read, this distinguishes a pending delete from an
+    /// untouched absent row without copying the collection's write set.
+    pub fn has_pending_write_for_record(&self, collection: &str, id: &str) -> bool {
+        self.last_pending_write(collection, id).is_some()
+    }
+
+    /// Transform each effective pending upsert using constant scratch space.
+    /// Replacements use ordinary checked writes and append to the write log,
+    /// preserving earlier savepoint marks. Deletes and superseded writes are
+    /// skipped, and replacements are not visited again. On a callback error,
+    /// the caller can restore its existing statement/savepoint rollback mark.
+    pub fn transform_pending_records<E, F>(
+        &mut self,
+        collection: &str,
+        mut transform: F,
+    ) -> std::result::Result<(), E>
+    where
+        E: From<BicDbError>,
+        F: FnMut(&Record) -> std::result::Result<Record, E>,
+    {
+        if self.state != TxState::Pending {
+            return Err(BicDbError::TransactionNotPending.into());
+        }
+        let end = self.writes.len();
+        for index in 0..end {
+            let write = &self.writes[index];
+            if write.collection != collection
+                || self
+                    .write_index
+                    .get(collection)
+                    .and_then(|rows| rows.get(&write.record_id))
+                    .copied()
+                    != Some(index)
+            {
+                continue;
+            }
+            let Some(record) = write.record_opt().cloned() else {
+                continue;
+            };
+            let rewritten = transform(&record)?;
+            if rewritten.id != record.id {
+                return Err(BicDbError::InvalidRecordId(
+                    "pending transform must preserve record identity".into(),
+                )
+                .into());
+            }
+            self.insert(collection, rewritten).map_err(E::from)?;
+        }
+        Ok(())
+    }
+
     pub fn get(&self, collection: &str, id: &str) -> Result<Option<Arc<Record>>> {
         let db = self.db_ref();
         db.check_recovery_state()?;
-        db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         let result = self.get_visible_unchecked(collection, id);
         self.fenced(result)
     }
@@ -17158,7 +17489,7 @@ impl Transaction {
 
     fn get_visible_unchecked(&self, collection: &str, id: &str) -> Result<Option<Arc<Record>>> {
         let db = self.db_ref();
-        self.bind_collection_incarnation(collection)?;
+        self.bind_collection_incarnation_for_record(collection, id)?;
         self.observe_postgres_record(collection, id);
         let (record, observed_version, read_stored) =
             record_read_snapshot::read_record_at_snapshot_unchecked(
@@ -17346,7 +17677,7 @@ impl Transaction {
     /// only then is the primary key consulted to overlay a pending write.
     pub fn get_by_rowid(&self, collection: &str, rowid: RowId) -> Result<Option<Arc<Record>>> {
         let db = self.db_ref();
-        db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.bind_collection_incarnation(collection)?;
         let has_pending = self.has_pending_writes(collection);
         let state = db.collection_state(collection)?;
@@ -17392,8 +17723,7 @@ impl Transaction {
         collection: &str,
         rowids: &[RowId],
     ) -> Result<Vec<Option<Arc<Record>>>> {
-        self.db_ref()
-            .ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.get_records_by_rowids_visible(collection, rowids)
     }
 
@@ -17502,8 +17832,7 @@ impl Transaction {
         collection: &str,
         rowids: &[RowId],
     ) -> Result<Vec<Option<Arc<StoredRecord>>>> {
-        self.db_ref()
-            .ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.get_stored_by_rowids_visible(collection, rowids)
     }
 
@@ -17581,8 +17910,7 @@ impl Transaction {
         collection: &str,
         pks: &[String],
     ) -> Result<Vec<Option<Arc<Record>>>> {
-        self.db_ref()
-            .ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.get_records_by_pks_visible(collection, pks)
     }
 
@@ -17657,7 +17985,7 @@ impl Transaction {
 
     pub fn scan_collection(&self, collection: &str) -> Result<Vec<Record>> {
         let db = self.db_ref();
-        db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.scan_collection_visible_unchecked(collection)
     }
 
@@ -17672,7 +18000,7 @@ impl Transaction {
         cancellation.check()?;
         let db = self.db_ref();
         db.check_recovery_state()?;
-        db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         if self.postgres_serializable.is_some() {
             self.bind_collection_incarnation(collection)?;
             self.observe_postgres_relation(collection);
@@ -18127,8 +18455,7 @@ impl Transaction {
         collection: &str,
         id_prefix: &str,
     ) -> Result<Vec<String>> {
-        self.db_ref()
-            .ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.scan_collection_record_ids_with_prefix_unchecked(collection, id_prefix)
     }
 
@@ -18327,6 +18654,90 @@ impl Transaction {
         Ok((ids, complete))
     }
 
+    /// A hard-bounded sibling of the range locator scan. Returns at most
+    /// `limit` keys, including resident/touched and pending overlays; scratch
+    /// storage is bounded independently of collection or write-set size.
+    /// Resident shards are examined to choose the nearest keys without making
+    /// an all-row locator vector. Paged collections retain their range seek.
+    /// Candidates still require normal visibility/authorization checks.
+    pub fn scan_collection_record_key_batch_in_range_unchecked(
+        &self,
+        collection: &str,
+        lower: Bound<&str>,
+        upper: Bound<&str>,
+        descending: bool,
+        limit: usize,
+    ) -> Result<(Vec<String>, bool)> {
+        if limit == 0 {
+            return Err(BicDbError::Unsupported(
+                "key batch limit must be positive".into(),
+            ));
+        }
+        let db = self.db_ref();
+        self.bind_collection_incarnation(collection)?;
+        let state = db.collection_state(collection)?;
+        let paged = if state.paged_lazy {
+            match (&self.paged_snapshot, &db.paged_records) {
+                (Some(snapshot), Some(paged)) => paged
+                    .scan_ids_in_range(snapshot, collection, lower, upper, descending, limit)?,
+                _ => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        };
+        let page_complete = paged.len() < limit;
+        let boundary = (!page_complete).then(|| paged.last().expect("nonzero limit").clone());
+        let mut keys = BTreeSet::<String>::new();
+        let mut truncated = false;
+        let mut include = |id: &str| {
+            if !record_id_in_range(id, lower, upper)
+                || boundary.as_ref().is_some_and(|boundary| {
+                    if descending {
+                        id < boundary.as_str()
+                    } else {
+                        id > boundary.as_str()
+                    }
+                })
+                || keys.contains(id)
+            {
+                return;
+            }
+            if keys.len() == limit {
+                truncated = true;
+                if descending {
+                    if id <= keys.first().expect("nonzero limit").as_str() {
+                        return;
+                    }
+                    keys.pop_first();
+                } else {
+                    if id >= keys.last().expect("nonzero limit").as_str() {
+                        return;
+                    }
+                    keys.pop_last();
+                }
+            }
+            keys.insert(id.to_string());
+        };
+        for id in &paged {
+            include(id);
+        }
+        for shard in state.read_all() {
+            for versions in shard.versions.values() {
+                if let Some(version) = versions.first() {
+                    include(&version.record.id);
+                }
+            }
+        }
+        for write in self.pending_writes_for_collection(collection) {
+            include(&write.record_id);
+        }
+        let mut keys = keys.into_iter().collect::<Vec<_>>();
+        if descending {
+            keys.reverse();
+        }
+        Ok((keys, page_complete && !truncated))
+    }
+
     /// Key-only locator candidates at this transaction's pinned paged snapshot,
     /// plus touched and pending keys. This is deliberately a superset: resolve
     /// each candidate through transaction visibility and authorization before
@@ -18404,7 +18815,7 @@ impl Transaction {
     /// bookkeeping and access checks as [`Self::get`].
     pub fn get_stored(&self, collection: &str, id: &str) -> Result<Option<VisibleRow>> {
         let db = self.db_ref();
-        db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.get_stored_visible_unchecked(collection, id)
     }
 
@@ -18490,7 +18901,7 @@ impl Transaction {
         pks: &[String],
     ) -> Result<Vec<Option<VisibleRow>>> {
         let db = self.db_ref();
-        db.ensure_unprotected_legacy_access(collection, SecureOperation::Read)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Read)?;
         self.bind_collection_incarnation(collection)?;
         if self.postgres_serializable.is_some() {
             for pk in pks {
@@ -18616,7 +19027,11 @@ impl Transaction {
     fn push_writes(&mut self, writes: Vec<TxWrite>) -> Result<()> {
         let mut previous_collection = None;
         for write in &writes {
-            if previous_collection != Some(write.collection.as_str()) {
+            if self.catalog_actor_scope.is_some() {
+                self.ensure_catalog_record_mutation_scope(&write.collection, &write.record_id)?;
+                self.bind_collection_incarnation_for_record(&write.collection, &write.record_id)?;
+            } else if previous_collection != Some(write.collection.as_str()) {
+                self.ensure_catalog_mutation_scope(&write.collection)?;
                 self.bind_collection_incarnation(&write.collection)?;
                 previous_collection = Some(write.collection.as_str());
             }
@@ -18819,6 +19234,7 @@ impl Transaction {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
+        self.ensure_catalog_mutation_scope(collection)?;
         let ids = ids
             .into_iter()
             .map(|(id, statement_snapshot)| (id.as_ref().to_string(), statement_snapshot))
@@ -18826,14 +19242,17 @@ impl Transaction {
         if ids.is_empty() {
             return Ok(());
         }
+        self.prepare_catalog_record_mutations(collection, ids.iter().map(|(id, _)| id.as_str()))?;
         let tx_id = self.id;
         let timestamp = unix_timestamp();
         let mut writes = Vec::with_capacity(ids.len());
         let db = self.db_ref();
         if enforce_legacy_access {
-            db.ensure_unprotected_legacy_access(collection, SecureOperation::Delete)?;
+            self.ensure_unprotected_collection_access(collection, SecureOperation::Delete)?;
         }
-        self.bind_collection_incarnation(collection)?;
+        if self.catalog_actor_scope.is_none() {
+            self.bind_collection_incarnation(collection)?;
+        }
         for (id, statement_snapshot) in ids {
             if id.is_empty() {
                 return Err(BicDbError::EmptyRecordId);
@@ -19302,10 +19721,15 @@ impl Transaction {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
+        self.ensure_catalog_mutation_scope(collection)?;
         let records = records.into_iter().collect::<Vec<_>>();
         if records.is_empty() {
             return Ok(());
         }
+        self.prepare_catalog_record_mutations(
+            collection,
+            records.iter().map(|(record, _, _)| record.id.as_str()),
+        )?;
         let tx_id = self.id;
         let timestamp = unix_timestamp();
         let mut writes = Vec::with_capacity(records.len());
@@ -19315,9 +19739,11 @@ impl Transaction {
             // it runs through a shared &BicDb and can execute concurrently.
             let db = self.db_ref();
             if enforce_legacy_access {
-                db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?;
+                self.ensure_unprotected_collection_access(collection, SecureOperation::Write)?;
             }
-            self.bind_collection_incarnation(collection)?;
+            if self.catalog_actor_scope.is_none() {
+                self.bind_collection_incarnation(collection)?;
+            }
             let (mut next_dim, policy) = {
                 let state = db.collection_state(collection)?;
                 (state.meta.vector_dim, state.meta.policy.clone())
@@ -19497,17 +19923,24 @@ impl Transaction {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
+        self.ensure_catalog_mutation_scope(collection)?;
         let rows = rows.into_iter().collect::<Vec<_>>();
         if rows.is_empty() {
             return Ok(());
         }
+        self.prepare_catalog_record_mutations(
+            collection,
+            rows.iter().map(|(_, stored, _, _, _)| stored.id.as_str()),
+        )?;
         let tx_id = self.id;
         let timestamp = unix_timestamp();
         let mut writes = Vec::with_capacity(rows.len());
         {
             let db = self.db_ref();
-            db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?;
-            self.bind_collection_incarnation(collection)?;
+            self.ensure_unprotected_collection_access(collection, SecureOperation::Write)?;
+            if self.catalog_actor_scope.is_none() {
+                self.bind_collection_incarnation(collection)?;
+            }
             let (mut next_dim, policy) = {
                 let state = db.collection_state(collection)?;
                 (state.meta.vector_dim, state.meta.policy.clone())
@@ -19585,17 +20018,24 @@ impl Transaction {
         if self.state != TxState::Pending {
             return Err(BicDbError::TransactionNotPending);
         }
+        self.ensure_catalog_mutation_scope(collection)?;
         let records = records.into_iter().collect::<Vec<_>>();
         if records.is_empty() {
             return Ok(());
         }
+        self.prepare_catalog_record_mutations(
+            collection,
+            records.iter().map(|(record, _, _)| record.id.as_str()),
+        )?;
         let tx_id = self.id;
         let timestamp = unix_timestamp();
         let mut writes = Vec::with_capacity(records.len());
         {
             let db = self.db_ref();
-            db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?;
-            self.bind_collection_incarnation(collection)?;
+            self.ensure_unprotected_collection_access(collection, SecureOperation::Write)?;
+            if self.catalog_actor_scope.is_none() {
+                self.bind_collection_incarnation(collection)?;
+            }
             let mut next_dim = db.collection_state(collection)?.meta.vector_dim;
             for (record, statement_snapshot, repair) in records {
                 let record_id = record.id.clone();
@@ -19733,7 +20173,9 @@ impl Transaction {
             Some(grant) => {
                 self.validate_mutation_grant_operation(grant, collection, id, operation)?
             }
-            None => db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?,
+            None => {
+                self.ensure_unprotected_collection_access(collection, SecureOperation::Write)?
+            }
         }
         self.bind_collection_incarnation(collection)?;
         if wait {
@@ -19815,7 +20257,7 @@ impl Transaction {
         }
         let tx_id = self.id;
         let db = self.db_ref();
-        db.ensure_unprotected_legacy_access(collection, SecureOperation::Write)?;
+        self.ensure_unprotected_collection_access(collection, SecureOperation::Write)?;
         self.bind_collection_incarnation(collection)?;
         if reservation {
             db.lock_tx_first_record_for_reservation(tx_id, collection, id, &self.locked_keys)?;
@@ -19882,7 +20324,9 @@ impl Transaction {
                 id,
                 MutationOperation::Delete,
             )?,
-            None => db.ensure_unprotected_legacy_access(collection, SecureOperation::Delete)?,
+            None => {
+                self.ensure_unprotected_collection_access(collection, SecureOperation::Delete)?
+            }
         }
         self.bind_collection_incarnation(collection)?;
         self.lock_row_for_write(tx_id, collection, id, true)?;
@@ -20133,6 +20577,7 @@ impl Drop for Transaction {
         // Goes through the shared handle (not `db`) to stay sound under
         // concurrent access, mirroring the record-lock release above.
         self.active_snapshots.decr_remove(self.snapshot_tx.0);
+        self.catalog_admission.finish(self.id, self.state);
     }
 }
 
@@ -20723,6 +21168,10 @@ fn ship_to_standby(source_path: &Path, standby_path: &Path) -> Result<HaApplyRep
     match apply {
         Ok(()) => {
             state.applied_checkpoint_bytes = source_checkpoint_bytes;
+            // Shipped by this crate from a primary that just opened in
+            // custody of its Native root: the standby directory may take
+            // custody of the shipped root at its next open.
+            native_origin::authorize_materialized_copy(&standby_path)?;
             persist_ha_state(&standby_path, &state, true)?;
             // An apply interrupted mid-copy leaves `.ha-tmp` files behind.
             // `collect_ha_files` SKIPS them, so they were invisible to every
@@ -21133,6 +21582,12 @@ struct TxRecovery {
     commit_seq_by_tx: BTreeMap<u64, u64>,
     next_tx_id: u64,
     last_commit_seq: u64,
+    requires_native_collection_birth: bool,
+    requires_native_catalog_allocations: bool,
+    native_backings_by_tx: BTreeMap<u64, BTreeMap<String, (Uuid, Uuid)>>,
+    native_backing_history: BTreeSet<(Uuid, Uuid)>,
+    native_origin_roots: BTreeSet<Uuid>,
+    native_imported_allocations: BTreeMap<(Uuid, Uuid), CollectionMeta>,
 }
 
 #[derive(Clone, Debug)]
@@ -21276,6 +21731,12 @@ fn recover_transaction_log(
     let mut commit_seq_by_tx: BTreeMap<u64, u64> = BTreeMap::new();
     let mut max_tx = 0_u64;
     let mut max_commit_seq = 0_u64;
+    let mut requires_native_collection_birth = false;
+    let mut requires_native_catalog_allocations = false;
+    let mut native_backings_by_tx = BTreeMap::new();
+    let mut native_backing_history = BTreeSet::new();
+    let mut native_origin_roots = BTreeSet::new();
+    let mut native_imported_allocations = BTreeMap::new();
 
     // Stream the WAL independently of the record-segment read mode. Preserve
     // torn-tail repair, without retaining every raw frame beside decoded rows.
@@ -21333,8 +21794,45 @@ fn recover_transaction_log(
                 states.entry(tx_id.0).or_insert(TxState::Pending);
             }
             TxFrame::Commit {
-                tx_id, commit_seq, ..
+                tx_id,
+                commit_seq,
+                native_backings,
+                native_catalog_allocations,
+                native_imported_allocations: imported_allocations,
+                ..
             } => {
+                for meta in imported_allocations.into_values() {
+                    let origin = meta
+                        .native_imported_backing_origin
+                        .as_ref()
+                        .expect("validated imported allocation");
+                    native_origin_roots.insert(origin.target_root);
+                    native_backing_history.insert((origin.target_birth, origin.target_namespace));
+                    native_imported_allocations
+                        .insert((origin.target_birth, origin.generation), meta);
+                }
+                requires_native_catalog_allocations |= !native_catalog_allocations.is_empty();
+                native_origin_roots.extend(
+                    native_catalog_allocations
+                        .values()
+                        .filter_map(|m| m.native_backing_origin_root),
+                );
+                native_backing_history.extend(
+                    native_wal_backings::identities(&native_catalog_allocations)?
+                        .values()
+                        .copied(),
+                );
+                requires_native_collection_birth |= !native_backings.is_empty();
+                native_origin_roots.extend(
+                    native_backings
+                        .values()
+                        .filter_map(|m| m.native_backing_origin_root),
+                );
+                if !native_backings.is_empty() {
+                    let identities = native_wal_backings::identities(&native_backings)?;
+                    native_backing_history.extend(identities.values().copied());
+                    native_backings_by_tx.insert(tx_id.0, identities);
+                }
                 max_tx = max_tx.max(tx_id.0);
                 max_commit_seq = max_commit_seq.max(commit_seq);
                 commit_seq_by_tx.insert(tx_id.0, commit_seq);
@@ -21353,6 +21851,7 @@ fn recover_transaction_log(
                     // redo of decisions that still require materialization.
                     // Raw log bytes remain available for replication.
                     writes.remove(&tx_id.0);
+                    native_backings_by_tx.remove(&tx_id.0);
                 }
                 commit_seq_by_tx.insert(tx_id.0, commit_seq);
             }
@@ -21365,6 +21864,7 @@ fn recover_transaction_log(
                 record_audit_events.remove(&tx_id.0);
                 record_audit_published.remove(&tx_id.0);
                 sync_ops.remove(&tx_id.0);
+                native_backings_by_tx.remove(&tx_id.0);
             }
         }
         Ok(())
@@ -21391,6 +21891,12 @@ fn recover_transaction_log(
         commit_seq_by_tx,
         next_tx_id: max_tx.saturating_add(1).max(1),
         last_commit_seq: max_commit_seq,
+        requires_native_collection_birth,
+        requires_native_catalog_allocations,
+        native_backings_by_tx,
+        native_backing_history,
+        native_origin_roots,
+        native_imported_allocations,
     })
 }
 
@@ -31823,6 +32329,9 @@ mod index_maintenance_tests {
                     tx_id,
                     timestamp: 1234,
                     commit_seq: 1,
+                    native_backings: BTreeMap::new(),
+                    native_catalog_allocations: BTreeMap::new(),
+                    native_imported_allocations: BTreeMap::new(),
                 },
             ] {
                 storage::append_frame(
@@ -31978,11 +32487,17 @@ mod index_maintenance_tests {
             tx_id,
             timestamp: 999,
             commit_seq: 42,
+            native_backings: BTreeMap::new(),
+            native_catalog_allocations: BTreeMap::new(),
+            native_imported_allocations: BTreeMap::new(),
         };
         let borrowed_commit = TxFrameRef::Commit {
             tx_id,
             timestamp: 999,
             commit_seq: 42,
+            native_backings: &BTreeMap::new(),
+            native_catalog_allocations: &BTreeMap::new(),
+            native_imported_allocations: &BTreeMap::new(),
         };
         assert_eq!(
             serde_json::to_vec(&owned_commit).unwrap(),
@@ -32122,6 +32637,9 @@ mod index_maintenance_tests {
                 tx_id,
                 timestamp: 100,
                 commit_seq: 0,
+                native_backings: BTreeMap::new(),
+                native_catalog_allocations: BTreeMap::new(),
+                native_imported_allocations: BTreeMap::new(),
             },
         ] {
             storage::append_frame(

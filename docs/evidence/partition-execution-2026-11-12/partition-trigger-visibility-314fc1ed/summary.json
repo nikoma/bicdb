@@ -1,0 +1,16 @@
+{
+  "label": "partition-trigger-visibility-314fc1ed",
+  "source": "314fc1edda99b02627e2baf8a2c727da6a3443a8",
+  "reported_batch_status": "failed",
+  "passed": 81,
+  "failed_tests": 0,
+  "ignored": 0,
+  "compile_errors": true,
+  "scope": "Evolvingpartitionbatch: actualPG16trigger-sidevisibility/sourceanddestinationveto7positivesafter2PASS5FAILbaseline; pluslatefailurethatprovespriorphysicalmutationandatomicrollback, savepointvetoedmovementrollback; existingphysicalevent/mixedupsert/catalog/bounds/locks/hash/auth/RLS/Oraclecontrols. ParentwritesnowperrowinsideouteratomicTX; aftereventsqueued. No broad/fault/application/HA/featurecompletion orversiondelivery.",
+  "raw_log": {
+    "archive": "tc-step-partition-trigger-visibility-314fc1ed.log.gz",
+    "uncompressed_bytes": 1462872,
+    "sha256": "0039cb861aa27e8d505635ce3968b9d07d82e9a40c83c0aaaf81da4863a6b62b",
+    "gzip_sha256": "b6dc970a6dcde3339d12d61a57efb5e3daa28ff65c6b90fbb5240408dcf20e6e"
+  }
+}

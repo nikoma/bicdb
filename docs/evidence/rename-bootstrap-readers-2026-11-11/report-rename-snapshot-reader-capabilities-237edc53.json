@@ -1,0 +1,26 @@
+{
+  "source": "237edc53382d04df6769d3770ef3acf29fa2f393",
+  "scope": "Coherent private bootstrap capability batch after59f55 tests-only actual snapshot/schema failures. Snapshot captures sorted portable flags; protected records-v1 wire shape makes frozen legacy decoder failclosed while emptyflag oldwire stays byteidentical. Both mutable/shared native apply validate+persist flags before rows. SchemaBundle checksums flags and uses format2 only withflags; unflagged format1 checksum remains identical. Compatibility fingerprint includes flags and invalidates when changed; same-schema bootstrap plus signed activation installs before schema, preserves sticky subsets. New positive/native schema/learner/live regressions, not real oldbinary/networkmixedversion/VM/powerloss acceptance.",
+  "started_unix": 1794386639.2108142,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "sql_rename_snapshot_fence"
+      ],
+      "started_unix": 1794386639.2112048,
+      "exit": 101,
+      "finished_unix": 1794386676.5666249
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794386676.5669749
+}

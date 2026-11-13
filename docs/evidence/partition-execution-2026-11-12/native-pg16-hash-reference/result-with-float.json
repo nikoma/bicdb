@@ -1,0 +1,15 @@
+{
+  "status": "actual_native_pg16_physical_hash_routes_collected",
+  "source": "control-with-float.sql actualINSERT/tableoid; stdout-with-float",
+  "exit": 0,
+  "native_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "counts": {
+    "integer": 12,
+    "text": 33,
+    "mixed": 50,
+    "float": 11
+  },
+  "total": 106,
+  "scratch_schema_absent": true,
+  "scope": "New scratchschema inrolledback transaction; originalbusinessschemasunchanged. No physicalbyteidentityclaim."
+}

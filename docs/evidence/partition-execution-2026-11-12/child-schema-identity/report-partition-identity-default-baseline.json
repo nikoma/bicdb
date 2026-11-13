@@ -1,0 +1,53 @@
+{
+  "source": "e86bdfc9a3be268e530fa3ad37fcf96f884d6207",
+  "scope": "On unchanged e036runtime, newPG16-confirmed42P16identityADD refusal must precede allcatalog/sequence mutations; newexactdefaultsavepointundo control. ExistingCorebroadcc84 lane unchanged. Expectedidentityproductcounterexample, no passed claim from refusal mismatch. First e036 spec textsaid17 leadingchecks but actual19passed; terminaltotals determine coverage.",
+  "started_unix": 1794504750.382438,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_child_schema",
+        "identity_add_with_existing_partitions",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794504750.3827412,
+      "exit": 101,
+      "finished_unix": 1794504756.9749243
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_child_schema",
+        "parent_default_savepoint_rollback",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794504756.9751472,
+      "exit": 0,
+      "finished_unix": 1794504757.5292826
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794504757.5294745
+}

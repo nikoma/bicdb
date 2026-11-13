@@ -1,0 +1,51 @@
+{
+  "source": "4c9c90476e14dc4a589b05f7d7259d167965399d",
+  "scope": "Actualoriginal95 4e94P1F certificate resource failure, identicalfocused094actual0P1F retained. NewNative temporaryderivedpublication borrowsactualparent and admits extras withforeignscope/observationfences; no permanent globalcertificate reservation or beforeimageauth. Native3controls thenoriginalpositiveSQLcommitrollback/NativeACK/fullhash/foreignread/tworeopens. No fullapplication/main/portableorigin/HAqualification claim. Fullgoalactive,P2productionoff,no spend. PriorCore2P1F was newtest checking an exactSQLcatalogrecord reservation via genericNativeget instead ofthe actualcatalogreadAPI. Correctedtest nowexplicitlychecks protectedbase metadata denied andtemporaryderivedmetadata readable afterrelease; productioncode unchanged. Original094SQLpositive unchanged andstillrequired.",
+  "started_unix": 1794526140.8789873,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "catalog_publication_",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794526140.8791773,
+      "exit": 0,
+      "finished_unix": 1794526206.2087479
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "retained_rename_owner_creates_partition_tree",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794526206.2090402,
+      "exit": 101,
+      "finished_unix": 1794526383.7469249
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794526383.7471263
+}

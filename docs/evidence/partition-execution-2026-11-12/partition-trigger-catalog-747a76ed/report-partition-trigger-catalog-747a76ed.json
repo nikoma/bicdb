@@ -1,0 +1,149 @@
+{
+  "source": "747a76edfe7afd2794096b7a86eb2a9170058e69",
+  "scope": "Evolvingbatch partitiontriggercatalog: realpersistedlineage+tgparentid, Nativeatomicmulti-catalogschema/clonepublication, completepreflight/ORREPLACE, detachretainsowntriggers, modes/dropdependencyandretryablebatchundo. NativePG16actualcatalogreference. Executionpipeline/eventorder, process/fault, namespace/oldreader andotherfeaturegatesstillpending; no completedfeature/app/HAclaim.",
+  "started_unix": 1794485068.7888854,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_trigger_catalog",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794485068.788974,
+      "exit": 0,
+      "finished_unix": 1794485149.3891866
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_upsert",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794485149.389366,
+      "exit": 0,
+      "finished_unix": 1794485154.4619093
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_bounds",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794485154.4621167,
+      "exit": 0,
+      "finished_unix": 1794485160.7018437
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_execution",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794485160.702111,
+      "exit": 0,
+      "finished_unix": 1794485169.4375243
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_row_locks",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794485169.4377787,
+      "exit": 0,
+      "finished_unix": 1794485175.4296649
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_hash",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794485175.429929,
+      "exit": 0,
+      "finished_unix": 1794485190.9038026
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "raw_ddl_authorization",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794485190.9040248,
+      "exit": 0,
+      "finished_unix": 1794485195.429373
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794485195.4295754
+}

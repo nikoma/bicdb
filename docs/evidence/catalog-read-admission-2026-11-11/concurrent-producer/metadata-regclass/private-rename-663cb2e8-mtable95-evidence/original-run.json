@@ -1,0 +1,190 @@
+{
+  "format": 1,
+  "status": "tests_failed",
+  "batch": "remaining-06",
+  "run_name": "private-rename-663cb2e8-mtable95",
+  "base": "/root/.local/state/bicdb/idempiere-reference/pg-provider/runs/private-rename-663cb2e8-mtable95-y2ttisoi",
+  "port": 44715,
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/663cb2e80cb1823f047f513f997a7e290ae2ff62/oracle_server",
+  "binary_sha256": "e35c996c964a5dfbb9ff55dca5999365bc80e538f0d0627abf13e72b7f4fb213",
+  "sql_profile": "postgres",
+  "database_provider": "org.compiere.db.postgresql.provider",
+  "jdbc_driver": "org.postgresql.jdbc 42.7.8 (stock product bundle)",
+  "baseline_record": "/root/.local/state/bicdb/idempiere-reference/pg-provider/baselines/main475-e098c26e/baseline-record.json",
+  "baseline_status": "baseline_verified",
+  "database_sync_outbox": "off",
+  "native_allocator_environment": {
+    "MALLOC_ARENA_MAX": "2"
+  },
+  "selected_classes": [
+    "org.idempiere.test.base.MProcessTest",
+    "org.idempiere.test.base.MQueryTest",
+    "org.idempiere.test.base.MRelationTypeTest",
+    "org.idempiere.test.base.MStorageTest",
+    "org.idempiere.test.base.MTabTest",
+    "org.idempiere.test.base.MTableTest"
+  ],
+  "expected_test_counts": {
+    "org.idempiere.test.base.MProcessTest": 22,
+    "org.idempiere.test.base.MQueryTest": 18,
+    "org.idempiere.test.base.MRelationTypeTest": 2,
+    "org.idempiere.test.base.MStorageTest": 1,
+    "org.idempiere.test.base.MTabTest": 14,
+    "org.idempiere.test.base.MTableTest": 38
+  },
+  "expected_invocations": 95,
+  "timeout_seconds": 5400,
+  "added_bundles": [
+    {
+      "name": "org.idempiere.test",
+      "version": "13.0.0.qualifier",
+      "installed_as": "tycho-project-directory",
+      "sha256": "261afbb15ba933880ddf8cb9bee9f5fa07f9dc21b205ba424f7036ba6e7679e7"
+    },
+    {
+      "name": "org.eclipse.tycho.surefire.osgibooter",
+      "version": "4.0.8",
+      "sha256": "d8d645a8cb944e880751f4f0180af33a0384ab53f240c4473784c6cad7d3915c"
+    },
+    {
+      "name": "org.eclipse.tycho.surefire.junit59",
+      "version": "4.0.8",
+      "sha256": "c96e2c66bb7c8b71631884b6439124ab8b464e2c7d47c9efb05febc3a671d771"
+    },
+    {
+      "name": "junit-jupiter-api",
+      "version": "5.9.1",
+      "sha256": "5d2fe4d719dffb25a95d77e9c7a34893cbbb1b4cc6c86f2726af7e0fb7035b2f"
+    },
+    {
+      "name": "junit-jupiter-params",
+      "version": "5.9.1",
+      "sha256": "30157f26d857ba4f84c0d84d156f55f056e80dc09b4281affa8b1ed4d3205c08"
+    },
+    {
+      "name": "junit-platform-commons",
+      "version": "1.9.1",
+      "sha256": "a8e82d510bbbce5fe1777b2ecf7bc68401e9ae8327009e029b2db5798403d25e"
+    },
+    {
+      "name": "org.opentest4j",
+      "version": "1.2.0",
+      "sha256": "58812de60898d976fb81ef3b62da05c6604c18fd4a249f5044282479fc286af2"
+    },
+    {
+      "name": "org.apiguardian.api",
+      "version": "1.1.2",
+      "sha256": "b509448ac506d607319f182537f0b35d71007582ec741832a1f111e5b5b70b38"
+    },
+    {
+      "name": "assertj-core",
+      "version": "3.22.0",
+      "sha256": "419b7594a869147ee9578f5af2297fdd2c03c07c835927dbf4a7b32ad22cb411"
+    }
+  ],
+  "private_application_home": "/root/.local/state/bicdb/idempiere-reference/pg-provider/runs/private-rename-663cb2e8-mtable95-y2ttisoi/runtime/application-home",
+  "test_assertions_or_bytecode_changed": false,
+  "tests_run": true,
+  "launcher_installation_arguments": [
+    "-install",
+    "/root/.local/state/bicdb/idempiere-reference/pg-provider/runs/private-rename-663cb2e8-mtable95-y2ttisoi/runtime/installation",
+    "-configuration",
+    "/root/.local/state/bicdb/idempiere-reference/pg-provider/runs/private-rename-663cb2e8-mtable95-y2ttisoi/runtime/configuration"
+  ],
+  "network_isolation": {
+    "interfaces": [
+      "lo"
+    ],
+    "only_loopback": true
+  },
+  "database_pid": 133548,
+  "database_startup_seconds": 227.9,
+  "java_pid": 274281,
+  "jvm_started_unix": 1794456611.497489,
+  "jvm_returncode": 255,
+  "jvm_finished_unix": 1794457001.181429,
+  "test_reports": [
+    {
+      "file": "TEST-org.idempiere.test.base.MProcessTest.xml",
+      "name": "org.idempiere.test.base.MProcessTest",
+      "tests": "22",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "time": "90.468"
+    },
+    {
+      "file": "TEST-org.idempiere.test.base.MQueryTest.xml",
+      "name": "org.idempiere.test.base.MQueryTest",
+      "tests": "18",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "time": "56.573"
+    },
+    {
+      "file": "TEST-org.idempiere.test.base.MRelationTypeTest.xml",
+      "name": "org.idempiere.test.base.MRelationTypeTest",
+      "tests": "2",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "time": "1.293"
+    },
+    {
+      "file": "TEST-org.idempiere.test.base.MStorageTest.xml",
+      "name": "org.idempiere.test.base.MStorageTest",
+      "tests": "1",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "time": "23.25"
+    },
+    {
+      "file": "TEST-org.idempiere.test.base.MTabTest.xml",
+      "name": "org.idempiere.test.base.MTabTest",
+      "tests": "14",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "time": "2.266"
+    },
+    {
+      "file": "TEST-org.idempiere.test.base.MTableTest.xml",
+      "name": "org.idempiere.test.base.MTableTest",
+      "tests": "38",
+      "errors": "0",
+      "failures": "1",
+      "skipped": "0",
+      "time": "209.183"
+    }
+  ],
+  "tests_success": false,
+  "expected_test_counts_matched": true,
+  "selected_classes_all_reported": true,
+  "tests": 95,
+  "failures": 1,
+  "errors": 0,
+  "skipped": 0,
+  "runtime_class_origins": {
+    "org.compiere.db.DB_PostgreSQL": [
+      "file:/tmp/bicdb-idempiere-reference-20261101/org.idempiere.p2/target/products/org.adempiere.server.product/linux/gtk/x86_64/plugins/org.compiere.db.postgresql.provider_13.0.0.202611011311.jar"
+    ],
+    "org.postgresql.Driver": [
+      "file:/tmp/bicdb-idempiere-reference-20261101/org.idempiere.p2/target/products/org.adempiere.server.product/linux/gtk/x86_64/plugins/org.postgresql.jdbc_42.7.8.jar"
+    ]
+  },
+  "oracle_provider_class_loaded": false,
+  "shutdown_results": [
+    {
+      "role": "test_jvm",
+      "returncode": 255
+    },
+    {
+      "role": "database",
+      "returncode": 0
+    }
+  ],
+  "server_aborts": [],
+  "processes_stopped": true
+}

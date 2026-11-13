@@ -1,0 +1,46 @@
+{
+  "source": "adfa24f3118c0c2025b5035fdce3f4f69de93241",
+  "private_unmerged": true,
+  "standard_binary_built": false,
+  "source_version": "1.0.487-beta inherited development",
+  "baseline": {
+    "source": "1f6a25ed3ad5ac70d119531f22336551b5cf57ae",
+    "default_cases_failed": 6,
+    "old_reader_cases_failed": 2,
+    "requirements_still_open": true
+  },
+  "latest": {
+    "focused_passed": 4,
+    "genuine_old_store_cases_passed": 8,
+    "two_storage_modes": true,
+    "two_reopens": true,
+    "idempotent_retries_no_new_commits": true,
+    "real_old482_reader_refused_all": true,
+    "old_reader_byte_identity_all": true,
+    "original_fixtures_unchanged": true,
+    "independent_old_ack_rows": 14,
+    "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/adfa24f3118c0c2025b5035fdce3f4f69de93241/partition_upgrade_probe",
+    "binary_sha256": "92ca8af528f31f9749cf3d4d682ab4315621d682fad7254fcb332cb8e9640f9f"
+  },
+  "scope": "Explicit local upgrade API only, not automatic SQL or host startup admission; no application/broad/fault/HA readiness claim. Repeated prior eight-case runs are not additive.",
+  "f5_setup_failure_preserved": {
+    "focused_passed": 1,
+    "focused_setup_failures": 3,
+    "runtime_cases_run": 0,
+    "fixed_fixture_source": "d965e015f",
+    "production_byte_equivalence": true
+  },
+  "core_qualification_reused": {
+    "source": "3b0289b200ad915de280783bb39faf61626345ea",
+    "focused_passed": 4,
+    "current_core_page_and_workspace_identity_exact": true
+  },
+  "memory_monitor": {
+    "host_min_available_bytes": 40100069376,
+    "cgroup_peak_current_bytes": 5857210368,
+    "cgroup_limit_bytes": 12884901888,
+    "interrupted": false
+  },
+  "raw_archives_verified": 150,
+  "last_verified_unix": 1794493936.9293196
+}

@@ -182,8 +182,10 @@ pub use consensus::{
     AppendEntries, AppendResponse, ConsensusConfig, ConsensusLogEntry, ConsensusPeer,
     ConsensusRole, ConsensusState, ConsensusStatus, RequestVote, VoteResponse,
 };
+pub use db::authorize_native_cold_restore;
 pub use db::effective_fts_partitions;
 pub use db::ensure_frames_within_durable_horizon;
+pub use db::NativeColdRestoreOutcome;
 mod oracle_simple_case;
 pub use oracle_simple_case::{
     oracle_simple_lower_v1, oracle_simple_national_lower_v1, oracle_simple_national_upper_v1,
@@ -195,7 +197,9 @@ pub use db::index_key_upper;
 pub use db::index_predicate_matches;
 pub use db::row_lock_waits_active;
 pub use db::AuthenticationStrength;
+pub use db::CatalogCreatedCollectionUndo;
 pub use db::ChangedRecord;
+pub use db::CollectionCacheStamp;
 pub use db::DeferredMaterializeStats;
 pub use db::FullTextBuildStep;
 pub use db::FullTextStoredTextPage;
@@ -211,13 +215,14 @@ pub use db::{
     decode_fts_posting_payload, decode_fts_posting_payload_into, fts_impact_bucket,
     fts_impact_bucket_upper_edge, fts_rank_conjunctive, fts_rank_single_term,
     full_text_oversized_terms_skipped, full_text_term_is_indexable, paged_tid_hint_stats,
-    parse_repair_decimal, BicDb, BlockGate, BypassPolicy, ClusterSchemaActivationAdvance,
-    ClusterSchemaActivationLimits, ClusterSchemaActivationPhase, ClusterSchemaActivationState,
-    ClusterSchemaBundle, ClusterSchemaCatalogRecord, ClusterSchemaCompatibilityWindow,
-    ClusterSchemaFinalizationState, ClusterSchemaOnlinePlan, ClusterSchemaStageLimits,
-    ClusterSchemaStageState, CollectionCompactionReport, CollectionStats, ColumnStatistics,
-    CompactionOptions, CompactionReport, DbConfig, DbSnapshot, DbStats, EventHorizonReport,
-    FtsQueryBudget, FtsQueryLimits, FullTextBuildLifecycleState, FullTextBuildLifecycleStatus,
+    parse_repair_decimal, BicDb, BlockGate, BypassPolicy, CatalogReadAccess, CatalogScopeAccess,
+    CatalogScopeToken, ClusterSchemaActivationAdvance, ClusterSchemaActivationLimits,
+    ClusterSchemaActivationPhase, ClusterSchemaActivationState, ClusterSchemaBundle,
+    ClusterSchemaCatalogRecord, ClusterSchemaCompatibilityWindow, ClusterSchemaFinalizationState,
+    ClusterSchemaOnlinePlan, ClusterSchemaStageLimits, ClusterSchemaStageState,
+    CollectionCompactionReport, CollectionStats, ColumnStatistics, CompactionOptions,
+    CompactionReport, DbConfig, DbSnapshot, DbStats, EventHorizonReport, FtsQueryBudget,
+    FtsQueryLimits, FullTextBuildLifecycleState, FullTextBuildLifecycleStatus,
     FullTextBuildProgress, FullTextBuildRecommendedAction, FullTextBuildReconcileOutcome,
     FullTextBuildReconcileReport, FullTextOpenMetrics, FullTextPublishedGeneration,
     FullTextReadSession, GeofenceTransition, GeofenceTransitionKind, HaApplyReport, HaRole,
@@ -559,8 +564,8 @@ pub use paged_maintenance::{
 pub use query_exec::{NumericSummary, TimeSeriesFilter};
 pub use record::{
     patch_json_object_text, splice_json_object_text, BlindIndexPolicy, CellRef, CellRow,
-    CollectionMeta, CollectionMode, CollectionPolicy, ColumnSecurity, OwnedCell, OwnedCellRow,
-    Record, RedactionPolicy, StoredRecord, TypedCell, TypedRow,
+    CollectionMeta, CollectionMode, CollectionPolicy, ColumnSecurity, NativeImportedBackingOrigin,
+    OwnedCell, OwnedCellRow, Record, RedactionPolicy, StoredRecord, TypedCell, TypedRow,
 };
 pub use replication::{
     CommitFrame, ReplicationApplyReport, ReplicationApplyState, ReplicationConfig,

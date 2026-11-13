@@ -1,0 +1,29 @@
+{
+  "source": "3b0289b200ad915de280783bb39faf61626345ea",
+  "scope": "Nativecomponent4focusedunitchecks; newtestprovesvisibleflagreactivationactuallycallsfsyncandpermanentlyfenceshandlewhenretryfails;8first-activationIOcuts acrossbothmodes, ACK/reopen,quiescentdurableindexprereqs. Coreproductionexactb715; SQLinspectionseparate; no SQLlegacyupgrade/admission/publicdelivery orapp/HAclaim.",
+  "started_unix": 1794491249.8496015,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "sql_partition_execution",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794491249.8498256,
+      "exit": 0,
+      "finished_unix": 1794491296.4796262
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794491296.4799047
+}

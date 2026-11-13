@@ -1,0 +1,28 @@
+{
+  "source": "73b120fc68f416ffbf97be464b49ba68dc7b65f8",
+  "scope": "Tests-only next Nativecatalogrecord requirement with localadaptermappingrequestedrecordIDs to EXISTINGcollectiononlyreservation; production86unchangedandall3commands50focusedPASSincludingSQLcold/warmfences. Thischaracterizes whyrecordsneeded: unrelatedrecordshouldread, out-of-scopeinternalupdateandmixedbatchmustrefusebeforelocks/writes, existingdifferentmetadatarecordobservationmustnotpreventreservation, disjointownersmustpublishtheirownrowdespiteoverlappingsamecollection. Fiveindependenttests intendedbothstores, recordactualfirstfailedcells. AdapterwillbechangedtonewresourceAPIwhileassertionsretained. NotclaimexistingcollectionAPIpromisesrecords. GlobalSQLNativeownerrecoverygate stillunchanged; SQLproducer/exactmetadata-row/ownercontext/wireDescribeintegrationremainOPEN. Source471private,nopublicationversionreserved.",
+  "started_unix": 1794407616.1384864,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_record_scope",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794407616.1385877,
+      "exit": 101,
+      "finished_unix": 1794407616.7638774
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794407616.7641218
+}

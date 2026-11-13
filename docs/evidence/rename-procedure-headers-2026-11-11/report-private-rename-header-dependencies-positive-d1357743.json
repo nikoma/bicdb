@@ -1,0 +1,32 @@
+{
+  "source": "d135774385df30c702cff49db95049653b2b04d7",
+  "scope": "Actual fb8 tests-only control failed both before rename: context-free default evaluator cannot cast source row type; pg_get_function_result loses TABLE output columns. Preserve original assertions. Database-aware defaults evaluate in session security context with caller local slots/vars/memos cleared; ordinary constant-only frame constructor retained for tests. Function/procedure header default casts and TABLE output column types share pure dependency relocation and full raw row journal. Metadata uses original TABLE declaration and consistent SETOF elsewhere. Run both new full two-store/two-decision/reuse/reopen tests plus existing procedure/function/dump/OID tests, process crash matrix58cuts116reopens, Oracle procedure parser and selected type/rename/read-only suites. Private source version465, not final PR145 source469, not full Native SQL ownership, app or VM acceptance. First105 candidate did not compile: accidentally used engine helper available only under cfg(test); no test executions. Use shared production helper. Database-aware defaults must not gain SECURITY DEFINER authority: complete missing PostgreSQL argument values before scalar/procedure/set-returning security entry, retain Oracle-specific bindings, avoid allocation when no missing arguments. Added denied secret function defaults for all three entry paths, explicit values allowed, GRANT allows default afterwards. No assertion relaxation.",
+  "started_unix": 1794403266.612905,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_routine_header_dependencies",
+        "--test",
+        "rename_routine_row_types",
+        "--test",
+        "table_row_routines",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794403266.6131053,
+      "exit": 101,
+      "finished_unix": 1794403351.1307936
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794403351.131058
+}

@@ -1,0 +1,87 @@
+{
+  "source": "de64001c8d2778aba2c9f1e38312910e116d5f2c",
+  "scope": "Native runtime collection-reservation foundation for scoped SQL admission. Active transaction incarnation bindings weak-registered; first bind and scope creation atomically ordered; both names+immutablebackings protected; only explicitlyscoped owner skips prior globalrename pending/lock gate. Default unscoped gate/grants retained. Leases release via exact token/commit/rollback/drop, snapshotrefresh retains. New4tests cover unrelatedACK bothstores, priorread/readlockdenial, latealreadybegun/newaccessdenial, foreigntokens,64races. SQLscoped visibility/Describe/metadata rowguard and producer integration NOT implemented; ce3SQLnegative remains failing and this is NOT delivery-ready. First2d source3/4 tests pass; late access oldname returnedCollectionNotFound beforebind due legacy policylookup; nativelegacy wrappers nowcheck missingname reservation onlyonNotFound, preserving existing policy/grant order. Same denial assertion retained, stronger futurewrite/readlock checks added. Localfmt caught missingbrace inunsubmitted aa7d helper; corrected before anynewremotebuild. No tests ran onaa7d.",
+  "started_unix": 1794388964.0617604,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_scope_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794388964.061918,
+      "exit": 0,
+      "finished_unix": 1794388988.5703452
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "collection_rename_admission",
+        "--test",
+        "collection_rename",
+        "--test",
+        "collection_rename_paged_stubs"
+      ],
+      "started_unix": 1794388988.5705402,
+      "exit": 0,
+      "finished_unix": 1794388990.782833
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "transaction_isolation",
+        "--test",
+        "mutation_grants"
+      ],
+      "started_unix": 1794388990.7830367,
+      "exit": 0,
+      "finished_unix": 1794388991.9024832
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "snapshot_reader_tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794388991.902725,
+      "exit": 0,
+      "finished_unix": 1794389018.5167954
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794389018.5170534
+}

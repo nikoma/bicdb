@@ -1,0 +1,50 @@
+{
+  "source": "c932a98bc86aa221ece871cc6e7d79a3ef0e8efa",
+  "scope": "Exact c932 stable Native source allocation producer: seven new focused regressions passed in prior v4; reuse that result. Run all Page/Core/SQL/wire all-target compile, full Core library suite, Page lock regressions, and source version synchronization. Broad Core library is not all-Core-targets, SQL/wire regression, application, receiver identity mapping, independent process/KVM, release or main delivery qualification. Previous related-final version synchronization passed29 packages; compilation invocation failed before compilation because I selected nonexistent package bicdb-wire. Corrected to actual bicdb-pgwire, retain failed invocation, reuse version check and seven new focused tests on exact same c932 runtime. No source change.",
+  "started_unix": 1794541419.353565,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "check",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-page",
+        "-p",
+        "bicdb-core",
+        "-p",
+        "bicdb-sql",
+        "-p",
+        "bicdb-pgwire",
+        "--all-targets"
+      ],
+      "started_unix": 1794541419.353883,
+      "exit": 0,
+      "finished_unix": 1794541563.997474
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794541563.9976866,
+      "exit": 101,
+      "finished_unix": 1794541965.333023
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794541965.3332946
+}

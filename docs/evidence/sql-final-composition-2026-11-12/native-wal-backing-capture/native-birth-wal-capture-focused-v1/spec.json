@@ -1,0 +1,132 @@
+{
+  "label": "native-birth-wal-capture-focused-v1",
+  "source": "31be8e3d0fb566fefa8c6189923b60f48abbd1c8",
+  "base": "d51e987d2534812491074b4600118e91465d3144",
+  "repo": "/root/bicdb-sql-final-composition",
+  "scope": "Write-time Native backing contracts are part of the same WAL commit as their writes, including prepared-WAL fast path. Actual bounded durable batch/live exporters retain historical backing identity across rename/name reuse/drop and restart. Private checksum-bound in-process capture is not decoded from JSON, not source root authentication/import/recovery authority. New lifecycle/unborn/async/forgery/dropped-fence controls plus prior Native birth5/image6/local8/snapshot3 and legacy WAL serialization tests. Original SQL promotion acceptance remains OPEN; no source/main/application/release/deployment or full broad/fault qualification.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "python3",
+      "scripts/bump-version.py",
+      "--check"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "check",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "-p",
+      "bicdb-sql",
+      "-p",
+      "bicdb-pgwire",
+      "--all-targets"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "native_collection_birth::",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "range_image_bindings::",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "local_namespace_identity::",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "tx_frame_ref_matches_owned_serialization",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "compact_wal::",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "sql_rename_snapshot_fence",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-native-birth-retained-wal-baseline-v3"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-native-birth-retained-wal-baseline-v3.json",
+      "equals": {
+        "source": "d51e987d2534812491074b4600118e91465d3144",
+        "status": "failed"
+      }
+    }
+  ]
+}

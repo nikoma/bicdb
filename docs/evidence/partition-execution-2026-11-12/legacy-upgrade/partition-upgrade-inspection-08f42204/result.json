@@ -1,0 +1,276 @@
+{
+  "source": "08f422047cc3dfb93ac34171283f275791789bd7",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/08f422047cc3dfb93ac34171283f275791789bd7/partition_upgrade_probe",
+  "binary_sha256": "92074dd4ddee5f415c088998a5f8defed208fff8a1a8013856707917b0520524",
+  "status": "inspection_passed",
+  "started_unix": 1794491250.4884388,
+  "cases": [
+    {
+      "mode": "embedded_memory",
+      "case": "parent_heap",
+      "inspection": {
+        "snapshot": "7fb3adc404efd047b6777bf3ee71c3f1cbc8e32bf94a1d72fd76aa60a0554756",
+        "legacy_relations": [
+          "high",
+          "low",
+          "p"
+        ],
+        "policy_decisions_required": [],
+        "invalid_rows": [],
+        "parent_heap_rows": 2,
+        "acknowledged_rows_examined": 4
+      },
+      "same_after_two_reopens": true
+    },
+    {
+      "mode": "embedded_memory",
+      "case": "bad_child_bound",
+      "inspection": {
+        "snapshot": "881fd8a19b2b63f8cdda66f98081c4f1ff66754a36148168b77deac4e3b3cf76",
+        "legacy_relations": [
+          "high",
+          "low",
+          "p"
+        ],
+        "policy_decisions_required": [],
+        "invalid_rows": [
+          {
+            "source": "low",
+            "record_id": "11",
+            "reason": "new row for relation \"low\" violates partition constraint",
+            "suggested_destination": "high"
+          }
+        ],
+        "parent_heap_rows": 0,
+        "acknowledged_rows_examined": 1
+      },
+      "same_after_two_reopens": true
+    },
+    {
+      "mode": "embedded_memory",
+      "case": "independent_child_policy",
+      "inspection": {
+        "snapshot": "e93fea347217c86d82dc121de01929fe81cb8d6cf59f2a42522f9c846b802c77",
+        "legacy_relations": [
+          "high",
+          "low",
+          "p"
+        ],
+        "policy_decisions_required": [
+          {
+            "relation": "high",
+            "stored": {
+              "rls_enabled": true,
+              "rls_forced": true,
+              "policies": [
+                {
+                  "name": "parent_guard",
+                  "command": "select",
+                  "using_expr": "(k < 10)",
+                  "check_expr": null,
+                  "permissive": true,
+                  "enforced": true,
+                  "roles": [
+                    "public"
+                  ]
+                },
+                {
+                  "name": "authored_child",
+                  "command": "select",
+                  "using_expr": "(k = 11)",
+                  "check_expr": null,
+                  "permissive": true,
+                  "enforced": true,
+                  "roles": [
+                    "public"
+                  ]
+                }
+              ]
+            },
+            "historical_effective": {
+              "rls_enabled": true,
+              "rls_forced": true,
+              "policies": [
+                {
+                  "name": "parent_guard",
+                  "command": "select",
+                  "using_expr": "(k < 10)",
+                  "check_expr": null,
+                  "permissive": true,
+                  "enforced": true,
+                  "roles": [
+                    "public"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "relation": "low",
+            "stored": {
+              "rls_enabled": true,
+              "rls_forced": true,
+              "policies": []
+            },
+            "historical_effective": {
+              "rls_enabled": true,
+              "rls_forced": true,
+              "policies": [
+                {
+                  "name": "parent_guard",
+                  "command": "select",
+                  "using_expr": "(k < 10)",
+                  "check_expr": null,
+                  "permissive": true,
+                  "enforced": true,
+                  "roles": [
+                    "public"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "invalid_rows": [],
+        "parent_heap_rows": 0,
+        "acknowledged_rows_examined": 2
+      },
+      "same_after_two_reopens": true
+    },
+    {
+      "mode": "server_paged",
+      "case": "parent_heap",
+      "inspection": {
+        "snapshot": "7fb3adc404efd047b6777bf3ee71c3f1cbc8e32bf94a1d72fd76aa60a0554756",
+        "legacy_relations": [
+          "high",
+          "low",
+          "p"
+        ],
+        "policy_decisions_required": [],
+        "invalid_rows": [],
+        "parent_heap_rows": 2,
+        "acknowledged_rows_examined": 4
+      },
+      "same_after_two_reopens": true
+    },
+    {
+      "mode": "server_paged",
+      "case": "bad_child_bound",
+      "inspection": {
+        "snapshot": "881fd8a19b2b63f8cdda66f98081c4f1ff66754a36148168b77deac4e3b3cf76",
+        "legacy_relations": [
+          "high",
+          "low",
+          "p"
+        ],
+        "policy_decisions_required": [],
+        "invalid_rows": [
+          {
+            "source": "low",
+            "record_id": "11",
+            "reason": "new row for relation \"low\" violates partition constraint",
+            "suggested_destination": "high"
+          }
+        ],
+        "parent_heap_rows": 0,
+        "acknowledged_rows_examined": 1
+      },
+      "same_after_two_reopens": true
+    },
+    {
+      "mode": "server_paged",
+      "case": "independent_child_policy",
+      "inspection": {
+        "snapshot": "e93fea347217c86d82dc121de01929fe81cb8d6cf59f2a42522f9c846b802c77",
+        "legacy_relations": [
+          "high",
+          "low",
+          "p"
+        ],
+        "policy_decisions_required": [
+          {
+            "relation": "high",
+            "stored": {
+              "rls_enabled": true,
+              "rls_forced": true,
+              "policies": [
+                {
+                  "name": "parent_guard",
+                  "command": "select",
+                  "using_expr": "(k < 10)",
+                  "check_expr": null,
+                  "permissive": true,
+                  "enforced": true,
+                  "roles": [
+                    "public"
+                  ]
+                },
+                {
+                  "name": "authored_child",
+                  "command": "select",
+                  "using_expr": "(k = 11)",
+                  "check_expr": null,
+                  "permissive": true,
+                  "enforced": true,
+                  "roles": [
+                    "public"
+                  ]
+                }
+              ]
+            },
+            "historical_effective": {
+              "rls_enabled": true,
+              "rls_forced": true,
+              "policies": [
+                {
+                  "name": "parent_guard",
+                  "command": "select",
+                  "using_expr": "(k < 10)",
+                  "check_expr": null,
+                  "permissive": true,
+                  "enforced": true,
+                  "roles": [
+                    "public"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "relation": "low",
+            "stored": {
+              "rls_enabled": true,
+              "rls_forced": true,
+              "policies": []
+            },
+            "historical_effective": {
+              "rls_enabled": true,
+              "rls_forced": true,
+              "policies": [
+                {
+                  "name": "parent_guard",
+                  "command": "select",
+                  "using_expr": "(k < 10)",
+                  "check_expr": null,
+                  "permissive": true,
+                  "enforced": true,
+                  "roles": [
+                    "public"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "invalid_rows": [],
+        "parent_heap_rows": 0,
+        "acknowledged_rows_examined": 2
+      },
+      "same_after_two_reopens": true
+    }
+  ],
+  "finished_unix": 1794491251.2597198,
+  "originals_unchanged": true,
+  "scope": "Sixactualold482fixtures/copies; stablefingerprintsacross2reopens; realparentheapcounts/boundviolationdestination/independentrawpolicyconflicts. This does not implement or qualify applying the upgrade."
+}

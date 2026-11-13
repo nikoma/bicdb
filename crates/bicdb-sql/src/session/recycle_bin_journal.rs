@@ -10,7 +10,57 @@ const CREATIONS: &str = "__bicdb_recycle_creations";
 /// Compare physical names exactly so identically named user relations in a
 /// private SQL schema remain accessible through their encoded storage name.
 pub(crate) fn is_catalog_journal_collection(name: &str) -> bool {
-    [INTENTS, PURGES, CREATIONS].contains(&name)
+    [INTENTS, PURGES, CREATIONS].contains(&name) || super::rename_journal::is_collection(name)
+}
+
+/// Check for live recovery work without materializing journal payloads or
+/// registering a repair while an unrelated native transaction is active.
+pub(super) fn collection_has_visible_records(db: &BicDb, collection: &str) -> Result<bool> {
+    match db.collection_policy(collection) {
+        Ok(_) => {}
+        Err(BicDbError::CollectionNotFound(_)) => return Ok(false),
+        Err(error) => return Err(error.into()),
+    }
+    let reader = db.begin_transaction()?;
+    let mut after: Option<String> = None;
+    loop {
+        let lower = after
+            .as_deref()
+            .map(std::ops::Bound::Excluded)
+            .unwrap_or(std::ops::Bound::Unbounded);
+        let (ids, complete) = reader.scan_collection_record_key_batch_in_range_unchecked(
+            collection,
+            lower,
+            std::ops::Bound::Unbounded,
+            false,
+            128,
+        )?;
+        if ids.is_empty() && !complete {
+            return Err(SqlError::InvalidSql(
+                "catalog-intent probe made no progress".into(),
+            ));
+        }
+        for id in &ids {
+            if reader.get(collection, id)?.is_some() {
+                reader.rollback()?;
+                return Ok(true);
+            }
+        }
+        if complete {
+            reader.rollback()?;
+            return Ok(false);
+        }
+        after = ids.last().cloned();
+    }
+}
+
+pub(super) fn has_pending_recovery(db: &BicDb) -> Result<bool> {
+    for collection in [INTENTS, PURGES, CREATIONS] {
+        if collection_has_visible_records(db, collection)? {
+            return Ok(true);
+        }
+    }
+    super::rename_journal::has_pending_recovery(db)
 }
 
 const CREATED_PREFIX: &str = "__bicdb_created_";
@@ -29,9 +79,11 @@ pub(super) fn create_replacement_collection(
     name: &str,
 ) -> Result<bool> {
     if session.tx.is_none()
-        || !session.ddl_undo.iter().any(
-            |undo| matches!(undo, DdlUndo::RestoreFromRecycleBin { target, .. } if target == name),
-        )
+        || !session.ddl_undo.iter().any(|undo| match undo {
+            DdlUndo::RestoreFromRecycleBin { target, .. } => target == name,
+            DdlUndo::RestoreRenameJournal { old_table, .. } => old_table == name,
+            _ => false,
+        })
     {
         return Ok(false);
     }
@@ -55,9 +107,22 @@ pub(super) fn create_replacement_collection(
     session.ddl_undo.push(DdlUndo::DropCollection {
         name: name.to_string(),
         creation_intent: Some(storage.clone()),
+        creation_receipt: None,
     });
     stage("recreate_intent");
-    session.db_mut()?.create_collection(&storage)?;
+    let owner = session.tx.take().expect("explicit replacement transaction");
+    let created = session
+        .db_mut()
+        .and_then(|db| Ok(db.create_collection_for_transaction_undo(&owner, &storage, name)?));
+    session.tx = Some(owner);
+    let receipt = created?;
+    let Some(DdlUndo::DropCollection {
+        creation_receipt, ..
+    }) = session.ddl_undo.last_mut()
+    else {
+        unreachable!("replacement undo was registered before native creation")
+    };
+    *creation_receipt = Some(receipt);
     stage("recreate_backing");
     session.db_mut()?.rename_collection(&storage, name)?;
     stage("recreate_name");
@@ -84,6 +149,16 @@ fn validate_creation(intent: &CreationIntent, id: &str) -> Result<()> {
 }
 
 fn rollback_creation(db: &mut BicDb, intent: &CreationIntent) -> Result<()> {
+    rollback_creation_with_owner(db, intent, None, &[], None)
+}
+
+fn rollback_creation_with_owner(
+    db: &mut BicDb,
+    intent: &CreationIntent,
+    mut owner: Option<&mut Transaction>,
+    contexts: &[String],
+    receipt: Option<&bicdb_core::CatalogCreatedCollectionUndo>,
+) -> Result<()> {
     let collections = db.collections();
     let target = collections.iter().find(|meta| meta.name == intent.table);
     let staged = collections.iter().find(|meta| meta.name == intent.storage);
@@ -96,41 +171,121 @@ fn rollback_creation(db: &mut BicDb, intent: &CreationIntent) -> Result<()> {
             intent.table
         )));
     }
+    if (target.is_some() || staged.is_some()) && receipt.is_some() {
+        let receipt = receipt.unwrap();
+        let current = match owner.as_deref() {
+            Some(owner) => db.check_created_collection_undo_owner(owner, receipt)?,
+            None => db.check_created_collection_undo_identity(receipt)?,
+        };
+        if current != intent.table && current != intent.storage {
+            return Err(SqlError::InvalidSql(
+                "replacement creation witness has a different live name".into(),
+            ));
+        }
+    }
     if target.is_some() {
         // Every removed object belongs to the independently proven backing;
         // never prune a collection merely because its logical name was reused.
-        delete_schema(db, &intent.table)?;
-        for grant in list_privileges(db)? {
+        let (grants, triggers, sequences) = {
+            // Full rollback consumed the business reader. Re-enter only the
+            // independently checked undecided context while discovering this
+            // backing's metadata; mutation guards below are per record.
+            let _access = super::rename_journal::record_mutation_access(
+                db,
+                owner.as_deref(),
+                contexts,
+                SCHEMA_COLLECTION,
+                &intent.table,
+            )?;
+            (
+                list_privileges(db)?,
+                list_triggers(db)?,
+                list_sequences(db)?,
+            )
+        };
+        {
+            let _access = super::rename_journal::record_mutation_access(
+                db,
+                owner.as_deref(),
+                contexts,
+                SCHEMA_COLLECTION,
+                &intent.table,
+            )?;
+            delete_schema(db, &intent.table)?;
+        }
+        for grant in grants {
             if grant.object_type == PrivilegeObjectType::Table && grant.object_name == intent.table
             {
+                let _access = super::rename_journal::record_mutation_access(
+                    db,
+                    owner.as_deref(),
+                    contexts,
+                    PRIVILEGE_COLLECTION,
+                    &privilege_key(&grant),
+                )?;
                 delete_privilege(db, &grant)?;
             }
         }
-        for trigger in list_triggers(db)? {
+        for trigger in triggers {
             if trigger.table_name == intent.table {
+                let _access = super::rename_journal::record_mutation_access(
+                    db,
+                    owner.as_deref(),
+                    contexts,
+                    TRIGGER_COLLECTION,
+                    &trigger_key(&intent.table, &trigger.name),
+                )?;
                 delete_trigger(db, &trigger.name, Some(&intent.table))?;
             }
         }
-        for sequence in list_sequences(db)? {
+        for sequence in sequences {
             if sequence.owned_by_table.as_deref() == Some(&intent.table) {
+                let _access = super::rename_journal::record_mutation_access(
+                    db,
+                    owner.as_deref(),
+                    contexts,
+                    SEQUENCE_COLLECTION,
+                    &sequence.name,
+                )?;
                 delete_sequence(db, &sequence.name)?;
             }
         }
-        db.drop_collection(&intent.table)?;
+        match (owner.as_deref_mut(), receipt) {
+            (Some(owner), Some(receipt)) => db.undo_created_collection(owner, receipt)?,
+            _ => {
+                db.drop_collection(&intent.table)?;
+            }
+        }
     } else if staged.is_some() {
-        db.drop_collection(&intent.storage)?;
+        match (owner.as_deref_mut(), receipt) {
+            (Some(owner), Some(receipt)) => db.undo_created_collection(owner, receipt)?,
+            _ => {
+                db.drop_collection(&intent.storage)?;
+            }
+        }
     }
     db.delete(CREATIONS, &intent.storage)?;
     Ok(())
 }
 
-pub(super) fn undo_creation(db: &mut BicDb, id: &str) -> Result<()> {
-    let record = db
+pub(super) fn undo_session_creation(
+    session: &mut SqlSession<'_>,
+    id: &str,
+    receipt: Option<&bicdb_core::CatalogCreatedCollectionUndo>,
+) -> Result<()> {
+    let record = session
+        .db_ref()
         .get(CREATIONS, id)?
         .ok_or_else(|| SqlError::InvalidSql("missing replacement creation intent".into()))?;
     let intent: CreationIntent = serde_json::from_value(record.metadata.clone())?;
     validate_creation(&intent, id)?;
-    rollback_creation(db, &intent)
+    let contexts = session.rename_journal_contexts();
+    let mut owner = session.tx.take();
+    let result = session.db_mut().and_then(|db| {
+        rollback_creation_with_owner(db, &intent, owner.as_mut(), &contexts, receipt)
+    });
+    session.tx = owner;
+    result
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct MoveIntent {
@@ -328,6 +483,7 @@ pub(super) fn recover(db: &mut BicDb) -> Result<usize> {
     enum PendingIntent {
         Move(MoveIntent),
         Creation(CreationIntent),
+        Rename(super::rename_journal::PendingRename),
     }
     let mut pending = intents
         .drain(..)
@@ -338,16 +494,27 @@ pub(super) fn recover(db: &mut BicDb) -> Result<usize> {
         validate_creation(&creation, &record.id)?;
         pending.push(PendingIntent::Creation(creation));
     }
+    pending.extend(
+        super::rename_journal::pending(db)?
+            .into_iter()
+            .map(PendingIntent::Rename),
+    );
     pending.sort_by_key(|intent| {
         std::cmp::Reverse(match intent {
             PendingIntent::Move(intent) => intent.order,
             PendingIntent::Creation(intent) => intent.order,
+            PendingIntent::Rename(intent) => intent.order,
         })
     });
     let mut repaired = purge_repairs;
     for intent in pending {
         let intent = match intent {
             PendingIntent::Move(intent) => intent,
+            PendingIntent::Rename(intent) => {
+                super::rename_journal::rollback(db, &intent.id)?;
+                repaired += 1;
+                continue;
+            }
             PendingIntent::Creation(intent) => {
                 rollback_creation(db, &intent)?;
                 repaired += 1;
@@ -438,6 +605,7 @@ pub(super) fn recover(db: &mut BicDb) -> Result<usize> {
         clear(db, &entry.bin_name)?;
         repaired += 1;
     }
+    super::rename_journal::collect_orphans(db)?;
     Ok(repaired)
 }
 

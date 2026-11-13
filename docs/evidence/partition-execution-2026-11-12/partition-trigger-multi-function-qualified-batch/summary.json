@@ -1,0 +1,16 @@
+{
+  "label": "partition-trigger-multi-function-qualified-batch",
+  "source": "74ab97ba31bc5757194cc90ab227ed2f3931e4e5",
+  "reported_batch_status": "focused_passed",
+  "passed": 57,
+  "failed_tests": 0,
+  "ignored": 0,
+  "compile_errors": false,
+  "scope": "Coherentmulti-functiontriggercascadecatalogbatch: allselectedfunctionsandalltheirtriggerlineagespublishinoneNativecatalogTX; selectedoverloadsneverpromoted; rawbatchundo; allname/dependency/ownerpreflight. NativeglobalcounterincludesknownemptySQLwrapper; eachaffectedcataloggenerationexactlyonce. Reuse actual314unchangedDML90scope; rerun12DDL/trigger/auth/routine/baseType/independentOraclefocusedtargets. Originalbaselinefailuresretained. No broad/processfault/mixedoperator-typecascade/namespace/oldreader/app/HA orfeaturecompletion.",
+  "raw_log": {
+    "archive": "tc-step-partition-trigger-multi-function-qualified-batch.log.gz",
+    "uncompressed_bytes": 975442,
+    "sha256": "a9c2d953cafe823e1fb5eb364ccb5cc33e901ac6f0df98a1518c9480240c1da4",
+    "gzip_sha256": "914a391061548e991e33b708b9ca62749058f96871972cb5f0af97e540e1f18a"
+  }
+}

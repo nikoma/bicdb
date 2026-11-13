@@ -1,0 +1,30 @@
+{
+  "source": "09473ee9c4fdd30d1a0511c75ed7e559017c338f",
+  "scope": "Actualoriginal4e95 remains94P1F, gotpastcompaction andfails CREATEpartition certificate outside retainedrename resources. Focusedunchangedpositivefirstsource beforeanyfix; ACK/fullhash/bothmodes/commitrollback/tworeopens/unrelatedquery asserted, notwaived. Fullgoalactive;no P2promotion/cloudspend.",
+  "started_unix": 1794525641.079015,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "retained_rename_owner_creates_partition_tree",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794525641.079382,
+      "exit": 101,
+      "finished_unix": 1794525773.2144434
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794525773.2146325
+}

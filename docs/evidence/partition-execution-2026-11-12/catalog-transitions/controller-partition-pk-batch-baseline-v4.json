@@ -1,0 +1,58 @@
+{
+  "label": "partition-pk-batch-baseline-v4",
+  "source": "a4ce8ac31afa5c630254e10b97f10705ccbf83c9",
+  "base": "e170e4bbb0eb0ff909c6a3e72f387b048f4ca73a",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "Exact f7fb main488 pre-fix runtime, only two regression testfiles changed. All original7assertions retained; explicit ensure_primary_key_indexes before Native index attack so partition child actually has backing to replace. V3 raw0PASS7FAIL includes six product counterexamples + exclusion control setup error (child backing absent), not2PASS5FAIL as mistakenly written in later3ff spec. This run distinguishes all actual outcomes. Earlier harness failures preserved. Not broad/application/HA.",
+  "continue_on_failure": true,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "primary_key_index_compatibility",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "partition_statement_batches",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-pk-and-ast-focused"
+  ],
+  "required_receipts": [],
+  "allow_isolated_builds": [
+    {
+      "pid": 473811,
+      "start_ticks": 163308064,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock",
+  "source_ref": "refs/bicdb-proof/partition-pk-batch-baseline-v4"
+}

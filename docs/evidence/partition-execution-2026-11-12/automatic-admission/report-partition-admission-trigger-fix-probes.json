@@ -1,0 +1,51 @@
+{
+  "source": "08cbbfc06b7e0a829ae9f39ecefac483b19daa7f",
+  "scope": "Build only private SQL/default/AST/COPY/procedure and hoststartup(no listener) old-store probes. Currentfix centralizes local trigger save/delete/undo and OracleLOB schema publication with the same Native catalog certificate. Priorfcf default8+explicit8PASS; targetedfcf63PASS1duplicate-child-triggerregressionFAIL retained. Newruntimeunqualified until focused and actualfixture runs; no broad/app/HA/delivery claim.",
+  "started_unix": 1794496161.8951905,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--example",
+        "partition_upgrade_probe"
+      ],
+      "started_unix": 1794496161.895325,
+      "exit": 0,
+      "finished_unix": 1794496253.063562
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--example",
+        "partition_startup_probe"
+      ],
+      "started_unix": 1794496253.063774,
+      "exit": 0,
+      "finished_unix": 1794496373.7639732
+    }
+  ],
+  "status": "focused_passed",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/08cbbfc06b7e0a829ae9f39ecefac483b19daa7f/partition_upgrade_probe",
+  "binary_sha256": "9a05942e76830ef8ab39ecea1309c45f33695d0e3d42441975770e8732942ce7",
+  "additional_binaries": {
+    "partition_startup_probe": {
+      "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/08cbbfc06b7e0a829ae9f39ecefac483b19daa7f/partition_startup_probe",
+      "binary_sha256": "8d7e1367292fbc4ccc4cff158172f0e7670f64a14852f0cc39f831d39077b61b"
+    }
+  },
+  "finished_unix": 1794496374.273692
+}

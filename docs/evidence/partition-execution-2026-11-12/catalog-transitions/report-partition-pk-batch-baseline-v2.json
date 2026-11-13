@@ -1,0 +1,32 @@
+{
+  "source": "63202b6a48c3a103358601bddac1b407902f42c5",
+  "scope": "Corrected fixture-only baseline on exact f7fb main488-integrated runtime before both PK matcher and AST partition creation fixes. Prior90cb baseline failed compiling movedStorageMode, not a product counterexample; original failure preserved. Exact seven regression assertions shared with current196f. Ordinary+child/modes/two reopens; Native actualexclusionnonunique control. Not application/broad/HA.",
+  "started_unix": 1794501706.0892682,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "primary_key_index_compatibility",
+        "--test",
+        "partition_statement_batches",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794501706.0895376,
+      "exit": 101,
+      "finished_unix": 1794501712.5685427
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794501712.5687878
+}

@@ -1897,6 +1897,38 @@ impl<'db> SqlSession<'db> {
         self.insert_session_records_with_blob_mode(table, records, None, None)
     }
 
+    pub(crate) fn update_session_identity_with_grant(
+        &mut self,
+        table: &str,
+        before: &Record,
+        mut after: Record,
+        statement_snapshot: u64,
+    ) -> Result<Record> {
+        let grant = self.signed_mutation_grant(table).ok_or_else(|| {
+            SqlError::BicDb(BicDbError::Authorization(
+                "protected identity UPDATE requires a signed mutation grant".into(),
+            ))
+        })?;
+        let events =
+            self.prepare_blob_records(table, std::slice::from_mut(&mut after), Some(before))?;
+        self.materialize_full_text_projections(table, std::slice::from_mut(&mut after))?;
+        let started = Instant::now();
+        self.tx
+            .as_mut()
+            .ok_or(SqlError::BicDb(BicDbError::TransactionNotPending))?
+            .update_identity_with_grant(
+                grant,
+                table,
+                &before.id,
+                after.clone(),
+                statement_snapshot,
+            )?;
+        sql_profile_write_elapsed(started);
+        sql_profile_write_batch(1);
+        self.record_blob_writes(events)?;
+        Ok(after)
+    }
+
     pub(crate) fn insert_session_new_records(
         &mut self,
         table: &str,

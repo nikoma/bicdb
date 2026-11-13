@@ -1,0 +1,74 @@
+{
+  "label": "rename-concurrent-wire-895c5036",
+  "source": "895c503641b98c2dd87aa990d9b3224b369a5f97",
+  "base": "5a7faea5968490ff93bd6a7523d0057079a1e8e9",
+  "repo": "/root/bicdb-sql-rename-concurrent-producer",
+  "wait_units": [
+    "bicdb-rename-concurrent-scoped-6ab82da9"
+  ],
+  "scope": "Same production runtime as6ab; add one complete-inventory scoped undo negative control (valid later row must remain unchanged when earlier persisted image escapes scope; foreign owner also refuses) and4 actual concurrent SQL wire scenarios exercising native outer COMMIT/rollback/savepoint/autocommit finalization. Also run unchanged original private rename_unrelated_transactions and Core scope admission. Initial no-binary trusted namespace activation retains its existing quiescence requirement; do not hide failures or claim replicated mapping/application acceptance. Not main delivery/source475 public acceptance.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "session::rename_journal::tests::",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-pgwire",
+      "--test",
+      "catalog_read_admission",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "rename_unrelated_transactions",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "catalog_host_scope",
+      "--test",
+      "catalog_record_scope",
+      "--test",
+      "catalog_scope_admission",
+      "--test",
+      "catalog_read_scope",
+      "--",
+      "--test-threads=1"
+    ]
+  ]
+}

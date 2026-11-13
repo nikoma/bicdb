@@ -1,0 +1,36 @@
+{
+  "source": "bccb1a8690343173bcdf846eb50d7e39098395fd",
+  "scope": "Currentchildschema/physicalkey batch plus actualPG16-correct42P16beforeanyidentitysequence mutation and exactdefaultCatalogUndo. All8child tests +prior112SQLfocused checked unchangedassertions/modes/reopens. Earlier e036118focusedSQLPASS recordedseparately, no wire/fullSQL claim forlaterchangedcode. RootCore/Page/Cargoexactcc84proved; no binary/release/deployment. Originalfullgoal remainsactive.",
+  "started_unix": 1794504803.6629517,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_child_schema",
+        "--test",
+        "partition_schema_changes",
+        "--test",
+        "primary_key_index_compatibility",
+        "--test",
+        "partition_statement_batches",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794504803.6630914,
+      "exit": 101,
+      "finished_unix": 1794504986.7750754
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794504986.7814517
+}

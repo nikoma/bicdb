@@ -1,0 +1,30 @@
+{
+  "source": "73f18e76faaf631bf3e2d48239814be1e788eb9a",
+  "scope": "Test-only over0031productionruntime. Native actualstickysemanticflags SQLpartition/Decimal/appuniquescope activateviaexistingCoreformat APIs; actualACKs/hash/seq andreadonlycapture asserted. required_reader_features usedbyNativeimagebindings mustnotdropactivesemanticrequirements. Capture-onlybaseline; doesnotclaimtargetinstallation/legacylogicalpropagation/oldreaderacceptance/Nativeoriginproducer. OriginalPR165version490code+qualifiedresultsseparateunchanged. Newtestsnot claimedpassuntilrun.",
+  "started_unix": 1794519052.9995277,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "semantic_reader_capture_tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794519052.999659,
+      "exit": 101,
+      "finished_unix": 1794519122.9381616
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794519122.9383528
+}

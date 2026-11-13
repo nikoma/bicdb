@@ -1,0 +1,23 @@
+\set ON_ERROR_STOP on
+BEGIN;CREATE SCHEMA root_part_lifecycle_d5b17e2b4a45;SET LOCAL search_path=root_part_lifecycle_d5b17e2b4a45;
+CREATE TABLE p(k INT PRIMARY KEY) PARTITION BY RANGE(k);
+CREATE TABLE low PARTITION OF p FOR VALUES FROM(0) TO(10);
+CREATE TABLE high PARTITION OF p FOR VALUES FROM(10) TO(20);
+INSERT INTO p VALUES(1);
+CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RETURN NEW;END$$;
+CREATE TABLE controls(label TEXT,state TEXT,message TEXT);
+DO $$BEGIN BEGIN CREATE CONSTRAINT TRIGGER c AFTER INSERT ON p DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION f(); INSERT INTO controls VALUES('constraint_parent','00000','accepted');EXCEPTION WHEN OTHERS THEN INSERT INTO controls VALUES('constraint_parent',SQLSTATE,SQLERRM);END;END$$;
+CREATE CONSTRAINT TRIGGER child_c AFTER INSERT ON low DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION f();
+CREATE TRIGGER guard BEFORE INSERT ON p FOR EACH ROW EXECUTE FUNCTION f();
+DO $$BEGIN BEGIN DROP FUNCTION f() RESTRICT; INSERT INTO controls VALUES('function_restrict','00000','accepted');EXCEPTION WHEN OTHERS THEN INSERT INTO controls VALUES('function_restrict',SQLSTATE,SQLERRM);END;END$$;
+DO $$BEGIN BEGIN DROP FUNCTION f(),missing_function(); INSERT INTO controls VALUES('multi_missing_function','00000','accepted');EXCEPTION WHEN OTHERS THEN INSERT INTO controls VALUES('multi_missing_function',SQLSTATE,SQLERRM);END;END$$;
+SELECT 'controls',jsonb_agg(jsonb_build_object('label',label,'state',state,'message',message) ORDER BY label) FROM controls;
+SELECT 'before_cascade',jsonb_agg(jsonb_build_object('relation',c.relname,'trigger',t.tgname,'parent',t.tgparentid<>0) ORDER BY c.relname,t.tgname) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE c.relnamespace='root_part_lifecycle_d5b17e2b4a45'::regnamespace AND NOT t.tgisinternal;
+SAVEPOINT cascade_undo;
+DROP FUNCTION f() CASCADE;
+SELECT 'cascade_trigger_count',COUNT(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE c.relnamespace='root_part_lifecycle_d5b17e2b4a45'::regnamespace AND NOT t.tgisinternal;
+ROLLBACK TO cascade_undo;
+SELECT 'after_rollback',jsonb_agg(jsonb_build_object('relation',c.relname,'trigger',t.tgname,'parent',t.tgparentid<>0) ORDER BY c.relname,t.tgname) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE c.relnamespace='root_part_lifecycle_d5b17e2b4a45'::regnamespace AND NOT t.tgisinternal;
+SELECT 'ack',k FROM p;
+ROLLBACK;
+SELECT 'scratch_schema_absent',NOT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname='root_part_lifecycle_d5b17e2b4a45');

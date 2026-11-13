@@ -1,0 +1,28 @@
+{
+  "source": "08f422047cc3dfb93ac34171283f275791789bd7",
+  "scope": "Buildonly actualold-storeboundedlocalinspector andsameprobe. StablecanonicalSHA256 binds raw Nativecatalogs/collectionmeta/definitions/rowcontent, actualimmediate-parentoldpolicysemantics; unknownversionsrefuse. No SQLmigration/admissionpathimplementedyet; copyfixtureinspectionruntimeevidencefollowssourcepinnedbuild. Nativefencecomponent3unitPASSatb715separate.",
+  "started_unix": 1794491081.6297703,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--example",
+        "partition_upgrade_probe"
+      ],
+      "started_unix": 1794491081.6299555,
+      "exit": 0,
+      "finished_unix": 1794491184.8301792
+    }
+  ],
+  "status": "focused_passed",
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/08f422047cc3dfb93ac34171283f275791789bd7/partition_upgrade_probe",
+  "binary_sha256": "92074dd4ddee5f415c088998a5f8defed208fff8a1a8013856707917b0520524",
+  "finished_unix": 1794491185.119382
+}

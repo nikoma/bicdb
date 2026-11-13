@@ -1,0 +1,17 @@
+{
+  "status": "native_control_passed",
+  "image_id": "sha256:71e27bf60b70bded003791b5573f8b808365613f341df20ffcf0c1ed7bc13ddf",
+  "outcomes": [
+    {
+      "label": "primary_key",
+      "state": "0A000",
+      "message": "unique constraint on partitioned table must include all partitioning columns"
+    },
+    {
+      "label": "unique",
+      "state": "0A000",
+      "message": "unique constraint on partitioned table must include all partitioning columns"
+    }
+  ],
+  "scope": "ActualPG16tmpfsisolatedrolledbackscratchcontrol; noexistingDBmutation/durabilityclaim"
+}

@@ -1,0 +1,78 @@
+{
+  "README.md": {
+    "bytes": 4420,
+    "sha256": "196fb125930d55c5b1f1879abe21394680979dce17fcd3797a2d3b2559189cf0"
+  },
+  "collector.py": {
+    "bytes": 9373,
+    "sha256": "74b48b6bf9238a17adbc3ff700c2aae381da263086fbf26bc7f72fbcc84fc798"
+  },
+  "native-origin-root-focused-v1/raw-manifest.json": {
+    "bytes": 665,
+    "sha256": "2b27a70f361208c2125238c6d2859703d4ccbf6bfb7c4286e5b01511253adf7d"
+  },
+  "native-origin-root-focused-v1/receipt.json": {
+    "bytes": 3956,
+    "sha256": "3ac89161632837e7ae30e86f99b39c97e2c612e87a1ede58eec2f35e570822a3"
+  },
+  "native-origin-root-focused-v1/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-origin-root-focused-v1/spec.json": {
+    "bytes": 2826,
+    "sha256": "1adc3ea3baf13d22c9dc5337a8ac72acbe9a32f12e15b73636100cea2f76096c"
+  },
+  "native-origin-root-focused-v1/validation.log.gz": {
+    "bytes": 152648,
+    "sha256": "a8120e539239720b5133e8cb48834e66417634963e34199a914bbbb14b56efb6"
+  },
+  "native-origin-root-focused-v2/raw-manifest.json": {
+    "bytes": 664,
+    "sha256": "176b1cc50097cdcf60ac48694c468aa853f81dd935d82c5275bc3d391c242d12"
+  },
+  "native-origin-root-focused-v2/receipt.json": {
+    "bytes": 2374,
+    "sha256": "a426ab2039e6eae570ddc228cd74dafb0ddf1caf95c8918b292f59df1f5c39da"
+  },
+  "native-origin-root-focused-v2/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-origin-root-focused-v2/spec.json": {
+    "bytes": 3327,
+    "sha256": "5b50c3a33bee120ef608cc2bf68ecfc85e4648f59788dfd8bb44fdb681efd9ef"
+  },
+  "native-origin-root-focused-v2/validation.log.gz": {
+    "bytes": 61005,
+    "sha256": "3b9614e0a01450351f8e701f2c0ef555cb98a7bc0a043e9e75f7001edf75a1e6"
+  },
+  "native-origin-root-focused-v3/raw-manifest.json": {
+    "bytes": 665,
+    "sha256": "73f9fe737ad46bb13143b0db5b526206185ada4d7868b8975bf739b42b796061"
+  },
+  "native-origin-root-focused-v3/receipt.json": {
+    "bytes": 4808,
+    "sha256": "dcf9f6e66da03ea129022dd6e1da411f901ac4f18b2c68aeecabf71f417f5a87"
+  },
+  "native-origin-root-focused-v3/runner.py": {
+    "bytes": 5033,
+    "sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b"
+  },
+  "native-origin-root-focused-v3/spec.json": {
+    "bytes": 3675,
+    "sha256": "0f0bab386c99a10e358378a8479254bddd29c7c95e08a9030f99e5843f864aac"
+  },
+  "native-origin-root-focused-v3/validation.log.gz": {
+    "bytes": 152351,
+    "sha256": "69b8da76b129e75ed87650e2db81273fbf076408c5c2d8b066f298de29b0e764"
+  },
+  "submit_s3_isolation_batch.py": {
+    "bytes": 7879,
+    "sha256": "06f8a0128af88f4e520690cbc175bf31f552559d900c72df06d6390775a30206"
+  },
+  "summary.json": {
+    "bytes": 3303,
+    "sha256": "1363708e760dd52a6b1ac2fe5d4a2385cc8b5d7bf0c0de12a8fb57aa8cbe7aec"
+  }
+}

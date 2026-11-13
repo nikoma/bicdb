@@ -1,0 +1,57 @@
+[
+  {
+    "path": "original-Core-receipt.json",
+    "bytes": 3005,
+    "sha256": "78bc1193b9e0ebb9d64a01cbf876f98a74af35ae20e9f2d09ef0d54c7c173e41",
+    "raw_bytes": 3005,
+    "raw_sha256": "78bc1193b9e0ebb9d64a01cbf876f98a74af35ae20e9f2d09ef0d54c7c173e41",
+    "remote_path": "report-semantic-reader-current-core-broad-v2.json"
+  },
+  {
+    "path": "canonical-parent-results.json",
+    "bytes": 72275,
+    "sha256": "7ba60e299e5b76c9a1ee543d85b1fc3e0658bb206b353c6020e126664ae04f1b",
+    "raw_bytes": 72275,
+    "raw_sha256": "7ba60e299e5b76c9a1ee543d85b1fc3e0658bb206b353c6020e126664ae04f1b",
+    "remote_path": "report-semantic-reader-e8-current-Core-canonical-parent-results.json"
+  },
+  {
+    "path": "original-Core.log.gz",
+    "bytes": 152587,
+    "sha256": "8113e651e60cf54b5b63649ecbe1783171900c27979df3a98bebe21a639abb40",
+    "raw_bytes": 1187198,
+    "raw_sha256": "d4aba20b17ced49e495b184098536f25246995afcf7908a14ce39ac3f030a7d4",
+    "remote_path": "tc-step-semantic-reader-current-core-broad-v2.log"
+  },
+  {
+    "path": "current-Core-helper-custody.json",
+    "bytes": 1497,
+    "sha256": "3306024a963d9c4f4d1c4b23040b69efe35e6a883782209e8ed85d7c96542ffd",
+    "raw_bytes": 1497,
+    "raw_sha256": "3306024a963d9c4f4d1c4b23040b69efe35e6a883782209e8ed85d7c96542ffd",
+    "remote_path": "semantic-reader-current-Core-helpers.json"
+  },
+  {
+    "path": "diagnostic-server-build-receipt.json",
+    "bytes": 1530,
+    "sha256": "68be10ef4f1d302bb53c638b2de0b505148155e88cb98ba9f855fc6ddfb628a4",
+    "raw_bytes": 1530,
+    "raw_sha256": "68be10ef4f1d302bb53c638b2de0b505148155e88cb98ba9f855fc6ddfb628a4",
+    "remote_path": "report-partition-original-mtable95-probe-build-v2.json"
+  },
+  {
+    "path": "collect-canonical-e8-semantic-reader-Core-results.py",
+    "sha256": "0c219a344c7b19d6a9c3a0d986f29eba3e643cb045403cbb31e3233149278f06",
+    "bytes": 2927
+  },
+  {
+    "path": "semantic-reader-current-core-broad-v2.json",
+    "sha256": "04a080403b7bafef36cd8a0b9b69cdfb1d54e6b624e6b5eefa73e755015dabd3",
+    "bytes": 3848
+  },
+  {
+    "path": "partition-original-mtable95-probe-build-v2.json",
+    "sha256": "362dfb9976e355702f89dd43b04f9673c1d0fb06993f1f316c3eb0cd4ff651b4",
+    "bytes": 1667
+  }
+]

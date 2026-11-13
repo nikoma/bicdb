@@ -1,0 +1,51 @@
+{
+  "source": "c4c98a5572eb13f97281107275b92e16ad4bc32d",
+  "scope": "DeclaredtargetPG18.4 correction: actualNative18 imagea02db confirmsrecursiveidentityADDaccepted/sharedchildidentity. Reverted bothPG16-only productionchanges (be8 runtimeexacte036), retained oldreferences/failedtests, corrected two newidentityexpectations to18.4. ValidSQLSTART WITH100 INCREMENT BY5 unchanged: sqlparser0.62 expects fixedorder, nowtoken-source-preservingcanonicaloptionorderadapter; no literal/comment edits. Unit2 +all9childrequirements; recursiveidentity/serialdata+catalog/sequenceatomicpublicationstillopen and mayfailafterparsergate. Originalfullgoal ACTIVE; no release/deployment. At9caa unit1PASS1FAIL exposed preexistingCycle(bool)polaritybug: sqlparser bool meansNO CYCLE, constructor copieditinsteadofnegating. Literal/comment/order checks passed; newchildintegration8PASS1FAIL reachesrealrecursiveidentityschema-publication mismatch, empty-parent/sharedchildidentityPASS. Correct cyclepolarity, sameassertions. Recursiveidentity/serialatomicpublisher stillpending; no overallpass claim.",
+  "started_unix": 1794506321.447577,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "identity_sequence_options::tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794506321.447786,
+      "exit": 0,
+      "finished_unix": 1794506450.5092041
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_child_schema",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794506450.5095649,
+      "exit": 101,
+      "finished_unix": 1794506581.4970276
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794506581.4972565
+}

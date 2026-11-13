@@ -1,0 +1,69 @@
+{
+  "label": "native-catalog-allocation-related-final",
+  "repo": "/root/bicdb-sql-final-composition",
+  "source": "c932a98bc86aa221ece871cc6e7d79a3ef0e8efa",
+  "base": "de10b2e33d127d3f82a3201111fb2666319295f9",
+  "scope": "Exact c932 stable Native source allocation producer: seven new focused regressions passed in prior v4; reuse that result. Run all Page/Core/SQL/wire all-target compile, full Core library suite, Page lock regressions, and source version synchronization. Broad Core library is not all-Core-targets, SQL/wire regression, application, receiver identity mapping, independent process/KVM, release or main delivery qualification.",
+  "commands": [
+    [
+      "python3",
+      "scripts/bump-version.py",
+      "--check"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "check",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-page",
+      "-p",
+      "bicdb-core",
+      "-p",
+      "bicdb-sql",
+      "-p",
+      "bicdb-wire",
+      "--all-targets"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-page",
+      "--lib",
+      "lock::tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "required_receipts": [
+    {
+      "path": "report-native-catalog-allocation-source-v4.json",
+      "equals": {
+        "source": "c932a98bc86aa221ece871cc6e7d79a3ef0e8efa",
+        "status": "focused_passed"
+      }
+    }
+  ]
+}

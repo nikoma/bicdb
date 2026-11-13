@@ -1,0 +1,201 @@
+{
+  "source": "82a8311156e2293a92e7cf9c1ffd70d1df92d57a",
+  "scope": "Currentprivatecombinedfinance490 Native temporarycatalogpublication+SQLpartition/rename ownerbatch. Requiresunchangedpositive094->82afocusedPASS. Relevantalltargetscheck, realNativecatalogowner/record/host/readcontrols, existingrenamejournal/dependencycases, partitiondata/schema/trigger/replicareads, actualwirecatalogfences+protocol library. Notfullbroad/current1464/application/crash/VM/main/portableorigin/HAqualification. Originalpromotedundecidedrenamepositive preservedseparatelyopenmissingNativeportableproducer; notskippedorclaimedPASS. Goalactive/P2productionoff/no spend.",
+  "started_unix": 1794526784.48725,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794526784.4873667,
+      "exit": 0,
+      "finished_unix": 1794526784.5528204
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "check",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "-p",
+        "bicdb-sql",
+        "-p",
+        "bicdb-pgwire",
+        "--all-targets"
+      ],
+      "started_unix": 1794526784.5530229,
+      "exit": 0,
+      "finished_unix": 1794526936.2838867
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "catalog_admission::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794526936.2841527,
+      "exit": 0,
+      "finished_unix": 1794526938.0947282
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_scope_admission",
+        "--test",
+        "catalog_record_scope",
+        "--test",
+        "catalog_host_scope",
+        "--test",
+        "catalog_read_scope",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794526938.0949624,
+      "exit": 0,
+      "finished_unix": 1794526996.7150218
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "rename_journal::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794526996.7153323,
+      "exit": 0,
+      "finished_unix": 1794527001.1035995
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "rename_dependencies::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794527001.1038392,
+      "exit": 0,
+      "finished_unix": 1794527003.5252452
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_execution",
+        "--test",
+        "partition_child_schema",
+        "--test",
+        "partition_trigger_catalog",
+        "--test",
+        "partition_trigger_events",
+        "--test",
+        "partition_schema_changes",
+        "--test",
+        "partition_replication_reader",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794527003.525609,
+      "exit": 0,
+      "finished_unix": 1794527171.203425
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--test",
+        "catalog_read_admission",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794527171.20381,
+      "exit": 0,
+      "finished_unix": 1794527388.7556708
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-pgwire",
+        "--lib",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794527388.755925,
+      "exit": 0,
+      "finished_unix": 1794527486.3978796
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794527486.398157
+}

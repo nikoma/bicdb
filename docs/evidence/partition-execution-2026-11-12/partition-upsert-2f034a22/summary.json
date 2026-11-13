@@ -1,0 +1,9 @@
+{
+  "label": "partition-upsert-2f034a22",
+  "source": "2f034a22f935ee9551e4255453b09f0589d5be9b",
+  "status": "focused_passed",
+  "passed": 66,
+  "failed": 0,
+  "ignored": 0,
+  "scope": "Evolvingpartitionbatch:5originalmandatoryupsertpositives afteractualold22runtime0PASS5FAIL; physicalleafNativearbiter/locks/grants, parentSQLRLS/returning, DO NOTHINGexplicit/all, keychangeinsideleaf, crosspartition0A000, cardinality21000+statementrollback. Relevantoriginalreadcommittedupserts/grants/signedarbiter/RLS andpartitioncontrols retained. Rowtriggerpipeline/cloneDDL, upgrade/fault/concurrency/operators/broad gatesremainpending. Notfinalfeature/app/HAqualification."
+}

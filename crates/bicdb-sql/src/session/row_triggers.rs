@@ -87,6 +87,8 @@ impl<'db> SqlSession<'db> {
             match load_schema(self.db_ref(), &table) {
                 Ok(Some(schema))
                     if oracle::lob_storage::has_columns(&schema)
+                        || schema.requires_row_move_plan()
+                        || schema.partition_of.is_some()
                         || schema.constraints.iter().any(|constraint| {
                             matches!(
                                 constraint,
@@ -131,6 +133,22 @@ impl<'db> SqlSession<'db> {
             object.insert(column.name.clone(), crate::jsonb::sql_value_to_json(&value));
         }
         SqlValue::Json(JsonValue::Object(object).into())
+    }
+
+    fn before_trigger_row_value(schema: &TableSchema, record: &Record) -> SqlValue {
+        let mut value = Self::trigger_row_value(schema, record);
+        if let SqlValue::Json(object) = &mut value {
+            if let Some(object) = Arc::make_mut(object).as_object_mut() {
+                for column in schema
+                    .columns
+                    .iter()
+                    .filter(|column| column.generated_expr.is_some())
+                {
+                    object.insert(column.name.clone(), JsonValue::Null);
+                }
+            }
+        }
+        value
     }
 
     fn row_triggers_matching(
@@ -282,6 +300,7 @@ impl<'db> SqlSession<'db> {
     /// primary-key update guard.
     fn apply_returned_row(
         schema: &TableSchema,
+        partition_identity: Option<&TableSchema>,
         record: &mut Record,
         original: &SqlValue,
         returned: &SqlValue,
@@ -302,7 +321,26 @@ impl<'db> SqlSession<'db> {
             if before.get(column) == Some(value) {
                 continue;
             }
-            set_record_column(record, Some(schema), column, json_to_sql_value(value))?;
+            // Stored generation runs after BEFORE triggers. PostgreSQL does
+            // not retain a trigger's assignment to a generated NEW field.
+            if schema
+                .column(column)
+                .is_some_and(|column| column.generated_expr.is_some())
+            {
+                continue;
+            }
+            if let Some(parent) =
+                partition_identity.or_else(|| schema.has_generated_primary_key().then_some(schema))
+            {
+                set_partition_update_column(
+                    record,
+                    Some(parent),
+                    column,
+                    json_to_sql_value(value),
+                )?;
+            } else {
+                set_record_column(record, Some(schema), column, json_to_sql_value(value))?;
+            }
         }
         Ok(())
     }
@@ -329,6 +367,16 @@ impl<'db> SqlSession<'db> {
         schema: Option<&TableSchema>,
         records: Vec<Record>,
     ) -> Result<(Vec<Record>, bool)> {
+        self.apply_before_insert_row_triggers_with_identity(table, schema, records, None)
+    }
+
+    pub(crate) fn apply_before_insert_row_triggers_with_identity(
+        &mut self,
+        table: &str,
+        schema: Option<&TableSchema>,
+        records: Vec<Record>,
+        partition_identity: Option<&TableSchema>,
+    ) -> Result<(Vec<Record>, bool)> {
         let Some(schema) = schema else {
             return Ok((records, false));
         };
@@ -339,13 +387,22 @@ impl<'db> SqlSession<'db> {
         let mut surviving = Vec::with_capacity(records.len());
         'record: for mut record in records {
             for trigger in &triggers {
-                let new_value = Self::trigger_row_value(schema, &record);
+                let new_value = Self::before_trigger_row_value(schema, &record);
                 let vars =
                     Self::trigger_vars(trigger, schema, "insert", None, Some(new_value.clone()));
                 match self.call_trigger_function(&trigger.name, &trigger.function_name, &vars)? {
                     Some(SqlValue::Null) => continue 'record,
                     Some(returned) => {
-                        Self::apply_returned_row(schema, &mut record, &new_value, &returned)?;
+                        Self::apply_returned_row(
+                            schema,
+                            partition_identity,
+                            &mut record,
+                            &new_value,
+                            &returned,
+                        )?;
+                        if let Some(parent) = partition_identity {
+                            self.refresh_identity_before_generation(parent, &mut record)?;
+                        }
                     }
                     None => {}
                 }
@@ -362,7 +419,18 @@ impl<'db> SqlSession<'db> {
         table: &str,
         schema: Option<&TableSchema>,
         old: &Record,
+        record: Record,
+    ) -> Result<Option<Record>> {
+        self.apply_before_update_row_triggers_with_identity(table, schema, old, record, None)
+    }
+
+    pub(crate) fn apply_before_update_row_triggers_with_identity(
+        &mut self,
+        table: &str,
+        schema: Option<&TableSchema>,
+        old: &Record,
         mut record: Record,
+        partition_identity: Option<&TableSchema>,
     ) -> Result<Option<Record>> {
         let Some(schema) = schema else {
             return Ok(Some(record));
@@ -373,7 +441,7 @@ impl<'db> SqlSession<'db> {
         }
         let old_value = Self::trigger_row_value(schema, old);
         for trigger in &triggers {
-            let new_value = Self::trigger_row_value(schema, &record);
+            let new_value = Self::before_trigger_row_value(schema, &record);
             let vars = Self::trigger_vars(
                 trigger,
                 schema,
@@ -384,7 +452,16 @@ impl<'db> SqlSession<'db> {
             match self.call_trigger_function(&trigger.name, &trigger.function_name, &vars)? {
                 Some(SqlValue::Null) => return Ok(None),
                 Some(returned) => {
-                    Self::apply_returned_row(schema, &mut record, &new_value, &returned)?;
+                    Self::apply_returned_row(
+                        schema,
+                        partition_identity,
+                        &mut record,
+                        &new_value,
+                        &returned,
+                    )?;
+                    if let Some(parent) = partition_identity {
+                        self.refresh_identity_before_generation(parent, &mut record)?;
+                    }
                 }
                 None => {}
             }

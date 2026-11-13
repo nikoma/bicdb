@@ -1,0 +1,4 @@
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to trigger c on table p
+drop cascades to trigger child_c on table low
+drop cascades to trigger guard on table p

@@ -1,0 +1,24 @@
+{
+  "label": "native-import-allocation-v1",
+  "repo": "/root/bicdb-sql-final-composition",
+  "source": "960d584194b3024784883c2cf13325a391ba6f37",
+  "base": "c932a98bc86aa221ece871cc6e7d79a3ef0e8efa",
+  "scope": "First actual Native in-process accepted receiver allocation batch: opaque actual source capture, no JSON authority, target fresh factory without role change, future-only no-existing-unowned adoption, prepared target birth/generation bound to source checksum, target allocation proof shares imported WAL decision and repairs pending markers before reopen verification. Four focused tests both storage modes and six actual EIO histories; no peer network auth, protected image mapping, journal publisher/record lineage, SQL resolver or unchanged promotion acceptance qualification. Known exactc932 broad Core 898P11F9I: all11 physical cold-copy custody refusals remain open; do not hide or disable.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "db::native_import_origins::tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ]
+}

@@ -190,6 +190,9 @@ fn rename_copy_and_savepoint_restoration_are_visible_in_the_same_client_batch() 
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();
         let mut db = seeded(mode, root.path());
+        // The scoped rename journal requires the host's ordinary quiescent
+        // namespace-identity migration before opening a business transaction.
+        bicdb_sql::initialize_rename_journal_identities(&mut db).unwrap();
         let mut sql = SqlSession::new(&mut db);
         assert_eq!(
             sql.execute("BEGIN; SAVEPOINT before_rename; ALTER TABLE statement_rows RENAME TO copied_rows; SELECT rowkey,payload FROM copied_rows ORDER BY rowkey")

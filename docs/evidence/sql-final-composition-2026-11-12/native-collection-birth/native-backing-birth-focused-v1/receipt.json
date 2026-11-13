@@ -1,0 +1,39 @@
+{
+  "source": "09b42f4d063f52d176a1675cd5086e71526e1538",
+  "scope": "Private combined source Native future-only backing allocation identity prerequisite. New lifecycle/import/restart/capture controls plus existing local identity controls, Core/SQL/wire alltargets compile, and unchanged original promoted undecided rename positive retained as OPEN acceptance gate. No portable authenticated origin producer/resolver yet; no main/release/deployment or application qualification. Goal active, experimental production OFF, no new spend.",
+  "started_unix": 1794531181.4876816,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794531181.4878736,
+      "exit": 0,
+      "finished_unix": 1794531181.538854
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "check",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "-p",
+        "bicdb-sql",
+        "-p",
+        "bicdb-pgwire",
+        "--all-targets"
+      ],
+      "started_unix": 1794531181.53901,
+      "exit": 101,
+      "finished_unix": 1794531243.4956877
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794531243.4958773
+}

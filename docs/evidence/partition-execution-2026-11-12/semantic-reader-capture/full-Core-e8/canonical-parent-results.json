@@ -1,0 +1,2442 @@
+{
+  "status": "verified_passed",
+  "scope": "TelemetryJSONandmemorymonitorinterleaving removedonlyfromderivedparse, rawlogs retained. Onlyfinalparentharness resultperCargoRunning target; nestedchildsummaries separatelyretained, notdoublecounted. ExactcompletedSourceScope, no latercodequalification.",
+  "runs": [
+    {
+      "label": "semantic-reader-current-core-broad-v2",
+      "source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+      "status": "canonical_parent_targets_passed",
+      "log_sha256": "d4aba20b17ced49e495b184098536f25246995afcf7908a14ce39ac3f030a7d4",
+      "counts": {
+        "bicdb_core": {
+          "Cargo_targets": 127,
+          "passed": 1707,
+          "failed": 0,
+          "ignored": 17,
+          "child_summaries_excluded": 1
+        }
+      },
+      "targets": [
+        {
+          "package": "bicdb_core",
+          "target": "src/lib.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/bicdb_core-7783118b88485bf9",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            },
+            {
+              "status": "ok",
+              "passed": 857,
+              "failed": 0,
+              "ignored": 9
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 857,
+            "failed": 0,
+            "ignored": 9
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/aggregate_projection.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/aggregate_projection-6e338dcb1900e821",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 12,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 12,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/aggregate_projection_durability.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/aggregate_projection_durability-b5deae5a2f29a0de",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 5,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/aggregate_sketch.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/aggregate_sketch-6d586a50dc6f123e",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 7,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 7,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/application_invariants.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/application_invariants-7c9c4e8a2d4d2f6e",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 5,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/archive_fail_closed.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/archive_fail_closed-7e3b4683f97e9d94",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 13,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 13,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/auto_checkpoint.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/auto_checkpoint-e1c12acf96efe8b1",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/backup.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/backup-9322998670d77770",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 10,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 10,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/backup_online.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/backup_online-bcdceaf0316930a4",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/backup_online_wal_rotation.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/backup_online_wal_rotation-ec28769fedaf7f2f",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/backup_paged.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/backup_paged-a1cf614844a7d849",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 4,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/backup_repository.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/backup_repository-9a02c54569607459",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 14,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 14,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/bounded_collection_batches.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/bounded_collection_batches-49c4c8155c3acf74",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/branching.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/branching-b1ae196160066bc9",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/broker.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/broker-967085c2ba55919e",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 30,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 30,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/broker_delivery_snapshot.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/broker_delivery_snapshot-dc3cd6f0eff6a790",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/broker_fenced.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/broker_fenced-da0d7ebe5c71e3f7",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/broker_outbox_retention.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/broker_outbox_retention-767b2557936b232d",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 6,
+              "failed": 0,
+              "ignored": 1
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 6,
+            "failed": 0,
+            "ignored": 1
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/bulk_load_insert.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/bulk_load_insert-7df5e928f632133d",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 4,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/collection_rename.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/collection_rename-d327d1f36cbd60eb",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/collection_rename_admission.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/collection_rename_admission-0a5bef36e51c9851",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 4,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/collection_rename_paged_stubs.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/collection_rename_paged_stubs-32892d04ce40d184",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/commit_apply_failure.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/commit_apply_failure-f0d63b9a6af21e1d",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/commit_durability_crash.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/commit_durability_crash-253a5c04a7a56b93",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 28,
+              "failed": 0,
+              "ignored": 3
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 28,
+            "failed": 0,
+            "ignored": 3
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/commit_durability_isolation.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/commit_durability_isolation-d437b9965dc935ef",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/commit_recovery_atomicity.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/commit_recovery_atomicity-c5aee0ebd59537d6",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/commit_visibility.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/commit_visibility-ea50d51e3bf627e2",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/concurrency.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/concurrency-7b981d12f2d0156e",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 8,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 8,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/consensus_leader_writes.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/consensus_leader_writes-c34beb7ae4ed9219",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/constraint_key_waits.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/constraint_key_waits-b09af50628fc276e",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 6,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 6,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/core.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/core-40712d8d49b35779",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 106,
+              "failed": 0,
+              "ignored": 1
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 106,
+            "failed": 0,
+            "ignored": 1
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/decimal_predicate_generations.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/decimal_predicate_generations-e5eaa6f9d8f38c1f",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 9,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 9,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/distribution_certificate_ack.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/distribution_certificate_ack-6dede9b23e013a94",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 5,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/distribution_learner.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/distribution_learner-545f9e4dd4f34dd7",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 9,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 9,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/distribution_rpc_deadline.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/distribution_rpc_deadline-bb13a6d5f99d09e7",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/distribution_rpc_mtls_deadline.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/distribution_rpc_mtls_deadline-237b9f881156263d",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 4,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/distribution_snapshot.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/distribution_snapshot-0e13dae0fa302edd",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/distribution_supervisor_fairness.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/distribution_supervisor_fairness-f2ce6f30749ead55",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 2,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/durability_fail_closed.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/durability_fail_closed-a3e103185d551690",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 16,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 16,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/empty_index_initialization.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/empty_index_initialization-4bc75ceaaec87df5",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/encryption.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/encryption-37e30f6ed1da88bc",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 22,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 22,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/event_read_fence.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/event_read_fence-1ef0eab0c757c43e",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 2,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/events.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/events-645579b9481dcc0c",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 11,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 11,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/flashback.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/flashback-5b1b6bb51f229ead",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 9,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 9,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/frame_log_torn_tail.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/frame_log_torn_tail-162922b651e3e8a3",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 9,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 9,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/fts_adaptive_partitions.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/fts_adaptive_partitions-ba348f30f5f71e71",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 10,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 10,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/fts_build_resume.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/fts_build_resume-26bcefc0b7a1cfdc",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 15,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 15,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/fts_cancellation.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/fts_cancellation-e1bbfd0d9347634d",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/fts_segment_equivalence.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/fts_segment_equivalence-e7ed688d84641567",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 12,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 12,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/fts_storage_generation.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/fts_storage_generation-d93a56cd9bd4727f",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 4,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/fts_unicode_tokenizer.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/fts_unicode_tokenizer-f84b047d4c32d5b5",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 5,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/full_text_legacy_backfill.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/full_text_legacy_backfill-dec092d463a23a60",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/gap1_page_only_batches.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/gap1_page_only_batches-40ced700e5b6460f",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 2,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/geo_geofence_mesh.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/geo_geofence_mesh-314372b34911124d",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 2,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/ha_state_crash.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/ha_state_crash-25b2b8fd123427f4",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 7,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 7,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/ha_state_durability.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/ha_state_durability-f86a23d3502d641b",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 8,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 8,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/index_concurrency_bench.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/index_concurrency_bench-170cc04941f42b89",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 0,
+              "failed": 0,
+              "ignored": 1
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 0,
+            "failed": 0,
+            "ignored": 1
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/integrity_truncation.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/integrity_truncation-7dae792e18a3fa7d",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/intern_dictionary.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/intern_dictionary-46e42b375f06faba",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/large_values.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/large_values-3c5e70668aac8771",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 6,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 6,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/lean_l5_audit_retention.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/lean_l5_audit_retention-6d81814876350e01",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 2,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/lean_l6_wal_prune.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/lean_l6_wal_prune-a45e4ad12fa18e32",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/live_replication.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/live_replication-645771e58cebba47",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 32,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 32,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/log_archive_pitr.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/log_archive_pitr-45b73576b3b91b64",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 8,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 8,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/logical_copy.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/logical_copy-b76abce292b60ff8",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 2,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/lua.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/lua-240b4e7fa9e7db36",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/memory.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/memory-93c01c7a0a34a7c1",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 6,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 6,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/mutation_grants.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/mutation_grants-f4ab5af0e4a66931",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 12,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 12,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/mvcc_chain_recovery.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/mvcc_chain_recovery-4aa51ce16633d45a",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/native_unique_reservations.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/native_unique_reservations-85676578e1d2b8bb",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 6,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 6,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/oracle_simple_case_indexes.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/oracle_simple_case_indexes-70aa5366fcc891c5",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 13,
+              "failed": 0,
+              "ignored": 1
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 13,
+            "failed": 0,
+            "ignored": 1
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/outbox_exactly_once.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/outbox_exactly_once-bc8a08aaa5d9426b",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 7,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 7,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/paged_checkpoint_maintenance.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_checkpoint_maintenance-99c9ea8081c55d01",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 4,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/paged_concurrency.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_concurrency-e258e83b2d21b7dc",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 13,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 13,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/paged_fts_postings.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_fts_postings-a55a15d293f68cfe",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 16,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 16,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/paged_index_entries.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_index_entries-fbb99d9cadd19f4b",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 8,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 8,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/paged_integrity_bounded.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_integrity_bounded-ff2e9257544dd1a9",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 4,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/paged_integrity_maintenance.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_integrity_maintenance-9d82fc92b4b8ad6a",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/paged_maintenance.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_maintenance-5849dc7e78f1ec52",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/paged_observability.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_observability-95d861eee5000a23",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 4,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/paged_orphaned_writer.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_orphaned_writer-b1edebb010829950",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/paged_row_reservations.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_row_reservations-d9ec050c7a644285",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 5,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/paged_system_metadata.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_system_metadata-6e3434b2e561072b",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/paged_vacuum_progress.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_vacuum_progress-6268edfd38371994",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 8,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 8,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/paged_visible_count.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_visible_count-fb32e680a21c6e13",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 2,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/paged_writeback_bounded.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/paged_writeback_bounded-7ecf4cc3dd097f8e",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/planner_row_estimate.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/planner_row_estimate-38588efa0ed1c0d8",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 5,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/projection_chaos.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/projection_chaos-4817afe2ecc6d92c",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 5,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/projection_checkpoint_hygiene.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/projection_checkpoint_hygiene-7d8cf99f54789bd5",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 4,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/projection_distributed.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/projection_distributed-30013f1e27253563",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 6,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 6,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/projection_incremental_persistence.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/projection_incremental_persistence-9f552e7009d9cd94",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 2,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/projection_rollup.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/projection_rollup-68bae7461d637c3c",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 5,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/projection_sketch_measures.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/projection_sketch_measures-9410492369e0a7ef",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 8,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 8,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/read_committed_reservations.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/read_committed_reservations-1659442c8b7951b2",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 10,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 10,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/read_committed_zero_boundary.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/read_committed_zero_boundary-28009e37a549b791",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 4,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/record_key_candidates.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/record_key_candidates-29c034dc171358f3",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/relocation_snapshot_authorization.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/relocation_snapshot_authorization-a3551bc1d9f62c95",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/replication_durable_frames.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/replication_durable_frames-1f33dff19e01e7a0",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 7,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 7,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/replication_journal.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/replication_journal-32a507da34cadc56",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 2,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/residency.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/residency-96cd0245e85e735f",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 9,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 9,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/single_writer_directory_lock.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/single_writer_directory_lock-69c7aef3ea2779d9",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 2,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/snapshot.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/snapshot-a05ab229d6ec27a3",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 10,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 10,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/spatial_pack_resume.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/spatial_pack_resume-bc46ef2c385a0e32",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/spatial_packed.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/spatial_packed-e2c727d83ad30318",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 13,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 13,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/spatial_streaming.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/spatial_streaming-eebaf11d51b7517e",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 4,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/storage_conformance.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/storage_conformance-1452b33502e47b76",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 20,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 20,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/storage_mode.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/storage_mode-caa55f8380010681",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 12,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 12,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/storage_mode_migration.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/storage_mode_migration-78a0d1f223c13a40",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 5,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/storage_ops_handle.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/storage_ops_handle-d7ffc2039e4ce874",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/structural_cut_concurrent_failure.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/structural_cut_concurrent_failure-f74f516f4bd9b323",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/structural_cut_large_record.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/structural_cut_large_record-df1e3d7de6c54d92",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/sync_mesh.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/sync_mesh-a166c0e47bd4e573",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 4,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/sync_mesh_signing.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/sync_mesh_signing-29208d62fc416483",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 9,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 9,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/sync_mesh_torture.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/sync_mesh_torture-76b82865db3cf9e6",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 14,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 14,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/sync_transaction_visibility.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/sync_transaction_visibility-16f793e1fb9bb728",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/tid_hint_read_through.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/tid_hint_read_through-03a74c08d3a3944e",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 2,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/timestamp_day_indexes.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/timestamp_day_indexes-aa6dcfcffddba591",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/transaction_id_recovery.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/transaction_id_recovery-cdb28a7757ec13b5",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 5,
+              "failed": 0,
+              "ignored": 1
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 1
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/transaction_isolation.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/transaction_isolation-54cb7da9626d645a",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 7,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 7,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/transaction_receipts.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/transaction_receipts-b458b596f75da9a5",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 9,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 9,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/transaction_rollback_mark.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/transaction_rollback_mark-d6f2f73b6d0cde3f",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 2,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 2,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/unique_index_build_identity.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/unique_index_build_identity-cd606479eba5ec2c",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/unique_nulls.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/unique_nulls-a420768e645d91a2",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 4,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 4,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/v3_end_to_end.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/v3_end_to_end-7d2c5fadee5f6f2b",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 5,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 5,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/v3_index_entries.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/v3_index_entries-dab7835b9d013c0c",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 3,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/v3_rekey.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/v3_rekey-36e620ab3d79a012",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        },
+        {
+          "package": "bicdb_core",
+          "target": "tests/wal_acknowledgement_race.rs",
+          "binary": "/root/bicdb-durability-s3/target-metadata-describe/debug/deps/wal_acknowledgement_race-ad658465e562fccf",
+          "observed_summaries": [
+            {
+              "status": "ok",
+              "passed": 1,
+              "failed": 0,
+              "ignored": 0
+            }
+          ],
+          "parent_result": {
+            "status": "ok",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        }
+      ]
+    }
+  ]
+}

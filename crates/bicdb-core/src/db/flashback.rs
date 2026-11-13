@@ -310,6 +310,14 @@ impl BicDb {
     /// collection take the flashback clock for their whole commit and carry
     /// their history rows; all others go straight to the commit body.
     pub(crate) fn commit_transaction(&self, tx: &mut Transaction) -> Result<u64> {
+        if !std::ptr::eq(tx.db.as_ptr(), self)
+            || !Arc::ptr_eq(&tx.catalog_admission, &self.catalog_admission)
+            || !Arc::ptr_eq(&tx.tx_states, &self.tx_states)
+        {
+            return Err(BicDbError::Unsupported(
+                "transaction belongs to a different database instance".into(),
+            ));
+        }
         self.check_recovery_state()?;
         if tx.state == TxState::Pending && !tx.writes.is_empty() {
             if self.range_image_initializing.load(AtomicOrdering::Acquire) {
@@ -338,13 +346,16 @@ impl BicDb {
             ));
         }
         self.check_recovery_state()?;
-        if tx.state == TxState::Pending && self.ensure_writable("commit").is_err() {
+        self.catalog_admission
+            .prepare_commit(tx.id, tx.catalog_actor_scope)?;
+        let committed = if tx.state == TxState::Pending && self.ensure_writable("commit").is_err() {
             if tx.postgres_serializable.is_some() {
                 self.ensure_writable("commit serializable transaction")?;
             }
-            return self.commit_read_only_on_standby(tx);
-        }
-        let committed = self.commit_transaction_tracked(tx);
+            self.commit_read_only_on_standby(tx)
+        } else {
+            self.commit_transaction_tracked(tx)
+        };
         // A commit that failed before its decision on a database fenced in
         // the meantime reports the fence (58030), not whatever it tripped
         // over: rows a failed materialization touched can have resident
@@ -386,6 +397,9 @@ impl BicDb {
             if !tx.writes.is_empty() || !tx.imported_record_audit_events.is_empty() {
                 replication_live::note_thread_commit(seq);
             }
+        }
+        if committed.is_err() && tx.state != TxState::Committed {
+            self.catalog_admission.reopen_after_failed_commit(tx.id);
         }
         committed
     }

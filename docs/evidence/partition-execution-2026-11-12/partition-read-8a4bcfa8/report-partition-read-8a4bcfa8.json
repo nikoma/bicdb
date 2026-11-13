@@ -1,0 +1,49 @@
+{
+  "source": "8a4bcfa818d4cf69df6007091c874fb4a91e088b",
+  "scope": "Evolving partition batch:6boundscontrols unchanged plus8executionpositives (original7 preserved+queryshape/systemcolumn provenance). Newparent readunion usesactualphysicalsources, sameNativecontext, parentSQLgrants/RLS andphysicalMVCC/tableoid/ctid; disablesunsafeparentindexshortcut. ParentINSERT/UPDATE/DELETE/hash remainincomplete. Previous8b6boundsPASS, originalexecution1PASS6FAIL. No broad/final/app/HA claim.",
+  "started_unix": 1794481635.7603538,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_bounds",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794481635.7605238,
+      "exit": 0,
+      "finished_unix": 1794481714.9041283
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_execution",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794481714.9043694,
+      "exit": 101,
+      "finished_unix": 1794481720.2047374
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794481720.2049894
+}

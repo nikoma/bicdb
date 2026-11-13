@@ -1,0 +1,28 @@
+{
+  "source": "2d1e2e9f60a5f57992d988be64c2b1f65d749d76",
+  "scope": "Native runtime collection-reservation foundation for scoped SQL admission. Active transaction incarnation bindings weak-registered; first bind and scope creation atomically ordered; both names+immutablebackings protected; only explicitlyscoped owner skips prior globalrename pending/lock gate. Default unscoped gate/grants retained. Leases release via exact token/commit/rollback/drop, snapshotrefresh retains. New4tests cover unrelatedACK bothstores, priorread/readlockdenial, latealreadybegun/newaccessdenial, foreigntokens,64races. SQLscoped visibility/Describe/metadata rowguard and producer integration NOT implemented; ce3SQLnegative remains failing and this is NOT delivery-ready.",
+  "started_unix": 1794388684.037465,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_scope_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794388684.0376678,
+      "exit": 101,
+      "finished_unix": 1794388711.229968
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794388711.2308557
+}

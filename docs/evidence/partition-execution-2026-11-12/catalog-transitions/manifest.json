@@ -1,0 +1,276 @@
+{
+  "recorded_unix": 1794502577.6290822,
+  "files": [
+    {
+      "source": "/root/bicdb-durability-s3/report-partition-admission-broad.json",
+      "stored": "report-partition-admission-broad.json",
+      "raw_sha256": "622cde82ab7929bbc74b1ddb9c635f8a2cf0543d5f205dba5383161143b28444",
+      "raw_bytes": 1978,
+      "source_revision": "c3588bf8b029ac8579f1336bf9d170d231648f29"
+    },
+    {
+      "source": "/root/bicdb-durability-s3/tc-step-partition-admission-broad.log",
+      "stored": "tc-step-partition-admission-broad.log.gz",
+      "raw_sha256": "7086dae274c62c3dfa7e18e1626fcde0d5958b89a3cd2bcff02214b468271a59",
+      "raw_bytes": 1910493,
+      "source_revision": "c3588bf8b029ac8579f1336bf9d170d231648f29"
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-admission-broad.json",
+      "stored": "controller-partition-admission-broad.json",
+      "raw_sha256": "f461cf0e4b184b8e6e2d35510e45284ee65dee4b7dd8d922b45e61fea77d4dfd",
+      "raw_bytes": 2021
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-admission-broad-runner.py",
+      "stored": "controller-partition-admission-broad-runner.py",
+      "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b",
+      "raw_bytes": 5033
+    },
+    {
+      "source": "/root/bicdb-durability-s3/report-partition-current-helper-requalification.json",
+      "stored": "report-partition-current-helper-requalification.json",
+      "raw_sha256": "62478fbbf7f6e100f93749d629318b68a2de3aef47f03deee9a49d03f61c230c",
+      "raw_bytes": 3140,
+      "source_revision": "c3588bf8b029ac8579f1336bf9d170d231648f29"
+    },
+    {
+      "source": "/root/bicdb-durability-s3/tc-step-partition-current-helper-requalification.log",
+      "stored": "tc-step-partition-current-helper-requalification.log.gz",
+      "raw_sha256": "48ee6a4f87fd421f56a220a7d41b001ea6dee8715db4e93f85b05a8eadeb3dee",
+      "raw_bytes": 170391,
+      "source_revision": "c3588bf8b029ac8579f1336bf9d170d231648f29"
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-current-helper-requalification.json",
+      "stored": "controller-partition-current-helper-requalification.json",
+      "raw_sha256": "1b439756cba4d4773d49c39a902d58e06104e74e11527e0bfd0363870969d42f",
+      "raw_bytes": 3242
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-current-helper-requalification-runner.py",
+      "stored": "controller-partition-current-helper-requalification-runner.py",
+      "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b",
+      "raw_bytes": 5033
+    },
+    {
+      "source": "/root/bicdb-durability-s3/report-partition-pk-shape-baseline.json",
+      "stored": "report-partition-pk-shape-baseline.json",
+      "raw_sha256": "698da3a6accf0595063e1823d5cee12cd2f9e0f8ea545133cab20dba1c0ffd48",
+      "raw_bytes": 1168,
+      "source_revision": "90cb54b2d69a5e88a04a2166a1dcd8eac4f66bb4"
+    },
+    {
+      "source": "/root/bicdb-durability-s3/tc-step-partition-pk-shape-baseline.log",
+      "stored": "tc-step-partition-pk-shape-baseline.log.gz",
+      "raw_sha256": "998fc604531126f91bbd5203a5bbefeaa000a578089040c2086e7333d86c6e7b",
+      "raw_bytes": 91126,
+      "source_revision": "90cb54b2d69a5e88a04a2166a1dcd8eac4f66bb4"
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-pk-shape-baseline.json",
+      "stored": "controller-partition-pk-shape-baseline.json",
+      "raw_sha256": "46a5e6ad74e57e2159c3e4b1049fab5aa1adaf5c483d854678f3896079be15b5",
+      "raw_bytes": 1499
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-pk-shape-baseline-runner.py",
+      "stored": "controller-partition-pk-shape-baseline-runner.py",
+      "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b",
+      "raw_bytes": 5033
+    },
+    {
+      "source": "/root/bicdb-durability-s3/report-partition-pk-batch-baseline-v2.json",
+      "stored": "report-partition-pk-batch-baseline-v2.json",
+      "raw_sha256": "0672c3892dca94f1f17288b5d5d33a065f6a58cfee54cd4f02dc616cb2909a74",
+      "raw_bytes": 1077,
+      "source_revision": "63202b6a48c3a103358601bddac1b407902f42c5"
+    },
+    {
+      "source": "/root/bicdb-durability-s3/tc-step-partition-pk-batch-baseline-v2.log",
+      "stored": "tc-step-partition-pk-batch-baseline-v2.log.gz",
+      "raw_sha256": "7c00ef3bfed75f0af2582834193fd28ac0ba254cffa6f1aba2517e6321a2669a",
+      "raw_bytes": 82197,
+      "source_revision": "63202b6a48c3a103358601bddac1b407902f42c5"
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-pk-batch-baseline-v2.json",
+      "stored": "controller-partition-pk-batch-baseline-v2.json",
+      "raw_sha256": "6e9c3b4dba415714160a7271bc2bc103b411f7c82a9697d25fee67152fae8b81",
+      "raw_bytes": 1471
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-pk-batch-baseline-v2-runner.py",
+      "stored": "controller-partition-pk-batch-baseline-v2-runner.py",
+      "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b",
+      "raw_bytes": 5033
+    },
+    {
+      "source": "/root/bicdb-durability-s3/report-partition-pk-batch-baseline-v3.json",
+      "stored": "report-partition-pk-batch-baseline-v3.json",
+      "raw_sha256": "c4780d34a9cecfdcdf652af189a4895137e0ef14841bc7b47f3bb767593fc200",
+      "raw_bytes": 1662,
+      "source_revision": "e170e4bbb0eb0ff909c6a3e72f387b048f4ca73a"
+    },
+    {
+      "source": "/root/bicdb-durability-s3/tc-step-partition-pk-batch-baseline-v3.log",
+      "stored": "tc-step-partition-pk-batch-baseline-v3.log.gz",
+      "raw_sha256": "82cb883a4c521b0c91def27888e2bf65f0f1cffa1b18937eba3809fa8a63c96d",
+      "raw_bytes": 166107,
+      "source_revision": "e170e4bbb0eb0ff909c6a3e72f387b048f4ca73a"
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-pk-batch-baseline-v3.json",
+      "stored": "controller-partition-pk-batch-baseline-v3.json",
+      "raw_sha256": "8c6bf60faddfa7ad76d7a36d624f700a67e0acdd8eebc00342091961a69652ee",
+      "raw_bytes": 1900
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-pk-batch-baseline-v3-runner.py",
+      "stored": "controller-partition-pk-batch-baseline-v3-runner.py",
+      "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b",
+      "raw_bytes": 5033
+    },
+    {
+      "source": "/root/bicdb-durability-s3/report-partition-pk-and-ast-focused.json",
+      "stored": "report-partition-pk-and-ast-focused.json",
+      "raw_sha256": "803f2da2e5c9e8138d88d2b26b1b82845b16ee493f68f4c0451fc433c2777a45",
+      "raw_bytes": 2779,
+      "source_revision": "3ff8bf10a1f7de0518393d365b7ffd517e61a948"
+    },
+    {
+      "source": "/root/bicdb-durability-s3/tc-step-partition-pk-and-ast-focused.log",
+      "stored": "tc-step-partition-pk-and-ast-focused.log.gz",
+      "raw_sha256": "9f5f4394d985020994a86e75a5fe3d4834f60b3898d9f3ccb122e42015b76ab8",
+      "raw_bytes": 271071,
+      "source_revision": "3ff8bf10a1f7de0518393d365b7ffd517e61a948"
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-pk-and-ast-focused.json",
+      "stored": "controller-partition-pk-and-ast-focused.json",
+      "raw_sha256": "1fabcb3bf3ce3f9464a85b34fd2243aa287aec0a649295584371f33e956f0113",
+      "raw_bytes": 2766
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-pk-and-ast-focused-runner.py",
+      "stored": "controller-partition-pk-and-ast-focused-runner.py",
+      "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b",
+      "raw_bytes": 5033
+    },
+    {
+      "source": "/root/bicdb-durability-s3/report-partition-pk-batch-baseline-v4.json",
+      "stored": "report-partition-pk-batch-baseline-v4.json",
+      "raw_sha256": "8d3df2cb5a7459c20d33c2b6935d041843264a40b866797b1d739753e2e299c4",
+      "raw_bytes": 1535,
+      "source_revision": "a4ce8ac31afa5c630254e10b97f10705ccbf83c9"
+    },
+    {
+      "source": "/root/bicdb-durability-s3/tc-step-partition-pk-batch-baseline-v4.log",
+      "stored": "tc-step-partition-pk-batch-baseline-v4.log.gz",
+      "raw_sha256": "bca941574d4b13bd7f80159b0d025c214ae27fa3c2a9a4418a717372572ffb7d",
+      "raw_bytes": 182864,
+      "source_revision": "a4ce8ac31afa5c630254e10b97f10705ccbf83c9"
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-pk-batch-baseline-v4.json",
+      "stored": "controller-partition-pk-batch-baseline-v4.json",
+      "raw_sha256": "4402c08f63f4d042f833920c2d8276aa5b31673143e91b6d3deb4b8da012982c",
+      "raw_bytes": 1819
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-pk-batch-baseline-v4-runner.py",
+      "stored": "controller-partition-pk-batch-baseline-v4-runner.py",
+      "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b",
+      "raw_bytes": 5033
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/native-pg16-partition-broad-reference/stdout",
+      "stored": "native-pg16-stdout",
+      "raw_sha256": "14c69ad3855ffd77a0f4c40a367d4b53f0b99e385f9addaaa039e229209b35d9",
+      "raw_bytes": 258
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/native-pg16-partition-broad-reference/result.json",
+      "stored": "native-pg16-result.json",
+      "raw_sha256": "b45546875d0e16eedb75e1b45a422ebe688532794c73ad77597b2e9b4d4f6e91",
+      "raw_bytes": 837
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/native-pg16-partition-broad-reference/stderr",
+      "stored": "native-pg16-stderr",
+      "raw_sha256": "4ae3249d1eee2f5524af5216c90faa78cd2ff33458a7cda82dea763d414f52fb",
+      "raw_bytes": 178
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/native-pg16-partition-broad-reference/container.stderr",
+      "stored": "native-pg16-container.stderr",
+      "raw_sha256": "ba816cd609a896b93cabcc7b261104a1dbe4bba93f8de152aca2a527ee9b6fd1",
+      "raw_bytes": 1610
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/native-pg16-partition-broad-reference/container.stdout",
+      "stored": "native-pg16-container.stdout",
+      "raw_sha256": "a3f4f6d04fa4b87c9666b96e9dd11b6731c5caa10ef080c080b387fed45bc136",
+      "raw_bytes": 2336
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/native-pg16-partition-broad-reference/control.sql",
+      "stored": "native-pg16-control.sql",
+      "raw_sha256": "2e6322a1709c205943778c4bc5ba56a735ecf25260c77f893176ee483035c8c5",
+      "raw_bytes": 3538
+    },
+    {
+      "source": "/root/bicdb-durability-s3/report-partition-pk-batch-and-fixtures-focused.json",
+      "stored": "report-partition-pk-batch-and-fixtures-focused.json",
+      "raw_sha256": "5f4fa62751f6bd39588354859193848f32f1da552f050c75d9a4fb95eabf1785",
+      "raw_bytes": 3184,
+      "source_revision": "57dcb89c2c1fdc6a423c58460d8e484e8a3c990e"
+    },
+    {
+      "source": "/root/bicdb-durability-s3/tc-step-partition-pk-batch-and-fixtures-focused.log",
+      "stored": "tc-step-partition-pk-batch-and-fixtures-focused.log.gz",
+      "raw_sha256": "23800026391a8c4be45887fa3d38970c2367bc205395e1ad8099a5e760876058",
+      "raw_bytes": 424293,
+      "source_revision": "57dcb89c2c1fdc6a423c58460d8e484e8a3c990e"
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-pk-batch-and-fixtures-focused.json",
+      "stored": "controller-partition-pk-batch-and-fixtures-focused.json",
+      "raw_sha256": "e734dce1b6095b976d1bbaf6dc120a5819272de77eb62ae494826fd737f1f748",
+      "raw_bytes": 2926
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-pk-batch-and-fixtures-focused-runner.py",
+      "stored": "controller-partition-pk-batch-and-fixtures-focused-runner.py",
+      "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b",
+      "raw_bytes": 5033
+    },
+    {
+      "source": "/root/bicdb-durability-s3/report-partition-schema-change-baseline.json",
+      "stored": "report-partition-schema-change-baseline.json",
+      "raw_sha256": "2a8cdffe2d884ba05e459cd4784c358ae3f1e18b919a25e9b3af195257845557",
+      "raw_bytes": 1955,
+      "source_revision": "8dcad32b2da608dd106002e13c584176b098d342"
+    },
+    {
+      "source": "/root/bicdb-durability-s3/tc-step-partition-schema-change-baseline.log",
+      "stored": "tc-step-partition-schema-change-baseline.log.gz",
+      "raw_sha256": "f45fcbd90612b3f022fa794509286d1c6b09a289a07062048b86249b525ac802",
+      "raw_bytes": 247053,
+      "source_revision": "8dcad32b2da608dd106002e13c584176b098d342"
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-schema-change-baseline.json",
+      "stored": "controller-partition-schema-change-baseline.json",
+      "raw_sha256": "9d02080895b07676d0bc13a643a8b65070fe7fdeaedb7f870233123141478a7d",
+      "raw_bytes": 1911
+    },
+    {
+      "source": "/root/.local/state/bicdb/typed-compare/partition-schema-change-baseline-runner.py",
+      "stored": "controller-partition-schema-change-baseline-runner.py",
+      "raw_sha256": "679260d14e9f4351cf0ee9d15024270f66e9daf47959e0e7b6981b582bf6314b",
+      "raw_bytes": 5033
+    }
+  ],
+  "scope": "Immutable terminal reports/logs/specs/runners, failed harnesses retained; no source DB/private keys included. Summary distinguishes actual product failures, fixture failures, valid counterexamples and source scope."
+}

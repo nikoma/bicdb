@@ -1,0 +1,177 @@
+{
+  "source": "a68fe5f37d697555d7c337005aac4785e5887f70",
+  "status": "observations_collected",
+  "application_qualified": false,
+  "binary": "/root/bicdb-durability-s3/qualification-artifacts-debug/a68fe5f37d697555d7c337005aac4785e5887f70/oracle_server",
+  "expected_binary_sha256": "8c2aeb480d1434127817c61e63eeb065b4f6ce8ecf0d4ad3e4b6e29ee34ec50b",
+  "profile": "postgres",
+  "storage_mode": "server_paged",
+  "fsync": true,
+  "original_fixture_touched": false,
+  "started_unix": 1794467642.370418,
+  "observations": [
+    {
+      "label": "create_parent",
+      "sql": "CREATE TABLE parent(item_key INT,payload TEXT) PARTITION BY RANGE(item_key)",
+      "status": "accepted",
+      "rows": [],
+      "command": "CREATE TABLE"
+    },
+    {
+      "label": "create_child",
+      "sql": "CREATE TABLE child PARTITION OF parent FOR VALUES FROM (0) TO (10)",
+      "status": "accepted",
+      "rows": [],
+      "command": "CREATE TABLE"
+    },
+    {
+      "label": "child_ack",
+      "sql": "INSERT INTO child VALUES(1,'child-ack')",
+      "status": "accepted",
+      "rows": [],
+      "command": "INSERT 0 1"
+    },
+    {
+      "label": "parent_after_child_ack",
+      "sql": "SELECT item_key,payload FROM parent ORDER BY item_key",
+      "status": "accepted",
+      "rows": [],
+      "command": "SELECT 0"
+    },
+    {
+      "label": "parent_ack",
+      "sql": "INSERT INTO parent VALUES(2,'parent-ack')",
+      "status": "accepted",
+      "rows": [],
+      "command": "INSERT 0 1"
+    },
+    {
+      "label": "child_after_parent_ack",
+      "sql": "SELECT item_key,payload FROM child ORDER BY item_key",
+      "status": "accepted",
+      "rows": [
+        [
+          1,
+          "child-ack"
+        ]
+      ],
+      "command": "SELECT 1"
+    },
+    {
+      "label": "bounds_begin",
+      "sql": "BEGIN",
+      "status": "accepted",
+      "rows": [],
+      "command": "BEGIN"
+    },
+    {
+      "label": "out_of_bound_insert",
+      "sql": "INSERT INTO child VALUES(50,'must-refuse')",
+      "status": "accepted",
+      "rows": [],
+      "command": "INSERT 0 1"
+    },
+    {
+      "label": "bounds_rollback",
+      "sql": "ROLLBACK",
+      "status": "accepted",
+      "rows": [],
+      "command": "ROLLBACK"
+    },
+    {
+      "label": "create_default_candidate",
+      "sql": "CREATE TABLE fallback(item_key INT,payload TEXT)",
+      "status": "accepted",
+      "rows": [],
+      "command": "CREATE TABLE"
+    },
+    {
+      "label": "attach_default",
+      "sql": "ALTER TABLE parent ATTACH PARTITION fallback DEFAULT",
+      "status": "rejected",
+      "sqlstate": "42601",
+      "error": "invalid SQL: ALTER TABLE ATTACH PARTITION expects FOR VALUES"
+    },
+    {
+      "label": "parent_after_attach",
+      "sql": "SELECT item_key,payload FROM parent ORDER BY item_key",
+      "status": "accepted",
+      "rows": [
+        [
+          2,
+          "parent-ack"
+        ]
+      ],
+      "command": "SELECT 1"
+    },
+    {
+      "label": "child_after_attach",
+      "sql": "SELECT item_key,payload FROM child ORDER BY item_key",
+      "status": "accepted",
+      "rows": [
+        [
+          1,
+          "child-ack"
+        ]
+      ],
+      "command": "SELECT 1"
+    },
+    {
+      "label": "reopen_1_parent",
+      "sql": "SELECT item_key,payload FROM parent ORDER BY item_key",
+      "status": "accepted",
+      "rows": [
+        [
+          2,
+          "parent-ack"
+        ]
+      ],
+      "command": "SELECT 1"
+    },
+    {
+      "label": "reopen_1_child",
+      "sql": "SELECT item_key,payload FROM child ORDER BY item_key",
+      "status": "accepted",
+      "rows": [
+        [
+          1,
+          "child-ack"
+        ]
+      ],
+      "command": "SELECT 1"
+    },
+    {
+      "label": "reopen_2_parent",
+      "sql": "SELECT item_key,payload FROM parent ORDER BY item_key",
+      "status": "accepted",
+      "rows": [
+        [
+          2,
+          "parent-ack"
+        ]
+      ],
+      "command": "SELECT 1"
+    },
+    {
+      "label": "reopen_2_child",
+      "sql": "SELECT item_key,payload FROM child ORDER BY item_key",
+      "status": "accepted",
+      "rows": [
+        [
+          1,
+          "child-ack"
+        ]
+      ],
+      "command": "SELECT 1"
+    }
+  ],
+  "producer_sha256": "51a29745f21c042ddf53644ecbf724ab8151723e213c04a7a3197a829344d24f",
+  "binary_sha256": "8c2aeb480d1434127817c61e63eeb065b4f6ce8ecf0d4ad3e4b6e29ee34ec50b",
+  "database_exits": [
+    0,
+    0,
+    0
+  ],
+  "processes_stopped": true,
+  "finished_unix": 1794467643.6869788
+}

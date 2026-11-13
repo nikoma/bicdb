@@ -1,0 +1,30 @@
+{
+  "source": "bfd40351e8d268e5ed28138f1bc5e0fda9a0a9ba",
+  "scope": "New four NativePG16-observed child-schema requirements on unchangedcc84production (bfdtestonly). Directvsrouteddefaults, unrelatedparentADD/TYPE preservation, column-specificSET/DROPDEFAULT propagation/oneNativecommit, independentchildPK underkeylessparent and physicalparentroute. Bothmodes/two reopens and originalACKs; expected product counterexamples, not qualification. ExactstandardCoreCargoPID1433706birth163475016 onlyparallelallow, separatemetadatarepo/target and28GiBhost floor; monitor12GiB/10GiBhost.",
+  "started_unix": 1794503276.6535645,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_child_schema",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794503276.6539185,
+      "exit": 101,
+      "finished_unix": 1794503283.1057525
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794503283.1059866
+}

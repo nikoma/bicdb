@@ -1,0 +1,57 @@
+{
+  "source": "d2106c1deaa5300ca5e5cb8bb033db405881c5d9",
+  "scope": "Currentmain489 partitioncompleteACKpreflight. Pureproposedv1effectiveforest beforefence; streamsallstationary+movedACKs, exactvisibleinterpretation+canonicalNativePK, localNOTNULL/CHECK, uncachedcompleteUNIQUEmap boundbyworkmemory (nohistoricalindextrust), FKchecks againstsimulatedfinalrows includingreferencedvirtualparents andinitiallydeferred, boundedpairwiseEXCLUDE. StationaryNOTVALIDCHECK/FK exemptions preserved; movedrows ordinarydestinationchecks. No ACKdrop/rekey/guess, oldSQLsourceunchangedassertions andactualold482fixturesretained. Thisnewbatch mustcompile/run; no finalbroad/HA/app/mainclaim. Previous3867 parser2+integration25 actualPASS, earliercc84broadALLCoreSQLwire actualPASS source-specific.",
+  "started_unix": 1794507711.9660604,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "partition_admission::tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794507711.966196,
+      "exit": 101,
+      "finished_unix": 1794507734.0297675
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_child_schema",
+        "--test",
+        "partition_schema_changes",
+        "--test",
+        "primary_key_index_compatibility",
+        "--test",
+        "partition_statement_batches",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794507734.029987,
+      "exit": 101,
+      "finished_unix": 1794507751.393097
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794507751.3934014
+}

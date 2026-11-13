@@ -1,0 +1,15 @@
+{
+  "native_runtime_source": "f4ab135fef987fddd9fbc4c53c8c3d914a90005d",
+  "native_focused_commands_passed": 5,
+  "native_focused_tests_passed": 29,
+  "selected_integration_commands_passed": 6,
+  "selected_integration_tests_passed": 98,
+  "undo_retry_negative_source": "43358d641d62d2f896bfb891c396762f85b31ea9",
+  "undo_retry_positive_source": "392688d5e38efe5b3584dee854fb43a2b0596896",
+  "undo_retry_positive_commands_passed": 2,
+  "sql_scope_producer_integrated": false,
+  "sql_catalog_describe_visibility_qualified": false,
+  "broad_workspace_ci_qualified": false,
+  "application_acceptance_qualified": false,
+  "production_qualified": false
+}

@@ -1,0 +1,89 @@
+{
+  "source": "c7f6ee724866c72ec87d8e2ffbad81f5d7f9945a",
+  "scope": "Focused evolvingbatch26tests:13bounds+9exec+1hash106NativePGvectors+3timezonehash. Parent EXISTSindexmemo declinesparentonlyindexes; updatedNativeimage rechecks parentUPDATE/DELETE+SELECTpolicies; noordinaryUPDATEidcloneadded. NegativeproofsameSQLtestagainstactual030runtime. Otheroperators/types/upsert/triggers/upgrade/locking/concurrency/broad gatesremainpending.",
+  "started_unix": 1794483232.9259686,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_hash",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483232.9261522,
+      "exit": 0,
+      "finished_unix": 1794483313.7713873
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_bounds",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483313.7716024,
+      "exit": 0,
+      "finished_unix": 1794483320.0062242
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_execution",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483320.0064707,
+      "exit": 0,
+      "finished_unix": 1794483325.6845968
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "timezone_catalog_hash",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794483325.6848361,
+      "exit": 0,
+      "finished_unix": 1794483330.022759
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794483330.0230384
+}

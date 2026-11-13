@@ -3639,7 +3639,16 @@ pub(crate) fn pg_trigger_rows_filtered(
                     "tgrelid",
                     SqlValue::Int(*table_oids.get(&trigger.table_name).unwrap_or(&0)),
                 ),
-                ("tgparentid", SqlValue::Int(0)),
+                (
+                    "tgparentid",
+                    SqlValue::Int(
+                        trigger
+                            .partition_parent
+                            .as_ref()
+                            .map(|parent| trigger_oid(&parent.table_name, &parent.trigger_name))
+                            .unwrap_or(0),
+                    ),
+                ),
                 ("tgname", SqlValue::String(trigger.name.clone())),
                 (
                     "tgfoid",
@@ -7434,6 +7443,7 @@ pub(crate) fn catalog_view_schema(db: &BicDb, view: ViewSchema) -> Result<TableS
         row_array_type_oid: view.row_array_type_oid,
         columns,
         primary_key_name: None,
+        implicit_primary_key_name: None,
         indexes: view.indexes,
         constraints: Vec::new(),
         rls_enabled: false,

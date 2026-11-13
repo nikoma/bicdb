@@ -1,0 +1,39 @@
+{
+  "status": "passed",
+  "started_unix": 1794387724.157679,
+  "bicdb_regression_source": "ce3dc430e0fe3f8daca5f2f4ec22807dc61c82e3",
+  "cases": [
+    {
+      "sql_decision": "rollback",
+      "unrelated_peer_commits_before_sql_decision": true,
+      "source_rows": [
+        [
+          "before"
+        ]
+      ],
+      "native_peer_rows": [
+        [
+          7
+        ]
+      ]
+    },
+    {
+      "sql_decision": "commit",
+      "unrelated_peer_commits_before_sql_decision": true,
+      "source_rows": [
+        [
+          "after"
+        ]
+      ],
+      "native_peer_rows": [
+        [
+          7
+        ]
+      ]
+    }
+  ],
+  "protected_application_schema_mutated": false,
+  "schema_dropped": true,
+  "server_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "finished_unix": 1794387724.306417
+}

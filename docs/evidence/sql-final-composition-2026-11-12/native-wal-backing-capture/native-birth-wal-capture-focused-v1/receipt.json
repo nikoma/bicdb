@@ -1,0 +1,59 @@
+{
+  "source": "31be8e3d0fb566fefa8c6189923b60f48abbd1c8",
+  "scope": "Write-time Native backing contracts are part of the same WAL commit as their writes, including prepared-WAL fast path. Actual bounded durable batch/live exporters retain historical backing identity across rename/name reuse/drop and restart. Private checksum-bound in-process capture is not decoded from JSON, not source root authentication/import/recovery authority. New lifecycle/unborn/async/forgery/dropped-fence controls plus prior Native birth5/image6/local8/snapshot3 and legacy WAL serialization tests. Original SQL promotion acceptance remains OPEN; no source/main/application/release/deployment or full broad/fault qualification.",
+  "started_unix": 1794533025.839252,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794533025.83942,
+      "exit": 0,
+      "finished_unix": 1794533025.908768
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "check",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "-p",
+        "bicdb-sql",
+        "-p",
+        "bicdb-pgwire",
+        "--all-targets"
+      ],
+      "started_unix": 1794533025.9090376,
+      "exit": 0,
+      "finished_unix": 1794533170.518145
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "native_collection_birth::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794533170.5184443,
+      "exit": 101,
+      "finished_unix": 1794533228.2556312
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794533228.255878
+}

@@ -1,0 +1,90 @@
+{
+  "label": "native-backing-birth-focused-v3",
+  "source": "a7571bd95db36b46924f242e3772cc7d9e10e71d",
+  "base": "5bf80715ed86e7ff55852b86932d747ee8eb3b39",
+  "repo": "/root/bicdb-sql-final-composition",
+  "scope": "Private combined source Native future-only backing allocation identity prerequisite. New lifecycle/import/restart/capture controls plus existing local identity controls, Core/SQL/wire alltargets compile, and unchanged original promoted undecided rename positive retained as OPEN acceptance gate. No portable authenticated origin producer/resolver yet; no main/release/deployment or application qualification. Goal active, experimental production OFF, no new spend. v1 stopped at a test-setup E0382 compile error; preserved. This source fixes only the borrowed storage-mode setup. No semantic failures hidden. v2 Core/SQL/wire alltargets compile and Native4 PASS; capture fixture failed because fresh live collection was not reopened into protected purely-paged representation. v3 fixes only that fixture lifecycle and adds actual Native row ACK hash custody. Original gate still unmodified.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "python3",
+      "scripts/bump-version.py",
+      "--check"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "check",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "-p",
+      "bicdb-sql",
+      "-p",
+      "bicdb-pgwire",
+      "--all-targets"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "native_collection_birth::",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "range_image_bindings::",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "local_namespace_identity::",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "promoted_primary_recovers_an_undecided_replicated_rename_before_sql_writes",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ]
+}

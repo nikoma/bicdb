@@ -1,0 +1,42 @@
+{
+  "label": "partition-child-identity-baseline",
+  "source": "3ae6dc9444cf85dd6d8d620c30fe8525ccff3d6c",
+  "base": "bccb1a8690343173bcdf846eb50d7e39098395fd",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "ActualPG16 identity-before-child control: parent allocates identity, freshchild hasNOidentity/default, directchild omission23502, explicitchild value allowed and doesnotconsumeparentsequence, ACKs2reopens. Testonlyoverbccb, expectedinheritancecounterexample, assertionsunchangedlater.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "partition_child_schema",
+      "identity_created_before_partitions",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-identity-default-focused"
+  ],
+  "required_receipts": [],
+  "allow_isolated_builds": [
+    {
+      "pid": 2111915,
+      "start_ticks": 163592680,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

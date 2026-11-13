@@ -1,0 +1,47 @@
+{
+  "label": "partition-old-io-failure-probe-build",
+  "source": "430067f7fed0b0fefacc6e2fef71e8aa27097c2c",
+  "base": "fa7a2c593f2fc0aee77781c56a277a0f3a96ad11",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "Example-only overexact6c Core/SQL/wireproduction. Snapshot completeNativeACKrecords/hash+rawschemas oncopies ofgenuineold482stores; applyonlyreviewedmigration andwriteindependentfsyncedACKafterreturn; verifyactualrecovery is exactlywholeoldorwholenew, acknowledgedstatealwaysnew, no fakecompletioncert, Nativeindexes+3opens. ReuseexistingCoreprocess/fencecrashsites; controlledpage/directoryvolatileemulation explicitlynotVMpowercut. Thisbuild isnotcrashqualification; exactcutsmustexecute/reach/verify. Original30legacycontrolsverifiedPASS at6c. FullgoalACTIVE. Example-only scopedarm_io_hook afterdbopen supportsNative transactionlogwrite/sync andotherexistingI/O sites inbothmodes. Armsatapplyonly; nocore/SQLproductchanges. ExactcutsthroughNativeexistinghooks mustexecuteandbereached; no APIbypass. ExternalACK records actualNative before/aftercommitsequence forcontrols. Corecommithitspan mustbecalibrated againstcontrol, neverassumeNthhookreached. Runtimeproductionexact6c unchanged; exampleonly. ExampleonlyI/Oactionarms scopedactualfailuresafteropen. Requiresactualfaultfired+applyErr/noACK, dropsfaultthenrequiresthesamehandle refuseslegitimateNativewrite. Writesindependentfailure report (notACK) andexitwithoutgracefulclose; separateprocess verifiesoldornew wholeACK/schema state andNativeindexes/reopens. Currentprocesscutsmoke38PASS, full14ACKmatrixseparatelyexecuting. No productioncodechange or I/Oqualificationclaimbeforeexecution.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "build",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--example",
+      "partition_crash_probe"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-old-crash-span-probe-build"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-partition-legacy-qualification-6c16e66e-verified.json",
+      "equals": {
+        "source": "6c16e66e742bb575041aebce4086ebf434b9fe64",
+        "status": "legacy_controls_verified_passed"
+      }
+    }
+  ],
+  "allow_isolated_builds": [
+    {
+      "pid": 183239,
+      "start_ticks": 163975095,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock",
+  "copy_example": "partition_crash_probe",
+  "copy_additional_examples": []
+}

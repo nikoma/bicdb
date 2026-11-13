@@ -1,0 +1,110 @@
+{
+  "source": "5e74ff58a6befce1f6e5e83ac6eb43dfa83969ba",
+  "scope": "Coherent SQL routine dependency batch after merged-main465 ten-command/132-test focused pass. Tests-only f229 actual failure occurs creating table row type array routine (Unsupported source array element unregistered), before rename. Native PostgreSQL16.13 both commit/rollback/reference cases pass. Preserve original test and OID/name/reuse/reopen assertions. Routine-specific custom-array fallback retains built-in array validation and dimensions canonicalized as one PostgreSQL array identity. Shared pure routine-header rewrite used by user type rename and table row rename; exact dependent routine catalog rows captured before effects, stable OID/overload keys retained, raw save covered by journal avoids creation defaults or generic undo entries. Focused validation only; complete SQL scope producer/metadata row guards/Describe and independent fault/VM/application gates remain OPEN. Main466 separately delivered, not yet integrated here.",
+  "started_unix": 1794396186.4563568,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_routine_row_types",
+        "--test",
+        "rename_default_privileges",
+        "--test",
+        "generated_boolean_filters",
+        "--test",
+        "table_rename_views",
+        "--test",
+        "rename_pending_composites"
+      ],
+      "started_unix": 1794396186.4564967,
+      "exit": 0,
+      "finished_unix": 1794396317.2797472
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794396317.2799852,
+      "exit": 0,
+      "finished_unix": 1794396430.215015
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "sql",
+        "routine_signatures_preserve_registered_types_and_typmods_after_reopen"
+      ],
+      "started_unix": 1794396430.2153764,
+      "exit": 0,
+      "finished_unix": 1794396438.0736985
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "sql",
+        "enum_columns_validate_order_rename_and_track_dependencies"
+      ],
+      "started_unix": 1794396438.0739415,
+      "exit": 0,
+      "finished_unix": 1794396438.5875463
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "schema_table_rename",
+        "--test",
+        "session_statement_snapshots",
+        "--test",
+        "read_only_transactions"
+      ],
+      "started_unix": 1794396438.5877988,
+      "exit": 0,
+      "finished_unix": 1794396454.771493
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794396454.771733
+}

@@ -1,0 +1,56 @@
+{
+  "label": "partition-upgrade-all-acks-focused",
+  "source": "d2106c1deaa5300ca5e5cb8bb033db405881c5d9",
+  "base": "4508ece82ca18dcc32ab2eba9be0da23bbf72897",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "Currentmain489 partitioncompleteACKpreflight. Pureproposedv1effectiveforest beforefence; streamsallstationary+movedACKs, exactvisibleinterpretation+canonicalNativePK, localNOTNULL/CHECK, uncachedcompleteUNIQUEmap boundbyworkmemory (nohistoricalindextrust), FKchecks againstsimulatedfinalrows includingreferencedvirtualparents andinitiallydeferred, boundedpairwiseEXCLUDE. StationaryNOTVALIDCHECK/FK exemptions preserved; movedrows ordinarydestinationchecks. No ACKdrop/rekey/guess, oldSQLsourceunchangedassertions andactualold482fixturesretained. Thisnewbatch mustcompile/run; no finalbroad/HA/app/mainclaim. Previous3867 parser2+integration25 actualPASS, earliercc84broadALLCoreSQLwire actualPASS source-specific.",
+  "continue_on_failure": true,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "partition_admission::tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "partition_child_schema",
+      "--test",
+      "partition_schema_changes",
+      "--test",
+      "primary_key_index_compatibility",
+      "--test",
+      "partition_statement_batches",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-upgrade-all-acks-baseline"
+  ],
+  "required_receipts": [],
+  "allow_isolated_builds": [],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

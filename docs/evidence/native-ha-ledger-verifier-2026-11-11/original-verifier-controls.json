@@ -1,0 +1,52 @@
+{
+  "source": "92b8456d795f7576636a1b10269fe2336af92a08",
+  "verifier": "/root/bicdb-durability-s3/host-control/verify_native_ha_ack_artifacts.py",
+  "verifier_sha256": "1b9deba441090b56f050d6903e7bc20993527b8b3a6cccc5895406f9a99d2375",
+  "original_result_sha256": "a62e9ca83e84ab87579216ea50322893e09242b008ee6b67fad7388a852cf4fe",
+  "status": "failed",
+  "started_unix": 1794413537.939985,
+  "engine_opened": false,
+  "cases": [
+    {
+      "control": "unchanged",
+      "expected": "accept",
+      "exit": 0,
+      "stdout": "{\"status\": \"passed\", \"cases\": [{\"voters\": 3, \"acknowledged\": 48, \"known_readonly_refusals\": 169, \"snapshots_verified\": 12}, {\"voters\": 5, \"acknowledged\": 32, \"known_readonly_refusals\": 287, \"snapshots_verified\": 12}]}\n",
+      "stderr": "",
+      "matched_expectation": true
+    },
+    {
+      "control": "lost_ack_with_zero_declared_expectations",
+      "expected": "reject",
+      "exit": 0,
+      "stdout": "{\"status\": \"passed\", \"cases\": [{\"voters\": 3, \"acknowledged\": 48, \"known_readonly_refusals\": 169, \"snapshots_verified\": 12}, {\"voters\": 5, \"acknowledged\": 32, \"known_readonly_refusals\": 287, \"snapshots_verified\": 12}]}\n",
+      "stderr": "",
+      "matched_expectation": false
+    },
+    {
+      "control": "changed_ack_value",
+      "expected": "reject",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "Traceback (most recent call last):\n  File \"/root/bicdb-durability-s3/host-control/verify_native_ha_ack_artifacts.py\", line 10, in <module>\n    path=pathlib.Path(snapshot['rows_file']);assert hashlib.file_digest(path.open('rb'),'sha256').hexdigest()==snapshot['rows_sha256'];rows=dict(json.loads(path.read_text()));expected=ack[:snapshot['acknowledged']];assert all(rows.get(k)==v for k,v in expected);assert -1 not in rows and not refused.intersection(rows);assert len(rows)==snapshot['observed'];checked+=1\n                                                                                                                                                                                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n",
+      "matched_expectation": true
+    },
+    {
+      "control": "readonly_refusal_present",
+      "expected": "reject",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "Traceback (most recent call last):\n  File \"/root/bicdb-durability-s3/host-control/verify_native_ha_ack_artifacts.py\", line 10, in <module>\n    path=pathlib.Path(snapshot['rows_file']);assert hashlib.file_digest(path.open('rb'),'sha256').hexdigest()==snapshot['rows_sha256'];rows=dict(json.loads(path.read_text()));expected=ack[:snapshot['acknowledged']];assert all(rows.get(k)==v for k,v in expected);assert -1 not in rows and not refused.intersection(rows);assert len(rows)==snapshot['observed'];checked+=1\n                                                                                                                                                                                                                                                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n",
+      "matched_expectation": true
+    },
+    {
+      "control": "uncertain_error_write_present",
+      "expected": "accept",
+      "exit": 0,
+      "stdout": "{\"status\": \"passed\", \"cases\": [{\"voters\": 3, \"acknowledged\": 48, \"known_readonly_refusals\": 169, \"snapshots_verified\": 12}, {\"voters\": 5, \"acknowledged\": 32, \"known_readonly_refusals\": 287, \"snapshots_verified\": 12}]}\n",
+      "stderr": "",
+      "matched_expectation": true
+    }
+  ],
+  "finished_unix": 1794413538.1363416
+}

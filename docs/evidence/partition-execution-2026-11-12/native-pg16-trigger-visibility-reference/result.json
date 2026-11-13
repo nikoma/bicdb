@@ -1,0 +1,17 @@
+{
+  "status": "native_pg_control_passed",
+  "version": "PostgreSQL 16.13 (Debian 16.13-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+  "cases": [
+    "insert_multi",
+    "move",
+    "veto_source_update",
+    "veto_source_delete",
+    "veto_destination_insert",
+    "update_multi",
+    "delete_multi"
+  ],
+  "image_id": "sha256:71e27bf60b70bded003791b5573f8b808365613f341df20ffcf0c1ed7bc13ddf",
+  "started_unix": 1794486351.932737,
+  "finished_unix": 1794486354.1140466,
+  "scope": "Actual isolated tmpfs PostgreSQL control for statement trigger visibility/suppression only; default fsync unchanged. Existing reference data untouched; no physical durability claim."
+}

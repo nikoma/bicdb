@@ -1,0 +1,82 @@
+{
+  "label": "private-rename-uid-reuse-positive-aee80da2",
+  "source": "aee80da206bf59e7a7e00b8be6d7f38364ac974c",
+  "base": "f2c25a66db145b7d5cb16b9ae00af78cb6429a67",
+  "repo": "/root/bicdb-sql-rename-uid-consumer",
+  "wait_units": [
+    "bicdb-private-rename-uid-reuse-negative-72da2fe2"
+  ],
+  "scope": "Private local rename image namespace consumer only. Require actual persistent local UUID plus storage alias; validate entire remaining inventory before undo. Refuse missing/nil/replaced identities and unresolved SQL journals during activation. Trusted initialization before Native transactions required. Replicated donor->target UUID mapping not implemented: no HA promotion/scoped producer/global gate relaxation or final qualification claim. Original negatives retained; four identity regressions and existing committed/uncommitted replay checks.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "session::rename_journal::tests::reused_",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "session::rename_journal::tests::namespace_activation_",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "session::rename_journal::tests::legacy_missing_",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "session::rename_journal::tests::uncommitted_journal_",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "session::rename_journal::tests::decision_and_business_",
+      "--",
+      "--test-threads=1"
+    ]
+  ]
+}

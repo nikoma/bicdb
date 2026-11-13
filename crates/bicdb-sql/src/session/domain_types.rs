@@ -1174,8 +1174,21 @@ impl<'db> SqlSession<'db> {
             schema.row_array_type_oid = Some(schema.row_array_type_oid());
         }
         let mut schema_dirty = false;
+        let mut partition_columns_published = true;
 
         for operation in &alter_table.operations {
+            if !matches!(
+                operation,
+                AlterTableOperation::AddColumn { .. }
+                    | AlterTableOperation::AlterColumn {
+                        op: AlterColumnOperation::SetDataType { .. }
+                            | AlterColumnOperation::SetDefault { .. }
+                            | AlterColumnOperation::DropDefault,
+                        ..
+                    }
+            ) {
+                partition_columns_published = false;
+            }
             match operation {
                 AlterTableOperation::AddColumn {
                     column_def,
@@ -1186,6 +1199,16 @@ impl<'db> SqlSession<'db> {
                     if !*if_not_exists || schema.column(&ident_value(&column_def.name)).is_none() {
                         self.ensure_table_row_type_change_allowed(&schema)?;
                     }
+                    if schema.partitioning.is_some()
+                        && self.alter_partition_add_column(
+                            &mut schema,
+                            column_def,
+                            *if_not_exists,
+                        )?
+                    {
+                        continue;
+                    }
+                    partition_columns_published = false;
                     self.capture_table_state_undo(&table, &schema)?;
                     if !self.alter_table_add_generated_column(
                         &table,
@@ -1369,7 +1392,6 @@ impl<'db> SqlSession<'db> {
                     }
                 }
                 AlterTableOperation::RenameTable { table_name } => {
-                    let previous_schema = schema.clone();
                     let target = match table_name {
                         RenameTableNameKind::To(name) | RenameTableNameKind::As(name) => name,
                     };
@@ -1391,64 +1413,7 @@ impl<'db> SqlSession<'db> {
                             Some(new_name.clone()),
                         ));
                     }
-                    let in_tx = self.tx.is_some();
-                    if let Some(undo) = alter_table_rename_table(
-                        self.db_mut()?,
-                        &table,
-                        &new_table,
-                        &mut schema,
-                        in_tx,
-                    )? {
-                        self.ddl_undo.push(undo);
-                    }
-                    // Foreign keys retain the referenced relation's identity
-                    // when PostgreSQL renames it. Our persisted metadata uses
-                    // collection names, so update every incoming reference,
-                    // including self references, with ordinary schema undo.
-                    for mut dependent in list_schemas(self.db_ref())? {
-                        let mut changed = false;
-                        for constraint in &mut dependent.constraints {
-                            if let ConstraintSchema::ForeignKey { foreign_table, .. } = constraint {
-                                if foreign_table == &table {
-                                    *foreign_table = new_table.clone();
-                                    changed = true;
-                                }
-                            }
-                        }
-                        if changed {
-                            self.save_session_schema(&dependent)?;
-                            if dependent.name == new_table {
-                                schema = dependent;
-                            }
-                        }
-                    }
-                    for mut grant in list_privileges(self.db_ref())? {
-                        if grant.object_type == PrivilegeObjectType::Table
-                            && grant.object_name == table
-                        {
-                            self.delete_session_privilege(&grant)?;
-                            grant.object_name = new_table.clone();
-                            self.save_session_privilege(&grant)?;
-                        }
-                    }
-                    // Trigger identity includes its owning relation. Rebind
-                    // through session metadata helpers so statement errors,
-                    // savepoints and full rollback restore both identities.
-                    for mut trigger in list_triggers(self.db_ref())? {
-                        if trigger.table_name == table {
-                            self.delete_session_trigger(&trigger.name, Some(&table))?;
-                            trigger.table_name = new_table.clone();
-                            self.save_session_trigger(&trigger)?;
-                        }
-                    }
-                    let renamed_type = table_row_type_schema(&schema)
-                        .column_type(false)
-                        .formatted_name();
-                    self.apply_table_row_type_change(
-                        &previous_schema,
-                        &schema,
-                        &CompositeAttributeMutation::RenameType { name: renamed_type },
-                    )?;
+                    rename_table::apply(self, &table, &new_table, &mut schema)?;
                     table = new_table;
                 }
                 AlterTableOperation::AlterColumn { column_name, op } => {
@@ -1465,6 +1430,16 @@ impl<'db> SqlSession<'db> {
                             using.as_ref(),
                         )?;
                     } else {
+                        if (schema.partitioning.is_some() || schema.partition_of.is_some())
+                            && matches!(
+                                op,
+                                AlterColumnOperation::SetDefault { .. }
+                                    | AlterColumnOperation::DropDefault
+                            )
+                        {
+                            self.alter_partition_column_default(&mut schema, &column_name, op)?;
+                            continue;
+                        }
                         self.capture_table_state_undo(&table, &schema)?;
                         alter_table_alter_column(
                             self.db_mut()?,
@@ -1592,7 +1567,7 @@ impl<'db> SqlSession<'db> {
                 }
             }
         }
-        if schema.partitioning.is_some() {
+        if schema.partitioning.is_some() && !partition_columns_published {
             sync_partition_children_from_parent(self.db_mut()?, &schema)?;
         }
         Ok(SqlResult::command("ALTER TABLE"))
@@ -1748,6 +1723,28 @@ impl<'db> SqlSession<'db> {
                         .map(|(_, updated)| updated)
                         .expect("partition parent queued after its type change");
                     let mut updated = schema_with_parent_inheritance(child.clone(), parent);
+                    let child_index = updated
+                        .columns
+                        .iter()
+                        .position(|column| column.name == previous_column.name)
+                        .ok_or_else(|| SqlError::UndefinedColumn {
+                            table: updated.name.clone(),
+                            column: previous_column.name.clone(),
+                        })?;
+                    let previous_child_column = child.columns[child_index].clone();
+                    let inherited_type = &parent.columns[column_index];
+                    let child_column = &mut updated.columns[child_index];
+                    child_column.pg_type = inherited_type.pg_type.clone();
+                    child_column.user_type = inherited_type.user_type.clone();
+                    child_column.collation = inherited_type.collation.clone();
+                    child_column.type_modifier = inherited_type.type_modifier.clone();
+                    child_column.array_ndims = inherited_type.array_ndims;
+                    child_column.vector_dim = inherited_type.vector_dim;
+                    self.rewrite_altered_column_default(
+                        &child.name,
+                        &previous_child_column,
+                        child_column,
+                    )?;
                     self.revalidate_altered_column_indexes(
                         &previous_column,
                         &mut updated,
@@ -1827,6 +1824,12 @@ impl<'db> SqlSession<'db> {
             planned.push((previous, updated, records));
         }
         self.validate_planned_alter_foreign_keys(&planned)?;
+
+        if schema.partitioning.is_some() {
+            self.publish_partition_schema_change(&planned)?;
+            *schema = updated_parent;
+            return Ok(());
+        }
 
         for (previous, _, _) in &planned {
             if unchanged_source_tables.contains(&previous.name) {
@@ -2185,18 +2188,7 @@ impl<'db> SqlSession<'db> {
         for view in list_views(self.db_ref())? {
             // Stored SQL uses logical, possibly qualified names. The physical
             // collection name for a non-public schema is not a SQL token.
-            let statements = parse_statements(&view.query_sql)?;
-            let references_table = sqlparser::ast::visit_relations(&statements, |name| {
-                let matches = relation_name(name).is_ok_and(|candidate| candidate == table)
-                    || name.0.len() == 1
-                        && object_name(name).is_ok_and(|candidate| candidate == table);
-                if matches {
-                    std::ops::ControlFlow::Break(())
-                } else {
-                    std::ops::ControlFlow::Continue(())
-                }
-            })
-            .is_break();
+            let references_table = view_dependencies::relations(&view.query_sql)?.contains(table);
             if references_table && sql_contains_identifier(&view.query_sql, column_name) {
                 return Err(SqlError::Unsupported(format!(
                     "cannot alter type of a column used by view or rule: view {} depends on column \"{column_name}\"",

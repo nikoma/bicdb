@@ -1,0 +1,19 @@
+{
+  "status": "native_partition_runtime_controls_passed",
+  "native_version": "16.13",
+  "subchecks": [
+    "parent reads child rows",
+    "parent inserts route into matching child",
+    "child out-of-bounds insert refuses23514",
+    "DEFAULT attach and unmatched routing",
+    "parent scan includes both children",
+    "pg_partitioned_table.partdefid identifies fallback"
+  ],
+  "protected_source_and_frozen_export_unchanged": "only owned native control DB connected; new schema inside rolled-back transaction",
+  "inputs": {
+    "stdout": "5cbd21848a97b45d58ecf4ce50b7591a69d0eaf1a387f428b242ec3c90312b3c",
+    "stderr": "81618489ca41f0d75cedf769917db5d0fda07b008dd21093f44f88d56f83060f",
+    "control.sql": "7de0161f8430e6e1fc571ba083e0201f38771b2cef2160580066374451ca9bbb"
+  },
+  "recorded_unix": 1794467674.4449956
+}

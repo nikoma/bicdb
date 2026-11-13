@@ -1,0 +1,30 @@
+{
+  "source": "a499113cf53d126df88b5268aa77c3584e0da8d9",
+  "scope": "Production tree identical pre-fix437/a68. Only new agent case fixture uses safe ASCII case-distinct names: hashed dotted names did not reproduce case-insensitive Native deletion. Other4 actual regressions already failed on437. Preserve all original app assertions; this negative ref never merges as production.",
+  "started_unix": 1794466276.1693428,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "drop_constraint_indexes",
+        "quoted_case_distinct_indexes_keep_exact_native_and_sql_identity_after_reopen",
+        "--",
+        "--exact",
+        "--nocapture"
+      ],
+      "started_unix": 1794466276.1695445,
+      "exit": 101,
+      "finished_unix": 1794466356.8514132
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794466356.8517196
+}

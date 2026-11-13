@@ -1,0 +1,80 @@
+{
+  "source": "86f12f19feae2f0c83547c636bf9660e89930fc6",
+  "scope": "Actual297tests-onlyreadcontrolall6FAIL: cold/warm ordinarypointSQL/pg_classcatalogscan/publicDescribe exposemetadata underNativefullSCHEMAreservation, firstEmbeddedMemorycaseeach; SQLliteral+unrelatedNativeACKpositivecompletedbeforefailure. CurrentprivatecoreNativeReadAccessisread-only, database/registration-bound, ownerexpiryrefuses, observationbindingspersist, nevercreatesHostmutationactors. SQLschema/type/view/routine/role/grantreaderscheckbeforecaches; metadata-onlyinference preservesNativeTransactionConflicts throughOptionfallbacks via scopeddeniallatch. CurrentNativeScopeprotectscollectionswildcard, metadata pointIDs passedforfuture rowresources. FullSQLscopeproducer/exactmetadata-rowresources/mutationbounds/SQLread-ownertxandwirecachedDescribe gates stillOPEN; no globalownerrecoverygate relaxed. Sameoriginal6testsplus4newNativecapabilitytests(existinghost/admissionregressions). Private471notpublicationversionreserved, notpublic147257. Stagefoundationonly, no finalNativeSQLconcurrency/app/HAacceptance.",
+  "started_unix": 1794407034.441497,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "catalog_read_scope",
+        "--test",
+        "catalog_host_scope",
+        "--test",
+        "catalog_scope_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794407034.4417038,
+      "exit": 0,
+      "finished_unix": 1794407061.2206247
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "catalog_read_admission",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794407061.2208643,
+      "exit": 0,
+      "finished_unix": 1794407176.5294263
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "routine_header_metadata",
+        "--test",
+        "rename_routine_header_dependencies",
+        "--test",
+        "rename_routine_row_types",
+        "--test",
+        "schema_table_rename",
+        "--test",
+        "session_statement_snapshots",
+        "--test",
+        "read_only_transactions",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794407176.5296903,
+      "exit": 0,
+      "finished_unix": 1794407199.4929867
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794407199.4932241
+}

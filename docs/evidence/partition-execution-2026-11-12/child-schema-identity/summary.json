@@ -1,0 +1,27 @@
+{
+  "recorded_unix": 1794507091.5739818,
+  "source_target": "PostgreSQL18.4: identity.rs180004; actualPG18.4 imagea02db... referencecontrols in thisfolder",
+  "delivery": "Private, not merged. Remote main advanced independently to b9394418bdf9d87864c2c12d6fe81bb7d4039d53 /1.0.489-beta during this work. This branch stillinherits488; RootstandardCLI remains482. No newRootdeliveryversion/binary/release/deployment.",
+  "child_default_and_key_batch": {
+    "baseline": "bfd40351e8d268e5ed28138f1bc5e0fda9a0a9ba tests only overcc84:0PASS4FAIL",
+    "implementation": "d40edd160d72f91e8f394abed01391601ab74660 with typedserializationerrorpropagation e036228fb842ef714c96b0db4a9443d6e82f4c4c",
+    "initial_compile_failure": "001fa918d250c87d249efba7d78f979da905c675 E0308 Result<Value> usedasValue; no executed tests; corrected w/errorpropagation, no panic.",
+    "qualified": "e036 focusedall5commandsPASS:118SQL0FAIL, including6new childdefault/independentPK/parentDML/physicalID/movementrollback checks and112prior. PG18 declaredtarget child+DML referencealsoPASS."
+  },
+  "prior_cc84_terminal": {
+    "source": "cc84f24fa263965d89697f36a96a9112a16d4016",
+    "focused_SQL": 112,
+    "focused_protocol": 195,
+    "failed": 0,
+    "broad": "Core1391PASS0FAIL13ignored; SQLterminalexit0 (counts/source scope recorded in final broadreceipt); protocol live at lastobservation. Doesnotqualify later SQL or main489Core."
+  },
+  "identity_target_correction": {
+    "wrong_trials": "Initial nativePG16 controls were incorrectly treated as declaredtarget. PG16 rejects recursiveidentityADD withchildren42P16 and freshchilddoesnotinheritidentity. bccb and71d attemptedthosebehaviors; bothreverted inbe8, restoringruntimeexacte036. Newtestscorrected to actualPG18.4 acceptedrecursive/sharedidentity. All failures andwrongtargetobservationsretained.",
+    "parser_counterexample": "ValidSTART WITH100 INCREMENT BY5 rejected42601 by sqlparser0.62 fixedoptionorder beforeeithertrialruntimepolicy reached. Thusinitialfailedtests arenot runtimeidentitypolicyproof.",
+    "fix": "9caac16dc86c390e5c115c8c38fa6adde8fea5ef preservesvalidSQL/literals/comments/sourcebytes and canonicalizes recognizedoptiongroups forparser; c4c98a5572eb13f97281107275b92e16ad4bc32d fixesactualpreexisting NO CYCLEbool polarity.",
+    "latest_qualified_units": "c4c2parserunitsPASS; childschema8PASS1FAIL, actualrecursiveidentitypublication invalidparentchildschemamismatch. Emptyparent/newchildsharedidentityPASS.",
+    "atomic_implementation": "8739d3e638a2e51faba20f2443c26eb6f598efae plansnewsequenceallocations withoutdurablewrites, publishesalltree data+schemas+newsequence+defaultACL+certificate inoneNativeTX, whole-tree+auxiliary retryableundo. Underfocusedqualification; no passclaimyet.",
+    "new_fixture_correction": "Newexhaustionfixture initially START1 MAX1 useddefaultMIN1, which PG18rejects before exhaustion. Added explicitMIN0, preserves2200H/nochanges/tworeopenassertions; actualreferencev1 retainedfailed, v2 passes all exhaustion/defaultACL/savepoint/sharedserial controls. Productrun8739 stillusesinitialfixture; pendingtestcorrectionmustbequalified."
+  },
+  "remaining": "All finalpartitionlifecycle/constraint/namespace/hash/ACKcanonicalbinding/Nativeprotectedauthority/processfaultVMHA gates, integrateactualmain489, finalversionCImergepush. Original1464OraclePG unchangedassertions/10swaits, UI400encryptedfullrestore/reopens, portableNativeproducerintegration, physicalRF3/P1P2 remainACTIVE. Newmain489NativeStoreBirthV1 exists; SQLportableacceptedprovenancefit isunreviewed, notclosed by name. P2off no cloudspend."
+}

@@ -1,0 +1,47 @@
+{
+  "source": "6ab82da97df2b540c56aad72036017bf36963568",
+  "status": "focused_passed",
+  "counts": [
+    {
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "status": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "passed": 29,
+  "failed": 0,
+  "ignored": 0,
+  "files": {
+    "report-rename-concurrent-scoped-6ab82da9.json": {
+      "bytes": 2323,
+      "sha256": "206565edb4c47e58e7ef82f89dd4ed9335e3767e41970caff0ea9cfc5c81eba0"
+    },
+    "tc-step-rename-concurrent-scoped-6ab82da9.log": {
+      "bytes": 349993,
+      "sha256": "ebbd286956cc33111d6c4f8a8c13d19caabea10f0685319f80c2583100e53258"
+    }
+  },
+  "scope": "Private scoped SQL rename producer: reserve full planned relation closure and exact catalog records plus journal backings before capture. Retain durable context until commit/full undo; validate live undo owner/full image coverage; native COMMIT finalizes only after durability and before catalog cleanup. Preserve global startup gates for journals without runtime scopes, UUID consumer, all fsync and upstream assertions. Test new4 actual concurrency scenarios plus existing journal/dependency controls and TCP metadata admission. Not replicated mapping/application acceptance/main delivery qualification.",
+  "main_delivered": false,
+  "application_qualified": false,
+  "observed_unix": 1794432399.418099
+}

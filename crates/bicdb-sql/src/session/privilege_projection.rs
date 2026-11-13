@@ -4,8 +4,13 @@ use super::*;
 
 impl<'db> SqlSession<'db> {
     pub(crate) fn save_session_privilege(&mut self, grant: &PrivilegeGrant) -> Result<()> {
-        let existed = self.tx.is_some() && privilege_exists(self.db_ref(), grant)?;
-        save_privilege(self.db_mut()?, grant)?;
+        let existed = {
+            let _access =
+                self.catalog_record_mutation_access(PRIVILEGE_COLLECTION, &privilege_key(grant))?;
+            let existed = self.tx.is_some() && privilege_exists(self.db_ref(), grant)?;
+            save_privilege(self.db_mut()?, grant)?;
+            existed
+        };
         if self.tx.is_some() && !existed {
             self.ddl_undo.push(DdlUndo::DeletePrivilege {
                 grant: grant.clone(),
@@ -15,8 +20,13 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn delete_session_privilege(&mut self, grant: &PrivilegeGrant) -> Result<()> {
-        let existed = self.tx.is_some() && privilege_exists(self.db_ref(), grant)?;
-        delete_privilege(self.db_mut()?, grant)?;
+        let existed = {
+            let _access =
+                self.catalog_record_mutation_access(PRIVILEGE_COLLECTION, &privilege_key(grant))?;
+            let existed = self.tx.is_some() && privilege_exists(self.db_ref(), grant)?;
+            delete_privilege(self.db_mut()?, grant)?;
+            existed
+        };
         if self.tx.is_some() && existed {
             self.ddl_undo.push(DdlUndo::RestorePrivilege {
                 grant: grant.clone(),
@@ -107,22 +117,38 @@ impl<'db> SqlSession<'db> {
         object_type: PrivilegeObjectType,
         object_name: &str,
     ) -> Result<()> {
+        for grant in
+            self.default_privileges_for_object(owner, schema_name, object_type, object_name)?
+        {
+            self.save_session_privilege(&grant)?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn default_privileges_for_object(
+        &self,
+        owner: &str,
+        schema_name: &str,
+        object_type: PrivilegeObjectType,
+        object_name: &str,
+    ) -> Result<Vec<PrivilegeGrant>> {
         let defaults = list_default_privileges(self.db_ref())?;
+        let mut grants = Vec::new();
         for default in defaults.into_iter().filter(|default| {
             default.grantor.eq_ignore_ascii_case(owner)
                 && (default.schema_name == "*"
                     || default.schema_name.eq_ignore_ascii_case(schema_name))
                 && default.object_type == object_type
         }) {
-            self.save_session_privilege(&PrivilegeGrant {
+            grants.push(PrivilegeGrant {
                 column: None,
                 object_type,
                 object_name: object_name.to_string(),
                 grantee: default.grantee,
                 privilege: default.privilege,
-            })?;
+            });
         }
-        Ok(())
+        Ok(grants)
     }
 
     pub(crate) fn save_session_routine(&mut self, routine: &RoutineSchema) -> Result<()> {
@@ -274,6 +300,18 @@ impl<'db> SqlSession<'db> {
         create_table: &CreateTable,
         compression: &[RawColumnCompression],
     ) -> Result<SqlResult> {
+        if create_table.partition_of.is_some() {
+            // A mixed statement list reaches this parsed path even though a
+            // single PARTITION OF statement uses the raw compatibility path.
+            // Keep the parent link, bound, ownership checks and physical
+            // creation identical for text batches and direct AST callers.
+            let partition =
+                raw_create_partition_table(&create_table.to_string())?.ok_or_else(|| {
+                    SqlError::InvalidSql("invalid CREATE TABLE PARTITION OF definition".into())
+                })?;
+            self.apply_raw_create_partition_table(partition)?;
+            return Ok(SqlResult::command("CREATE TABLE"));
+        }
         if create_table.query.is_some() {
             return Err(SqlError::Unsupported(
                 "CREATE TABLE AS SELECT is not supported".to_string(),
@@ -438,6 +476,7 @@ impl<'db> SqlSession<'db> {
             }
         }
 
+        let mut unnamed_primary_constraint = None;
         for constraint in &create_table.constraints {
             match constraint {
                 TableConstraint::PrimaryKey(primary_key) => {
@@ -446,6 +485,8 @@ impl<'db> SqlSession<'db> {
                     )?;
                     if let Some(name) = primary_key.name.as_ref().map(ident_value) {
                         primary_key_name = Some(name);
+                    } else {
+                        unnamed_primary_constraint = Some(constraints.len());
                     }
                     constraints.extend(table_constraint_schema(
                         &table,
@@ -482,9 +523,6 @@ impl<'db> SqlSession<'db> {
             .map(|column| column.name.clone())
             .collect::<Vec<_>>();
         reject_missing_default_operator_class(self.db_ref(), &columns, &primary_columns, "btree")?;
-        if !primary_columns.is_empty() && primary_key_name.is_none() {
-            primary_key_name = Some(default_primary_key_name(&table));
-        }
         self.require_reference_privilege(&table, &constraints)?;
         for constraint in &constraints {
             if let ConstraintSchema::Unique {
@@ -505,10 +543,31 @@ impl<'db> SqlSession<'db> {
             }
         }
 
-        if !has_like_clause && !columns.iter().any(|column| column.primary_key) {
+        if !has_like_clause
+            && create_table.partition_by.is_none()
+            && !columns.iter().any(|column| column.primary_key)
+        {
             if let Some(id_column) = columns.iter_mut().find(|column| column.name == "id") {
                 id_column.primary_key = true;
                 id_column.nullable = false;
+            }
+        }
+
+        let mut implicit_primary_key_name = None;
+        if primary_key_name.is_none() && columns.iter().any(|column| column.primary_key) {
+            // The table-level form also stores a uniqueness constraint for the
+            // primary key. Rename that entry along with the generated index.
+            let unnamed_primary =
+                unnamed_primary_constraint.map(|index| (index, constraints.remove(index)));
+            let name = allocate_primary_key_name(self.db_ref(), &schema_name, &table, &constraints);
+            if let Some((index, mut constraint)) = unnamed_primary {
+                set_constraint_name(&mut constraint, name.clone());
+                constraints.insert(index, constraint);
+            }
+            if !primary_columns.is_empty() {
+                primary_key_name = Some(name);
+            } else if name != default_primary_key_name(&table) {
+                implicit_primary_key_name = Some(name);
             }
         }
 
@@ -539,16 +598,14 @@ impl<'db> SqlSession<'db> {
             .map(partitioning_schema_from_expr)
             .transpose()?;
 
-        self.create_session_collection(&table)?;
-        let (row_type_oid, row_array_type_oid) =
-            reserve_relation_type_oids(self.db_mut()?, &schema_name, &table)?;
-        let schema = TableSchema {
-            name: table,
-            schema_name,
-            row_type_oid: Some(row_type_oid),
-            row_array_type_oid: Some(row_array_type_oid),
+        let mut schema = TableSchema {
+            name: table.clone(),
+            schema_name: schema_name.clone(),
+            row_type_oid: None,
+            row_array_type_oid: None,
             columns,
             primary_key_name,
+            implicit_primary_key_name,
             indexes: Vec::new(),
             constraints,
             rls_enabled: false,
@@ -560,6 +617,12 @@ impl<'db> SqlSession<'db> {
             partition_of: None,
             oracle_partitioning: None,
         };
+        partition::validate_definition(&schema)?;
+        self.create_session_collection(&table)?;
+        let (row_type_oid, row_array_type_oid) =
+            reserve_relation_type_oids(self.db_mut()?, &schema_name, &table)?;
+        schema.row_type_oid = Some(row_type_oid);
+        schema.row_array_type_oid = Some(row_array_type_oid);
         self.save_session_schema(&schema)?;
         if let Some(definition) = primary_key_index_definition_for_schema(&schema) {
             self.create_new_table_index(definition)?;
@@ -1776,29 +1839,7 @@ impl<'db> SqlSession<'db> {
         mutation: &CompositeAttributeMutation,
         persist_root: bool,
     ) -> Result<()> {
-        let mut replacements = BTreeMap::new();
-        replacements.insert(updated.oid, updated.clone());
-        let all_types = list_user_types(self.db_ref())?;
-        loop {
-            let mut changed = false;
-            for candidate in &all_types {
-                let mut candidate = replacements
-                    .get(&candidate.oid)
-                    .cloned()
-                    .unwrap_or_else(|| candidate.clone());
-                let before = candidate.clone();
-                replace_user_type_kind_references(&mut candidate.kind, &replacements);
-                if candidate != before || replacements.contains_key(&candidate.oid) {
-                    if replacements.get(&candidate.oid) != Some(&candidate) {
-                        replacements.insert(candidate.oid, candidate);
-                        changed = true;
-                    }
-                }
-            }
-            if !changed {
-                break;
-            }
-        }
+        let replacements = composite_type_replacements(self.db_ref(), updated)?;
 
         let mut table_updates = Vec::new();
         for schema in list_schemas(self.db_ref())? {
@@ -1850,6 +1891,9 @@ impl<'db> SqlSession<'db> {
             self.capture_table_state_undo(&previous_schema.name, &previous_schema)?;
             for record in records {
                 self.db_mut()?.insert(&previous_schema.name, record)?;
+                if matches!(mutation, CompositeAttributeMutation::RenameType { .. }) {
+                    rename_table::stage("value_row");
+                }
             }
             self.save_session_schema(&next_schema)?;
         }
@@ -1904,6 +1948,136 @@ impl<'db> SqlSession<'db> {
         let previous = table_row_type_schema(previous_schema);
         let updated = table_row_type_schema(updated_schema);
         self.apply_composite_type_change(&previous, &updated, mutation, false)
+    }
+
+    /// The rename journal already owns durable before-images for this exact
+    /// dependency closure. Do not duplicate whole tables in a heap undo list.
+    /// Keep the caller's pending values in its own transaction, while committed
+    /// rows are rewritten one bounded key batch at a time under journal undo.
+    pub(super) fn apply_journaled_table_row_type_rename(
+        &mut self,
+        previous_schema: &TableSchema,
+        updated_schema: &TableSchema,
+    ) -> Result<()> {
+        let previous = table_row_type_schema(previous_schema);
+        let updated = table_row_type_schema(updated_schema);
+        let mutation = CompositeAttributeMutation::RenameType {
+            name: updated.column_type(false).formatted_name(),
+        };
+        let replacements = composite_type_replacements(self.db_ref(), &updated)?;
+        for user_type in replacements.values().filter(|kind| kind.oid != updated.oid) {
+            self.save_session_user_type(user_type)?;
+        }
+        for mut routine in list_routines(self.db_ref())? {
+            if rewrite_routine_schema_type_identity(&mut routine, &previous, &updated)? {
+                // Its exact existing catalog row is already captured by the
+                // rename journal, including its stable OID and overload key.
+                save_routine(self.db_mut()?, &routine)?;
+                if routine.kind == RoutineKind::Procedure {
+                    rename_table::stage("procedure_type_row");
+                }
+            }
+        }
+        rename_table::stage("routine_types");
+        for schema in list_schemas(self.db_ref())? {
+            let mut next = schema.clone();
+            let changed = next
+                .columns
+                .iter_mut()
+                .enumerate()
+                .filter_map(|(index, column)| {
+                    replace_column_user_type_references(column, &replacements).then_some(index)
+                })
+                .collect::<Vec<_>>();
+            if changed.is_empty() {
+                continue;
+            }
+            let rewrite = |record: &Record| -> Result<Record> {
+                let mut record = record.clone();
+                for &index in &changed {
+                    let old_column = &schema.columns[index];
+                    if old_column.primary_key {
+                        continue;
+                    }
+                    let value = record_column_value(&record, &schema, &old_column.name);
+                    let value = rewrite_composite_value(
+                        value,
+                        previous.oid,
+                        &previous.column_type(false).formatted_name(),
+                        &mutation,
+                    )?;
+                    let value = cast_value_to_column_type(value, &next.columns[index])?;
+                    set_record_column(&mut record, Some(&next), &next.columns[index].name, value)?;
+                }
+                Ok(record)
+            };
+            if let Some(owner) = self.tx.as_mut() {
+                owner.transform_pending_records(&schema.name, &rewrite)?;
+            }
+            let reader = self.db_ref().begin_transaction()?;
+            let mut after: Option<String> = None;
+            loop {
+                let lower = after
+                    .as_deref()
+                    .map(std::ops::Bound::Excluded)
+                    .unwrap_or(std::ops::Bound::Unbounded);
+                let (ids, complete) = reader.scan_collection_record_key_batch_in_range_unchecked(
+                    &schema.name,
+                    lower,
+                    std::ops::Bound::Unbounded,
+                    false,
+                    128,
+                )?;
+                if ids.is_empty() && !complete {
+                    return Err(SqlError::InvalidSql(
+                        "rename value scan made no progress".into(),
+                    ));
+                }
+                for id in &ids {
+                    if self
+                        .tx
+                        .as_ref()
+                        .is_some_and(|owner| owner.has_pending_write_for_record(&schema.name, id))
+                    {
+                        // Includes deletes: never resurrect a row the owner
+                        // deleted, and never overwrite its transformed upsert.
+                        continue;
+                    }
+                    let owned = self
+                        .tx
+                        .as_ref()
+                        .is_some_and(|owner| owner.holds_record_lock(&schema.name, id));
+                    let record = if owned {
+                        self.tx
+                            .as_ref()
+                            .expect("owner lock")
+                            .get(&schema.name, id)?
+                    } else {
+                        reader.get(&schema.name, id)?
+                    };
+                    let Some(record) = record else {
+                        continue;
+                    };
+                    let record = rewrite(&record)?;
+                    if owned {
+                        self.tx
+                            .as_mut()
+                            .expect("owner lock")
+                            .insert(&schema.name, record)?;
+                    } else {
+                        self.db_mut()?.insert(&schema.name, record)?;
+                    }
+                    rename_table::stage("value_row");
+                }
+                if complete {
+                    break;
+                }
+                after = ids.last().cloned();
+            }
+            reader.rollback()?;
+            self.save_session_schema(&next)?;
+        }
+        Ok(())
     }
 
     pub(crate) fn execute_alter_type(
@@ -2058,26 +2232,7 @@ impl<'db> SqlSession<'db> {
 
         self.sync_user_type_columns(updated, None)?;
         for mut routine in list_routines(self.db_ref())? {
-            let mut changed =
-                rewrite_routine_type_identity(&mut routine.return_type, previous, updated);
-            if let Some(declaration) = &mut routine.return_type_declaration {
-                changed |= rewrite_routine_type_identity(declaration, previous, updated);
-            }
-            for index in 0..routine.arg_types.len() {
-                let argument_changed = rewrite_routine_type_identity(
-                    &mut routine.arg_types[index].pg_type,
-                    previous,
-                    updated,
-                );
-                if argument_changed {
-                    if let Some(argument) = routine.args.get_mut(index) {
-                        rewrite_routine_argument_type_identity(argument, previous, updated);
-                    }
-                    changed = true;
-                }
-            }
-            changed |= rewrite_routine_definition_type_identity(&mut routine, previous, updated);
-            if changed {
+            if rewrite_routine_schema_type_identity(&mut routine, previous, updated)? {
                 self.save_session_routine(&routine)?;
             }
         }
@@ -2153,4 +2308,36 @@ impl<'db> SqlSession<'db> {
         }
         Ok(existed)
     }
+}
+
+/// Shared transitive closure for value rewrites and their durable before-images.
+pub(super) fn composite_type_replacements(
+    db: &BicDb,
+    updated: &UserTypeSchema,
+) -> Result<BTreeMap<i64, UserTypeSchema>> {
+    let mut replacements = BTreeMap::new();
+    replacements.insert(updated.oid, updated.clone());
+    let all_types = list_user_types(db)?;
+    loop {
+        let mut changed = false;
+        for candidate in &all_types {
+            let mut candidate = replacements
+                .get(&candidate.oid)
+                .cloned()
+                .unwrap_or_else(|| candidate.clone());
+            let before = candidate.clone();
+            replace_user_type_kind_references(&mut candidate.kind, &replacements);
+            if candidate != before || replacements.contains_key(&candidate.oid) {
+                if replacements.get(&candidate.oid) != Some(&candidate) {
+                    replacements.insert(candidate.oid, candidate);
+                    changed = true;
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    Ok(replacements)
 }

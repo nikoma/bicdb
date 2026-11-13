@@ -1,0 +1,30 @@
+{
+  "source": "54bf4151bc888ab2d3015b5e1316ba5ab8374694",
+  "scope": "Test-only over exact compiled c727 production; preserve required Native semantic replication live-state positive with real source+standby frames/ACK/fullflags and two reopens (only claimed if reached). Native partition cache expected stale after durable imported flag. No fullgoal, application, portableorigin, oldreader, HA/capacity or release/deployment claim. Original application assertions/waits unchanged.",
+  "started_unix": 1794521041.7229207,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "replicated_semantic_requirements_activate_live_native_reader_state_and_keep_acks",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794521041.723079,
+      "exit": 101,
+      "finished_unix": 1794521102.0850928
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794521102.08531
+}

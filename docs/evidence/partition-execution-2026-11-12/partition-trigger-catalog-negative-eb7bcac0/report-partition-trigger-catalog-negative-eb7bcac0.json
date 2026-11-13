@@ -1,0 +1,29 @@
+{
+  "source": "eb7bcac0201ab33f575f649c20977a79f94d58cc",
+  "scope": "Actual2f upsertqualifiedruntime plus4mandatorypartitiontriggercatalogpositives; no productionchanges. CompareNativePG16clone-lineage/attach-detach/mode/dependency/rollback. Expectedoldmissingclonesfailuresretained. OriginalACK+2reopens bothstores.",
+  "started_unix": 1794485062.8553083,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_trigger_catalog",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794485062.8555057,
+      "exit": 101,
+      "finished_unix": 1794485067.552806
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794485067.5530586
+}

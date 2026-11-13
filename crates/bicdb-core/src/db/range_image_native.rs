@@ -995,7 +995,16 @@ impl BicDb {
             true,
         )?;
         let mut db = Self::open_with_config(root, config.with_required_commit_admission(true))?;
+        // This function, rather than open_inner, performed the actual atomic
+        // directory creation above. Carry that private factory fact forward.
+        db.fresh_directory_created = true;
+        #[cfg(unix)]
+        db.activate_native_origin_root_v1()?;
         db.activate_local_namespace_identity_v1()?;
+        db.activate_native_collection_birth_v1()?;
+        db.activate_native_wal_backing_capture_v1()?;
+        #[cfg(unix)]
+        db.activate_native_catalog_allocation_facts_v1()?;
         format::enable_range_image_install(root)?;
         if enforce {
             format::enable_current_image_proposal(root)?;
@@ -2133,6 +2142,7 @@ mod tests {
             .unwrap();
         let record = Record::new(key.clone()).with_metadata(json!({"from":"raw-copy"}));
         let batch = RangeSnapshotBatch {
+            required_reader_features: Vec::new(),
             collection: "items".into(),
             range_id: range.id,
             range_epoch: range.epoch,
@@ -2202,6 +2212,7 @@ mod tests {
         let mut meta = CollectionMeta::standard("items");
         meta.storage_name = Some("\0receipt".into());
         let batch = RangeSnapshotBatch {
+            required_reader_features: Vec::new(),
             collection: "items".into(),
             range_id: expected.initial_ranges[0].id,
             range_epoch: 1,

@@ -1,0 +1,28 @@
+{
+  "source": "35e5839d026f90919ca10a323d7fca98a8aa5419",
+  "scope": "Private test-only negative for stale rename/row images after drop/recreate with the same physical storage alias. Integrates a700 namespace foundation and root transaction delivery parents; no producer gate relaxed and no recovery behavior changed. Both original fail-closed assertions expected to fail against storage-string consumer. Full fsync, both storage modes when assertions reached. Not main474 or application qualification.",
+  "started_unix": 1794425571.5318766,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "session::rename_journal::tests::reused_",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794425571.5323439,
+      "exit": 101,
+      "finished_unix": 1794425596.5729897
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794425596.5732229
+}

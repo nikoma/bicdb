@@ -14,6 +14,12 @@ mod timestamp_day_indexes;
 pub(crate) use merge::UpdateMatchPolicy;
 pub(crate) mod recycle_bin;
 mod recycle_bin_journal;
+mod rename_dependencies;
+mod rename_journal;
+pub use rename_journal::initialize_rename_journal_identities;
+mod rename_table;
+mod rename_views;
+mod view_dependencies;
 pub use recycle_bin::finish_committed_recycle_bin_purges;
 pub(crate) use recycle_bin::is_recycle_bin_name;
 pub use recycle_bin::recover_interrupted_recycle_bin_renames;
@@ -30,6 +36,16 @@ mod driver_metadata_tests;
 pub(crate) mod functions_insert;
 mod join_lookup_tests;
 mod operator_ddl;
+pub(crate) mod partition_admission;
+mod partition_exec;
+mod partition_schema;
+pub use partition_admission::{
+    apply_partition_upgrade, check_sql_partition_admission, ensure_sql_partition_admission,
+    inspect_partition_upgrade, PartitionInvalidRow, PartitionPolicyConflict,
+    PartitionPolicyDecision, PartitionRowRelocation, PartitionUpgradeApplied,
+    PartitionUpgradeInspection, PartitionUpgradePlan,
+};
+mod partition_triggers;
 #[cfg(test)]
 mod primary_key_range_tests;
 mod primary_key_updates;
@@ -836,17 +852,43 @@ fn rewrite_routine_argument_type_identity(
     true
 }
 
+fn rewrite_routine_schema_type_identity(
+    routine: &mut RoutineSchema,
+    previous: &UserTypeSchema,
+    updated: &UserTypeSchema,
+) -> Result<bool> {
+    let mut changed = rewrite_routine_type_identity(&mut routine.return_type, previous, updated);
+    if let Some(declaration) = &mut routine.return_type_declaration {
+        changed |= rewrite_routine_type_identity(declaration, previous, updated);
+    }
+    for index in 0..routine.arg_types.len() {
+        if rewrite_routine_type_identity(&mut routine.arg_types[index].pg_type, previous, updated) {
+            if let Some(argument) = routine.args.get_mut(index) {
+                rewrite_routine_argument_type_identity(argument, previous, updated);
+            }
+            changed = true;
+        }
+    }
+    changed |= rewrite_routine_definition_type_identity(routine, previous, updated)?;
+    Ok(changed)
+}
+
 fn rewrite_routine_definition_type_identity(
     routine: &mut RoutineSchema,
     previous: &UserTypeSchema,
     updated: &UserTypeSchema,
-) -> bool {
+) -> Result<bool> {
     fn relocate(
         data_type: &mut DataType,
         previous: &UserTypeSchema,
         updated: &UserTypeSchema,
     ) -> bool {
         use sqlparser::ast::ArrayElemTypeDef;
+        if let DataType::Table(Some(columns)) | DataType::NamedTable { columns, .. } = data_type {
+            return columns.iter_mut().fold(false, |changed, column| {
+                relocate(&mut column.data_type, previous, updated) || changed
+            });
+        }
         if let DataType::Array(
             ArrayElemTypeDef::AngleBracket(element)
             | ArrayElemTypeDef::SquareBracket(element, _)
@@ -902,45 +944,107 @@ fn rewrite_routine_definition_type_identity(
         true
     }
 
-    let Ok(mut statements) = Parser::parse_sql(&PostgreSqlDialect {}, &routine.definition) else {
-        return false;
-    };
-    let [Statement::CreateFunction(function)] = statements.as_mut_slice() else {
-        return false;
+    fn relocate_default(
+        default: &mut Option<Expr>,
+        previous: &UserTypeSchema,
+        updated: &UserTypeSchema,
+    ) -> bool {
+        let mut changed = false;
+        let _ = sqlparser::ast::visit_expressions_mut(default, |expr| {
+            match expr {
+                Expr::Cast { data_type, .. } => changed |= relocate(data_type, previous, updated),
+                Expr::TypedString(value) => {
+                    changed |= relocate(&mut value.data_type, previous, updated)
+                }
+                _ => {}
+            }
+            ControlFlow::<()>::Continue(())
+        });
+        changed
+    }
+
+    let (mut statements, procedure_proxy) =
+        match Parser::parse_sql(&PostgreSqlDialect {}, &routine.definition) {
+            Ok(statements) => (statements, false),
+            Err(_) if routine.kind == RoutineKind::Procedure => {
+                let Some(header) = oracle::procedures::header(&routine.definition)? else {
+                    return Ok(false);
+                };
+                (vec![Statement::CreateFunction(header)], true)
+            }
+            Err(_) => return Ok(false),
+        };
+    let [statement] = statements.as_mut_slice() else {
+        return Ok(false);
     };
     let mut changed = false;
-    for (index, argument) in function.args.iter_mut().flatten().enumerate() {
-        if relocate(&mut argument.data_type, previous, updated) {
-            if let Some(declaration) = routine.args.get_mut(index) {
-                *declaration = crate::sql_text::sql_text(argument);
+    match statement {
+        Statement::CreateFunction(function) => {
+            for (index, argument) in function.args.iter_mut().flatten().enumerate() {
+                let type_changed = relocate(&mut argument.data_type, previous, updated);
+                let default_changed =
+                    relocate_default(&mut argument.default_expr, previous, updated);
+                if type_changed || default_changed {
+                    if let Some(declaration) = routine.args.get_mut(index) {
+                        *declaration = crate::sql_text::sql_text(argument);
+                    }
+                    if let (Some(saved), Ok(rewritten)) = (
+                        routine.arg_types.get_mut(index),
+                        routine_type_schema(&argument.data_type),
+                    ) {
+                        *saved = rewritten;
+                    }
+                    changed = true;
+                }
             }
-            if let (Some(saved), Ok(rewritten)) = (
-                routine.arg_types.get_mut(index),
-                routine_type_schema(&argument.data_type),
-            ) {
-                *saved = rewritten;
+            if let Some(
+                FunctionReturnType::DataType(data_type) | FunctionReturnType::SetOf(data_type),
+            ) = &mut function.return_type
+            {
+                if relocate(data_type, previous, updated) {
+                    routine.return_type_declaration = Some(data_type.to_string());
+                    if let Ok(rewritten) = routine_type_schema(data_type) {
+                        routine.return_type = rewritten.pg_type;
+                        routine.return_type_modifier = rewritten.type_modifier;
+                    }
+                    changed = true;
+                }
             }
-            changed = true;
         }
-    }
-    if let Some(FunctionReturnType::DataType(data_type) | FunctionReturnType::SetOf(data_type)) =
-        &mut function.return_type
-    {
-        if relocate(data_type, previous, updated) {
-            routine.return_type_declaration = Some(data_type.to_string());
-            if let Ok(rewritten) = routine_type_schema(data_type) {
-                routine.return_type = rewritten.pg_type;
-                routine.return_type_modifier = rewritten.type_modifier;
+        Statement::CreateProcedure { params, .. } => {
+            for (index, argument) in params.iter_mut().flatten().enumerate() {
+                let type_changed = relocate(&mut argument.data_type, previous, updated);
+                let default_changed = relocate_default(&mut argument.default, previous, updated);
+                if type_changed || default_changed {
+                    if let Some(declaration) = routine.args.get_mut(index) {
+                        *declaration = crate::sql_text::sql_text(argument);
+                    }
+                    if let (Some(saved), Ok(rewritten)) = (
+                        routine.arg_types.get_mut(index),
+                        routine_type_schema(&argument.data_type),
+                    ) {
+                        *saved = rewritten;
+                    }
+                    changed = true;
+                }
             }
-            changed = true;
         }
+        _ => return Ok(false),
     }
     if changed {
         // Loading routine metadata reparses this declaration. Keep its typed
         // header current while preserving the body as its original SQL value.
-        routine.definition = crate::sql_text::sql_text(&statements[0]);
+        let statement = statements.remove(0);
+        routine.definition = if procedure_proxy {
+            let Statement::CreateFunction(function) = statement else {
+                unreachable!("procedure parsing proxy is a function header");
+            };
+            oracle::procedures::render(function)?
+        } else {
+            crate::sql_text::sql_text(&statement)
+        };
     }
-    changed
+    Ok(changed)
 }
 
 fn base_type_uses_routine(user_type: &UserTypeSchema, routine_name: &str) -> bool {
@@ -1005,6 +1109,20 @@ fn resolve_base_codec_routine<'a>(
 }
 
 #[derive(Debug)]
+struct CatalogPreflightScope {
+    transaction: Rc<RefCell<Option<Transaction>>>,
+}
+
+impl Drop for CatalogPreflightScope {
+    fn drop(&mut self) {
+        // A writing routine transfers this same owner into its ordinary
+        // transaction. Otherwise the read-only preflight owner ends here,
+        // including early errors and unwinding, without a durable commit.
+        self.transaction.borrow_mut().take();
+    }
+}
+
+#[derive(Debug)]
 pub struct SqlSession<'db> {
     /// Per-statement memo for the unique arbiter backing an ON CONFLICT
     /// target. Resolving it calls `index_definitions()`, which read-locks and
@@ -1053,6 +1171,10 @@ pub struct SqlSession<'db> {
     pub(crate) cancellation: CancellationToken,
     pub(crate) fts_limits: bicdb_core::FtsQueryLimits,
     pub(crate) tx: Option<Transaction>,
+    /// Metadata read while resolving an autocommit CALL belongs to the same
+    /// owner later used for its buffered writes. This owner carries no SQL
+    /// transaction semantics until begin_session_transaction consumes it.
+    catalog_preflight_tx: Rc<RefCell<Option<Transaction>>>,
     /// True only for the child session that runs a PL/pgSQL function for one
     /// row of an engine-evaluated statement (`SqlSession::for_row_routine_call`).
     /// Such a session never begins or owns a transaction and refuses
@@ -2018,6 +2140,21 @@ impl SqlSessionDdlUndoLog {
     pub fn len(&self) -> usize {
         self.entries.len()
     }
+
+    /// Native hosts that commit outside SqlSession must release only rename
+    /// scopes whose durable business decision consumed the journal header.
+    pub fn finish_committed_catalog_scopes(&self, db: &BicDb) -> Result<()> {
+        finish_committed_catalog_scopes(db, &self.entries)
+    }
+}
+
+fn finish_committed_catalog_scopes(db: &BicDb, entries: &[DdlUndo]) -> Result<()> {
+    for entry in entries {
+        if let DdlUndo::RestoreRenameJournal { id, .. } = entry {
+            rename_journal::finish_committed(db, id)?;
+        }
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug)]
@@ -2034,6 +2171,7 @@ pub(crate) enum DdlUndo {
     DropCollection {
         name: String,
         creation_intent: Option<String>,
+        creation_receipt: Option<bicdb_core::CatalogCreatedCollectionUndo>,
     },
     RestoreCollection {
         name: String,
@@ -2043,6 +2181,10 @@ pub(crate) enum DdlUndo {
         table: String,
         schema: TableSchema,
         records: Vec<Record>,
+    },
+    RestoreRenameJournal {
+        id: String,
+        old_table: String,
     },
     RestoreRenamedTable {
         old_table: String,
@@ -2086,6 +2228,13 @@ pub(crate) enum DdlUndo {
     },
     RestoreTrigger {
         trigger: TriggerSchema,
+    },
+    RestorePartitionCatalog {
+        entries: Vec<partition_triggers::CatalogUndo>,
+    },
+    RestorePartitionTableStates {
+        states: Vec<partition_schema::TableState>,
+        auxiliary: Vec<partition_schema::AuxiliaryState>,
     },
     DeleteUserType {
         schema_name: String,
@@ -2423,6 +2572,7 @@ impl<'db> SqlSession<'db> {
             cancellation: CancellationToken::uncancelable(),
             fts_limits: bicdb_core::FtsQueryLimits::UNLIMITED,
             tx: None,
+            catalog_preflight_tx: Rc::new(RefCell::new(None)),
             row_routine_call: false,
             in_oracle_sql_function: false,
             in_routine_expression: false,
@@ -2640,7 +2790,14 @@ impl<'db> SqlSession<'db> {
         let floor = self
             .snapshot_floor
             .max(crate::statement_context::latest_independent_commit());
-        let mut tx = self.db_ref().begin_transaction_after(floor)?;
+        let preflight = self.catalog_preflight_tx.borrow_mut().take();
+        let mut tx = match preflight {
+            Some(mut tx) => {
+                tx.refresh_read_committed_snapshot_after(floor)?;
+                tx
+            }
+            None => self.db_ref().begin_transaction_after(floor)?,
+        };
         tx.set_blocking_row_waits(self.blocking_row_wait_token());
         if matches!(isolation, "repeatable read" | "serializable") {
             tx.set_snapshot_isolation(true, floor)?;
@@ -3006,6 +3163,7 @@ impl<'db> SqlSession<'db> {
         columns: &[String],
         rows: Vec<Vec<Option<String>>>,
     ) -> Result<usize> {
+        self.admit_partition_execution()?;
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.require_transaction_write()?;
         self.with_implicit_guc_statement(|session| {
@@ -3073,12 +3231,18 @@ impl<'db> SqlSession<'db> {
                 );
             }
             self.apply_bulk_insert_defaults(schema.as_ref(), &defaults, idx, &mut fields)?;
-            records.push(record_from_fields_with_db(
+            records.push(record_from_insert_fields_with_db(
                 self.db_ref(),
                 &table,
                 schema.as_ref(),
                 fields,
             )?);
+        }
+        if let Some(parent) = schema
+            .as_ref()
+            .filter(|schema| schema.partitioning.is_some())
+        {
+            return Ok(self.insert_partition_rows(parent, records, false)?.len());
         }
         // BEFORE triggers can replace or suppress rows. Validate the rows
         // actually being stored, just as INSERT does, rather than allowing
@@ -3128,6 +3292,18 @@ impl<'db> SqlSession<'db> {
     }
 
     pub fn execute(&mut self, sql: &str) -> Result<SqlResult> {
+        if !matches!(
+            normalize_sql(sql).as_str(),
+            "rollback" | "rollback work" | "rollback transaction"
+        ) {
+            self.admit_partition_execution()?;
+        }
+        let _preflight = self.prepare_catalog_preflight_text(sql)?;
+        let preprocessing_reads = if !sql.contains(';') || split_sql_statements(sql).len() == 1 {
+            self.enter_statement_catalog_reads(sql)?
+        } else {
+            None
+        };
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.statement_error_recovered = false;
         self.db_ref().check_recovery_state()?;
@@ -3155,6 +3331,7 @@ impl<'db> SqlSession<'db> {
         if let Some(tx) = self.tx.as_ref() {
             tx.set_blocking_row_waits(self.blocking_row_wait_token());
         }
+        drop(preprocessing_reads);
         let effects = crate::statement_context::StatementScope::enter();
         let atomic = self.tx.is_some() && oracle::preview_routine_language_enabled(self.db_ref())?;
         let execute = |session: &mut Self| {
@@ -3163,6 +3340,8 @@ impl<'db> SqlSession<'db> {
                     Some(statements) => {
                         let mut last = None;
                         for statement in statements {
+                            let preprocessing_reads =
+                                session.enter_statement_catalog_reads(statement)?;
                             let path = crate::search_path::binding_path(
                                 session.db_ref(),
                                 &session.session_gucs,
@@ -3177,6 +3356,7 @@ impl<'db> SqlSession<'db> {
                             };
                             let _path_scope = crate::search_path::PathScope::enter(path);
                             session.conflict_arbiter_memo.borrow_mut().take();
+                            drop(preprocessing_reads);
                             last =
                                 Some(session.execute_text_statements(
                                     bound.as_deref().unwrap_or(statement),
@@ -3213,6 +3393,12 @@ impl<'db> SqlSession<'db> {
     /// Statement text through the profiled executor; a read-only transaction
     /// checks a single statement before it runs.
     fn execute_text_statements(&mut self, sql: &str) -> Result<SqlResult> {
+        let _preflight = self.prepare_catalog_preflight_text(sql)?;
+        let _catalog_reads = if !sql.contains(';') || split_sql_statements(sql).len() == 1 {
+            self.enter_statement_catalog_reads(sql)?
+        } else {
+            None
+        };
         self.acquire_postgres_statement_snapshot(|| {
             (!sql.contains(';') || split_sql_statements(sql).len() == 1)
                 && postgres_execution_requires_snapshot(sql)
@@ -3366,6 +3552,11 @@ impl<'db> SqlSession<'db> {
     /// diagnostics that want to preserve normal statement semantics without
     /// measuring parser or SQL-string construction cost.
     pub fn execute_statement_ast(&mut self, statement: &Statement) -> Result<SqlResult> {
+        if !matches!(statement, Statement::Rollback { .. }) {
+            self.admit_partition_execution()?;
+        }
+        let _preflight = self.prepare_catalog_preflight(matches!(statement, Statement::Call(_)))?;
+        let _catalog_reads = self.enter_parsed_catalog_reads(statement)?;
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.statement_error_recovered = false;
         let _clock = oracle::current_time::StatementScope::new();
@@ -3386,6 +3577,9 @@ impl<'db> SqlSession<'db> {
     /// Execute a stored procedure directly from its already-typed arguments,
     /// bypassing SQL text parsing and `CALL` AST construction.
     pub fn call_procedure(&mut self, name: &str, args: &[SqlValue]) -> Result<SqlResult> {
+        self.admit_partition_execution()?;
+        let _preflight = self.prepare_catalog_preflight(true)?;
+        let _catalog_reads = self.enter_catalog_reads_requiring_snapshot(true)?;
         let _case = oracle::simple_case::Scope::for_db(self.db_ref())?;
         self.statement_error_recovered = false;
         self.db_ref().check_recovery_state()?;
@@ -3671,6 +3865,9 @@ impl<'db> SqlSession<'db> {
     ) -> Result<SqlResult> {
         let mut last_result = None;
         for statement in statements {
+            let _preflight =
+                self.prepare_catalog_preflight(matches!(statement, Statement::Call(_)))?;
+            let _catalog_reads = self.enter_parsed_catalog_reads(statement)?;
             if check_columns && self.column_references_checkable() {
                 self.sql_engine()
                     .check_statement_column_references(statement)?;
@@ -3678,6 +3875,81 @@ impl<'db> SqlSession<'db> {
             last_result = Some(self.execute_parsed_statement(statement)?);
         }
         last_result.ok_or_else(|| SqlError::InvalidSql("empty SQL statement".to_string()))
+    }
+
+    fn enter_statement_catalog_reads(
+        &mut self,
+        sql: &str,
+    ) -> Result<Option<bicdb_core::CatalogReadAccess>> {
+        self.enter_catalog_reads_requiring_snapshot(postgres_execution_requires_snapshot(sql))
+    }
+
+    fn enter_parsed_catalog_reads(
+        &mut self,
+        statement: &Statement,
+    ) -> Result<Option<bicdb_core::CatalogReadAccess>> {
+        if self.read_tx().is_none() && self.catalog_preflight_tx.borrow().is_none() {
+            return self
+                .db_ref()
+                .enter_catalog_read_access(None)
+                .map_err(Into::into);
+        }
+        let needs_snapshot = match statement {
+            Statement::Query(_)
+            | Statement::Insert(_)
+            | Statement::Update(_)
+            | Statement::Delete(_) => true,
+            _ => postgres_execution_requires_snapshot(&statement.to_string()),
+        };
+        self.enter_catalog_reads_requiring_snapshot(needs_snapshot)
+    }
+
+    fn enter_catalog_reads_requiring_snapshot(
+        &mut self,
+        needs_snapshot: bool,
+    ) -> Result<Option<bicdb_core::CatalogReadAccess>> {
+        if needs_snapshot {
+            self.acquire_postgres_statement_snapshot(|| true)?;
+        }
+        // DDL does not need a data snapshot, but its metadata reads still
+        // belong to the pending transaction. An anonymous reader would be
+        // refused by that transaction's own retained rename reservation.
+        // Read identity grants no internal catalog write authority.
+        self.enter_current_catalog_reads()
+    }
+
+    fn enter_current_catalog_reads(&self) -> Result<Option<bicdb_core::CatalogReadAccess>> {
+        let preflight = self.catalog_preflight_tx.borrow();
+        self.db_ref()
+            .enter_catalog_read_access(self.read_tx().or(preflight.as_ref()))
+            .map_err(Into::into)
+    }
+
+    fn prepare_catalog_preflight_text(&self, sql: &str) -> Result<Option<CatalogPreflightScope>> {
+        let call =
+            leading_sql_keyword(sql).is_some_and(|keyword| keyword.eq_ignore_ascii_case("call"));
+        self.prepare_catalog_preflight(
+            call && (!sql.contains(';') || split_sql_statements(sql).len() == 1),
+        )
+    }
+
+    fn prepare_catalog_preflight(&self, call: bool) -> Result<Option<CatalogPreflightScope>> {
+        if !call
+            || self.read_tx().is_some()
+            || self.catalog_preflight_tx.borrow().is_some()
+            || self.row_routine_call
+        {
+            return Ok(None);
+        }
+        let floor = self
+            .snapshot_floor
+            .max(crate::statement_context::latest_independent_commit());
+        let mut tx = self.db_ref().begin_transaction_after(floor)?;
+        tx.defer_statement_snapshot()?;
+        *self.catalog_preflight_tx.borrow_mut() = Some(tx);
+        Ok(Some(CatalogPreflightScope {
+            transaction: Rc::clone(&self.catalog_preflight_tx),
+        }))
     }
 
     /// Direct embedding sessions need the same READ COMMITTED statement
@@ -3968,6 +4240,8 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn execute_parsed_statement(&mut self, statement: &Statement) -> Result<SqlResult> {
+        let _preflight = self.prepare_catalog_preflight(matches!(statement, Statement::Call(_)))?;
+        let _catalog_reads = self.enter_parsed_catalog_reads(statement)?;
         let _clock = oracle::current_time::StatementScope::new();
         oracle::lock_waits::validate(self.db_ref(), statement)?;
         let previous = std::mem::replace(&mut self.in_routine_expression, false);
@@ -4160,12 +4434,18 @@ impl<'db> SqlSession<'db> {
         self.oracle_autonomous_epoch += 1;
         // A rolled-back transaction's deferred constraint triggers
         // drop with the transaction itself.
+        // Journal undo below reads as this owner whatever frame the running
+        // statement entered: after a failed statement that frame has none.
+        let owner_reads = self
+            .tx
+            .as_ref()
+            .and_then(|tx| tx.enter_catalog_read_access().ok());
         let tx_rollback = self
             .tx
             .take()
             .map(|tx| tx.rollback().map_err(SqlError::from))
             .unwrap_or(Ok(()));
-        let ddl_rollback = self.rollback_ddl_to_len(0);
+        let ddl_rollback = self.rollback_ddl_after_transaction_end(owner_reads);
         self.savepoints.clear();
         self.rollback_guc_transaction();
         tx_rollback?;
@@ -4192,10 +4472,14 @@ impl<'db> SqlSession<'db> {
         {
             if let Err(error) = self.fire_deferred_row_triggers() {
                 self.pg_large_objects.clear();
+                let owner_reads = self
+                    .tx
+                    .as_ref()
+                    .and_then(|tx| tx.enter_catalog_read_access().ok());
                 if let Some(tx) = self.tx.take() {
                     let _ = tx.rollback();
                 }
-                let _ddl_rollback = self.rollback_ddl_to_len(0);
+                let _ddl_rollback = self.rollback_ddl_after_transaction_end(owner_reads);
                 self.savepoints.clear();
                 self.rollback_guc_transaction();
                 return Err(error);
@@ -4204,10 +4488,11 @@ impl<'db> SqlSession<'db> {
         self.pg_large_objects.clear();
         let mut committed_sequence = 0;
         if let Some(tx) = self.tx.take() {
+            let owner_reads = tx.enter_catalog_read_access().ok();
             match tx.commit_with_sequence() {
                 Ok(sequence) => committed_sequence = sequence,
                 Err(error) => {
-                    let _ddl_rollback = self.rollback_ddl_to_len(0);
+                    let _ddl_rollback = self.rollback_ddl_after_transaction_end(owner_reads);
                     self.savepoints.clear();
                     self.rollback_guc_transaction();
                     return Err(error.into());
@@ -4223,6 +4508,8 @@ impl<'db> SqlSession<'db> {
             crate::statement_context::note_independent_commit(committed_sequence);
             self.snapshot_floor = self.snapshot_floor.max(committed_sequence);
         }
+        let committed_catalog_work = !self.ddl_undo.is_empty();
+        finish_committed_catalog_scopes(self.db_ref(), &self.ddl_undo)?;
         self.ddl_undo.clear();
         self.savepoints.clear();
         self.commit_guc_transaction();
@@ -4232,7 +4519,11 @@ impl<'db> SqlSession<'db> {
         // Concurrent/shared COMMIT cannot mutate the collection catalog. Its
         // durable purge markers remain hidden until exclusive cleanup/startup.
         if self.exclusive {
-            recycle_bin_journal::recover_purges(self.db_mut()?)?;
+            if committed_catalog_work {
+                finish_committed_recycle_bin_purges(self.db_mut()?)?;
+            } else {
+                recycle_bin_journal::recover_purges(self.db_mut()?)?;
+            }
         }
         Ok(SqlResult::command("COMMIT"))
     }
@@ -4328,6 +4619,7 @@ impl<'db> SqlSession<'db> {
             self.ddl_undo.push(DdlUndo::DropCollection {
                 name: name.to_string(),
                 creation_intent: None,
+                creation_receipt: None,
             });
         }
         Ok(())
@@ -4635,10 +4927,119 @@ impl<'db> SqlSession<'db> {
         })));
     }
 
+    fn rename_journal_contexts(&self) -> Vec<String> {
+        self.ddl_undo
+            .iter()
+            .filter_map(|undo| match undo {
+                DdlUndo::RestoreRenameJournal { id, .. } => Some(id.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Scope only the actual native metadata writer. Preparatory work, default
+    /// ACLs and unrelated metadata keep their own normal admission checks.
+    fn catalog_record_mutation_access(
+        &self,
+        collection: &str,
+        record: &str,
+    ) -> Result<Option<bicdb_core::CatalogScopeAccess>> {
+        let Some(owner) = self.tx.as_ref() else {
+            return Ok(None);
+        };
+        rename_journal::record_mutation_access(
+            self.db_ref(),
+            Some(owner),
+            &self.rename_journal_contexts(),
+            collection,
+            record,
+        )
+    }
+
+    fn catalog_record_undo_access(
+        &self,
+        collection: &str,
+        record: &str,
+    ) -> Result<Option<bicdb_core::CatalogScopeAccess>> {
+        rename_journal::record_mutation_access(
+            self.db_ref(),
+            self.tx.as_ref(),
+            &self.rename_journal_contexts(),
+            collection,
+            record,
+        )
+    }
+
+    fn catalog_schema_publication_access(
+        &self,
+        table: &str,
+        certificate: bool,
+        undo: bool,
+    ) -> Result<Option<bicdb_core::CatalogScopeAccess>> {
+        if !undo && self.tx.is_none() {
+            return Ok(None);
+        }
+        let names = if certificate {
+            vec![partition_admission::CERTIFICATE_COLLECTION.to_string()]
+        } else {
+            Vec::new()
+        };
+        rename_journal::record_mutation_access_with_publication_resources(
+            self.db_ref(),
+            self.tx.as_ref(),
+            &self.rename_journal_contexts(),
+            SCHEMA_COLLECTION,
+            table,
+            &names,
+        )
+    }
+
+    fn catalog_partition_publication_access(
+        &self,
+        changes: &[(&'static str, String, Option<Record>)],
+        undo: bool,
+    ) -> Result<Option<bicdb_core::CatalogScopeAccess>> {
+        if !undo && self.tx.is_none() {
+            return Ok(None);
+        }
+        let names = [partition_admission::CERTIFICATE_COLLECTION.to_string()];
+        let contexts = self.rename_journal_contexts();
+        for (collection, id, _) in changes {
+            if let Some(access) = rename_journal::record_mutation_access_with_publication_resources(
+                self.db_ref(),
+                self.tx.as_ref(),
+                &contexts,
+                collection,
+                id,
+                &names,
+            )? {
+                return Ok(Some(access));
+            }
+        }
+        Ok(None)
+    }
+
     pub(crate) fn save_session_schema(&mut self, schema: &TableSchema) -> Result<()> {
         let previous = load_schema(self.db_ref(), &schema.name)?;
         let created = previous.is_none();
-        save_schema(self.db_mut()?, schema)?;
+        let certificate = schema.partitioning.is_some()
+            || schema.partition_of.is_some()
+            || previous
+                .as_ref()
+                .is_some_and(|old| old.partitioning.is_some() || old.partition_of.is_some());
+        let saved = {
+            let _access =
+                self.catalog_schema_publication_access(&schema.name, certificate, false)?;
+            let record = prepare_schema_record(self.db_mut()?, schema)?;
+            let saved: TableSchema = serde_json::from_value(record.metadata.clone())?;
+            partition_admission::publish_schema_change(
+                self.db_mut()?,
+                schema.name.clone(),
+                Some(record),
+            )?;
+            saved
+        };
+        cache_saved_schema(self.db_ref(), &saved);
         if self.tx.is_some() {
             match previous.clone() {
                 Some(schema) => self.ddl_undo.push(DdlUndo::RestoreSchema { schema }),
@@ -4664,7 +5065,13 @@ impl<'db> SqlSession<'db> {
         } else {
             None
         };
-        delete_schema(self.db_mut()?, table)?;
+        {
+            let certificate = previous
+                .as_ref()
+                .is_some_and(|old| old.partitioning.is_some() || old.partition_of.is_some());
+            let _access = self.catalog_schema_publication_access(table, certificate, false)?;
+            delete_schema(self.db_mut()?, table)?;
+        }
         for grant in list_privileges(self.db_ref())? {
             if grant.object_type == PrivilegeObjectType::Table && grant.object_name == table {
                 self.delete_session_privilege(&grant)?;
@@ -4825,6 +5232,21 @@ impl<'db> SqlSession<'db> {
         trigger: TriggerSchema,
         or_replace: bool,
     ) -> Result<()> {
+        if let Some(previous) = load_trigger(self.db_ref(), &trigger.table_name, &trigger.name)? {
+            if previous.partition_parent.is_some() {
+                return Err(SqlError::data_exception(
+                    "42710",
+                    "cannot replace an inherited partition trigger directly",
+                    None,
+                ));
+            }
+        }
+        if load_schema(self.db_ref(), &trigger.table_name)?
+            .is_some_and(|schema| schema.partitioning.is_some())
+            && trigger.for_each == "row"
+        {
+            return self.create_partition_trigger_tree(trigger, or_replace);
+        }
         let previous = if self.tx.is_some() {
             find_trigger(self.db_ref(), &trigger.name, Some(&trigger.table_name))?
         } else {
@@ -4849,6 +5271,9 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn save_session_trigger(&mut self, trigger: &TriggerSchema) -> Result<()> {
+        if self.has_partition_trigger_descendants(trigger)? {
+            return self.save_partition_trigger_mode_tree(trigger);
+        }
         let previous = if self.tx.is_some() {
             Some(find_trigger(
                 self.db_ref(),
@@ -4876,6 +5301,18 @@ impl<'db> SqlSession<'db> {
         name: &str,
         table_name: Option<&str>,
     ) -> Result<bool> {
+        if let Some(trigger) = find_trigger(self.db_ref(), name, table_name)? {
+            if trigger.partition_parent.is_some() {
+                return Err(SqlError::data_exception(
+                    "2BP01",
+                    "cannot drop an inherited partition trigger directly",
+                    None,
+                ));
+            }
+            if self.has_partition_trigger_descendants(&trigger)? {
+                return self.drop_partition_trigger_tree(&trigger);
+            }
+        }
         let previous = if self.tx.is_some() {
             find_trigger(self.db_ref(), name, table_name)?
         } else {
@@ -4888,15 +5325,72 @@ impl<'db> SqlSession<'db> {
         Ok(existed)
     }
 
+    /// Undo every DDL effect once the owning transaction is gone. The running
+    /// statement bound its metadata reads to that transaction. While a rename
+    /// journal retains that owner's catalog scope, undo keeps reading as the
+    /// owner, which its reservations require. Once no journal remains the
+    /// owner is no longer registered, and the rest reads as the session's
+    /// next statement would, with no owner.
+    fn rollback_ddl_after_transaction_end(
+        &mut self,
+        owner_reads: Option<bicdb_core::CatalogReadAccess>,
+    ) -> Result<()> {
+        while self
+            .ddl_undo
+            .iter()
+            .any(|undo| matches!(undo, DdlUndo::RestoreRenameJournal { .. }))
+        {
+            let len = self.ddl_undo.len() - 1;
+            self.rollback_ddl_to_len(len)?;
+        }
+        drop(owner_reads);
+        let _reads = self.db_ref().enter_catalog_read_access(None)?;
+        self.rollback_ddl_to_len(0)
+    }
+
     pub(crate) fn rollback_ddl_to_len(&mut self, len: usize) -> Result<()> {
         while self.ddl_undo.len() > len {
-            // Full rebuilds can refuse a live foreign owner. Keep the index
-            // definition until restoration succeeds so a later ROLLBACK can
-            // retry after the blocker ends. Native admission stays intact.
-            if let Some(DdlUndo::RestoreIndex { definition }) = self.ddl_undo.last() {
-                self.apply_ddl_undo(DdlUndo::RestoreIndex {
+            if let Some(DdlUndo::RestorePartitionTableStates { states, auxiliary }) =
+                self.ddl_undo.last().cloned()
+            {
+                self.restore_partition_table_states(states, auxiliary)?;
+                self.ddl_undo.pop();
+                continue;
+            }
+            if let Some(DdlUndo::RestorePartitionCatalog { entries }) =
+                self.ddl_undo.last().cloned()
+            {
+                self.restore_partition_catalog(entries)?;
+                self.ddl_undo.pop();
+                continue;
+            }
+            // A live foreign owner can refuse journal recovery or an index
+            // rebuild. Keep the matching undo until it succeeds so a later
+            // full rollback can retry after that owner finishes. Clone only
+            // small identities/definitions, not legacy row payloads.
+            let retryable = match self.ddl_undo.last() {
+                Some(DdlUndo::RestoreRenameJournal { id, old_table }) => {
+                    Some(DdlUndo::RestoreRenameJournal {
+                        id: id.clone(),
+                        old_table: old_table.clone(),
+                    })
+                }
+                Some(DdlUndo::DropCollection {
+                    name,
+                    creation_intent: Some(id),
+                    creation_receipt,
+                }) => Some(DdlUndo::DropCollection {
+                    name: name.clone(),
+                    creation_intent: Some(id.clone()),
+                    creation_receipt: creation_receipt.clone(),
+                }),
+                Some(DdlUndo::RestoreIndex { definition }) => Some(DdlUndo::RestoreIndex {
                     definition: definition.clone(),
-                })?;
+                }),
+                _ => None,
+            };
+            if let Some(undo) = retryable {
+                self.apply_ddl_undo(undo)?;
                 self.ddl_undo.pop();
                 continue;
             }
@@ -4930,9 +5424,14 @@ impl<'db> SqlSession<'db> {
             DdlUndo::DropCollection {
                 name,
                 creation_intent,
+                creation_receipt,
             } => {
                 if let Some(id) = creation_intent {
-                    recycle_bin_journal::undo_creation(self.db_mut()?, &id)?;
+                    recycle_bin_journal::undo_session_creation(
+                        self,
+                        &id,
+                        creation_receipt.as_ref(),
+                    )?;
                 } else {
                     let _ = self.db_mut()?.drop_collection(&name)?;
                 }
@@ -4948,7 +5447,14 @@ impl<'db> SqlSession<'db> {
                 schema,
                 records,
             } => {
+                // A rename this transaction left undecided still reserves the
+                // relation; restore inside that journal's own scope rather
+                // than as an unrelated writer it must refuse.
+                let _access = self.catalog_record_undo_access(SCHEMA_COLLECTION, &table)?;
                 restore_table_state(self.db_mut()?, &table, &schema, records)?;
+            }
+            DdlUndo::RestoreRenameJournal { id, .. } => {
+                rename_journal::undo_session(self, &id)?;
             }
             DdlUndo::RestoreRenamedTable {
                 old_table,
@@ -4978,10 +5484,30 @@ impl<'db> SqlSession<'db> {
                 let _ = self.db_mut()?.rename_index(&new_name, &old_name)?;
             }
             DdlUndo::DeleteSchema { table } => {
+                let _access = self.catalog_schema_publication_access(
+                    &table,
+                    self.db_ref().sql_partition_execution_feature_active(),
+                    true,
+                )?;
                 delete_schema(self.db_mut()?, &table)?;
             }
             DdlUndo::RestoreSchema { schema } => {
-                save_schema(self.db_mut()?, &schema)?;
+                let saved = {
+                    let _access = self.catalog_schema_publication_access(
+                        &schema.name,
+                        self.db_ref().sql_partition_execution_feature_active(),
+                        true,
+                    )?;
+                    let record = prepare_schema_record(self.db_mut()?, &schema)?;
+                    let saved: TableSchema = serde_json::from_value(record.metadata.clone())?;
+                    partition_admission::publish_schema_change(
+                        self.db_mut()?,
+                        schema.name.clone(),
+                        Some(record),
+                    )?;
+                    saved
+                };
+                cache_saved_schema(self.db_ref(), &saved);
             }
             DdlUndo::DeleteSequence { sequence } => {
                 let _ = delete_sequence(self.db_mut()?, &sequence)?;
@@ -5004,6 +5530,12 @@ impl<'db> SqlSession<'db> {
             DdlUndo::RestoreTrigger { trigger } => {
                 save_trigger(self.db_mut()?, &trigger)?;
             }
+            DdlUndo::RestorePartitionCatalog { entries } => {
+                self.restore_partition_catalog(entries)?
+            }
+            DdlUndo::RestorePartitionTableStates { states, auxiliary } => {
+                self.restore_partition_table_states(states, auxiliary)?
+            }
             DdlUndo::DeleteUserType { schema_name, name } => {
                 let _ = delete_user_type(self.db_mut()?, &schema_name, &name)?;
             }
@@ -5011,9 +5543,13 @@ impl<'db> SqlSession<'db> {
                 save_user_type(self.db_mut()?, &user_type)?;
             }
             DdlUndo::DeletePrivilege { grant } => {
+                let _access =
+                    self.catalog_record_undo_access(PRIVILEGE_COLLECTION, &privilege_key(&grant))?;
                 delete_privilege(self.db_mut()?, &grant)?;
             }
             DdlUndo::RestorePrivilege { grant } => {
+                let _access =
+                    self.catalog_record_undo_access(PRIVILEGE_COLLECTION, &privilege_key(&grant))?;
                 save_privilege(self.db_mut()?, &grant)?;
             }
             DdlUndo::RestoreFromRecycleBin { bin_name, target } => {

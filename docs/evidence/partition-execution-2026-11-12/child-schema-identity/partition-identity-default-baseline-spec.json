@@ -1,0 +1,59 @@
+{
+  "label": "partition-identity-default-baseline",
+  "source": "e86bdfc9a3be268e530fa3ad37fcf96f884d6207",
+  "base": "e036228fb842ef714c96b0db4a9443d6e82f4c4c",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "On unchanged e036runtime, newPG16-confirmed42P16identityADD refusal must precede allcatalog/sequence mutations; newexactdefaultsavepointundo control. ExistingCorebroadcc84 lane unchanged. Expectedidentityproductcounterexample, no passed claim from refusal mismatch. First e036 spec textsaid17 leadingchecks but actual19passed; terminaltotals determine coverage.",
+  "continue_on_failure": true,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "partition_child_schema",
+      "identity_add_with_existing_partitions",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "partition_child_schema",
+      "parent_default_savepoint_rollback",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-partition-child-schema-typed-focused"
+  ],
+  "required_receipts": [],
+  "allow_isolated_builds": [
+    {
+      "pid": 2111915,
+      "start_ticks": 163592680,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

@@ -1,0 +1,9 @@
+memory_available_kib=52472972 swap_free_kib=4451564 cgroup_current_bytes=4694016 cgroup_anon_bytes=4075520 cgroup_kernel_bytes=647168 cgroup_max_bytes=12884901888 memory_psi_avg10=0.00 cgroup_memory_psi_avg10=0.00
+error: Repository lacks these prerequisite commits:
+error: e3fa39974d23c13d6212d5b94ab84437271c50bf 
+Traceback (most recent call last):
+  File "/root/bicdb-durability-s3/host-control/partition-execution-negative-f9d2000d-runner.py", line 49, in <module>
+    subprocess.run(['git','fetch',str(root/'host-control'/(label+'.bundle')),spec.get('source_ref','HEAD')+':refs/heads/task-'+label],cwd=repo,check=True)
+  File "/usr/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['git', 'fetch', '/root/bicdb-durability-s3/host-control/partition-execution-negative-f9d2000d.bundle', 'HEAD:refs/heads/task-partition-execution-negative-f9d2000d']' returned non-zero exit status 1.

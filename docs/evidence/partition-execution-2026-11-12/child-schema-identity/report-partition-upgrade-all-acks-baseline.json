@@ -1,0 +1,30 @@
+{
+  "source": "4508ece82ca18dcc32ab2eba9be0da23bbf72897",
+  "scope": "Test-only over3867 currentmain489 integration. Five independentstationaryleafACK requirements beforefence/certificate/commit: CHECK/NOTNULL/nonPKUNIQUE/FKincludinginitiallydeferred/canonicalNativeprimarykeybinding. Everyrefusal retains exactrawschemas/ACKs; CHECKtworeopens. Syntheticoldrawmetadatafixture explicitlynot actualoldbinaryfixture; immutableold482fixtures separate. Expectedcounterexamples: currentonlymovedrowsvalidated witholdlegacyparentcolumninheritance, stationaryACKs nevervalidated. Baseline mustbeobserved, no successassumed. AllfullcampaignscopeACTIVE.",
+  "started_unix": 1794507586.010644,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--lib",
+        "stationary_leaf_",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794507586.010771,
+      "exit": 101,
+      "finished_unix": 1794507710.9621258
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794507710.962375
+}

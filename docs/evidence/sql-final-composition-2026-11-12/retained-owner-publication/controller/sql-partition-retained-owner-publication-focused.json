@@ -1,0 +1,63 @@
+{
+  "label": "sql-partition-retained-owner-publication-focused",
+  "source": "5392fb876ab96a4607728e424f141d77a9749d83",
+  "base": "09473ee9c4fdd30d1a0511c75ed7e559017c338f",
+  "source_ref": "refs/bicdb-proof/partition-retained-owner-publication-5392fb87",
+  "repo": "/root/bicdb-sql-final-composition",
+  "scope": "Actualoriginal95 4e94P1F certificate resource failure, identicalfocused094actual0P1F retained. NewNative temporaryderivedpublication borrowsactualparent and admits extras withforeignscope/observationfences; no permanent globalcertificate reservation or beforeimageauth. Native3controls thenoriginalpositiveSQLcommitrollback/NativeACK/fullhash/foreignread/tworeopens. No fullapplication/main/portableorigin/HAqualification claim. Fullgoalactive,P2productionoff,no spend.",
+  "continue_on_failure": false,
+  "wait_units": [
+    "bicdb-sql-partition-retained-owner-baseline"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-sql-partition-retained-owner-baseline.json",
+      "equals": {
+        "source": "09473ee9c4fdd30d1a0511c75ed7e559017c338f",
+        "status": "failed"
+      }
+    }
+  ],
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "catalog_publication_",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--lib",
+      "retained_rename_owner_creates_partition_tree",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "allow_isolated_builds": [
+    {
+      "pid": 2039683,
+      "start_ticks": 165686736,
+      "repo": "/root/bicdb-durability-s3/repo-metadata-describe",
+      "target": "/root/bicdb-durability-s3/target-metadata-describe"
+    }
+  ]
+}

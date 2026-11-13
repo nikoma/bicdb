@@ -1,0 +1,42 @@
+{
+  "label": "partition-pk-batch-baseline-v2",
+  "source": "63202b6a48c3a103358601bddac1b407902f42c5",
+  "base": "90cb54b2d69a5e88a04a2166a1dcd8eac4f66bb4",
+  "repo": "/root/bicdb-partition-runtime",
+  "scope": "Corrected fixture-only baseline on exact f7fb main488-integrated runtime before both PK matcher and AST partition creation fixes. Prior90cb baseline failed compiling movedStorageMode, not a product counterexample; original failure preserved. Exact seven regression assertions shared with current196f. Ordinary+child/modes/two reopens; Native actualexclusionnonunique control. Not application/broad/HA.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-sql",
+      "--test",
+      "primary_key_index_compatibility",
+      "--test",
+      "partition_statement_batches",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [],
+  "required_receipts": [],
+  "allow_isolated_builds": [
+    {
+      "pid": 473811,
+      "start_ticks": 163308064,
+      "repo": "/root/bicdb-durability-s3/repo-tc",
+      "target": "/root/bicdb-durability-s3/target-tc"
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock",
+  "source_ref": "refs/bicdb-proof/partition-pk-batch-baseline-v2"
+}

@@ -1,0 +1,11 @@
+{
+  "status": "actual_native_pg16_reference_passed",
+  "container": "bicdb-pgprov-ref",
+  "exit": 0,
+  "scope": "Only new owned schema/role inside one rolled-back transaction; no original business schema modified, no physical-byte-identity claim.",
+  "recorded_unix": 1794480153.759013,
+  "official_sources": [
+    "https://www.postgresql.org/docs/16/ddl-partitioning.html",
+    "https://www.postgresql.org/docs/16/ddl-rowsecurity.html"
+  ]
+}

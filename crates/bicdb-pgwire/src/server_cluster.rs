@@ -810,6 +810,14 @@ impl PgWireServer {
         resource_governor: Option<ResourceGovernor>,
     ) -> Result<Arc<Self>> {
         config.validate()?;
+        {
+            let mut guard = db.write();
+            if guard.is_read_only_standby() {
+                bicdb_sql::check_sql_partition_admission(&guard)?;
+            } else {
+                bicdb_sql::ensure_sql_partition_admission(&mut guard)?;
+            }
+        }
         bicdb_sql::oracle::ensure_database_profile(&mut db.write(), &config.sql_profile)?;
         if config.automatic_paged_read_ahead {
             if let Some(snapshot) = db.read().paged_storage_snapshot()? {

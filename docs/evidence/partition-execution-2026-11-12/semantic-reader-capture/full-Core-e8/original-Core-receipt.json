@@ -1,0 +1,61 @@
+{
+  "source": "e8c426a73a14c1d97851082b90b815da60d4ef82",
+  "scope": "Full current Core library+integration qualification after stable actual Native semantic reader contract fix e8c426a7. Explicit source-current Core helper builds and custody before suite; original test assertions/timeouts preserved. Prior0031 Core/SQL/wire results remain source-scoped, not substituted. Wait completed original broad+safe owned-cache cleanup and unchanged format/image module success; no concurrent compilers. Not application, portable collection origin, legacy logical propagation, physical HA/capacity, release/deployment or merged-source qualification. Full goal active/P2off/no new spend. v2 corrects Python custody string syntax only; original terminal failed wrapper (helper build0, pin1, no tests run) is retained. Actual product/test source unchanged.",
+  "started_unix": 1794520612.4132998,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "build",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--example",
+        "durability_child",
+        "--example",
+        "chaos_child",
+        "--example",
+        "ha_state_child"
+      ],
+      "started_unix": 1794520612.4133933,
+      "exit": 0,
+      "finished_unix": 1794520612.7474563
+    },
+    {
+      "command": [
+        "python3",
+        "-c",
+        "import pathlib,json,hashlib,os,subprocess,time\nroot=pathlib.Path('/root/bicdb-durability-s3');source=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip();assert source=='e8c426a73a14c1d97851082b90b815da60d4ef82'\nfiles={}\nfor name in ['durability_child','chaos_child','ha_state_child']:\n p=pathlib.Path(os.environ['CARGO_TARGET_DIR'])/'debug/examples'/name;data=p.read_bytes();flags={flag:flag.encode() in data for flag in ['sql_partition_execution_v1','decimal_predicate_comparison_v1','application_unique_scope_transition_v1']};assert all(flags.values()),(name,flags);files[name]={'path':str(p),'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data),'required_features':flags}\nproof={'source':source,'files':files,'recorded_unix':time.time(),'scope':'Explicit current-source Core helper build succeeded; helper custody only, not CLI/release/deployment.'};out=root/'semantic-reader-current-Core-helpers.json';assert not out.exists();json.dump(proof,out.open('w'),indent=2);print(json.dumps(proof))\n"
+      ],
+      "started_unix": 1794520612.7476542,
+      "exit": 0,
+      "finished_unix": 1794520612.8727994
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--no-fail-fast",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "--tests",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794520612.8730106,
+      "exit": 0,
+      "finished_unix": 1794522210.8618667
+    }
+  ],
+  "status": "focused_passed",
+  "finished_unix": 1794522210.8620741
+}

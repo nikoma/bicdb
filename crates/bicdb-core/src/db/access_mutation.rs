@@ -401,12 +401,78 @@ impl BicDb {
             return paged.scan_batch_after(&snapshot, collection, after_id, max_rows, max_bytes);
         }
 
-        let mut rows = Vec::with_capacity(max_rows.min(4096));
-        let mut bytes = 0usize;
-        for record in self.scan_collection_unchecked(collection)? {
-            if after_id.is_some_and(|cursor| record.id.as_str() <= cursor) {
-                continue;
+        // Select only a bounded number of immutable resident images. Calling
+        // scan_collection_unchecked here decoded the entire collection before
+        // applying either requested bound (and could exhaust a query budget
+        // even when the caller requested just one row).
+        #[derive(Clone)]
+        struct Candidate(Arc<StoredRecord>);
+        impl PartialEq for Candidate {
+            fn eq(&self, other: &Self) -> bool {
+                self.0.id == other.0.id
             }
+        }
+        impl Eq for Candidate {}
+        impl PartialOrd for Candidate {
+            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+        impl Ord for Candidate {
+            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                self.0.id.cmp(&other.0.id)
+            }
+        }
+        let mut candidates = std::collections::BinaryHeap::<Candidate>::new();
+        {
+            let state = self.collection_state(collection)?;
+            let shards = state.read_all();
+            for entry in shards.iter().flat_map(|shard| shard.records.values()) {
+                if after_id.is_some_and(|cursor| entry.record.id.as_str() <= cursor) {
+                    continue;
+                }
+                if candidates.len() < max_rows {
+                    candidates.push(Candidate(Arc::clone(&entry.record)));
+                } else if candidates
+                    .peek()
+                    .is_some_and(|largest| entry.record.id < largest.0.id)
+                {
+                    candidates.pop();
+                    candidates.push(Candidate(Arc::clone(&entry.record)));
+                }
+                crate::query_budget::observe(
+                    candidates
+                        .len()
+                        .saturating_mul(std::mem::size_of::<Candidate>()),
+                );
+                crate::query_budget::check()?;
+            }
+        }
+        let mut rows = Vec::with_capacity(candidates.len());
+        let mut bytes = 0usize;
+        let mut retained_bytes = 0usize;
+        for Candidate(stored) in candidates.into_sorted_vec() {
+            let lower_bound = stored
+                .id
+                .len()
+                .saturating_add(stored.metadata.get().len())
+                .saturating_add(stored.payload.as_ref().map_or(0, Vec::len))
+                .saturating_add(
+                    stored
+                        .vector
+                        .as_ref()
+                        .map_or(0, |vector| vector.len().saturating_mul(4)),
+                );
+            if lower_bound > max_bytes {
+                if !rows.is_empty() {
+                    break;
+                }
+                return Err(BicDbError::PagedStorage(format!(
+                    "record `{}` exceeds the {} byte batch limit",
+                    stored.id, max_bytes
+                )));
+            }
+            let record = stored.to_record()?;
             let encoded_bytes = serde_json::to_vec(&record)?.len();
             if encoded_bytes > max_bytes && rows.is_empty() {
                 return Err(BicDbError::PagedStorage(format!(
@@ -418,6 +484,7 @@ impl BicDb {
                 break;
             }
             bytes = bytes.saturating_add(encoded_bytes);
+            crate::query_budget::retain_record(&mut retained_bytes, &record)?;
             rows.push(record);
             if rows.len() >= max_rows {
                 break;
@@ -832,6 +899,7 @@ impl BicDb {
         before_registration: impl FnOnce(),
     ) -> Result<Transaction> {
         self.check_recovery_state()?;
+        let catalog_actor_scope = self.catalog_admission.ambient_actor()?;
         // A standby may begin transactions to read; any write is refused when
         // it is buffered and a read-only commit takes no sequence number (see
         // `commit_transaction`).
@@ -856,6 +924,15 @@ impl BicDb {
             applied_watermark = current;
             snapshot_tx = TransactionId(current.max(min_snapshot));
         }
+        let collection_incarnations = Arc::new(Mutex::new(FxHashMap::default()));
+        if let Err(error) =
+            self.catalog_admission
+                .register(tx_id, &collection_incarnations, catalog_actor_scope)
+        {
+            self.tx_states.remove(&tx_id.0);
+            self.active_snapshots.decr_remove(snapshot_tx.0);
+            return Err(error);
+        }
         Ok(Transaction {
             db: NonNull::from(self),
             id: tx_id,
@@ -866,7 +943,9 @@ impl BicDb {
             // provide a more exact mutation boundary.
             applied_snapshot: applied_watermark,
             observed_record_versions: Mutex::new(FxHashMap::default()),
-            collection_incarnations: Mutex::new(FxHashMap::default()),
+            collection_incarnations,
+            catalog_admission: Arc::clone(&self.catalog_admission),
+            catalog_actor_scope,
             statement_write_conflicts: false,
             statement_snapshot_acquired: false,
             statement_snapshot_deferred: false,
@@ -896,6 +975,7 @@ impl BicDb {
             constraint_modes: Mutex::new(Vec::new()),
             mutation_grants: BTreeMap::new(),
             native_write_issuers: Mutex::new(BTreeMap::new()),
+            native_catalog_allocations: BTreeMap::new(),
             next_mutation_grant: 1,
             commit_validators: Vec::new(),
             mutation_invariant_bundles: BTreeMap::new(),

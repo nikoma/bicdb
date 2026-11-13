@@ -1,0 +1,97 @@
+{
+  "source": "c932a98bc86aa221ece871cc6e7d79a3ef0e8efa",
+  "passed": 898,
+  "failed": 11,
+  "ignored": 9,
+  "all_panic_sites": [
+    {
+      "site": "thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::missing_catalogue_tests::native_event_endpoint_missing_catalogue_same_birth_restart_must_never_return_acked_absence' (1739309) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_strong_point_tests/endpoint_tests/missing_catalogue_tests.rs:924:13:",
+      "context": [
+        "intact control strict open failed at strict_native_open_refused: format compatibility error: Native origin root: copied or replaced physical directory; an authorized Native import/restore producer is required",
+        "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "FAILED"
+      ]
+    },
+    {
+      "site": "thread 'db::range_image_native::serving_configuration::floor_tests::actual_native_floor_vetoes_lower_and_same_epoch_drift_after_copied_logical_rollback' (1760355) panicked at crates/bicdb-core/src/db/range_image_native/serving_configuration/floor_tests.rs:205:6:",
+      "context": [
+        "called `Result::unwrap()` on an `Err` value: FormatCompatibility(\"Native origin root: copied or replaced physical directory; an authorized Native import/restore producer is required\")",
+        "FAILED",
+        "test db::range_image_native::tests::native_installing_marker_closes_source_and_observation_after_reopen ... ok"
+      ]
+    },
+    {
+      "site": "thread 'distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_exposed_cold_copy_never_reenters_prevote_or_resets_term' (1790043) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_preparation_tests.rs:520:5:",
+      "context": [
+        "format compatibility error: Native origin root: copied or replaced physical directory; an authorized Native import/restore producer is required",
+        "FAILED",
+        "test distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_drain_deadline_retains_stopping_owner_and_same_store ... NATIVE_INITIAL_PREPARATION_ROOT /tmp/.tmpmcT4ID"
+      ]
+    },
+    {
+      "site": "thread 'distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_prepared_cold_copy_reopens_same_store_without_birth_fallback' (1793021) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_preparation_tests.rs:429:10:",
+      "context": [
+        "called `Result::unwrap()` on an `Err` value: FormatCompatibility(\"Native origin root: copied or replaced physical directory; an authorized Native import/restore producer is required\")",
+        "FAILED",
+        "test distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_protected_proposal_and_both_metadata_cuts_resume_exact_c_on_cold_copy ... NATIVE_INITIAL_PREPARATION_ROOT /tmp/.tmp8hdJxj"
+      ]
+    },
+    {
+      "site": "thread 'distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_protected_proposal_and_both_metadata_cuts_resume_exact_c_on_cold_copy' (1793605) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_preparation_tests.rs:625:14:",
+      "context": [
+        "called `Result::unwrap()` on an `Err` value: FormatCompatibility(\"Native origin root: copied or replaced physical directory; an authorized Native import/restore producer is required\")",
+        "FAILED",
+        "test distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_sequential_launch_uses_historical_same_c_after_first_vote ... NATIVE_INITIAL_PREPARATION_ROOT /tmp/.tmpPfsAzn"
+      ]
+    },
+    {
+      "site": "thread 'distribution_range_image_install::proposal_tests::actual_protected_proposal_orphan_preserves_native_point_and_reopens_without_intent' (1820676) panicked at crates/bicdb-core/src/distribution_range_image_install/proposal_tests.rs:132:6:",
+      "context": [
+        "called `Result::unwrap()` on an `Err` value: FormatCompatibility(\"Native origin root: copied or replaced physical directory; an authorized Native import/restore producer is required\")",
+        "FAILED",
+        "test distribution_range_image_install::tests::actual_capture_refuses_outstanding_controlled_callback_then_succeeds_after_drain ... ok"
+      ]
+    },
+    {
+      "site": "thread 'distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_interrupted_normal_image_cold_resume_is_characterized_without_forged_cut' (1900256) panicked at crates/bicdb-core/src/distribution_range_recovery/recovery_order_tests/interrupted_normal_repair.rs:444:81:",
+      "context": [
+        "called `Result::unwrap()` on an `Err` value: FormatCompatibility(\"Native origin root: copied or replaced physical directory; an authorized Native import/restore producer is required\")",
+        "FAILED",
+        "test distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_after_clear_with_fresh_installing_quorum ... INTERRUPTED_NORMAL_ORIGINAL_ROOT /tmp/.tmpVETavP"
+      ]
+    },
+    {
+      "site": "thread 'distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_after_clear_with_fresh_installing_quorum' (1900565) panicked at crates/bicdb-core/src/distribution_range_recovery/recovery_order_tests/interrupted_normal_repair.rs:444:81:",
+      "context": [
+        "called `Result::unwrap()` on an `Err` value: FormatCompatibility(\"Native origin root: copied or replaced physical directory; an authorized Native import/restore producer is required\")",
+        "FAILED",
+        "test distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_begin_before_history_staging ... INTERRUPTED_NORMAL_ORIGINAL_ROOT /tmp/.tmprpL48o"
+      ]
+    },
+    {
+      "site": "thread 'distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_begin_before_history_staging' (1900949) panicked at crates/bicdb-core/src/distribution_range_recovery/recovery_order_tests/interrupted_normal_repair.rs:444:81:",
+      "context": [
+        "called `Result::unwrap()` on an `Err` value: FormatCompatibility(\"Native origin root: copied or replaced physical directory; an authorized Native import/restore producer is required\")",
+        "FAILED",
+        "test distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_intent_before_native_marker ... INTERRUPTED_NORMAL_ORIGINAL_ROOT /tmp/.tmp3OYwbq"
+      ]
+    },
+    {
+      "site": "thread 'distribution_range_recovery::recovery_order_tests::interrupted_normal_repair::actual_protected_current_image_resumes_intent_before_native_marker' (1901435) panicked at crates/bicdb-core/src/distribution_range_recovery/recovery_order_tests/interrupted_normal_repair.rs:444:81:",
+      "context": [
+        "called `Result::unwrap()` on an `Err` value: FormatCompatibility(\"Native origin root: copied or replaced physical directory; an authorized Native import/restore producer is required\")",
+        "FAILED",
+        "test distribution_range_recovery::recovery_order_tests::small_sparse_cold::actual_small_sparse_current_quorum_and_strict_cold_reopen_preserve_decision ... SMALL_SPARSE_COLD_ORIGINAL_ROOT /tmp/.tmpJ2Ftzx"
+      ]
+    },
+    {
+      "site": "thread 'distribution_range_recovery::recovery_order_tests::small_sparse_cold::actual_small_sparse_current_quorum_and_strict_cold_reopen_preserve_decision' (1902441) panicked at crates/bicdb-core/src/distribution_range_recovery/recovery_order_tests/small_sparse_cold.rs:301:85:",
+      "context": [
+        "called `Result::unwrap()` on an `Err` value: FormatCompatibility(\"Native origin root: copied or replaced physical directory; an authorized Native import/restore producer is required\")",
+        "FAILED",
+        "test distribution_range_recovery::recovery_order_tests::sparse_current_case::copied_actual_1025_prefix_sparse_current_quorum_finishes_native_tail ... ignored, requires explicit BICDB_RETAINED_NATIVE_RECOVERY_ROOT; copies retained actual 1025-ACK fixture"
+      ]
+    }
+  ],
+  "classification": "Open private Native directory-custody/authorized cold-restore producer integration; not upstream failures or disabled tests"
+}

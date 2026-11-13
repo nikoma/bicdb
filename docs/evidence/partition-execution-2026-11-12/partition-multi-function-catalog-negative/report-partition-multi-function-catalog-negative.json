@@ -1,0 +1,30 @@
+{
+  "source": "1f9bfb159c54a62d54e5d331cca53b7f6bec8364",
+  "scope": "Correctedobservable,unchanged21runtime: requireONEroutinecataloggenerationandONEtriggercataloggeneration, oneNativecatalogTXplusknownexistingemptySQLwrappercommit=2. Previousnewcounterexpected1globalcommitbutobserved3(2catalog+emptywrapper); preserveoriginalfailureandexplicitcorrection. Mandatorynewpositiveexpectedold3vs2failure, notfullprocess/crashatomicproof.",
+  "started_unix": 1794487491.1170917,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_trigger_lifecycle",
+        "multiple_trigger_functions_and_their_lineages_publish_one_catalog_transaction",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794487491.1172607,
+      "exit": 101,
+      "finished_unix": 1794487495.4843493
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794487495.484617
+}

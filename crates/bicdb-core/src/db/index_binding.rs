@@ -63,7 +63,9 @@ impl BicDb {
     pub fn enable_oracle_simple_case_v1(&mut self) -> Result<()> {
         self.ensure_writable("enable Oracle simple-case v1")?;
         self.ensure_no_pending_transactions()?;
-        format::enable_oracle_simple_case_v1(&self.path)?;
+        self.install_replicated_reader_features(&[
+            format::ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG.into()
+        ])?;
         self.check_recovery_state()
     }
 

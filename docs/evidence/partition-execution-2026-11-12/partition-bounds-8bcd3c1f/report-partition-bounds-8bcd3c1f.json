@@ -1,0 +1,49 @@
+{
+  "source": "8bcd3c1fa502a674a8ea284a3ef2032bb3f61d5a",
+  "scope": "Evolving coherent partition execution batch: typed RANGE/LIST/DEFAULT/Hash bound parsing, overlap/existing-ACK attachment preflight, true parent detach identity, child own RLS, mandatory direct-child bounds and resident-path gates. Focused6newbounds/ACK/reopen controls and unchanged7execution positives. Parent routing/reads/update/delete and PGhash routing still incomplete; no broad/final/application/HA completion claim.",
+  "started_unix": 1794481446.3531208,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_bounds",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794481446.3533008,
+      "exit": 0,
+      "finished_unix": 1794481525.414916
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "partition_execution",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794481525.4151363,
+      "exit": 101,
+      "finished_unix": 1794481530.6760304
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794481530.6762786
+}

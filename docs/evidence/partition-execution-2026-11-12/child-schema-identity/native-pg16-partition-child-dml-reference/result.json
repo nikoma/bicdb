@@ -1,0 +1,14 @@
+{
+  "status": "reference_passed",
+  "container": "bicdb-partition-child-dml-ecdff86bd7",
+  "image": "sha256:71e27bf60b70bded003791b5573f8b808365613f341df20ffcf0c1ed7bc13ddf",
+  "sql": "control.sql",
+  "started_unix": 1794503938.525517,
+  "exit": 0,
+  "version": "PostgreSQL 16.13 (Debian 16.13-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit",
+  "finished_unix": 1794503939.980085,
+  "scope": "Actual PG16 owned384MiB/no-network/tmpfs reference; rolledback scratch schema. Child local defaults/direct versus routed INSERT, preservation through parent ADD/TYPE, explicit parent SET/DROP DEFAULT propagation and independently authored child keys; parent SELECT FOR UPDATE, INSERT duplicate refusal, PK-changing UPDATE, DELETE and movement between differing child PKs with savepoint rollback. No application modifications.",
+  "container_removed": true,
+  "cleanup_stdout": "bicdb-partition-child-dml-ecdff86bd7\n",
+  "cleanup_stderr": ""
+}

@@ -1,0 +1,161 @@
+{
+  "source": "5594663d3757ce2fad1340028e5b430088b29a24",
+  "scope": "Actual integration of remote main492 e37c into private Native origins+combined SQL. Runtime code remains identical to qualified1f14 (format adds public test helper/tests only; bindings add public six-reader test only; public crash example and SQL authority test restored). Source29versions/deps/locks now492, private unmerged. Compile allPage/Core/SQL/wire targets incl new public probe; rerun actualroot8, image7, both public/private semantic reader regressions, SQLauthority and version identity. Reuse earlier source1f14 51Core checks only for unchanged code; do not claim original application, full broad/fault/VM, both import producers or SQL promotion acceptance.",
+  "started_unix": 1794539443.7060008,
+  "steps": [
+    {
+      "command": [
+        "python3",
+        "scripts/bump-version.py",
+        "--check"
+      ],
+      "started_unix": 1794539443.706262,
+      "exit": 0,
+      "finished_unix": 1794539443.7729688
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "check",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-page",
+        "-p",
+        "bicdb-core",
+        "-p",
+        "bicdb-sql",
+        "-p",
+        "bicdb-pgwire",
+        "--all-targets"
+      ],
+      "started_unix": 1794539443.7731886,
+      "exit": 0,
+      "finished_unix": 1794539611.1137538
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "native_origin::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794539611.1139567,
+      "exit": 0,
+      "finished_unix": 1794539674.9748902
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "range_image_bindings::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794539674.9751909,
+      "exit": 0,
+      "finished_unix": 1794539676.325578
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "mutation_reader_contract_tests::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794539676.3258545,
+      "exit": 0,
+      "finished_unix": 1794539677.314143
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--lib",
+        "semantic_reader_capture_tests::",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794539677.3144033,
+      "exit": 0,
+      "finished_unix": 1794539678.3143172
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "mutation_authority",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794539678.3146434,
+      "exit": 0,
+      "finished_unix": 1794539846.939013
+    },
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-core",
+        "--test",
+        "version_identity",
+        "--",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794539846.939254,
+      "exit": 101,
+      "finished_unix": 1794539847.0933344
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794539847.0936823
+}

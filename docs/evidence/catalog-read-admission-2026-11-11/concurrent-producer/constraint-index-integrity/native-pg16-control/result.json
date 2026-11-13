@@ -1,0 +1,15 @@
+{
+  "status": "native_constraint_index_guards_passed",
+  "native_version": "16.13 (Debian 16.13-1.pgdg13+1)",
+  "rejected_expected_commands": 5,
+  "sqlstate": "2BP01",
+  "standalone_index_preserved_after_rejected_multi_drop": true,
+  "transaction_rolled_back": true,
+  "target": "owned Native control clone; protected source database and frozen export not connected or modified",
+  "inputs": {
+    "stdout": "043745ded23c5d17334e73c3466cfbf60e13092aff5af4b11d73b6ccc8abe304",
+    "stderr": "bd7442a0cc9e009692887e4d9d7897ed070fca8acdc1e2f474785585ac4c7e2e",
+    "control.sql": "208900122cc5849015f8db12dacf04a388f822f96eb65f471ecc899da2868951"
+  },
+  "recorded_unix": 1794466068.6836555
+}

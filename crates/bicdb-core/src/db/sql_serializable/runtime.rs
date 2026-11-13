@@ -287,7 +287,9 @@ impl Transaction {
     }
 
     fn postgres_collection_identity(&self, collection: &str) -> CollectionIdentity {
-        CollectionIdentity(Arc::clone(&self.collection_incarnations.lock()[collection]))
+        CollectionIdentity(Arc::clone(
+            &self.collection_incarnations.lock()[collection].incarnation,
+        ))
     }
 
     fn observe_postgres_read(&self, collection: &str, keys: impl FnOnce() -> ReadKeys) {

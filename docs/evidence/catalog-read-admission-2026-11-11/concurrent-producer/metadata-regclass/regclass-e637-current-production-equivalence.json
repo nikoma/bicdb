@@ -1,0 +1,17 @@
+{
+  "recorded_unix": 1794459555.309827,
+  "implementation": "e637801fd1306e70f15f9e9421b275e6f3449e81",
+  "test_fixture_followup": "5421dbbb28351aa187b8d330c1cca8ed5d4b8b42",
+  "all_production_and_dependencies_identical": true,
+  "changed_files": [
+    "crates/bicdb-pgwire/tests/catalog_read_admission.rs",
+    "crates/bicdb-sql/tests/regclass_search_path.rs"
+  ],
+  "fixture_notes": [
+    "Documentedquiescentinitialize_rename_journal_identitiesbeforebusinessBEGIN",
+    "Strictprimary-keycountisolatesPG18NOTNULLcatalogdifference",
+    "Application-styleitem_keyavoidsdocumentednativeimplicitidconvention; count0assertionsretained",
+    "OriginalupstreamiDempierequery/assertions/JAR/timeoutsunchanged"
+  ],
+  "reuse_existing_SQL46": true
+}

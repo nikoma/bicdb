@@ -1,0 +1,58 @@
+{
+  "label": "private-rename-uid-scope-wire-0d020d5c",
+  "source": "0d020d5c8c11e8456dd0b23841ae64d97b0c4434",
+  "base": "65e54d425e8710a158ffdeabd182d7b4e2775f9e",
+  "repo": "/root/bicdb-sql-rename-uid-consumer",
+  "wait_units": [
+    "bicdb-private-rename-uid-core-integration-0d020d5c"
+  ],
+  "scope": "Private integrated source0d focused scope/wire/UID controls. Prior final SQLjournal13+profile2 pass on65 (runtime unchanged), CoreSSI15 + catalogunit1 + SQLcatalog27 pass0d. This batch exercises actual four Native catalog integration targets (not just one unit-filter match), namespace foundation tests, then unchanged nine TCP/metadata controls from b1 integrated with public transaction/namespace code. No whole producer gate relaxed, no donor-local mapping, no replicated promotion/app/main474 qualification.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--test",
+      "catalog_host_scope",
+      "--test",
+      "catalog_record_scope",
+      "--test",
+      "catalog_read_scope",
+      "--test",
+      "catalog_scope_admission"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "namespace_identity",
+      "--",
+      "--test-threads=1"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-pgwire",
+      "--test",
+      "catalog_read_admission",
+      "--",
+      "--test-threads=1"
+    ]
+  ]
+}

@@ -1,0 +1,30 @@
+[
+  {
+    "path": "sql-final-partition-replica-and-original-rename-gates-receipt.json",
+    "sha256": "4f8617db1574accd0f5f062c0eb967fa851d5adfa30d72eab54a1992089530bd",
+    "bytes": 1673,
+    "raw_sha256": "4f8617db1574accd0f5f062c0eb967fa851d5adfa30d72eab54a1992089530bd",
+    "raw_bytes": 1673
+  },
+  {
+    "path": "sql-final-partition-replica-and-original-rename-gates-original.log.gz",
+    "sha256": "c0836434d244a73cc34e3eee2f462982629f5e21fc60af5eb0c4d1c5eb002558",
+    "bytes": 74029,
+    "raw_sha256": "e33aea2318c98e733152c2e77e5af03a1aecec8548131989096bdaa6ed1ddc26",
+    "raw_bytes": 602347
+  },
+  {
+    "path": "sql-final-partition-certificate-focused-receipt.json",
+    "sha256": "06f86785a73e42395786d32d4614f6252460cf7cdc795217cf5f3c71852d622f",
+    "bytes": 2930,
+    "raw_sha256": "06f86785a73e42395786d32d4614f6252460cf7cdc795217cf5f3c71852d622f",
+    "raw_bytes": 2930
+  },
+  {
+    "path": "sql-final-partition-certificate-focused-original.log.gz",
+    "sha256": "6b4cf411e786d2f24d9640f6389e6526c8b0d4af48acde0a7cceaa1e4b4d6398",
+    "bytes": 180412,
+    "raw_sha256": "f0ccae573d55892ffa74a75b318eb996d3576c9d2d8df3b8f7aaa96ac7623450",
+    "raw_bytes": 1485688
+  }
+]

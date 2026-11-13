@@ -1066,6 +1066,9 @@ impl<'db> SqlEngine<'db> {
             if alias_name != table {
                 crate::slot_types::register_table(&table, &schema);
             }
+            if schema.partitioning.is_some() {
+                return self.partition_row_set(&table, &alias_name, &schema, needed_columns);
+            }
         }
 
         if self.heap_lock_identity {
@@ -1315,6 +1318,75 @@ impl<'db> SqlEngine<'db> {
         Ok(RowSet { rows, columns })
     }
 
+    fn partition_row_set(
+        &self,
+        table: &str,
+        alias: &str,
+        schema: &TableSchema,
+        needed_columns: Option<&ReferencedColumns>,
+    ) -> Result<RowSet> {
+        let mut fields = FieldRef::wildcard(Some(schema));
+        retain_referenced_fields(&mut fields, needed_columns, table, alias);
+        let mut columns = row_output_columns_from_fields(table, alias, &fields);
+        columns.extend(postgres_system_output_columns(table, alias));
+        if self.heap_lock_identity && primary_key_columns_for_schema(schema).is_empty() {
+            columns.push(format!("{alias}.{}", super::row_locks::HEAP_LOCK_IDENTITY));
+        }
+        let mut rows = Vec::new();
+        for physical in partition::physical_tables(self.db_ref(), schema)? {
+            self.check_cancellation()?;
+            // Keep Native context admission on every physical source. SQL
+            // grants and SQL row policies apply to the accessed parent; a
+            // direct child query independently uses that child's own policy.
+            let mut records = Vec::new();
+            let different_keys =
+                primary_key_columns_for_schema(&physical) != primary_key_columns_for_schema(schema);
+            for record in self.scan_raw_records(&physical.name)? {
+                let record = if different_keys {
+                    let mut record = (*record).clone();
+                    partition::materialize_primary_key_fields(&physical, &mut record)?;
+                    Arc::new(record)
+                } else {
+                    record
+                };
+                if rls_allows_record_with_schema(
+                    self,
+                    table,
+                    PolicyAction::Select,
+                    &record,
+                    Some(schema),
+                )? {
+                    records.push(record);
+                }
+            }
+            let ids = records
+                .iter()
+                .map(|record| record.id.clone())
+                .collect::<Vec<_>>();
+            let metadata = self.postgres_system_metadata_batch(&physical.name, &ids)?;
+            for (record, metadata) in records.into_iter().zip(metadata) {
+                self.check_cancellation()?;
+                let mut row = slot_row_from_record_fields(table, alias, &fields, &record)?;
+                let system = self.postgres_system_values(
+                    &physical.name,
+                    &physical.name,
+                    Some(&physical),
+                    metadata,
+                );
+                row.extend(system.iter().cloned());
+                if table != alias {
+                    row.extend(system);
+                }
+                if self.heap_lock_identity && primary_key_columns_for_schema(schema).is_empty() {
+                    row.push(SqlValue::String(record.id.clone()));
+                }
+                rows.push(row);
+            }
+        }
+        sql_profile_sql_rows_materialized(&rows);
+        Ok(RowSet { rows, columns })
+    }
+
     // The record ids come from rows this statement just materialized, so the
     // materialized variants apply: they stamp system columns without the
     // per-row page-store presence probe that dominates row output on lazy
@@ -1446,6 +1518,9 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         selection: Option<&Expr>,
     ) -> Result<Option<Vec<Arc<Record>>>> {
+        if schema.is_some_and(|schema| schema.partitioning.is_some()) {
+            return Ok(None);
+        }
         let policy_selection =
             self.rls_index_candidate_selection(table, alias, schema, selection, true)?;
         let selection = policy_selection.as_ref().or(selection);
@@ -2599,6 +2674,9 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         selection: Option<&Expr>,
     ) -> Result<Option<RecordLocators>> {
+        if schema.is_some_and(|schema| schema.partitioning.is_some()) {
+            return Ok(None);
+        }
         let Some(selection) = selection else {
             return Ok(None);
         };
@@ -2791,6 +2869,9 @@ impl<'db> SqlEngine<'db> {
         schema: Option<&TableSchema>,
         selection: Option<&Expr>,
     ) -> Result<Option<Vec<String>>> {
+        if schema.is_some_and(|schema| schema.partitioning.is_some()) {
+            return Ok(None);
+        }
         let Some(selection) = selection else {
             return Ok(None);
         };

@@ -1,0 +1,77 @@
+{
+  "original95/controller.json": {
+    "stored_as": "original95/controller.json",
+    "raw_bytes": 4349,
+    "raw_sha256": "abeb174ddeb658ad5b8dbed605316c0a972b3cbed455cc2b48ac972eaa86a4bc"
+  },
+  "original95/test-run.json": {
+    "stored_as": "original95/test-run.json",
+    "raw_bytes": 6354,
+    "raw_sha256": "27304f44f0ea199bc77d26d68923983eff9182e6e5a12d43bfad3de5db650aff"
+  },
+  "original95/jvm.log": {
+    "stored_as": "original95/jvm.log.gz",
+    "raw_bytes": 75523,
+    "raw_sha256": "f051fa63685fb878f6dbb657f115ca83986125143c1929ce5f40dc984a4998ed"
+  },
+  "original95/database.log": {
+    "stored_as": "original95/database.log.gz",
+    "raw_bytes": 9244,
+    "raw_sha256": "f8e56c722d24d426ed701bd93b43145b094df6aafe70a2a5fc45191127b36781"
+  },
+  "bicdb-count-control/result.json": {
+    "stored_as": "bicdb-count-control/result.json",
+    "raw_bytes": 1598,
+    "raw_sha256": "e319ada10dcaf210a5911436656a02449e0b1339a0302f92152c88ccf7130c12"
+  },
+  "bicdb-count-control/server.log": {
+    "stored_as": "bicdb-count-control/server.log.gz",
+    "raw_bytes": 983,
+    "raw_sha256": "87adee1d8866064594fe32a20ee57ce825e89b9237c53d87d23bc226bd178ed4"
+  },
+  "failed-first-count-harness/result.json": {
+    "stored_as": "failed-first-count-harness/result.json",
+    "raw_bytes": 625,
+    "raw_sha256": "3e4091872d171a23421f9903d8780273ba995c80976c4961f5cc5a91ca908b6b"
+  },
+  "failed-first-count-harness/server.log": {
+    "stored_as": "failed-first-count-harness/server.log.gz",
+    "raw_bytes": 1224,
+    "raw_sha256": "0c11802a21c641680df99bcd5d1a52d9d6b7b965ad7f8c55667e0604ec77755f"
+  },
+  "cleanup/finance492-superseded-main490-Core-test-cleanup.json": {
+    "stored_as": "cleanup/finance492-superseded-main490-Core-test-cleanup.json",
+    "raw_bytes": 49646,
+    "raw_sha256": "a0a336cbb16544778b0f7bc58be945d20c60702f809fdac25010ee082d4a3fdf"
+  },
+  "original95/surefire/TEST-org.idempiere.test.base.MStorageTest.xml": {
+    "stored_as": "original95/surefire/TEST-org.idempiere.test.base.MStorageTest.xml.gz",
+    "raw_bytes": 19284,
+    "raw_sha256": "8e10a79a15e158102a081c281c828b7ebb2dc1d4962fef8e77d3ec3f83d2e223"
+  },
+  "original95/surefire/TEST-org.idempiere.test.base.MRelationTypeTest.xml": {
+    "stored_as": "original95/surefire/TEST-org.idempiere.test.base.MRelationTypeTest.xml.gz",
+    "raw_bytes": 19571,
+    "raw_sha256": "33d207f5a7fb0436da74cfd87dffb90570dc6c1617a2d52d1effa72f4d509191"
+  },
+  "original95/surefire/TEST-org.idempiere.test.base.MQueryTest.xml": {
+    "stored_as": "original95/surefire/TEST-org.idempiere.test.base.MQueryTest.xml.gz",
+    "raw_bytes": 22925,
+    "raw_sha256": "4877f4e4882de33f1695896b875d63377eed53e29625a755943335aeec205ec2"
+  },
+  "original95/surefire/TEST-org.idempiere.test.base.MTableTest.xml": {
+    "stored_as": "original95/surefire/TEST-org.idempiere.test.base.MTableTest.xml.gz",
+    "raw_bytes": 37417,
+    "raw_sha256": "51db6134a4e004c44ad9f3357d24d971235fa98a9d7b96010042b487ed51be66"
+  },
+  "original95/surefire/TEST-org.idempiere.test.base.MProcessTest.xml": {
+    "stored_as": "original95/surefire/TEST-org.idempiere.test.base.MProcessTest.xml.gz",
+    "raw_bytes": 24032,
+    "raw_sha256": "e78ee3d4224c3de3b3c54a50656f7dd4b617e7cbafe0f8a28b3829553b9c960b"
+  },
+  "original95/surefire/TEST-org.idempiere.test.base.MTabTest.xml": {
+    "stored_as": "original95/surefire/TEST-org.idempiere.test.base.MTabTest.xml.gz",
+    "raw_bytes": 22129,
+    "raw_sha256": "4320ef40e8fd8c9d7deceaba158e14e0f8f01064032f7044309fdb6df416094f"
+  }
+}

@@ -172,6 +172,7 @@ impl CurrentRepairFixture {
                     other,
                     &CollectionMeta::standard("items"),
                     &crate::RangeSnapshotBatch {
+                        required_reader_features: Vec::new(),
                         collection: "items".into(),
                         range_id: other.id,
                         range_epoch: other.epoch,

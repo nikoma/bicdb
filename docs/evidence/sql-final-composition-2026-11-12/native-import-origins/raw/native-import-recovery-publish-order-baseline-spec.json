@@ -1,0 +1,24 @@
+{
+  "label": "native-import-recovery-publish-order-baseline",
+  "repo": "/root/bicdb-sql-final-composition",
+  "source": "606692adc80390fda471398e8050d85bb505c825",
+  "base": "f2bff71a5233066f2026ffef50881b6e3cc7d336",
+  "scope": "Regression baseline only: same f2bff runtime plus one new ordering test. Actual catalog.write EIO preserves pending target on disk after committed creation; actual WAL rewrite cut_copy EIO during reopen must not let metadata publish completed provenance before WAL is verified. Expect original pending-marker invariant to expose ordering defect, keep evidence; no pass qualification.",
+  "commands": [
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "db::native_import_origins::tests::recovery_never_publishes_pending_origin_before_its_wal_rewrite_sync",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ]
+}

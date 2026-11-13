@@ -1,0 +1,28 @@
+{
+  "source": "ff40982a45bf58d001887d974126aedd3b95133d",
+  "scope": "Private rename branch imports the standalone type/OID/qualified-name fixes and socket test to prevent regression when469 later merges. Test-only next procedure closure control adds pg_get_functiondef dump declaration plus argument metadata and actual scalar/array procedure calls, commit/rollback/old-name-reuse/reopen, intended both stores. Native PostgreSQL16.13 two reference cases passed. Run existing function identity control alongside, collect actual result; do not assume procedure failure merely from CreateFunction-only source review. Scope remains private465, no package version reserved; full SQL scoped producer/metadata/Describe and app/VM gates open.",
+  "started_unix": 1794401256.5964658,
+  "steps": [
+    {
+      "command": [
+        "cargo",
+        "+1.96.0",
+        "test",
+        "--locked",
+        "-j",
+        "1",
+        "-p",
+        "bicdb-sql",
+        "--test",
+        "rename_routine_row_types",
+        "--",
+        "--test-threads=1"
+      ],
+      "started_unix": 1794401256.596613,
+      "exit": 101,
+      "finished_unix": 1794401358.4450922
+    }
+  ],
+  "status": "failed",
+  "finished_unix": 1794401358.4453287
+}

@@ -1,0 +1,1543 @@
+diff --git a/crates/bicdb-core/src/db.rs b/crates/bicdb-core/src/db.rs
+index fb04fad01..50cd8206e 100644
+--- a/crates/bicdb-core/src/db.rs
++++ b/crates/bicdb-core/src/db.rs
+@@ -15,6 +15,7 @@ mod local_namespace_identity;
+ mod mutation_identity;
+ mod native_catalog_allocations;
+ mod native_collection_birth;
++mod native_import_origins;
+ mod native_origin;
+ pub(crate) use native_origin::NativeOriginObservation;
+ mod native_wal_backings;
+@@ -4007,6 +4008,7 @@ pub struct BicDb {
+     native_origin: Option<native_origin::NativeOriginRoot>,
+     fresh_directory_created: bool,
+     native_catalog_allocation_facts_active: bool,
++    native_imported_backing_origins_active: bool,
+     sql_partition_execution_v1_active: AtomicBool,
+     ha_state: HaState,
+     replication_state: ReplicationApplyState,
+@@ -7782,6 +7784,8 @@ pub(crate) enum TxFrame {
+         native_backings: BTreeMap<String, CollectionMeta>,
+         #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+         native_catalog_allocations: BTreeMap<String, CollectionMeta>,
++        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
++        native_imported_allocations: BTreeMap<String, CollectionMeta>,
+     },
+     #[serde(rename = "tx_commit_materialized")]
+     CommitMaterialized {
+@@ -7842,6 +7846,8 @@ struct TxFrameWire {
+     native_backings: BTreeMap<String, CollectionMeta>,
+     #[serde(default)]
+     native_catalog_allocations: BTreeMap<String, CollectionMeta>,
++    #[serde(default)]
++    native_imported_allocations: BTreeMap<String, CollectionMeta>,
+ }
+ 
+ fn decode_tx_frame(payload: &[u8]) -> Result<TxFrame> {
+@@ -7898,6 +7904,9 @@ fn decode_tx_frame(payload: &[u8]) -> Result<TxFrame> {
+             native_catalog_allocations: native_catalog_allocations::validated(
+                 wire.native_catalog_allocations,
+             )?,
++            native_imported_allocations: native_import_origins::validated_decisions(
++                wire.native_imported_allocations,
++            )?,
+         },
+         TxFrameKind::TxCommitMaterialized => TxFrame::CommitMaterialized {
+             tx_id: wire.tx_id,
+@@ -8345,6 +8354,8 @@ enum TxFrameRef<'a> {
+         native_backings: &'a BTreeMap<String, CollectionMeta>,
+         #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+         native_catalog_allocations: &'a BTreeMap<String, CollectionMeta>,
++        #[serde(skip_serializing_if = "BTreeMap::is_empty")]
++        native_imported_allocations: &'a BTreeMap<String, CollectionMeta>,
+     },
+ }
+ 
+@@ -10603,6 +10614,15 @@ impl BicDb {
+             paged.set_index_aliases(fts_generations.indexes.clone());
+         }
+ 
++        // One durability state per database: the page store's when there is
++        // one, so a failure in the page log, the page file or the
++        // transaction log fences all of them.
++        let durability = paged_records
++            .as_ref()
++            .map_or_else(bicdb_page::DurabilityHealth::new, |paged| {
++                paged.store().durability_health().clone()
++            });
++        durability.set_marker_path(path.join(DURABILITY_FAILURE_MARKER));
+         let ha_state = load_ha_state(&path)?;
+         let consensus_state = load_consensus_state(&path, &config.consensus, config.fsync)?;
+         let mut tx_recovery = recover_transaction_log(
+@@ -10644,7 +10664,7 @@ impl BicDb {
+         let replication_state =
+             load_replication_state(&path, &config.replication, tx_recovery.last_commit_seq)?;
+         open_trace!("tx_recovery");
+-        let metas = load_catalog(&path.join(DEFAULT_COLLECTION_CATALOG), &encryption)?;
++        let mut metas = load_catalog(&path.join(DEFAULT_COLLECTION_CATALOG), &encryption)?;
+         let format_capabilities = format::read_or_legacy_metadata(&path)?.feature_flags;
+         let local_namespace_identity_active =
+             format_capabilities.contains(format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG);
+@@ -10654,6 +10674,28 @@ impl BicDb {
+             format_capabilities.contains(format::NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG);
+         let native_catalog_allocation_facts_active =
+             format_capabilities.contains(format::NATIVE_CATALOG_ALLOCATION_FACTS_FEATURE_FLAG);
++        let native_imported_backing_origins_active =
++            format_capabilities.contains(format::NATIVE_IMPORTED_BACKING_ORIGINS_FEATURE_FLAG);
++        if !native_imported_backing_origins_active
++            && !tx_recovery.native_imported_allocations.is_empty()
++        {
++            return Err(BicDbError::FormatCompatibility(
++                "Native imported allocation WAL requires its format fence".into(),
++            ));
++        }
++        if native_imported_backing_origins_active
++            && (native_origin.is_none() || !native_wal_backing_capture_active)
++        {
++            return Err(BicDbError::FormatCompatibility(
++                "Native imported allocation has no actual origin/WAL fence".into(),
++            ));
++        }
++        let mut completed_import_catalog = metas.clone();
++        let native_import_catalog_repaired = native_import_origins::repair_pending(
++            &mut completed_import_catalog,
++            &tx_recovery.native_imported_allocations,
++        )?;
++        native_import_origins::validate_catalog(&metas, native_imported_backing_origins_active)?;
+         if tx_recovery.requires_native_catalog_allocations
+             && !native_catalog_allocation_facts_active
+         {
+@@ -10696,6 +10738,26 @@ impl BicDb {
+             &tx_recovery.native_origin_roots,
+             native_origin.as_ref(),
+         )?;
++        if native_import_catalog_repaired {
++            // Recovery may have read a commit left only in the page cache by
++            // a failed fsync. Make those exact bytes durable before publishing
++            // completed allocation provenance, or before any open-time WAL
++            // cut can discard the only copy of that allocation decision.
++            copy_transaction_log_tail(&path.join(DEFAULT_TRANSACTION_LOG), 0, true)?;
++            metas = completed_import_catalog;
++            metas.sort_by(|left, right| left.name.cmp(&right.name));
++            write_sidecar(
++                &path.join(DEFAULT_COLLECTION_CATALOG),
++                FrameKind::Index,
++                &serde_json::to_vec_pretty(&CollectionCatalog {
++                    collections: metas.clone(),
++                })?,
++                true,
++                &encryption,
++                "catalog",
++                storage::FailClosed::Always(&durability),
++            )?;
++        }
+         // Physical storage names must be known before any row is read, and an
+         // interrupted rename (renamed_from still set) maps index definitions
+         // still recorded under the old name.
+@@ -11427,15 +11489,6 @@ impl BicDb {
+         };
+ 
+         open_trace!("events+graphs+sync_state");
+-        // One durability state per database: the page store's when there is
+-        // one, so a failure in the page log, the page file or the
+-        // transaction log fences all of them.
+-        let durability = paged_records
+-            .as_ref()
+-            .map_or_else(bicdb_page::DurabilityHealth::new, |paged| {
+-                paged.store().durability_health().clone()
+-            });
+-        durability.set_marker_path(path.join(DURABILITY_FAILURE_MARKER));
+         let tx_log = TxLogHandle::new(
+             path.join(DEFAULT_TRANSACTION_LOG),
+             tx_recovery.last_commit_seq,
+@@ -11486,6 +11539,7 @@ impl BicDb {
+             native_origin,
+             fresh_directory_created,
+             native_catalog_allocation_facts_active,
++            native_imported_backing_origins_active,
+             ha_state,
+             replication_state,
+             consensus_state,
+@@ -12562,6 +12616,7 @@ impl BicDb {
+                     commit_seq,
+                     native_backings,
+                     native_catalog_allocations,
++                    ..
+                 } => {
+                     if commit_seq <= through_seq {
+                         commits.push((commit_seq, tx_id.0, timestamp));
+@@ -13157,19 +13212,24 @@ impl BicDb {
+         }
+ 
+         self.verify_replication_attachments(frame)?;
++        let native_import = self.accept_native_import(frame)?;
++        let native_import_decisions =
++            self.prepare_native_import_allocations(native_import.as_ref())?;
+         self.install_replicated_reader_features(&frame.required_reader_features)?;
+         self.ensure_replication_frame_collections(frame)?;
+         let writes = replication_writes_to_tx_writes(frame)?;
+         self.stage_pending_replication_catalog(frame)?;
+-        self.apply_imported_replication_commit_with_mutation(
++        self.apply_imported_replication_commit_with_native_allocations(
+             frame.tx_id,
+             frame.commit_seq,
+             frame.timestamp,
+             &writes,
+             &frame.journal,
+             authority,
++            &native_import_decisions,
+         )?;
+         self.apply_replicated_catalog_ops(frame)?;
++        self.finish_native_import_allocations(&native_import_decisions)?;
+         self.finish_pending_replication_catalog()?;
+         self.record_replication_apply_success(frame)?;
+         Ok(ReplicationApplyReport {
+@@ -13401,6 +13461,7 @@ impl BicDb {
+             local_namespace_id: self.fresh_local_namespace_identity(),
+             native_backing_birth_id: self.fresh_native_collection_birth(),
+             native_backing_origin_root: self.fresh_native_backing_origin_root(),
++            native_imported_backing_origin: None,
+             native_catalog_allocation_pending: self.native_catalog_allocation_logging_active()
+                 && name != collection_rename::CATALOG_LOG_COLLECTION,
+         };
+@@ -21313,6 +21374,7 @@ struct TxRecovery {
+     native_backings_by_tx: BTreeMap<u64, BTreeMap<String, (Uuid, Uuid)>>,
+     native_backing_history: BTreeSet<(Uuid, Uuid)>,
+     native_origin_roots: BTreeSet<Uuid>,
++    native_imported_allocations: BTreeMap<(Uuid, Uuid), CollectionMeta>,
+ }
+ 
+ #[derive(Clone, Debug)]
+@@ -21461,6 +21523,7 @@ fn recover_transaction_log(
+     let mut native_backings_by_tx = BTreeMap::new();
+     let mut native_backing_history = BTreeSet::new();
+     let mut native_origin_roots = BTreeSet::new();
++    let mut native_imported_allocations = BTreeMap::new();
+ 
+     // Stream the WAL independently of the record-segment read mode. Preserve
+     // torn-tail repair, without retaining every raw frame beside decoded rows.
+@@ -21522,8 +21585,19 @@ fn recover_transaction_log(
+                 commit_seq,
+                 native_backings,
+                 native_catalog_allocations,
++                native_imported_allocations: imported_allocations,
+                 ..
+             } => {
++                for meta in imported_allocations.into_values() {
++                    let origin = meta
++                        .native_imported_backing_origin
++                        .as_ref()
++                        .expect("validated imported allocation");
++                    native_origin_roots.insert(origin.target_root);
++                    native_backing_history.insert((origin.target_birth, origin.target_namespace));
++                    native_imported_allocations
++                        .insert((origin.target_birth, origin.generation), meta);
++                }
+                 requires_native_catalog_allocations |= !native_catalog_allocations.is_empty();
+                 native_origin_roots.extend(
+                     native_catalog_allocations
+@@ -21609,6 +21683,7 @@ fn recover_transaction_log(
+         native_backings_by_tx,
+         native_backing_history,
+         native_origin_roots,
++        native_imported_allocations,
+     })
+ }
+ 
+@@ -32043,6 +32118,7 @@ mod index_maintenance_tests {
+                     commit_seq: 1,
+                     native_backings: BTreeMap::new(),
+                     native_catalog_allocations: BTreeMap::new(),
++                    native_imported_allocations: BTreeMap::new(),
+                 },
+             ] {
+                 storage::append_frame(
+@@ -32200,6 +32276,7 @@ mod index_maintenance_tests {
+             commit_seq: 42,
+             native_backings: BTreeMap::new(),
+             native_catalog_allocations: BTreeMap::new(),
++            native_imported_allocations: BTreeMap::new(),
+         };
+         let borrowed_commit = TxFrameRef::Commit {
+             tx_id,
+@@ -32207,6 +32284,7 @@ mod index_maintenance_tests {
+             commit_seq: 42,
+             native_backings: &BTreeMap::new(),
+             native_catalog_allocations: &BTreeMap::new(),
++            native_imported_allocations: &BTreeMap::new(),
+         };
+         assert_eq!(
+             serde_json::to_vec(&owned_commit).unwrap(),
+@@ -32348,6 +32426,7 @@ mod index_maintenance_tests {
+                 commit_seq: 0,
+                 native_backings: BTreeMap::new(),
+                 native_catalog_allocations: BTreeMap::new(),
++                native_imported_allocations: BTreeMap::new(),
+             },
+         ] {
+             storage::append_frame(
+diff --git a/crates/bicdb-core/src/db/collection_rename.rs b/crates/bicdb-core/src/db/collection_rename.rs
+index acec50582..8b1c02c67 100644
+--- a/crates/bicdb-core/src/db/collection_rename.rs
++++ b/crates/bicdb-core/src/db/collection_rename.rs
+@@ -390,6 +390,11 @@ impl BicDb {
+     }
+ 
+     fn ensure_renamable(&self, collection: &str) -> Result<()> {
++        if native_import_origins::pending(&self.collection_state(collection)?.meta) {
++            return Err(replication_error(
++                "Native imported backing publication is pending",
++            ));
++        }
+         if self
+             .collection_state(collection)?
+             .meta
+@@ -656,6 +661,7 @@ impl BicDb {
+         copied.native_backing_birth_id = target.meta.native_backing_birth_id;
+         copied.native_backing_origin_root = target.meta.native_backing_origin_root;
+         copied.native_catalog_allocation_pending = target.meta.native_catalog_allocation_pending;
++        copied.native_imported_backing_origin = target.meta.native_imported_backing_origin.clone();
+         copied.renamed_from = None;
+         target.meta = copied;
+         self.persist_catalog()?;
+diff --git a/crates/bicdb-core/src/db/commit_snapshot.rs b/crates/bicdb-core/src/db/commit_snapshot.rs
+index 5b8001ad5..13d4acf7e 100644
+--- a/crates/bicdb-core/src/db/commit_snapshot.rs
++++ b/crates/bicdb-core/src/db/commit_snapshot.rs
+@@ -91,6 +91,7 @@ impl BicDb {
+             writes,
+             broker_publishes,
+             native_catalog_allocations,
++            &BTreeMap::new(),
+             record_audit_events,
+             sync_ops,
+             prepared,
+@@ -105,6 +106,7 @@ impl BicDb {
+         writes: &[TxWrite],
+         broker_publishes: &[crate::broker::PendingBrokerPublish],
+         native_catalog_allocations: &BTreeMap<String, CollectionMeta>,
++        native_imported_allocations: &BTreeMap<String, CollectionMeta>,
+         record_audit_events: &[Event],
+         sync_ops: &[SyncOp],
+         prepared: PreparedWal,
+@@ -119,6 +121,7 @@ impl BicDb {
+         }
+         let native_backings = self.capture_native_wal_backings(writes)?;
+         self.validate_native_catalog_allocation_commit(writes, native_catalog_allocations)?;
++        self.validate_native_import_decisions(native_imported_allocations)?;
+         let prepared = match prepared {
+             PreparedWal::PlainFrames { count, mut bytes }
+                 if count == writes.len() && !self.encryption.is_enabled() =>
+@@ -156,6 +159,7 @@ impl BicDb {
+                         commit_seq,
+                         native_backings: &native_backings,
+                         native_catalog_allocations,
++                        native_imported_allocations,
+                     },
+                 )?;
+                 return Ok(bytes);
+@@ -200,6 +204,7 @@ impl BicDb {
+             commit_seq,
+             native_backings: &native_backings,
+             native_catalog_allocations,
++            native_imported_allocations,
+         })?);
+         storage::encode_frames_to_bytes(
+             &self.tx_log_path(),
+@@ -232,6 +237,27 @@ impl BicDb {
+         writes: &[TxWrite],
+         journal: &[Event],
+         authority: Option<&crate::distribution_range_mutation::RangeMutationAuthority<'_>>,
++    ) -> Result<()> {
++        self.apply_imported_replication_commit_with_native_allocations(
++            tx_id,
++            commit_seq,
++            timestamp,
++            writes,
++            journal,
++            authority,
++            &BTreeMap::new(),
++        )
++    }
++
++    pub(super) fn apply_imported_replication_commit_with_native_allocations(
++        &mut self,
++        tx_id: u64,
++        commit_seq: u64,
++        timestamp: i64,
++        writes: &[TxWrite],
++        journal: &[Event],
++        authority: Option<&crate::distribution_range_mutation::RangeMutationAuthority<'_>>,
++        native_imported_allocations: &BTreeMap<String, CollectionMeta>,
+     ) -> Result<()> {
+         self.require_native_generic_import_allowed()?;
+         if let Some(authority) = authority {
+@@ -273,6 +299,7 @@ impl BicDb {
+                     native_backing_birth_id: self.fresh_native_collection_birth(),
+                     native_backing_origin_root: self.fresh_native_backing_origin_root(),
+                     native_catalog_allocation_pending: false,
++                    native_imported_backing_origin: None,
+                 };
+                 self.collections.insert(
+                     write.collection.clone(),
+@@ -297,6 +324,7 @@ impl BicDb {
+             writes,
+             &[],
+             &BTreeMap::new(),
++            native_imported_allocations,
+             journal,
+             &[],
+             PreparedWal::default(),
+@@ -1701,6 +1729,10 @@ impl BicDb {
+             &collections,
+             self.native_catalog_allocation_facts_active,
+         )?;
++        native_import_origins::validate_catalog(
++            &collections,
++            self.native_imported_backing_origins_active,
++        )?;
+         collections.sort_by(|left, right| left.name.cmp(&right.name));
+         let catalog = CollectionCatalog { collections };
+         let bytes = serde_json::to_vec_pretty(&catalog)?;
+@@ -2874,7 +2906,9 @@ impl BicDb {
+ 
+     pub(crate) fn ensure_collection(&self, collection: &str) -> Result<()> {
+         let state = self.collection_state(collection)?;
+-        if state.meta.native_catalog_allocation_pending {
++        if state.meta.native_catalog_allocation_pending
++            || native_import_origins::pending(&state.meta)
++        {
+             return Err(BicDbError::Replication(format!("Native collection `{collection}` creation publication is pending; retry its create operation")));
+         }
+         Ok(())
+diff --git a/crates/bicdb-core/src/db/compact_wal.rs b/crates/bicdb-core/src/db/compact_wal.rs
+index 5122ad283..5eca8ae5b 100644
+--- a/crates/bicdb-core/src/db/compact_wal.rs
++++ b/crates/bicdb-core/src/db/compact_wal.rs
+@@ -266,6 +266,7 @@ mod tests {
+                 commit_seq: 1,
+                 native_backings: BTreeMap::new(),
+                 native_catalog_allocations: BTreeMap::new(),
++                native_imported_allocations: BTreeMap::new(),
+             })
+             .unwrap(),
+         );
+diff --git a/crates/bicdb-core/src/db/native_catalog_allocations.rs b/crates/bicdb-core/src/db/native_catalog_allocations.rs
+index 5b1b9ce31..5392f2bb9 100644
+--- a/crates/bicdb-core/src/db/native_catalog_allocations.rs
++++ b/crates/bicdb-core/src/db/native_catalog_allocations.rs
+@@ -206,5 +206,5 @@ impl BicDb {
+     }
+ }
+ 
+-#[cfg(test)]
++#[cfg(all(test, unix))]
+ mod tests;
+diff --git a/crates/bicdb-core/src/db/native_import_origins.rs b/crates/bicdb-core/src/db/native_import_origins.rs
+new file mode 100644
+index 000000000..265d2df40
+--- /dev/null
++++ b/crates/bicdb-core/src/db/native_import_origins.rs
+@@ -0,0 +1,405 @@
++//! Native receiver allocation provenance. Only the opaque actual-source
++//! capture enters this producer; portable metadata never enters as authority.
++use super::*;
++use crate::NativeImportedBackingOrigin;
++
++fn invalid(message: &str) -> BicDbError {
++    BicDbError::Replication(format!("Native imported backing: {message}"))
++}
++fn sha256_shape(value: &str) -> bool {
++    value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit())
++}
++fn contract_hash(meta: &CollectionMeta) -> Result<String> {
++    Ok(hex::encode(sha2::Sha256::digest(serde_json::to_vec(
++        &meta.portable_contract(),
++    )?)))
++}
++
++impl NativeImportedBackingOrigin {
++    fn validate(&self, meta: &CollectionMeta) -> Result<()> {
++        if self.version != 1
++            || self.source_sequence == 0
++            || [
++                self.source_root,
++                self.source_birth,
++                self.source_namespace,
++                self.target_root,
++                self.target_birth,
++                self.target_namespace,
++                self.generation,
++            ]
++            .iter()
++            .any(Uuid::is_nil)
++            || self.source_root == self.target_root
++            || !sha256_shape(&self.source_root_sha256)
++            || !sha256_shape(&self.source_contract_sha256)
++            || meta.native_backing_origin_root != Some(self.target_root)
++            || meta.native_backing_birth_id != Some(self.target_birth)
++            || meta.local_namespace_id != Some(self.target_namespace)
++            || meta.storage() != self.target_storage
++        {
++            return Err(invalid("damaged or transplanted actual target allocation"));
++        }
++        validate_collection_name(&self.source_storage)?;
++        validate_collection_name(&self.target_storage)?;
++        Ok(())
++    }
++    fn same_source(&self, root: &NativeOriginObservation, fact: &CollectionMeta) -> Result<bool> {
++        Ok(self.source_root == root.root_id()
++            && self.source_root_sha256 == root.record_sha256()
++            && Some(self.source_birth) == fact.native_backing_birth_id
++            && Some(self.source_namespace) == fact.local_namespace_id
++            && self.source_storage == fact.storage()
++            && self.source_contract_sha256 == contract_hash(fact)?)
++    }
++}
++
++pub(super) fn pending(meta: &CollectionMeta) -> bool {
++    meta.native_imported_backing_origin
++        .as_ref()
++        .is_some_and(|origin| origin.pending)
++}
++
++pub(super) fn validate_catalog(metas: &[CollectionMeta], active: bool) -> Result<()> {
++    let mut source_births = BTreeSet::new();
++    let mut source_namespaces = BTreeSet::new();
++    let mut generations = BTreeSet::new();
++    for meta in metas {
++        if let Some(origin) = &meta.native_imported_backing_origin {
++            if !active {
++                return Err(invalid("catalog provenance has no Native format fence"));
++            }
++            origin.validate(meta)?;
++            if !source_births.insert((origin.source_root, origin.source_birth))
++                || !source_namespaces.insert((origin.source_root, origin.source_namespace))
++                || !generations.insert(origin.generation)
++            {
++                return Err(invalid("ambiguous imported backing or install generation"));
++            }
++        }
++    }
++    Ok(())
++}
++
++pub(super) fn validated_decisions(
++    facts: BTreeMap<String, CollectionMeta>,
++) -> Result<BTreeMap<String, CollectionMeta>> {
++    let facts = native_wal_backings::validated(facts)?;
++    validate_catalog(&facts.values().cloned().collect::<Vec<_>>(), true)?;
++    if facts.values().any(|meta| {
++        meta.native_catalog_allocation_pending
++            || meta
++                .native_imported_backing_origin
++                .as_ref()
++                .is_none_or(|origin| origin.pending)
++    }) {
++        return Err(invalid("WAL allocation decision is incomplete"));
++    }
++    Ok(facts)
++}
++
++/// Normalize only a pending marker whose exact actual target and accepted
++/// source were committed together. Completed control metadata outlives WAL
++/// cuts; a pending marker without that decision remains fenced for retry.
++pub(super) fn repair_pending(
++    metas: &mut [CollectionMeta],
++    decisions: &BTreeMap<(Uuid, Uuid), CollectionMeta>,
++) -> Result<bool> {
++    let mut changed = false;
++    for meta in metas {
++        if !pending(meta) {
++            continue;
++        }
++        let origin = meta.native_imported_backing_origin.as_ref().unwrap();
++        if let Some(decision) = decisions.get(&(origin.target_birth, origin.generation)) {
++            let mut expected = origin.clone();
++            expected.pending = false;
++            if decision.native_imported_backing_origin.as_ref() != Some(&expected)
++                || decision.local_namespace_id != meta.local_namespace_id
++                || decision.native_backing_origin_root != meta.native_backing_origin_root
++                || decision.storage() != meta.storage()
++            {
++                return Err(invalid(
++                    "pending target differs from its committed allocation decision",
++                ));
++            }
++            meta.native_imported_backing_origin
++                .as_mut()
++                .unwrap()
++                .pending = false;
++            changed = true;
++        }
++    }
++    Ok(changed)
++}
++
++/// Not serializable or externally constructible. The source observation and
++/// facts come from the checksum-bound actual Native exporter, never JSON.
++pub(super) struct AcceptedNativeImport {
++    root: NativeOriginObservation,
++    facts: BTreeMap<String, CollectionMeta>,
++    sequence: u64,
++    checksum: [u8; 32],
++}
++
++impl BicDb {
++    /// Trusted host setup before this fresh primary's first allocation. An
++    /// existing empty directory is not a Native factory and is not upgraded.
++    pub fn initialize_fresh_primary_replication_origins(&mut self) -> Result<bool> {
++        if !self.config.replication.enabled
++            || self.is_replication_standby()
++            || !self.config.fsync
++            || !self.collections.is_empty()
++            || self.current_commit_seq() != 0
++            || (!self.fresh_directory_created
++                && self.native_origin.is_none()
++                && !native_origin::has_prepared_factory(&self.path)?)
++        {
++            return Ok(false);
++        }
++        self.activate_native_origin_root_v1()?;
++        self.activate_local_namespace_identity_v1()?;
++        self.activate_native_collection_birth_v1()?;
++        self.activate_native_wal_backing_capture_v1()?;
++        self.activate_native_catalog_allocation_facts_v1()?;
++        Ok(true)
++    }
++
++    pub(super) fn accept_native_import(
++        &self,
++        frame: &CommitFrame,
++    ) -> Result<Option<AcceptedNativeImport>> {
++        let Some(facts) = frame.captured_native_catalog_allocations()? else {
++            return Ok(None);
++        };
++        if facts.is_empty() {
++            return Ok(None);
++        }
++        let root = frame
++            .captured_native_origin_root()?
++            .ok_or_else(|| invalid("actual source root is missing"))?;
++        if !self.config.fsync {
++            return Err(invalid("actual target allocation requires fsync"));
++        }
++        for (name, fact) in facts {
++            validate_collection_meta_namespaces(fact)?;
++            if fact.native_backing_origin_root != Some(root.root_id()) {
++                return Err(invalid("actual source birth belongs to another root"));
++            }
++            let mut create = false;
++            for write in &frame.writes {
++                if write.collection == *name {
++                    return Err(invalid("creation frame also writes its unpublished child"));
++                }
++                if write.collection == collection_rename::CATALOG_LOG_COLLECTION
++                    && write.operation != ReplicationOperationType::Delete
++                {
++                    let record: Record = serde_json::from_slice(&write.payload)?;
++                    if let collection_rename::CatalogOp::Create {
++                        name: created,
++                        mode,
++                    } = serde_json::from_value(record.metadata)?
++                    {
++                        create |= created == *name && mode == fact.mode;
++                    }
++                }
++            }
++            if !create {
++                return Err(invalid(
++                    "source allocation has no corresponding catalog CREATE",
++                ));
++            }
++            for existing in self.collections() {
++                if existing.name != *name
++                    && existing
++                        .native_imported_backing_origin
++                        .as_ref()
++                        .is_some_and(|origin| {
++                            origin.source_root == root.root_id()
++                                && (Some(origin.source_birth) == fact.native_backing_birth_id
++                                    || Some(origin.source_namespace) == fact.local_namespace_id)
++                        })
++                {
++                    return Err(invalid(
++                        "source allocation already belongs to another actual target",
++                    ));
++                }
++            }
++            if let Some(state) = self.collections.get(name) {
++                let state = state.read();
++                let origin = state
++                    .meta
++                    .native_imported_backing_origin
++                    .as_ref()
++                    .ok_or_else(|| {
++                        invalid("existing unowned target cannot acquire imported provenance")
++                    })?;
++                origin.validate(&state.meta)?;
++                if !origin.same_source(root, fact)?
++                    || (origin.pending
++                        && (origin.source_sequence != frame.commit_seq
++                            || origin.source_frame_checksum != frame.checksum))
++                {
++                    return Err(invalid(
++                        "existing target belongs to another accepted allocation",
++                    ));
++                }
++            }
++        }
++        if self.native_origin.is_none()
++            && (!self.collections.is_empty()
++                || self.current_commit_seq() != 0
++                || (!self.fresh_directory_created
++                    && !native_origin::has_prepared_factory(&self.path)?))
++        {
++            return Err(invalid("actual fresh target factory is required"));
++        }
++        if !self.collections.is_empty()
++            && (!self.local_namespace_identity_active
++                || !self.native_collection_birth_active
++                || !self.native_wal_backing_capture_active)
++        {
++            return Err(invalid(
++                "existing target lacks its Native allocation fences",
++            ));
++        }
++        Ok(Some(AcceptedNativeImport {
++            root: root.clone(),
++            facts: facts.clone(),
++            sequence: frame.commit_seq,
++            checksum: frame.checksum,
++        }))
++    }
++
++    pub(super) fn prepare_native_import_allocations(
++        &mut self,
++        accepted: Option<&AcceptedNativeImport>,
++    ) -> Result<BTreeMap<String, CollectionMeta>> {
++        let Some(accepted) = accepted else {
++            return Ok(BTreeMap::new());
++        };
++        self.check_catalog_recovery_quiescent()?;
++        let setup = (|| -> Result<()> {
++            self.install_actual_native_origin_root_v1()?;
++            format::enable_local_namespace_identity(&self.path)?;
++            self.local_namespace_identity_active = true;
++            format::enable_native_collection_birth(&self.path)?;
++            self.native_collection_birth_active = true;
++            format::enable_native_wal_backing_capture(&self.path)?;
++            self.native_wal_backing_capture_active = true;
++            format::enable_native_catalog_allocation_facts(&self.path)?;
++            self.native_catalog_allocation_facts_active = true;
++            format::enable_native_imported_backing_origins(&self.path)?;
++            self.native_imported_backing_origins_active = true;
++            Ok(())
++        })();
++        if let Err(error) = setup {
++            self.fence_durability("native_import_origin.format_fence", &error);
++            return Err(error);
++        }
++        let mut decisions = BTreeMap::new();
++        for (name, fact) in &accepted.facts {
++            if !self.collections.contains_key(name) {
++                let mut meta = self.new_local_collection_metadata(fact);
++                meta.storage_name = self.storage_name_for_new(name);
++                let origin = NativeImportedBackingOrigin {
++                    version: 1,
++                    source_root: accepted.root.root_id(),
++                    source_root_sha256: accepted.root.record_sha256().into(),
++                    source_birth: fact
++                        .native_backing_birth_id
++                        .ok_or_else(|| invalid("missing source birth"))?,
++                    source_namespace: fact
++                        .local_namespace_id
++                        .ok_or_else(|| invalid("missing source namespace"))?,
++                    source_storage: fact.storage().into(),
++                    source_contract_sha256: contract_hash(fact)?,
++                    source_sequence: accepted.sequence,
++                    source_frame_checksum: accepted.checksum,
++                    target_root: meta
++                        .native_backing_origin_root
++                        .ok_or_else(|| invalid("missing target root"))?,
++                    target_birth: meta
++                        .native_backing_birth_id
++                        .ok_or_else(|| invalid("missing target birth"))?,
++                    target_namespace: meta
++                        .local_namespace_id
++                        .ok_or_else(|| invalid("missing target namespace"))?,
++                    target_storage: meta.storage().into(),
++                    generation: Uuid::new_v4(),
++                    pending: true,
++                };
++                meta.native_imported_backing_origin = Some(origin);
++                if let Some(storage) = &meta.storage_name {
++                    self.set_storage_alias(name, storage);
++                }
++                let mut state = CollectionState::new(meta);
++                state.paged_lazy = self.paged_records.is_some();
++                self.collections.insert(name.clone(), RwLock::new(state));
++                self.persist_catalog()?;
++                self.schema_compatibility.invalidate();
++            }
++            let state = self.collection_state(name)?;
++            if pending(&state.meta) {
++                let mut meta = state.meta.clone();
++                meta.native_imported_backing_origin
++                    .as_mut()
++                    .unwrap()
++                    .pending = false;
++                decisions.insert(name.clone(), meta);
++            }
++        }
++        validated_decisions(decisions)
++    }
++
++    pub(super) fn validate_native_import_decisions(
++        &self,
++        decisions: &BTreeMap<String, CollectionMeta>,
++    ) -> Result<()> {
++        if decisions.is_empty() {
++            return Ok(());
++        }
++        if !self.config.fsync || !self.native_imported_backing_origins_active {
++            return Err(invalid("allocation decision is unfenced"));
++        }
++        validated_decisions(decisions.clone())?;
++        for (name, decision) in decisions {
++            let state = self.collection_state(name)?;
++            let mut actual = state.meta.clone();
++            if !pending(&actual) {
++                return Err(invalid("allocation decision has no actual pending target"));
++            }
++            actual
++                .native_imported_backing_origin
++                .as_mut()
++                .unwrap()
++                .pending = false;
++            if actual != *decision {
++                return Err(invalid("allocation decision replaced its actual target"));
++            }
++        }
++        Ok(())
++    }
++
++    pub(super) fn finish_native_import_allocations(
++        &mut self,
++        decisions: &BTreeMap<String, CollectionMeta>,
++    ) -> Result<()> {
++        if decisions.is_empty() {
++            return Ok(());
++        }
++        self.validate_native_import_decisions(decisions)?;
++        for name in decisions.keys() {
++            self.collection_state_mut(name)?
++                .meta
++                .native_imported_backing_origin
++                .as_mut()
++                .unwrap()
++                .pending = false;
++        }
++        self.persist_catalog()
++    }
++}
++
++#[cfg(all(test, unix))]
++mod tests;
+diff --git a/crates/bicdb-core/src/db/native_import_origins/tests.rs b/crates/bicdb-core/src/db/native_import_origins/tests.rs
+new file mode 100644
+index 000000000..d0fd507e0
+--- /dev/null
++++ b/crates/bicdb-core/src/db/native_import_origins/tests.rs
+@@ -0,0 +1,465 @@
++use super::*;
++use crate::{ReplicationMode, ReplicationTlsConfig};
++use serde_json::json;
++
++fn config(mode: StorageMode, role: ReplicationMode) -> DbConfig {
++    DbConfig::default()
++        .with_fsync(true)
++        .with_storage_mode(mode)
++        .with_paged_buffer_pool_bytes(8 * 1024 * 1024)
++        .with_replication(ReplicationConfig {
++            enabled: true,
++            mode: role,
++            listen_addr: Some("127.0.0.1:0".into()),
++            tls: Some(ReplicationTlsConfig {
++                cert_path: Default::default(),
++                key_path: Default::default(),
++                ca_path: Default::default(),
++                require_client_cert: true,
++                dev_localhost_plaintext: true,
++            }),
++            ..Default::default()
++        })
++}
++fn meta(db: &BicDb, name: &str) -> CollectionMeta {
++    db.collections()
++        .into_iter()
++        .find(|m| m.name == name)
++        .unwrap()
++}
++fn ship(source: &BicDb, target: &mut BicDb) {
++    target
++        .apply_replication_batch(
++            &source
++                .export_replication_frames_since(target.last_applied_commit_seq(), usize::MAX)
++                .unwrap(),
++        )
++        .unwrap();
++}
++
++#[test]
++fn actual_export_import_allocates_new_target_and_retains_origin_through_rename_and_two_opens() {
++    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
++        let root = tempfile::tempdir().unwrap();
++        let path = root.path().join("target");
++        let cfg = config(mode.clone(), ReplicationMode::Standby);
++        let mut source = BicDb::open_with_config(
++            root.path().join("source"),
++            config(mode, ReplicationMode::Primary),
++        )
++        .unwrap();
++        source.sync_quorum().hold("origin-history", 0);
++        source.persist_standby_slots().unwrap();
++        assert!(source
++            .initialize_fresh_primary_replication_origins()
++            .unwrap());
++        source.create_collection("items").unwrap();
++        let first = meta(&source, "items");
++        let row = Record::new("ACK").with_metadata(json!({"value":97}));
++        source.insert("items", row.clone()).unwrap();
++        let mut target = BicDb::open_with_config(&path, cfg.clone()).unwrap();
++        assert!(target.native_origin_root_id().unwrap().is_none());
++        ship(&source, &mut target);
++        let local = meta(&target, "items");
++        let origin = local.native_imported_backing_origin.as_ref().unwrap();
++        assert!(!origin.pending);
++        assert!(origin
++            .same_source(
++                &source.observe_native_origin_root().unwrap().unwrap(),
++                &first
++            )
++            .unwrap());
++        assert_ne!(local.native_backing_birth_id, first.native_backing_birth_id);
++        assert_ne!(local.local_namespace_id, first.local_namespace_id);
++        assert_ne!(
++            local.native_backing_origin_root,
++            first.native_backing_origin_root
++        );
++        assert!(
++            !target.native_catalog_allocation_logging_active(),
++            "import must preserve standby role"
++        );
++        assert!(target.is_replication_standby());
++        source.rename_collection("items", "kept").unwrap();
++        source.create_timeseries_collection("items").unwrap();
++        let second = meta(&source, "items");
++        ship(&source, &mut target);
++        let replacement = meta(&target, "items");
++        let moved = meta(&target, "kept");
++        assert_eq!(
++            moved.native_imported_backing_origin,
++            local.native_imported_backing_origin
++        );
++        assert_ne!(
++            replacement
++                .native_imported_backing_origin
++                .as_ref()
++                .unwrap()
++                .generation,
++            origin.generation
++        );
++        assert_eq!(
++            replacement
++                .native_imported_backing_origin
++                .as_ref()
++                .unwrap()
++                .source_birth,
++            second.native_backing_birth_id.unwrap()
++        );
++        assert_eq!(replacement.mode, CollectionMode::TimeSeries);
++        target.close().unwrap();
++        for _ in 0..2 {
++            let target = BicDb::open_with_config(&path, cfg.clone()).unwrap();
++            assert_eq!(meta(&target, "kept"), moved);
++            assert_eq!(meta(&target, "items"), replacement);
++            assert_eq!(
++                target
++                    .get("kept", "ACK")
++                    .unwrap()
++                    .unwrap()
++                    .content_hash()
++                    .unwrap(),
++                row.content_hash().unwrap()
++            );
++            assert!(target.get("items", "ACK").unwrap().is_none());
++            target.close().unwrap();
++        }
++    }
++}
++
++#[test]
++fn json_or_modified_frames_never_mint_target_provenance_and_duplicate_does_not_retrofit() {
++    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
++        let root = tempfile::tempdir().unwrap();
++        let mut source = BicDb::open_with_config(
++            root.path().join("source"),
++            config(mode.clone(), ReplicationMode::Primary),
++        )
++        .unwrap();
++        source.sync_quorum().hold("origin-history", 0);
++        assert!(source
++            .initialize_fresh_primary_replication_origins()
++            .unwrap());
++        source.create_collection("items").unwrap();
++        source.insert("items", Record::new("ACK")).unwrap();
++        let frames = source
++            .export_replication_frames_since(0, usize::MAX)
++            .unwrap();
++        let decoded: Vec<CommitFrame> =
++            serde_json::from_slice(&serde_json::to_vec(&frames).unwrap()).unwrap();
++        let mut target = BicDb::open_with_config(
++            root.path().join("target"),
++            config(mode.clone(), ReplicationMode::Standby),
++        )
++        .unwrap();
++        target.apply_replication_batch(&decoded).unwrap();
++        let local = meta(&target, "items");
++        assert!(local.native_imported_backing_origin.is_none());
++        target.apply_replication_batch(&frames).unwrap();
++        assert_eq!(meta(&target, "items"), local);
++        assert!(target.native_origin_root_id().unwrap().is_none());
++        let mut changed = frames[0].clone();
++        changed.timestamp += 1;
++        changed.checksum = changed.calculate_checksum();
++        let path = root.path().join("other");
++        let mut other =
++            BicDb::open_with_config(&path, config(mode, ReplicationMode::Standby)).unwrap();
++        let catalog = other.collections();
++        let format = fs::read(format::metadata_path(&path)).unwrap();
++        assert!(other.apply_replication_frame(&changed).is_err());
++        assert_eq!(other.collections(), catalog);
++        assert_eq!(fs::read(format::metadata_path(&path)).unwrap(), format);
++        assert_eq!(other.last_applied_commit_seq(), 0);
++    }
++}
++
++#[test]
++fn actual_import_eio_recovers_or_retries_only_the_same_actual_target_generation() {
++    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
++        for (site, hit) in [
++            ("transaction_log.write", 1),
++            ("transaction_log.sync", 1),
++            ("catalog.dir_sync", 2),
++        ] {
++            let root = tempfile::tempdir().unwrap();
++            let path = root.path().join("target");
++            let cfg = config(mode.clone(), ReplicationMode::Standby);
++            let mut source = BicDb::open_with_config(
++                root.path().join("source"),
++                config(mode.clone(), ReplicationMode::Primary),
++            )
++            .unwrap();
++            source.sync_quorum().hold("origin-history", 0);
++            source
++                .initialize_fresh_primary_replication_origins()
++                .unwrap();
++            source.create_collection("independent").unwrap();
++            let row = Record::new("ACK").with_metadata(json!({"value":83}));
++            source.insert("independent", row.clone()).unwrap();
++            let mut target = BicDb::open_with_config(&path, cfg.clone()).unwrap();
++            ship(&source, &mut target);
++            target.sync_quorum().hold("origin-history", 0);
++            target.persist_standby_slots().unwrap();
++            source.create_collection("items").unwrap();
++            let frames = source
++                .export_replication_frames_since(target.last_applied_commit_seq(), usize::MAX)
++                .unwrap();
++            assert_eq!(frames.len(), 1);
++            let fault = bicdb_page::test_faults::arm_io_failure(site, &path, hit, false);
++            assert!(
++                target.apply_replication_frame(&frames[0]).is_err(),
++                "{mode:?} {site}"
++            );
++            drop(fault);
++            let allocated = meta(&target, "items");
++            let generation = allocated
++                .native_imported_backing_origin
++                .as_ref()
++                .unwrap()
++                .generation;
++            assert!(target.apply_replication_frame(&frames[0]).is_err());
++            drop(target);
++            let mut target = BicDb::open_with_config(&path, cfg.clone()).unwrap();
++            target.apply_replication_batch(&frames).unwrap();
++            let completed = meta(&target, "items");
++            let origin = completed.native_imported_backing_origin.as_ref().unwrap();
++            assert!(!origin.pending);
++            assert_eq!(origin.generation, generation);
++            assert_eq!(
++                completed.native_backing_birth_id,
++                allocated.native_backing_birth_id
++            );
++            assert_eq!(completed.local_namespace_id, allocated.local_namespace_id);
++            assert_eq!(
++                target
++                    .get("independent", "ACK")
++                    .unwrap()
++                    .unwrap()
++                    .content_hash()
++                    .unwrap(),
++                row.content_hash().unwrap()
++            );
++            target.close().unwrap();
++            for _ in 0..2 {
++                let target = BicDb::open_with_config(&path, cfg.clone()).unwrap();
++                assert_eq!(meta(&target, "items"), completed);
++                assert_eq!(
++                    target
++                        .get("independent", "ACK")
++                        .unwrap()
++                        .unwrap()
++                        .content_hash()
++                        .unwrap(),
++                    row.content_hash().unwrap()
++                );
++                target.close().unwrap();
++            }
++        }
++    }
++}
++
++#[test]
++fn donated_metadata_and_existing_unowned_backing_are_never_adopted() {
++    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
++        let root = tempfile::tempdir().unwrap();
++        let mut source = BicDb::open_with_config(
++            root.path().join("source"),
++            config(mode.clone(), ReplicationMode::Primary),
++        )
++        .unwrap();
++        source.sync_quorum().hold("origin-history", 0);
++        source
++            .initialize_fresh_primary_replication_origins()
++            .unwrap();
++        source.create_collection("placeholder").unwrap();
++        source.create_collection("items").unwrap();
++        let frames = source
++            .export_replication_frames_since(0, usize::MAX)
++            .unwrap();
++        let mut target = BicDb::open_with_config(
++            root.path().join("target"),
++            config(mode.clone(), ReplicationMode::Standby),
++        )
++        .unwrap();
++        ship(&source, &mut target);
++        let owned = meta(&target, "items");
++        assert!(owned
++            .portable_contract()
++            .native_imported_backing_origin
++            .is_none());
++        let mut fabricated = owned.clone();
++        fabricated
++            .native_imported_backing_origin
++            .as_mut()
++            .unwrap()
++            .generation = Uuid::new_v4();
++        target
++            .promote_by_election(1, "origin-maintenance", None)
++            .unwrap();
++        drop(target);
++        let mut target = BicDb::open_with_config(
++            root.path().join("target"),
++            config(mode.clone(), ReplicationMode::Primary),
++        )
++        .unwrap();
++        target
++            .restore_migrated_collection_contract(&fabricated)
++            .unwrap();
++        assert_eq!(meta(&target, "items"), owned);
++        let mut other = BicDb::open_with_config(
++            root.path().join("other"),
++            config(mode, ReplicationMode::Standby),
++        )
++        .unwrap();
++        assert_eq!(frames.len(), 2);
++        let mut legacy: CommitFrame =
++            serde_json::from_slice(&serde_json::to_vec(&frames[0]).unwrap()).unwrap();
++        let mut record: Record = serde_json::from_slice(&legacy.writes[0].payload).unwrap();
++        record.metadata["name"] = json!("items");
++        legacy.writes[0].payload = serde_json::to_vec(&record).unwrap();
++        legacy.checksum = legacy.calculate_checksum();
++        other.apply_replication_frame(&legacy).unwrap();
++        let before = meta(&other, "items");
++        let before_format = fs::read(format::metadata_path(&other.path)).unwrap();
++        let error = other.apply_replication_frame(&frames[1]).unwrap_err();
++        assert!(error.to_string().contains("unowned"), "{error}");
++        assert_eq!(meta(&other, "items"), before);
++        assert_eq!(
++            fs::read(format::metadata_path(&other.path)).unwrap(),
++            before_format
++        );
++        assert_eq!(other.last_applied_commit_seq(), 1);
++    }
++}
++
++#[test]
++fn recovery_never_publishes_pending_origin_before_its_wal_rewrite_sync() {
++    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
++        let root = tempfile::tempdir().unwrap();
++        let path = root.path().join("target");
++        let cfg = config(mode.clone(), ReplicationMode::Standby);
++        let mut source = BicDb::open_with_config(
++            root.path().join("source"),
++            config(mode, ReplicationMode::Primary),
++        )
++        .unwrap();
++        source.sync_quorum().hold("origin-history", 0);
++        source
++            .initialize_fresh_primary_replication_origins()
++            .unwrap();
++        source.create_collection("independent").unwrap();
++        let row = Record::new("ACK").with_metadata(json!({"value":89}));
++        source.insert("independent", row.clone()).unwrap();
++        let mut target = BicDb::open_with_config(&path, cfg.clone()).unwrap();
++        ship(&source, &mut target);
++        target.sync_quorum().hold("origin-history", 0);
++        target.persist_standby_slots().unwrap();
++        source.create_collection("items").unwrap();
++        let frames = source
++            .export_replication_frames_since(target.last_applied_commit_seq(), usize::MAX)
++            .unwrap();
++        let fault = bicdb_page::test_faults::arm_io_failure("catalog.write", &path, 2, false);
++        assert!(target.apply_replication_frame(&frames[0]).is_err());
++        drop(fault);
++        let allocated = meta(&target, "items");
++        let generation = allocated
++            .native_imported_backing_origin
++            .as_ref()
++            .unwrap()
++            .generation;
++        let pending =
++            load_catalog(&path.join(DEFAULT_COLLECTION_CATALOG), &target.encryption).unwrap();
++        assert!(super::pending(
++            pending.iter().find(|m| m.name == "items").unwrap()
++        ));
++        let encryption = target.encryption.clone();
++        drop(target);
++        let fault =
++            bicdb_page::test_faults::arm_io_failure("transaction_log.cut_copy", &path, 1, false);
++        assert!(
++            BicDb::open_with_config(&path, cfg.clone()).is_err(),
++            "WAL rewrite fault did not fire"
++        );
++        drop(fault);
++        let catalog = load_catalog(&path.join(DEFAULT_COLLECTION_CATALOG), &encryption).unwrap();
++        assert!(
++            super::pending(catalog.iter().find(|m| m.name == "items").unwrap()),
++            "unverified recovered WAL must not publish completed Native import provenance"
++        );
++        for _ in 0..2 {
++            let target = BicDb::open_with_config(&path, cfg.clone()).unwrap();
++            let completed = meta(&target, "items");
++            let origin = completed.native_imported_backing_origin.as_ref().unwrap();
++            assert!(!origin.pending);
++            assert_eq!(origin.generation, generation);
++            assert_eq!(
++                completed.native_backing_birth_id,
++                allocated.native_backing_birth_id
++            );
++            assert_eq!(
++                target
++                    .get("independent", "ACK")
++                    .unwrap()
++                    .unwrap()
++                    .content_hash()
++                    .unwrap(),
++                row.content_hash().unwrap()
++            );
++            target.close().unwrap();
++        }
++    }
++}
++
++#[test]
++fn retained_import_decisions_require_their_fence_after_all_mapped_backings_are_dropped() {
++    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
++        let root = tempfile::tempdir().unwrap();
++        let path = root.path().join("target");
++        let cfg = config(mode.clone(), ReplicationMode::Standby);
++        let mut source = BicDb::open_with_config(
++            root.path().join("source"),
++            config(mode, ReplicationMode::Primary),
++        )
++        .unwrap();
++        source.sync_quorum().hold("origin-history", 0);
++        source
++            .initialize_fresh_primary_replication_origins()
++            .unwrap();
++        source.create_collection("items").unwrap();
++        let mut target = BicDb::open_with_config(&path, cfg.clone()).unwrap();
++        target.sync_quorum().hold("origin-history", 0);
++        target.persist_standby_slots().unwrap();
++        ship(&source, &mut target);
++        source.drop_collection("items").unwrap();
++        ship(&source, &mut target);
++        assert!(target
++            .collections()
++            .iter()
++            .all(|m| m.native_imported_backing_origin.is_none()));
++        target.close().unwrap();
++        let file = format::metadata_path(&path);
++        let original = fs::read(&file).unwrap();
++        let mut metadata: Value = serde_json::from_slice(&original).unwrap();
++        metadata["feature_flags"]
++            .as_array_mut()
++            .unwrap()
++            .retain(|f| f.as_str() != Some(format::NATIVE_IMPORTED_BACKING_ORIGINS_FEATURE_FLAG));
++        fs::write(&file, serde_json::to_vec_pretty(&metadata).unwrap()).unwrap();
++        let error = BicDb::open_with_config(&path, cfg.clone()).unwrap_err();
++        assert!(
++            error
++                .to_string()
++                .contains("imported allocation WAL requires its format fence"),
++            "{error}"
++        );
++        fs::write(file, original).unwrap();
++        for _ in 0..2 {
++            let target = BicDb::open_with_config(&path, cfg.clone()).unwrap();
++            assert!(target
++                .collections()
++                .iter()
++                .all(|m| m.native_imported_backing_origin.is_none()));
++            target.close().unwrap();
++        }
++    }
++}
+diff --git a/crates/bicdb-core/src/db/native_origin.rs b/crates/bicdb-core/src/db/native_origin.rs
+index 9bb021d3d..dcb1afcc4 100644
+--- a/crates/bicdb-core/src/db/native_origin.rs
++++ b/crates/bicdb-core/src/db/native_origin.rs
+@@ -54,6 +54,13 @@ impl NativeOriginObservation {
+     pub(crate) fn root_id(&self) -> Uuid {
+         self.root_id
+     }
++    pub(super) fn record_sha256(&self) -> &str {
++        &self.native_record_sha256
++    }
++}
++
++pub(super) fn has_prepared_factory(path: &Path) -> Result<bool> {
++    Ok(read_record(path)?.is_some())
+ }
+ 
+ pub(super) fn create_directory(path: &Path) -> Result<bool> {
+@@ -163,6 +170,13 @@ impl BicDb {
+     /// Existing backing birth metadata is never upgraded or rebound.
+     pub fn activate_native_origin_root_v1(&mut self) -> Result<()> {
+         self.ensure_writable("activate Native origin root")?;
++        self.install_actual_native_origin_root_v1()
++    }
++
++    // Also used by the private accepted-import factory. This never accepts a
++    // caller's root UUID and never changes this node's role to enable writes.
++    pub(super) fn install_actual_native_origin_root_v1(&mut self) -> Result<()> {
++        self.check_recovery_state()?;
+         self.check_catalog_recovery_quiescent()?;
+         if !self.config.fsync {
+             return Err(invalid("origin factory requires fsync-enabled storage"));
+diff --git a/crates/bicdb-core/src/db/pitr_maintenance.rs b/crates/bicdb-core/src/db/pitr_maintenance.rs
+index 1a4e9b3cc..641028c80 100644
+--- a/crates/bicdb-core/src/db/pitr_maintenance.rs
++++ b/crates/bicdb-core/src/db/pitr_maintenance.rs
+@@ -1641,6 +1641,8 @@ impl BicDb {
+                         state.get_mut().meta.native_backing_origin_root;
+                     local_meta.native_catalog_allocation_pending =
+                         state.get_mut().meta.native_catalog_allocation_pending;
++                    local_meta.native_imported_backing_origin =
++                        state.get_mut().meta.native_imported_backing_origin.clone();
+                     state.get_mut().meta = local_meta;
+                     catalog_changed = true;
+                 }
+diff --git a/crates/bicdb-core/src/db/range_image_bindings.rs b/crates/bicdb-core/src/db/range_image_bindings.rs
+index 31adcc6cd..92e7d2635 100644
+--- a/crates/bicdb-core/src/db/range_image_bindings.rs
++++ b/crates/bicdb-core/src/db/range_image_bindings.rs
+@@ -90,7 +90,9 @@ impl BicDb {
+                 ))
+             })?;
+             let state = self.collection_state(&name)?;
+-            if state.meta.native_catalog_allocation_pending {
++            if state.meta.native_catalog_allocation_pending
++                || native_import_origins::pending(&state.meta)
++            {
+                 return Err(BicDbError::Cluster(
+                     "Native creation publication is pending; no protected capture is available"
+                         .into(),
+diff --git a/crates/bicdb-core/src/db/replication_live.rs b/crates/bicdb-core/src/db/replication_live.rs
+index aa626db3c..5dbaa740d 100644
+--- a/crates/bicdb-core/src/db/replication_live.rs
++++ b/crates/bicdb-core/src/db/replication_live.rs
+@@ -247,6 +247,7 @@ impl BicDb {
+                     commit_seq,
+                     native_backings,
+                     native_catalog_allocations,
++                    ..
+                 } => {
+                     if commit_seq <= target {
+                         new_anchor = Some((*start, *end));
+diff --git a/crates/bicdb-core/src/format.rs b/crates/bicdb-core/src/format.rs
+index 3608d4a60..a00676101 100644
+--- a/crates/bicdb-core/src/format.rs
++++ b/crates/bicdb-core/src/format.rs
+@@ -39,6 +39,7 @@ pub const NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG: &str = "native_wal_backing_ca
+ /// Physical Native factory root and allocation scope; local, not peer auth.
+ pub const NATIVE_ORIGIN_ROOT_FEATURE_FLAG: &str = "native_origin_root_v1";
+ pub const NATIVE_CATALOG_ALLOCATION_FACTS_FEATURE_FLAG: &str = "native_catalog_allocation_facts_v1";
++pub const NATIVE_IMPORTED_BACKING_ORIGINS_FEATURE_FLAG: &str = "native_imported_backing_origins_v1";
+ /// Local native image receipts require writers that honor image invalidation.
+ /// This capability is separate from namespace IDs and is never portable schema.
+ pub const RANGE_IMAGE_INSTALL_FEATURE_FLAG: &str = "range_image_install_v1";
+@@ -79,6 +80,7 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
+     NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG,
+     NATIVE_ORIGIN_ROOT_FEATURE_FLAG,
+     NATIVE_CATALOG_ALLOCATION_FACTS_FEATURE_FLAG,
++    NATIVE_IMPORTED_BACKING_ORIGINS_FEATURE_FLAG,
+     RANGE_IMAGE_INSTALL_FEATURE_FLAG,
+     CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG,
+     NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
+@@ -870,6 +872,30 @@ pub(crate) fn enable_native_origin_root(root: &Path) -> Result<()> {
+     persist_metadata(root, &metadata, true)
+ }
+ 
++pub(crate) fn enable_native_imported_backing_origins(root: &Path) -> Result<()> {
++    let lock = feature_flags_lock(root);
++    let _guard = lock.lock();
++    let mut metadata = read_or_legacy_metadata(root)?;
++    validate_supported(&metadata)?;
++    for required in [
++        NATIVE_ORIGIN_ROOT_FEATURE_FLAG,
++        NATIVE_COLLECTION_BIRTH_FEATURE_FLAG,
++        NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG,
++        LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
++    ] {
++        if !metadata.feature_flags.contains(required) {
++            return Err(BicDbError::InvalidConfig(
++                "Native imported origins require actual root, birth, namespace and WAL capture"
++                    .into(),
++            ));
++        }
++    }
++    metadata
++        .feature_flags
++        .insert(NATIVE_IMPORTED_BACKING_ORIGINS_FEATURE_FLAG.into());
++    persist_metadata(root, &metadata, true)
++}
++
+ pub(crate) fn enable_native_catalog_allocation_facts(root: &Path) -> Result<()> {
+     let lock = feature_flags_lock(root);
+     let _guard = lock.lock();
+diff --git a/crates/bicdb-core/src/lib.rs b/crates/bicdb-core/src/lib.rs
+index 777b69909..4f001e717 100644
+--- a/crates/bicdb-core/src/lib.rs
++++ b/crates/bicdb-core/src/lib.rs
+@@ -546,8 +546,8 @@ pub use paged_maintenance::{
+ pub use query_exec::{NumericSummary, TimeSeriesFilter};
+ pub use record::{
+     patch_json_object_text, splice_json_object_text, BlindIndexPolicy, CellRef, CellRow,
+-    CollectionMeta, CollectionMode, CollectionPolicy, ColumnSecurity, OwnedCell, OwnedCellRow,
+-    Record, RedactionPolicy, StoredRecord, TypedCell, TypedRow,
++    CollectionMeta, CollectionMode, CollectionPolicy, ColumnSecurity, NativeImportedBackingOrigin,
++    OwnedCell, OwnedCellRow, Record, RedactionPolicy, StoredRecord, TypedCell, TypedRow,
+ };
+ pub use replication::{
+     CommitFrame, ReplicationApplyReport, ReplicationApplyState, ReplicationConfig,
+diff --git a/crates/bicdb-core/src/record.rs b/crates/bicdb-core/src/record.rs
+index cb941f4aa..eccfe3378 100644
+--- a/crates/bicdb-core/src/record.rs
++++ b/crates/bicdb-core/src/record.rs
+@@ -1295,6 +1295,28 @@ fn is_false_bool(value: &bool) -> bool {
+     !value
+ }
+ 
++/// Durable Native control data, installed only when an accepted import
++/// actually allocates its target. Decoding this data grants no capability.
++#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields)]
++pub struct NativeImportedBackingOrigin {
++    pub(crate) version: u32,
++    pub(crate) source_root: uuid::Uuid,
++    pub(crate) source_root_sha256: String,
++    pub(crate) source_birth: uuid::Uuid,
++    pub(crate) source_namespace: uuid::Uuid,
++    pub(crate) source_storage: String,
++    pub(crate) source_contract_sha256: String,
++    pub(crate) source_sequence: u64,
++    pub(crate) source_frame_checksum: [u8; 32],
++    pub(crate) target_root: uuid::Uuid,
++    pub(crate) target_birth: uuid::Uuid,
++    pub(crate) target_namespace: uuid::Uuid,
++    pub(crate) target_storage: String,
++    pub(crate) generation: uuid::Uuid,
++    pub(crate) pending: bool,
++}
++
+ #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+ pub struct CollectionMeta {
+     pub name: String,
+@@ -1342,6 +1364,8 @@ pub struct CollectionMeta {
+     /// decision. Import metadata must never adopt this local pending state.
+     #[serde(default, skip_serializing_if = "is_false_bool")]
+     pub native_catalog_allocation_pending: bool,
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub native_imported_backing_origin: Option<NativeImportedBackingOrigin>,
+ }
+ 
+ impl CollectionMeta {
+@@ -1358,6 +1382,7 @@ impl CollectionMeta {
+         portable.native_backing_birth_id = None;
+         portable.native_backing_origin_root = None;
+         portable.native_catalog_allocation_pending = false;
++        portable.native_imported_backing_origin = None;
+         portable
+     }
+ 
+@@ -1376,6 +1401,7 @@ impl CollectionMeta {
+             native_backing_birth_id: None,
+             native_backing_origin_root: None,
+             native_catalog_allocation_pending: false,
++            native_imported_backing_origin: None,
+         }
+     }
+ 
+@@ -1394,6 +1420,7 @@ impl CollectionMeta {
+             native_backing_birth_id: None,
+             native_backing_origin_root: None,
+             native_catalog_allocation_pending: false,
++            native_imported_backing_origin: None,
+         }
+     }
+ }
+diff --git a/crates/bicdb-sql/src/oracle.rs b/crates/bicdb-sql/src/oracle.rs
+index b55211590..37bbf0443 100644
+--- a/crates/bicdb-sql/src/oracle.rs
++++ b/crates/bicdb-sql/src/oracle.rs
+@@ -493,6 +493,7 @@ pub fn initialize_existing_database_profile(db: &mut BicDb) -> Result<()> {
+     if let Some(profile) = &profile {
+         validate_database_profile_selection(db, profile)?;
+     }
++    db.initialize_fresh_primary_replication_origins()?;
+     recover_interrupted_recycle_bin_renames(db)?;
+     if let Some(profile) = profile {
+         ensure_database_profile_inner(db, &profile)?;
+@@ -509,6 +510,7 @@ pub fn ensure_database_profile(db: &mut BicDb, profile: &str) -> Result<()> {
+     // A wrong serve flag must not repair or convert a differently profiled
+     // store before reporting the mismatch.
+     validate_database_profile_selection(db, profile)?;
++    db.initialize_fresh_primary_replication_origins()?;
+     recover_interrupted_recycle_bin_renames(db)?;
+     let result = ensure_database_profile_inner(db, profile);
+     db.check_recovery_state()?;

@@ -1,0 +1,46 @@
+{
+  "inputs": [
+    {
+      "label": "regclass-path-2765b646",
+      "source": "2765b646c2675ddf922c8650c4820a3618056af2",
+      "status": "failed",
+      "receipt_sha256": "5e13e2de311a2255db3a6a3ae546b368dc2c863d14b2f3c0a3c490e3c8b3f515",
+      "raw_log_sha256": "bce05913fffacf9beaa2695f341b7df79923765cfd1c4594c49e0406d5994e26",
+      "packed_log_sha256": "26333df853ed22f66ad9490629a753541e80c0a50093ceb568b8ccb5b046f850"
+    },
+    {
+      "label": "regclass-index-e637801f",
+      "source": "e637801fd1306e70f15f9e9421b275e6f3449e81",
+      "status": "failed",
+      "receipt_sha256": "d65d0b7ea136e73381b9361678b5caa902587bae3057d662a42fb5ab43c99b4e",
+      "raw_log_sha256": "90eaf096b5f5f9b2271260ee7fac743de141c57d0c5e4c57ee0b88094eaba935",
+      "packed_log_sha256": "3a4f1e591fbd17f6ff8ae670614e9d1cfd35a4f8dd55871940d8cda5937bc905"
+    },
+    {
+      "label": "regclass-startup-1f479747",
+      "source": "1f47974702aed116e82a0c15df5cad6c72e49646",
+      "status": "failed",
+      "receipt_sha256": "64445d9bdf1e88fc2552d432cc2366c743d12215a36fe7ccf8f4520b672f03da",
+      "raw_log_sha256": "6ccf0ddc7436ce4c80245f201e8af8f8276c2e11dccf706b10ca6a1eee8d8ae9",
+      "packed_log_sha256": "baf78f0ed1c749fb1a93e4ddd767a2292eb35f9afbd878cab5053baf1211b3dc"
+    },
+    {
+      "label": "regclass-user-key-5421dbbb",
+      "source": "5421dbbb28351aa187b8d330c1cca8ed5d4b8b42",
+      "status": "focused_passed",
+      "receipt_sha256": "6f0aafe86a982694e71294d597e835e6937f067e0f41f9390df76b0e5251d93b",
+      "raw_log_sha256": "48532846474d102f53f7507b4872c3dbbbe80fe38af4e1c8f82b093ebed473f4",
+      "packed_log_sha256": "16ac9647facced5bf062cfd74b54869cba294a0f00ca01f0d8aae3adc5a9e9dd"
+    },
+    {
+      "label": "partition-index-describe-repro-b3e4b211",
+      "source": "b3e4b2110b04819f6b56f2fc2f9bdf7dd02af451",
+      "status": "failed",
+      "receipt_sha256": "a4acb1a2c56b762bc01b2866feb38920b0be76a8343cdfd5ebbaeaa93b7d8f59",
+      "raw_log_sha256": "c660586326a6559bfdaa83286000466d1b325ef8cb3296428790152e45fb1e4f",
+      "packed_log_sha256": "15d0d619fe522fa8ffb2237a5d9553d5f4e56d67bd64ada182bd6770c37ec8ba"
+    }
+  ],
+  "collected_unix": 1794461593.6612456,
+  "scope": "Focused source-scoped checks and original failing evidence, not final application acceptance"
+}

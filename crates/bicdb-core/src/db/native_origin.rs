@@ -4,6 +4,9 @@ use super::*;
 
 const ROOT_FILE: &str = "native-origin-root-v1.json";
 const MAX_ROOT_BYTES: u64 = 16 * 1024;
+/// Written only by this crate's own archive restore and open-database copy,
+/// for the directory they just materialized. The first open consumes it.
+const RESTORE_FILE: &str = "native-origin-restore-v1.json";
 
 fn invalid(detail: &str) -> BicDbError {
     BicDbError::FormatCompatibility(format!("Native origin root: {detail}"))
@@ -84,6 +87,146 @@ impl RootRecord {
     }
 }
 
+impl RootRecord {
+    /// The same root bound to another physical directory by an authorized
+    /// restore: one custody generation later, naming its predecessor.
+    fn rebound(&self, directory: bicdb_page::DirectoryPhysicalBirth) -> Result<Self> {
+        let mut record = RootRecord {
+            version: 2,
+            root_id: self.root_id,
+            directory,
+            custody_generation: self
+                .custody_generation
+                .checked_add(1)
+                .ok_or_else(|| invalid("custody generation overflow"))?,
+            predecessor_sha256: Some(self.checksum_sha256.clone()),
+            genesis_sha256: Some(self.identity_sha256().to_owned()),
+            checksum_sha256: String::new(),
+        };
+        record.checksum_sha256 = record.checksum()?;
+        record.validate()?;
+        Ok(record)
+    }
+}
+
+/// Authorizes exactly one materialized directory to take custody of exactly
+/// one archived root record. Like the root record, its checksum is integrity,
+/// not a secret: it stops a plain copy, not a forger with write access.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RestoreAuthorization {
+    version: u32,
+    source_record_sha256: String,
+    directory: bicdb_page::DirectoryPhysicalBirth,
+    checksum_sha256: String,
+}
+
+impl RestoreAuthorization {
+    fn checksum(&self) -> Result<String> {
+        Ok(hex::encode(sha2::Sha256::digest(serde_json::to_vec(&(
+            "BicDbNativeOriginRestore-v1",
+            self.version,
+            &self.source_record_sha256,
+            &self.directory,
+        ))?)))
+    }
+}
+
+fn read_restore_authorization(path: &Path) -> Result<Option<RestoreAuthorization>> {
+    let file = path.join(RESTORE_FILE);
+    match fs::metadata(&file) {
+        Ok(metadata) if metadata.len() > MAX_ROOT_BYTES => {
+            return Err(invalid("restore authorization size bound exceeded"))
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    }
+    let authorization: RestoreAuthorization = serde_json::from_slice(&fs::read(file)?)?;
+    if authorization.version != 1 || authorization.checksum()? != authorization.checksum_sha256 {
+        return Err(invalid("damaged Native restore authorization"));
+    }
+    Ok(Some(authorization))
+}
+
+fn restore_authorized(
+    path: &Path,
+    record: &RootRecord,
+    actual: &bicdb_page::DirectoryPhysicalBirth,
+) -> Result<bool> {
+    Ok(
+        read_restore_authorization(path)?.is_some_and(|authorization| {
+            authorization.source_record_sha256 == record.checksum_sha256
+                && authorization.directory == *actual
+        }),
+    )
+}
+
+/// Called by this crate's archive restore and open-database copy once they
+/// have materialized `target` themselves. The archive or copy came from a
+/// root that passed its own custody check, so the new directory may take
+/// custody at its first open. The authorization names this directory's
+/// physical identity: a later plain copy of `target` does not inherit it.
+pub(crate) fn authorize_materialized_copy(target: &Path) -> Result<()> {
+    if !root_active(target)? {
+        return Ok(());
+    }
+    let record = read_record(target)?.ok_or_else(|| invalid("restored root record is missing"))?;
+    let actual = bicdb_page::physical_directory_birth(target)
+        .map_err(|e| invalid(&e.to_string()))?
+        .ok_or_else(|| invalid("physical directory birth is unsupported"))?;
+    if record.directory == actual {
+        return Ok(());
+    }
+    let mut authorization = RestoreAuthorization {
+        version: 1,
+        source_record_sha256: record.checksum_sha256,
+        directory: actual,
+        checksum_sha256: String::new(),
+    };
+    authorization.checksum_sha256 = authorization.checksum()?;
+    crate::storage::write_atomic(
+        &target.join(RESTORE_FILE),
+        &serde_json::to_vec_pretty(&authorization)?,
+        true,
+    )?;
+    File::open(target)?.sync_all()?;
+    Ok(())
+}
+
+/// Under the open's directory claim: take custody of a root this directory
+/// was authorized to restore, then consume the authorization.
+pub(super) fn complete_authorized_restore(
+    path: &Path,
+    claim: &bicdb_page::DirectoryLock,
+) -> Result<()> {
+    if !root_active(path)? {
+        return Ok(());
+    }
+    let record = read_record(path)?.ok_or_else(|| invalid("active root record is missing"))?;
+    let actual = claim
+        .physical_birth()
+        .map_err(|e| invalid(&e.to_string()))?
+        .ok_or_else(|| invalid("physical directory birth is unsupported"))?;
+    if record.directory != actual {
+        if !restore_authorized(path, &record, &actual)? {
+            return Err(invalid("claimed directory does not own this Native root"));
+        }
+        crate::storage::write_atomic(
+            &path.join(ROOT_FILE),
+            &serde_json::to_vec_pretty(&record.rebound(actual)?)?,
+            true,
+        )?;
+        File::open(path)?.sync_all()?;
+    }
+    match fs::remove_file(path.join(RESTORE_FILE)) {
+        Ok(()) => File::open(path)?.sync_all()?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+    Ok(())
+}
+
 /// Constructed only from this actual claimed root's native record and OS
 /// custody, never by decoding a caller-supplied capsule into an authority.
 #[derive(Debug)]
@@ -146,7 +289,7 @@ fn root_active(path: &Path) -> Result<bool> {
         .contains(format::NATIVE_ORIGIN_ROOT_FEATURE_FLAG))
 }
 
-pub(super) fn refuse_foreign_root_preflight(path: &Path) -> Result<()> {
+pub(crate) fn refuse_foreign_root_preflight(path: &Path) -> Result<()> {
     if !root_active(path)? {
         return Ok(());
     }
@@ -154,7 +297,7 @@ pub(super) fn refuse_foreign_root_preflight(path: &Path) -> Result<()> {
     let actual = bicdb_page::physical_directory_birth(path)
         .map_err(|e| invalid(&e.to_string()))?
         .ok_or_else(|| invalid("physical directory birth is unsupported"))?;
-    if actual != record.directory {
+    if actual != record.directory && !restore_authorized(path, &record, &actual)? {
         // Operators rebind a legitimate file-level copy offline with
         // `authorize_native_cold_restore` before its first open.
         return Err(invalid("copied or replaced physical directory; an authorized Native import/restore producer is required"));
@@ -274,10 +417,8 @@ pub fn authorize_native_cold_restore(
     if actual == source_record.directory {
         return Err(invalid("restore target is the source directory"));
     }
-    let custody_generation = source_record
-        .custody_generation
-        .checked_add(1)
-        .ok_or_else(|| invalid("custody generation overflow"))?;
+    let rebound = source_record.rebound(actual.clone())?;
+    let custody_generation = rebound.custody_generation;
     let target_record =
         read_record(target)?.ok_or_else(|| invalid("restore target root record is missing"))?;
     if target_record.directory == actual {
@@ -295,20 +436,9 @@ pub fn authorize_native_cold_restore(
     if fs::read(source.join(ROOT_FILE))? != fs::read(target.join(ROOT_FILE))? {
         return Err(invalid("restore target is not a copy of this source"));
     }
-    let mut record = RootRecord {
-        version: 2,
-        root_id: source_record.root_id,
-        directory: actual,
-        custody_generation,
-        predecessor_sha256: Some(source_record.checksum_sha256.clone()),
-        genesis_sha256: Some(source_record.identity_sha256().to_owned()),
-        checksum_sha256: String::new(),
-    };
-    record.checksum_sha256 = record.checksum()?;
-    record.validate()?;
     crate::storage::write_atomic(
         &target.join(ROOT_FILE),
-        &serde_json::to_vec_pretty(&record)?,
+        &serde_json::to_vec_pretty(&rebound)?,
         true,
     )?;
     File::open(target)?.sync_all()?;

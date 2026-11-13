@@ -274,3 +274,92 @@ fn native_origin_restored_source_still_matches_its_receivers_bindings() {
         );
     }
 }
+
+#[test]
+fn native_origin_archive_restore_takes_custody_once_at_first_open() {
+    use crate::backup::{create_backup, restore_backup, BackupCreateOptions, BackupRestoreOptions};
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let parent = tempfile::tempdir().unwrap();
+        let source = parent.path().join("source");
+        let cfg = config(mode, ReplicationMode::Primary);
+        let mut db = BicDb::open_with_config(&source, cfg.clone()).unwrap();
+        db.activate_native_origin_root_v1().unwrap();
+        db.activate_local_namespace_identity_v1().unwrap();
+        db.activate_native_collection_birth_v1().unwrap();
+        db.activate_native_wal_backing_capture_v1().unwrap();
+        let root = db.native_origin_root_id().unwrap();
+        let identity = db
+            .observe_native_origin_root()
+            .unwrap()
+            .unwrap()
+            .record_sha256()
+            .to_owned();
+        db.create_collection("items").unwrap();
+        db.insert(
+            "items",
+            Record::new("ACK").with_metadata(json!({"value":47})),
+        )
+        .unwrap();
+        db.close().unwrap();
+
+        // A plain copy cannot cut an archive that would authorize a restore.
+        let copied = parent.path().join("copied");
+        copy_tree(&source, &copied);
+        let options = || BackupCreateOptions {
+            passphrase: "restore-custody".into(),
+            base_backup: None,
+        };
+        let error =
+            create_backup(&copied, parent.path().join("laundered.bak"), options()).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("copied or replaced physical directory"),
+            "{error}"
+        );
+
+        let archive = parent.path().join("genuine.bak");
+        create_backup(&source, &archive, options()).unwrap();
+        let restored = parent.path().join("restored");
+        restore_backup(
+            &archive,
+            &restored,
+            BackupRestoreOptions {
+                passphrase: "restore-custody".into(),
+                force: false,
+            },
+        )
+        .unwrap();
+        assert!(restored.join(RESTORE_FILE).is_file());
+
+        // The authorization names the restored directory, not its copies.
+        let second_hand = parent.path().join("second-hand");
+        copy_tree(&restored, &second_hand);
+        refused(&second_hand, &cfg);
+
+        for _ in 0..2 {
+            let db = BicDb::open_with_config(&restored, cfg.clone()).unwrap();
+            assert_eq!(db.native_origin_root_id().unwrap(), root);
+            assert_eq!(
+                db.observe_native_origin_root()
+                    .unwrap()
+                    .unwrap()
+                    .record_sha256(),
+                identity
+            );
+            assert_eq!(
+                db.get("items", "ACK").unwrap().unwrap().metadata["value"],
+                json!(47)
+            );
+            db.close().unwrap();
+            assert!(!restored.join(RESTORE_FILE).exists());
+            let record = read_record(&restored).unwrap().unwrap();
+            assert_eq!((record.version, record.custody_generation), (2, 1));
+        }
+
+        // Once consumed, the opened restore is an ordinary root in custody.
+        let third = parent.path().join("third");
+        copy_tree(&restored, &third);
+        refused(&third, &cfg);
+    }
+}

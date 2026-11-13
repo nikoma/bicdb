@@ -19,6 +19,10 @@ mod native_import_origins;
 mod native_origin;
 pub(crate) use native_origin::NativeOriginObservation;
 pub use native_origin::{authorize_native_cold_restore, NativeColdRestoreOutcome};
+pub(crate) use native_origin::{
+    authorize_materialized_copy as authorize_materialized_native_copy,
+    refuse_foreign_root_preflight as refuse_unauthorized_native_copy,
+};
 mod native_wal_backings;
 mod sql_partition_execution;
 pub use sql_partition_execution::CollectionCacheStamp;
@@ -10592,6 +10596,7 @@ impl BicDb {
                 path.display()
             ))
         })?;
+        native_origin::complete_authorized_restore(&path, &directory_lock)?;
         let native_origin = native_origin::load_active(&path, &directory_lock)?;
         // A core fence protects raw SQL and every other opener, not merely the
         // application host. Unknown/malformed states quarantine the store.

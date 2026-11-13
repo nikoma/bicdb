@@ -382,7 +382,11 @@ pub(super) fn exercise(
                 "{error}"
             );
             let retained = control.test_registered_remote_image_state(range).unwrap();
-            assert_eq!(factory.database.read().test_native_wal_retention_active(),1,
+            let actual_active_pins = factory.database.read().test_native_wal_retention_active();
+            evidence(&output.join("registered-image-wal-retention.json"),&serde_json::json!({
+                "phase":"inner_apply_failed_before_retention_assertion","actual_active_pins":actual_active_pins,
+                "actual_owner":retained,"exact_error":error.to_string(),"no_cold_or_serving_claim":true})).unwrap();
+            assert_eq!(actual_active_pins,1,
                 "original pending-apply row owner must retain its actual WAL lease after Transaction consumption");
             assert_eq!(
                 retained["rows"]["pending"]["logical_outcome"],
@@ -484,13 +488,16 @@ pub(super) fn exercise(
                 );
                 assert_eq!(factory.database.read().current_commit_seq(), 0);
             }
+            let active_before_retry = factory.database.read().test_native_wal_retention_active();
+            evidence(&output.join("registered-image-wal-retention.json"),&serde_json::json!({
+                "phase":"caller_cancelled_before_retention_assertion","actual_active_pins":active_before_retry,
+                "actual_owner":retained,"exact_error":error.to_string(),"applied_known":after,
+                "no_cold_or_serving_claim":true})).unwrap();
             assert_eq!(
-                factory.database.read().test_native_wal_retention_active(),
-                1,
+                active_before_retry, 1,
                 "one pending original row step owns one shared WAL retention lease"
             );
-            let mut wal_retention =
-                serde_json::json!({"active_before_retry":1,"checkpoint_exercised":after});
+            let mut wal_retention = serde_json::json!({"active_before_retry":active_before_retry,"checkpoint_exercised":after});
             let retained_wal = if after {
                 let db = factory.database.read();
                 let path = db.data_path().join(crate::DEFAULT_TRANSACTION_LOG);
@@ -545,9 +552,15 @@ pub(super) fn exercise(
             assert_eq!(completed["rows"]["pending"], serde_json::Value::Null);
             {
                 let db = factory.database.read();
-                assert_eq!(db.test_native_wal_retention_active(),0,
+                let actual_active_pins = db.test_native_wal_retention_active();
+                wal_retention["active_after_committed_progress"] =
+                    serde_json::json!(actual_active_pins);
+                evidence(&output.join("registered-image-wal-retention.json"),&serde_json::json!({
+                    "phase":"committed_progress_before_release_assertion","actual_active_pins":actual_active_pins,
+                    "original_txid":txid,"actual_owner":completed,"wal_retention":wal_retention,
+                    "no_cold_or_serving_claim":true})).unwrap();
+                assert_eq!(actual_active_pins,0,
                     "actual committed row header and postchecks must release the completed step's lease");
-                wal_retention["active_after_committed_progress"] = serde_json::json!(0);
                 if let Some(before) = retained_wal {
                     let path = db.data_path().join(crate::DEFAULT_TRANSACTION_LOG);
                     assert_eq!(

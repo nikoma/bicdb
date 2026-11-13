@@ -106,6 +106,10 @@ enum LogicalOutcome {
     NoRows,
 }
 struct RowPending {
+    // One shared actual lease outlives Transaction consumption/finalization.
+    // Release only when committed protected progress and postchecks permit
+    // removing this original pending step; errors retain it with the debt.
+    _wal_retention: super::super::super::native_wal_apply::NativeWalRetentionPin,
     intent: RowIntent,
     step: RangeImageStepV1,
     transaction: Option<Transaction>,
@@ -495,6 +499,17 @@ impl RetainedRemoteRows {
                 tx.write_upserts_unchecked(&batch.collection, batch.records.clone())?;
                 transaction = Some(tx);
             }
+            // Acquire before the first native intent WAL. The SAME actual
+            // transaction shares this lease; commit finalization may clear its
+            // clone, but cannot release the pending owner's retention.
+            let wal_retention = if let Some(tx) = transaction.as_mut() {
+                if tx.native_wal_retention.is_none() {
+                    tx.native_wal_retention = Some(db.tx_log.pin_native_wal_proof()?);
+                }
+                tx.native_wal_retention.as_ref().unwrap().clone()
+            } else {
+                db.tx_log.pin_native_wal_proof()?
+            };
             let intent = RowIntent {
                 version: 1,
                 attempt: self.header.attempt,
@@ -534,6 +549,7 @@ impl RetainedRemoteRows {
             // Original host owns exact pending Tx/payload/progress BEFORE any
             // intent page WAL or row WAL. No canceled call recreates it.
             self.pending = Some(RowPending {
+                _wal_retention: wal_retention,
                 intent,
                 step: step.clone(),
                 transaction,
@@ -679,6 +695,9 @@ impl RetainedRemoteRows {
         context.require_current(db)?;
         self.header = actual;
         self.content = pending.content.clone();
+        // Exact committed header readback and fresh context checks above are
+        // the release boundary. Unknown/pending-apply/error paths never drop
+        // this step merely because the consuming logical commit returned.
         self.pending = None;
         drop(controlled);
         Ok(())

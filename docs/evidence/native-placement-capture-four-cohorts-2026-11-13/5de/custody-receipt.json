@@ -1,0 +1,143 @@
+{
+  "source": "5de01e7e8916f3da9ea377484755ef12662f22ca",
+  "run": 43357622068,
+  "artifact_id": 14006394476,
+  "zip_sha256": "e94c09e4c187f99469dcb67ec0f5ea1541cd6138b847123ca8c89aa497475268",
+  "zip_bytes": 3109287,
+  "zip_entries": 1352,
+  "manifests": [
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2eb-7474-7962-a4bb-afdd4654115e/custody-manifest.json",
+      "sha256": "b1a941d0a14c36a5757a4df40a22665877ae691d1c6702ec7556501aedd8c047",
+      "files": 96,
+      "bytes": 2937528,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "5de01e7e8916f3da9ea377484755ef12662f22ca",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2eb-7494-7620-a174-9f53b271836e/custody-manifest.json",
+      "sha256": "19cce1f1bfd39d860f091ea0e60322a91fe06d486c8027aafe5fb329b549855b",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "5de01e7e8916f3da9ea377484755ef12662f22ca",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2eb-74b7-7880-a897-d7ef8c3aa786/custody-manifest.json",
+      "sha256": "7741f1bfa5b6dfffb7490899da75563b043d31b7df3bf796d3b7fb95ce60fa86",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "5de01e7e8916f3da9ea377484755ef12662f22ca",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2eb-74c2-7353-9882-0888d157cd7f/custody-manifest.json",
+      "sha256": "762c4913dc62da6b09a46830439e22ad4cd7e2d23d1d5b279296344350ea9319",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "5de01e7e8916f3da9ea377484755ef12662f22ca",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2eb-980e-7fe0-917e-19907b150b1e/custody-manifest.json",
+      "sha256": "ad18b5caee8cafdf4c8151231a58d08dc22903c1abff03af9ea14275056e1c09",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "5de01e7e8916f3da9ea377484755ef12662f22ca",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2eb-9834-7e72-9cfc-c1d79f2ef77e/custody-manifest.json",
+      "sha256": "2d5a8abc469772fede5e135441eff3ae7c75d2c11cf9ad9656096d19b9d08186",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "5de01e7e8916f3da9ea377484755ef12662f22ca",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2eb-98ba-70c2-a8cd-512715d68641/custody-manifest.json",
+      "sha256": "2d4d5ff70ccdfb828161fab3c066fca53faca8f4ae05ac1eb15ae68c13276ede",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "5de01e7e8916f3da9ea377484755ef12662f22ca",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2eb-98bd-75a1-a594-ab594a927f04/custody-manifest.json",
+      "sha256": "a20c6e4648800b7d238101bdb3799e9de42aa6125698d42f0e29e0040c569687",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "5de01e7e8916f3da9ea377484755ef12662f22ca",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2eb-b510-72e0-ada8-4f231e5849d7/custody-manifest.json",
+      "sha256": "7c12915d3354071dda582cb48de776d0fc4504a54e841e6c99bbf8f3046402d2",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "5de01e7e8916f3da9ea377484755ef12662f22ca",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2eb-b552-7072-adbd-de80f38578fd/custody-manifest.json",
+      "sha256": "dc1e5e26d4080ff36ab1e858f3c9595194127eddbf4c844fb115c92a9b4c74de",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "5de01e7e8916f3da9ea377484755ef12662f22ca",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2eb-b5a8-7ce2-ad73-fc19110e488d/custody-manifest.json",
+      "sha256": "63b33d346d301877dfc83cda947093e5dd949b282d3c34bb61d1c381fdc92f38",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "5de01e7e8916f3da9ea377484755ef12662f22ca",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2eb-b5c2-74f3-9528-1b2528b1cd54/custody-manifest.json",
+      "sha256": "a0008310bd36f118faf28f943714c6338d69ae78cb81c396405fad459fadfc57",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "5de01e7e8916f3da9ea377484755ef12662f22ca",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2eb-d13d-78f3-8d00-698358694577/custody-manifest.json",
+      "sha256": "12c00db208c981bf8610e178e0911f7e4d6e3dfdaf0cbdab83814f0a129cb60a",
+      "files": 96,
+      "bytes": 2912958,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "5de01e7e8916f3da9ea377484755ef12662f22ca",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    }
+  ],
+  "verified_files": 1248,
+  "verified_bytes": 37891198,
+  "engine_opened_or_replayed": false
+}

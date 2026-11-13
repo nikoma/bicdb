@@ -1,0 +1,9 @@
+{
+  "id": 43356111432,
+  "head_sha": "80aabf0fa5f25d8da652825e1c7927d67ce77934",
+  "head_branch": "qual/native-placement-fence-80aabf0fa-required2",
+  "status": "completed",
+  "conclusion": "failure",
+  "event": "workflow_dispatch",
+  "html_url": "https://github.com/nikoma/bicdb/actions/runs/43356111432"
+}

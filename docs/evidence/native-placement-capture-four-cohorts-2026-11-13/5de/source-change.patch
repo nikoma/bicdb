@@ -1,0 +1,131 @@
+commit 5de01e7e8916f3da9ea377484755ef12662f22ca
+Author:     nikoma <niko.manek@gmail.com>
+AuthorDate: Thu Nov 12 19:12:01 2026 -0800
+Commit:     nikoma <niko.manek@gmail.com>
+CommitDate: Thu Nov 12 19:12:01 2026 -0800
+
+    fix: separate retiring replica from authenticated handoff initiator
+
+diff --git a/crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/closed_fence.rs b/crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/closed_fence.rs
+index cb12d11ab..ee1974d06 100644
+--- a/crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/closed_fence.rs
++++ b/crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/closed_fence.rs
+@@ -160,8 +160,15 @@ impl<'op> NativeAssignedRegisteredClosedFence<'op> {
+             || plan.promoted_epoch.is_some()
+             || plan.learner_epoch != self.scope.range_epoch
+             || plan.expected_epoch.checked_add(1) != Some(plan.learner_epoch)
+-            || plan.source.as_ref() != Some(self.role.initiator_node_id())
+-            || self.role.initiator_node_id() != &self.role.current_range().leader
++            // `source` names the retiring replica, not the image donor or
++            // authenticated initiator. The actual sealed CommittedHandoff
++            // role already proves the caller is the range OR metadata leader.
++            // This initial replacement lane still requires a real old voter.
++            || plan.source.as_ref().is_none_or(|retiring| {
++                !self.role.current_range().replicas.iter().any(|replica| {
++                    &replica.node_id == retiring && replica.role == RangeReplicaRole::Voter
++                })
++            })
+             || !self.role.current_range().replicas.iter().any(|r| {
+                 r.id == plan.target_replica_id
+                     && r.node_id == plan.target
+diff --git a/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/closed_fence_controls.rs b/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/closed_fence_controls.rs
+index d6b098026..b35df5958 100644
+--- a/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/closed_fence_controls.rs
++++ b/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/closed_fence_controls.rs
+@@ -12,6 +12,7 @@ pub(super) enum Case {
+     SinkCanceled,
+     SinkIoUnknown,
+     ActualInvalidation,
++    UnprivilegedInitiator,
+ }
+ #[allow(clippy::too_many_arguments)]
+ pub(super) fn run(
+@@ -113,6 +114,32 @@ pub(super) fn run(
+     let mut sink_report = None;
+     let mut foreign_report = None;
+     let error = match case {
++        Case::UnprivilegedInitiator => {
++            // This member is genuinely TLS-authenticated, but is neither
++            // metadata leader nor this range's leader. Reusing correlation
++            // DATA from the valid operation cannot authorize its new RPC.
++            let caller = clients[3].local_metadata_read_participant();
++            assert_eq!(caller.node_id(), &node(3));
++            assert_ne!(caller.node_id(), &range.leader);
++            assert_ne!(caller.node_id(), &node(0));
++            let error = clients[3]
++                .recovery_epoch_fence_observation(
++                    &node(4),
++                    &RecoveryEpochFenceRequest {
++                        scope: scope.clone(),
++                        budget_ms: 4000,
++                    },
++                    &parent,
++                )
++                .unwrap_err();
++            assert!(
++                error.to_string().contains(
++                    "metadata recovery-role identity, purpose or committed configuration changed"
++                ),
++                "unprivileged real RPC did not reach the expected role refusal: {error}"
++            );
++            error
++        }
+         Case::Ingress => {
+             // Exact existing generic/older code path remains closed despite
+             // persisted Active fences. This is not an old-binary execution.
+@@ -442,3 +469,8 @@ control!(
+     native_registered_fifth_closed_fence_actual_durable_invalidation_is_not_unknown_absence,
+     ActualInvalidation
+ );
++
++control!(
++    native_registered_fifth_closed_fence_actual_nonleader_rpc_initiator_refused,
++    UnprivilegedInitiator
++);
+diff --git a/docs/design/native-automatic-plan-fence-admission.md b/docs/design/native-automatic-plan-fence-admission.md
+index 322c516d7..61166f002 100644
+--- a/docs/design/native-automatic-plan-fence-admission.md
++++ b/docs/design/native-automatic-plan-fence-admission.md
+@@ -44,3 +44,42 @@ ten-case mode remains the default; no production path or authority predicate
+ is changed by this source. No image, rows, NEW quorum, target APP/Strong,
+ controller convergence, node replacement, physical RPO/RTO or qualification
+ claim follows from these focused ingress regressions.
++
++
++## Executed required failures and corrective successor
++
++Exact80aabf0fa5f25d8da652825e1c7927d67ce77934, run43356111432,
++Core131658467851: **0 passed / 2 failed**, 994 filtered, 4.56s; compile/consumer
++and formatting passed. Both cases reach the original required two-fence gate,
++with four original writer guards and two full source ACKs retained per fixture.
++
++Actual planner output selects range2 with retiree n0, leader/initiator n2,
++then range1 with retiree/leader/initiator n1. Range2 is refused by the extra
++CLOSED-plan check while original caller/role have 4926/1424ms remaining; target
++is unchanged. The range1 fence succeeds. The metadata-leader case uses actual
++initiator n0 and retires leaders n1/n2; both fences are refused by that same
++check, with caller/role 4932/1430ms and 4931/1429ms remaining; target unchanged.
++These are semantic refusals, not timeout/setup failures or evidence of ACK loss.
++The two fixtures' four ACKs are not one cluster history. Raw Core SHA-256:
++`005ba370da2bc55f6a1ae3b91910a782dc480f36fa076d17f14f12cecdf6f57e`.
++Private artifact14006341679 was exported and hash-verified, no extraction or
++engine replay; its435073 bytes hash to
++`6bdebf5c8f0f580200ed7eee5d78ba065f2a02cf0bbd07ee9453bfc7a376cc00`.
++
++The corrective production successor keeps the retiring-replica requirement,
++but proves that node is an actual old VOTER. It no longer equates retirement
++with RPC initiation or image donation. Eligible initiation remains enforced
++by the existing actual sealed CommittedHandoff role producer: authenticated
++metadata leader OR range leader, exact configuration/session/nonce/recipient.
++The same OWN-MQ/protected MStore/DB/open/Store/hook/native/no-domain checks,
++refusal-only persistence and original callers/roles are unchanged. Source=None
++remains outside this first replacement lane. No data or serving grant is added.
++
++An additional negative first reaches the genuine valid capability after BOTH
++original fences, then sends the same scope DATA from actual n3 TLS client.
++n3 is neither the metadata leader nor range leader, so the real receiver must
++reject its fresh role request with the exact existing identity/purpose/config
++error and unchanged complete target state. This tests that removing the faulty
++equality does not admit every authenticated voter. The corrected coherent
++cohort contains thirteen tests: ten original, two placement and this negative.
++All require fresh execution; the original80a failed record remains unchanged.

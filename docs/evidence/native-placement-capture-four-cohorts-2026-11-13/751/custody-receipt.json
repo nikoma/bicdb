@@ -1,0 +1,113 @@
+{
+  "source": "751fc28f45c849e0bdb9085744e123409cb0b580",
+  "run": 43354081271,
+  "artifact_id": 14004684180,
+  "zip_sha256": "c7408c407847b886a8f83d230c5f8f220d7fb2d50482f78b860b27246ad7ccd3",
+  "zip_bytes": 2446828,
+  "zip_entries": 1043,
+  "manifests": [
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2cd-f8b5-7cd0-ab7e-cc82dc85d865/custody-manifest.json",
+      "sha256": "9b50bac488c1afd440bf0c5486adae2442a608e5d2429a26136f115b0b544dc0",
+      "files": 96,
+      "bytes": 2937528,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "751fc28f45c849e0bdb9085744e123409cb0b580",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2cd-f8c9-7e22-b892-259b76e29092/custody-manifest.json",
+      "sha256": "353d7cbbf8ac50eaa52e63863d2094993f935680ebf54bf67546bf41bd1e2200",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "751fc28f45c849e0bdb9085744e123409cb0b580",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2cd-f8ea-7b20-ba09-1db12e0191a4/custody-manifest.json",
+      "sha256": "38c5d44fed4e6863d644ddd50a035277b58b04cf50b0cc0136361ec669194c96",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "751fc28f45c849e0bdb9085744e123409cb0b580",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2cd-f921-74e2-89fd-4e662733af47/custody-manifest.json",
+      "sha256": "8ae2cbb0fd5622fb8546e874e2783675c3e63102e1c8770b71aea6896c2c83e8",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "751fc28f45c849e0bdb9085744e123409cb0b580",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2ce-119c-78a1-95ed-9018fde85526/custody-manifest.json",
+      "sha256": "9bf835e58d2e0834a9d3820406048a33061101fbfb7013b1df094c91d560b651",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "751fc28f45c849e0bdb9085744e123409cb0b580",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2ce-1287-77c1-9d68-b8c21003867c/custody-manifest.json",
+      "sha256": "12ba54340b1d6037574e539c85f419ef95d41b778164445544241c679195dc13",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "751fc28f45c849e0bdb9085744e123409cb0b580",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2ce-1292-7b12-8f93-af66e027aa05/custody-manifest.json",
+      "sha256": "6349364b297c06ff14b7c3a89c7939472d39457a4c32157ad61625695a7163a7",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "751fc28f45c849e0bdb9085744e123409cb0b580",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2ce-12aa-7e10-828d-c8db90b64d8d/custody-manifest.json",
+      "sha256": "30a98b3c5698bbb71f44a4c6d4ee19a5a5e0c7af4bdaa9c14065895f3997bc15",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "751fc28f45c849e0bdb9085744e123409cb0b580",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2ce-2708-78f3-933c-787c3d4dc878/custody-manifest.json",
+      "sha256": "356cb8b2d73a93c0108b6eabb9f94f16ca667514c417fa201f9a8f065ed1f6f3",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "751fc28f45c849e0bdb9085744e123409cb0b580",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    },
+    {
+      "path": "fault-state/native-registered-fifth-image-01a1d2ce-27a0-7e50-8488-c32400981673/custody-manifest.json",
+      "sha256": "14adb5fe4471fa10c40860b8efb1a50941e69ca30c908a07d6a7501c5229b645",
+      "files": 96,
+      "bytes": 2912792,
+      "status": "observed_stable_with_live_actual_owners",
+      "source": "751fc28f45c849e0bdb9085744e123409cb0b580",
+      "engine_owners_alive": true,
+      "atomic_powerloss_snapshot_claimed": false
+    }
+  ],
+  "verified_files": 960,
+  "verified_bytes": 29152656,
+  "engine_opened_or_replayed": false
+}

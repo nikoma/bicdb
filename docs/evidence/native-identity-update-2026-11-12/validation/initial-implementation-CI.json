@@ -1,0 +1,133 @@
+{
+  "source": "6cafd400844f0dc11200afed52ab2f015009ecf2",
+  "checked_unix": 1794520536.653417,
+  "scope": "Initial implementation CI terminal success; final evidence-only PR head must separately satisfy CI before merge. No release/deployment claim.",
+  "runs": [
+    {
+      "run_id": 43302760435,
+      "head_sha": "6cafd400844f0dc11200afed52ab2f015009ecf2",
+      "url": "https://github.com/nikoma/bicdb/actions/runs/43302760435",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 131477986912,
+          "name": "Community-only workspace compiles, tests included",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-12T20:41:16Z",
+          "completed_at": "2026-11-12T20:52:44Z",
+          "html_url": "https://github.com/nikoma/bicdb/actions/runs/43302760435/job/131477986912"
+        },
+        {
+          "id": 131477987040,
+          "name": "Licensing invariants",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-12T20:41:17Z",
+          "completed_at": "2026-11-12T20:41:25Z",
+          "html_url": "https://github.com/nikoma/bicdb/actions/runs/43302760435/job/131477987040"
+        },
+        {
+          "id": 131477987063,
+          "name": "Public repository has no private dependencies",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-12T20:41:16Z",
+          "completed_at": "2026-11-12T20:41:50Z",
+          "html_url": "https://github.com/nikoma/bicdb/actions/runs/43302760435/job/131477987063"
+        },
+        {
+          "id": 131477987110,
+          "name": "Formatting",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-12T20:41:16Z",
+          "completed_at": "2026-11-12T20:41:43Z",
+          "html_url": "https://github.com/nikoma/bicdb/actions/runs/43302760435/job/131477987110"
+        },
+        {
+          "id": 131477988022,
+          "name": "Validate focused test selectors",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-12T20:41:17Z",
+          "completed_at": "2026-11-12T20:41:19Z",
+          "html_url": "https://github.com/nikoma/bicdb/actions/runs/43302760435/job/131477988022"
+        },
+        {
+          "id": 131478035424,
+          "name": "bicdb-sql",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-12T20:41:21Z",
+          "completed_at": "2026-11-12T21:14:02Z",
+          "html_url": "https://github.com/nikoma/bicdb/actions/runs/43302760435/job/131478035424"
+        },
+        {
+          "id": 131478035434,
+          "name": "bicdb-core",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-12T20:41:22Z",
+          "completed_at": "2026-11-12T21:02:52Z",
+          "html_url": "https://github.com/nikoma/bicdb/actions/runs/43302760435/job/131478035434"
+        },
+        {
+          "id": 131478035519,
+          "name": "rest of workspace",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-12T20:41:22Z",
+          "completed_at": "2026-11-12T21:52:20Z",
+          "html_url": "https://github.com/nikoma/bicdb/actions/runs/43302760435/job/131478035519"
+        },
+        {
+          "id": 131478035535,
+          "name": "bicdb-pgwire",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-12T20:41:21Z",
+          "completed_at": "2026-11-12T21:00:35Z",
+          "html_url": "https://github.com/nikoma/bicdb/actions/runs/43302760435/job/131478035535"
+        },
+        {
+          "id": 131478038240,
+          "name": "Focused Core library (${{ inputs.core_filter }})",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-11-12T20:41:20Z",
+          "completed_at": "2026-11-12T20:41:19Z",
+          "html_url": "https://github.com/nikoma/bicdb/actions/runs/43302760435/job/131478038240"
+        },
+        {
+          "id": 131478038493,
+          "name": "Focused PGwire library (${{ inputs.pgwire_filter }})",
+          "status": "completed",
+          "conclusion": "skipped",
+          "started_at": "2026-11-12T20:41:20Z",
+          "completed_at": "2026-11-12T20:41:19Z",
+          "html_url": "https://github.com/nikoma/bicdb/actions/runs/43302760435/job/131478038493"
+        }
+      ]
+    },
+    {
+      "run_id": 43302760629,
+      "head_sha": "6cafd400844f0dc11200afed52ab2f015009ecf2",
+      "url": "https://github.com/nikoma/bicdb/actions/runs/43302760629",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 131477987054,
+          "name": "Rails 8.1.4 with stock PostgreSQL adapter",
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-12T20:41:17Z",
+          "completed_at": "2026-11-12T20:49:00Z",
+          "html_url": "https://github.com/nikoma/bicdb/actions/runs/43302760629/job/131477987054"
+        }
+      ]
+    }
+  ]
+}

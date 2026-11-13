@@ -1,0 +1,77 @@
+{
+  "label": "native-identity-finance492-validation",
+  "source": "2403deefde68869c15f02b73d40406ffdfb50148",
+  "source_ref": "refs/bicdb-proof/native-finance492-validation-2403deef",
+  "base": "fdac8c7691ed0458497096999c590a2aee092f18",
+  "repo": "/root/bicdb-native-identity-delivery",
+  "scope": "Exact492candidate overactualfinance main490 plusNativeIDissuer tracking and6implementedsemanticreader requirements. Sourceversion29pkg check, explicitcurrentprobe/helpers+custody, fullCorelib/integration qualification. Wait usefulunaltered95composeddiagnostic finishes beforeheavytests. Prior17focused at5fab andreaderfocus separate, old490qualificationhistorical. New38process8EIO10KVM andindependentverification separate; mainmergemustwaitactualHA491andfreshnextpatch/finalheadCI. Originalassertions/timeouts preserved;fullgoalactive/P2productionoff/no spend.",
+  "continue_on_failure": false,
+  "commands": [
+    [
+      "python3",
+      "scripts/bump-version.py",
+      "--check"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "build",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--example",
+      "native_identity_crash_probe",
+      "--example",
+      "durability_child",
+      "--example",
+      "chaos_child",
+      "--example",
+      "ha_state_child"
+    ],
+    [
+      "python3",
+      "-c",
+      "import pathlib,json,hashlib,subprocess,os,shutil\nroot=pathlib.Path('/root/bicdb-durability-s3');source=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip();assert source=='2403deefde68869c15f02b73d40406ffdfb50148'\nout=root/'qualification-artifacts-debug'/source;out.mkdir(exist_ok=False);probe=out/'native_identity_crash_probe';shutil.copy2(pathlib.Path(os.environ['CARGO_TARGET_DIR'])/'debug/examples/native_identity_crash_probe',probe)\nrecord={'source':source,'status':'probe_built','binary':str(probe),'binary_sha256':hashlib.file_digest(probe.open('rb'),'sha256').hexdigest(),'source_version':'1.0.492-beta','scope':'Explicit current492candidate probe build succeeded; finance main490+issuer tracking+implementedreader capture, no privateSQLpartition/rename. Qualification probe, notCLI/release/deploy or passing test result.'};p=root/'native-identity-finance492-probe-custody.json';assert not p.exists();json.dump(record,p.open('w'),indent=2);print(json.dumps(record))\n"
+    ],
+    [
+      "cargo",
+      "+1.96.0",
+      "test",
+      "--no-fail-fast",
+      "--locked",
+      "-j",
+      "1",
+      "-p",
+      "bicdb-core",
+      "--lib",
+      "--tests",
+      "--",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  ],
+  "wait_units": [
+    "bicdb-native492-reader-contract-focused",
+    "bicdb-private-composed-4e329f36-mtable95-v1"
+  ],
+  "required_receipts": [
+    {
+      "path": "report-native492-reader-contract-focused.json",
+      "equals": {
+        "source": "2403deefde68869c15f02b73d40406ffdfb50148",
+        "status": "focused_passed"
+      }
+    },
+    {
+      "path": "report-private-composed-4e329f36-mtable95-v1.json",
+      "equals": {
+        "source": "4e329f368de5fc7485971b877e905d3d17110880"
+      }
+    }
+  ],
+  "remote_repo_name": "repo-metadata-describe",
+  "remote_target_name": "target-metadata-describe",
+  "remote_lock_name": "metadata-describe-source-build.lock"
+}

@@ -45,7 +45,7 @@ fn observed(result: Result<serde_json::Value>) -> serde_json::Value {
         Err(error) => serde_json::json!({"value":null,"diagnostic_error":error.to_string()}),
     }
 }
-fn prerequisite_snapshot(
+pub(super) fn prerequisite_snapshot(
     control: &NativeMetadataControlHost,
     factory: &Arc<crate::distribution_native_host::NativeUnassignedLearnerFactory>,
     pending: &ClusterTopology,
@@ -156,6 +156,7 @@ pub(super) fn exercise(
         Operation::PublishNativeBase,
         false,
         Some(&mut request_observations),
+        None,
     );
     let prerequisite_elapsed_us = prerequisite_started.elapsed().as_micros();
     let prerequisite_after = prerequisite_snapshot(

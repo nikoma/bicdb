@@ -54,6 +54,7 @@ pub(super) fn advance(
 ) -> Result<Progress> {
     advance_with_diagnostics(
         control, client, source, plan, provider, actor, output, journal, operation, cancel, None,
+        None,
     )
 }
 fn diagnostic_window(deadline: Option<Instant>, check: Result<()>) -> serde_json::Value {
@@ -86,6 +87,7 @@ fn advance_with_diagnostics(
     operation: Operation,
     cancel: bool,
     mut observations: Option<&mut Vec<serde_json::Value>>,
+    expiry: Option<&native_expiry_tests::ExpiryControl>,
 ) -> Result<Progress> {
     let started = Instant::now();
     let parent = budget(5000);
@@ -148,6 +150,7 @@ fn advance_with_diagnostics(
             );
         }
         let native_base = matches!(operation, Operation::PublishNativeBase);
+        let expiry_guard = expiry.map(|expiry| expiry.arm(&role, &parent));
         let adoption = matches!(operation, Operation::AdoptCatalogueFloor);
         let adoption_guard = (cancel && adoption).then(|| {
             let token = parent.clone();
@@ -179,6 +182,7 @@ fn advance_with_diagnostics(
         drop(guard);
         drop(base_guard);
         drop(adoption_guard);
+        drop(expiry_guard);
         stage = "actual_host_returned";
         result
     })();
@@ -555,7 +559,29 @@ pub(super) fn exercise(
             acknowledged,
         );
     }
+    if matches!(
+        case,
+        SourceCase::TargetNativeBaseRoleExpiryBeforePut
+            | SourceCase::TargetNativeBaseRoleExpiryAfterCommit
+    ) {
+        native_expiry_tests::exercise(
+            case,
+            control,
+            client,
+            &source,
+            plan,
+            provider,
+            actor,
+            factory,
+            pending,
+            ranges,
+            output,
+            journal,
+            acknowledged,
+        );
+    }
 }
 
 mod catalogue_tests;
 mod native_base_tests;
+mod native_expiry_tests;

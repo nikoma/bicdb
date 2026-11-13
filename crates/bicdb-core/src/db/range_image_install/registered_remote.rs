@@ -154,6 +154,8 @@ impl RegisteredRemoteBasePublication {
                 // Original host owns exact bytes+xid BEFORE native mutation.
                 self.receipt = receipt;
                 self.attempted = Some(boundary.clone());
+                #[cfg(test)]
+                before_put_cut::fire();
                 let owned = context.with_owned_base(boundary);
                 owned.require_current(db)?;
                 for key in [
@@ -283,6 +285,14 @@ fn receipt_from_final(
     Ok(receipt)
 }
 impl BicDb {
+    /// Test-only original-owner cut, after actual native xid/bytes retention
+    /// and before owned.current or the first native put. No admission minted.
+    #[cfg(test)]
+    pub(crate) fn test_registered_remote_base_before_first_put(
+        callback: Box<dyn FnOnce()>,
+    ) -> impl Drop {
+        before_put_cut::arm(callback)
+    }
     #[cfg(test)]
     pub(crate) fn test_invalidate_registered_installed_base(
         &self,
@@ -412,6 +422,30 @@ impl BicDb {
             ));
         }
         native.require_current(self)
+    }
+}
+
+#[cfg(test)]
+mod before_put_cut {
+    use std::cell::RefCell;
+    thread_local! {static CUT:RefCell<Option<Box<dyn FnOnce()>>>=RefCell::new(None);}
+    pub(super) fn fire() {
+        let callback = CUT.with(|cut| cut.borrow_mut().take());
+        if let Some(callback) = callback {
+            callback();
+        }
+    }
+    pub(crate) struct Guard;
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            CUT.with(|cut| {
+                cut.borrow_mut().take();
+            });
+        }
+    }
+    pub(super) fn arm(callback: Box<dyn FnOnce()>) -> Guard {
+        CUT.with(|cut| assert!(cut.borrow_mut().replace(callback).is_none()));
+        Guard
     }
 }
 

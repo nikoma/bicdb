@@ -10,6 +10,7 @@ use exact_decimal_sum::ExactDecimalSum;
 mod local_namespace_identity;
 mod mutation_identity;
 mod native_wal_apply;
+pub(crate) mod registered_row_retention;
 pub use deferred_materialize::DeferredMaterializeStats;
 pub(crate) use native_wal_apply::admission_mutations_sha256;
 pub use native_wal_apply::NativeWalApplyReceipt;
@@ -10671,6 +10672,10 @@ impl BicDb {
         } else {
             None
         };
+        // Actual native WAL/transaction outcomes are recovered now. Preserve
+        // outstanding Registered row evidence BEFORE the generic logical WAL
+        // scanner (which can repair tails), row/outbox replay and open reset.
+        registered_row_retention::require_no_outstanding(&path, paged_records.as_deref())?;
         let mut fts_generations =
             load_fts_generation_catalog(&path.join(DEFAULT_FTS_GENERATION_CATALOG))?;
         // Recovery exports can explicitly omit secondary index definitions.

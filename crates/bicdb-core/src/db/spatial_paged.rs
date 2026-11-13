@@ -2214,6 +2214,10 @@ impl BicDb {
                             .into(),
                     ));
                 };
+                registered_row_retention::require_no_outstanding(
+                    &self.path,
+                    self.paged_records.as_deref(),
+                )?;
                 self.tx_log.flush_pending()?;
                 let _backup_gate = storage::acquire_database_backup_write_guard(&self.path)?;
                 copy_transaction_log_tail(&log, 0, true)?;

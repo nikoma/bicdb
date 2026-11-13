@@ -5,6 +5,10 @@ use crate::db::{
     NativeRegisteredRemoteImageProgress as Progress,
 };
 
+const COLD_CHILD_MARKER: &str = "BICDB_REGISTERED_ROW_COLD_CHILD_MARKER";
+#[cfg(unix)]
+mod cold_preservation_tests;
+
 #[test]
 fn native_registered_fifth_remote_image_actual_stored_history_rows_beyond_b0_preserve_other_range()
 {
@@ -81,7 +85,29 @@ fn advance(
     )?;
     let guard = cut.map(|after| {
         let caller = parent.clone();
-        crate::db::test_registered_remote_row_wal_cut(after, Box::new(move || caller.cancel()))
+        crate::db::test_registered_remote_row_wal_cut(
+            after,
+            Box::new(move || {
+                if after {
+                    if let Some(marker) = std::env::var_os(COLD_CHILD_MARKER) {
+                        // Actual retain_applied_known callback, before RowsHeader.
+                        // No DB/native/network borrow inside this observation.
+                        evidence(
+                            std::path::Path::new(&marker),
+                            &serde_json::json!({
+                                "phase":"actual_applied_known_before_protected_progress",
+                                "child_pid":std::process::id(),"no_target_ack_claim":true
+                            }),
+                        )
+                        .unwrap();
+                        loop {
+                            std::thread::park();
+                        }
+                    }
+                }
+                caller.cancel()
+            }),
+        )
     });
     let result = control
         .advance_registered_remote_image(source, frame, role, own, business, &parent, operation);
@@ -356,6 +382,21 @@ pub(super) fn exercise(
                 }),
             )
         });
+        if cut == Some(true) {
+            if let Some(marker) = std::env::var_os(COLD_CHILD_MARKER) {
+                let marker = std::path::PathBuf::from(marker);
+                evidence(
+                    &marker.with_extension("pre.json"),
+                    &serde_json::json!({
+                        "target_database_path":factory.database.read().data_path(),
+                        "source_acknowledged":acknowledged,
+                        "original_step":step,"exact_source_frame":actual.payload().unwrap(),
+                        "test_observation_not_authority":true
+                    }),
+                )
+                .unwrap();
+            }
+        }
         let result = advance(
             control,
             client,
@@ -488,6 +529,19 @@ pub(super) fn exercise(
                 );
                 assert_eq!(factory.database.read().current_commit_seq(), 0);
             }
+            let original_pending_index = factory
+                .database
+                .read()
+                .test_registered_row_wal_index_data()
+                .unwrap();
+            assert_eq!(
+                original_pending_index["pending"].as_array().unwrap().len(),
+                1
+            );
+            assert_eq!(
+                original_pending_index["pending"][0]["intent"], intent,
+                "durable index must bind original actual native intent"
+            );
             let active_before_retry = factory.database.read().test_native_wal_retention_active();
             evidence(&output.join("registered-image-wal-retention.json"),&serde_json::json!({
                 "phase":"caller_cancelled_before_retention_assertion","actual_active_pins":active_before_retry,
@@ -552,6 +606,13 @@ pub(super) fn exercise(
             assert_eq!(completed["rows"]["pending"], serde_json::Value::Null);
             {
                 let db = factory.database.read();
+                let cleared_index = db.test_registered_row_wal_index_data().unwrap();
+                assert!(
+                    cleared_index["pending"].as_array().unwrap().is_empty(),
+                    "exact committed RowsHeader must atomically clear its outstanding index"
+                );
+                wal_retention["original_pending_index"] = original_pending_index;
+                wal_retention["index_after_committed_progress"] = cleared_index;
                 let actual_active_pins = db.test_native_wal_retention_active();
                 wal_retention["active_after_committed_progress"] =
                     serde_json::json!(actual_active_pins);

@@ -64,7 +64,10 @@ pub const NATIVE_REGISTERED_REMOTE_PROPOSAL_FEATURE_FLAG: &str =
     "native_registered_remote_proposal_v1";
 /// Node-local Registered remote history/row-intent semantics, never portable.
 pub const NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG: &str = "native_registered_remote_image_v1";
+/// Durable restrictive row-WAL index; old unindexed prototypes are unsupported.
+pub const NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG: &str = "native_registered_row_wal_index_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG,
     EXACT_DECIMAL_UNITS_FEATURE_FLAG,
     NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG,
     NATIVE_WRITER_DATA_DOMAIN_FEATURE_FLAG,
@@ -892,9 +895,25 @@ pub(crate) fn enable_native_registered_remote_image(root: &Path) -> Result<()> {
             "Registered image requires its protected proposal reader fence".into(),
         ));
     }
+    if metadata
+        .feature_flags
+        .contains(NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG)
+        && !metadata
+            .feature_flags
+            .contains(NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG)
+    {
+        return Err(BicDbError::FormatCompatibility(
+            "unindexed Registered image prototype requires explicit recovery; upgrade refused"
+                .into(),
+        ));
+    }
     metadata
         .feature_flags
         .insert(NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG.into());
+    // One durable reader-fence replacement precedes the first indexed intent.
+    metadata
+        .feature_flags
+        .insert(NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG.into());
     persist_metadata_with(root, &metadata, true, |path, bytes, sync| {
         storage::replace_durably(
             path,
@@ -911,6 +930,13 @@ pub(crate) fn native_registered_remote_image_active(root: &Path) -> Result<bool>
     Ok(metadata
         .feature_flags
         .contains(NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG))
+}
+pub(crate) fn native_registered_row_wal_index_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG))
 }
 pub(crate) fn native_writer_enrollment_active(root: &Path) -> Result<bool> {
     let metadata = read_or_legacy_metadata(root)?;

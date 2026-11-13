@@ -1,5 +1,6 @@
 //! Retained original row transaction and exact imported-image WAL grant.
 use super::*;
+use crate::db::registered_row_retention::{self, RegisteredRowIntent as RowIntent};
 use crate::distribution_range_image::{RangeImageCursorV1, RangeImageStepV1};
 use crate::distribution_range_mutation::{RangeMutationAuthority, RangeMutationClaim};
 use writer_enrollment::RegisteredRemoteMutationScopeLiveness;
@@ -53,46 +54,6 @@ impl RowHeader {
             || self.checksum()? != self.checksum_sha256
         {
             return Err(invalid("damaged Registered remote row progress"));
-        }
-        Ok(())
-    }
-}
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-struct RowIntent {
-    version: u32,
-    attempt: Uuid,
-    range: RangeId,
-    manifest_sha256: String,
-    history_generation: Uuid,
-    history_header_sha256: String,
-    intent_sha256: String,
-    step: u64,
-    step_sha256: String,
-    previous_progress_sha256: Option<String>,
-    logical_txid: Option<u64>,
-    mutations_sha256: Option<String>,
-    native_xid: u64,
-    checksum_sha256: String,
-}
-impl RowIntent {
-    fn checksum(&self) -> Result<String> {
-        let mut value = self.clone();
-        value.checksum_sha256.clear();
-        Ok(hex::encode(sha2::Sha256::digest(bounded_json(
-            &("registered-remote-row-intent-v1", value),
-            MAX_NATIVE_RECEIPT_BYTES,
-        )?)))
-    }
-    fn validate(&self) -> Result<()> {
-        if self.version != 1
-            || self.attempt.is_nil()
-            || self.history_generation.is_nil()
-            || self.native_xid == 0
-            || self.logical_txid.is_some() != self.mutations_sha256.is_some()
-            || self.checksum()? != self.checksum_sha256
-        {
-            return Err(invalid("damaged Registered remote row intent"));
         }
         Ok(())
     }
@@ -578,6 +539,13 @@ impl RetainedRemoteRows {
                 pending.intent.checksum_sha256 = pending.intent.checksum()?;
                 pending.intent.validate()?;
                 let bytes = bounded_json(&pending.intent, MAX_NATIVE_RECEIPT_BYTES)?;
+                registered_row_retention::insert(
+                    paged,
+                    xid,
+                    db.incarnation_id(),
+                    context.point.preflight().native().birth_sha256(),
+                    &pending.intent,
+                )?;
                 paged
                     .store()
                     .put(
@@ -597,6 +565,17 @@ impl RetainedRemoteRows {
             return Err(invalid(
                 "Registered row native intent exact outcome unproven",
             ));
+        }
+        // The intent and its restrictive index must have the SAME committed
+        // page XID before any actual logical-WAL attempt can proceed.
+        if pending.progress_attempt.is_none() {
+            registered_row_retention::require_exact(
+                db.paged_records
+                    .as_deref()
+                    .ok_or_else(|| invalid("Registered index page store absent"))?,
+                db.incarnation_id(),
+                &pending.intent,
+            )?;
         }
         let logical = *pending.logical.lock();
         if matches!(logical, LogicalOutcome::NotAttempted) {
@@ -660,6 +639,12 @@ impl RetainedRemoteRows {
                 next.checksum_sha256 = next.checksum()?;
                 next.validate()?;
                 pending.progress_attempt = Some((next.clone(), None));
+                registered_row_retention::require_exact(
+                    paged,
+                    db.incarnation_id(),
+                    &pending.intent,
+                )?;
+                registered_row_retention::clear(paged, xid, &pending.intent)?;
                 paged
                     .store()
                     .put(
@@ -692,6 +677,12 @@ impl RetainedRemoteRows {
         {
             return Err(invalid("Registered row progress outcome not proven"));
         }
+        registered_row_retention::require_cleared(
+            db.paged_records
+                .as_deref()
+                .ok_or_else(|| invalid("Registered index page store absent"))?,
+            &pending.intent,
+        )?;
         context.require_current(db)?;
         self.header = actual;
         self.content = pending.content.clone();

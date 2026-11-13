@@ -304,10 +304,22 @@ fn native_hot_recovery_original_writer_replacement_refuses_without_reserving_or_
         original["persisted_policy_registration_generation"],
         current["persisted_policy_registration_generation"]
     );
-    assert_eq!(
-        host.binding_diagnostic()["observed_bound_registration_active"],
-        false
+    // The hook slot releases its actual old registration Arc on replace;
+    // this guard intentionally retains Weak only. Ended is distinct from a
+    // retained inactive object: JSON optional fields are null in that case.
+    let revoked = host.binding_diagnostic();
+    assert!(
+        host.registration_ended(),
+        "actual original registration must end"
     );
+    assert!(revoked["observed_bound_registration_generation"].is_null());
+    assert!(revoked["observed_bound_registration_active"].is_null());
+    assert_eq!(revoked["observed_binding_lifetime_live"], false);
+    assert_eq!(revoked["observed_weak_directory_alive"], true);
+    assert!(revoked["observed_binding_liveness_error"]
+        .as_str()
+        .unwrap()
+        .contains("native writer hook lifetime ended"));
     let root = database.read().data_path().to_owned();
     let catalog = root.join(crate::distribution_range_consensus::DEFAULT_RANGE_WRITE_LOG);
     let bytes = std::fs::read(&catalog).unwrap();

@@ -154,3 +154,53 @@ is canceled while the long session stays live; complete actual native history
 export still succeeds with all original OLD-closure assertions. These are lower
 capture-producer controls, not a remote source-session/TLS/image acceptance run.
 A consumed failed cut stays quarantined; exact restart/resume remains OPEN.
+
+## Source ingress leaf and its exact component boundary
+
+The next leaf adds a bounded retained source-owner table to the ACTUAL initial
+DATA host and a separate readonly `NativeRemoteImageSourceFrame` request/reply.
+The host captures its existing admission/runtime/protected MStore/guard/coordinator
+before taking an `Option<NativeJointOldClosedQuorum>` from the caller. All later
+publication failures retain that owner. The table holds at most eight sessions;
+it does not evict on TTL, clear permanent refusals or provide a recovery reset.
+Safe completed-session retirement and failed-publication continuation remain
+OPEN rather than silently discarding pins or reconstructing a cut.
+
+The immutable INITIAL DATA listener alone permits this new source route; old
+metadata/provisional/Registered allowlists stay closed. Before any service/DB
+latch, the handler binds the actual TLS target and original request budget. The
+source acquires its own fresh HostMQ without table/session/engine guards, then
+validates its original actual objects and exports through existing bounded
+capture/history producers. The target client uses the real numeric, pinned TLS
+exchange and native destination birth fence. Exact original request, peer,
+source birth, session, attempt, checksum, inner operation/cursor/history/seal
+bindings precede the opaque observation. Its original step token remains stored.
+No decoded frame constructs this wrapper, a local lineage or a target row grant.
+Normal completed-response EOF does not imply source-session death.
+
+Driver owns reserved private wire30. This isolated leaf inherits private wire29
+and adds arms only, with no independent version reservation or rolling upgrade
+claim; parent composition MUST union them into the already-reserved wire30.
+It changes no durable catalogue/native record codec or grants from old bytes.
+
+Two source-only component tests first run EVERY original genuine-fifth setup,
+2 source APP ACK/full records, 2 actual target fences and 4 original writer guard
+assertions. A separate typed runner branch then produces real native OLD QQs
+LOCALLY, publishes actual source sessions and fetches both ranges' manifests,
+zero-through-R history, rows and seals over real fifth-to-source TLS. Duplicate
+row-cursor requests return the same actual inner step; full acknowledged records
+cross the connection. Target native/raw/B/namespace/rows remain byte/state equal
+and its no-writer policy stays absent. A separate control cancels the actual
+source session after a returned manifest: issued historical facts remain equal,
+while a new real source request refuses with the target caller still live.
+Both cases retain normal cleanup/custody and intent-before-API frame ledgers.
+The original required/control runner is byte-equal after removing ONLY this
+optional typed source branch. No existing acceptance body or clock is relaxed.
+
+These tests DO NOT collect remote OLD QQ, install target rows, establish source
+death detection, cover source death between row reply and target Tx, or grant
+Serving/ACK on the fifth. The two CLOSED source streams are a component-only
+prerequisite; full range1 NEW QQ/open/ACK/Strong THEN range2 on the same Assigned
+writer remains mandatory. The next target/history/row/finalizer producer must
+consume these authenticated historical facts under its DISTINCT original local
+owner/role/caller authority, preserving every target/other-range obligation.

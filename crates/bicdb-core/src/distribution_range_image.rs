@@ -33,8 +33,9 @@ mod remote_source;
 pub(crate) use remote_source::{
     ActualNativeRemoteImageSourceFrame, NativeRemoteImageManifestV1,
     NativeRemoteImageSourceOperationV1, NativeRemoteImageSourcePayloadV1,
-    NativeRemoteImageSourceReplyV1, NativeRemoteImageSourceRequestV1,
-    NativeRemoteImageSourceSession,
+    NativeRemoteImageSourceRegistry, NativeRemoteImageSourceReplyV1,
+    NativeRemoteImageSourceRequestV1, NativeRemoteImageSourceSession,
+    NativeRetainedRemoteImageSource,
 };
 mod source_cut;
 pub(crate) use closed_image_source::ClosedNativeImageSource;

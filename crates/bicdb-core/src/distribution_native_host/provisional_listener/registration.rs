@@ -503,6 +503,17 @@ impl NativeMetadataControlHost {
         self.listener = Some(self.backend.start_listener(self.network.clone(), &token)?);
         token.check()
     }
+    pub(crate) fn retain_initial_remote_image_source(
+        &self,
+        old: &mut Option<crate::distribution_range_handoff::NativeJointOldClosedQuorum>,
+        target_attempt: Uuid,
+        original_session: &CancellationToken,
+    ) -> Result<crate::distribution_range_image::NativeRetainedRemoteImageSource> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual initial DATA owner is absent"))?
+            .retain_remote_image_source(old, target_attempt, original_session)
+    }
     pub(crate) fn ensure_enrolled_target(
         &self,
         target: &ClusterNodeId,

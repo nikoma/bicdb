@@ -39,6 +39,7 @@ pub(super) fn require_request(
     admission.require_live()?;
     match request {
         ClusterDataRequest::Ping
+        | ClusterDataRequest::NativeRemoteImageSourceFrame { .. }
         | ClusterDataRequest::RegisterMetadataLearner { .. }
         | ClusterDataRequest::FetchBootstrapSnapshot
         | ClusterDataRequest::ExportSchemaBundle { .. }

@@ -555,3 +555,148 @@ impl NativeRemoteImageSourceSession {
         Ok(ActualNativeRemoteImageSourceFrame { reply })
     }
 }
+/// Retained bounded owner table, not a token cache. No timeout eviction/drop
+/// unlocks an image or forgives its permanent OLD refusals. An active request
+/// retains its actual session through return; source Host revocation is checked
+/// by the original admission inside every real session boundary.
+pub(crate) struct NativeRemoteImageSourceRegistry {
+    sessions: Mutex<BTreeMap<Uuid, Arc<Mutex<NativeRemoteImageSourceSession>>>>,
+    transport: Arc<TcpClusterRelocationTransport>,
+    provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
+}
+impl NativeRemoteImageSourceRegistry {
+    pub(crate) fn new(
+        transport: Arc<TcpClusterRelocationTransport>,
+        provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
+    ) -> Self {
+        Self {
+            sessions: Mutex::new(BTreeMap::new()),
+            transport,
+            provider,
+        }
+    }
+    /// The caller still owns `session` if admission fails, including a full
+    /// table. Register BEFORE begin, so every attempted capture stays retained.
+    pub(crate) fn retain(
+        &self,
+        session: &Arc<Mutex<NativeRemoteImageSourceSession>>,
+    ) -> Result<Uuid> {
+        let id = session
+            .try_lock()
+            .ok_or_else(|| invalid("source publication owner busy"))?
+            .source_session;
+        let mut sessions = self
+            .sessions
+            .try_lock()
+            .ok_or_else(|| invalid("source owner table busy"))?;
+        if let Some(previous) = sessions.get(&id) {
+            if !Arc::ptr_eq(previous, session) {
+                return Err(invalid("source session identity collision"));
+            }
+            return Ok(id);
+        }
+        if sessions.len() >= 8 {
+            return Err(invalid(
+                "source session owner capacity; retained cuts not evicted",
+            ));
+        }
+        sessions.insert(id, session.clone());
+        Ok(id)
+    }
+    /// The source obtains OWN fresh HostMQ OUTSIDE registry/session/engine
+    /// latches. The caller remains the actual authenticated target; it does not
+    /// acquire metadata-leader or range-leader initiator powers here.
+    pub(crate) fn observe_frame(
+        &self,
+        target: &MetadataReadParticipant,
+        request: &NativeRemoteImageSourceRequestV1,
+        parent: &CancellationToken,
+    ) -> Result<ActualNativeRemoteImageSourceFrame> {
+        let token = request.cancellation(parent)?;
+        let session = self
+            .sessions
+            .try_lock()
+            .ok_or_else(|| invalid("source session table busy"))?
+            .get(&request.source_session)
+            .cloned()
+            .ok_or_else(|| invalid("source image session is not retained"))?;
+        // Necessary immutable request/actor refusal before any source OWN MQ
+        // network work. Full current actor/pins/plan checks still follow it.
+        {
+            let actual = session
+                .try_lock()
+                .ok_or_else(|| invalid("source image operation already active"))?;
+            let manifest = actual.manifest()?;
+            if target.node_id() != &manifest.target_id
+                || target.member_incarnation() != manifest.target_birth.node_incarnation()
+                || request.target_attempt != manifest.target_attempt
+                || request.manifest_sha256 != manifest.checksum_sha256
+            {
+                return Err(invalid("source image original target/session differs"));
+            }
+        }
+        let leader = self
+            .provider
+            .current_metadata_leader_hint(&token)?
+            .ok_or_else(|| invalid("source OWN metadata leader is unavailable"))?;
+        let remaining = token
+            .deadline()
+            .unwrap()
+            .saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(BicDbError::QueryTimedOut);
+        }
+        let own = self.transport.acquire_host_metadata_observation(
+            &leader,
+            request.business,
+            remaining.min(Duration::from_secs(5)),
+            &token,
+        )?;
+        let mut actual = session
+            .try_lock()
+            .ok_or_else(|| invalid("source image operation already active"))?;
+        actual.observe_frame(target, request, &own, request.business, &token)
+    }
+}
+
+/// The controller retains this opaque actual owner before publication. Even a
+/// full registry or a failed begin leaves the consumed OLD proof in this owner.
+/// There is no source DTO/UUID constructor and no mutable session accessor.
+pub(crate) struct NativeRetainedRemoteImageSource {
+    session: Arc<Mutex<NativeRemoteImageSourceSession>>,
+    registry: Arc<NativeRemoteImageSourceRegistry>,
+}
+impl NativeRetainedRemoteImageSource {
+    pub(crate) fn retain(
+        session: NativeRemoteImageSourceSession,
+        registry: Arc<NativeRemoteImageSourceRegistry>,
+    ) -> Self {
+        Self {
+            session: Arc::new(Mutex::new(session)),
+            registry,
+        }
+    }
+    pub(crate) fn publish(
+        &self,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        original_publish: &CancellationToken,
+    ) -> Result<NativeRemoteImageManifestV1> {
+        self.registry.retain(&self.session)?;
+        let mut actual = self
+            .session
+            .try_lock()
+            .ok_or_else(|| invalid("source publication is active"))?;
+        actual.begin(Duration::from_secs(5), own, business, original_publish)?;
+        Ok(actual.manifest()?.clone())
+    }
+    /// Historical identity DATA; a cached manifest is not frame/target grant.
+    pub(crate) fn manifest(&self) -> Result<NativeRemoteImageManifestV1> {
+        Ok(self
+            .session
+            .try_lock()
+            .ok_or_else(|| invalid("source owner busy"))?
+            .manifest()?
+            .clone())
+    }
+}

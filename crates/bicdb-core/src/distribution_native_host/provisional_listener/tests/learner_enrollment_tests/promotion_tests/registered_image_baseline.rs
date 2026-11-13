@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 mod closed_fence_controls;
 mod custody;
 mod placement_cases;
+mod remote_source_tests;
 use closed_fence_controls::Case;
 use placement_cases::AssignmentMode;
 
@@ -180,6 +181,23 @@ fn run_registered_image_baseline(case: Case) {
     run_registered_image_baseline_with_placement(case, AssignmentMode::OriginalLeader);
 }
 fn run_registered_image_baseline_with_placement(case: Case, assignment: AssignmentMode) {
+    run_registered_image_baseline_with_placement_and_source(case, assignment, None);
+}
+fn run_registered_image_baseline_with_source(
+    case: Case,
+    source_case: Option<remote_source_tests::SourceCase>,
+) {
+    run_registered_image_baseline_with_placement_and_source(
+        case,
+        AssignmentMode::OriginalLeader,
+        source_case,
+    );
+}
+fn run_registered_image_baseline_with_placement_and_source(
+    case: Case,
+    assignment: AssignmentMode,
+    source_case: Option<remote_source_tests::SourceCase>,
+) {
     let mut f = EnrollmentFixture::new();
     let (factory, mut host) = f.factory("actual-registered-fifth-image-target");
     assert!(factory.spec.initial_ranges.is_empty());
@@ -704,7 +722,23 @@ fn run_registered_image_baseline_with_placement(case: Case, assignment: Assignme
         }
         phase = "required_fence_acceptance";
         assert_eq!(succeeded,2,"REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute");
-        if case != Case::Required {
+        if let Some(source_case) = source_case {
+            phase = "actual_local_old_quorum_seeded_remote_source_frames";
+            remote_source_tests::exercise(
+                source_case,
+                &controls,
+                &clients,
+                &services,
+                &metadata,
+                &target_transport,
+                &factory,
+                &pending,
+                &ranges,
+                &ledger,
+                &output,
+                &original_writers,
+            );
+        } else if case != Case::Required {
             phase = "captured_valid_registered_closed_fence_control";
             closed_fence_controls::run(
                 case,

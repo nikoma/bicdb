@@ -1259,16 +1259,16 @@ impl<'db> SqlEngine<'db> {
         Ok(result)
     }
 
-    pub(crate) fn validate_money_aggregate_signatures(
+    pub(crate) fn validate_native_aggregate_signatures(
         &self,
         select: &Select,
         query: &Query,
     ) -> Result<()> {
-        // Only `avg` can name `money`: when no expression of the statement
-        // calls a function named avg there is nothing to validate, and the
-        // aggregate/window collection below (which clones every call) is
-        // skipped.
-        if !query_mentions_function(select, query, "avg") {
+        // Validate signatures before empty groups and LIMIT 0 can skip row
+        // evaluation. Statements without these functions avoid schema work.
+        if !query_mentions_function(select, query, "avg")
+            && !query_mentions_function(select, query, "bicdb_exact_sum_units")
+        {
             return Ok(());
         }
         let mut functions = query_group_aggregate_functions(select, query)?;
@@ -1283,6 +1283,13 @@ impl<'db> SqlEngine<'db> {
         for function in functions {
             let raw_name = object_name(&function.name)?.to_ascii_lowercase();
             let name = raw_name.strip_prefix("pg_catalog.").unwrap_or(&raw_name);
+            if name == "bicdb_exact_sum_units" {
+                self.require_exact_decimal_units()?;
+                let aggregate = crate::eval::ExactUnitsAggregate::from_function(&function)?;
+                let columns = self.from_relation_columns(&select.from)?;
+                aggregate.validate_type(|value| self.infer_env_expr_type(value, &columns))?;
+                continue;
+            }
             if name != "avg" {
                 continue;
             }

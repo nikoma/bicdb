@@ -5296,7 +5296,7 @@ impl<'db> SqlEngine<'db> {
             return self.execute_query(&rewritten);
         }
         validate_window_functions(select, query)?;
-        self.validate_money_aggregate_signatures(select, query)?;
+        self.validate_native_aggregate_signatures(select, query)?;
         let has_windows = select_has_window_functions(select, query)?;
 
         if select.from.is_empty() {

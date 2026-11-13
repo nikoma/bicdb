@@ -116,8 +116,13 @@ impl NativeJointPreparedServingRound {
         self.cancellation = self
             .cancellation
             .child_with_deadline(observation.actual.committed().deadline());
-        self.observations
-            .insert(observation.local_node_id().clone(), Arc::new(observation));
+        let observation = Arc::new(observation);
+        let local = observation.local_node_id().clone();
+        let retired = {
+            let _version = observation.actual.committed().native_publication_guard()?;
+            self.observations.insert(local, observation.clone())
+        };
+        drop(retired);
         Ok(())
     }
     pub(crate) fn finish(self) -> Result<NativeJointPreparedServingQuorum> {
@@ -309,6 +314,12 @@ impl NativeJointPreparedServingQuorum {
             trace.complete();
             result
         };
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &local.service,
+            &metadata,
+            business,
+            &cancellation,
+        )?;
         let fresh = {
             let service = local
                 .service
@@ -320,11 +331,12 @@ impl NativeJointPreparedServingQuorum {
                 actor.node_id(),
                 &cancellation,
             );
-            let result = local.actual.observe_fresh_committed(
+            let result = local.actual.observe_fresh_committed_with_point(
                 &service,
                 metadata,
                 business,
                 self.data.old_range().id,
+                metadata_point,
             )?;
             #[cfg(test)]
             trace.complete();

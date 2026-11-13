@@ -131,14 +131,29 @@ impl RegisteredRemoteImageInstallFreeze {
             ));
         }
         admission.require_live()?;
-        // Every fallible operation precedes actual consumption. The retained
-        // host release state already owns the exact activation for arm retry.
-        sessions.registered_remote.remove(&range);
-        sessions.current.remove(&range);
-        let released = self.custody.take();
-        drop(sessions);
-        drop(service);
-        drop(released);
+        // Full actual physical/native/owner proof remains lexical with the
+        // actual service and runtime session guards. No MStore acquisition or
+        // filesystem operation occurs under the short version publication gate.
+        let database_arc = service.database();
+        let database = database_arc
+            .try_read()
+            .ok_or_else(|| invalid("Registered release actual DB busy"))?;
+        let physical = admission.native().historical_cut_scope(&database)?;
+        admission.require_local_with_scope(
+            &service,
+            &physical,
+            crate::distribution_data::NativeJointReleaseOwnerView::Frozen(&custody.frozen),
+        )?;
+        let retired = {
+            let _version = admission.native_publication_guard()?;
+            // Every fallible operation precedes actual consumption. Original
+            // host activation survives; no destructor runs under final gate.
+            let runtime_custody = sessions.registered_remote.remove(&range);
+            let original_session = sessions.current.remove(&range);
+            let lease_custody = self.custody.take();
+            (runtime_custody, original_session, lease_custody)
+        };
+        drop(retired);
         Ok(())
     }
 }

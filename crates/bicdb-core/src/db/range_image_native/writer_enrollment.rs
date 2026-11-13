@@ -43,6 +43,8 @@ mod old_constraints;
 mod registry_refresh;
 #[cfg(feature = "tls-replication")]
 pub(crate) use assigned_install::NativeAssignedWriterInstallAttempt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use assigned_install::NativeFirstPolicyPublicationCandidate;
 pub(crate) use joint_domain::NativeJointWriterDomain;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

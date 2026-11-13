@@ -53,6 +53,16 @@ impl NativeJointActivatedOpenGuard {
     }
 }
 impl NativeJointOpenContinuity {
+    pub(crate) fn actual_released_publication_point(
+        &self,
+    ) -> Result<(Arc<NativeJointActivatedOpenGuard>, Uuid, String)> {
+        self.released_generation()?;
+        let actual = self
+            .guard
+            .upgrade()
+            .ok_or_else(|| BicDbError::Cluster("actual released publication guard ended".into()))?;
+        Ok((actual, self.store_open_id, self.activation_sha256.clone()))
+    }
     /// Identity of the actual retained, armed generation; a number alone is
     /// never an open permission or a replacement for this weak observation.
     pub(crate) fn released_generation(&self) -> Result<Uuid> {

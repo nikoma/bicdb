@@ -319,16 +319,23 @@ impl NativeJointReleasePhaseRound {
             remaining(&self.cancellation)?,
             &self.cancellation,
         )?;
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &member.service,
+            &host,
+            business,
+            &self.cancellation,
+        )?;
         let evidence = self.continuation.with_owner(node, |service, owner| {
             let actual = service
                 .try_lock()
                 .ok_or_else(|| invalid("joint release service busy"))?;
-            let evidence = actual.observe_joint_release_member_with_domain(
+            let evidence = actual.observe_joint_release_member_with_domain_and_point(
                 &member.writer_domain,
                 host,
                 business,
                 member.native.clone(),
                 owner,
+                metadata_point,
             )?;
             evidence.require_original_writer_identity(&member.writer)?;
             Ok(evidence)
@@ -451,16 +458,23 @@ impl NativeJointReleasePhaseQuorum {
             remaining(&self.cancellation)?,
             &self.cancellation,
         )?;
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &member.service,
+            &host,
+            business,
+            &self.cancellation,
+        )?;
         let post = self.continuation.with_owner(&node, |service, owner| {
             let actual = service
                 .try_lock()
                 .ok_or_else(|| invalid("joint release post-QQ service busy"))?;
-            let evidence = actual.observe_joint_release_member_with_domain(
+            let evidence = actual.observe_joint_release_member_with_domain_and_point(
                 &member.writer_domain,
                 host,
                 business,
                 member.native.clone(),
                 owner,
+                metadata_point,
             )?;
             evidence.require_original_writer_identity(&member.writer)?;
             Ok(evidence)
@@ -488,6 +502,12 @@ impl NativeJointReleasePhaseQuorum {
     }
 }
 impl NativeJointReleaseAdmission {
+    pub(crate) fn native_publication_guard(
+        &self,
+    ) -> Result<Option<crate::distribution_data::ActualNativeJointMetadataPublicationGuard<'_>>>
+    {
+        self.post.committed().native_publication_guard()
+    }
     pub(crate) fn writer_domain(&self) -> &crate::db::NativeJointWriterDomain {
         &self.phase.continuation.members[&self.local].writer_domain
     }
@@ -530,6 +550,7 @@ impl NativeJointReleaseAdmission {
         owner: NativeJointReleaseOwnerView<'_>,
     ) -> Result<()> {
         self.require_live()?;
+        service.require_joint_release_metadata_point(self.post.committed(), scope.database())?;
         self.phase.members[&self.local].require_current_with_scope(service, scope, owner)?;
         self.post
             .require_current_with_scope(service, scope, owner)?;
@@ -542,6 +563,9 @@ impl NativeJointReleaseAdmission {
         owner: NativeJointReleaseOwnerView<'_>,
     ) -> Result<()> {
         self.require_live()?;
+        self.post
+            .committed()
+            .require_native_publication_metadata(scope.database(), store)?;
         self.phase.members[&self.local].require_current_with_store_scope(store, scope, owner)?;
         self.post
             .require_current_with_store_scope(store, scope, owner)?;

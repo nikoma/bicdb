@@ -99,6 +99,16 @@ impl NativeWriterDataDomainPolicy {
         self.member.require_current(&actual)?;
         self.require_live()
     }
+    pub(super) fn publication_version_guard(
+        &self,
+    ) -> Result<crate::distribution_consensus::NativeMetadataPublicationGuard<'_>> {
+        // These helpers are explicitly memory-only; actual native identity
+        // checks already ran under the caller's lexical journal/hook scope.
+        self.caller.check()?;
+        self.open.require_live()?;
+        self.slot.require_live()?;
+        self.member.publication_version().try_publication_guard()
+    }
     pub(super) fn metadata_store_id(&self) -> Uuid {
         self.member.store_id()
     }
@@ -122,6 +132,7 @@ impl NativeWriterDataDomainPolicy {
         }
         self.open.require_database(db)?;
         self.member.require_database_point(db)?;
+        self.member.publication_version().require_current_memory()?;
         self.require_live()
     }
 }

@@ -2,9 +2,13 @@
 //! publisher can write it. Reading bytes yields a historical local WAL fact,
 //! never reconstructed quorums or permission to release a freeze.
 use super::*;
+#[cfg(feature = "tls-replication")]
+mod registered;
 use crate::distribution_range_handoff::{
     NativeJointDecisionData, NativeJointDecisionPublicationAdmission,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered::NativeRegisteredJointDecisionAttempt;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -85,6 +89,12 @@ pub(crate) struct NativeJointDecisionReceipt {
     record: NativeJointDecisionRecord,
 }
 impl NativeJointDecisionReceipt {
+    pub(crate) fn native_admission(&self) -> &NativeRecoveryAdmission {
+        &self.native
+    }
+    pub(crate) fn native_metadata_initialization_version(&self) -> u32 {
+        self.native.metadata_initialization_version()
+    }
     pub(crate) fn native_database_incarnation(&self) -> &str {
         self.native.database_incarnation()
     }
@@ -184,8 +194,6 @@ impl BicDb {
             native.logical_history_sha256(),
             native.local_visibility_sequence(),
             controlled,
-            #[cfg(feature = "tls-replication")]
-            None,
         )
     }
     pub(crate) fn persist_native_joint_decision_from_image(
@@ -217,8 +225,6 @@ impl BicDb {
             point.logical_history_sha256(),
             point.target_snapshot_bound().get(),
             controlled,
-            #[cfg(feature = "tls-replication")]
-            None,
         )
     }
     #[allow(clippy::too_many_arguments)]
@@ -233,22 +239,12 @@ impl BicDb {
         h: &str,
         b: u64,
         controlled: &ControlledFrozenMutationPermit,
-        #[cfg(feature = "tls-replication")] registered: Option<
-            &crate::db::NativeRegisteredJointExclusionScope<'_>,
-        >,
     ) -> Result<NativeJointDecisionReceipt> {
         admission.require_live()?;
         native.require_current(self)?;
+        admission.require_native_metadata_point(self, store, native)?;
         admission.data().require_actual_native(native)?;
         store.require_native_catalog_durability(self.data_path())?;
-        #[cfg(feature = "tls-replication")]
-        if let Some(scope) = registered {
-            admission.require_registered_own()?;
-            scope.require_current(self, store)?;
-        } else {
-            store.require_native_writer_host_base()?;
-        }
-        #[cfg(not(feature = "tls-replication"))]
         store.require_native_writer_host_base()?;
         if native.local_node_id() != admission.role().local_node_id()
             || native.local_member_incarnation() != admission.role().local_member_incarnation()
@@ -281,13 +277,6 @@ impl BicDb {
             native_page_xid: 0,
             checksum_sha256: String::new(),
         };
-        #[cfg(feature = "tls-replication")]
-        let _journal = if registered.is_some() {
-            None
-        } else {
-            Some(self.try_native_image_journal()?)
-        };
-        #[cfg(not(feature = "tls-replication"))]
         let _journal = self.try_native_image_journal()?;
         if let Some(existing) =
             self.read_native_range_image_record::<NativeJointDecisionRecord>(&key(admission
@@ -308,11 +297,7 @@ impl BicDb {
         } else {
             self.in_paged_transaction(|paged, xid| {
                 admission.require_live()?;
-                #[cfg(feature = "tls-replication")]
-                if let Some(scope) = registered {
-                    admission.require_registered_own()?;
-                    scope.require_current(self, store)?;
-                }
+                admission.require_native_metadata_point(self, store, native)?;
                 record.native_page_xid = xid;
                 record.checksum_sha256 = record.checksum()?;
                 record.validate()?;
@@ -343,45 +328,11 @@ impl BicDb {
         };
         result.require_current(self)?;
         admission.require_live()?;
-        #[cfg(feature = "tls-replication")]
-        if let Some(scope) = registered {
-            admission.require_registered_own()?;
-            scope.require_current(self, store)?;
-        }
+        let _physical_journal = self.try_native_image_journal()?;
+        result.require_current(self)?;
+        admission.require_native_metadata_point(self, store, native)?;
+        let _version = admission.native_publication_guard(native)?;
         Ok(result)
-    }
-    #[cfg(feature = "tls-replication")]
-    pub(crate) fn persist_native_joint_decision_from_registered(
-        &self,
-        admission: &NativeJointDecisionPublicationAdmission,
-        scope: &crate::db::NativeRegisteredJointExclusionScope<'_>,
-        store: &RangeWriteStore,
-        controlled: &ControlledFrozenMutationPermit,
-    ) -> Result<NativeJointDecisionReceipt> {
-        admission.require_registered_own()?;
-        scope.require_current(self, store)?;
-        let target = scope.target();
-        let point = target.base();
-        admission.data().require_actual_local_point(
-            target.native(),
-            point.native_receipt_sha256(),
-            point.range_index(),
-            point.logical_genesis_sha256(),
-            point.logical_history_sha256(),
-            point.target_snapshot_bound().get(),
-        )?;
-        self.persist_native_joint_decision_inner(
-            admission,
-            store,
-            target.native(),
-            point.native_receipt_sha256(),
-            point.range_index(),
-            point.logical_genesis_sha256(),
-            point.logical_history_sha256(),
-            point.target_snapshot_bound().get(),
-            controlled,
-            Some(scope),
-        )
     }
     /// Actual protected record reader. Expected checksum binds a committed
     /// correlation; it does not manufacture a quorum or serving permission.

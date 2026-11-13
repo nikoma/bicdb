@@ -110,9 +110,14 @@ impl NativeJointServingPublicationRound {
                 "native bridge publication changed decision or local native history",
             ));
         }
-        self.phase = admission.phase.clone();
-        self.pending.remove(&node);
-        self.receipts.insert(node, Arc::new(receipt));
+        let retired = {
+            let _version = admission.committed().native_publication_guard()?;
+            let old_phase = std::mem::replace(&mut self.phase, admission.phase.clone());
+            self.pending.remove(&node);
+            let old_receipt = self.receipts.insert(node, Arc::new(receipt));
+            (old_phase, old_receipt)
+        };
+        drop(retired);
         Ok(())
     }
     /// Actual native producer succeeds, then the test loses its reply before
@@ -282,15 +287,23 @@ impl NativeJointPublishedServingQuorum {
             remaining,
             &cancellation,
         )?;
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &local.service,
+            &metadata,
+            business,
+            &cancellation,
+        )?;
         let fresh = {
             let service = local
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("joint open metadata service busy"))?;
-            service.observe_committed_native_joint_decision(
+            local.actual.observe_fresh_committed_with_point(
+                &service,
                 metadata,
                 business,
                 self.data().old_range().id,
+                metadata_point,
             )?
         };
         let cancellation = cancellation.child_with_deadline(fresh.deadline());

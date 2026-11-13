@@ -117,9 +117,13 @@ pub(crate) use range_image_native::test_registered_remote_proposal_cut;
 pub(crate) use range_image_native::test_registered_remote_row_wal_cut;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeAssignedWriterInstallAttempt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeFirstPolicyPublicationCandidate;
 pub(crate) use range_image_native::NativeInitialDataGenesis;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredClosedPersistScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeRegisteredJointDecisionAttempt;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredNoDomainScope;
 #[cfg(feature = "tls-replication")]

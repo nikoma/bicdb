@@ -438,10 +438,39 @@ impl ClusterDataNodeService {
         actual: &ActualServiceNativeJointPreparedEvidence,
         parent: &CancellationToken,
     ) -> Result<()> {
+        self.reconcile_native_joint_open_phase_with_point(
+            host, business, native, actual, parent, None,
+        )
+    }
+    pub(crate) fn reconcile_native_joint_open_phase_with_point(
+        &mut self,
+        host: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        native: &crate::db::NativeJointServingBridgeReceipt,
+        actual: &ActualServiceNativeJointPreparedEvidence,
+        parent: &CancellationToken,
+        point: Option<&crate::distribution_data::ActualNativeJointMetadataPoint>,
+    ) -> Result<()> {
         parent.check()?;
         host.require_live_request(business)?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         actual.require_original_phase_owner(&database, &self.range_writes)?;
+        match point {
+            Some(point) => {
+                point.require_request(host, business)?;
+                point.require_native_store_point(&database, &self.range_writes)?;
+            }
+            None if actual
+                .committed()
+                .native_receipt()
+                .native_metadata_initialization_version()
+                == 0 => {}
+            None => {
+                return Err(data_error(
+                    "protected native Open refsync requires current-MStore point",
+                ))
+            }
+        }
         self.range_writes
             .current_mut()
             .refsync_joint_activation_from_actual_host(
@@ -737,6 +766,23 @@ impl ActualServiceNativeJointPreparedEvidence {
             range,
         )
     }
+    pub(crate) fn observe_fresh_committed_with_point(
+        &self,
+        service: &ClusterDataNodeService,
+        metadata: crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        range: RangeId,
+        point: Option<Arc<crate::distribution_data::ActualNativeJointMetadataPoint>>,
+    ) -> Result<CommittedNativeJointDecisionObservation> {
+        self.require_original_writer_lifetime()?;
+        service.observe_joint_decision_with_writer_domain_and_point(
+            &self.writer_domain,
+            metadata,
+            business,
+            range,
+            point,
+        )
+    }
 }
 impl ClusterDataNodeService {
     pub(crate) fn observe_joint_decision_with_writer_domain(
@@ -746,15 +792,40 @@ impl ClusterDataNodeService {
         business: Uuid,
         range: RangeId,
     ) -> Result<CommittedNativeJointDecisionObservation> {
+        self.observe_joint_decision_with_writer_domain_and_point(
+            domain, metadata, business, range, None,
+        )
+    }
+    pub(crate) fn observe_joint_decision_with_writer_domain_and_point(
+        &self,
+        domain: &crate::db::NativeJointWriterDomain,
+        metadata: crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        range: RangeId,
+        metadata_point: Option<Arc<crate::distribution_data::ActualNativeJointMetadataPoint>>,
+    ) -> Result<CommittedNativeJointDecisionObservation> {
+        if let Some(point) = &metadata_point {
+            point.require_request(&metadata, business)?;
+        }
+
         match domain {
             #[cfg(feature = "tls-replication")]
             crate::db::NativeJointWriterDomain::Registered(owner) => self
                 .observe_registered_committed_joint_decision(
-                    domain, owner, metadata, business, range,
+                    domain,
+                    owner,
+                    metadata,
+                    business,
+                    range,
+                    metadata_point,
                 ),
-            crate::db::NativeJointWriterDomain::Installed(_) => {
-                self.observe_committed_native_joint_decision(metadata, business, range)
-            }
+            crate::db::NativeJointWriterDomain::Installed(_) => self
+                .observe_committed_native_joint_decision_with_point(
+                    metadata,
+                    business,
+                    range,
+                    metadata_point,
+                ),
             #[cfg(feature = "tls-replication")]
             crate::db::NativeJointWriterDomain::Closed(closed) => {
                 metadata.require_live_request(business)?;
@@ -790,6 +861,7 @@ impl ClusterDataNodeService {
                     native: actual,
                     metadata,
                     business,
+                    metadata_point,
                 };
                 let result =
                     CommittedNativeJointDecisionObservation::from_actual_service(evidence)?;

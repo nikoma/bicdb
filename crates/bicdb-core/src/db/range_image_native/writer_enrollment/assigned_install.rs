@@ -5,6 +5,53 @@ use super::*;
 use crate::distribution_native_host::{
     NativeAssignedDataPolicyOrigin, NativeRegisteredServingDataPolicyOrigin,
 };
+/// Sealed actual native-readback borrow, minted only by this retained
+/// installer while its real DB/journal/hook/admission scope remains held.
+/// No path/hash/Weak<State>/policy DTO can construct this candidate.
+pub(crate) struct NativeFirstPolicyPublicationCandidate<'a> {
+    database: &'a BicDb,
+    journal: &'a NativeImageJournalGuard<'a>,
+    state: &'a Arc<NativeWriterHostState>,
+    registration: &'a Arc<CommitAdmissionRegistration>,
+}
+impl NativeFirstPolicyPublicationCandidate<'_> {
+    pub(crate) fn borrow_historical_cut<'a>(
+        &'a self,
+        native: &'a crate::db::NativeJointServingBridgeReceipt,
+    ) -> Result<crate::db::NativeJointHistoricalCutScope<'a>> {
+        native.historical_cut_scope_under_journal(self.database, self.journal)
+    }
+    pub(crate) fn state(&self) -> &Arc<NativeWriterHostState> {
+        self.state
+    }
+    pub(crate) fn require_actual(
+        &self,
+        db: &BicDb,
+        policy: &SealedHostWriterEnrollment,
+    ) -> Result<()> {
+        if !std::ptr::eq(db, self.database)
+            || self.state.record.facts != *policy.facts()
+            || self.state.record.store_open_id != policy.store_open_id()
+            || self.state.record.database_incarnation != db.incarnation_id()
+            || self.registration.generation() != self.state.record.generation
+        {
+            return Err(invalid(
+                "FIRST publication candidate changed actual record/registration/open",
+            ));
+        }
+        self.journal.require_database(db)?;
+        let actual: NativeWriterPolicyRecord =
+            db.read_native_range_image_record(POLICY_POINTER)?
+                .ok_or_else(|| invalid("FIRST actual native candidate disappeared"))?;
+        actual.validate()?;
+        if actual != self.state.record {
+            return Err(invalid(
+                "FIRST actual native candidate differs from exact retained readback",
+            ));
+        }
+        Ok(())
+    }
+}
 #[derive(Clone, Copy)]
 enum FirstPolicyOrigin<'a> {
     Legacy(&'a NativeAssignedDataPolicyOrigin),
@@ -70,6 +117,7 @@ impl FirstPolicyOrigin<'_> {
         &self,
         db: &BicDb,
         policy: &SealedHostWriterEnrollment,
+        candidate: &NativeFirstPolicyPublicationCandidate<'_>,
         operation: impl for<'scope> FnOnce(
             &'scope Arc<parking_lot::Mutex<crate::distribution_data::ClusterDataNodeService>>,
             &'scope mut crate::distribution_data::ClusterDataNodeService,
@@ -77,7 +125,29 @@ impl FirstPolicyOrigin<'_> {
     ) -> Result<R> {
         match self {
             Self::Legacy(o) => o.with_publication_service(db, policy, operation),
-            Self::Registered(o) => o.with_publication_service(db, policy, operation),
+            Self::Registered(o) => o.with_publication_service(db, policy, candidate, operation),
+        }
+    }
+    fn require_native_metadata_point(&self, db: &BicDb) -> Result<()> {
+        match self {
+            Self::Legacy(_) => Ok(()),
+            Self::Registered(o) => o.require_native_metadata_point(db),
+        }
+    }
+    fn publication_version_guard(
+        &self,
+    ) -> Result<Option<crate::distribution_consensus::NativeMetadataPublicationGuard<'_>>> {
+        match self {
+            Self::Legacy(_) => Ok(None),
+            Self::Registered(o) => o.publication_version_guard().map(Some),
+        }
+    }
+    fn actual_released_publication_point(
+        &self,
+    ) -> Result<Option<(Arc<crate::db::NativeJointActivatedOpenGuard>, Uuid, String)>> {
+        match self {
+            Self::Legacy(_) => Ok(None),
+            Self::Registered(origin) => origin.actual_released_publication_point().map(Some),
         }
     }
     fn retain_installed_writer(&self, state: Arc<NativeWriterHostState>) -> Result<()> {
@@ -292,6 +362,7 @@ impl NativeAssignedWriterInstallAttempt {
                     self.original_caller.check()?;
                     origin.require_live()?;
                     policy.require_live()?;
+                    origin.require_native_metadata_point(database)?;
                     record.native_page_xid = xid;
                     record.checksum_sha256 = record.checksum()?;
                     record.validate()?;
@@ -402,30 +473,74 @@ impl NativeAssignedWriterInstallAttempt {
             ));
         }
         origin.require_original_empty_hook(database)?;
-        origin.with_publication_service(database, policy, |actual_service, service| {
-            origin.require_original_empty_hook(database)?;
-            let mut hook = database
-                .commit_admission
-                .try_write()
-                .ok_or_else(|| invalid("assigned actual hook busy before publication"))?;
-            coordinator.install_assigned_native_writer_host_state(
-                database,
-                actual_service,
-                service,
-                policy,
-                Arc::downgrade(&state),
-            )?;
-            self.require_request(database, coordinator, origin, policy)?;
-            hook.install_enrolled(authority, registration, state.clone());
-            // Retain BEFORE the scope's fallible postchecks. Service mutex
-            // excludes Slot replacement through this exact hook publication.
-            self.publication = Publication::Installed {
-                guard: Arc::new(InstalledNativeWriterHostGuard {
-                    state: state.clone(),
-                }),
-            };
-            origin.retain_installed_writer(state.clone())
-        })?;
+        let candidate = NativeFirstPolicyPublicationCandidate {
+            database,
+            journal: &_journal,
+            state: &state,
+            registration: &registration,
+        };
+        let released = origin.actual_released_publication_point()?;
+        origin.with_publication_service(
+            database,
+            policy,
+            &candidate,
+            |actual_service, service| {
+                origin.require_original_empty_hook(database)?;
+                let mut hook = database
+                    .commit_admission
+                    .try_write()
+                    .ok_or_else(|| invalid("assigned actual hook busy before publication"))?;
+                // All I/O, native identity reads and full admission validation
+                // precede the short actual-version gate. The returned concrete
+                // publication borrow retains the actual service Store/cache and
+                // held routing topology; the surrounding journal/admission/hook
+                // and original release scope remain lexical through publication.
+                self.require_request(database, coordinator, origin, policy)?;
+                origin.require_native_metadata_point(database)?;
+                let range_publication = released
+                    .as_ref()
+                    .map(|(guard, store, sha)| guard.borrow_arm_publication(*store, sha))
+                    .transpose()?;
+                let mut publication = coordinator.prepare_assigned_native_writer_publication(
+                    database,
+                    actual_service,
+                    service,
+                    policy,
+                    &candidate,
+                )?;
+                let retired;
+                {
+                    let version = origin.publication_version_guard()?;
+                    if let Some(version) = &version {
+                        version.require_current_memory()?;
+                    }
+                    // Concrete memory publication only: no callback/full-live/native
+                    // read/fsync under this guard. Hook and both caches agree.
+                    let old_caches = publication.publish();
+                    let old_hook = hook.replace_enrolled_retaining_old(
+                        authority,
+                        registration.clone(),
+                        state.clone(),
+                    );
+                    let old_publication = std::mem::replace(
+                        &mut self.publication,
+                        Publication::Installed {
+                            guard: Arc::new(InstalledNativeWriterHostGuard {
+                                state: state.clone(),
+                            }),
+                        },
+                    );
+                    retired = (old_caches, old_hook, old_publication);
+                }
+                // Retired owners and lexical cache/topology guards leave only
+                // AFTER the short version guard; no destructor/callback inside it.
+                drop(retired);
+                drop(publication);
+                drop(range_publication);
+                // Exact Installed custody is already retained on every error.
+                origin.retain_installed_writer(state.clone())
+            },
+        )?;
         drop(_journal);
         origin.require_current(database, policy)?;
         self.original_caller.check()?;

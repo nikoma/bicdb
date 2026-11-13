@@ -15,6 +15,35 @@ pub(crate) struct NativeRegisteredServingDataPolicyOrigin {
     _local: std::marker::PhantomData<std::rc::Rc<()>>,
 }
 impl NativeRegisteredServingDataPolicyOrigin {
+    /// Protected native identity read while the caller retains actual journal.
+    /// The actual version is separately checked and finally read-guarded.
+    pub(crate) fn require_native_metadata_point(&self, db: &BicDb) -> Result<()> {
+        self.parent.check()?;
+        self.phase.check()?;
+        self.member.require_database_point(db)?;
+        self.member.publication_version().require_current_memory()
+    }
+    pub(crate) fn publication_version_guard(
+        &self,
+    ) -> Result<crate::distribution_consensus::NativeMetadataPublicationGuard<'_>> {
+        self.parent.check()?;
+        self.phase.check()?;
+        self.owner
+            .target
+            .preflight
+            .original
+            .database
+            .require_live()?;
+        self.owner.target.preflight.original.store.require_live()?;
+        let version = self.member.publication_version().try_publication_guard()?;
+        self.admission.require_publication_request_memory()?;
+        Ok(version)
+    }
+    pub(crate) fn actual_released_publication_point(
+        &self,
+    ) -> Result<(Arc<crate::db::NativeJointActivatedOpenGuard>, Uuid, String)> {
+        self.admission.actual_released_publication_point()
+    }
     pub(crate) fn original_joint_owner(&self) -> &Arc<NativeRegisteredRemoteJointOwner> {
         &self.owner
     }
@@ -76,7 +105,7 @@ impl NativeRegisteredServingDataPolicyOrigin {
         let target = self.owner.target();
         target.preflight.original.database.require_database(db)?;
         target.preflight.original.store.require_live()?;
-        self.member.require_database(db)?;
+        self.member.require_database_point(db)?;
         service.with_writer_data_domain_store(db, |store| {
             if let Some(writer) = self.owner.terminal_writer() {
                 writer.require_database(db, self.range())?;
@@ -91,7 +120,18 @@ impl NativeRegisteredServingDataPolicyOrigin {
             if policy.store_open_id() != store.native_writer_store_open_id()
                 || policy.database_incarnation() != db.incarnation_id()
                 || policy.facts().local_node_id != *target.native().local_node_id()
-                || policy.facts().ranges.len() != 1
+                || policy
+                    .facts()
+                    .ranges
+                    .values()
+                    .filter(|range| {
+                        range.replicas.iter().any(|replica| {
+                            replica.node_id == policy.facts().local_node_id
+                                && replica.role == crate::RangeReplicaRole::Voter
+                        })
+                    })
+                    .count()
+                    != 1
             {
                 return Err(invalid(
                     "Registered first DATA changed DB/slot/one-range policy scope",
@@ -125,6 +165,7 @@ impl NativeRegisteredServingDataPolicyOrigin {
         &self,
         db: &BicDb,
         policy: &SealedHostWriterEnrollment,
+        candidate: &crate::db::NativeFirstPolicyPublicationCandidate<'_>,
         operation: impl for<'scope> FnOnce(
             &'scope Arc<parking_lot::Mutex<crate::distribution_data::ClusterDataNodeService>>,
             &'scope mut crate::distribution_data::ClusterDataNodeService,
@@ -137,6 +178,13 @@ impl NativeRegisteredServingDataPolicyOrigin {
             .try_lock()
             .ok_or_else(|| invalid("Registered first DATA publication service busy"))?;
         self.require_service_identity(&service, db, policy)?;
+        let physical = candidate.borrow_historical_cut(self.admission.native())?;
+        service.with_writer_data_domain_store(db, |store| {
+            self.admission
+                .require_local_with_store_scope(store, &physical)
+        })?;
+        // This actual borrowed historical cut (including original journal)
+        // remains alive through native candidate/service/cache/hook publish.
         let result = operation(&self.owner.service, &mut service)?;
         self.require_service_identity(&service, db, policy)?;
         self.require_live()?;

@@ -528,11 +528,16 @@ impl RangeWriteStore {
         admission: &crate::distribution_range_handoff::NativeJointDecisionPublicationAdmission,
         receipt: &crate::db::NativeJointDecisionReceipt,
         scope: &crate::db::NativeRegisteredJointExclusionScope<'_>,
+        metadata: &crate::distribution_data::ActualNativeJointMetadataPoint,
     ) -> Result<()> {
         admission.require_registered_own()?;
+        let (own, business) = admission.registered_metadata_request()?;
+        metadata.require_request(own, business)?;
+        metadata.require_native_store_point(database, self)?;
         scope.require_current(database, self)?;
         self.confirm_native_joint_decision_inner(database, admission, receipt, Some(scope))?;
         admission.require_registered_own()?;
+        metadata.require_native_store_point(database, self)?;
         scope.require_current(database, self)
     }
     fn confirm_native_joint_decision_inner(
@@ -545,6 +550,7 @@ impl RangeWriteStore {
         >,
     ) -> Result<()> {
         admission.require_live()?;
+        admission.require_native_metadata_point(database, self, receipt.native_admission())?;
         receipt.require_current(database)?;
         self.require_native_catalog_durability(database.data_path())?;
         #[cfg(feature = "tls-replication")]

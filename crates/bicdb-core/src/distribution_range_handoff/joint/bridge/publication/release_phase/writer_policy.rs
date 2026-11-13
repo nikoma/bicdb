@@ -41,16 +41,23 @@ impl NativeJointReleasePhaseQuorum {
             remaining(&self.cancellation)?,
             &self.cancellation,
         )?;
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &member.service,
+            &own,
+            business,
+            &self.cancellation,
+        )?;
         let post = self.continuation.with_owner(&local, |service, owner| {
             let actual = service
                 .try_lock()
                 .ok_or_else(|| invalid("joint writer policy post-QQ service busy"))?;
-            let evidence = actual.observe_joint_release_member_with_domain(
+            let evidence = actual.observe_joint_release_member_with_domain_and_point(
                 &member.writer_domain,
                 own,
                 business,
                 member.native.clone(),
                 owner,
+                metadata_point,
             )?;
             evidence.require_original_writer_identity(&member.writer)?;
             evidence.require_released_open()?;
@@ -183,6 +190,52 @@ impl NativeJointServingPolicyAdmission {
         {
             return Err(invalid("Registered first policy requires independently post-all-released actual OWN metadata"));
         }
+        self.require_live()
+    }
+    pub(crate) fn actual_released_publication_point(
+        &self,
+    ) -> Result<(Arc<crate::db::NativeJointActivatedOpenGuard>, Uuid, String)> {
+        self.post.actual_released_publication_point()
+    }
+    pub(crate) fn require_publication_request_memory(&self) -> Result<()> {
+        self.cancellation.check()?;
+        self.phase.cancellation.check()?;
+        self.phase.continuation.caller.check()?;
+        if self
+            .phase
+            .continuation
+            .original_cancel
+            .is_cancel_requested()
+        {
+            return Err(crate::BicDbError::QueryCanceled);
+        }
+        self.post.committed().require_publication_request_memory()?;
+        for member in self.phase.members.values() {
+            member.committed().require_publication_request_memory()?;
+        }
+        Ok(())
+    }
+    pub(crate) fn native_publication_guard(
+        &self,
+    ) -> Result<Option<crate::distribution_data::ActualNativeJointMetadataPublicationGuard<'_>>>
+    {
+        self.post.committed().native_publication_guard()
+    }
+    pub(crate) fn require_local_with_store_scope(
+        &self,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        scope: &crate::db::NativeJointHistoricalCutScope<'_>,
+    ) -> Result<()> {
+        self.require_live()?;
+        self.post
+            .committed()
+            .require_native_publication_metadata(scope.database(), store)?;
+        let owner = NativeJointReleaseOwnerView::Dropped(
+            &self.phase.continuation.members[&self.local].activation,
+        );
+        self.phase.members[&self.local].require_current_with_store_scope(store, scope, owner)?;
+        self.post
+            .require_current_with_store_scope(store, scope, owner)?;
         self.require_live()
     }
     pub(crate) fn observe_local_continuity(

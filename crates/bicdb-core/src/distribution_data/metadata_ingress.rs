@@ -25,6 +25,24 @@ impl NativeMetadataIngressRegistration {
     pub(crate) fn revoke(&self) {
         self.revoked.store(true, Ordering::Release);
     }
+    pub(super) fn actual_metadata(&self) -> Result<Arc<Mutex<MetadataConsensusStore>>> {
+        let actual = self
+            .metadata
+            .upgrade()
+            .ok_or_else(|| data_error("actual joint metadata owner ended"))?;
+        self.require_current_memory(&actual)?;
+        Ok(actual)
+    }
+    /// Memory/atomics only; no DB/format/root read.
+    pub(super) fn require_current_memory(
+        &self,
+        actual: &Arc<Mutex<MetadataConsensusStore>>,
+    ) -> Result<()> {
+        if !self.live_for(actual) {
+            return Err(data_error("actual joint metadata ingress revoked/changed"));
+        }
+        Ok(())
+    }
     fn live_for(&self, actual: &Arc<Mutex<MetadataConsensusStore>>) -> bool {
         self.started.load(Ordering::Acquire)
             && !self.revoked.load(Ordering::Acquire)
@@ -58,6 +76,41 @@ impl NativeMetadataIngressRegistry {
         });
         listeners.push(Arc::downgrade(&actual));
         Ok(actual)
+    }
+    pub(super) fn actual_joint_registration(
+        &self,
+        slot: Uuid,
+    ) -> Result<Option<Arc<NativeMetadataIngressRegistration>>> {
+        let listeners = self
+            .listeners
+            .try_lock()
+            .ok_or_else(|| data_error("joint actual metadata registration busy"))?;
+        let mut selected: Option<(
+            Arc<NativeMetadataIngressRegistration>,
+            Arc<Mutex<MetadataConsensusStore>>,
+        )> = None;
+        for registration in listeners.iter().filter_map(Weak::upgrade) {
+            if registration.slot.id() != slot
+                || !registration.started.load(Ordering::Acquire)
+                || registration.revoked.load(Ordering::Acquire)
+                || registration.slot.require_live().is_err()
+            {
+                continue;
+            }
+            let Some(metadata) = registration.metadata.upgrade() else {
+                continue;
+            };
+            if let Some((_, previous)) = &selected {
+                if !Arc::ptr_eq(previous, &metadata) {
+                    return Err(data_error(
+                        "joint metadata registration refers to different actual MStores",
+                    ));
+                }
+            } else {
+                selected = Some((registration, metadata));
+            }
+        }
+        Ok(selected.map(|(registration, _)| registration))
     }
     pub(super) fn has_live_for(
         &self,

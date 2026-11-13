@@ -207,14 +207,15 @@ impl RangeWriteStore {
             .ok_or_else(|| {
                 range_write_error("fresh joint release lost actual installed generation")
             })?;
-        let current = guard.observe_actual_continuity(self.open_id, &fact.activation_sha256()?)?;
-        if current.armed() {
-            // A SAME actual armed generation is an idempotent completed fact.
-            // Ordinary writes may be active; do not require a read stamp here.
-            current.require_current(guard, self.open_id, &fact.activation_sha256()?)?;
-        } else {
-            guard.arm_after_actual_release(self.open_id, &fact.activation_sha256()?)?;
-        }
-        admission.require_local_with_store_scope(self, scope, owner)
+        let activation_sha256 = fact.activation_sha256()?;
+        // Full native/history/catalogue checks share actual historical scope.
+        // Both local mutable range/generation slots are borrowed BEFORE the
+        // metadata gate. No lock/I/O/callback occurs during final arm itself.
+        let publication = guard.borrow_arm_publication(self.open_id, &activation_sha256)?;
+        let version = admission.native_publication_guard()?;
+        publication.publish();
+        drop(version);
+        drop(publication);
+        Ok(())
     }
 }

@@ -1083,6 +1083,7 @@ pub(crate) struct ActualServiceNativeJointCommittedEvidence {
     metadata: crate::distribution_consensus::HostMetadataReadObservation,
     business: Uuid,
     database_incarnation: String,
+    metadata_point: Option<Arc<crate::distribution_data::ActualNativeJointMetadataPoint>>,
 }
 impl ActualServiceNativeJointCommittedEvidence {
     pub(crate) fn into_parts(
@@ -1092,12 +1093,14 @@ impl ActualServiceNativeJointCommittedEvidence {
         crate::distribution_consensus::HostMetadataReadObservation,
         Uuid,
         String,
+        Option<Arc<crate::distribution_data::ActualNativeJointMetadataPoint>>,
     ) {
         (
             self.native,
             self.metadata,
             self.business,
             self.database_incarnation,
+            self.metadata_point,
         )
     }
 }
@@ -1111,6 +1114,19 @@ impl ClusterDataNodeService {
         business: Uuid,
         range: RangeId,
     ) -> Result<crate::distribution_range_handoff::CommittedNativeJointDecisionObservation> {
+        self.observe_committed_native_joint_decision_with_point(metadata, business, range, None)
+    }
+    pub(crate) fn observe_committed_native_joint_decision_with_point(
+        &self,
+        metadata: crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        range: RangeId,
+        metadata_point: Option<Arc<crate::distribution_data::ActualNativeJointMetadataPoint>>,
+    ) -> Result<crate::distribution_range_handoff::CommittedNativeJointDecisionObservation> {
+        if let Some(point) = &metadata_point {
+            point.require_request(&metadata, business)?;
+        }
+
         metadata.require_live_request(business)?;
         let topology = metadata.committed_topology(business)?;
         let descriptor = topology
@@ -1165,6 +1181,7 @@ impl ClusterDataNodeService {
             native: actual,
             metadata,
             business,
+            metadata_point,
         };
         let observation=crate::distribution_range_handoff::CommittedNativeJointDecisionObservation::from_actual_service(evidence)?;
         observation.require_current(&database)?;

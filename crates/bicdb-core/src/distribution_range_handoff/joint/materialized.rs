@@ -196,6 +196,16 @@ impl NativeJointMaterializedQuorums {
 }
 
 impl NativeJointNewObservation {
+    #[cfg(feature = "tls-replication")]
+    pub(super) fn actual_service_for_metadata(
+        &self,
+    ) -> &Arc<parking_lot::Mutex<crate::distribution_data::ClusterDataNodeService>> {
+        match self {
+            Self::Registered { actual } => actual.service(),
+            Self::Survivor { old, .. } => old.actual_service(),
+            Self::Target { service, .. } => service,
+        }
+    }
     pub(super) fn release_capture_pin_for_decision(&self) -> Result<()> {
         match self {
             #[cfg(feature = "tls-replication")]
@@ -219,7 +229,9 @@ impl NativeJointNewObservation {
     ) -> Result<crate::db::NativeJointDecisionReceipt> {
         match self {
             #[cfg(feature = "tls-replication")]
-            Self::Registered { actual } => actual.publish_decision(admission, parent),
+            Self::Registered { .. } => Err(invalid(
+                "Registered decision needs original actual current-metadata publication/count path",
+            )),
             Self::Survivor { old, .. } => old.publish_decision(admission, parent),
             Self::Target { actual, service } => {
                 let mut service = service

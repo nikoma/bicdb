@@ -392,7 +392,13 @@ impl RangeWriteStore {
         database: &crate::BicDb,
         admission: &NativeJointOpenAdmission,
     ) -> Result<Option<NativeJointCatalogueActivationReceipt>> {
-        if admission.has_fresh_open_phase() {
+        if admission.has_fresh_open_phase()
+            || admission
+                .committed()
+                .native_receipt()
+                .native_metadata_initialization_version()
+                == 1
+        {
             return self.recover_fresh_native_joint_activation(database, admission);
         }
 
@@ -488,7 +494,13 @@ impl RangeWriteStore {
             &self.catalog.node_id,
             admission.cancellation(),
         );
-        if admission.has_fresh_open_phase() {
+        if admission.has_fresh_open_phase()
+            || admission
+                .committed()
+                .native_receipt()
+                .native_metadata_initialization_version()
+                == 1
+        {
             let result = self.persist_fresh_native_joint_activation(
                 database, admission, original, catalogue, image, frozen, parent,
             );

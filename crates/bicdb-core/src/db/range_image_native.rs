@@ -59,6 +59,8 @@ pub(crate) use registered_remote_image::{
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeAssignedWriterInstallAttempt;
 #[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeFirstPolicyPublicationCandidate;
+#[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredClosedPersistScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredNoDomainScope;
@@ -82,6 +84,8 @@ mod serving_configuration;
 pub(crate) use native_read::{
     NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use serving_configuration::NativeRegisteredJointDecisionAttempt;
 pub(crate) use serving_configuration::{
     NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,
     NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,

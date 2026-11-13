@@ -156,6 +156,8 @@ mod native_durability;
 mod native_normal;
 mod native_prefix;
 mod native_writer;
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_writer::NativeAssignedCoordinatorWriterPublication;
 mod registered_joint_identity;
 pub(crate) use joint_handoff_state::{
     NativeJointBridgeCatalogue, NativeJointCatalogueActivationFact,

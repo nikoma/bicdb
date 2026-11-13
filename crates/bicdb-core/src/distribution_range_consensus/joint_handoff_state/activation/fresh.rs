@@ -28,6 +28,9 @@ impl RangeWriteStore {
         admission: &NativeJointOpenAdmission,
     ) -> Result<Option<NativeJointCatalogueActivationReceipt>> {
         admission.require_live()?;
+        admission
+            .committed()
+            .require_native_publication_metadata(database, self)?;
         let (writer, writer_root) =
             admission.original_phase_owner_for_activation(database, self)?;
         let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
@@ -81,6 +84,10 @@ impl RangeWriteStore {
         };
         receipt.require_current_with_scope(&scope, self)?;
         admission.require_live()?;
+        admission
+            .committed()
+            .require_native_publication_metadata(database, self)?;
+        let _version = admission.committed().native_publication_guard()?;
         Ok(Some(receipt))
     }
     #[allow(clippy::too_many_arguments)]
@@ -166,6 +173,9 @@ impl RangeWriteStore {
         let controlled = gate.try_controlled_mutation(frozen)?;
         gate.validate(range, &RangeMutationAuthority::Controlled(&controlled))?;
         writer_domain.require_current(database, self, data.activation_range())?;
+        admission
+            .committed()
+            .require_native_publication_metadata(database, self)?;
         let state = self
             .catalog
             .native_joint_handoffs
@@ -219,7 +229,11 @@ impl RangeWriteStore {
         };
         receipt.require_current_with_scope(&scope, self)?;
         admission.require_live()?;
+        admission
+            .committed()
+            .require_native_publication_metadata(database, self)?;
         parent.check()?;
+        let _version = admission.committed().native_publication_guard()?;
         Ok(receipt)
     }
 }

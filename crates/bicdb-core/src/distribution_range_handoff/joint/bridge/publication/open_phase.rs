@@ -99,23 +99,31 @@ impl NativeJointOpenPhaseRound {
             mq_trace.complete();
             drop(mq_trace);
         }
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &old.service,
+            &metadata,
+            business,
+            &self.cancellation,
+        )?;
         let (committed, writer) = {
             let mut service = old
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("fresh open service busy"))?;
-            service.reconcile_native_joint_open_phase(
+            service.reconcile_native_joint_open_phase_with_point(
                 &metadata,
                 business,
                 &self.original.receipts[node],
                 &old.actual,
                 &self.cancellation,
+                metadata_point.as_deref(),
             )?;
-            let committed = old.actual.observe_fresh_committed(
+            let committed = old.actual.observe_fresh_committed_with_point(
                 &service,
                 metadata,
                 business,
                 self.original.data().old_range().id,
+                metadata_point,
             )?;
             let writer = old.actual.require_current_under_open_phase(
                 &service,
@@ -293,16 +301,23 @@ impl NativeJointOpenPhaseQuorum {
             remaining(&self.cancellation)?,
             &self.cancellation,
         )?;
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &local.service,
+            &metadata,
+            business,
+            &self.cancellation,
+        )?;
         let fresh = {
             let service = local
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("fresh open postquorum service busy"))?;
-            local.actual.observe_fresh_committed(
+            local.actual.observe_fresh_committed_with_point(
                 &service,
                 metadata,
                 business,
                 self.original.data().old_range().id,
+                metadata_point,
             )?
         };
         let result = NativeJointOpenAdmission {

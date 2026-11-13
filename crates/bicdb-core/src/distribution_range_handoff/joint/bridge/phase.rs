@@ -94,16 +94,23 @@ impl NativeJointPreparationPhaseRound {
             budget,
             &self.cancellation,
         )?;
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &old.service,
+            &metadata,
+            business,
+            &self.cancellation,
+        )?;
         let (committed, writer) = {
             let service = old
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("fresh joint phase actual service busy"))?;
-            let committed = old.actual.observe_fresh_committed(
+            let committed = old.actual.observe_fresh_committed_with_point(
                 &service,
                 metadata,
                 business,
                 self.original.data.old_range().id,
+                metadata_point,
             )?;
             let writer = old
                 .actual
@@ -302,15 +309,23 @@ impl NativeJointPreparationPhaseQuorum {
             remaining(&self.cancellation)?,
             &self.cancellation,
         )?;
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &local.service,
+            &metadata,
+            business,
+            &self.cancellation,
+        )?;
         let fresh = {
             let service = local
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("fresh phase post-quorum binding service busy"))?;
-            service.observe_committed_native_joint_decision(
+            local.actual.observe_fresh_committed_with_point(
+                &service,
                 metadata,
                 business,
                 self.original.data.old_range().id,
+                metadata_point,
             )?
         };
         let cancellation = self.cancellation.child_with_deadline(fresh.deadline());

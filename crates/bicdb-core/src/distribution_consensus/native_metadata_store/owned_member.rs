@@ -4,6 +4,7 @@ use super::*;
 
 pub(crate) struct NativeOwnedMetadataMemberObservation {
     pub(super) store_id: Uuid,
+    version: crate::distribution_consensus::NativeMetadataVersionPoint,
     node: ClusterNodeId,
     birth: crate::distribution::NativeStoreBirthV1,
     topology: ClusterTopology,
@@ -14,6 +15,11 @@ pub(crate) struct NativeOwnedMetadataMemberObservation {
     cancellation: crate::CancellationToken,
 }
 impl NativeOwnedMetadataMemberObservation {
+    pub(crate) fn publication_version(
+        &self,
+    ) -> &crate::distribution_consensus::NativeMetadataVersionPoint {
+        &self.version
+    }
     pub(crate) fn store_id(&self) -> Uuid {
         self.store_id
     }
@@ -71,6 +77,7 @@ impl NativeOwnedMetadataMemberObservation {
     }
     pub(crate) fn require_current(&self, store: &MetadataConsensusStore) -> Result<()> {
         self.cancellation.check()?;
+        self.version.require_current_memory()?;
         let id = store.registered_native_metadata_member_store_id()?;
         let owner = store
             .native_owner
@@ -116,6 +123,7 @@ impl MetadataConsensusStore {
     ) -> Result<NativeOwnedMetadataMemberObservation> {
         observed.require_live_request(business)?;
         parent.check()?;
+        self.publication_version.require_ready()?;
         let id = self.registered_native_metadata_member_store_id()?;
         if observed.requester_node_id() != &self.state.node_id
             || observed.term() != self.state.current_term
@@ -151,8 +159,15 @@ impl MetadataConsensusStore {
             &self.state.committed_topology,
             2 * 1024 * 1024,
         )?;
+        let cancellation = parent.child_with_deadline(observed.deadline());
+        let version = self.publication_version.seal(
+            observed
+                .original_request_cancellation()
+                .child_with_deadline(observed.deadline()),
+        )?;
         Ok(NativeOwnedMetadataMemberObservation {
             store_id: id,
+            version,
             node: self.state.node_id.clone(),
             birth,
             topology: self.state.committed_topology.clone(),
@@ -160,7 +175,7 @@ impl MetadataConsensusStore {
             term: self.state.current_term,
             read_index: self.state.commit_index,
             actual_open: owner.actual_open.clone(),
-            cancellation: parent.child_with_deadline(observed.deadline()),
+            cancellation,
         })
     }
 }

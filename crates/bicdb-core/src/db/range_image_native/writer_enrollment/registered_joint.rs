@@ -47,13 +47,12 @@ impl NativeRegisteredJointExclusionScope<'_> {
     }
 }
 impl BicDb {
-    pub(crate) fn with_registered_joint_exclusion_scope<R>(
-        &self,
-        target: &NativeRegisteredRemoteJointTarget,
-        frozen: &FrozenRangeMutationPermit,
-        caller: &CancellationToken,
-        operation: impl for<'scope> FnOnce(&'scope NativeRegisteredJointExclusionScope<'_>) -> Result<R>,
-    ) -> Result<R> {
+    pub(crate) fn registered_joint_exclusion_scope<'a>(
+        &'a self,
+        target: &'a NativeRegisteredRemoteJointTarget,
+        frozen: &'a FrozenRangeMutationPermit,
+        caller: &'a CancellationToken,
+    ) -> Result<NativeRegisteredJointExclusionScope<'a>> {
         let scope = NativeRegisteredJointExclusionScope {
             db: self,
             target,
@@ -69,6 +68,19 @@ impl BicDb {
                 .ok_or_else(|| invalid("Registered joint original hook busy"))?,
             journal: self.try_native_image_journal()?,
         };
+        scope.require_original(self)?;
+        self.range_mutation_gate()
+            .validate_quiescent_frozen(target.base().capture_range().id, frozen)?;
+        Ok(scope)
+    }
+    pub(crate) fn with_registered_joint_exclusion_scope<R>(
+        &self,
+        target: &NativeRegisteredRemoteJointTarget,
+        frozen: &FrozenRangeMutationPermit,
+        caller: &CancellationToken,
+        operation: impl for<'scope> FnOnce(&'scope NativeRegisteredJointExclusionScope<'_>) -> Result<R>,
+    ) -> Result<R> {
+        let scope = self.registered_joint_exclusion_scope(target, frozen, caller)?;
         scope.require_original(self)?;
         self.range_mutation_gate()
             .validate_quiescent_frozen(target.base().capture_range().id, frozen)?;

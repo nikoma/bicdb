@@ -52,6 +52,27 @@ impl CommitAdmissionSlot {
     ) {
         self.replace(Some(authority), registration, Some(state));
     }
+    /// Sealed installer publication keeps every retired strong owner alive
+    /// until AFTER its final metadata guard. This method only swaps memory.
+    pub(in crate::db) fn replace_enrolled_retaining_old(
+        &mut self,
+        authority: Arc<dyn CommitAdmission>,
+        registration: Arc<CommitAdmissionRegistration>,
+        state: Arc<super::range_image_native::NativeWriterHostState>,
+    ) -> Self {
+        self.registration
+            .active
+            .store(false, std::sync::atomic::Ordering::Release);
+        let next = Self {
+            authority: Some(authority),
+            registration,
+            native_writer: Some(state),
+        };
+        next.registration
+            .active
+            .store(true, std::sync::atomic::Ordering::Release);
+        std::mem::replace(self, next)
+    }
     fn replace(
         &mut self,
         authority: Option<Arc<dyn CommitAdmission>>,

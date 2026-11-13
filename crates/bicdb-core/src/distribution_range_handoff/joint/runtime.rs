@@ -229,10 +229,25 @@ impl NativeJointHandoffRuntime {
                     crate::distribution_data::NativeJointReleaseOwnerView::Frozen(frozen),
                 )?;
                 admission.require_live()?;
-                let dropped = std::mem::replace(
-                    &mut held.exclusion,
-                    RetainedExclusion::Released(original.clone()),
-                );
+                let database_arc = service.database();
+                let database = database_arc
+                    .try_read()
+                    .ok_or_else(|| invalid("fresh survivor release actual DB busy"))?;
+                let physical = admission.native().historical_cut_scope(&database)?;
+                admission.require_local_with_scope(
+                    &service,
+                    &physical,
+                    crate::distribution_data::NativeJointReleaseOwnerView::Frozen(frozen),
+                )?;
+                let dropped = {
+                    let _version = admission.native_publication_guard()?;
+                    std::mem::replace(
+                        &mut held.exclusion,
+                        RetainedExclusion::Released(original.clone()),
+                    )
+                };
+                // Actual drop occurs after final guard; the original immutable
+                // activation is already retained for a distinct fresh arm.
                 (original, Some(dropped))
             }
             RetainedExclusion::Released(actual) => {

@@ -24,6 +24,9 @@ pub(crate) struct NativeRegisteredRemoteJointTarget {
 /// before an API can return or later NEW/decision/phase work can fail.
 /// The real runtime also retains A; no drop creates N or Serving.
 pub(crate) struct NativeRegisteredRemoteJointOwner {
+    decision_attempt: parking_lot::Mutex<
+        Option<Arc<parking_lot::Mutex<crate::db::NativeRegisteredJointDecisionAttempt>>>,
+    >,
     terminal_writer: std::sync::OnceLock<Arc<crate::db::NativeWriterHostState>>,
     release: parking_lot::Mutex<Option<RegisteredJointReleaseState>>,
     target: Arc<NativeRegisteredRemoteJointTarget>,
@@ -33,6 +36,47 @@ pub(crate) struct NativeRegisteredRemoteJointOwner {
     >,
 }
 impl NativeRegisteredRemoteJointOwner {
+    pub(crate) fn retain_decision_attempt(
+        &self,
+        data: &crate::distribution_range_handoff::NativeJointDecisionData,
+    ) -> Result<Arc<parking_lot::Mutex<crate::db::NativeRegisteredJointDecisionAttempt>>> {
+        data.require_actual_native(self.target.native())?;
+        let base = self.target.base();
+        data.require_actual_local_point(
+            self.target.native(),
+            base.native_receipt_sha256(),
+            base.range_index(),
+            base.logical_genesis_sha256(),
+            base.logical_history_sha256(),
+            base.target_snapshot_bound().get(),
+        )?;
+        let mut retained = self
+            .decision_attempt
+            .try_lock()
+            .ok_or_else(|| invalid("Registered original decision attempt custody busy"))?;
+        if retained.is_none() {
+            *retained = Some(Arc::new(parking_lot::Mutex::new(
+                crate::db::NativeRegisteredJointDecisionAttempt::retain_expected(data)?,
+            )));
+        }
+        Ok(retained.as_ref().unwrap().clone())
+    }
+    #[cfg(test)]
+    pub(crate) fn test_decision_attempt_evidence(&self) -> Result<serde_json::Value> {
+        let retained = self
+            .decision_attempt
+            .try_lock()
+            .ok_or_else(|| invalid("Registered decision evidence custody busy"))?;
+        match retained.as_ref() {
+            Some(attempt) => attempt
+                .try_lock()
+                .ok_or_else(|| invalid("Registered decision evidence actual attempt busy"))?
+                .test_evidence(),
+            None => Ok(
+                serde_json::json!({"native_attempts":[],"not_started":true,"data_not_authority":true}),
+            ),
+        }
+    }
     pub(crate) fn terminal_writer(&self) -> Option<&Arc<crate::db::NativeWriterHostState>> {
         self.terminal_writer.get()
     }
@@ -335,6 +379,7 @@ impl NativeMetadataControlHost {
             .take()
             .expect("same original lease borrowed above");
         let owner = Arc::new(NativeRegisteredRemoteJointOwner {
+            decision_attempt: parking_lot::Mutex::new(None),
             terminal_writer: std::sync::OnceLock::new(),
             release: parking_lot::Mutex::new(None),
             target: Arc::new(target),

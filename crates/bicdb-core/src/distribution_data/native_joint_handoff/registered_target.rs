@@ -9,6 +9,9 @@ use crate::distribution_range_handoff::{
 pub(crate) struct ActualServiceNativeRegisteredJointNewEvidence {
     certificate: Arc<NativeRemoteOldCutCertificate>,
     role: crate::distribution_range_recovery::HandoffRoleAdmission,
+    own: crate::distribution_consensus::HostMetadataReadObservation,
+    business: Uuid,
+    metadata_point: Arc<crate::distribution_data::ActualNativeJointMetadataPoint>,
     owner: Arc<NativeRegisteredRemoteJointOwner>,
     frozen: Arc<crate::distribution_range_image_install::NativeImageInstallFreeze>,
     pin: parking_lot::Mutex<Option<SourceCaptureReadPin>>,
@@ -18,6 +21,8 @@ impl ActualServiceNativeRegisteredJointNewEvidence {
     pub(crate) fn observe(
         certificate: Arc<NativeRemoteOldCutCertificate>,
         role: crate::distribution_range_recovery::HandoffRoleAdmission,
+        own: crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
         owner: Arc<NativeRegisteredRemoteJointOwner>,
         parent: &CancellationToken,
     ) -> Result<Self> {
@@ -25,6 +30,16 @@ impl ActualServiceNativeRegisteredJointNewEvidence {
         certificate.require_current()?;
         let plan = certificate.plan();
         plan.require_role(role.role())?;
+        role.role().require_own_host_metadata(&own, business)?;
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            owner.service(),
+            &own,
+            business,
+            parent,
+        )?
+        .ok_or_else(|| {
+            data_error("Registered NEW requires actual current-MStore metadata point")
+        })?;
         let frozen = owner.retained_freeze()?;
         let service = owner
             .service()
@@ -33,6 +48,7 @@ impl ActualServiceNativeRegisteredJointNewEvidence {
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
         let target = owner.target();
+        metadata_point.require_native_store_point(&database, &service.range_writes)?;
         plan.require_actual_native(target.native())?;
         target.require_current(
             &database,
@@ -98,12 +114,16 @@ impl ActualServiceNativeRegisteredJointNewEvidence {
         let evidence = Self {
             certificate,
             role,
+            own,
+            business,
+            metadata_point,
             owner,
             frozen,
             pin: parking_lot::Mutex::new(Some(pin)),
             facts,
         };
         evidence.require_current()?;
+        evidence.require_issuance_current()?;
         Ok(evidence)
     }
     pub(crate) fn require_remote_source_retirement(
@@ -128,7 +148,12 @@ impl ActualServiceNativeRegisteredJointNewEvidence {
         &self.facts
     }
     pub(crate) fn require_issuance_current(&self) -> Result<()> {
-        self.certificate.plan().require_role(self.role.role())
+        self.certificate.plan().require_role(self.role.role())?;
+        self.role
+            .role()
+            .require_own_host_metadata(&self.own, self.business)?;
+        self.metadata_point
+            .require_request(&self.own, self.business)
     }
     pub(crate) fn require_current(&self) -> Result<()> {
         let service = self
@@ -178,13 +203,25 @@ impl ActualServiceNativeRegisteredJointNewEvidence {
             .take();
         self.require_current()
     }
-    pub(crate) fn publish_decision(
+    pub(crate) fn publish_and_count_decision(
         &self,
         admission: &crate::distribution_range_handoff::NativeJointDecisionPublicationAdmission,
         parent: &CancellationToken,
-    ) -> Result<crate::db::NativeJointDecisionReceipt> {
+        durable: &mut BTreeMap<ClusterNodeId, crate::db::NativeJointDecisionReceipt>,
+    ) -> Result<()> {
         parent.check()?;
         admission.require_registered_own()?;
+        let (own, business) = admission.registered_metadata_request()?;
+        let metadata = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            self.service(),
+            own,
+            business,
+            parent,
+        )?
+        .ok_or_else(|| {
+            data_error("Registered decision requires actual original native MStore version")
+        })?;
+        metadata.require_external_current()?;
         self.require_current()?;
         if self
             .pin
@@ -197,40 +234,26 @@ impl ActualServiceNativeRegisteredJointNewEvidence {
                 "Registered decision requires drained original pin/same pending plan",
             ));
         }
+        let retained = self.owner.retain_decision_attempt(admission.data())?;
+        let mut attempt = retained.try_lock().ok_or_else(|| {
+            data_error("Registered original decision native attempt already active")
+        })?;
         let mut service = self
             .service()
             .try_lock()
             .ok_or_else(|| data_error("Registered decision service busy"))?;
         let database_arc = service.db.clone();
         let database = checked_database_read(&database_arc, &service.storage_policy)?;
-        database.with_registered_joint_exclusion_scope(
+        service.require_native_catalog_database(&database)?;
+        database.publish_registered_joint_decision_and_count(
             self.owner.target(),
             self.frozen.try_as_frozen()?,
             parent,
-            |scope| {
-                admission.require_registered_own()?;
-                scope.require_current(&database, &service.range_writes)?;
-                let controlled = database
-                    .range_mutation_gate()
-                    .try_controlled_mutation(self.frozen.try_as_frozen()?)?;
-                let receipt = database.persist_native_joint_decision_from_registered(
-                    admission,
-                    scope,
-                    &service.range_writes,
-                    &controlled,
-                )?;
-                service
-                    .range_writes
-                    .current_mut()
-                    .confirm_native_registered_joint_decision(
-                        &database, admission, &receipt, scope,
-                    )?;
-                drop(controlled);
-                admission.require_registered_own()?;
-                scope.require_current(&database, &service.range_writes)?;
-                parent.check()?;
-                Ok(receipt)
-            },
+            service.range_writes.current_mut(),
+            admission,
+            &metadata,
+            &mut attempt,
+            durable,
         )
     }
     pub(crate) fn require_decision_receipt(
@@ -283,7 +306,13 @@ impl ClusterDataNodeService {
         metadata: crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         range: RangeId,
+        metadata_point: Option<Arc<crate::distribution_data::ActualNativeJointMetadataPoint>>,
     ) -> Result<crate::distribution_range_handoff::CommittedNativeJointDecisionObservation> {
+        let point = metadata_point.as_ref().ok_or_else(|| {
+            data_error("Registered committed phase requires actual original current-MStore point")
+        })?;
+        point.require_request(&metadata, business)?;
+
         metadata.require_live_request(business)?;
         let target = owner.target();
         let topology = metadata.committed_topology(business)?;
@@ -327,6 +356,7 @@ impl ClusterDataNodeService {
             native: actual,
             metadata,
             business,
+            metadata_point,
         };
         let observed = crate::distribution_range_handoff::CommittedNativeJointDecisionObservation::from_actual_service(evidence)?;
         observed.require_current(&database)?;

@@ -390,6 +390,7 @@ impl BicDb {
             record = old;
         } else {
             self.in_paged_transaction(|paged, xid| {
+                committed.require_native_publication_metadata(self, store)?;
                 record.native_page_xid = xid;
                 record.checksum_sha256 = record.checksum()?;
                 record.validate()?;
@@ -422,6 +423,14 @@ impl BicDb {
         catalogue.require_current(store, self, committed, image, frozen)?;
         parent.check()?;
         receipt.require_current(self, store, committed, catalogue, image, frozen)?;
+        committed.require_native_publication_metadata(self, store)?;
+        // The actual post-write pointer/archive/lineage and original hook/A
+        // are reborrowed together, then retained through the memory-only gate.
+        let physical =
+            receipt.publication_read_scope(self, store, committed, catalogue, image, frozen)?;
+        let version = committed.native_publication_guard()?;
+        drop(version);
+        drop(physical);
         Ok(receipt)
     }
 }

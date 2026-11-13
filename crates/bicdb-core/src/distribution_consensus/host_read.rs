@@ -106,6 +106,7 @@ impl MetadataConsensusStore {
         subject: &MetadataReadAcquireRequest,
         caller: &MetadataReadParticipant,
     ) -> Result<crate::RangeDescriptor> {
+        self.publication_version.require_ready()?;
         host.require_subject(subject)?;
         host.validate_member(&self.state.committed_topology)?;
         let node = &self.state.committed_topology.nodes[&host.requester_node_id];
@@ -157,6 +158,11 @@ pub(crate) struct HostMetadataReadObservation {
     cancellation: crate::CancellationToken,
 }
 impl HostMetadataReadObservation {
+    /// Necessary original request cancellation only, never a cloned metadata
+    /// observation or authority. Native version points retain this same token.
+    pub(crate) fn original_request_cancellation(&self) -> crate::CancellationToken {
+        self.cancellation.clone()
+    }
     /// Test-only liveness DATA from the SAME original request; no observation
     /// clone, deadline renewal or metadata authority is constructed.
     #[cfg(test)]

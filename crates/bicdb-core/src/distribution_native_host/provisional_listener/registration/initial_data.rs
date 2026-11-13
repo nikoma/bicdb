@@ -801,3 +801,17 @@ impl NativeMetadataControlHost {
             .scope_for_test(range, parent)
     }
 }
+
+#[cfg(test)]
+impl NativeMetadataControlHost {
+    pub(crate) fn test_hold_hot_controller_for_fault(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<hot_recovery::NativeHotControllerTestHold<'_>> {
+        self.data
+            .as_ref()
+            .and_then(|data| data.hot_recovery.as_ref())
+            .ok_or_else(|| invalid("test hold requires actual retained DATA controller"))?
+            .hold_controller_for_test(parent)
+    }
+}

@@ -456,3 +456,36 @@ impl NativeHotRecoveryMaintenance {
         RecoveryFenceScope::from_role(&self.fresh_role(range, Uuid::now_v7(), parent)?)
     }
 }
+
+/// Test scheduling hold ONLY. It owns the actual existing state mutex and
+/// exposes no state, mutator, range reservation, role or permission. Rc marker
+/// keeps it !Send/!Sync even if parking_lot feature selection changes.
+#[cfg(test)]
+pub(crate) struct NativeHotControllerTestHold<'a> {
+    _held: parking_lot::MutexGuard<'a, State>,
+    _not_send: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+#[cfg(test)]
+impl NativeHotRecoveryMaintenance {
+    pub(super) fn hold_controller_for_test(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<NativeHotControllerTestHold<'_>> {
+        if parent.deadline().is_none() {
+            return Err(invalid(
+                "test controller hold needs a finite acquisition deadline",
+            ));
+        }
+        loop {
+            parent.check()?;
+            if let Some(held) = self.state.try_lock() {
+                parent.check()?;
+                return Ok(NativeHotControllerTestHold {
+                    _held: held,
+                    _not_send: std::marker::PhantomData,
+                });
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+}

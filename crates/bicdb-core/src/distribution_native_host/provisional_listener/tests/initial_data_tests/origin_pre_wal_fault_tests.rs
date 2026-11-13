@@ -613,3 +613,5 @@ fn native_initial_data_origin_fault_arm_drop_revokes_retained_probe_without_eras
     assert!(!retained.snapshot()["fired"].as_bool().unwrap());
     assert!(!next.snapshot()["fired"].as_bool().unwrap());
 }
+
+mod one_peer_loss_tests;

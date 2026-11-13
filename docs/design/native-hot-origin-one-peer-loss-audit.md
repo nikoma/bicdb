@@ -153,3 +153,44 @@ same terminal next-ACK/Strong gate. Later parameterized Complete/Activate cuts
 must preserve actual durable continuation/original caller semantics. These
 fault controls and any majority-aware producer change require separate review;
 no implementation or HA/physical qualification follows from this design.
+
+## Test-only witness source checkpoint
+
+A successor based on `ca8383ef36190c6c69cc8853cd51dd7803c7cc52` implements
+only the proposed scheduling seam and required test, with no production
+quorum/controller change or execution result. The guard owns the actual state
+mutex privately, has no methods or Clone/Serde, and is explicitly !Send/!Sync.
+Acquisition polls only `try_lock` under a finite caller deadline; Drop only
+unlocks. All three actual automatic owners are started before acquisition.
+
+Selector: `native_hot_one_peer_loss_actual_rpc_requires_autonomous_tail_recovery`.
+The child uses the existing fsynced Journal and actual EventClient helpers. It
+keeps the original fault's first Unknown immutable, requires a strict held
+R1/Pending2 cut plus both native R2/full-value proofs, stops only n1, obtains an
+actual freshly authenticated surviving HostMQ with its own attempt trace, then
+releases only the scheduling hold. The original two test bodies and shared
+helpers are unchanged; their parent file gains only the child module line.
+The older module-name filter consequently selects three tests at this new
+source, rather than the two historical tests. Source-specific counts must stay
+separate; any repeat of the original pair must select their actual names.
+
+Peer stop/drain and the fresh metadata proof consume the same 20s clock; it is
+not restarted before health calls. The unchanged client2s and controller5s
+budgets remain in force. There is no explicit maintenance fallback or direct
+mutating recovery invocation. Every round actually attempts old+committed
+reads, a next write and next read before outcome assertions. The gate checks
+receipt time and preserves any earlier ACK when rejecting later false absence.
+Post-gate observations are nonwaiting diagnostics and do not extend a successful
+receipt. Cleanup/report errors cannot replace an earlier prerequisite or
+required-acceptance error. Only ledger/log/path evidence is retained; no portable
+native DB copy, cold reopen or physical fault is claimed. Current source is
+predicted to fail the REQUIRED success gate, not to pass by safe refusal. No
+local build or dispatch has been performed.
+
+The direct initial Bootstrap raw-frame gap stays explicitly labelled. The fresh
+surviving HostMQ uses a second real observed transport; its request IDs and
+observer sequence can restart, so evidence must correlate by actual attempt UUID
+and logical context, not assume global numeric request-ID uniqueness. Controller
+internal calls remain phase traces, not complete independent wire capture. The
+peer-loss check requires the drained endpoint's actual ConnectionRefused with
+its caller budget still live; a timeout/expired probe cannot make that cut pass.

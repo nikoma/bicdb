@@ -29,6 +29,15 @@ impl NativeRegisteredRemoteImageIntent {
     pub(crate) fn sha256(&self) -> Result<String> {
         self.intent.sha256()
     }
+    /// Exact bounded persisted DATA; the original host attempt and fresh
+    /// scoped mutation checks remain mandatory at every publication boundary.
+    pub(crate) fn canonical_intent_bytes(&self) -> Result<Vec<u8>> {
+        self.intent.validate()?;
+        crate::distribution_range_image::bounded_json(&self.intent, 128 * 1024)
+    }
+    pub(crate) fn source_manifest_sha256(&self) -> &str {
+        &self.source_manifest_sha256
+    }
     /// Readonly DATA recheck after the lexical NoDomain value has ended.
     /// The caller must independently validate its actual owned native/catalogue
     /// preflight under the unique original Runtime freeze. This method neither

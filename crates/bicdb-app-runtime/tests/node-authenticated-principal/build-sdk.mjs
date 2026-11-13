@@ -54,7 +54,7 @@ caller.manifest.capabilities=['http_routes','plugin_services','transactions'];
 caller.manifest.dependencies=[{name:ownerName,version:'=999.1.0',abi_version:2,optional:false,capabilities:[],module_sha256:null}];
 const locked=Buffer.from(JSON.stringify({format:1,packages:[{name:ownerName,version:'999.1.0',package_sha256:ownerSigned.manifest.application.package.package_sha256}]}));
 caller.dependency_lock=[...locked];ca.package.dependency_lock_sha256=hash(locked);
-ca.required_features.push('services','read_committed');
+ca.required_features.push('services','read_committed','savepoints');
 ca.service_imports=[{name:ownerName,service:'principal_identity',version:'1.0.0',contract_sha256:serviceHash,optional:false,propagate_transaction:true,allow_reentrant:false,delegated_authority:false}];
 ca.routes=[route('cross_owner','/sdk-principal/cross-owner','cross_owner')];
 ca.application_program.service_bindings.remote={dependency:ownerName,service:'principal_identity',method:'who',parameters:[],propagate_transaction:true};

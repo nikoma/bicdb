@@ -472,6 +472,26 @@ impl InstalledNativeWriterHostGuard {
         range: &RangeDescriptor,
         coordinator: &Arc<RangeWriteCoordinator<T>>,
     ) -> Result<()> {
+        self.require_for_coordinator_under(database, range, coordinator, None)
+    }
+    /// Identical proof for a caller already holding the coordinator's routing
+    /// read guard; that guard is used instead of being acquired a second time.
+    pub(crate) fn require_for_coordinator_with_topology<T: RangeWriteTransport + 'static>(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+        coordinator: &Arc<RangeWriteCoordinator<T>>,
+        held_topology: &crate::ClusterTopology,
+    ) -> Result<()> {
+        self.require_for_coordinator_under(database, range, coordinator, Some(held_topology))
+    }
+    fn require_for_coordinator_under<T: RangeWriteTransport + 'static>(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+        coordinator: &Arc<RangeWriteCoordinator<T>>,
+        held_topology: Option<&crate::ClusterTopology>,
+    ) -> Result<()> {
         self.require_current(database, range)?;
         let actual: Arc<dyn CommitAdmission> = coordinator.clone();
         let installed = self
@@ -486,7 +506,11 @@ impl InstalledNativeWriterHostGuard {
                 "read reservation coordinator is not the actual installed writer",
             ));
         }
-        coordinator.require_native_writer_host_context(database, range)
+        match held_topology {
+            Some(topology) => coordinator
+                .require_native_writer_host_context_with_topology(database, range, topology),
+            None => coordinator.require_native_writer_host_context(database, range),
+        }
     }
 }
 

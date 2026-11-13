@@ -15,23 +15,72 @@ struct RootRecord {
     version: u32,
     root_id: Uuid,
     directory: bicdb_page::DirectoryPhysicalBirth,
+    /// Version 2 only: number of authorized physical rebinds since the factory.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    custody_generation: u64,
+    /// Version 2 only: checksum of the genuine record this one was rebound from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    predecessor_sha256: Option<String>,
+    /// Version 2 only: checksum of the original factory record. It names the
+    /// root independently of whichever directory currently holds it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    genesis_sha256: Option<String>,
     checksum_sha256: String,
+}
+
+fn is_zero(value: &u64) -> bool {
+    *value == 0
+}
+fn sha256_shape(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 impl RootRecord {
     fn checksum(&self) -> Result<String> {
+        if self.version == 1 {
+            return Ok(hex::encode(sha2::Sha256::digest(serde_json::to_vec(&(
+                "BicDbNativeOriginRoot-v1",
+                self.version,
+                self.root_id,
+                &self.directory,
+            ))?)));
+        }
         Ok(hex::encode(sha2::Sha256::digest(serde_json::to_vec(&(
-            "BicDbNativeOriginRoot-v1",
+            "BicDbNativeOriginRoot-v2",
             self.version,
             self.root_id,
             &self.directory,
+            self.custody_generation,
+            &self.predecessor_sha256,
+            &self.genesis_sha256,
         ))?)))
     }
     fn validate(&self) -> Result<()> {
-        if self.version != 1 || self.root_id.is_nil() || self.checksum()? != self.checksum_sha256 {
+        let lineage = match self.version {
+            1 => {
+                self.custody_generation == 0
+                    && self.predecessor_sha256.is_none()
+                    && self.genesis_sha256.is_none()
+            }
+            2 => {
+                self.custody_generation > 0
+                    && self.predecessor_sha256.as_deref().is_some_and(sha256_shape)
+                    && self.genesis_sha256.as_deref().is_some_and(sha256_shape)
+            }
+            _ => false,
+        };
+        if !lineage || self.root_id.is_nil() || self.checksum()? != self.checksum_sha256 {
             return Err(invalid("damaged private Native root record"));
         }
         Ok(())
+    }
+    /// Directory-independent identity: the factory record's checksum. An
+    /// authorized restore carries it forward, so bindings that retained it
+    /// from an earlier observation still name this root afterwards.
+    fn identity_sha256(&self) -> &str {
+        self.genesis_sha256
+            .as_deref()
+            .unwrap_or(&self.checksum_sha256)
     }
 }
 
@@ -106,6 +155,8 @@ pub(super) fn refuse_foreign_root_preflight(path: &Path) -> Result<()> {
         .map_err(|e| invalid(&e.to_string()))?
         .ok_or_else(|| invalid("physical directory birth is unsupported"))?;
     if actual != record.directory {
+        // Operators rebind a legitimate file-level copy offline with
+        // `authorize_native_cold_restore` before its first open.
         return Err(invalid("copied or replaced physical directory; an authorized Native import/restore producer is required"));
     }
     Ok(())
@@ -163,6 +214,109 @@ pub(super) fn validate_recorded_roots(
     Ok(())
 }
 
+/// What an authorized cold restore did to the copied directory.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NativeColdRestoreOutcome {
+    /// The source has no Native origin root; a plain copy already opens.
+    NotRequired,
+    /// The copy now owns the root at this custody generation.
+    Rebound { custody_generation: u64 },
+    /// An earlier call already rebound this copy from this source.
+    AlreadyRebound { custody_generation: u64 },
+}
+
+/// Offline, operator-authorized rebind of a file-level copy of a stopped
+/// Native store. Authority is exclusive custody of the genuine source: the
+/// source must be lockable (stopped) and its record must match its own
+/// physical directory, so a copy of a copy that was never rebound is refused.
+/// The target must still hold the byte-identical source record. Nothing but
+/// the target's root record is written; the root identity is preserved and
+/// only its physical custody advances by one generation.
+///
+/// This does not retire the source. Running both afterwards duplicates one
+/// node identity exactly as any cold copy does; higher layers must fence it.
+pub fn authorize_native_cold_restore(
+    source: impl AsRef<Path>,
+    target: impl AsRef<Path>,
+) -> Result<NativeColdRestoreOutcome> {
+    let (source, target) = (source.as_ref(), target.as_ref());
+    if !source.is_dir() || !target.is_dir() {
+        return Err(invalid(
+            "restore source and target must be existing directories",
+        ));
+    }
+    let source_lock = bicdb_page::DirectoryLock::acquire(source)
+        .map_err(|e| invalid(&format!("restore source is not stopped: {e}")))?;
+    let target_lock = bicdb_page::DirectoryLock::acquire(target)
+        .map_err(|e| invalid(&format!("restore target is in use or is the source: {e}")))?;
+    if !root_active(source)? {
+        if root_active(target)? {
+            return Err(invalid("restore target is not a copy of this source"));
+        }
+        return Ok(NativeColdRestoreOutcome::NotRequired);
+    }
+    if !root_active(target)? {
+        return Err(invalid("restore target is not a copy of this source"));
+    }
+    let birth = |lock: &bicdb_page::DirectoryLock| -> Result<bicdb_page::DirectoryPhysicalBirth> {
+        lock.physical_birth()
+            .map_err(|e| invalid(&e.to_string()))?
+            .ok_or_else(|| invalid("physical directory birth is unsupported"))
+    };
+    let source_record =
+        read_record(source)?.ok_or_else(|| invalid("restore source root record is missing"))?;
+    if birth(&source_lock)? != source_record.directory {
+        return Err(invalid(
+            "restore source is itself an unauthorized copy; restore from the genuine root",
+        ));
+    }
+    let actual = birth(&target_lock)?;
+    if actual == source_record.directory {
+        return Err(invalid("restore target is the source directory"));
+    }
+    let custody_generation = source_record
+        .custody_generation
+        .checked_add(1)
+        .ok_or_else(|| invalid("custody generation overflow"))?;
+    let target_record =
+        read_record(target)?.ok_or_else(|| invalid("restore target root record is missing"))?;
+    if target_record.directory == actual {
+        if target_record.root_id == source_record.root_id
+            && target_record.custody_generation == custody_generation
+            && target_record.predecessor_sha256.as_deref()
+                == Some(source_record.checksum_sha256.as_str())
+        {
+            return Ok(NativeColdRestoreOutcome::AlreadyRebound { custody_generation });
+        }
+        return Err(invalid(
+            "restore target already owns a different Native root",
+        ));
+    }
+    if fs::read(source.join(ROOT_FILE))? != fs::read(target.join(ROOT_FILE))? {
+        return Err(invalid("restore target is not a copy of this source"));
+    }
+    let mut record = RootRecord {
+        version: 2,
+        root_id: source_record.root_id,
+        directory: actual,
+        custody_generation,
+        predecessor_sha256: Some(source_record.checksum_sha256.clone()),
+        genesis_sha256: Some(source_record.identity_sha256().to_owned()),
+        checksum_sha256: String::new(),
+    };
+    record.checksum_sha256 = record.checksum()?;
+    record.validate()?;
+    crate::storage::write_atomic(
+        &target.join(ROOT_FILE),
+        &serde_json::to_vec_pretty(&record)?,
+        true,
+    )?;
+    File::open(target)?.sync_all()?;
+    drop(target_lock);
+    drop(source_lock);
+    Ok(NativeColdRestoreOutcome::Rebound { custody_generation })
+}
+
 impl BicDb {
     /// Trusted factory activation for a directory this actual open created
     /// atomically. Merely empty/existing directories are not eligible. A
@@ -200,6 +354,7 @@ impl BicDb {
             Some(_) => return Err(invalid("prepared root belongs to another physical directory")),
             None if self.fresh_directory_created => {
                 let mut record = RootRecord { version: 1, root_id: Uuid::new_v4(), directory: actual,
+                    custody_generation: 0, predecessor_sha256: None, genesis_sha256: None,
                     checksum_sha256: String::new() };
                 record.checksum_sha256 = record.checksum()?;
                 // Persist every containing directory entry too, including
@@ -250,11 +405,13 @@ impl BicDb {
         }
         Ok(Some(NativeOriginObservation {
             root_id: root.record.root_id,
-            native_record_sha256: root.record.checksum_sha256.clone(),
+            native_record_sha256: root.record.identity_sha256().to_owned(),
             source_open_incarnation: self.incarnation.clone(),
         }))
     }
 }
 
+#[cfg(all(test, unix))]
+mod restore_tests;
 #[cfg(all(test, unix))]
 mod tests;

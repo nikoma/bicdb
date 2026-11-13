@@ -2247,6 +2247,14 @@ enum BackupCommand {
     /// (segments written by the engine's archive_wal_segments). Run after
     /// `backup restore`, before the first open.
     ApplyWal { target: PathBuf, archive: PathBuf },
+    /// Authorize a file-level copy of a STOPPED native store to open in its
+    /// new directory. A native store is bound to the physical directory that
+    /// created it and refuses to open from a plain copy. Run this once after
+    /// copying, before the first open, with the original directory still
+    /// present and stopped: SOURCE is the original, TARGET is the copy. Only
+    /// the copy's root record is rewritten; the original is left untouched,
+    /// so never run both afterwards as the same node.
+    AdoptCopy { source: PathBuf, target: PathBuf },
     /// Delete archived WAL segments already contained in verified retained
     /// bases. Repeat --base for every base still retained; the oldest floor
     /// governs pruning.
@@ -5327,6 +5335,27 @@ fn main() -> Result<()> {
                     report.bytes_freed,
                     report.kept
                 );
+            }
+            BackupCommand::AdoptCopy { source, target } => {
+                match bicdb_core::authorize_native_cold_restore(&source, &target)? {
+                    bicdb_core::NativeColdRestoreOutcome::NotRequired => println!(
+                        "No native origin root in {}; the copy opens as it is",
+                        source.display()
+                    ),
+                    bicdb_core::NativeColdRestoreOutcome::Rebound { custody_generation } => {
+                        println!(
+                            "Adopted copy {} from {} (custody generation {custody_generation})",
+                            target.display(),
+                            source.display()
+                        )
+                    }
+                    bicdb_core::NativeColdRestoreOutcome::AlreadyRebound { custody_generation } => {
+                        println!(
+                            "Copy {} was already adopted (custody generation {custody_generation})",
+                            target.display()
+                        )
+                    }
+                }
             }
             BackupCommand::ApplyWal { target, archive } => {
                 let applied = bicdb_core::apply_archived_wal(&target, &archive)?;

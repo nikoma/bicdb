@@ -175,8 +175,10 @@ pub use consensus::{
     AppendEntries, AppendResponse, ConsensusConfig, ConsensusLogEntry, ConsensusPeer,
     ConsensusRole, ConsensusState, ConsensusStatus, RequestVote, VoteResponse,
 };
+pub use db::authorize_native_cold_restore;
 pub use db::effective_fts_partitions;
 pub use db::ensure_frames_within_durable_horizon;
+pub use db::NativeColdRestoreOutcome;
 mod oracle_simple_case;
 pub use oracle_simple_case::{
     oracle_simple_lower_v1, oracle_simple_national_lower_v1, oracle_simple_national_upper_v1,

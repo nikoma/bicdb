@@ -203,11 +203,19 @@ impl Host {
             "db.commit" if args.is_empty() => {
                 let transaction = self
                     .transaction
+                    .take()
                     .ok_or_else(|| "no active transaction".to_string())?;
-                self.request(HostRequest::Transaction(TransactionRequest::Commit {
+                let result = self.request(HostRequest::Transaction(TransactionRequest::Commit {
                     transaction,
-                }))?;
-                self.transaction = None;
+                }));
+                if result.is_err() {
+                    // A failed commit normally consumed the handle. If host
+                    // dispatch failed before consumption, release it through
+                    // trusted deadline-independent cleanup. Neither outcome
+                    // may hide the original commit error from the caller.
+                    let _ = self.capability.rollback_script_transaction(transaction);
+                }
+                result?;
                 Ok(Value::Null)
             }
             "db.rollback" if args.is_empty() => {

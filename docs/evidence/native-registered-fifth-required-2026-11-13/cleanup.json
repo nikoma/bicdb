@@ -1,0 +1,5 @@
+{
+  "errors": [],
+  "original_roots_retained": true,
+  "primary_failure_preserved": "assertion `left == right` failed: REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute\n  left: 0\n right: 2"
+}

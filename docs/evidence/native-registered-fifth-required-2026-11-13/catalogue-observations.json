@@ -1,0 +1,283 @@
+[
+  {
+    "node": "n0",
+    "range_catalogue_path": "node0/cluster-range-write-log.json",
+    "range_catalogue_bytes": 6885,
+    "range_catalogue_sha256": "fd6abc7fd5cc171587311702febc444306e357ca0bc5dfbc4e9c983df0b28f0c",
+    "range_catalogue_envelope_checksum": "149f67671d2d73be57152e39c7c0d0873f45da50d97c72b3cfc797a0f65801fd",
+    "range_catalogue_envelope_checksum_verified": true,
+    "format_version": 15,
+    "writer_enforcement_version": 1,
+    "ranges": {
+      "2": {
+        "current_epoch": 1,
+        "last_index": 1,
+        "resolved_through": 1,
+        "compacted_through": 0,
+        "entries": {
+          "1": {
+            "state": "applied",
+            "command_sha256": "edb72ecbc2758fdc4dbca9203100298ac683d247502402a2679f92c7605a35a3"
+          }
+        }
+      }
+    },
+    "recovery_fences": {},
+    "abort_domains": [
+      "2"
+    ],
+    "metadata_path": "node0/native-initial-metadata/cluster-metadata-consensus.json",
+    "metadata_bytes": 11337,
+    "metadata_sha256": "f95dbe0a23d4b70bc200b68a9d6c798e9c78ab05ebb338c85e5a0d38671bedd3",
+    "metadata_envelope_checksum": "94e9d3c8d78cf751217b04372f0ee3e603620f0c9c34220ddc00fe581253e0b8",
+    "metadata_envelope_checksum_verified": true,
+    "metadata_status": {
+      "cluster_id": "native-bootstrap-actual-tls",
+      "commit_index": 5,
+      "current_term": 1,
+      "last_log_index": 5,
+      "last_log_term": 1,
+      "leader_id": "n0",
+      "learners": [],
+      "node_id": "n0",
+      "role": "leader",
+      "topology_generation": 5,
+      "voted_for": "n0",
+      "voters": [
+        "n0",
+        "n1",
+        "n2",
+        "n3",
+        "n4"
+      ]
+    },
+    "native_pages_decoded_or_replayed": false
+  },
+  {
+    "node": "n1",
+    "range_catalogue_path": "node1/cluster-range-write-log.json",
+    "range_catalogue_bytes": 6849,
+    "range_catalogue_sha256": "e326734727ff87c92261cee1f364edaae1285089ef0e408c86ea689b8da94070",
+    "range_catalogue_envelope_checksum": "c57fb67118934d348bfd63fd91d16929d05f447f639c8b9139654a6d155224ee",
+    "range_catalogue_envelope_checksum_verified": true,
+    "format_version": 15,
+    "writer_enforcement_version": 1,
+    "ranges": {
+      "1": {
+        "current_epoch": 1,
+        "last_index": 1,
+        "resolved_through": 1,
+        "compacted_through": 0,
+        "entries": {
+          "1": {
+            "state": "applied",
+            "command_sha256": "f27813245c2c8fa255835a1cd6b8792331aa0a99462bfefdee20d143735fec03"
+          }
+        }
+      }
+    },
+    "recovery_fences": {},
+    "abort_domains": [
+      "1"
+    ],
+    "metadata_path": "node1/native-initial-metadata/cluster-metadata-consensus.json",
+    "metadata_bytes": 11339,
+    "metadata_sha256": "040228bd056c001a333baa58a7d47f0c6a2f9201ce2ed6e702cfdf2453bd3ab7",
+    "metadata_envelope_checksum": "d1f89429325fd34cb0d86d7fbd263901362d263655ca6d414395387db31ea3a9",
+    "metadata_envelope_checksum_verified": true,
+    "metadata_status": {
+      "cluster_id": "native-bootstrap-actual-tls",
+      "commit_index": 5,
+      "current_term": 1,
+      "last_log_index": 5,
+      "last_log_term": 1,
+      "leader_id": "n0",
+      "learners": [],
+      "node_id": "n1",
+      "role": "follower",
+      "topology_generation": 5,
+      "voted_for": "n0",
+      "voters": [
+        "n0",
+        "n1",
+        "n2",
+        "n3",
+        "n4"
+      ]
+    },
+    "native_pages_decoded_or_replayed": false
+  },
+  {
+    "node": "n2",
+    "range_catalogue_path": "node2/cluster-range-write-log.json",
+    "range_catalogue_bytes": 13215,
+    "range_catalogue_sha256": "0056ed9d5e7070c318e5f27e89bd57d571a6851e213af96fce1c45d75ed17dac",
+    "range_catalogue_envelope_checksum": "c7f0b0f4e2cc42e8aae77f02b7ee08fe297d5bbaf782ac31428d8240e18add6d",
+    "range_catalogue_envelope_checksum_verified": true,
+    "format_version": 15,
+    "writer_enforcement_version": 1,
+    "ranges": {
+      "1": {
+        "current_epoch": 1,
+        "last_index": 1,
+        "resolved_through": 1,
+        "compacted_through": 0,
+        "entries": {
+          "1": {
+            "state": "applied",
+            "command_sha256": "f27813245c2c8fa255835a1cd6b8792331aa0a99462bfefdee20d143735fec03"
+          }
+        }
+      },
+      "2": {
+        "current_epoch": 1,
+        "last_index": 1,
+        "resolved_through": 1,
+        "compacted_through": 0,
+        "entries": {
+          "1": {
+            "state": "applied",
+            "command_sha256": "edb72ecbc2758fdc4dbca9203100298ac683d247502402a2679f92c7605a35a3"
+          }
+        }
+      }
+    },
+    "recovery_fences": {},
+    "abort_domains": [
+      "1",
+      "2"
+    ],
+    "metadata_path": "node2/native-initial-metadata/cluster-metadata-consensus.json",
+    "metadata_bytes": 11339,
+    "metadata_sha256": "51520154723197ad42a74a27e4fa9ff0d74073ba7b3590c7e058bcdf8f1c3d4c",
+    "metadata_envelope_checksum": "d325e1d10b544a9187a5b1b5280d1d2c3404d6a9feb5c76c04ac9f10e686343d",
+    "metadata_envelope_checksum_verified": true,
+    "metadata_status": {
+      "cluster_id": "native-bootstrap-actual-tls",
+      "commit_index": 5,
+      "current_term": 1,
+      "last_log_index": 5,
+      "last_log_term": 1,
+      "leader_id": "n0",
+      "learners": [],
+      "node_id": "n2",
+      "role": "follower",
+      "topology_generation": 5,
+      "voted_for": "n0",
+      "voters": [
+        "n0",
+        "n1",
+        "n2",
+        "n3",
+        "n4"
+      ]
+    },
+    "native_pages_decoded_or_replayed": false
+  },
+  {
+    "node": "n3",
+    "range_catalogue_path": "node3/cluster-range-write-log.json",
+    "range_catalogue_bytes": 13215,
+    "range_catalogue_sha256": "d265bc5319bec2b2122d7096368d8f37f909f6a171f40dfb0db01df3529f9f13",
+    "range_catalogue_envelope_checksum": "4f6dacb53316f34113ece59c4b52803e1764fb2bb8f573ac9b6086f6b7206075",
+    "range_catalogue_envelope_checksum_verified": true,
+    "format_version": 15,
+    "writer_enforcement_version": 1,
+    "ranges": {
+      "1": {
+        "current_epoch": 1,
+        "last_index": 1,
+        "resolved_through": 1,
+        "compacted_through": 0,
+        "entries": {
+          "1": {
+            "state": "applied",
+            "command_sha256": "f27813245c2c8fa255835a1cd6b8792331aa0a99462bfefdee20d143735fec03"
+          }
+        }
+      },
+      "2": {
+        "current_epoch": 1,
+        "last_index": 1,
+        "resolved_through": 1,
+        "compacted_through": 0,
+        "entries": {
+          "1": {
+            "state": "applied",
+            "command_sha256": "edb72ecbc2758fdc4dbca9203100298ac683d247502402a2679f92c7605a35a3"
+          }
+        }
+      }
+    },
+    "recovery_fences": {},
+    "abort_domains": [
+      "1",
+      "2"
+    ],
+    "metadata_path": "node3/native-initial-metadata/cluster-metadata-consensus.json",
+    "metadata_bytes": 11339,
+    "metadata_sha256": "d69cb284dbab07d22d24f3d465c7766d65cd4a48283905637716df5d02bdea9a",
+    "metadata_envelope_checksum": "ccb768ea364e95a6896d8a44fa20d2f827c4baf646455c46491832d28fc3f8bd",
+    "metadata_envelope_checksum_verified": true,
+    "metadata_status": {
+      "cluster_id": "native-bootstrap-actual-tls",
+      "commit_index": 5,
+      "current_term": 1,
+      "last_log_index": 5,
+      "last_log_term": 1,
+      "leader_id": "n0",
+      "learners": [],
+      "node_id": "n3",
+      "role": "follower",
+      "topology_generation": 5,
+      "voted_for": "n0",
+      "voters": [
+        "n0",
+        "n1",
+        "n2",
+        "n3",
+        "n4"
+      ]
+    },
+    "native_pages_decoded_or_replayed": false
+  },
+  {
+    "node": "n4",
+    "range_catalogue_path": "node4/cluster-range-write-log.json",
+    "range_catalogue_bytes": 509,
+    "range_catalogue_sha256": "37ecc6bd2b653146b03f425ba47de59b4166d1e2afeb13afb2690017f652d607",
+    "range_catalogue_envelope_checksum": "7b02af630f959dd0d42564b1f9dde6a062c1ad98cc480712b2dba01c3f6e6870",
+    "range_catalogue_envelope_checksum_verified": true,
+    "format_version": 15,
+    "writer_enforcement_version": 1,
+    "ranges": {},
+    "recovery_fences": {},
+    "abort_domains": [],
+    "metadata_path": "node4/native-learner-metadata/cluster-metadata-consensus.json",
+    "metadata_bytes": 11339,
+    "metadata_sha256": "c3fa19d8766eb37fad6781cb28f10d0c8363beae602c7b6a705d228b46f08573",
+    "metadata_envelope_checksum": "d8efe3b11e51fed8d477ca51e2e4bf34f987cc42d51cc8a177092252d08de562",
+    "metadata_envelope_checksum_verified": true,
+    "metadata_status": {
+      "cluster_id": "native-bootstrap-actual-tls",
+      "commit_index": 5,
+      "current_term": 1,
+      "last_log_index": 5,
+      "last_log_term": 1,
+      "leader_id": "n0",
+      "learners": [],
+      "node_id": "n4",
+      "role": "follower",
+      "topology_generation": 5,
+      "voted_for": null,
+      "voters": [
+        "n0",
+        "n1",
+        "n2",
+        "n3",
+        "n4"
+      ]
+    },
+    "native_pages_decoded_or_replayed": false
+  }
+]

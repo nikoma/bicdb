@@ -1,0 +1,79 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 7744,
+      "sha256": "555ee0be0e870a35f8ccaa7e93ecac5930edc88254ca39ce92477fe208e45698"
+    },
+    {
+      "path": "ack-ledger.json",
+      "bytes": 20575,
+      "sha256": "e41a47ff52acc2f824de7bd39fda7c2cea449f47e402c12cba82362ba7a2e004"
+    },
+    {
+      "path": "artifact-receipt.json",
+      "bytes": 803,
+      "sha256": "8972b8356dbc12d60672e0eff896a6ee2d1d4c2160df4a3deb0354008c63d045"
+    },
+    {
+      "path": "catalogue-observations.json",
+      "bytes": 8867,
+      "sha256": "66bfeec76013dddb3ebca5bd5efcd8e65c3f1a59d3f8ec656e9b24ba1d5f01bd"
+    },
+    {
+      "path": "cleanup.json",
+      "bytes": 243,
+      "sha256": "867e91f06884f4ad71763659a60f76f5b57d96c6a9648141a672070ed50b9d14"
+    },
+    {
+      "path": "compile-index.json",
+      "bytes": 612,
+      "sha256": "03e3195694aa1940b2611f012612726b7be05666feffbf36f26c172eb8b0bf54"
+    },
+    {
+      "path": "compile.log.gz",
+      "bytes": 277012,
+      "sha256": "d9e8c3dbc727fd4ede356d6ad1b8050883356af7bb2ec470efff614037b35baf"
+    },
+    {
+      "path": "core-index.json",
+      "bytes": 5641,
+      "sha256": "28f5f9b8c46809cfc0a60811cf71bd3adc6e6e3c0fdcb295f5aa1132639c7fd9"
+    },
+    {
+      "path": "core.log.gz",
+      "bytes": 212812,
+      "sha256": "bc92e31800d068e4c76975921a8103df76c00ffb97fe6107ebc5d924a7175c04"
+    },
+    {
+      "path": "custody-manifest.json",
+      "bytes": 25249,
+      "sha256": "482e8aeb41317301d7d3f0d213ac388f39dbf05f49d121bcb3721ebfec896953"
+    },
+    {
+      "path": "evidence-errors.json",
+      "bytes": 18,
+      "sha256": "861f18bcf433cba1e778ffc114e58f280b62a2f21198feeb33e135018efc7ce8"
+    },
+    {
+      "path": "fence-ledger.json",
+      "bytes": 63991,
+      "sha256": "278f49986a7e324bb7ecdb57b7b8ac09af46187757114e842034c4df0a4f4a85"
+    },
+    {
+      "path": "results.json",
+      "bytes": 1411,
+      "sha256": "d450447fa8aa33956b86c9dbe457fdde5edd08dacc39c67b2eb5e3d39e763eff"
+    },
+    {
+      "path": "semantic_tamper.py",
+      "bytes": 3790,
+      "sha256": "4b8daa7b2c2c490a36166a8be0425b160751656466aaff61dbf84cc726dfbdae"
+    },
+    {
+      "path": "verify.py",
+      "bytes": 12525,
+      "sha256": "5329e1b93bfe6c614604ddb8010f94ac870e2c13fd259fc105f65885fe98b53e"
+    }
+  ]
+}

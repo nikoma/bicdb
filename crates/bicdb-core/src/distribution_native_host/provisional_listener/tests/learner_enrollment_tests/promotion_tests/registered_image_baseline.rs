@@ -737,6 +737,7 @@ fn run_registered_image_baseline_with_placement_and_source(
                 &ledger,
                 &output,
                 &original_writers,
+                &token,
             );
         } else if case != Case::Required {
             phase = "captured_valid_registered_closed_fence_control";

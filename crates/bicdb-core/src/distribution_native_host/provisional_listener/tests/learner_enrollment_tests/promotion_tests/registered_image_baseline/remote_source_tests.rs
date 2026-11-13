@@ -15,6 +15,7 @@ use crate::distribution_transport::AuthenticatedNativeRemoteImageSourceFrame;
 pub(super) enum SourceCase {
     Frames,
     CancelAfterIssuedFrame,
+    RevokeBeforeNativeWal,
 }
 #[test]
 fn native_registered_fifth_remote_source_actual_tls_history_rows_seal_local_old_seed() {
@@ -26,6 +27,13 @@ fn native_registered_fifth_remote_source_actual_session_cancel_preserves_issued_
     run_registered_image_baseline_with_source(
         Case::Required,
         Some(SourceCase::CancelAfterIssuedFrame),
+    );
+}
+#[test]
+fn native_registered_fifth_remote_old_source_actual_hook_revoked_after_promise_before_native_wal() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::RevokeBeforeNativeWal),
     );
 }
 fn actual_role(
@@ -68,6 +76,134 @@ fn actual_role(
         &purpose,
     )
     .unwrap()
+}
+#[allow(clippy::too_many_arguments)]
+fn sink_control(
+    revoke: bool,
+    source: usize,
+    controls: &[NativeMetadataControlHost],
+    runtime: &Arc<NativeJointHandoffRuntime>,
+    provider: &MetadataReadProvider,
+    actor: &crate::distribution_consensus::MetadataReadParticipant,
+    plan: &Arc<NativeJointHandoffPlan>,
+    clients: &[Arc<TcpClusterRelocationTransport>],
+    services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
+    pending: &ClusterTopology,
+    ranges: &[crate::RangeDescriptor],
+    output: &std::path::Path,
+) {
+    let database = services[source].lock().database();
+    let before = state(&database, pending, &node(source), ranges).unwrap();
+    assert!(!database
+        .read()
+        .test_native_old_close_present(plan.old_range().id)
+        .unwrap());
+    evidence(
+        &output.join("old-sink-control-intent.json"),
+        &serde_json::json!({
+        "operation":"actual OLD source sink fault","revoke_hook":revoke,
+        "before":before,"outcome":"not_started","logical_local_api_not_wire":true}),
+    )
+    .unwrap();
+    let caller = budget(5000);
+    let original_role = Arc::new(actual_role(provider, actor, plan, &node(source), &caller));
+    let own_parent = caller.child();
+    let own_business = Uuid::now_v7();
+    let own = clients[source]
+        .acquire_host_metadata_observation(
+            &node(0),
+            own_business,
+            Duration::from_secs(5),
+            &own_parent,
+        )
+        .unwrap();
+    let own_deadline = own.deadline();
+    let hook = if revoke {
+        crate::distribution_native_host::CancelOldOwnBeforeNativeWal::revoke_hook(
+            &database,
+            &original_role,
+        )
+    } else {
+        crate::distribution_native_host::CancelOldOwnBeforeNativeWal::install(
+            &database,
+            &original_role,
+            &own_parent,
+        )
+    };
+    let result = controls[source].close_initial_old_step(
+        runtime.clone(),
+        original_role.clone(),
+        own,
+        own_business,
+        &caller,
+    );
+    assert!(
+        hook.fired(),
+        "actual durable OLD raw promise returned before native-WAL fault"
+    );
+    caller.check().unwrap();
+    original_role.require_live_request().unwrap();
+    assert!(
+        Instant::now() < own_deadline,
+        "original OWN deadline must remain live; only deliberate cancel/revoke explains refusal"
+    );
+    let error = result
+        .err()
+        .expect("actual original step must refuse at pre-native-WAL boundary");
+    if revoke {
+        own_parent.check().unwrap();
+        assert!(error.to_string().contains("native writer hook"), "{error}");
+    } else {
+        assert!(matches!(&error, BicDbError::QueryCanceled), "{error}");
+        assert!(matches!(own_parent.check(), Err(BicDbError::QueryCanceled)));
+    }
+    assert!(
+        !database
+            .read()
+            .test_native_old_close_present(plan.old_range().id)
+            .unwrap(),
+        "native OLD close must not be minted after original input revocation"
+    );
+    let after = state(&database, pending, &node(source), ranges).unwrap();
+    let raw_bytes = after["raw"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|b| b.as_u64().unwrap() as u8)
+        .collect::<Vec<_>>();
+    let raw: serde_json::Value = serde_json::from_slice(&raw_bytes).unwrap();
+    let promise: crate::distribution_range_handoff::RangeHandoffPromise = serde_json::from_value(
+        raw["catalog"]["handoff_promises"][plan.old_range().id.get().to_string()].clone(),
+    )
+    .unwrap();
+    assert!(promise.same_request(plan.promise()));
+    assert_eq!(
+        promise.resolved_through, 1,
+        "real fsynced raw promise remains owned, not erased on error"
+    );
+    let mut normalized_before = before.clone();
+    let mut normalized_after = after.clone();
+    normalized_before.as_object_mut().unwrap().remove("raw");
+    normalized_after.as_object_mut().unwrap().remove("raw");
+    if revoke {
+        normalized_before
+            .as_object_mut()
+            .unwrap()
+            .remove("writer_installed");
+        normalized_after
+            .as_object_mut()
+            .unwrap()
+            .remove("writer_installed");
+    }
+    assert_eq!(
+        normalized_before, normalized_after,
+        "fault changed acknowledged rows/native R/H/B/UID/birth/slots"
+    );
+    evidence(&output.join("old-sink-control-result.json"),&serde_json::json!({
+        "revoke_hook":revoke,"reached_after_durable_raw_before_native_wal":true,
+        "original_role_and_caller_live":true,"original_own_deadline_live":true,"error":error.to_string(),
+        "before":before,"after":after,"actual_promise":promise,"native_old_close_present":false,
+        "rollback_claimed":false,"logical_local_api_not_wire":true})).unwrap();
 }
 fn frame(
     target: &TcpClusterRelocationTransport,
@@ -151,10 +287,15 @@ pub(super) fn exercise(
     ledger: &[serde_json::Value],
     output: &std::path::Path,
     original_writers: &[Arc<crate::db::InstalledNativeWriterHostGuard>],
+    process: &CancellationToken,
 ) {
+    for source in controls {
+        source.bind_initial_image_source_process(process).unwrap();
+    }
     let target_before = state(&factory.database, pending, &node(4), ranges).unwrap();
     let mut journal = Vec::new();
     let mut retained_sources = Vec::new();
+    let mut last_manifest = None;
     let mut retained_runtimes = Vec::new();
     let mut retained_remote_facts: Vec<NativeRemoteImageFact> = Vec::new();
     for (original, acknowledged) in ranges.iter().zip(ledger) {
@@ -188,7 +329,9 @@ pub(super) fn exercise(
         let mut runtimes = Vec::new();
         let mut providers = Vec::new();
         for &i in &old_indices {
-            runtimes.push(NativeJointHandoffRuntime::new(services[i].clone()).unwrap());
+            runtimes.push(Arc::new(
+                NativeJointHandoffRuntime::new(services[i].clone()).unwrap(),
+            ));
             providers
                 .push(MetadataReadProvider::new(metadata[i].clone(), clients[i].clone()).unwrap());
         }
@@ -203,6 +346,62 @@ pub(super) fn exercise(
                 .unwrap();
             round.record_constraints(constraints, &services[i]).unwrap();
         }
+        if original.id == ranges[0].id && !matches!(case, SourceCase::CancelAfterIssuedFrame) {
+            let i = old_indices[0];
+            sink_control(
+                matches!(case, SourceCase::RevokeBeforeNativeWal),
+                i,
+                controls,
+                &runtimes[0],
+                &providers[0],
+                &actor,
+                &plan,
+                clients,
+                services,
+                pending,
+                ranges,
+                output,
+            );
+            if matches!(case, SourceCase::RevokeBeforeNativeWal) {
+                assert_eq!(
+                    state(&factory.database, pending, &node(4), ranges).unwrap(),
+                    target_before
+                );
+                return;
+            }
+            // A recorded failed operation has produced only an actual raw
+            // refusal. Begin a DISTINCT fresh collector, not a renewal of any
+            // counted/issued OLD quorum (the former round counted none).
+            drop(round);
+            let next_parent = budget(5000);
+            let next_business = Uuid::now_v7();
+            let next = clients[leader_index]
+                .acquire_metadata_read_observation(
+                    &node(0),
+                    next_business,
+                    range.id,
+                    range.epoch,
+                    Duration::from_secs(5),
+                    &next_parent,
+                )
+                .unwrap();
+            round = NativeJointOldRound::begin(next, next_business, relocation.id).unwrap();
+            assert_eq!(
+                round.plan().checksum_sha256().unwrap(),
+                plan.checksum_sha256().unwrap()
+            );
+            for ((&i, runtime), provider) in old_indices.iter().zip(&runtimes).zip(&providers) {
+                let operation = budget(5000);
+                let constraints = runtime
+                    .observe_constraints(
+                        plan.clone(),
+                        actual_role(provider, &actor, &plan, &node(i), &operation),
+                        &operation,
+                    )
+                    .unwrap();
+                round.record_constraints(constraints, &services[i]).unwrap();
+            }
+        }
         for ((&i, runtime), provider) in old_indices.iter().zip(&runtimes).zip(&providers) {
             let operation = budget(5000);
             let actual_role = actual_role(provider, &actor, &plan, &node(i), &operation);
@@ -215,15 +414,19 @@ pub(super) fn exercise(
                     &operation,
                 )
                 .unwrap();
-            let closed = controls[i].with_initial_old_step(Arc::new(actual_role), own, own_business,
-                &operation, |step| {
-                    assert_eq!(step.plan().checksum_sha256().unwrap(), plan.checksum_sha256().unwrap(),
-                        "paired actual recipient role/OWN plan must match actual controller plan");
-                    runtime.close_old_for_initial_step(step, &operation)
-                }).unwrap();
-            round.record_closed(closed).unwrap();
+            let closed = controls[i]
+                .close_initial_old_step(
+                    runtime.clone(),
+                    Arc::new(actual_role),
+                    own,
+                    own_business,
+                    &operation,
+                )
+                .unwrap();
+            round.record_retained_closed_actual(closed).unwrap();
         }
         let closed = round.finish().unwrap();
+        let original_old_expiry = closed.original_issuance_deadline();
         let source = (0..4)
             .find(|i| node(*i) == *closed.selected_source_id())
             .unwrap();
@@ -259,10 +462,10 @@ pub(super) fn exercise(
                 "{error}"
             );
         }
-        let source_session = CancellationToken::uncancelable();
+        let retain_request = budget(5000);
         let mut old = Some(closed);
         let retained = controls[source]
-            .retain_initial_remote_image_source(&mut old, Uuid::now_v7(), &source_session)
+            .retain_initial_remote_image_source(&mut old, Uuid::now_v7(), &retain_request)
             .unwrap();
         assert!(old.is_none());
         let publish_parent = budget(5000);
@@ -281,13 +484,29 @@ pub(super) fn exercise(
         assert_eq!(manifest.source_id, node(source));
         assert_eq!(manifest.target_id, node(4));
         assert_eq!(manifest.target_birth, *factory.actual_birth());
+        // The original finite acquisitions REALLY end. Keep only actual
+        // hosted-process/session ownership; each following TLS step acquires
+        // its own fresh OWN context under a distinct original bounded caller.
+        parent.cancel();
+        publish_parent.cancel();
+        while Instant::now() <= original_old_expiry {
+            process.check().unwrap();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(plan.require_live().is_err());
+        assert!(matches!(parent.check(), Err(BicDbError::QueryCanceled)));
+        assert!(matches!(
+            publish_parent.check(),
+            Err(BicDbError::QueryCanceled)
+        ));
+        process.check().unwrap();
         assert_eq!(manifest.range_index, 1);
         assert_ne!(manifest.source_reserved_b, 0);
         let actual = frame(target, &manifest, Op::Manifest, output, &mut journal).unwrap();
-        assert!(matches!(actual.reply().payload, Payload::Manifest(_)));
+        assert!(matches!(&actual.reply().payload, Payload::Manifest(_)));
         if matches!(case, SourceCase::CancelAfterIssuedFrame) {
             let issued = serde_json::to_vec(actual.reply()).unwrap();
-            source_session.cancel();
+            retained.request_cancel();
             actual.require_request_live().unwrap();
             assert_eq!(serde_json::to_vec(actual.reply()).unwrap(), issued);
             let refused = frame(target, &manifest, Op::Manifest, output, &mut journal)
@@ -435,13 +654,40 @@ pub(super) fn exercise(
             target_before,
             "source historical frame MUST NOT install rows or grant a target policy"
         );
+        last_manifest = Some(manifest);
         retained_sources.push(retained);
         retained_runtimes.extend(runtimes);
+    }
+    if matches!(case, SourceCase::Frames) {
+        let manifest = last_manifest.as_ref().unwrap();
+        // This session remains healthy immediately before ACTUAL hosted
+        // process cancellation; a per-session cancel cannot masquerade here.
+        frame(target, manifest, Op::Manifest, output, &mut journal).unwrap();
+        process.check().unwrap();
+        process.cancel();
+        let refused = frame(target, manifest, Op::Manifest, output, &mut journal)
+            .err()
+            .expect("actual original hosted process cancellation must close fresh source frames");
+        assert!(
+            refused
+                .to_string()
+                .contains(&BicDbError::QueryCanceled.to_string()),
+            "{refused}"
+        );
+        assert_eq!(
+            state(&factory.database, pending, &node(4), ranges).unwrap(),
+            target_before
+        );
     }
     assert_eq!(retained_sources.len(), 2);
     assert!(!factory.database.read().commit_admission_ready());
     evidence(&output.join("source-frames-result.json"), &serde_json::json!({
-        "actual_two_range_source_streams":true,"source_seed":"genuine local native OLD QQ, NOT remote collector",
+        "actual_two_range_manifest_observations":true,
+        "actual_two_range_history_rows_seals":matches!(case,SourceCase::Frames),
+        "actual_session_cancel_after_issued_manifest":matches!(case,SourceCase::CancelAfterIssuedFrame),
+        "actual_hosted_process_cancel_after_healthy_frames":matches!(case,SourceCase::Frames),
+        "original_finite_old_and_publish_acquisitions_ended":true,
+        "source_seed":"genuine local native OLD QQ, NOT remote collector",
         "actual_fifth_target_unchanged":true,"target_rows_installed":false,"serving_granted":false,
         "target_before":target_before,"actual_frame_count":journal.len(),"original_four_writer_objects_retained":true,
         "real_target_namespaces":factory.database.read().capture_range_image_bindings().unwrap().namespace_ids(),

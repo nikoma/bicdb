@@ -184,6 +184,10 @@ impl ClusterDataNodeService {
             .range_writes
             .current_mut()
             .persist_native_joint_old_promise(&database, &plan, &role, &physical, &controlled)?;
+        #[cfg(all(test, feature = "tls-replication"))]
+        if step.is_some() {
+            crate::distribution_native_host::before_native_old_wal(&self.db, &database, &role);
+        }
         #[cfg(feature = "tls-replication")]
         if let Some(step) = step {
             self.require_initial_old_step(step, &plan, &role, &database)?;

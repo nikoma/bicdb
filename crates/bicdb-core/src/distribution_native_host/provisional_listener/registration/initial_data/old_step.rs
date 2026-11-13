@@ -1,12 +1,16 @@
 //! Actual source-owner admission for ONLY OLD refusal/closure. Purpose/plan
 //! DATA alone is insufficient. No APP/Strong/image-row/Serving grant.
 use super::*;
+#[cfg(test)]
+mod sink_test;
 use crate::distribution_consensus::{
     HostMetadataReadObservation, MetadataConsensusStore, NativeOwnedMetadataMemberObservation,
 };
 use crate::distribution_range_consensus::RangeWriteStore;
 use crate::distribution_range_handoff::NativeJointHandoffPlan;
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
+#[cfg(test)]
+pub(crate) use sink_test::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
 
 pub(crate) struct NativeInitialOldStep<'request> {
     admission: &'request NativeInitialDataAdmission,
@@ -166,5 +170,77 @@ impl NativeInitialOldStep<'_> {
         }
         database.require_native_writer_catalogue_custody(store)?;
         self.require_live()
+    }
+}
+
+/// Retained BEFORE any real freeze/write and kept in the actual DATA host.
+/// An uncertain producer never removes this owner or invents an observation.
+pub(super) struct RetainedInitialOld {
+    plan_sha256: String,
+    runtime: Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>,
+    actual: Option<Arc<crate::distribution_range_handoff::NativeJointOldObservation>>,
+}
+impl NativeInitialDataHost {
+    pub(in crate::distribution_native_host::provisional_listener::registration) fn close_initial_old(
+        &self,
+        runtime: Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>,
+        role: Arc<RecoveryRoleAdmission>,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<Arc<crate::distribution_range_handoff::NativeJointOldObservation>> {
+        let admission = self.admission_for_old_step()?;
+        let step = admission.observe_initial_old_step(
+            self.initial.metadata.clone(),
+            role,
+            own,
+            business,
+            parent,
+        )?;
+        step.require_joint_runtime(&runtime)?;
+        let range = step.plan().old_range().id;
+        let digest = step.plan().checksum_sha256()?;
+        let retained = {
+            let mut owners = self
+                .old_closures
+                .try_lock()
+                .ok_or_else(|| invalid("retained OLD owner table busy"))?;
+            if let Some(previous) = owners.get(&range) {
+                previous.clone()
+            } else {
+                if owners.len() >= 8 {
+                    return Err(invalid(
+                        "retained OLD capacity; existing refusals not evicted",
+                    ));
+                }
+                let owner = Arc::new(Mutex::new(RetainedInitialOld {
+                    plan_sha256: digest.clone(),
+                    runtime: runtime.clone(),
+                    actual: None,
+                }));
+                owners.insert(range, owner.clone());
+                owner
+            }
+        };
+        let mut owner = retained
+            .try_lock()
+            .ok_or_else(|| invalid("actual OLD operation already active"))?;
+        if owner.plan_sha256 != digest || !Arc::ptr_eq(&owner.runtime, &runtime) {
+            return Err(invalid(
+                "OLD continuation changed original plan/runtime owner",
+            ));
+        }
+        if owner.actual.is_none() {
+            let observation = runtime.close_old_for_initial_step(&step, parent)?;
+            // Actual native/promise/pin ownership BEFORE the next fallible
+            // MStore/context/reply check. Error preserves this exact object.
+            owner.actual = Some(Arc::new(observation));
+        }
+        let actual = owner.actual.as_ref().unwrap().clone();
+        actual.require_current()?;
+        drop(owner);
+        step.require_metadata_current()?;
+        step.require_live()?;
+        Ok(actual)
     }
 }

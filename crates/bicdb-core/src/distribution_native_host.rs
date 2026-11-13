@@ -599,3 +599,6 @@ pub use provisional_listener::NativeRegisteredReplicaReceiverStatus;
 pub(crate) use provisional_listener::{
     NativeAssignedRegisteredClosedFence, NativeRegisteredReplicaAdmission,
 };
+
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use provisional_listener::{before_native_old_wal, CancelOldOwnBeforeNativeWal};

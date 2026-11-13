@@ -18,6 +18,8 @@ pub(crate) use registered_replica::{
 };
 mod maintenance;
 use initial_data::NativeInitialDataHost;
+#[cfg(test)]
+pub(crate) use initial_data::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
 pub(crate) use initial_data::{NativeInitialDataAdmission, NativeInitialOldStep};
 pub use initial_data::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
 mod schema_export;
@@ -503,9 +505,23 @@ impl NativeMetadataControlHost {
         self.listener = Some(self.backend.start_listener(self.network.clone(), &token)?);
         token.check()
     }
+    pub(crate) fn close_initial_old_step(
+        &self,
+        runtime: Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>,
+        role: Arc<crate::distribution_range_recovery::RecoveryRoleAdmission>,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<Arc<crate::distribution_range_handoff::NativeJointOldObservation>> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("original initial DATA owner absent"))?
+            .close_initial_old(runtime, role, own, business, parent)
+    }
     /// Actual receiver step; neither its borrow nor a cached validation result
     /// can escape. Network acquisitions must precede this call. The closure
     /// must retain actual mutation outcomes before fallible postchecks.
+    #[cfg(test)]
     pub(crate) fn with_initial_old_step<T>(
         &self,
         role: Arc<crate::distribution_range_recovery::RecoveryRoleAdmission>,
@@ -531,16 +547,25 @@ impl NativeMetadataControlHost {
         step.require_live()?;
         Ok(result)
     }
+    pub(crate) fn bind_initial_image_source_process(
+        &self,
+        process: &CancellationToken,
+    ) -> Result<()> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual initial DATA owner absent"))?
+            .bind_image_source_process(process)
+    }
     pub(crate) fn retain_initial_remote_image_source(
         &self,
         old: &mut Option<crate::distribution_range_handoff::NativeJointOldClosedQuorum>,
         target_attempt: Uuid,
-        original_session: &CancellationToken,
+        original_request: &CancellationToken,
     ) -> Result<crate::distribution_range_image::NativeRetainedRemoteImageSource> {
         self.data
             .as_ref()
             .ok_or_else(|| invalid("actual initial DATA owner is absent"))?
-            .retain_remote_image_source(old, target_attempt, original_session)
+            .retain_remote_image_source(old, target_attempt, original_request)
     }
     pub(crate) fn ensure_enrolled_target(
         &self,

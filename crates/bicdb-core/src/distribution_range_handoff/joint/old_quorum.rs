@@ -116,6 +116,14 @@ impl NativeJointOldRound {
         Ok(())
     }
     pub(crate) fn record_closed(&mut self, observation: NativeJointOldObservation) -> Result<()> {
+        self.record_retained_closed_actual(Arc::new(observation))
+    }
+    /// Sharing only an ACTUAL local service observation. This is neither a
+    /// remote decoder nor a replacement for transport-authenticated facts.
+    pub(crate) fn record_retained_closed_actual(
+        &mut self,
+        observation: Arc<NativeJointOldObservation>,
+    ) -> Result<()> {
         self.metadata.authority.require_live()?;
         observation.require_issuance_current()?;
         if observation.scope_sha256()? != self.plan.checksum_sha256()?
@@ -131,7 +139,7 @@ impl NativeJointOldRound {
             ));
         }
         self.observations
-            .insert(observation.node_id().clone(), Arc::new(observation));
+            .insert(observation.node_id().clone(), observation);
         Ok(())
     }
     pub(crate) fn finish(self) -> Result<NativeJointOldClosedQuorum> {
@@ -252,6 +260,13 @@ impl NativeJointOldRound {
     }
 }
 impl NativeJointOldClosedQuorum {
+    /// Original issuance deadline DATA for diagnostics, never a new grant.
+    pub(crate) fn original_issuance_deadline(&self) -> std::time::Instant {
+        self.observations
+            .values()
+            .map(|old| old.original_issuance_deadline())
+            .fold(self.plan.original_deadline(), std::cmp::max)
+    }
     pub(crate) fn range_index(&self) -> u64 {
         self.range_index
     }

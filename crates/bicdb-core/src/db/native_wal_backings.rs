@@ -173,6 +173,10 @@ impl BicDb {
         backings: BTreeMap<String, CollectionMeta>,
     ) -> Result<CommitFrame> {
         let backings = validated(backings)?;
+        native_origin::validate_catalog(
+            &backings.values().cloned().collect::<Vec<_>>(),
+            self.native_origin.as_ref(),
+        )?;
         if backings.is_empty() || !self.config.fsync {
             return Ok(frame);
         }
@@ -189,6 +193,10 @@ impl BicDb {
                 });
             }
         }
-        Ok(frame.with_native_wal_capture(&self.incarnation, backings))
+        Ok(frame.with_native_wal_capture(
+            &self.incarnation,
+            backings,
+            self.observe_native_origin_root()?,
+        ))
     }
 }

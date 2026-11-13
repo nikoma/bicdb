@@ -10,6 +10,7 @@ struct NamespacePin {
     name: String,
     local_id: Uuid,
     backing_birth_id: Option<Uuid>,
+    origin_root: Option<Uuid>,
     incarnation: Arc<()>,
 }
 
@@ -102,6 +103,7 @@ impl BicDb {
                 name,
                 local_id,
                 backing_birth_id: state.meta.native_backing_birth_id,
+                origin_root: state.meta.native_backing_origin_root,
                 incarnation: Arc::clone(&state.incarnation),
             });
             portable_collections.push(state.meta.portable_contract());
@@ -145,6 +147,7 @@ impl BicDb {
             if !Arc::ptr_eq(&state.incarnation, &pin.incarnation)
                 || self.local_namespace_identity(&pin.name)? != Some(pin.local_id)
                 || state.meta.native_backing_birth_id != pin.backing_birth_id
+                || state.meta.native_backing_origin_root != pin.origin_root
             {
                 return Err(BicDbError::Cluster(format!(
                     "range image namespace `{}` changed physical lineage; discard this capture",

@@ -1637,6 +1637,8 @@ impl BicDb {
                     local_meta.local_namespace_id = state.get_mut().meta.local_namespace_id;
                     local_meta.native_backing_birth_id =
                         state.get_mut().meta.native_backing_birth_id;
+                    local_meta.native_backing_origin_root =
+                        state.get_mut().meta.native_backing_origin_root;
                     state.get_mut().meta = local_meta;
                     catalog_changed = true;
                 }

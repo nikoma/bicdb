@@ -14,6 +14,8 @@ use exact_decimal_sum::ExactDecimalSum;
 mod local_namespace_identity;
 mod mutation_identity;
 mod native_collection_birth;
+mod native_origin;
+pub(crate) use native_origin::NativeOriginObservation;
 mod native_wal_backings;
 mod sql_partition_execution;
 pub use sql_partition_execution::CollectionCacheStamp;
@@ -4001,6 +4003,8 @@ pub struct BicDb {
     local_namespace_identity_active: bool,
     native_collection_birth_active: bool,
     native_wal_backing_capture_active: bool,
+    native_origin: Option<native_origin::NativeOriginRoot>,
+    fresh_directory_created: bool,
     sql_partition_execution_v1_active: AtomicBool,
     ha_state: HaState,
     replication_state: ReplicationApplyState,
@@ -10483,6 +10487,7 @@ impl BicDb {
         // can write to `path`, including the format-version migration below.
         let effective_mode = format::ensure_storage_mode_compatible(&path, &config.storage_mode)?;
         format::verify_open_compatible(&path)?;
+        native_origin::refuse_foreign_root_preflight(&path)?;
         // Also read-only, and also before any directory is created: the paged
         // engine cannot honour encryption at rest yet, and a refused open must
         // not leave `encryption.json` behind (see ADR-004).
@@ -10491,7 +10496,7 @@ impl BicDb {
             &effective_mode,
             encryption_config.as_ref(),
         )?;
-        fs::create_dir_all(&path)?;
+        let fresh_directory_created = native_origin::create_directory(&path)?;
 
         // Claim the directory before anything reads or writes state in it. A
         // second writer here is unrecoverable rather than merely racy, so this
@@ -10502,6 +10507,7 @@ impl BicDb {
                 path.display()
             ))
         })?;
+        let native_origin = native_origin::load_active(&path, &directory_lock)?;
         // A core fence protects raw SQL and every other opener, not merely the
         // application host. Unknown/malformed states quarantine the store.
         if !application_scope_recovery {
@@ -10652,6 +10658,11 @@ impl BicDb {
             local_namespace_identity_active,
         )?;
         native_wal_backings::rebind_recovery_writes(&mut tx_recovery, &metas)?;
+        native_origin::validate_catalog(&metas, native_origin.as_ref())?;
+        native_origin::validate_recorded_roots(
+            &tx_recovery.native_origin_roots,
+            native_origin.as_ref(),
+        )?;
         // Physical storage names must be known before any row is read, and an
         // interrupted rename (renamed_from still set) maps index definitions
         // still recorded under the old name.
@@ -11439,6 +11450,8 @@ impl BicDb {
             native_collection_birth_active,
             native_wal_backing_capture_active,
             sql_partition_execution_v1_active: AtomicBool::new(sql_partition_execution_v1_active),
+            native_origin,
+            fresh_directory_created,
             ha_state,
             replication_state,
             consensus_state,
@@ -13340,6 +13353,7 @@ impl BicDb {
             renamed_from: None,
             local_namespace_id: self.fresh_local_namespace_identity(),
             native_backing_birth_id: self.fresh_native_collection_birth(),
+            native_backing_origin_root: self.fresh_native_backing_origin_root(),
         };
         if let Some(storage) = storage_name {
             self.set_storage_alias(name, &storage);
@@ -21243,6 +21257,7 @@ struct TxRecovery {
     requires_native_collection_birth: bool,
     native_backings_by_tx: BTreeMap<u64, BTreeMap<String, (Uuid, Uuid)>>,
     native_backing_history: BTreeSet<(Uuid, Uuid)>,
+    native_origin_roots: BTreeSet<Uuid>,
 }
 
 #[derive(Clone, Debug)]
@@ -21389,6 +21404,7 @@ fn recover_transaction_log(
     let mut requires_native_collection_birth = false;
     let mut native_backings_by_tx = BTreeMap::new();
     let mut native_backing_history = BTreeSet::new();
+    let mut native_origin_roots = BTreeSet::new();
 
     // Stream the WAL independently of the record-segment read mode. Preserve
     // torn-tail repair, without retaining every raw frame beside decoded rows.
@@ -21452,6 +21468,11 @@ fn recover_transaction_log(
                 ..
             } => {
                 requires_native_collection_birth |= !native_backings.is_empty();
+                native_origin_roots.extend(
+                    native_backings
+                        .values()
+                        .filter_map(|m| m.native_backing_origin_root),
+                );
                 if !native_backings.is_empty() {
                     let identities = native_wal_backings::identities(&native_backings)?;
                     native_backing_history.extend(identities.values().copied());
@@ -21518,6 +21539,7 @@ fn recover_transaction_log(
         requires_native_collection_birth,
         native_backings_by_tx,
         native_backing_history,
+        native_origin_roots,
     })
 }
 

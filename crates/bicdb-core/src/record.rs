@@ -1331,6 +1331,9 @@ pub struct CollectionMeta {
     /// not an import receipt, source attestation or recovery authorization.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native_backing_birth_id: Option<uuid::Uuid>,
+    /// Native root active at actual allocation, never assigned later.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_backing_origin_root: Option<uuid::Uuid>,
 }
 
 impl CollectionMeta {
@@ -1345,6 +1348,7 @@ impl CollectionMeta {
         let mut portable = self.clone();
         portable.local_namespace_id = None;
         portable.native_backing_birth_id = None;
+        portable.native_backing_origin_root = None;
         portable
     }
 
@@ -1361,6 +1365,7 @@ impl CollectionMeta {
             renamed_from: None,
             local_namespace_id: None,
             native_backing_birth_id: None,
+            native_backing_origin_root: None,
         }
     }
 
@@ -1377,6 +1382,7 @@ impl CollectionMeta {
             renamed_from: None,
             local_namespace_id: None,
             native_backing_birth_id: None,
+            native_backing_origin_root: None,
         }
     }
 }

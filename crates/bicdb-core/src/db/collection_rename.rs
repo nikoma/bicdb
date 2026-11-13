@@ -634,6 +634,7 @@ impl BicDb {
         copied.storage_name = target.meta.storage_name.clone();
         copied.local_namespace_id = target.meta.local_namespace_id;
         copied.native_backing_birth_id = target.meta.native_backing_birth_id;
+        copied.native_backing_origin_root = target.meta.native_backing_origin_root;
         copied.renamed_from = None;
         target.meta = copied;
         self.persist_catalog()?;

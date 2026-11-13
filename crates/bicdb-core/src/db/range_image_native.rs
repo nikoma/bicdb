@@ -860,7 +860,14 @@ impl BicDb {
             true,
         )?;
         let mut db = Self::open_with_config(root, config.with_required_commit_admission(true))?;
+        // This function, rather than open_inner, performed the actual atomic
+        // directory creation above. Carry that private factory fact forward.
+        db.fresh_directory_created = true;
+        #[cfg(unix)]
+        db.activate_native_origin_root_v1()?;
         db.activate_local_namespace_identity_v1()?;
+        db.activate_native_collection_birth_v1()?;
+        db.activate_native_wal_backing_capture_v1()?;
         format::enable_range_image_install(root)?;
         if enforce {
             format::enable_current_image_proposal(root)?;

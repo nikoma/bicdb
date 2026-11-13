@@ -265,6 +265,7 @@ impl BicDb {
                     renamed_from: None,
                     local_namespace_id: self.fresh_local_namespace_identity(),
                     native_backing_birth_id: self.fresh_native_collection_birth(),
+                    native_backing_origin_root: self.fresh_native_backing_origin_root(),
                 };
                 self.collections.insert(
                     write.collection.clone(),
@@ -1687,6 +1688,7 @@ impl BicDb {
             self.native_collection_birth_active,
             self.local_namespace_identity_active,
         )?;
+        native_origin::validate_catalog(&collections, self.native_origin.as_ref())?;
         collections.sort_by(|left, right| left.name.cmp(&right.name));
         let catalog = CollectionCatalog { collections };
         let bytes = serde_json::to_vec_pretty(&catalog)?;

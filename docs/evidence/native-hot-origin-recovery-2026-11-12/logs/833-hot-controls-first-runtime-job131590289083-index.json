@@ -1,0 +1,165 @@
+{
+  "source_revision": "8334a99e666970263c2d5a4192b5c9ce61d26677",
+  "requested_source": "8334a99e666970263c2d5a4192b5c9ce61d26677",
+  "authoritative_source_verified": true,
+  "run_id": 43335418131,
+  "job_id": 131590289083,
+  "job_name": "Focused Core library (native_hot_recovery_)",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T00:19:54.656113+00:00",
+  "raw_bytes": 2806444,
+  "raw_sha256": "9103f09793c123c045b35d7e5e8f912081ba14faed45ff0977ae371935926536",
+  "compressed_file": "833-hot-controls-first-runtime-job131590289083.log.gz",
+  "compressed_sha256": "d946791b8709e8be3569c0db4b0eaeb446423a58ca3b09b2aa2e47f758a957b9",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-13T00:18:46.9168983Z test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 965 filtered out; finished in 5.23s"
+  ],
+  "failure_context": [
+    {
+      "line": 20411,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T00:18:46.9164230Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T00:18:46.9164463Z",
+        "2026-11-13T00:18:46.9165421Z thread 'distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_original_writer_replacement_refuses_without_reserving_or_clearing' (7413) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/hot_recovery_tests.rs:307:5:",
+        "2026-11-13T00:18:46.9166546Z assertion `left == right` failed",
+        "2026-11-13T00:18:46.9166768Z   left: Null",
+        "2026-11-13T00:18:46.9166941Z  right: false",
+        "2026-11-13T00:18:46.9167226Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "2026-11-13T00:18:46.9167493Z",
+        "2026-11-13T00:18:46.9167496Z",
+        "2026-11-13T00:18:46.9167570Z failures:",
+        "2026-11-13T00:18:46.9168164Z     distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_original_writer_replacement_refuses_without_reserving_or_clearing",
+        "2026-11-13T00:18:46.9168746Z",
+        "2026-11-13T00:18:46.9168983Z test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 965 filtered out; finished in 5.23s",
+        "2026-11-13T00:18:46.9169399Z",
+        "2026-11-13T00:18:46.9169873Z error: test failed, to rerun pass `-p bicdb-core --lib`",
+        "2026-11-13T00:18:46.9180909Z ##[error]Process completed with exit code 101."
+      ]
+    }
+  ],
+  "test_observations": [
+    {
+      "line": 18702,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_original_writer_replacement_refuses_without_reserving_or_clearing",
+      "result": "FAILED"
+    },
+    {
+      "line": 18703,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_finite_open_never_starts_process_worker",
+      "result": "ok"
+    },
+    {
+      "line": 18704,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_cancel_waiter_preserves_actual_other_owner",
+      "result": "ok"
+    },
+    {
+      "line": 18705,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_activation_rpc_refuses_unprepared_and_wrong_actual_leader",
+      "result": "ok"
+    },
+    {
+      "line": 20168,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_queued_read_handoff_and_unrelated_range_progress",
+      "result": "ok"
+    },
+    {
+      "line": 20205,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation",
+      "result": "ok"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T00:14:16Z",
+      "completed_at": "2026-11-13T00:14:17Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T00:14:17Z",
+      "completed_at": "2026-11-13T00:14:20Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T00:14:20Z",
+      "completed_at": "2026-11-13T00:14:28Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T00:14:28Z",
+      "completed_at": "2026-11-13T00:14:36Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T00:14:36Z",
+      "completed_at": "2026-11-13T00:17:37Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T00:17:37Z",
+      "completed_at": "2026-11-13T00:18:41Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 7,
+      "started_at": "2026-11-13T00:18:41Z",
+      "completed_at": "2026-11-13T00:18:46Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T00:18:46Z",
+      "completed_at": "2026-11-13T00:18:47Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-13T00:18:47Z",
+      "completed_at": "2026-11-13T00:18:47Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T00:18:47Z",
+      "completed_at": "2026-11-13T00:18:48Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T00:18:48Z",
+      "completed_at": "2026-11-13T00:18:48Z"
+    }
+  ]
+}

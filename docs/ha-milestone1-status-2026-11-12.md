@@ -46,6 +46,39 @@ qualification remains **FAILED**. Historical sections retain their own
 revision-scoped outcomes; their old pending/open labels do not override this
 current verdict or the later executed results.
 
+## Latest HOT original-origin component execution: eight distinct tests pass
+
+The unmerged native candidate has its first executed **autonomous hot original-
+origin committed-tail repair** prerequisite. Exact source
+`8334a99e666970263c2d5a4192b5c9ce61d26677`,
+[run 43335421681](https://github.com/nikoma/bicdb/actions/runs/43335421681), passes
+the two unchanged fault/arm controls (2/0, 969 filtered, 14.38s). The genuine
+first origin transaction is Unknown without a sequence after cleanup/normal
+handler exit; actual peers have materialized CQ2. Before any explicit manual
+maintenance tick, the process-owned controller restores exact old/committed
+Strong values, a new actual ACK and its exact Strong value. The first health
+receipt is 1.524s **within its phase window**, not fault RTO or suite duration.
+
+Exact `60c47ae29d84371f6815cdedf1fb0b8ffa866d75`,
+[run 43336846793](https://github.com/nikoma/bicdb/actions/runs/43336846793), passes
+all six controls (6/0, 965 filtered, 6.74s). Production bytes match 8334; only an
+ended-registration diagnostic assertion in the control file changes. Both
+sources' all-target and isolated-consumer checks pass. The earlier a96 compile
+failure and 8334 control cohort **5 passed/1 failed**, with its later failed-case
+assertions unexecuted, remain preserved. These are eight distinct tests across
+14 executions, **13 passed plus one preserved failure**, not 14 distinct tests.
+
+This is **three actual NativeHosts/RF3/TLS in one Core process**, all recipients
+reachable. It does not close the four failing StrongR2 prerequisites below,
+genuine fifth-node DATA image/joint/controller integration, public-process
+repair acceptance, cold/higher-domain or one-peer-loss recovery, sustained
+capacity, physical RPO/RTO, or the overall production gate. No implementation
+main merge, release binary or deployment follows from this evidence. Original
+Azure FAILED status is unchanged. The raw generic Core Unknown advice to reopen
+is an operating-guidance gap, not qualified native cold recovery.
+[Complete source-separated receipt, full attempt journal, prior failures and
+portable verifier](evidence/native-hot-origin-recovery-2026-11-12/README.md).
+
 ## Read-safety foundation delivered: 1.0.489-beta
 
 [PR #157](https://github.com/nikoma/bicdb/pull/157) merged on November 12 at
@@ -75,7 +108,7 @@ The original Azure qualification remains **FAILED**, and production admission
 remains unchanged. The following checkpoints retain their original revisions
 and pre-merge status; they are not newer claims that read489 is still unmerged.
 
-## Latest executed component result: ACK4/Strong and historical retry pass
+## Earlier executed component result: ACK4/Strong and historical retry pass
 
 Exact unmerged candidate `eedf23d58e236cf62d61366349ad4de3bd52373b` passes
 three distinct component tests. [Run 43319425823](https://github.com/nikoma/bicdb/actions/runs/43319425823),

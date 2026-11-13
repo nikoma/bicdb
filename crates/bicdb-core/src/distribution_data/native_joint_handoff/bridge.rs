@@ -35,7 +35,7 @@ impl NativeJointServingLease {
             Self::Image { frozen, .. } => frozen.try_as_frozen(),
         }
     }
-    fn image(&self) -> Option<&NativeImageCatalogueFinalization> {
+    pub(crate) fn image(&self) -> Option<&NativeImageCatalogueFinalization> {
         match self {
             Self::Survivor(_) => None,
             Self::Image { image, .. } => Some(image),
@@ -49,17 +49,17 @@ pub(crate) struct ActualServiceNativeJointPreparedEvidence {
     // Captured BEFORE the native preparation producer. A later fresh MQ may
     // revalidate this object, never replace its original writer registration.
     writer: Arc<crate::db::NativeWriterHostState>,
+    writer_domain: crate::db::NativeJointWriterDomain,
     lease: NativeJointServingLease,
     pin: parking_lot::Mutex<Option<SourceCaptureReadPin>>,
 }
 impl ActualServiceNativeJointPreparedEvidence {
     pub(crate) fn require_original_writer_lifetime(&self) -> Result<()> {
-        self.writer.require_store(
+        self.writer_domain.require_lifetime(
             self.catalogue.database_root(),
             self.catalogue.store_open_id(),
-        )?;
-        self.writer
-            .require_range(self.committed.data().activation_range())
+            self.committed.data().activation_range(),
+        )
     }
     pub(crate) fn require_original_writer(
         &self,
@@ -73,8 +73,11 @@ impl ActualServiceNativeJointPreparedEvidence {
                 "joint preparation changed its original actual writer registration",
             ));
         }
-        self.writer
-            .require_database(database, self.committed.data().activation_range())?;
+        self.writer_domain.require_current(
+            database,
+            store,
+            self.committed.data().activation_range(),
+        )?;
         self.require_original_writer_lifetime()?;
         Ok(self.writer.clone())
     }
@@ -102,8 +105,9 @@ impl ActualServiceNativeJointPreparedEvidence {
         );
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
-        service.require_native_writer_host_for_range(
+        self.writer_domain.require_current(
             &database,
+            &service.range_writes,
             self.committed.data().activation_range(),
         )?;
         if self.prepared.local_node_id() != &service.node_id {
@@ -148,7 +152,11 @@ impl ActualServiceNativeJointPreparedEvidence {
     ) -> Result<Arc<crate::db::NativeWriterHostState>> {
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
-        service.require_native_writer_host_for_range(&database, fresh.data().activation_range())?;
+        self.writer_domain.require_current(
+            &database,
+            &service.range_writes,
+            fresh.data().activation_range(),
+        )?;
         self.require_original_writer(&database, &service.range_writes)?;
         self.committed.require_durable_fact_current(&database)?;
         fresh.require_current(&database)?;
@@ -206,7 +214,11 @@ impl ActualServiceNativeJointPreparedEvidence {
         );
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
-        service.require_native_writer_host_for_range(&database, fresh.data().activation_range())?;
+        self.writer_domain.require_current(
+            &database,
+            &service.range_writes,
+            fresh.data().activation_range(),
+        )?;
         self.require_original_writer(&database, &service.range_writes)?;
         #[cfg(test)]
         let mut native_trace =
@@ -421,7 +433,11 @@ impl ClusterDataNodeService {
             .current_mut()
             .refsync_native_joint_catalogue_activation(&database, admission)?;
         self.require_native_catalog_database(&database)?;
-        self.require_native_writer_host_for_range(&database, admission.data().activation_range())?;
+        actual.writer_domain.require_current(
+            &database,
+            &self.range_writes,
+            admission.data().activation_range(),
+        )?;
         if actual.prepared.local_node_id() != &self.node_id {
             return Err(data_error(
                 "joint catalogue activation targets another actual service",
@@ -472,7 +488,7 @@ impl ClusterDataNodeService {
     ) -> Result<()> {
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
-        self.require_native_writer_host_for_range(&database, receipt.range())?;
+        receipt.require_original_writer_current(&database, &self.range_writes)?;
         receipt.require_current(&database, &self.range_writes)
     }
     pub(crate) fn arm_local_native_joint_open(
@@ -481,7 +497,7 @@ impl ClusterDataNodeService {
     ) -> Result<()> {
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
-        self.require_native_writer_host_for_range(&database, receipt.range())?;
+        receipt.require_original_writer_current(&database, &self.range_writes)?;
         self.range_writes
             .arm_native_joint_activated_open(&database, receipt)
     }
@@ -516,7 +532,11 @@ impl ClusterDataNodeService {
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         actual.require_original_writer(&database, &self.range_writes)?;
         self.require_native_catalog_database(&database)?;
-        self.require_native_writer_host_for_range(&database, admission.data().activation_range())?;
+        actual.writer_domain.require_current(
+            &database,
+            &self.range_writes,
+            admission.data().activation_range(),
+        )?;
         if actual.prepared.local_node_id() != &self.node_id {
             return Err(data_error(
                 "joint native bridge publishes on another actual service",
@@ -549,8 +569,9 @@ impl ClusterDataNodeService {
             let database = checked_database_read(&self.db, &self.storage_policy)?;
             self.require_native_catalog_database(&database)?;
             actual.require_original_writer(&database, &self.range_writes)?;
-            self.require_native_writer_host_for_range(
+            actual.writer_domain.require_current(
                 &database,
+                &self.range_writes,
                 admission.data().activation_range(),
             )?;
             return database.recover_scoped_native_joint_bridge(
@@ -577,7 +598,11 @@ impl ClusterDataNodeService {
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         actual.require_original_writer(&database, &self.range_writes)?;
-        self.require_native_writer_host_for_range(&database, admission.data().activation_range())?;
+        actual.writer_domain.require_current(
+            &database,
+            &self.range_writes,
+            admission.data().activation_range(),
+        )?;
         let result = database
             .read_existing_native_joint_serving_bridge(admission.committed(), &actual.prepared)?;
         parent.check()?;
@@ -638,6 +663,7 @@ impl ClusterDataNodeService {
             committed,
             prepared,
             catalogue,
+            writer_domain: crate::db::NativeJointWriterDomain::Installed(writer.clone()),
             writer,
             lease,
             pin: parking_lot::Mutex::new(Some(pin)),
@@ -645,5 +671,168 @@ impl ClusterDataNodeService {
         evidence.require_current(self)?;
         parent.check()?;
         Ok(evidence)
+    }
+}
+
+impl ActualServiceNativeJointPreparedEvidence {
+    pub(crate) fn writer_domain(&self) -> &crate::db::NativeJointWriterDomain {
+        &self.writer_domain
+    }
+    pub(crate) fn observe_fresh_committed(
+        &self,
+        service: &ClusterDataNodeService,
+        metadata: crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        range: RangeId,
+    ) -> Result<CommittedNativeJointDecisionObservation> {
+        service.observe_joint_decision_with_writer_domain(
+            &self.writer_domain,
+            metadata,
+            business,
+            range,
+        )
+    }
+}
+impl ClusterDataNodeService {
+    pub(crate) fn observe_joint_decision_with_writer_domain(
+        &self,
+        domain: &crate::db::NativeJointWriterDomain,
+        metadata: crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        range: RangeId,
+    ) -> Result<CommittedNativeJointDecisionObservation> {
+        match domain {
+            crate::db::NativeJointWriterDomain::Installed(_) => {
+                self.observe_committed_native_joint_decision(metadata, business, range)
+            }
+            #[cfg(feature = "tls-replication")]
+            crate::db::NativeJointWriterDomain::Closed(closed) => {
+                metadata.require_live_request(business)?;
+                if range != closed.range().id {
+                    return Err(data_error("CLOSED joint observer selected another range"));
+                }
+                let database = checked_database_read(&self.db, &self.storage_policy)?;
+                self.require_native_catalog_database(&database)?;
+                domain.require_current(&database, &self.range_writes, closed.range())?;
+                let local = metadata
+                    .committed_topology(business)?
+                    .nodes
+                    .get(&self.node_id)
+                    .ok_or_else(|| data_error("CLOSED joint actual local member missing"))?;
+                let native = database.native_recovery_admission(
+                    closed.data().cluster_id(),
+                    closed.data().bootstrap_id(),
+                    &self.node_id,
+                    local.incarnation,
+                )?;
+                let actual = database.read_native_joint_decision(
+                    &native,
+                    range,
+                    closed.data().checksum_sha256(),
+                )?;
+                if actual.data() != closed.data() {
+                    return Err(data_error(
+                        "CLOSED joint observer replaced actual protected decision",
+                    ));
+                }
+                let evidence = super::ActualServiceNativeJointCommittedEvidence {
+                    database_incarnation: native.database_incarnation().into(),
+                    native: actual,
+                    metadata,
+                    business,
+                };
+                let result =
+                    CommittedNativeJointDecisionObservation::from_actual_service(evidence)?;
+                result.require_current(&database)?;
+                domain.require_current(&database, &self.range_writes, closed.range())?;
+                Ok(result)
+            }
+        }
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn prepare_local_joint_serving_with_closed_writer(
+        &self,
+        closed: Arc<crate::db::NativeClosedWriterDomain>,
+        committed: CommittedNativeJointDecisionObservation,
+        lease: NativeJointServingLease,
+        parent: &CancellationToken,
+    ) -> Result<ActualServiceNativeJointPreparedEvidence> {
+        parent.check()?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
+        self.require_native_catalog_database(&database)?;
+        let domain = crate::db::NativeJointWriterDomain::Closed(closed);
+        domain.require_current(
+            &database,
+            &self.range_writes,
+            committed.data().activation_range(),
+        )?;
+        committed.require_current(&database)?;
+        if matches!(&lease, NativeJointServingLease::Survivor(_))
+            && lease.try_frozen()?.owner() != committed.data().promise().session_id
+        {
+            return Err(data_error(
+                "CLOSED writer joint preparation changed actual permanent OLD owner",
+            ));
+        }
+        let writer = domain.actual_writer().clone();
+        if committed.native_receipt().local_node_id() != &self.node_id {
+            return Err(data_error(
+                "CLOSED writer joint preparation changed actual node",
+            ));
+        }
+        let catalogue = self.range_writes.observe_native_joint_bridge_catalogue(
+            &database,
+            &committed,
+            lease.image(),
+            lease.try_frozen()?,
+        )?;
+        domain.require_current(
+            &database,
+            &self.range_writes,
+            committed.data().activation_range(),
+        )?;
+        let prepared = database.prepare_native_joint_serving(
+            &committed,
+            &self.range_writes,
+            &catalogue,
+            lease.image(),
+            lease.try_frozen()?,
+            parent,
+        )?;
+        let pin = database
+            .range_mutation_gate()
+            .try_source_capture_read_pin(committed.data().old_range().id, lease.try_frozen()?)?;
+        drop(database);
+        let evidence = ActualServiceNativeJointPreparedEvidence {
+            committed,
+            prepared,
+            catalogue,
+            writer,
+            writer_domain: domain,
+            lease,
+            pin: parking_lot::Mutex::new(Some(pin)),
+        };
+        evidence.require_current(self)?;
+        parent.check()?;
+        Ok(evidence)
+    }
+    pub(crate) fn require_joint_bridge_with_writer_domain(
+        &self,
+        receipt: &crate::db::NativeJointServingBridgeReceipt,
+        domain: &crate::db::NativeJointWriterDomain,
+    ) -> Result<()> {
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
+        self.require_native_catalog_database(&database)?;
+        domain.require_current(
+            &database,
+            &self.range_writes,
+            receipt.data().activation_range(),
+        )?;
+        if receipt.local_node_id() != &self.node_id {
+            return Err(data_error(
+                "joint bridge writer domain changed actual local node",
+            ));
+        }
+        receipt.require_current(&database)
     }
 }

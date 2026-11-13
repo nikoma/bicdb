@@ -156,7 +156,10 @@ impl NativeJointServingPublicationRound {
                 .try_lock()
                 .ok_or_else(|| invalid("publication finish service busy"))?;
             phase.require_member_with_service(node, &service)?;
-            service.require_actual_native_joint_bridge(receipt)?;
+            service.require_joint_bridge_with_writer_domain(
+                receipt,
+                self.prepared.observations[node].actual.writer_domain(),
+            )?;
         }
         phase.require_live()?;
         Ok(NativeJointPublishedServingQuorum {
@@ -229,7 +232,10 @@ impl NativeJointPublishedServingQuorum {
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("native bridge majority service busy"))?;
-            service.require_actual_native_joint_bridge(receipt)?;
+            service.require_joint_bridge_with_writer_domain(
+                receipt,
+                self.prepared.observations[node].actual.writer_domain(),
+            )?;
         }
         Ok(())
     }
@@ -372,6 +378,18 @@ impl NativeJointOpenAdmission {
     pub(crate) fn cancellation(&self) -> &crate::CancellationToken {
         &self.cancellation
     }
+    pub(crate) fn original_writer_domain_for_activation(
+        &self,
+        database: &crate::BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<crate::db::NativeJointWriterDomain> {
+        self.require_live()?;
+        self.local.actual.require_original_writer(database, store)?;
+        let domain = self.local.actual.writer_domain().clone();
+        domain.require_current(database, store, self.data().activation_range())?;
+        self.require_live()?;
+        Ok(domain)
+    }
     pub(crate) fn original_writer_for_activation(
         &self,
         database: &crate::BicDb,
@@ -421,7 +439,12 @@ impl NativeJointOpenAdmission {
                 if let Some(phase) = &self.open_phase {
                     phase.require_member_with_service(node, &service)?;
                 } else {
-                    service.require_actual_native_joint_bridge(receipt)?;
+                    service.require_joint_bridge_with_writer_domain(
+                        receipt,
+                        self.quorum.prepared.observations[node]
+                            .actual
+                            .writer_domain(),
+                    )?;
                 }
             }
         }

@@ -140,6 +140,22 @@ impl NativeJointDecisionReceipt {
     }
 }
 impl BicDb {
+    /// Actual protected CURRENT read, not a checksum/DTO authority constructor.
+    pub(in crate::db::range_image_native) fn read_current_native_joint_writer_decision(
+        &self,
+        native: &NativeRecoveryAdmission,
+        range: RangeId,
+    ) -> Result<NativeJointDecisionReceipt> {
+        native.require_current(self)?;
+        let actual: NativeJointDecisionRecord = self
+            .read_native_range_image_record(&key(range))?
+            .ok_or_else(|| {
+            invalid("writer DATA transition lacks actual protected joint decision")
+        })?;
+        actual.validate()?;
+        self.read_native_joint_decision(native, range, actual.decision.checksum_sha256())
+    }
+
     pub(crate) fn persist_native_joint_decision_from_old(
         &self,
         admission: &NativeJointDecisionPublicationAdmission,

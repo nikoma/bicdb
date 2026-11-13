@@ -121,6 +121,8 @@ pub(crate) use range_image_native::{
     NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
     NativeJointServingBridgeReceipt, NativeJointServingPreparation, NativeReadyObserverReadScope,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::{NativeClosedWriterDomain, NativeWriterDataDomainTransition};
 #[cfg(test)]
 pub(crate) use range_image_native::{
     NativeOriginAppSpan, NativeOriginFaultArm, NativeOriginFaultProbe,
@@ -35481,3 +35483,5 @@ mod analyze_sampling_tests {
 #[cfg(test)]
 #[path = "db/distribution_event_retry_tests.rs"]
 mod distribution_event_retry_tests;
+
+pub(crate) use range_image_native::NativeJointWriterDomain;

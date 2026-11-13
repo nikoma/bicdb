@@ -225,6 +225,7 @@ impl NativeAssignedWriterInstallAttempt {
                     coordinator: Arc::downgrade(&authority),
                     registry_extension: parking_lot::RwLock::new(None),
                     registry_publication_pending: std::sync::atomic::AtomicBool::new(false),
+                    data_domains: parking_lot::RwLock::new(Default::default()),
                 });
                 self.publication = Publication::NativeReadBack {
                     record: record.clone(),

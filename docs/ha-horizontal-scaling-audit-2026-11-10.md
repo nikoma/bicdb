@@ -11,6 +11,48 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
+## Recovery continuation evidence — 2026-11-13 UTC
+
+The [source-pinned continuation packet](evidence/native-recovery-continuation-2026-11-13/README.md)
+retains complete CI logs, fault journals, exact failures and narrow passing
+regressions. Public main inspected was **1.0.495-beta**, `462e0c1d6485`;
+the measured native candidates are separately identified unmerged 494 source.
+One candidate passes twelve origin-fault tests and eleven other recovery tests.
+A distinct continuation candidate passes its new cancellation/custody regression
+but fails six of thirteen tests overall. They are not one green release.
+A subsequent unfinished-replica cohort fails nine of fourteen tests despite
+observed progress repairing prior work and publishing a new recovery anchor.
+Two other component candidates fail compilation and supply no runtime results.
+Later actual-source/empty-target prerequisites pass ten focused tests, and a
+separate passive repeated-failure diagnostic passes; neither installs target
+rows or qualifies the failed overlapping workload. Full fixture originals remain
+private where they include database/signing material; public projections retain
+logical ledgers and omission hashes with explicit capture limits.
+No new physical experiment, stable five-node capacity gain, general SQL contract
+or production admission is established. The original Azure failure remains failed.
+
+## Current PostgreSQL integration check — 2026-11-13 UTC
+
+Read-only inspection at **1.0.495-beta**, `462e0c1d6485`, still finds ordinary
+PGwire execution entering local `BicDb` / `SqlSession` paths in
+`crates/bicdb-pgwire/src/lib.rs`, rather than the explicit `plan_cluster_*`
+helpers in `server_cluster.rs`. Public repository implementations of the generic
+point connector, scatter executor and `DistributedCommitProtocol` remain test
+implementations; no concrete SQL gateway or durable coordinator/resolver attachment
+is established. Ordinary mutation admission in
+`crates/bicdb-core/src/distribution_range_consensus.rs::resolve_range` still rejects
+multiple ranges and a nonlocal leader. Local joins and repaired table-name
+resolution do not change that contract.
+
+The [minimum execution contract](design/distributed-sql-minimum-execution-contract.md)
+remains design-only. Integration must happen before local SQL/DB guards, preserve
+simple and extended protocol/session state, and provide an actual shared read
+view plus durable participant enrollment, intents, decisions and independent
+recovery. In particular, the generic helper's failed Prepare recipient may have
+prepared before losing its reply; aborting only acknowledged earlier participants
+does not resolve that uncertainty. Neither table-name fixes nor this evidence
+update implements transparent distributed business transactions.
+
 ## Metadata-consensus safety follow-up — 2026-11-12 UTC
 
 A [deterministic metadata Append reproduction](design/metadata-append-frontier-safety-2026-11-12.md)

@@ -1,0 +1,140 @@
+{
+  "source_revision": "1c5addeeffb95cb9651fc4bd41188ab7e4ae1835",
+  "requested_source": "1c5addeeffb95cb9651fc4bd41188ab7e4ae1835",
+  "authoritative_source_verified": true,
+  "run_id": 43442888614,
+  "job_id": 131944862173,
+  "job_name": "Focused Core library (native_hot_peer_repeat_unknown_canceled_successor_acquisition_preserves_prior_custody)",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T14:47:22.664129+00:00",
+  "raw_bytes": 4738406,
+  "raw_sha256": "8a81824d690886efc9abbe32acab93cbc16a76e033dcb7d4d341976dcb0e1ccf",
+  "compressed_file": "job.log.gz",
+  "compressed_sha256": "8af82a957aadbbf8c44fe9a77b028072b129931031b1251fd0631f9981a9fdb5",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-13T14:34:40.2863590Z test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1017 filtered out; finished in 37.38s"
+  ],
+  "failure_context": [
+    {
+      "line": 26390,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T14:34:40.2860450Z NATIVE_HOT_ONE_PEER_LOSS_EVIDENCE /home/runner/work/_temp/native-core-evidence/fault-state/native-hot-one-peer-loss-01a1d554-726e-78f3-b594-78e38f980a12 {\"cleanup_errors\":[],\"kind\":\"test_terminal_after_owned_stop_attempts\",\"no_direct_fixture_recovery_or_reopen\":true,\"no_manual_maintenance_fallback\":true,\"original_root_retained_path_only\":\"/tmp/.tmpKyGGa1\",\"portable_native_db_custody\":false,\"primary_error\":\"cluster error: real canceled successor acquisition lost prior session custody\",\"stage\":\"required_second_unknown5_same_original_owners_then_ack6_all_replicas\"} journal_error=None report_error=None",
+        "2026-11-13T14:34:40.2860461Z",
+        "2026-11-13T14:34:40.2861763Z thread 'distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_repeat_unknown_canceled_successor_acquisition_preserves_prior_custody' (7671) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/origin_pre_wal_fault_tests/one_peer_loss_tests.rs:912:27:",
+        "2026-11-13T14:34:40.2862348Z actual one-peer-loss witness failed at required_second_unknown5_same_original_owners_then_ack6_all_replicas: cluster error: real canceled successor acquisition lost prior session custody",
+        "2026-11-13T14:34:40.2862552Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "2026-11-13T14:34:40.2862556Z",
+        "2026-11-13T14:34:40.2862560Z",
+        "2026-11-13T14:34:40.2862640Z failures:",
+        "2026-11-13T14:34:40.2863308Z     distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_repeat_unknown_canceled_successor_acquisition_preserves_prior_custody",
+        "2026-11-13T14:34:40.2863315Z",
+        "2026-11-13T14:34:40.2863590Z test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1017 filtered out; finished in 37.38s",
+        "2026-11-13T14:34:40.2863594Z",
+        "2026-11-13T14:34:40.2864018Z error: test failed, to rerun pass `-p bicdb-core --lib`",
+        "2026-11-13T14:34:40.2873194Z ##[error]Process completed with exit code 101.",
+        "2026-11-13T14:34:40.2940022Z ##[group]Run actions/upload-artifact@v4",
+        "2026-11-13T14:34:40.2940121Z with:"
+      ]
+    }
+  ],
+  "test_observations": [
+    {
+      "line": 20447,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_repeat_unknown_canceled_successor_acquisition_preserves_prior_custody",
+      "result": "FAILED"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T14:27:45Z",
+      "completed_at": "2026-11-13T14:27:46Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T14:27:46Z",
+      "completed_at": "2026-11-13T14:27:52Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T14:27:52Z",
+      "completed_at": "2026-11-13T14:28:01Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T14:28:01Z",
+      "completed_at": "2026-11-13T14:28:10Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T14:28:10Z",
+      "completed_at": "2026-11-13T14:32:21Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T14:32:21Z",
+      "completed_at": "2026-11-13T14:34:01Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 7,
+      "started_at": "2026-11-13T14:34:01Z",
+      "completed_at": "2026-11-13T14:34:40Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T14:34:40Z",
+      "completed_at": "2026-11-13T14:34:41Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-13T14:34:41Z",
+      "completed_at": "2026-11-13T14:34:41Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T14:34:41Z",
+      "completed_at": "2026-11-13T14:34:41Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T14:34:41Z",
+      "completed_at": "2026-11-13T14:34:41Z"
+    }
+  ]
+}

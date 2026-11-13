@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "readiness_ms": [
+    2577,
+    2848,
+    2848
+  ],
+  "original_startup_limit_ms": 30000,
+  "first_start_index_hash": "7e93a030cf1a431431c4add3eaca640a249f2ba2f3ed3a703b0fc3a6e9474e2c",
+  "no_deferred_startup_index_creation": true,
+  "scope": "Nonfinancial actual MAX default-cost V2 transfer, restart and cold restore; accounting guard transition, other modes and oracle differential remain unqualified",
+  "native": {
+    "name": "bicdb",
+    "path": "/opt/walknorth-erp-modernization/private/native10498-beta-4705b888-inputs/artifacts/bicdb-1.0.498-beta-4705b888",
+    "sha256": "dfa5b45e64089e4b9376145d943dff12230e920eaec2a8c18c957ecaf55a54c2",
+    "bytes": 417443184
+  },
+  "records": 515,
+  "mainAccountUntouched": true,
+  "completeProduct": false
+}

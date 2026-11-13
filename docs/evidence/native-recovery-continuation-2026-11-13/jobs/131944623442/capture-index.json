@@ -1,0 +1,310 @@
+{
+  "source_revision": "0175a151117d35e5220de519e7476d0c96da6d57",
+  "requested_source": "0175a151117d35e5220de519e7476d0c96da6d57",
+  "authoritative_source_verified": true,
+  "run_id": 43442830345,
+  "job_id": 131944623442,
+  "job_name": "Focused Core library (origin_pre_wal_fault_tests)",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T14:47:09.521273+00:00",
+  "raw_bytes": 18318511,
+  "raw_sha256": "6c948d72e78564ed9e262311c71609282e43e00dc67a26f83015d5802412d73c",
+  "compressed_file": "job.log.gz",
+  "compressed_sha256": "1b7c8c865030dca6d5c23fe6bb884b87bf24afedcb858f00c07100c6ce767e74",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-13T14:34:49.0590614Z test result: FAILED. 7 passed; 6 failed; 0 ignored; 0 measured; 1005 filtered out; finished in 97.03s"
+  ],
+  "failure_context": [
+    {
+      "line": 61055,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T14:34:48.5739912Z NATIVE_HOT_ONE_PEER_LOSS_EVIDENCE /home/runner/work/_temp/native-core-evidence/fault-state/native-hot-one-peer-loss-01a1d553-a925-7df3-a2a3-2434fce83233 {\"cleanup_errors\":[],\"kind\":\"test_terminal_after_owned_stop_attempts\",\"no_direct_fixture_recovery_or_reopen\":true,\"no_manual_maintenance_fallback\":true,\"original_root_retained_path_only\":\"/tmp/.tmphyRUHC\",\"portable_native_db_custody\":false,\"primary_error\":\"cluster error: REQUIRED one-peer-unavailable autonomous committed-tail repair + next ACK/full Strong not achieved\",\"stage\":\"required_autonomous_health_gate_with_peer_unavailable\"} journal_error=None report_error=None",
+        "2026-11-13T14:34:48.5739923Z",
+        "2026-11-13T14:34:48.5740888Z thread 'distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_actual_CQ2_native1_before_fence_requires_automatic_R4_convergence' (7442) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/origin_pre_wal_fault_tests/one_peer_loss_tests.rs:912:27:",
+        "2026-11-13T14:34:48.5741389Z actual one-peer-loss witness failed at required_autonomous_health_gate_with_peer_unavailable: cluster error: REQUIRED one-peer-unavailable autonomous committed-tail repair + next ACK/full Strong not achieved",
+        "2026-11-13T14:34:48.5741548Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "2026-11-13T14:34:48.5741553Z",
+        "2026-11-13T14:34:48.5742040Z ---- distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_one_peer_loss_actual_rpc_requires_autonomous_tail_recovery stdout ----",
+        "2026-11-13T14:34:48.5742187Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.5742313Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.5742569Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.5742693Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.5742967Z bicdb native metadata supervisor: cluster error: native host bootstrap: native metadata tick store busy",
+        "2026-11-13T14:34:48.5743091Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.5743221Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.5743350Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.5743557Z bicdb native metadata supervisor: cluster error: native host bootstrap: native metadata tick store busy"
+      ]
+    },
+    {
+      "line": 62668,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T14:34:48.6771047Z NATIVE_HOT_ONE_PEER_LOSS_EVIDENCE /home/runner/work/_temp/native-core-evidence/fault-state/native-hot-one-peer-loss-01a1d553-a952-7940-9ee5-17bc31fabb6d {\"cleanup_errors\":[],\"kind\":\"test_terminal_after_owned_stop_attempts\",\"no_direct_fixture_recovery_or_reopen\":true,\"no_manual_maintenance_fallback\":true,\"original_root_retained_path_only\":\"/tmp/.tmpJOCyT0\",\"portable_native_db_custody\":false,\"primary_error\":\"cluster error: REQUIRED one-peer-unavailable autonomous committed-tail repair + next ACK/full Strong not achieved\",\"stage\":\"required_autonomous_health_gate_with_peer_unavailable\"} journal_error=None report_error=None",
+        "2026-11-13T14:34:48.6771108Z",
+        "2026-11-13T14:34:48.6772097Z thread 'distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_one_peer_loss_actual_rpc_requires_autonomous_tail_recovery' (7441) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/origin_pre_wal_fault_tests/one_peer_loss_tests.rs:912:27:",
+        "2026-11-13T14:34:48.6772609Z actual one-peer-loss witness failed at required_autonomous_health_gate_with_peer_unavailable: cluster error: REQUIRED one-peer-unavailable autonomous committed-tail repair + next ACK/full Strong not achieved",
+        "2026-11-13T14:34:48.6772615Z",
+        "2026-11-13T14:34:48.6773154Z ---- distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_prepare_reply_requires_automatic_R4_convergence stdout ----",
+        "2026-11-13T14:34:48.6773295Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.6773434Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.6773569Z bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-13T14:34:48.6773695Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.6773821Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.6774050Z bicdb native metadata supervisor: cluster error: native host bootstrap: native metadata tick store busy",
+        "2026-11-13T14:34:48.6774275Z bicdb native metadata supervisor: cluster error: native host bootstrap: native metadata tick store busy",
+        "2026-11-13T14:34:48.6774494Z bicdb native metadata supervisor: cluster error: native host bootstrap: native metadata tick store busy",
+        "2026-11-13T14:34:48.6774633Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.6774765Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)"
+      ]
+    },
+    {
+      "line": 62693,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T14:34:48.6777936Z NATIVE_HOT_ONE_PEER_LOSS_EVIDENCE /home/runner/work/_temp/native-core-evidence/fault-state/native-hot-one-peer-loss-01a1d554-212f-76a0-9a49-7110ce38702b {\"cleanup_errors\":[],\"kind\":\"test_terminal_after_owned_stop_attempts\",\"no_direct_fixture_recovery_or_reopen\":true,\"no_manual_maintenance_fallback\":true,\"original_root_retained_path_only\":\"/tmp/.tmpIuG6m5\",\"portable_native_db_custody\":false,\"primary_error\":\"cluster error: no event cluster member is reachable\",\"stage\":\"actual_old_ack_and_strong_with_controller_held\"} journal_error=None report_error=None",
+        "2026-11-13T14:34:48.6777942Z",
+        "2026-11-13T14:34:48.6779052Z thread 'distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_prepare_reply_requires_automatic_R4_convergence' (12690) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/origin_pre_wal_fault_tests/one_peer_loss_tests.rs:912:27:",
+        "2026-11-13T14:34:48.6779427Z actual one-peer-loss witness failed at actual_old_ack_and_strong_with_controller_held: cluster error: no event cluster member is reachable",
+        "2026-11-13T14:34:48.6779431Z",
+        "2026-11-13T14:34:48.6779999Z ---- distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_fence_reply_requires_automatic_R4_convergence stdout ----",
+        "2026-11-13T14:34:48.6780130Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.6780260Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.6780392Z bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-13T14:34:48.6780516Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.6780646Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.6780771Z bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-13T14:34:48.6780998Z bicdb native metadata supervisor: cluster error: native host bootstrap: native metadata tick store busy",
+        "2026-11-13T14:34:48.6781114Z bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-13T14:34:48.6781280Z bicdb cluster data RPC error: io error: Connection reset by peer (os error 104)",
+        "2026-11-13T14:34:48.6781497Z bicdb native metadata supervisor: cluster error: native host bootstrap: native metadata tick store busy"
+      ]
+    },
+    {
+      "line": 64369,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T14:34:48.7835156Z NATIVE_HOT_ONE_PEER_LOSS_EVIDENCE /home/runner/work/_temp/native-core-evidence/fault-state/native-hot-one-peer-loss-01a1d554-1734-7192-9a8c-219629a5cb77 {\"cleanup_errors\":[],\"kind\":\"test_terminal_after_owned_stop_attempts\",\"no_direct_fixture_recovery_or_reopen\":true,\"no_manual_maintenance_fallback\":true,\"original_root_retained_path_only\":\"/tmp/.tmpVgzbvu\",\"portable_native_db_custody\":false,\"primary_error\":\"cluster error: REQUIRED one-peer-unavailable autonomous committed-tail repair + next ACK/full Strong not achieved\",\"stage\":\"required_autonomous_health_gate_with_peer_unavailable\"} journal_error=None report_error=None",
+        "2026-11-13T14:34:48.7835167Z",
+        "2026-11-13T14:34:48.7836145Z thread 'distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_fence_reply_requires_automatic_R4_convergence' (12516) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/origin_pre_wal_fault_tests/one_peer_loss_tests.rs:912:27:",
+        "2026-11-13T14:34:48.7836651Z actual one-peer-loss witness failed at required_autonomous_health_gate_with_peer_unavailable: cluster error: REQUIRED one-peer-unavailable autonomous committed-tail repair + next ACK/full Strong not achieved",
+        "2026-11-13T14:34:48.7836697Z",
+        "2026-11-13T14:34:48.7837223Z ---- distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_blackhole_actual_rpc_requires_autonomous_tail_recovery stdout ----",
+        "2026-11-13T14:34:48.7837372Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.7837498Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.7837626Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.7837755Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.7837877Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.7838112Z bicdb native metadata supervisor: cluster error: native host bootstrap: native metadata tick store busy",
+        "2026-11-13T14:34:48.7838454Z bicdb native metadata supervisor: cluster error: native host bootstrap: native metadata tick store busy",
+        "2026-11-13T14:34:48.7838590Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.7838728Z bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-13T14:34:48.7838861Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)"
+      ]
+    },
+    {
+      "line": 65880,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T14:34:48.8756883Z NATIVE_HOT_ONE_PEER_LOSS_EVIDENCE /home/runner/work/_temp/native-core-evidence/fault-state/native-hot-one-peer-loss-01a1d554-0e0f-7aa1-bc9c-a5371e1bf605 {\"cleanup_errors\":[],\"kind\":\"test_terminal_after_owned_stop_attempts\",\"no_direct_fixture_recovery_or_reopen\":true,\"no_manual_maintenance_fallback\":true,\"original_root_retained_path_only\":\"/tmp/.tmpDI64Zr\",\"portable_native_db_custody\":false,\"primary_error\":\"cluster error: REQUIRED one-peer-unavailable autonomous committed-tail repair + next ACK/full Strong not achieved\",\"stage\":\"required_autonomous_health_gate_with_peer_unavailable\"} journal_error=None report_error=None",
+        "2026-11-13T14:34:48.8756901Z",
+        "2026-11-13T14:34:48.8757844Z thread 'distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_blackhole_actual_rpc_requires_autonomous_tail_recovery' (12054) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/origin_pre_wal_fault_tests/one_peer_loss_tests.rs:912:27:",
+        "2026-11-13T14:34:48.8758438Z actual one-peer-loss witness failed at required_autonomous_health_gate_with_peer_unavailable: cluster error: REQUIRED one-peer-unavailable autonomous committed-tail repair + next ACK/full Strong not achieved",
+        "2026-11-13T14:34:48.8758491Z",
+        "2026-11-13T14:34:48.8759053Z ---- distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_completion_reply_requires_fresh_recovery stdout ----",
+        "2026-11-13T14:34:48.8759194Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.8759330Z bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-13T14:34:48.8759450Z bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-13T14:34:48.8759585Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.8759747Z bicdb cluster data RPC error: io error: Connection reset by peer (os error 104)",
+        "2026-11-13T14:34:48.8759879Z bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-13T14:34:48.8760064Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.8760188Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-13T14:34:48.8760425Z bicdb native metadata supervisor: cluster error: native host bootstrap: native metadata tick store busy",
+        "2026-11-13T14:34:48.8760642Z bicdb native metadata supervisor: cluster error: native host bootstrap: native metadata tick store busy"
+      ]
+    },
+    {
+      "line": 68213,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T14:34:49.0585708Z NATIVE_HOT_ONE_PEER_LOSS_EVIDENCE /home/runner/work/_temp/native-core-evidence/fault-state/native-hot-one-peer-loss-01a1d554-10ca-7181-8cd1-2405d60c95e1 {\"cleanup_errors\":[],\"kind\":\"test_terminal_after_owned_stop_attempts\",\"no_direct_fixture_recovery_or_reopen\":true,\"no_manual_maintenance_fallback\":true,\"original_root_retained_path_only\":\"/tmp/.tmpL5nqs0\",\"portable_native_db_custody\":false,\"primary_error\":\"cluster error: REQUIRED one-peer-unavailable autonomous committed-tail repair + next ACK/full Strong not achieved\",\"stage\":\"required_autonomous_health_gate_with_peer_unavailable\"} journal_error=None report_error=None",
+        "2026-11-13T14:34:49.0585767Z",
+        "2026-11-13T14:34:49.0586736Z thread 'distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_completion_reply_requires_fresh_recovery' (12347) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/origin_pre_wal_fault_tests/one_peer_loss_tests.rs:912:27:",
+        "2026-11-13T14:34:49.0587238Z actual one-peer-loss witness failed at required_autonomous_health_gate_with_peer_unavailable: cluster error: REQUIRED one-peer-unavailable autonomous committed-tail repair + next ACK/full Strong not achieved",
+        "2026-11-13T14:34:49.0587283Z",
+        "2026-11-13T14:34:49.0587287Z",
+        "2026-11-13T14:34:49.0587357Z failures:",
+        "2026-11-13T14:34:49.0587814Z     distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_one_peer_loss_actual_rpc_requires_autonomous_tail_recovery",
+        "2026-11-13T14:34:49.0588461Z     distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_actual_CQ2_native1_before_fence_requires_automatic_R4_convergence",
+        "2026-11-13T14:34:49.0588911Z     distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_blackhole_actual_rpc_requires_autonomous_tail_recovery",
+        "2026-11-13T14:34:49.0589365Z     distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_completion_reply_requires_fresh_recovery",
+        "2026-11-13T14:34:49.0589896Z     distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_fence_reply_requires_automatic_R4_convergence",
+        "2026-11-13T14:34:49.0590389Z     distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_prepare_reply_requires_automatic_R4_convergence",
+        "2026-11-13T14:34:49.0590395Z",
+        "2026-11-13T14:34:49.0590614Z test result: FAILED. 7 passed; 6 failed; 0 ignored; 0 measured; 1005 filtered out; finished in 97.03s",
+        "2026-11-13T14:34:49.0590617Z"
+      ]
+    }
+  ],
+  "test_observations": [
+    {
+      "line": 16481,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_origin_fault_arm_drop_revokes_retained_probe_without_erasing_successor",
+      "result": "ok"
+    },
+    {
+      "line": 24200,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_actual_rpc_post_admission_fault_requires_autonomous_tail_recovery",
+      "result": "ok"
+    },
+    {
+      "line": 24883,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_actual_CQ2_native1_before_fence_requires_automatic_R4_convergence",
+      "result": "FAILED"
+    },
+    {
+      "line": 25305,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_one_peer_loss_actual_rpc_requires_autonomous_tail_recovery",
+      "result": "FAILED"
+    },
+    {
+      "line": 25830,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_actual_semantic_rejection_then_socket_loss_retains_veto",
+      "result": "ok"
+    },
+    {
+      "line": 28872,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_prepare_reply_requires_automatic_R4_convergence",
+      "result": "FAILED"
+    },
+    {
+      "line": 30435,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_fence_reply_requires_automatic_R4_convergence",
+      "result": "FAILED"
+    },
+    {
+      "line": 30738,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_blackhole_actual_rpc_requires_autonomous_tail_recovery",
+      "result": "FAILED"
+    },
+    {
+      "line": 30739,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_completion_reply_requires_fresh_recovery",
+      "result": "FAILED"
+    },
+    {
+      "line": 34377,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_origin_completion_reply_requires_fresh_reattest",
+      "result": "ok"
+    },
+    {
+      "line": 37601,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_socket_eof_actual_rpc_requires_autonomous_tail_recovery",
+      "result": "ok"
+    },
+    {
+      "line": 40309,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_second_actual_origin_unknown5_same_owners_requires_ack6_and_full_replica_convergence",
+      "result": "ok"
+    },
+    {
+      "line": 40344,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_repeat_unknown_canceled_successor_acquisition_preserves_prior_custody",
+      "result": "ok"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T14:27:18Z",
+      "completed_at": "2026-11-13T14:27:20Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T14:27:20Z",
+      "completed_at": "2026-11-13T14:27:23Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T14:27:23Z",
+      "completed_at": "2026-11-13T14:27:31Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T14:27:31Z",
+      "completed_at": "2026-11-13T14:27:39Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T14:27:39Z",
+      "completed_at": "2026-11-13T14:31:41Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T14:31:41Z",
+      "completed_at": "2026-11-13T14:33:09Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 7,
+      "started_at": "2026-11-13T14:33:09Z",
+      "completed_at": "2026-11-13T14:34:49Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T14:34:49Z",
+      "completed_at": "2026-11-13T14:34:50Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-13T14:34:50Z",
+      "completed_at": "2026-11-13T14:34:50Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T14:34:50Z",
+      "completed_at": "2026-11-13T14:34:50Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T14:34:50Z",
+      "completed_at": "2026-11-13T14:34:50Z"
+    }
+  ]
+}

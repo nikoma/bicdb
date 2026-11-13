@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "source": "4705b888f933936ec1d17c9393c0805903a5f9e5",
+  "binary_sha256": "dfa5b45e64089e4b9376145d943dff12230e920eaec2a8c18c957ecaf55a54c2",
+  "source_authored_ABI": true,
+  "Node_only": true,
+  "indexes_before_serve": true,
+  "no_startup_index_writes": true,
+  "failed_populated_upgrade_compensated": true,
+  "tenant_and_role_denials": true,
+  "SIGKILL_and_cold_restore": true,
+  "exact_Decimal_preserved": true,
+  "ERP_qualified": false,
+  "real_issuer": false,
+  "Hub": false
+}

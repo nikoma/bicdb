@@ -3438,6 +3438,19 @@ impl ApplicationRuntime {
                         &mut receipt,
                     )?;
                 }
+                // Materialize the SQL constraints during lifecycle work, not
+                // first PGwire startup. Use the same compensating receipt as
+                // the resource schema so failed activation leaves no indexes.
+                for definition in missing_embedded_table_constraint_indexes(&db, &contract.relation)
+                    .map_err(|error| {
+                        AppRuntimeError::InvalidPackage(format!(
+                            "resource `{}` cannot install its SQL constraint indexes: {error}",
+                            contract.name
+                        ))
+                    })?
+                {
+                    create_schema_index(&mut db, definition, &mut receipt)?;
+                }
                 if let Some(tenant_field) = &contract.tenant_field {
                     let policy = CollectionPolicy::tenant_field(tenant_field.clone())
                         .with_read_roles(contract.required_roles.iter().cloned())

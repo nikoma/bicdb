@@ -1077,11 +1077,7 @@ pub(super) fn exercise(
                     target,
                     &actual,
                     &plan,
-                    &MetadataReadProvider::new(
-                        metadata[leader_index].clone(),
-                        clients[leader_index].clone(),
-                    )
-                    .unwrap(),
+                    &MetadataReadProvider::new(target_metadata.clone(), target.clone()).unwrap(),
                     &actor,
                     factory,
                     pending,

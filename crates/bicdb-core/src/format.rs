@@ -54,7 +54,11 @@ pub const EXACT_PROPORTIONAL_INTERVALS_FEATURE_FLAG: &str = "exact_proportional_
 pub const EXACT_DECIMAL_LIST_SUM_FEATURE_FLAG: &str = "exact_decimal_list_sum_v1";
 pub const NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG: &str =
     "native_fact_projection_contracts_v1";
+/// Sticky node-local receipt semantics. Never a portable schema capability.
+pub const NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG: &str =
+    "native_completed_decision_materialization_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG,
     EXACT_DECIMAL_LIST_SUM_FEATURE_FLAG,
     EXACT_PROPORTIONAL_INTERVALS_FEATURE_FLAG,
     NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG,
@@ -879,6 +883,48 @@ pub(crate) fn native_joint_data_handoff_active(root: &Path) -> Result<bool> {
 
 /// Reader refusal only; neither a metadata role nor a native/data quorum.
 /// Deliberately excluded from REPLICATED_READER_FEATURES.
+pub(crate) fn enable_native_completed_decision_materialization(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(NATIVE_ABORT_HISTORY_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "completed materialization needs actual native writer/abort/custody fences".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+#[cfg(test)]
+pub(crate) fn test_simulated_reader_without_completed_materialization(root: &Path) -> Result<()> {
+    let metadata = read_or_legacy_metadata(root)?;
+    let old = KNOWN_FEATURE_FLAGS
+        .iter()
+        .copied()
+        .filter(|name| *name != NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG)
+        .collect::<Vec<_>>();
+    validate_supported_with_flags(&metadata, &old)
+}
+pub(crate) fn native_completed_decision_materialization_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG))
+}
+
 pub(crate) fn enable_native_current_joint_recovery(root: &Path) -> Result<()> {
     let lock = feature_flags_lock(root);
     let _guard = lock.lock();

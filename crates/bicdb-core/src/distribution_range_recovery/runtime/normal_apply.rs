@@ -85,6 +85,12 @@ impl RangeRecoveryRuntime {
         )?;
         let admission =
             NativeLeaderInstructionAdmission::from_actual_peer(role, initiator, request)?;
+        #[cfg(test)]
+        if self.test_refuse_actual_native_apply_before_effect(&admission) {
+            return Err(invalid(
+                "injected actual authenticated NativeApply refusal before native effect",
+            ));
+        }
         let mut service = loop {
             token.check()?;
             if let Some(service) = self.service.try_lock_for(LATCH_POLL) {

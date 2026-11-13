@@ -45,7 +45,10 @@ fn snapshot(
     )
 }
 #[allow(clippy::too_many_arguments)]
-pub(super) fn run<ActualHeldDebtSchedule>(
+pub(super) fn run<
+    ActualHeldDebtSchedule,
+    ResumeActualTarget: FnOnce(&CancellationToken) -> Result<()>,
+>(
     f: &Fixture,
     origin_control: &NativeMetadataControlHost,
     journal: &Arc<Journal>,
@@ -58,6 +61,9 @@ pub(super) fn run<ActualHeldDebtSchedule>(
     actual_reply_loss: serde_json::Value,
     actual_debt_schedule: ActualHeldDebtSchedule,
     first_public_receipt_ns: u128,
+    expected_blocked_native: u64,
+    expected_blocked_phase: &str,
+    resume_actual_target: ResumeActualTarget,
 ) -> Result<serde_json::Value> {
     check(
         first_public_receipt_ns <= 20_000_000_000,
@@ -73,10 +79,10 @@ pub(super) fn run<ActualHeldDebtSchedule>(
         "first_public_20s_receipt_ns":first_public_receipt_ns,"target":node(2),"actual":before,
         "actual_post_producer_reply_loss":actual_reply_loss,"actual_debt_schedule_still_held":true}))?;
     check(
-        before["native_R"] == 2
-            && before["actual_open"]["phase"] == "NativeCompletedFrozen"
+        before["native_R"] == expected_blocked_native
+            && before["actual_open"]["phase"] == expected_blocked_phase
             && before["actual_open"]["actual_current_open_valid"] == false,
-        "follower must actually remain Completed/native2 after publicR3 success",
+        "follower did not retain its required actual blocked native/phase cut after publicR3",
     )?;
     check(
         before["actual_open"]["actual_store_open"]
@@ -118,8 +124,8 @@ pub(super) fn run<ActualHeldDebtSchedule>(
         "ordinary_APP_repair_did_not_unfreeze":true}),
     )?;
     check(
-        still_frozen["native_R"] == 2
-            && still_frozen["actual_open"]["phase"] == "NativeCompletedFrozen"
+        still_frozen["native_R"] == expected_blocked_native
+            && still_frozen["actual_open"]["phase"] == expected_blocked_phase
             && still_frozen["actual_open"]["actual_current_open_valid"] == false
             && still_frozen["records"][values[2].0].is_null()
             && still_frozen["records"][&fourth].is_null(),
@@ -166,6 +172,11 @@ pub(super) fn run<ActualHeldDebtSchedule>(
         serde_json::json!({"kind":"actual_origin_r4_full_commands_before_debt_release",
         "elapsed_ns":start.elapsed().as_nanos(),"source":source,"actual_commands":commands}),
     )?;
+    journal.append(serde_json::json!({"kind":"same_actual_target_network_resume_intent",
+        "elapsed_ns":start.elapsed().as_nanos(),"actual_blocked_native":expected_blocked_native,
+        "actual_blocked_phase":expected_blocked_phase,"no_protocol_or_permission_from_resume":true}))?;
+    resume_actual_target(&parent)?;
+    parent.check()?;
     drop(actual_debt_schedule);
     journal.append(
         serde_json::json!({"kind":"actual_debt_only_schedule_released",
@@ -207,6 +218,27 @@ pub(super) fn run<ActualHeldDebtSchedule>(
                 let lineage = db.current_native_range_source_lineage(range.id)?;
                 for command in &commands {
                     db.require_native_command_materialized(&lineage, command)?;
+                }
+                if expected_blocked_native == 1 {
+                    check(
+                        crate::format::native_completed_decision_materialization_active(
+                            db.data_path(),
+                        )?,
+                        "actual R4 target lost sticky completed-materialization reader fence",
+                    )?;
+                    let simulated =
+                        crate::format::test_simulated_reader_without_completed_materialization(
+                            db.data_path(),
+                        );
+                    check(simulated.as_ref().err().is_some_and(|e|e.to_string().contains(crate::format::NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG)),
+                        "SIMULATED old-feature reader accepted actual converted root at later ordinaryR4")?;
+                    let portable = crate::format::required_reader_features(db.data_path())?;
+                    check(
+                        !portable.iter().any(|f| {
+                            f==crate::format::NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG
+                        }),
+                        "node-local completed receipt feature leaked into portable schema features",
+                    )?;
                 }
                 drop(db);
                 // The success clock includes the final full native-history

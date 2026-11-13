@@ -95,6 +95,10 @@ pub(crate) use native_abort::{
     NativeAbortCandidateObservation, NativeAbortPromiseObservation, NativeAbortPromiseRound,
     NativeAbortQuorum, NativeAbortRequest,
 };
+mod completed_apply;
+pub(crate) use completed_apply::{
+    CompletedNativeCommandAdmission, NativeCompletedMaterializeRequest,
+};
 mod historical;
 pub(crate) use historical::{
     CurrentHistoricalCertificationRound, HistoricalCommandDecision, HistoricalCommandDecisionRound,
@@ -355,6 +359,10 @@ pub(crate) struct RecoveryFenceObservation {
     deadline: Instant,
 }
 impl RecoveryFenceObservation {
+    #[cfg(test)]
+    pub(crate) fn test_actual_reply_for_loss(&self) -> &RecoveryEpochFenceReply {
+        &self.reply
+    }
     pub(crate) fn is_active_recovery(&self) -> bool {
         self.reply.phase == RecoveryFenceObservationPhase::ActiveRecovery
     }

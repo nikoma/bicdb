@@ -541,11 +541,12 @@ impl RangeWriteStore {
         range: RangeId,
     ) -> Result<serde_json::Value> {
         self.require_durable_recovery_catalog()?;
-        let saved = self
-            .catalog
-            .recovery_fences
-            .get(&range)
-            .ok_or_else(|| range_write_error("actual native replica has no recovery record"))?;
+        let Some(saved) = self.catalog.recovery_fences.get(&range) else {
+            return Ok(
+                serde_json::json!({"phase":"NoRecoveryRecord","actual_store_open":self.open_id,
+                "actual_current_open_valid":false,"scope":"actual absence of recovery record; not a native floor or permission"}),
+            );
+        };
         let phase = self.recovery_observation_phase(&saved.scope)?;
         let open = self.require_actual_native_activated_open(range);
         Ok(

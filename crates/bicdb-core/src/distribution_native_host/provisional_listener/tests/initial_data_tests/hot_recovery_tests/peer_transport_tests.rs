@@ -285,3 +285,197 @@ fn native_hot_recovery_wire30_refuses_actual29_peer_without_catalogue_mutation()
         control.stop(&budget(5000)).unwrap();
     }
 }
+
+#[test]
+fn native_hot_recovery_completed_materialization_requires_actual_QQ_leader_and_live_parent() {
+    let (f, mut controls, configs) = opened();
+    let (range_scope, range) = scope_and_range(&f, &controls);
+    let (_, _, _, leader) = controls[0].test_hot_recovery_bindings().unwrap();
+    let (_, _, _, follower) = controls[1].test_hot_recovery_bindings().unwrap();
+    let (actual_coordinator, actual_guard, _, _) =
+        controls[2].test_hot_recovery_bindings().unwrap();
+    let bootstrap = crate::TcpClusterBootstrapClient::new(
+        configs[0].cluster_id.clone(),
+        node(0),
+        f.networks[0].clone(),
+    )
+    .unwrap();
+    let topology = bootstrap
+        .fetch_snapshot(&node(0), &configs[0].node_address)
+        .unwrap()
+        .topology;
+    let key = (0..10_000)
+        .map(|n| format!("completed-denial-{n}"))
+        .find(|key| {
+            let id = crate::cluster_event_record_id("items", key).unwrap();
+            topology
+                .range_for_key(crate::CLUSTER_EVENTS_COLLECTION, &id)
+                .unwrap()
+                .id
+                == range.id
+        })
+        .unwrap();
+    let client = crate::ClusterEventClient::new(&configs[0], topology)
+        .unwrap()
+        .with_request_timeout(Duration::from_secs(2))
+        .unwrap();
+    let value = serde_json::json!({"actual":"original full ACK", "nested":[null,{},[7,8]]});
+    assert!(client.append("items", &key, value).unwrap());
+    let command = f.hosts[0]
+        ._service
+        .lock()
+        .probe_range_write_for_peer(&range, &node(0), 1)
+        .unwrap()
+        .entry
+        .unwrap()
+        .command;
+    let (root, before, full_record) = {
+        let db = f.hosts[2].seed.database.read();
+        let lineage = db.current_native_range_source_lineage(range.id).unwrap();
+        db.require_native_command_materialized(&lineage, &command)
+            .unwrap();
+        (
+            db.data_path().to_owned(),
+            db.native_range_prefix_observation(range.id).unwrap(),
+            db.get(
+                crate::CLUSTER_EVENTS_COLLECTION,
+                &crate::cluster_event_record_id("items", &key).unwrap(),
+            )
+            .unwrap(),
+        )
+    };
+    let path = root.join(crate::distribution_range_consensus::DEFAULT_RANGE_WRITE_LOG);
+    let catalogue = std::fs::read(&path).unwrap();
+    let request = crate::distribution_range_recovery::NativeCompletedMaterializeRequest {
+        historical: crate::distribution_range_recovery::RecoveryHistoricalCommandRequest {
+            scope: range_scope,
+            command,
+            budget_ms: 1500,
+        },
+        challenge: Uuid::now_v7(),
+    };
+    let denied = follower
+        .hot_recovery_phase_observation(
+            &node(2),
+            HotRecoveryPhaseRequest::MaterializeCompleted(request.clone()),
+            1,
+            Duration::from_millis(1500),
+            &budget(2500),
+        )
+        .err()
+        .expect("actual nonleader cannot create a completed decision");
+    assert!(
+        denied.to_string().contains("metadata recovery-role"),
+        "wrong authenticated nonleader refusal: {denied}"
+    );
+    let denied = leader
+        .hot_recovery_phase_observation(
+            &node(2),
+            HotRecoveryPhaseRequest::MaterializeCompleted(request.clone()),
+            1,
+            Duration::from_millis(1500),
+            &budget(2500),
+        )
+        .err()
+        .expect("raw Applied labels cannot supply real completed quorum");
+    assert!(
+        denied
+            .to_string()
+            .contains("distinct durable completion quorum unavailable"),
+        "wrong genuine completed-QQ refusal: {denied}"
+    );
+    let expired = budget(1);
+    std::thread::sleep(Duration::from_millis(2));
+    let denied = leader
+        .hot_recovery_phase_observation(
+            &node(2),
+            HotRecoveryPhaseRequest::MaterializeCompleted(request),
+            1,
+            Duration::from_millis(1500),
+            &expired,
+        )
+        .err()
+        .expect("expired original caller cannot dispatch");
+    assert!(matches!(denied, BicDbError::QueryTimedOut));
+    assert_eq!(std::fs::read(path).unwrap(), catalogue);
+    let db = f.hosts[2].seed.database.read();
+    assert_eq!(
+        db.native_range_prefix_observation(range.id).unwrap(),
+        before
+    );
+    assert_eq!(
+        db.get(
+            crate::CLUSTER_EVENTS_COLLECTION,
+            &crate::cluster_event_record_id("items", &key).unwrap()
+        )
+        .unwrap(),
+        full_record
+    );
+    assert!(!crate::format::native_completed_decision_materialization_active(&root).unwrap());
+    actual_guard
+        .require_for_coordinator(&db, &range, &actual_coordinator)
+        .unwrap();
+    drop(db);
+    for control in &mut controls {
+        control.stop(&budget(5000)).unwrap();
+    }
+}
+
+#[test]
+fn native_hot_recovery_completed_fence_simulated_old_reader_refuses_before_receipt_and_after_rewrite(
+) {
+    let (f, mut controls, _) = opened();
+    let root = f.hosts[2].seed.database.read().data_path().to_owned();
+    let range = f.hosts[0]
+        .seed
+        .spec
+        .initial_ranges
+        .iter()
+        .find(|r| r.leader == node(0))
+        .unwrap();
+    let before = f.hosts[2]
+        .seed
+        .database
+        .read()
+        .native_range_prefix_observation(range.id)
+        .unwrap();
+    let catalogue =
+        std::fs::read(root.join(crate::distribution_range_consensus::DEFAULT_RANGE_WRITE_LOG))
+            .unwrap();
+    let portable = crate::format::required_reader_features(&root).unwrap();
+    // Necessary old-reader refusal only; this test does NOT create a QQ,
+    // completed decision, native receipt or new write/read authority.
+    crate::format::enable_native_completed_decision_materialization(&root).unwrap();
+    let first =
+        crate::format::test_simulated_reader_without_completed_materialization(&root).unwrap_err();
+    assert!(first
+        .to_string()
+        .contains(crate::format::NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG));
+    crate::format::persist_current(&root, true).unwrap();
+    let later =
+        crate::format::test_simulated_reader_without_completed_materialization(&root).unwrap_err();
+    assert!(later
+        .to_string()
+        .contains(crate::format::NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG));
+    assert_eq!(
+        crate::format::required_reader_features(&root).unwrap(),
+        portable
+    );
+    assert_eq!(
+        std::fs::read(root.join(crate::distribution_range_consensus::DEFAULT_RANGE_WRITE_LOG))
+            .unwrap(),
+        catalogue
+    );
+    assert_eq!(
+        f.hosts[2]
+            .seed
+            .database
+            .read()
+            .native_range_prefix_observation(range.id)
+            .unwrap(),
+        before
+    );
+    for control in &mut controls {
+        control.stop(&budget(5000)).unwrap();
+    }
+}

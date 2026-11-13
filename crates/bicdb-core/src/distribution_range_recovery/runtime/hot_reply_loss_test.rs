@@ -6,13 +6,20 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Boundary {
+    Fence,
+    Prepare,
+    Complete,
+}
 #[derive(Debug)]
 pub(super) struct ReplyLoss {
+    boundary: Boundary,
     range: RangeId,
     index: u64,
     armed: AtomicBool,
     suppressed: AtomicBool,
-    actual_reply: OnceLock<crate::distribution_range_recovery::NativeCompletionReply>,
+    actual_reply: OnceLock<serde_json::Value>,
 }
 pub(crate) struct NativeHotReplyLossArm<'a> {
     runtime: &'a RangeRecoveryRuntime,
@@ -36,7 +43,7 @@ impl NativeHotReplyLossArm<'_> {
     pub(crate) fn snapshot(&self) -> serde_json::Value {
         let suppressed = self.actual.suppressed.load(Ordering::Acquire);
         serde_json::json!({"suppressed_after_actual_producer":suppressed,
-            "actual_reply":self.actual.actual_reply.get(),"armed":self.actual.armed.load(Ordering::Acquire),
+            "actual_reply":self.actual.actual_reply.get(),"actual_boundary":format!("{:?}",self.actual.boundary),"armed":self.actual.armed.load(Ordering::Acquire),
             "scope":"cfg(test) reply loss only; no authority; no user ACK inferred"})
     }
 }
@@ -45,6 +52,28 @@ impl RangeRecoveryRuntime {
         &self,
         range: RangeId,
         index: u64,
+    ) -> Result<NativeHotReplyLossArm<'_>> {
+        self.arm_actual_hot_reply_loss(range, index, Boundary::Complete)
+    }
+    pub(crate) fn test_arm_hot_fence_reply_loss(
+        &self,
+        range: RangeId,
+        index: u64,
+    ) -> Result<NativeHotReplyLossArm<'_>> {
+        self.arm_actual_hot_reply_loss(range, index, Boundary::Fence)
+    }
+    pub(crate) fn test_arm_hot_prepare_reply_loss(
+        &self,
+        range: RangeId,
+        index: u64,
+    ) -> Result<NativeHotReplyLossArm<'_>> {
+        self.arm_actual_hot_reply_loss(range, index, Boundary::Prepare)
+    }
+    fn arm_actual_hot_reply_loss(
+        &self,
+        range: RangeId,
+        index: u64,
+        boundary: Boundary,
     ) -> Result<NativeHotReplyLossArm<'_>> {
         let mut slot = self
             .test_hot_completion_reply_loss
@@ -58,6 +87,7 @@ impl RangeRecoveryRuntime {
             return Err(invalid("actual runtime reply-loss test already armed"));
         }
         let actual = Arc::new(ReplyLoss {
+            boundary,
             range,
             index,
             armed: AtomicBool::new(true),
@@ -81,7 +111,8 @@ impl RangeRecoveryRuntime {
         let Some(actual) = slot.as_ref().and_then(std::sync::Weak::upgrade) else {
             return false;
         };
-        if reply.scope.range_id != actual.range
+        if actual.boundary != Boundary::Complete
+            || reply.scope.range_id != actual.range
             || reply.range_index != actual.index
             || reply.stage
                 != crate::distribution_range_recovery::NativeCompletionStage::CompletedFrozen
@@ -94,7 +125,71 @@ impl RangeRecoveryRuntime {
         }
         // Actual producer fact, not a caller DTO. No DB/service/journal guard
         // is held here. Publish immutable data before the test observes fired.
-        let _ = actual.actual_reply.set(reply.clone());
+        let Ok(captured) = serde_json::to_value(reply) else {
+            return false;
+        };
+        let _ = actual.actual_reply.set(captured);
+        actual.suppressed.store(true, Ordering::Release);
+        true
+    }
+}
+
+impl RangeRecoveryRuntime {
+    pub(crate) fn test_suppress_actual_hot_fence_reply(
+        &self,
+        reply: &crate::distribution_range_recovery::RecoveryEpochFenceReply,
+    ) -> bool {
+        let Some(slot) = self.test_hot_completion_reply_loss.try_lock() else {
+            return false;
+        };
+        let Some(actual) = slot.as_ref().and_then(std::sync::Weak::upgrade) else {
+            return false;
+        };
+        if actual.boundary != Boundary::Fence
+            || reply.scope.range_id != actual.range
+            || reply.native.native_applied_index != Some(actual.index)
+            || reply.phase
+                != crate::distribution_range_recovery::RecoveryFenceObservationPhase::ActiveRecovery
+            || actual
+                .armed
+                .compare_exchange(true, false, Ordering::AcqRel, Ordering::Acquire)
+                .is_err()
+        {
+            return false;
+        }
+        let Ok(captured) = serde_json::to_value(reply) else {
+            return false;
+        };
+        let _ = actual.actual_reply.set(captured);
+        actual.suppressed.store(true, Ordering::Release);
+        true
+    }
+    pub(crate) fn test_suppress_actual_hot_prepare_reply(
+        &self,
+        reply: &crate::distribution_range_recovery::NativeReadyReply,
+    ) -> bool {
+        let Some(slot) = self.test_hot_completion_reply_loss.try_lock() else {
+            return false;
+        };
+        let Some(actual) = slot.as_ref().and_then(std::sync::Weak::upgrade) else {
+            return false;
+        };
+        if actual.boundary != Boundary::Prepare
+            || reply.scope.range_id != actual.range
+            || reply.range_index != actual.index
+            || reply.stage
+                != crate::distribution_range_recovery::FrozenNativeReadyStage::NativePrepared
+            || actual
+                .armed
+                .compare_exchange(true, false, Ordering::AcqRel, Ordering::Acquire)
+                .is_err()
+        {
+            return false;
+        }
+        let Ok(captured) = serde_json::to_value(reply) else {
+            return false;
+        };
+        let _ = actual.actual_reply.set(captured);
         actual.suppressed.store(true, Ordering::Release);
         true
     }

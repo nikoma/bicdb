@@ -829,3 +829,74 @@ impl NativeMetadataControlHost {
             .hold_debt_schedule_for_test(parent)
     }
 }
+
+// Network-only TEST cut: preserve actual DATA owner, policy, coordinator,
+// dispatcher, runtime, DB/Store and metadata supervisor. No cold authority.
+#[cfg(test)]
+impl NativeMetadataControlHost {
+    pub(crate) fn test_pause_initial_data_listener_only(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let data = self
+            .data
+            .as_mut()
+            .ok_or_else(|| invalid("actual DATA owner required"))?;
+        data.admission
+            .as_ref()
+            .ok_or_else(|| invalid("actual DATA admission absent"))?
+            .require_live()?;
+        let listener = data
+            .listener
+            .as_mut()
+            .ok_or_else(|| invalid("actual DATA listener absent"))?;
+        let drained = listener.stop_and_drain(parent)?;
+        drained.require_service(&data.initial.service)?;
+        data.drained = Some(drained);
+        data.listener.take();
+        parent.check()
+    }
+    pub(crate) fn test_resume_same_initial_data_listener_only(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        let data = self
+            .data
+            .as_mut()
+            .ok_or_else(|| invalid("same retained DATA owner required"))?;
+        if data.stopping || data.listener.is_some() {
+            return Err(invalid("actual DATA listener is stopping or still running"));
+        }
+        let admission = data
+            .admission
+            .as_ref()
+            .ok_or_else(|| invalid("actual original DATA admission absent"))?;
+        let runtime = data
+            .runtime
+            .as_ref()
+            .ok_or_else(|| invalid("actual original runtime absent"))?;
+        admission.require_listener(&data.initial.service, runtime)?;
+        data.drained
+            .as_ref()
+            .ok_or_else(|| invalid("actual stopped/drained listener receipt required"))?
+            .require_service(&data.initial.service)?;
+        let address: std::net::SocketAddr = network_address(&data.initial, parent)?
+            .parse()
+            .map_err(|_| invalid("actual local address is not numeric"))?;
+        data.listener = Some(
+            crate::distribution_transport::start_cluster_initial_native_data_server(
+                address,
+                self.network.clone(),
+                data.initial.topology.clone(),
+                data.initial.service.clone(),
+                data.initial.metadata.clone(),
+                data.initial.provider.clone(),
+                runtime.clone(),
+                admission.clone(),
+            )?,
+        );
+        admission.require_listener(&data.initial.service, runtime)?;
+        parent.check()
+    }
+}

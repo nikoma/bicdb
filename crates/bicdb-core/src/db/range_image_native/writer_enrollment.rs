@@ -19,7 +19,11 @@ mod joint_domain;
 #[cfg(feature = "tls-replication")]
 mod registered_no_domain;
 #[cfg(feature = "tls-replication")]
+mod registered_remote_attempt;
+#[cfg(feature = "tls-replication")]
 pub(crate) use registered_no_domain::NativeRegisteredNoDomainScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote_attempt::NativeRegisteredRemoteAttemptScope;
 #[cfg(feature = "tls-replication")]
 mod old_constraints;
 mod registry_refresh;

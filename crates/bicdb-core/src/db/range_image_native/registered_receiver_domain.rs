@@ -49,6 +49,15 @@ impl BicDb {
         self.check_recovery_state()
     }
     fn require_original_registered_receiver_inventory(&self) -> Result<()> {
+        self.require_registered_receiver_inventory_with_extra_keys(&[])
+    }
+    pub(super) fn require_registered_receiver_inventory_with_extra_keys(
+        &self,
+        extra: &[String],
+    ) -> Result<()> {
+        if extra.len() > 2 {
+            return Err(invalid("Registered proposal inventory bound exceeded"));
+        }
         let paged = self
             .paged_records
             .as_ref()
@@ -59,12 +68,16 @@ impl BicDb {
             .store()
             .scan_from(&snapshot, &namespace)
             .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
-        let expected = [
+        let mut expected = vec![
             BIRTH_KEY,
             READY_KEY,
             "metadata-store:initialized",
             "abort-range-catalogue:identity",
-        ];
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+        expected.extend(extra.iter().cloned());
         let mut found = BTreeSet::new();
         for entry in cursor {
             let (key, value) = entry.map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
@@ -78,7 +91,7 @@ impl BicDb {
             }
             let key = std::str::from_utf8(&key[namespace.len()..])
                 .map_err(|_| invalid("registered receiver native record key malformed"))?;
-            if !expected.contains(&key) {
+            if !expected.iter().any(|expected| expected == key) {
                 return Err(invalid("registered receiver has an existing native domain/invalidation/install/history record; continuation unsupported"));
             }
             if found.len() >= expected.len() || !found.insert(key.to_owned()) {
@@ -87,7 +100,7 @@ impl BicDb {
                 ));
             }
         }
-        if found.len() != expected.len() || expected.iter().any(|k| !found.contains(*k)) {
+        if found.len() != expected.len() || expected.iter().any(|k| !found.contains(k)) {
             return Err(invalid("registered receiver lost original native birth/READY/Registered/catalogue record custody"));
         }
         // Native identity/checksum and namespace checks for these known

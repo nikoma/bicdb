@@ -18,6 +18,52 @@ impl NativeRegisteredRangeCatalogueAbsence {
     pub(crate) fn catalogue_id(&self) -> Uuid {
         self.catalogue
     }
+    pub(crate) fn constraint_sha256(&self) -> Result<String> {
+        Ok(hex::encode(Sha256::digest(
+            crate::distribution_range_image::bounded_json(
+                &(
+                    "registered-raw-refusal-preimage-v1",
+                    self.range,
+                    self.catalogue,
+                    self.birth,
+                    &self.birth_sha256,
+                    &self.raw,
+                    &self.refusal,
+                ),
+                8 * 1024 * 1024,
+            )?,
+        )))
+    }
+    pub(crate) fn require_attempt_current(
+        &self,
+        store: &RangeWriteStore,
+        db: &crate::BicDb,
+        scope: &crate::db::NativeRegisteredRemoteAttemptScope<'_>,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+    ) -> Result<()> {
+        scope.require_database(db)?;
+        self.open.require_live()?;
+        if store.open_id != self.open.id()
+            || !std::sync::Weak::ptr_eq(&self.open.open, &Arc::downgrade(&store.open_lifetime))
+            || scope.range_id() != self.range
+            || scope.native().birth_id() != self.birth
+            || scope.native().birth_sha256() != self.birth_sha256
+            || store.catalog.recovery_fences.get(&self.range) != Some(&self.refusal)
+            || store.catalog.ranges.get(&self.range) != Some(&self.raw)
+            || db.native_abort_catalogue_store_id()? != Some(self.catalogue)
+        {
+            return Err(range_write_error(
+                "Registered proposal changed exact original catalogue/raw preimage",
+            ));
+        }
+        store.require_registered_selected_constraint_record(
+            db,
+            scope.native(),
+            scope.range_id(),
+            role,
+        )?;
+        scope.require_database(db)
+    }
     pub(crate) fn require_current(
         &self,
         store: &RangeWriteStore,
@@ -83,11 +129,24 @@ impl RangeWriteStore {
         role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
     ) -> Result<()> {
         scope.require_database(db)?;
+        self.require_registered_selected_constraint_record(
+            db,
+            scope.native(),
+            scope.range_id(),
+            role,
+        )?;
+        scope.require_database(db)
+    }
+    fn require_registered_selected_constraint_record(
+        &self,
+        db: &crate::BicDb,
+        native: &crate::db::NativeRecoveryAdmission,
+        range: RangeId,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+    ) -> Result<()> {
         self.require_native_catalog_durability(db.data_path())?;
         db.require_native_writer_catalogue_custody(self)?;
         self.require_actual_abort_catalogue(db)?;
-        let native = scope.native();
-        let range = scope.range_id();
         let sparse = self
             .catalog
             .sparse_committed_decisions
@@ -172,6 +231,6 @@ impl RangeWriteStore {
         {
             return Err(range_write_error("Registered selected range has actual raw/catalogue/slot/domain state; never infer R=0"));
         }
-        scope.require_database(db)
+        Ok(())
     }
 }

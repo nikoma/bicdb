@@ -15,6 +15,7 @@ mod remote_image;
 pub(crate) use closed_fence::NativeAssignedRegisteredClosedFence;
 pub(crate) use no_domain::NativeRegisteredSelectedRangeNoDomain;
 pub(crate) use remote_attempt::NativeRegisteredRemoteInstallPreflight;
+pub(crate) use remote_attempt::NativeRegisteredRemoteProposalPoint;
 pub(crate) use remote_image::NativeRegisteredRemoteImageStep;
 pub(crate) use remote_image::NativeRegisteredRemoteTransferRequest;
 mod assigned_policy;

@@ -31,6 +31,36 @@ pub(super) struct RegisteredRemoteNativePreflight {
     metadata_store: Uuid,
 }
 impl RegisteredRemoteNativePreflight {
+    pub(super) fn require_original_boundary(
+        &self,
+        db: &BicDb,
+        scope: &crate::db::NativeRegisteredRemoteAttemptScope<'_>,
+        member: &NativeOwnedMetadataMemberObservation,
+    ) -> Result<()> {
+        if member.store_id() != self.metadata_store
+            || self.native.birth_id() != scope.native().birth_id()
+        {
+            return Err(invalid(
+                "Registered proposal original metadata/native owner changed",
+            ));
+        }
+        member.require_database_point(db)?;
+        db.validate_range_image_bindings(&self.bindings)?;
+        scope.require_install_safety(&self.safety)
+    }
+    pub(super) fn require_attempt_current(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        scope: &crate::db::NativeRegisteredRemoteAttemptScope<'_>,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        member: &NativeOwnedMetadataMemberObservation,
+    ) -> Result<()> {
+        self.require_original_boundary(db, scope, member)?;
+        self.catalogue
+            .require_attempt_current(store, db, scope, role)?;
+        scope.require_install_safety(&self.safety)
+    }
     pub(super) fn catalogue(&self) -> &NativeRegisteredRangeCatalogueAbsence {
         &self.catalogue
     }

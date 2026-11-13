@@ -22,6 +22,80 @@ pub(crate) struct NativeRegisteredRemoteInstallPreflight {
 pub(super) struct NativeRegisteredRemoteInstallAttempt {
     preflight: Arc<NativeRegisteredRemoteInstallPreflight>,
     lease: Option<RegisteredRemoteImageInstallFreeze>,
+    proposal: Option<crate::db::NativeRegisteredRemoteProposalPublication>,
+}
+/// Original host-only construction, borrowing its actual A lease and fresh
+/// request. Neither a DTO nor a missing native prefix constructs this point.
+pub(crate) struct NativeRegisteredRemoteProposalPoint<'a> {
+    preflight: &'a Arc<NativeRegisteredRemoteInstallPreflight>,
+    lease: &'a RegisteredRemoteImageInstallFreeze,
+    request: &'a NativeRegisteredRemoteTransferRequest,
+    frame: &'a NativeRemoteImageStep<'a>,
+}
+impl NativeRegisteredRemoteProposalPoint<'_> {
+    /// Necessary actual original boundary after the separate sink changes its
+    /// own catalogue candidate. The sink must verify that exact new state.
+    pub(crate) fn require_original_boundary(
+        &self,
+        db: &BicDb,
+        scope: &crate::db::NativeRegisteredRemoteAttemptScope<'_>,
+    ) -> Result<()> {
+        self.require_live()?;
+        scope.require_database(db)?;
+        self.preflight.original.database.require_database(db)?;
+        if scope.attempt_id() != self.preflight.attempt_id()
+            || scope.range_id() != self.preflight.scope().range_id
+        {
+            return Err(invalid(
+                "Registered original mutation boundary changed A/range",
+            ));
+        }
+        self.preflight
+            .actual
+            .require_original_boundary(db, scope, &self.request.member)?;
+        self.require_live()
+    }
+    pub(crate) fn preflight(&self) -> &NativeRegisteredRemoteInstallPreflight {
+        self.preflight
+    }
+    pub(crate) fn request(&self) -> &NativeRegisteredRemoteTransferRequest {
+        self.request
+    }
+    pub(crate) fn require_live(&self) -> Result<()> {
+        self.preflight.require_request(self.request, self.frame)?;
+        if !Arc::ptr_eq(self.preflight, self.lease.preflight())
+            || self.lease.try_as_frozen()?.owner() != self.preflight.attempt_id()
+        {
+            return Err(invalid(
+                "Registered proposal does not borrow exact retained A lease",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_database_store(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        scope: &crate::db::NativeRegisteredRemoteAttemptScope<'_>,
+    ) -> Result<()> {
+        self.require_original_boundary(db, scope)?;
+        if scope.attempt_id() != self.preflight.attempt_id()
+            || scope.range_id() != self.preflight.scope().range_id
+            || store.native_writer_store_open_id() != self.preflight.original.store.id()
+        {
+            return Err(invalid(
+                "Registered proposal changed original range/Store/A point",
+            ));
+        }
+        self.preflight.actual.require_attempt_current(
+            db,
+            store,
+            scope,
+            self.request.role.role(),
+            &self.request.member,
+        )?;
+        self.require_live()
+    }
 }
 impl NativeRegisteredRemoteInstallPreflight {
     pub(crate) fn source(&self) -> &Arc<NativeRemoteImageFact> {
@@ -213,6 +287,7 @@ impl NativeMetadataControlHost {
             "original_owner":actual.preflight.scope().freeze_owner()?,
             "actual_owner":actual.lease.as_ref().map(|l|l.as_frozen().owner()),
             "source":actual.preflight.source().manifest().checksum_sha256,
+            "proposal":actual.proposal.as_ref().map(|publication|publication.test_outcome()),
             "retained":true,"lease_present":actual.lease.is_some()}))
     }
     /// Capture real readonly facts, retain this exact attempt, then transfer
@@ -312,6 +387,7 @@ impl NativeMetadataControlHost {
             NativeRegisteredRemoteInstallAttempt {
                 preflight: preflight.clone(),
                 lease: None,
+                proposal: None,
             }
         });
         let lease = receiver.runtime.transfer_registered_remote_install(
@@ -324,5 +400,101 @@ impl NativeMetadataControlHost {
         preflight.require_metadata_current(&request)?;
         preflight.require_request(&request, frame)?;
         parent.check()
+    }
+    pub(crate) fn publish_registered_remote_proposal(
+        &mut self,
+        source: &Arc<NativeRemoteImageFact>,
+        frame: &NativeRemoteImageStep<'_>,
+        role: HandoffRoleAdmission,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<crate::db::NativeRegisteredRemoteProposalPointer> {
+        parent.check()?;
+        if self.assigned.is_some() || self.data.is_some() {
+            return Err(invalid("Registered proposal cannot replace DATA owner"));
+        }
+        let receiver = self
+            .replica
+            .as_mut()
+            .ok_or_else(|| invalid("actual Registered receiver absent"))?;
+        let range = role.role().current_range().id;
+        let attempt = receiver
+            .remote_attempts
+            .get_mut(&range)
+            .ok_or_else(|| invalid("actual retained remote attempt absent"))?;
+        if !Arc::ptr_eq(source, attempt.preflight.source()) {
+            return Err(invalid(
+                "Registered proposal requires same actual retained MF Arc",
+            ));
+        }
+        let lease = attempt
+            .lease
+            .as_ref()
+            .ok_or_else(|| invalid("Registered proposal has no actual A lease"))?;
+        lease.require_retained()?;
+        // Fresh A request. N's source_capture_freeze path remains unavailable.
+        let step = receiver.admission.observe_remote_image_step(
+            frame,
+            role,
+            own,
+            business,
+            lease.try_as_frozen()?,
+            parent,
+        )?;
+        let request = step.into_transfer_request();
+        attempt.preflight.require_metadata_current(&request)?;
+        let point = NativeRegisteredRemoteProposalPoint {
+            preflight: &attempt.preflight,
+            lease,
+            request: &request,
+            frame,
+        };
+        point.require_live()?;
+        if attempt.proposal.is_none() {
+            attempt.proposal = Some(crate::db::NativeRegisteredRemoteProposalPublication::begin(
+                &point,
+            )?);
+        }
+        // Fault/control boundary is outside every DB/service/journal/hook
+        // guard. An actual hook/slot revocation cannot deadlock its own reader.
+        #[cfg(test)]
+        crate::db::test_fire_before_registered_remote_proposal_scope();
+        // Retained exact publication owner BEFORE page transaction assignment.
+        let result = {
+            let actual = receiver
+                .backend
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("Registered proposal service busy"))?;
+            let database = actual.database();
+            let db = database
+                .try_read()
+                .ok_or_else(|| invalid("Registered proposal DB busy"))?;
+            db.with_registered_remote_attempt_exclusion(
+                attempt.preflight.native(),
+                &receiver.admission.original_hook,
+                lease.try_as_frozen()?,
+                attempt.preflight.attempt_id(),
+                request.cancellation(),
+                |scope| {
+                    actual.with_writer_data_domain_store(&db, |store| {
+                        attempt
+                            .proposal
+                            .as_mut()
+                            .unwrap()
+                            .advance(&db, store, &point, scope)
+                    })
+                },
+            )
+        };
+        let post = attempt
+            .preflight
+            .require_metadata_current(&request)
+            .and_then(|()| point.require_live());
+        let pointer = result?;
+        post?;
+        parent.check()?;
+        Ok(pointer)
     }
 }

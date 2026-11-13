@@ -26,6 +26,10 @@ pub(super) enum SourceCase {
     TargetTransferBusy,
     TargetTransferCanceled,
     TargetTransferHookRevoked,
+    TargetProposal,
+    TargetProposalPostCanceled,
+    TargetProposalBeforeCanceled,
+    TargetProposalBeforeHookRevoked,
     RemoteConstraintCapture,
 }
 #[test]
@@ -1070,6 +1074,29 @@ pub(super) fn exercise(
             finished_ranges.insert(original.id);
             if matches!(
                 case,
+                SourceCase::TargetProposal
+                    | SourceCase::TargetProposalPostCanceled
+                    | SourceCase::TargetProposalBeforeCanceled
+                    | SourceCase::TargetProposalBeforeHookRevoked
+            ) {
+                target_proposal_tests::exercise(
+                    case,
+                    target_control,
+                    target,
+                    remote_fact.clone(),
+                    &actual,
+                    &plan,
+                    &MetadataReadProvider::new(target_metadata.clone(), target.clone()).unwrap(),
+                    &actor,
+                    factory,
+                    pending,
+                    ranges,
+                    output,
+                );
+                return;
+            }
+            if matches!(
+                case,
                 SourceCase::TargetTransfer
                     | SourceCase::TargetTransferBusy
                     | SourceCase::TargetTransferCanceled
@@ -1205,4 +1232,5 @@ pub(super) fn exercise(
     })).unwrap();
 }
 mod target_no_domain_tests;
+mod target_proposal_tests;
 mod target_transfer_tests;

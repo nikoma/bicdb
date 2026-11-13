@@ -29,6 +29,17 @@ pub(crate) use history_stage::ClosedImageOriginalWriter;
 mod installed_anchor;
 mod native_read;
 mod registered_receiver_domain;
+#[cfg(feature = "tls-replication")]
+mod registered_remote_proposal;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_remote_proposal::test_fire_before_registered_remote_proposal_scope;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_remote_proposal::test_registered_remote_proposal_cut;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote_proposal::{
+    NativeRegisteredRemoteProposalPointer, NativeRegisteredRemoteProposalPublication,
+    NativeRegisteredRemoteProposalReceipt,
+};
 mod writer_enrollment;
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeAssignedWriterInstallAttempt;
@@ -36,6 +47,8 @@ pub(crate) use writer_enrollment::NativeAssignedWriterInstallAttempt;
 pub(crate) use writer_enrollment::NativeRegisteredClosedPersistScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredNoDomainScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeRegisteredRemoteAttemptScope;
 pub(crate) use writer_enrollment::{
     InstalledNativeWriterHostGuard, NativeRegisteredReceiverHook, NativeWriterHostState,
 };

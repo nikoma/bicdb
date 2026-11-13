@@ -97,6 +97,10 @@ pub(crate) use range_image_native::abort_history::NativeNoEffectIntentRecord;
 pub(crate) use range_image_native::rf3_fixture::{
     ActualNativeRf3Fixture, ActualNativeRf3RpcObservation,
 };
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use range_image_native::test_fire_before_registered_remote_proposal_scope;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use range_image_native::test_registered_remote_proposal_cut;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeAssignedWriterInstallAttempt;
 pub(crate) use range_image_native::NativeInitialDataGenesis;
@@ -104,6 +108,8 @@ pub(crate) use range_image_native::NativeInitialDataGenesis;
 pub(crate) use range_image_native::NativeRegisteredClosedPersistScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredNoDomainScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeRegisteredRemoteAttemptScope;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
     FreshNativeCatalogueBootstrap, FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard,
@@ -134,6 +140,11 @@ pub(crate) use range_image_native::{
 };
 pub(crate) use range_image_native::{
     NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::{
+    NativeRegisteredRemoteProposalPointer, NativeRegisteredRemoteProposalPublication,
+    NativeRegisteredRemoteProposalReceipt,
 };
 mod range_image_bindings;
 pub(crate) use range_image_bindings::RangeImageDbBindings;

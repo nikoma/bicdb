@@ -271,6 +271,7 @@ fn donated_metadata_and_existing_unowned_backing_are_never_adopted() {
         source
             .initialize_fresh_primary_replication_origins()
             .unwrap();
+        source.create_collection("placeholder").unwrap();
         source.create_collection("items").unwrap();
         let frames = source
             .export_replication_frames_since(0, usize::MAX)
@@ -295,6 +296,12 @@ fn donated_metadata_and_existing_unowned_backing_are_never_adopted() {
         target
             .promote_by_election(1, "origin-maintenance", None)
             .unwrap();
+        drop(target);
+        let mut target = BicDb::open_with_config(
+            root.path().join("target"),
+            config(mode.clone(), ReplicationMode::Primary),
+        )
+        .unwrap();
         target
             .restore_migrated_collection_contract(&fabricated)
             .unwrap();
@@ -304,19 +311,23 @@ fn donated_metadata_and_existing_unowned_backing_are_never_adopted() {
             config(mode, ReplicationMode::Standby),
         )
         .unwrap();
-        let ordinary = CollectionMeta::standard("items");
-        let state = CollectionState::new(other.new_local_collection_metadata(&ordinary));
-        other.collections.insert("items".into(), RwLock::new(state));
-        other.persist_catalog().unwrap();
+        assert_eq!(frames.len(), 2);
+        let mut legacy: CommitFrame =
+            serde_json::from_slice(&serde_json::to_vec(&frames[0]).unwrap()).unwrap();
+        let mut record: Record = serde_json::from_slice(&legacy.writes[0].payload).unwrap();
+        record.metadata["name"] = json!("items");
+        legacy.writes[0].payload = serde_json::to_vec(&record).unwrap();
+        legacy.checksum = legacy.calculate_checksum();
+        other.apply_replication_frame(&legacy).unwrap();
         let before = meta(&other, "items");
         let before_format = fs::read(format::metadata_path(&other.path)).unwrap();
-        let error = other.apply_replication_frame(&frames[0]).unwrap_err();
+        let error = other.apply_replication_frame(&frames[1]).unwrap_err();
         assert!(error.to_string().contains("unowned"), "{error}");
         assert_eq!(meta(&other, "items"), before);
         assert_eq!(
             fs::read(format::metadata_path(&other.path)).unwrap(),
             before_format
         );
-        assert_eq!(other.last_applied_commit_seq(), 0);
+        assert_eq!(other.last_applied_commit_seq(), 1);
     }
 }

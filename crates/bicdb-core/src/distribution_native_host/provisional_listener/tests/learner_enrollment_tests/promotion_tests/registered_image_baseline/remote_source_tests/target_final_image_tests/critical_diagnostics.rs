@@ -157,6 +157,89 @@ pub(super) fn advance_publication(
                 "critical publication evidence failed for attempt {attempt}: {error}"
             )));
         }
+        // Never perform another request if the original outcome could not be
+        // retained first. Its error still reaches the original assertion.
+        return result;
+    }
+    if operation_name == "PublishNativeBase"
+        && !cancel
+        && matches!(&result, Err(BicDbError::QueryTimedOut))
+    {
+        // A separate diagnostic continuation, AFTER the original failed call
+        // has been reported. It cannot turn that call or test green.
+        // Do not manufacture an expiry, renew its authority, cancel a token,
+        // retry a source append, or issue a second continuation here.
+        let base = &after["image"]["value"]["native_base"];
+        let xid = base["issued_native_xid"].as_u64();
+        let actual = &after["native"]["value"];
+        let known_committed = xid.is_some_and(|xid| {
+            base["actual_commit_returned"].as_u64() == Some(xid)
+                && actual["native_tx_status_api_observations"][xid.to_string()] == "Committed"
+                && actual["base"] == actual["attempt_archive"]
+                && actual["base"] == base["receipt"]
+        });
+        // This is a fixed-key same-open observation, not a recovery or
+        // durability certificate. An unknown/poisoned outcome gets no call.
+        if known_committed {
+            let mut fresh_windows = Vec::new();
+            let fresh_started = Instant::now();
+            let fresh_result = advance_with_diagnostics(
+                control,
+                client,
+                source,
+                plan,
+                provider,
+                actor,
+                output,
+                journal,
+                Operation::PublishNativeBase,
+                false,
+                Some(&mut fresh_windows),
+                None,
+            );
+            let fresh_elapsed_us = fresh_started.elapsed().as_micros();
+            let fresh_after = catalogue_tests::prerequisite_snapshot(
+                control,
+                factory,
+                pending,
+                ranges,
+                range,
+                attempt,
+                acknowledged,
+            );
+            let fresh_base = &fresh_after["image"]["value"]["native_base"];
+            let report = serde_json::json!({
+                "version":1,"original_operation":operation_name,
+                "original_exact_error":result.as_ref().err().map(|e|e.to_string()),
+                "original_primary_error_debug":result.as_ref().err().map(|e|format!("{e:?}")),
+                "original_result_preserved":true,"original_test_still_fails":true,
+                "original_outcome_already_retained":"registered-native-image-critical-outcome.json",
+                "original_failed_snapshot":after,
+                "actual_target_attempt":attempt,
+                "actual_manifest_sha256":source.manifest().checksum_sha256,
+                "fresh_call_count":1,"fresh_request_windows":fresh_windows,
+                "fresh_elapsed_us":fresh_elapsed_us,
+                "fresh_exact_error":fresh_result.as_ref().err().map(|e|e.to_string()),
+                "fresh_error_debug":fresh_result.as_ref().err().map(|e|format!("{e:?}")),
+                "fresh_progress":fresh_result.as_ref().ok(),"fresh_snapshot":fresh_after,
+                "same_issued_native_xid":fresh_base["issued_native_xid"].as_u64()==xid,
+                "same_exact_receipt":fresh_base["receipt"]==base["receipt"],
+                "same_canonical_attempt":fresh_base["attempted_canonical_bytes"]==base["attempted_canonical_bytes"],
+                "same_attempt_allocation_count":fresh_base["native_attempts_issued"]==base["native_attempts_issued"],
+                "same_memory_custody":fresh_after["memory_custody"]==after["memory_custody"],
+                "same_logical_state":fresh_after["logical"]==after["logical"],
+                "catalogue_adoption_or_serving":false,
+                "fresh_parent_budget_ms":5000,"authority_ttl_changed":false,
+                "original_deadline_extended":false,"source_append_retried":false,
+                "diagnostic_not_a_passing_acceptance_test":true
+            });
+            if let Err(error) = evidence(
+                &output.join("registered-native-base-unforced-timeout-continuation.json"),
+                &report,
+            ) {
+                eprintln!("NATIVE_CRITICAL_EVIDENCE_FAILURE attempt={attempt} operation=unforced_timeout_continuation primary_error={:?} diagnostic={error}", result.as_ref().err());
+            }
+        }
     }
     result
 }

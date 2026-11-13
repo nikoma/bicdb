@@ -629,3 +629,52 @@ factory or fake genesis is acceptable. Compacted payloads need actual image
 continuation. Lost-origin/cold/replacement/new-domain/Assigned lifecycle and real
 five-node automatic movement remain separate executable gates. No source in
 this section has yet been compiled or run locally or remotely.
+
+### Strict second-origin-fault witness (test-only, not executed)
+
+The successor test
+`native_hot_peer_second_actual_origin_unknown5_same_owners_requires_ack6_and_full_replica_convergence`
+first runs the unchanged public availability contract and actual lost-follower-
+Complete R4 convergence, then independently verifies **all three** original
+coordinator/guard pairs against the actual DB hook and native history1..4/open/
+full ACK Records. It captures those actual pairs before the first fault. No
+control command, factory, registration, role, writer or epoch is replaced.
+
+It holds only the same real maintenance State mutex while arming a second real
+origin pre-WAL fault. The same public client must produce a new actual first
+CoreUnknown/sequenceNone with matching actual transaction/ticket, successful
+real release callback and normal APP handler EXIT. The source must genuinely be
+native4/Pending5 while both peers prove actual native5/history/full new record.
+Every API intent, physical SDK attempt, result and error remains in the original
+durable journal. No probe supplies an external ACK or rollback decision.
+
+After dropping only that scheduling hold, another explicit unchanged twenty-
+second receipt gate requires old full Strong, committed5 full Strong, real next
+ACK6 and full Strong6, followed by **all three** exact native6/history1..6/full
+records/current opens under the original guards. A next ACK is remembered across
+rounds; later successful false absence/wrong value fails immediately. The full
+replica receipt must also precede the original second gate deadline. Per-attempt
+client setting remains two seconds; phase limit remains five seconds. There is
+no explicit tick, metadata registry fallback, recovery API, new genesis or
+second database open. Safe refusal or queued debt is a required failure.
+
+This is expected RED until the actual protected session-successor producer is
+implemented. First-session convergence failure is an earlier prerequisite
+failure, not evidence the second-fault gate executed. Historical tests and
+receipts are unchanged. Declaration counts with this separate test become
+`origin_pre_wal_fault_tests` 12 plus `native_hot_recovery_` 11 (23 distinct), not
+runtime results. No local build or hosted dispatch occurred.
+
+For later **actual binary** reader testing, prior public main492 at
+`e37c666660c2ce599fff516c1de9351706154b53` supports
+`<old-bicdb> inspect <DISPOSABLE_STOPPED_DB2_COPY>`. That reaches the real storage-
+mode-aware open/format compatibility path. However public492 lacks the existing
+Abort-history feature too, so its first unknown-feature refusal is nonspecific.
+A pre-7d **full prototype**, such as `9b313703467eb9ec924d30f05f9ea52baf4d9569`,
+plus an intact compatible preflag control is needed to specifically establish
+this new completed-materialization reader fence. Preserve old binary/source/SHA,
+full command/exit/stdout/stderr and before/after disposable-copy manifests. Do
+not rewrite format metadata, strip other flags or open the original native DB.
+Current Core evidence is still path-only; hosted teardown loses the actual db2
+unless a separate bounded, all-owners-stopped custody producer succeeds. It must
+copy only the actual recorded db2 data path, never the fixture's TLS ancestors.

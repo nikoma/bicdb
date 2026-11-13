@@ -2,6 +2,7 @@
 //! orchestration is expected to FAIL its terminal gate; refusal is not success.
 //! No producer, role, quorum, counter, reservation or deadline is replaced.
 use super::*;
+mod repeat_origin;
 mod replica_convergence;
 #[derive(Clone, Copy, Debug)]
 enum Scenario {
@@ -9,6 +10,7 @@ enum Scenario {
     Blackhole,
     SocketEof,
     LostFollowerReply,
+    RepeatOriginalOrigin,
     LostFollowerFenceReply,
     LostFollowerPrepareReply,
     LostOriginReply,
@@ -42,6 +44,17 @@ fn run_one_peer_loss(
         controls.iter().all(|c| c.test_hot_worker_started()),
         "all actual process workers must already be started",
     )?;
+    let original_writers = if matches!(scenario, Scenario::RepeatOriginalOrigin) {
+        controls
+            .iter()
+            .map(|control| {
+                let (coordinator, guard, _, _) = control.test_hot_recovery_bindings()?;
+                Ok((coordinator, guard))
+            })
+            .collect::<Result<Vec<_>>>()?
+    } else {
+        Vec::new()
+    };
     let (origin_controls, peers) = controls.split_at_mut(1);
     let origin_control = &origin_controls[0];
     // Separate test-only scheduling hold blocks ONLY post-Publish debt work.
@@ -49,6 +62,7 @@ fn run_one_peer_loss(
     let debt_hold = if matches!(
         scenario,
         Scenario::LostFollowerReply
+            | Scenario::RepeatOriginalOrigin
             | Scenario::LostFollowerFenceReply
             | Scenario::LostFollowerPrepareReply
             | Scenario::NativeGapBeforeFence
@@ -378,6 +392,7 @@ fn run_one_peer_loss(
     }
     let loss_runtime = match scenario {
         Scenario::LostFollowerReply
+        | Scenario::RepeatOriginalOrigin
         | Scenario::LostFollowerFenceReply
         | Scenario::LostFollowerPrepareReply => Some(peers[1].test_hot_recovery_bindings()?.2),
         Scenario::LostOriginReply => Some(origin_control.test_hot_recovery_bindings()?.2),
@@ -616,6 +631,7 @@ fn run_one_peer_loss(
     let replica_convergence = if matches!(
         scenario,
         Scenario::LostFollowerReply
+            | Scenario::RepeatOriginalOrigin
             | Scenario::LostFollowerFenceReply
             | Scenario::LostFollowerPrepareReply
             | Scenario::NativeGapBeforeFence
@@ -674,6 +690,27 @@ fn run_one_peer_loss(
         drop(debt_hold);
         None
     };
+    let repeat_receipt = if matches!(scenario, Scenario::RepeatOriginalOrigin) {
+        check(
+            replica_convergence.is_some(),
+            "second fault requires first actual complete R4 convergence",
+        )?;
+        *stage = "required_second_unknown5_same_original_owners_then_ack6_all_replicas";
+        Some(repeat_origin::run(
+            f,
+            origin_control,
+            journal,
+            &client,
+            &topology,
+            &range,
+            &old,
+            &old_value,
+            &original_writers,
+            replica_convergence.as_ref().unwrap(),
+        )?)
+    } else {
+        None
+    };
     // Post-gate observations are diagnostics, never an extension of the
     // already-measured success receipt or a substitute for a user ACK.
     let final_prefix = (|| -> Result<serde_json::Value> {
@@ -727,7 +764,7 @@ fn run_one_peer_loss(
     // Socket owner is retained through all receipts; dropping it only ends the
     // test-owned nonblocking accept worker, never starts native work.
     drop(socket_fault);
-    let terminal = serde_json::json!({"scenario":format!("{scenario:?}"),"acceptance_contract":if matches!(scenario,Scenario::SemanticThenStopped){"security-negative: retained actual semantic veto; NOT healthy-repair qualification"}else{"REQUIRED actual healthy repair and next ACK/full Strong"},"actual_reply_loss":reply_loss_snapshot,"replica_convergence":replica_convergence,"required_one_peer_loss_repair_and_next_ack":healthy,
+    let terminal = serde_json::json!({"scenario":format!("{scenario:?}"),"acceptance_contract":if matches!(scenario,Scenario::SemanticThenStopped){"security-negative: retained actual semantic veto; NOT healthy-repair qualification"}else{"REQUIRED actual healthy repair and next ACK/full Strong"},"actual_reply_loss":reply_loss_snapshot,"replica_convergence":replica_convergence,"second_origin_recovery":repeat_receipt,"required_one_peer_loss_repair_and_next_ack":healthy,
         "rounds":rounds,"ever_next_user_ack":ever_next_ack,
         "first_actual_origin_error":fault,"first_origin_unknown_is_not_rollback":true,
         "fault_api_user_ack":faulted_append.is_ok(),"terminal_elapsed_ns":health_start.elapsed().as_nanos(),
@@ -914,4 +951,10 @@ fn native_hot_peer_lost_actual_follower_fence_reply_requires_automatic_R4_conver
 #[test]
 fn native_hot_peer_lost_actual_follower_prepare_reply_requires_automatic_R4_convergence() {
     run_case(Scenario::LostFollowerPrepareReply);
+}
+
+#[test]
+fn native_hot_peer_second_actual_origin_unknown5_same_owners_requires_ack6_and_full_replica_convergence(
+) {
+    run_case(Scenario::RepeatOriginalOrigin);
 }

@@ -2,8 +2,10 @@
 
 The exact `b6398fb075eed7c93a71ab25a52fad3f936421e5` broader remote cohort,
 run 43519728051, **failed 44 passed / 7 failed**. All seven failures reported
-an expired metadata observation at the legacy local `NativeJointOldRound`
-finish, after several actual node-local closes. Six stopped before their
+`Cluster("metadata consensus: metadata observation request changed or expired")`
+at the legacy local `NativeJointOldRound` finish, after several actual node-local
+closes. That lane did not retain pre/post window diagnostics; exact deadline or
+cancellation cause is not established by the combined refusal. Six stopped before their
 named target controls. The NoDomain happy case retained range-one point
 observations, then failed while seeding range two; its complete two-range
 assertions did not pass. The raw archive SHA-256 is

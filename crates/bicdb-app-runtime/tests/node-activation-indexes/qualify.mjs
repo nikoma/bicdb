@@ -96,6 +96,7 @@ try {
   assert.deepEqual(await indexes(), installed, 'First serve creates no deferred indexes');
   const created = await call(original[0].list_route,'POST',{amount:'9007199254740992.01'}); assert.equal(created.status,201);
   const snapshot = await call(original[0].list_route,'GET'); assert.equal(snapshot.status,200);
+  assert.equal(snapshot.body.items[0].amount,'9007199254740992.01');
   assert.equal((await call(original[0].list_route,'GET',undefined,other)).body.items.length,0);
   assert.equal((await call(original[0].list_route,'GET',undefined,tenant,['viewer'])).status,403);
   await h.stop();
@@ -108,6 +109,16 @@ try {
   assert.deepEqual(await indexes(), installed, 'Failed populated upgrade compensates new SQL and resource indexes');
   const collections = await fs.readFile(database+'/collections.json','utf8');
   assert(!collections.includes('activation_new')&&!collections.includes('activation_collision'), 'Failed upgrade compensates new collections and schemas');
+  // A resource-local partial UNIQUE index must never shadow the complete SQL
+  // primary-key index, even when its name and fields match that primary key.
+  const shadow = resource('ActivationShadow','activation_shadow');
+  shadow.unique_targets = [{target:'id',fields:['id'],index_name:'activation_shadow_pkey',predicate:{op:'literal',value:true}}];
+  shadow.contract_sha256 = ''; shadow.contract_sha256 = sha(JSON.stringify(shadow));
+  const partial = await build('2.1.0',[shadow,...original]);
+  const shadowRefused = await cli(lifecycle('upgrade',partial),false);
+  assert.match(shadowRefused,/index "activation_shadow_pkey" conflicts with an embedded table constraint/);
+  assert.deepEqual(await indexes(),installed,'Partial UNIQUE collision cannot weaken primary key or leave residue');
+  assert(!(await fs.readFile(database+'/collections.json','utf8')).includes('activation_shadow'));
   await h.start(tenant); assert.deepEqual(await call(original[0].list_route,'GET'),snapshot);
   await h.restart(tenant); assert.deepEqual(await call(original[0].list_route,'GET'),snapshot);
   await h.coldRestore(tenant); assert.deepEqual(await call(original[0].list_route,'GET'),snapshot);

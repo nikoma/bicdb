@@ -87,6 +87,7 @@ pub(super) fn exercise(
     );
     drop(hook);
     let mut failure = None;
+    let mut successful_retry = None;
     if matches!(case, SourceCase::TargetTransfer) {
         result.unwrap();
     } else {
@@ -137,6 +138,7 @@ pub(super) fn exercise(
                 &retry,
             )
             .unwrap();
+        successful_retry = Some(retry);
     }
     let retained = control.test_registered_remote_attempt(range).unwrap();
     if matches!(
@@ -154,6 +156,9 @@ pub(super) fn exercise(
         );
         let error = runtime.source_capture_freeze(&scope).unwrap_err();
         assert!(error.to_string().contains("freeze is leased"), "{error}");
+        if let Some(actual_caller) = successful_retry {
+            actual_caller.cancel();
+        }
         parent.cancel();
         assert_eq!(
             control.test_registered_remote_attempt(range).unwrap(),

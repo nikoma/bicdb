@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-extension"
-version = "1.0.495-beta"
+version = "1.0.496-beta"
 edition.workspace = true
 license = "Apache-2.0"
 rust-version.workspace = true

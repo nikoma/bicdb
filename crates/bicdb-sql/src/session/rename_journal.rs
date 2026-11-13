@@ -111,6 +111,12 @@ fn backing_name(db: &BicDb, storage: &str, namespace_id: uuid::Uuid) -> Result<S
     if namespace_id.is_nil() {
         return Err(invalid("nil physical namespace identity"));
     }
+    // A journal replicated from another primary names that primary's
+    // backing; a promoted node resolves it to its own imported allocation.
+    let (storage, namespace_id) = db
+        .resolve_native_backing(storage, namespace_id)?
+        .ok_or_else(|| invalid("missing, replaced, or ambiguous physical backing"))?;
+    let storage = storage.as_str();
     let names = db
         .collections()
         .into_iter()
@@ -456,6 +462,9 @@ fn rollback_inner(db: &mut BicDb, id: &str, mut owner: Option<&mut Transaction>)
                 if let Some(scope) = &scope {
                     db.check_catalog_scope_resources(scope, &[old.clone(), new.clone()], &[])?;
                 }
+                let (storage, namespace_id) = db
+                    .resolve_native_backing(&storage, namespace_id)?
+                    .unwrap_or((storage, namespace_id));
                 let matches = names
                     .iter()
                     .filter(|(_, backing)| backing.0 == storage && backing.1 == Some(namespace_id))

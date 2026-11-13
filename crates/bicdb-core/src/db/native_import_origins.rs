@@ -165,6 +165,44 @@ impl BicDb {
         Ok(true)
     }
 
+    /// Read-only resolution of a physical backing named by the node that
+    /// recorded it. A journal replicated from another primary names that
+    /// primary's `(storage, namespace)`; a completed imported allocation
+    /// retains exactly that pair for its own local backing. Returns this
+    /// node's `(storage, namespace)`, `None` when nothing matches, and an
+    /// error when more than one backing would. A pending import never
+    /// resolves. This grants no authority and changes nothing.
+    pub fn resolve_native_backing(
+        &self,
+        storage: &str,
+        namespace_id: Uuid,
+    ) -> Result<Option<(String, Uuid)>> {
+        if namespace_id.is_nil() {
+            return Ok(None);
+        }
+        let mut found = BTreeSet::new();
+        for meta in self.collections() {
+            let Some(local) = meta.local_namespace_id else {
+                continue;
+            };
+            let imported = meta
+                .native_imported_backing_origin
+                .as_ref()
+                .is_some_and(|origin| {
+                    !origin.pending
+                        && origin.source_namespace == namespace_id
+                        && origin.source_storage == storage
+                });
+            if imported || (local == namespace_id && meta.storage() == storage) {
+                found.insert((meta.storage().to_string(), local));
+            }
+        }
+        if found.len() > 1 {
+            return Err(invalid("ambiguous local or imported physical backing"));
+        }
+        Ok(found.into_iter().next())
+    }
+
     pub(super) fn accept_native_import(
         &self,
         frame: &CommitFrame,

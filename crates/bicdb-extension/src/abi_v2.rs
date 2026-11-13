@@ -3281,6 +3281,15 @@ impl ApplicationManifestV2 {
                     "finance.units_limb requires signed exact_unit_limb_access feature",
                 );
             }
+            if application_program_uses_builtin(program, &["auth.current_principal"])
+                && !self
+                    .required_features
+                    .contains(&ApplicationFeature::AuthenticatedPrincipal)
+            {
+                return invalid(
+                    "auth.current_principal requires signed authenticated_principal feature",
+                );
+            }
             if application_program_uses_builtin(program, &["query.decimal_sum"])
                 && !self
                     .required_features
@@ -5228,6 +5237,9 @@ fn validate_carrier_expression(expression: &ApplicationExpressionV1) -> Result<(
             arguments,
             ..
         } => {
+            if *kind == ApplicationCallKindV1::Builtin && target == "auth.current_principal" {
+                validate_authenticated_principal_call(expression)?;
+            }
             if *kind == ApplicationCallKindV1::Builtin && target == "finance.proportional_interval"
             {
                 validate_proportional_interval_call(expression)?;
@@ -6139,6 +6151,7 @@ impl EgressDeclaration {
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum ApplicationFeature {
+    AuthenticatedPrincipal,
     ExactUnitLimbAccess,
     ExactDecimalUnits,
     ExactDecimalListSum,
@@ -6747,6 +6760,33 @@ impl ApplicationInvariantV1 {
         }
         Ok(())
     }
+}
+
+fn validate_authenticated_principal_call(expression: &ApplicationExpressionV1) -> Result<()> {
+    let ApplicationExpressionV1::Call {
+        kind: ApplicationCallKindV1::Builtin,
+        target,
+        method,
+        result_type,
+        argument_types,
+        argument_item_types,
+        result_projection,
+        arguments,
+    } = expression
+    else {
+        return invalid("authenticated principal requires its typed builtin call");
+    };
+    if target != "auth.current_principal"
+        || method.is_some()
+        || *result_type != Some(ApplicationExpressionTypeV1::Other)
+        || !argument_types.is_empty()
+        || !argument_item_types.is_empty()
+        || result_projection.is_some()
+        || !arguments.is_empty()
+    {
+        return invalid("auth.current_principal requires exactly zero arguments and its declared record result; methods and projections are forbidden");
+    }
+    Ok(())
 }
 
 fn validate_exact_decimal_units_call(expression: &ApplicationExpressionV1) -> Result<()> {

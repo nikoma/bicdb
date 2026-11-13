@@ -2663,6 +2663,20 @@ impl<'db> SqlSession<'db> {
         self.tx.as_ref().or(self.parent_tx)
     }
 
+    /// The native transaction's trusted mutation actor identifies an owning
+    /// application invocation. SQL roles, GUCs and routine/view execution cannot
+    /// change it. Only the host may finish that transaction; ordinary operator
+    /// SQL transactions retain their existing control semantics.
+    pub(crate) fn require_local_transaction_control(&self) -> Result<()> {
+        if self
+            .read_tx()
+            .is_some_and(|tx| tx.mutation_actor().is_some())
+        {
+            return Err(SqlError::ApplicationTransactionControlDenied);
+        }
+        Ok(())
+    }
+
     /// Takes the pending (uncommitted) transaction produced by a deferred
     /// autocommit execution, if one is present.
     /// `(channel, payload)` notifications raised by this session's trigger
@@ -3939,6 +3953,19 @@ impl<'db> SqlSession<'db> {
     }
 
     fn execute_parsed_statement_in_sql(&mut self, statement: &Statement) -> Result<SqlResult> {
+        if matches!(
+            statement,
+            Statement::StartTransaction { .. }
+                | Statement::Commit { .. }
+                | Statement::Rollback {
+                    savepoint: None,
+                    ..
+                }
+        ) {
+            // Refuse before snapshots, hooks, state changes or transaction
+            // extraction. ROLLBACK TO/SAVEPOINT/RELEASE remain local operations.
+            self.require_local_transaction_control()?;
+        }
         self.ensure_read_only_statement(statement)?;
         self.acquire_postgres_statement_snapshot(|| {
             postgres_execution_requires_snapshot(&statement.to_string())
@@ -4035,6 +4062,7 @@ impl<'db> SqlSession<'db> {
     }
 
     fn finish_chained_transaction(&mut self, commit: bool) -> Result<SqlResult> {
+        self.require_local_transaction_control()?;
         let tx = self
             .tx
             .as_ref()
@@ -4099,6 +4127,9 @@ impl<'db> SqlSession<'db> {
     }
 
     pub(crate) fn commit(&mut self) -> Result<SqlResult> {
+        // Also guard internal commit entry points reached through nested CALL
+        // and dynamic SQL, before deferred hooks or any durable effect.
+        self.require_local_transaction_control()?;
         if self.oracle_autonomous && !self.pending_notifications.is_empty() {
             return Err(SqlError::Unsupported(
                 "independent notification delivery is not implemented".into(),

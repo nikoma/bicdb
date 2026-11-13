@@ -69,6 +69,14 @@ parameter errors have typed origins (42501 and 22023); matching RAISE strings
 do not acquire those origins. The host restores its owning transaction before
 error mapping and rolls back failed deferred validation.
 
+An application transaction's native mutation actor also preserves its ownership
+through SQL calls. SQL cannot finish that host-owned unit with COMMIT, full
+ROLLBACK, AND CHAIN, nested BEGIN or independent autonomous execution. Refusal
+occurs before hooks or durable effects, with a typed `2D000` origin mapped to an
+application capability denial. Local savepoints and internal error rollback
+remain available; ordinary operator transactions retain their control semantics.
+The host alone performs the application's final commit or rollback.
+
 Proration takes canonical unsigned ASCII cost units and positive quantity atoms,
 each less than `2^254`, with no signs, leading zeros except `"0"`, whitespace or
 exponents. Quantity precision is 0 through 12 and amount scale 0 through 8.

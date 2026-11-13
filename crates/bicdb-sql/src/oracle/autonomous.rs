@@ -298,6 +298,9 @@ impl SqlSession<'_> {
         &mut self,
         execute: impl FnOnce(&mut SqlSession<'_>) -> Result<T>,
     ) -> Result<T> {
+        // An application invocation has no authority to turn its host-owned
+        // atomic unit into independent durable child effects.
+        self.require_local_transaction_control()?;
         let effects = crate::statement_context::StatementScope::enter();
         // Once an independent routine starts, avoid speculative replay even
         // if a later commit reports a post-durability delivery error.

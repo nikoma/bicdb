@@ -1945,6 +1945,9 @@ pub enum SqlError {
     #[error("signed application requires the exact_decimal_units feature")]
     ExactUnitsCapabilityDenied,
 
+    #[error("transaction control is not permitted inside a host-owned application transaction")]
+    ApplicationTransactionControlDenied,
+
     /// Domain failure from the exact-unit leaf, distinct from arbitrary SQL
     /// routines which may raise the same SQLSTATE or copy its message.
     #[error("{0}")]
@@ -2051,6 +2054,17 @@ pub enum SqlError {
 }
 
 impl SqlError {
+    pub fn is_application_transaction_control_denied(&self) -> bool {
+        match self {
+            Self::ApplicationTransactionControlDenied => true,
+            Self::WithNotices { error, .. } => error.is_application_transaction_control_denied(),
+            Self::OracleContext { inner, .. } | Self::Rethrown(inner) => {
+                inner.is_application_transaction_control_denied()
+            }
+            _ => false,
+        }
+    }
+
     pub fn is_exact_units_capability_denied(&self) -> bool {
         match self {
             Self::ExactUnitsCapabilityDenied => true,
@@ -2229,6 +2243,7 @@ impl SqlError {
             Self::RaisedException { sqlstate, .. } => sqlstate,
             Self::InvalidSql(_) => "42601",
             Self::ExactUnitsCapabilityDenied => "42501",
+            Self::ApplicationTransactionControlDenied => "2D000",
             Self::ExactUnitsParameter(_) => "22023",
             Self::InvalidTextRepresentation(_) => "22P02",
             Self::DataException { sqlstate, .. } => sqlstate,

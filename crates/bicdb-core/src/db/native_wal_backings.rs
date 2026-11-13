@@ -32,6 +32,25 @@ pub(super) fn validated(
 }
 
 impl BicDb {
+    /// Explicitly fence writers that know collection births but do not retain
+    /// their historical write-time contracts. This never retrofits older WAL
+    /// and grants neither peer authentication nor imported recovery authority.
+    pub fn activate_native_wal_backing_capture_v1(&mut self) -> Result<()> {
+        self.ensure_writable("activate Native WAL backing capture")?;
+        self.check_catalog_recovery_quiescent()?;
+        if !self.native_collection_birth_active {
+            return Err(BicDbError::InvalidConfig(
+                "Native WAL backing capture requires explicit collection birth activation".into(),
+            ));
+        }
+        if let Err(error) = format::enable_native_wal_backing_capture(&self.path) {
+            self.fence_durability("native_wal_backing_capture.format_fence", &error);
+            return Err(error);
+        }
+        self.native_wal_backing_capture_active = true;
+        Ok(())
+    }
+
     /// Called once while encoding the Native commit decision, after writes
     /// have their actual backing and while catalog structure is pinned. WAL
     /// preparation contains only row frames, so it cannot cache stale births.
@@ -39,18 +58,24 @@ impl BicDb {
         &self,
         writes: &[TxWrite],
     ) -> Result<BTreeMap<String, CollectionMeta>> {
-        if !self.native_collection_birth_active {
+        if !self.native_wal_backing_capture_active {
             return Ok(BTreeMap::new());
         }
-        let names = writes
-            .iter()
-            .map(|w| &w.collection)
-            .collect::<BTreeSet<_>>();
+        let grouped = tx_writes_by_collection(writes);
         let mut backings = BTreeMap::new();
-        for name in names {
+        for (name, writes) in grouped {
             let state = self.collection_state(name)?;
             if state.meta.native_backing_birth_id.is_some() {
-                backings.insert(name.clone(), state.meta.clone());
+                let mut meta = state.meta.clone();
+                // A first vector fixes its dimension in this same commit.
+                // Capture the validated result before apply changes the live
+                // catalog, without parsing stored row metadata.
+                for write in writes {
+                    if matches!(write.op, TxWriteOp::Upsert) {
+                        validate_write_record(name, write, &mut meta.vector_dim)?;
+                    }
+                }
+                backings.insert(name.to_owned(), meta);
             }
         }
         validated(backings)
@@ -67,7 +92,7 @@ impl BicDb {
         if backings.is_empty() || !self.config.fsync {
             return Ok(frame);
         }
-        if !self.native_collection_birth_active {
+        if !self.native_wal_backing_capture_active {
             return Err(BicDbError::FormatCompatibility(
                 "Native WAL allocation data has no local format fence".into(),
             ));

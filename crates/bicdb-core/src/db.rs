@@ -4000,6 +4000,7 @@ pub struct BicDb {
     // Opt-in, sticky local format capability; never a portable reader flag.
     local_namespace_identity_active: bool,
     native_collection_birth_active: bool,
+    native_wal_backing_capture_active: bool,
     sql_partition_execution_v1_active: AtomicBool,
     ha_state: HaState,
     replication_state: ReplicationApplyState,
@@ -10630,9 +10631,16 @@ impl BicDb {
             format_capabilities.contains(format::LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG);
         let native_collection_birth_active =
             format_capabilities.contains(format::NATIVE_COLLECTION_BIRTH_FEATURE_FLAG);
-        if tx_recovery.requires_native_collection_birth && !native_collection_birth_active {
+        let native_wal_backing_capture_active =
+            format_capabilities.contains(format::NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG);
+        if native_wal_backing_capture_active && !native_collection_birth_active {
             return Err(BicDbError::FormatCompatibility(
-                "Native WAL backing identities require the collection birth format fence".into(),
+                "Native WAL backing capture has no collection birth format fence".into(),
+            ));
+        }
+        if tx_recovery.requires_native_collection_birth && !native_wal_backing_capture_active {
+            return Err(BicDbError::FormatCompatibility(
+                "Native WAL backing identities require the write capture format fence".into(),
             ));
         }
         let sql_partition_execution_v1_active =
@@ -11428,6 +11436,7 @@ impl BicDb {
             config,
             local_namespace_identity_active,
             native_collection_birth_active,
+            native_wal_backing_capture_active,
             sql_partition_execution_v1_active: AtomicBool::new(sql_partition_execution_v1_active),
             ha_state,
             replication_state,

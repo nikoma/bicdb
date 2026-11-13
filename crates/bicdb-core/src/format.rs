@@ -33,6 +33,9 @@ pub const SQL_RENAME_INTENTS_FEATURE_FLAG: &str = "sql_rename_intents_v1";
 pub const LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG: &str = "local_namespace_identity_v1";
 /// Future-only local allocation identities, never portable reader authority.
 pub const NATIVE_COLLECTION_BIRTH_FEATURE_FLAG: &str = "native_collection_birth_v1";
+/// Local historical WAL allocation contracts; birth-aware older writers must
+/// refuse rather than silently discard these additional commit facts.
+pub const NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG: &str = "native_wal_backing_capture_v1";
 /// Local native image receipts require writers that honor image invalidation.
 /// This capability is separate from namespace IDs and is never portable schema.
 pub const RANGE_IMAGE_INSTALL_FEATURE_FLAG: &str = "range_image_install_v1";
@@ -70,6 +73,7 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     SQL_RENAME_INTENTS_FEATURE_FLAG,
     LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
     NATIVE_COLLECTION_BIRTH_FEATURE_FLAG,
+    NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG,
     RANGE_IMAGE_INSTALL_FEATURE_FLAG,
     CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG,
     NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
@@ -682,6 +686,9 @@ fn persist_metadata_with(
             .contains(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG)
         || metadata
             .feature_flags
+            .contains(NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG)
+        || metadata
+            .feature_flags
             .contains(SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG)
         || metadata
             .feature_flags
@@ -817,6 +824,29 @@ pub(crate) fn enable_native_collection_birth(root: &Path) -> Result<()> {
     metadata
         .feature_flags
         .insert(NATIVE_COLLECTION_BIRTH_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+pub(crate) fn enable_native_wal_backing_capture(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_COLLECTION_BIRTH_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "Native WAL backing capture requires collection births and local namespace identities"
+                .into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG.into());
     persist_metadata(root, &metadata, true)
 }
 

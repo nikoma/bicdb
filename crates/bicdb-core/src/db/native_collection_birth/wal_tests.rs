@@ -32,6 +32,7 @@ fn retained_write_contract_after_name_reuse(live: bool) {
         db.sync_quorum().hold("native-birth-export-control", 0);
         db.activate_local_namespace_identity_v1().unwrap();
         db.activate_native_collection_birth_v1().unwrap();
+        db.activate_native_wal_backing_capture_v1().unwrap();
         db.create_collection("items").unwrap();
         db.create_collection("independent").unwrap();
         let row = Record::new("old_ACK").with_metadata(json!({"owner":"original"}));
@@ -136,12 +137,135 @@ fn native_birth_retained_live_export_does_not_rebind_old_writes_to_reused_names(
 }
 
 #[test]
+fn native_birth_wal_activation_is_separate_future_only_and_persists_across_restart() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        db.sync_quorum().hold("future-only-capture-control", 0);
+        assert!(db.activate_native_wal_backing_capture_v1().is_err());
+        db.activate_local_namespace_identity_v1().unwrap();
+        db.activate_native_collection_birth_v1().unwrap();
+        db.create_collection("items").unwrap();
+        let birth = db.native_collection_birth_id("items").unwrap();
+        assert!(birth.is_some());
+        db.insert("items", Record::new("before_capture_ACK"))
+            .unwrap();
+        let old_seq = db.last_commit_seq();
+        assert!(
+            db.export_replication_frames_since(old_seq - 1, 1).unwrap()[0]
+                .captured_native_wal_backings()
+                .unwrap()
+                .is_none()
+        );
+        db.activate_native_wal_backing_capture_v1().unwrap();
+        db.activate_native_wal_backing_capture_v1().unwrap();
+        assert_eq!(db.last_commit_seq(), old_seq);
+        assert!(!format::required_reader_features(root.path())
+            .unwrap()
+            .iter()
+            .any(|flag| flag == format::NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG));
+        db.insert("items", Record::new("after_capture_ACK"))
+            .unwrap();
+        let new_seq = db.last_commit_seq();
+        db.close().unwrap();
+        for _ in 0..2 {
+            let db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            let old = db
+                .export_replication_frames_since(old_seq - 1, 1)
+                .unwrap()
+                .remove(0);
+            let new = db
+                .export_replication_frames_since(new_seq - 1, 1)
+                .unwrap()
+                .remove(0);
+            assert!(old.captured_native_wal_backings().unwrap().is_none());
+            assert_eq!(
+                new.captured_native_wal_backings().unwrap().unwrap()["items"]
+                    .native_backing_birth_id,
+                birth
+            );
+            assert!(db.get("items", "before_capture_ACK").unwrap().is_some());
+            assert!(db.get("items", "after_capture_ACK").unwrap().is_some());
+            db.close().unwrap();
+        }
+    }
+}
+
+#[test]
+fn native_birth_wal_captures_first_vector_contract_and_complete_native_payload() {
+    for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
+        let root = tempfile::tempdir().unwrap();
+        let cfg = config(mode);
+        let mut db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+        db.sync_quorum().hold("full-native-wal-control", 0);
+        db.activate_local_namespace_identity_v1().unwrap();
+        db.activate_native_collection_birth_v1().unwrap();
+        db.activate_native_wal_backing_capture_v1().unwrap();
+        db.create_collection("items").unwrap();
+        let row = Record::new("full_ACK")
+            .with_vector(vec![1.25, -2.5, 3.0])
+            .with_timestamp(1731000000)
+            .with_payload(vec![0, 255, 1, 128])
+            .with_metadata(json!({"value": "Native", "unknown": {"nested": [null, true, "雪"]}}));
+        db.insert("items", row.clone()).unwrap();
+        let seq = db.last_commit_seq();
+        let birth = db.native_collection_birth_id("items").unwrap();
+        assert_eq!(
+            db.collections()
+                .into_iter()
+                .find(|m| m.name == "items")
+                .unwrap()
+                .vector_dim,
+            Some(3)
+        );
+        db.close().unwrap();
+        for _ in 0..2 {
+            let db = BicDb::open_with_config(root.path(), cfg.clone()).unwrap();
+            for frames in [
+                db.export_replication_frames_since(seq - 1, 1).unwrap(),
+                db.replication_frames_after(&mut crate::ReplicationCursor::new(seq - 1), 1)
+                    .unwrap(),
+            ] {
+                let frame = &frames[0];
+                let captured = frame.captured_native_wal_backings().unwrap().unwrap();
+                assert_eq!(captured["items"].native_backing_birth_id, birth);
+                assert_eq!(captured["items"].vector_dim, Some(3));
+                let write = frame
+                    .writes
+                    .iter()
+                    .find(|w| w.record_id == "full_ACK")
+                    .unwrap();
+                assert_eq!(write.collection_meta.as_ref().unwrap().vector_dim, Some(3));
+                assert_eq!(
+                    serde_json::from_slice::<Record>(&write.payload)
+                        .unwrap()
+                        .content_hash()
+                        .unwrap(),
+                    row.content_hash().unwrap()
+                );
+            }
+            assert_eq!(
+                db.get("items", "full_ACK")
+                    .unwrap()
+                    .unwrap()
+                    .content_hash()
+                    .unwrap(),
+                row.content_hash().unwrap()
+            );
+            db.close().unwrap();
+        }
+    }
+}
+
+#[test]
 fn native_birth_wal_capture_is_bound_to_actual_frame_and_never_decoded_from_json() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let root = tempfile::tempdir().unwrap();
         let mut db = BicDb::open_with_config(root.path(), config(mode)).unwrap();
         db.activate_local_namespace_identity_v1().unwrap();
         db.activate_native_collection_birth_v1().unwrap();
+        db.activate_native_wal_backing_capture_v1().unwrap();
         db.create_collection("items").unwrap();
         db.insert(
             "items",
@@ -222,6 +346,7 @@ fn native_birth_old_wal_is_never_retrofitted_and_async_sources_mint_no_capture()
         let legacy_seq = db.last_commit_seq();
         db.activate_local_namespace_identity_v1().unwrap();
         db.activate_native_collection_birth_v1().unwrap();
+        db.activate_native_wal_backing_capture_v1().unwrap();
         db.rename_collection("items", "kept").unwrap();
         db.create_collection("items").unwrap();
         assert!(db.native_collection_birth_id("items").unwrap().is_some());
@@ -240,6 +365,9 @@ fn native_birth_old_wal_is_never_retrofitted_and_async_sources_mint_no_capture()
             BicDb::open_with_config(async_root.path(), config(mode).with_fsync(false)).unwrap();
         asynchronous.activate_local_namespace_identity_v1().unwrap();
         asynchronous.activate_native_collection_birth_v1().unwrap();
+        asynchronous
+            .activate_native_wal_backing_capture_v1()
+            .unwrap();
         asynchronous.create_collection("items").unwrap();
         asynchronous
             .insert("items", Record::new("async_row"))
@@ -278,6 +406,7 @@ fn native_birth_wal_keeps_dropped_identity_and_requires_its_format_fence_after_r
             .unwrap();
         db.activate_local_namespace_identity_v1().unwrap();
         db.activate_native_collection_birth_v1().unwrap();
+        db.activate_native_wal_backing_capture_v1().unwrap();
         db.create_collection("born").unwrap();
         db.insert("born", Record::new("old_ACK")).unwrap();
         let seq = db.last_commit_seq();
@@ -294,7 +423,7 @@ fn native_birth_wal_keeps_dropped_identity_and_requires_its_format_fence_after_r
         damaged["feature_flags"]
             .as_array_mut()
             .unwrap()
-            .retain(|flag| flag.as_str() != Some(format::NATIVE_COLLECTION_BIRTH_FEATURE_FLAG));
+            .retain(|flag| flag.as_str() != Some(format::NATIVE_WAL_BACKING_CAPTURE_FEATURE_FLAG));
         fs::write(&path, serde_json::to_vec_pretty(&damaged).unwrap()).unwrap();
         let error = BicDb::open_with_config(root.path(), cfg.clone()).unwrap_err();
         assert!(

@@ -350,6 +350,7 @@ impl NativeCertifiedRangePrefix {
         if matches!(
             self.certificate_evidence,
             NativeRangeCertificateEvidence::HistoricalCurrentCertificateQuorum { .. }
+                | NativeRangeCertificateEvidence::CompletedDecisionMaterializationQuorum { .. }
         ) != self.recovery_attempt.is_some()
         {
             return Err(invalid(
@@ -754,6 +755,15 @@ impl BicDb {
         self.validate_native_range_base_history(birth, base)?;
         let joint = self.read_native_joint_serving_domain(birth, base)?;
         if let Some(prefix) = &prefix {
+            if matches!(
+                prefix.certificate_evidence,
+                NativeRangeCertificateEvidence::CompletedDecisionMaterializationQuorum { .. }
+            ) && !crate::format::native_completed_decision_materialization_active(&self.path)?
+            {
+                return Err(invalid(
+                    "actual completed-decision prefix requires its sticky reader fence",
+                ));
+            }
             prefix.validate_with_native_joint_domain(birth, base, joint.as_ref())?;
             let entry = self.read_native_history_entry(
                 prefix.range_id,

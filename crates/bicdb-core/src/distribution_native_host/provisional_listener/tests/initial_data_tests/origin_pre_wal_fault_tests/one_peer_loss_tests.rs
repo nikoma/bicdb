@@ -9,7 +9,10 @@ enum Scenario {
     Blackhole,
     SocketEof,
     LostFollowerReply,
+    LostFollowerFenceReply,
+    LostFollowerPrepareReply,
     LostOriginReply,
+    NativeGapBeforeFence,
     SemanticThenStopped,
 }
 impl Scenario {
@@ -43,7 +46,13 @@ fn run_one_peer_loss(
     let origin_control = &origin_controls[0];
     // Separate test-only scheduling hold blocks ONLY post-Publish debt work.
     // Original actual state hold below still owns the genuine pre-fault cut.
-    let debt_hold = if matches!(scenario, Scenario::LostFollowerReply) {
+    let debt_hold = if matches!(
+        scenario,
+        Scenario::LostFollowerReply
+            | Scenario::LostFollowerFenceReply
+            | Scenario::LostFollowerPrepareReply
+            | Scenario::NativeGapBeforeFence
+    ) {
         Some(origin_control.test_hold_hot_replica_debt_schedule(&budget(1000))?)
     } else {
         None
@@ -126,6 +135,15 @@ fn run_one_peer_loss(
         "event_id":crate::cluster_event_record_id("items",&old)?,"full_payload":old_value,
         "actual_command":old_command,"native_before":before}),
     )?;
+    let gap_runtime = if matches!(scenario, Scenario::NativeGapBeforeFence) {
+        Some(peers[1].test_hot_recovery_bindings()?.2)
+    } else {
+        None
+    };
+    let gap_arm = gap_runtime
+        .as_ref()
+        .map(|runtime| runtime.test_arm_native_apply_pre_effect(range.id, old_r + 1))
+        .transpose()?;
     *stage = "actual_origin_unknown_release_exit_with_controller_held";
     let arm: crate::db::NativeOriginFaultArm = database
         .read()
@@ -213,6 +231,47 @@ fn run_one_peer_loss(
         if node(i) == range.leader {
             continue;
         }
+        if i == 2 && matches!(scenario, Scenario::NativeGapBeforeFence) {
+            let cq = host
+                ._service
+                .lock()
+                .probe_range_write_for_peer(&range, &node(0), entry.command.index)?
+                .entry
+                .ok_or_else(|| BicDbError::Cluster("real target CQ body is absent".into()))?;
+            let fact = {
+                let db = host.seed.database.read();
+                let lineage = db.current_native_range_source_lineage(range.id)?;
+                db.require_native_command_materialized(&lineage, &old_command)?;
+                let old_record = db
+                    .get(
+                        crate::CLUSTER_EVENTS_COLLECTION,
+                        &crate::cluster_event_record_id("items", &old)?,
+                    )?
+                    .ok_or_else(|| {
+                        BicDbError::Cluster("real target original ACK payload missing".into())
+                    })?;
+                let prefix = db.native_range_prefix_observation(range.id)?;
+                check(
+                    lineage.range_index() == 1
+                        && lineage.logical_genesis_sha256() == before["H0"].as_str().unwrap()
+                        && old_record.metadata == old_value
+                        && prefix.pending_command_index.is_none()
+                        && cq.command == entry.command
+                        && cq.state == crate::RangeWriteState::QuorumCommitted,
+                    "required actual target CQ2/native1 cut not established",
+                )?;
+                serde_json::json!({"actual_native_R":lineage.range_index(),"actual_H0":lineage.logical_genesis_sha256(),
+                    "actual_H1":lineage.logical_history_sha256(),"actual_old_full_record":old_record,"actual_prefix":prefix,"actual_CQ_entry":cq})
+            };
+            let fired = gap_arm.as_ref().unwrap().snapshot();
+            check(fired["actual_authenticated_pre_effect_request"]["before_native_effect"] == true
+                && fired["actual_authenticated_pre_effect_request"]["actual_command"]["checksum_sha256"] == entry.command.checksum_sha256,
+                "real authenticated NativeApply pre-effect fault did not capture exact original command")?;
+            journal.append(serde_json::json!({"kind":"actual_target_native_gap_before_any_recovery_fence",
+                "actual":fact,"actual_pre_effect_fault":fired,"no_native_floor_from_absence_or_CQ":true}))?;
+            physical.push(serde_json::json!({"node":node(2),"actual_CQ2_native1":fact}));
+            continue;
+        }
         // Collect BOTH actual peers before asserting. The DB guard ends before
         // any diagnostic fsync; a failed prerequisite is retained, not skipped.
         let actual = (|| -> Result<serde_json::Value> {
@@ -252,17 +311,23 @@ fn run_one_peer_loss(
         "actual_command":entry.command,"raw_state":entry.state,"peer_native_materialization":physical,
         "native_proof_not_inferred_from_raw_counters":true}))?;
     check(
-        materialized == 2,
+        materialized
+            == if matches!(scenario, Scenario::NativeGapBeforeFence) {
+                1
+            } else {
+                2
+            },
         "two actual peer native materialization prerequisites failed",
     )?;
     check(
-        physical
-            .iter()
-            .all(|p| p["verified_actual_native"]["native_R"] == 2)
-            && physical[0]["verified_actual_native"]["H0"] == before["H0"]
-            && physical[1]["verified_actual_native"]["H0"] == before["H0"]
-            && physical[0]["verified_actual_native"]["H"]
-                == physical[1]["verified_actual_native"]["H"],
+        matches!(scenario, Scenario::NativeGapBeforeFence)
+            || physical
+                .iter()
+                .all(|p| p["verified_actual_native"]["native_R"] == 2)
+                && physical[0]["verified_actual_native"]["H0"] == before["H0"]
+                && physical[1]["verified_actual_native"]["H0"] == before["H0"]
+                && physical[0]["verified_actual_native"]["H"]
+                    == physical[1]["verified_actual_native"]["H"],
         "both actual peers must prove the same exact native R2 history before losing one",
     )?;
 
@@ -312,13 +377,23 @@ fn run_one_peer_loss(
         }
     }
     let loss_runtime = match scenario {
-        Scenario::LostFollowerReply => Some(peers[1].test_hot_recovery_bindings()?.2),
+        Scenario::LostFollowerReply
+        | Scenario::LostFollowerFenceReply
+        | Scenario::LostFollowerPrepareReply => Some(peers[1].test_hot_recovery_bindings()?.2),
         Scenario::LostOriginReply => Some(origin_control.test_hot_recovery_bindings()?.2),
         _ => None,
     };
     let reply_loss = loss_runtime
         .as_ref()
-        .map(|r| r.test_arm_hot_completion_reply_loss(range.id, entry.command.index))
+        .map(|r| match scenario {
+            Scenario::LostFollowerFenceReply => {
+                r.test_arm_hot_fence_reply_loss(range.id, entry.command.index)
+            }
+            Scenario::LostFollowerPrepareReply => {
+                r.test_arm_hot_prepare_reply_loss(range.id, entry.command.index)
+            }
+            _ => r.test_arm_hot_completion_reply_loss(range.id, entry.command.index),
+        })
         .transpose()?;
     let mut socket_fault = None;
     if scenario.stops_peer() {
@@ -390,6 +465,30 @@ fn run_one_peer_loss(
                 "scenario":format!("{scenario:?}"),"address":configs[1].node_address,
                 "no_native_metadata_or_tls_authority":true,"health_elapsed_ns":health_start.elapsed().as_nanos()}))?;
         }
+    }
+    if matches!(scenario, Scenario::NativeGapBeforeFence) {
+        journal.append(serde_json::json!({"kind":"network_only_target_pause_intent",
+            "target":node(2),"health_elapsed_ns":health_start.elapsed().as_nanos(),
+            "original_writer_runtime_DB_Store_retained":true,"no_recovery_or_hook_retirement":true}))?;
+        peers[1].test_pause_initial_data_listener_only(
+            &health_parent
+                .child_with_deadline(health_end.min(Instant::now() + Duration::from_secs(5))),
+        )?;
+        let address: std::net::SocketAddr = configs[2]
+            .node_address
+            .parse()
+            .map_err(|_| BicDbError::Cluster("actual target endpoint not numeric".into()))?;
+        let refused = std::net::TcpStream::connect_timeout(&address, Duration::from_millis(100))
+            .err()
+            .is_some_and(|e| e.kind() == std::io::ErrorKind::ConnectionRefused);
+        health_parent.check()?;
+        journal.append(serde_json::json!({"kind":"actual_target_listener_paused_before_repair",
+            "target":node(2),"actual_connection_refused":refused,"health_elapsed_ns":health_start.elapsed().as_nanos(),
+            "same_owner_not_cold_reopen":true}))?;
+        check(
+            refused,
+            "real native-gap target listener did not prove connection refusal",
+        )?;
     }
     // Current leader IDs are routing DATA. Only the following genuine fresh
     // sealed HostMQ proves the surviving cohort can still serve metadata.
@@ -514,12 +613,31 @@ fn run_one_peer_loss(
             break;
         }
     }
-    let replica_convergence = if matches!(scenario, Scenario::LostFollowerReply) && healthy {
-        let loss = reply_loss.as_ref().unwrap().snapshot();
-        check(
-            loss["suppressed_after_actual_producer"] == true,
-            "follower convergence requires actual post-Complete reply loss first",
-        )?;
+    let replica_convergence = if matches!(
+        scenario,
+        Scenario::LostFollowerReply
+            | Scenario::LostFollowerFenceReply
+            | Scenario::LostFollowerPrepareReply
+            | Scenario::NativeGapBeforeFence
+    ) && healthy
+    {
+        let gap = matches!(scenario, Scenario::NativeGapBeforeFence);
+        let loss = if gap {
+            let actual_open = f.hosts[2]
+                ._service
+                .lock()
+                .native_initial_listener_store_open_id();
+            serde_json::json!({"actual_reply":{"store_open_id":actual_open},
+                "actual_native_pre_effect_fault":gap_arm.as_ref().unwrap().snapshot(),
+                "store_source":"actual retained service open diagnostic; NOT an absent response"})
+        } else {
+            let loss = reply_loss.as_ref().unwrap().snapshot();
+            check(
+                loss["suppressed_after_actual_producer"] == true,
+                "follower convergence requires actual selected post-producer reply loss first",
+            )?;
+            loss
+        };
         Some(replica_convergence::run(
             f,
             origin_control,
@@ -537,6 +655,20 @@ fn run_one_peer_loss(
             loss,
             debt_hold.unwrap(),
             last_receipt.unwrap(),
+            if gap { 1 } else { 2 },
+            match scenario {
+                Scenario::NativeGapBeforeFence => "NoRecoveryRecord",
+                Scenario::LostFollowerFenceReply => "ActiveRecovery",
+                Scenario::LostFollowerPrepareReply => "NativePrepared",
+                _ => "NativeCompletedFrozen",
+            },
+            |parent| {
+                if gap {
+                    peers[1].test_resume_same_initial_data_listener_only(parent)
+                } else {
+                    Ok(())
+                }
+            },
         )?)
     } else {
         drop(debt_hold);
@@ -768,4 +900,18 @@ fn native_hot_peer_lost_actual_origin_completion_reply_requires_fresh_reattest()
 #[test]
 fn native_hot_peer_actual_semantic_rejection_then_socket_loss_retains_veto() {
     run_case(Scenario::SemanticThenStopped);
+}
+
+#[test]
+fn native_hot_peer_actual_CQ2_native1_before_fence_requires_automatic_R4_convergence() {
+    run_case(Scenario::NativeGapBeforeFence);
+}
+
+#[test]
+fn native_hot_peer_lost_actual_follower_fence_reply_requires_automatic_R4_convergence() {
+    run_case(Scenario::LostFollowerFenceReply);
+}
+#[test]
+fn native_hot_peer_lost_actual_follower_prepare_reply_requires_automatic_R4_convergence() {
+    run_case(Scenario::LostFollowerPrepareReply);
 }

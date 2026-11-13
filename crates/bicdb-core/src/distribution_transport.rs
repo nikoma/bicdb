@@ -448,6 +448,9 @@ enum ClusterDataRequest {
     ObserveNativeOrigin {
         request: crate::distribution_native_apply::NativeOriginStatusRequest,
     },
+    MaterializeNativeCompleted {
+        request: crate::distribution_range_recovery::NativeCompletedMaterializeRequest,
+    },
     RecertifyNativeOrigin {
         request: crate::distribution_native_apply::NativeRecertifyRequest,
     },
@@ -540,6 +543,7 @@ impl ClusterDataRequest {
             | Self::ExportRangeDigestBucket { range_id, .. }
             | Self::ApplyRangeDigestRepair { range_id, .. } => Some(*range_id),
             Self::ApplyRangeWriteRepair { batch, .. } => Some(batch.range_id),
+            Self::MaterializeNativeCompleted { request } => Some(request.historical.scope.range_id),
             Self::RecertifyNativeOrigin { request } => Some(request.instruction.command.range_id),
             Self::ApplyNativeOrigin { request } => Some(request.command.range_id),
             Self::ObserveNativeOrigin { request } => Some(request.range_id),
@@ -602,6 +606,7 @@ impl ClusterDataRequest {
                 | Self::HostMetadataReadAcquire { .. }
                 | Self::AcquireMetadataRecoveryRole { .. }
                 | Self::RecertifyNativeOrigin { .. }
+                | Self::MaterializeNativeCompleted { .. }
         )
     }
 }
@@ -1697,6 +1702,24 @@ fn handle_cluster_data_connection(
                 .acquire_recovery_role(caller, request, &cancellation)
                 .map(ClusterDataResponse::MetadataRecoveryRole);
         }
+        if let ClusterDataRequest::MaterializeNativeCompleted { request } = request.request {
+            let runtime = recovery_runtime.ok_or_else(|| {
+                transport_error("completed native materialization receiver is not wired")
+            })?;
+            let original = initial_data.ok_or_else(|| {
+                transport_error(
+                    "completed native materialization requires actual retained INITIAL data owner",
+                )
+            })?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("completed materialization requires authenticated current leader")
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            let actual =
+                runtime.materialize_completed_native_command(original, caller, &request, &token)?;
+            return Ok(ClusterDataResponse::NativeReady(actual.into_reply()));
+        }
         if let ClusterDataRequest::RecertifyNativeOrigin { request } = request.request {
             let runtime = recovery_runtime.ok_or_else(|| {
                 transport_error("bounded native recertification receiver is not wired")
@@ -1749,9 +1772,16 @@ fn handle_cluster_data_connection(
                     runtime.fence_registered_replica(admission, caller, &request, &token)
                 }
                 None => runtime.fence_epoch(caller, &request, &token),
-            };
-            return observation
-                .map(|actual| ClusterDataResponse::RecoveryEpochFence(actual.into_reply()));
+            }?;
+            #[cfg(test)]
+            if runtime
+                .test_suppress_actual_hot_fence_reply(observation.test_actual_reply_for_loss())
+            {
+                suppress_actual_completion_reply.set(true);
+            }
+            return Ok(ClusterDataResponse::RecoveryEpochFence(
+                observation.into_reply(),
+            ));
         }
         if let ClusterDataRequest::RecoveryFencedProbe { request } = request.request {
             let runtime = recovery_runtime
@@ -1817,9 +1847,12 @@ fn handle_cluster_data_connection(
             })?;
             let token =
                 CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
-            return runtime
-                .prepare_native_ready(caller, &request, &token)
-                .map(|o| ClusterDataResponse::NativeReady(o.into_reply()));
+            let observation = runtime.prepare_native_ready(caller, &request, &token)?;
+            #[cfg(test)]
+            if runtime.test_suppress_actual_hot_prepare_reply(observation.reply()) {
+                suppress_actual_completion_reply.set(true);
+            }
+            return Ok(ClusterDataResponse::NativeReady(observation.into_reply()));
         }
         if let ClusterDataRequest::ObserveNativeReady { request } = request.request {
             let runtime = recovery_runtime
@@ -2762,6 +2795,7 @@ fn dispatch_cluster_data_request(
         }
         ClusterDataRequest::ApplyNativeOrigin { .. }
         | ClusterDataRequest::RecertifyNativeOrigin { .. }
+        | ClusterDataRequest::MaterializeNativeCompleted { .. }
         | ClusterDataRequest::ObserveNativeOrigin { .. } => Err(transport_error(
             "ordinary native requests require the fresh-role receiver",
         )),
@@ -5225,6 +5259,7 @@ impl TcpClusterRelocationTransport {
                     | ClusterDataRequest::NativeLearnerBirth { .. }
                     | ClusterDataRequest::AcquireMetadataRecoveryRole { .. }
                     | ClusterDataRequest::RecertifyNativeOrigin { .. }
+                    | ClusterDataRequest::MaterializeNativeCompleted { .. }
                     | ClusterDataRequest::RecoveryEpochFence { .. }
                     | ClusterDataRequest::RecoveryFencedProbe { .. }
                     | ClusterDataRequest::PrepareNativeReady { .. }

@@ -414,6 +414,30 @@ impl RecoveryResolvedCatalogObservation {
 }
 
 impl RangeWriteStore {
+    pub(crate) fn require_completed_retained_command(
+        &self,
+        native: &NativeRecoveryAdmission,
+        completed: &crate::distribution_range_recovery::CompletedNativeCommandAdmission,
+    ) -> Result<()> {
+        completed.require_live()?;
+        self.require_native_recovery_identity(completed.role(), native)?;
+        self.require_durable_recovery_catalog()?;
+        let command = completed.command();
+        let log = self
+            .catalog
+            .ranges
+            .get(&command.range_id)
+            .ok_or_else(|| range_write_error("completed command actual local log is absent"))?;
+        if log.current_epoch != command.range_epoch {
+            return Err(range_write_error(
+                "completed command actual local raw epoch differs",
+            ));
+        }
+        match log.entries.get(&command.index) {
+            Some(entry) if entry.command == *command && matches!(entry.state, RangeWriteState::QuorumCommitted | RangeWriteState::Applied) => Ok(()),
+            _ => Err(range_write_error("completed materialization needs exact retained actual local CQ command; compaction/image or new-vote adoption is separate")),
+        }
+    }
     pub(crate) fn mark_historical_applied(
         &mut self,
         db: &crate::BicDb,
@@ -513,6 +537,14 @@ impl RangeWriteStore {
                     "physical historical Apply contradicts actual retained command state",
                 ))
             }
+        }
+        // Completed authority is disjoint from active current-certification.
+        // It may materialize ONLY an identical already durable local CQ/body;
+        // it cannot insert a missing command or cast a new Commit vote. Full
+        // actual native predecessor/H linkage is required separately by DB.
+        if let Some(completed) = admission.completed_decision() {
+            completed.require_recipient_role(role)?;
+            return self.require_completed_retained_command(native, completed);
         }
         let marker=self.catalog.recovery_fences[&scope.range_id].historical_certifications.get(&command.index)
             .ok_or_else(||range_write_error("physical historical Apply lacks an actual local current-session certify marker"))?;

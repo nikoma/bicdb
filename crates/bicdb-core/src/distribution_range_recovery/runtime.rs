@@ -12,10 +12,14 @@ use parking_lot::Mutex;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+#[cfg(feature = "tls-replication")]
+mod completed_materialize;
 mod current_image_replacement;
 mod current_image_resume;
 mod native_abort;
 mod native_activation;
+#[cfg(test)]
+mod native_apply_pre_effect_test;
 mod native_completion;
 mod native_completion_quorum;
 mod native_read;
@@ -84,6 +88,9 @@ pub(crate) struct RangeRecoveryRuntime {
         Option<Arc<dyn crate::distribution_range_consensus::RangeWriteTransport>>,
     #[cfg(test)]
     test_hot_completion_reply_loss: Mutex<Option<std::sync::Weak<hot_reply_loss_test::ReplyLoss>>>,
+    #[cfg(test)]
+    test_native_apply_pre_effect:
+        Mutex<Option<std::sync::Weak<native_apply_pre_effect_test::NativeApplyPreEffect>>>,
     #[cfg(test)]
     test_completion_reply_barrier: Mutex<Option<Arc<NativeCompletionReplyBarrier>>>,
     #[cfg(test)]
@@ -682,6 +689,8 @@ impl RangeRecoveryRuntime {
             participant_transport: None,
             #[cfg(test)]
             test_hot_completion_reply_loss: Mutex::new(None),
+            #[cfg(test)]
+            test_native_apply_pre_effect: Mutex::new(None),
             #[cfg(test)]
             test_completion_reply_barrier: Mutex::new(None),
             #[cfg(test)]

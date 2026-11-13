@@ -227,12 +227,55 @@ impl NativeHotRecoveryMaintenance {
                         }
                         debt.pending.insert(node.clone());
                     }
-                    Some(_) => {
-                        // Early unavailable targets may lack native material.
-                        // Activated anchors cannot be cast to ActiveFenceQQ.
-                        // Keep the actual obligation; never manufacture a
-                        // prepared point/genesis or orphan it as "ready".
-                        return Err(invalid("retained early-phase/native-gap replica debt needs a genuine completed-decision materialization continuation"));
+                    Some(Phase::Fence | Phase::Certify | Phase::Apply | Phase::Prepare) => {
+                        let budget_ms = Self::remaining(&phase_parent)?.saturating_sub(250).max(1);
+                        let request =
+                            crate::distribution_range_recovery::NativeCompletedMaterializeRequest {
+                                historical: RecoveryHistoricalCommandRequest {
+                                    scope: debt.scope.clone(),
+                                    command: debt.command.clone(),
+                                    budget_ms,
+                                },
+                                challenge: Uuid::now_v7(),
+                            };
+                        let actual = self.initial.transport.hot_recovery_phase_observation(
+                            &node,
+                            HotRecoveryPhaseRequest::MaterializeCompleted(request),
+                            debt.command.index,
+                            Duration::from_millis(budget_ms),
+                            &phase_parent,
+                        )?;
+                        if let Some(original) = debt.peer_opens.get(&node) {
+                            original.require_same(actual.observed_open())?;
+                        } else {
+                            // A missing old reply was never an open identity.
+                            // This first observation is allowed only through
+                            // the receiver's sealed retained INITIAL owner,
+                            // actual current slot/original writer and real
+                            // completed QQ+native predecessor/Ready producer.
+                            // It is not a cold-open permission or DTO proof.
+                            debt.peer_opens
+                                .insert(node.clone(), actual.observed_open().clone());
+                        }
+                        self.live(&phase_parent)?;
+                        role.require_live_request()?;
+                        self.coordinator.require_hot_replica_binding(
+                            &self.runtime,
+                            &self.host,
+                            &debt.binding,
+                            &role,
+                            &phase_parent,
+                        )?;
+                        // Only actual full native preparation, not a phase
+                        // counter, makes the next operation Complete.
+                        debt.next.insert(node.clone(), Phase::Complete);
+                        debt.semantic_veto.remove(&node);
+                        debt.retry_after.remove(&node);
+                        #[cfg(test)]
+                        eprintln!("NATIVE_HOT_REPLICA_COMPLETED_MATERIALIZATION target={} range={} anchor={} actual_native_prepared=true no_active_fence_authority_cast=true no_leader_reservation=true",node,debt.range.id,debt.command.index);
+                    }
+                    Some(Phase::Publish | Phase::Replica) => {
+                        return Err(invalid("invalid retained recipient phase"));
                     }
                 }
             }
@@ -248,12 +291,10 @@ impl NativeHotRecoveryMaintenance {
             } else if !matches!(
                 error,
                 crate::BicDbError::QueryCanceled | crate::BicDbError::QueryTimedOut
-            ) && !debt.next.get(&node).is_some_and(|p| {
-                matches!(
-                    p,
-                    Phase::Fence | Phase::Certify | Phase::Apply | Phase::Prepare
-                )
-            }) {
+            ) {
+                // Early phases now run real completed materialization. Retain
+                // their semantic refusal too; subsequent socket loss cannot
+                // erase it or turn this known peer into a backoff-only hint.
                 debt.semantic_veto
                     .entry(node.clone())
                     .or_insert(debt.next.get(&node).copied().unwrap_or(Phase::Replica));

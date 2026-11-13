@@ -48,6 +48,7 @@ mod hot_recovery;
 mod native_abort;
 mod native_activation;
 mod native_apply;
+mod native_completion_materialize;
 mod native_recertify;
 pub(crate) use native_recertify::LocalNativeRecertifyEvidence;
 mod native_durability;
@@ -1755,6 +1756,9 @@ impl ClusterDataNodeService {
         native.require_current(&db)?;
         self.range_mutations
             .validate_controlled(admission.command().range_id, &controlled)?;
+        if admission.completed_decision().is_some() {
+            self.require_native_writer_host_for_range(&db, role.current_range())?;
+        }
         let receipt = db.apply_historical_native_command(
             &self.range_writes,
             &native,
@@ -1764,6 +1768,9 @@ impl ClusterDataNodeService {
             &controlled,
             cancellation,
         )?;
+        if admission.completed_decision().is_some() {
+            self.require_native_writer_host_for_range(&db, role.current_range())?;
+        }
         self.range_writes
             .current_mut()
             .mark_historical_applied(&db, &native, role, admission, &receipt)?;

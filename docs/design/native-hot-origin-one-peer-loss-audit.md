@@ -508,3 +508,129 @@ cannot satisfy it. Do not weaken the already required late-phase convergence
 or availability assertions while adding it. Cold/replacement/higher-domain,
 compacted payloads, NoData suffix, joint/Assigned owner and automatic fifth-node
 movement remain separate open producers and acceptance gates.
+
+### Completed-decision native-gap successor (source only, not executed)
+
+A separate successor of `0b7ffe8ad24a8d1d92bf53c180f565f4505945af` implements
+the early-debt materialization family. It does not change the meaning of the
+preserved baseline, canonical history hashes, old historical scope bytes or
+prior runtime results. It is not a second-fault/session-retirement fix.
+
+`completed_apply.rs::CompletedNativeCommandAdmission` owns an actual
+`NativeCompletionQuorum` collected in **RequireQuorum** mode, an independently
+fresh recipient NormalRecovery role, the exact requested command and original
+cancellation. A single activated-decision fallback is refused. This proof is a
+new disjoint `RecoveryApplyAdmission` branch; it cannot produce an ordinary
+`FreshRangeRecoveryAuthority`, active fence QQ or NoData decision. Its local
+recipient/context/member/domain checks remain live throughout physical work.
+
+The incoming wire30 `MaterializeNativeCompleted` arm accepts claims only on the
+immutable INITIAL DATA listener and retains the actual original admission
+throughout. `runtime/completed_materialize.rs` captures the actual service Store
+slot and DB-open guard before collection, repeats original writer/owner/slot/
+open checks around IO, waits for actual collector contexts to exit, and obtains
+a distinct fresh recipient role. Before any fence it requires the exact locally
+retained CQ/Applied command/body under the protected native Store identity.
+Missing or compacted bodies are refused; this branch does not insert a command,
+clear a promise or cast a new Commit vote.
+
+For an active or missing same-owner session, existing actual preflight and owned
+freeze/fence producers precede controlled historical materialization. The DB
+Known-prefix producer proves the actual native predecessor, H0 and deterministic
+unchanged Applied-command link equal the actual completed quorum's exact R/H.
+Certificate construction repeats this check against the opaque Known-prefix's
+actual command/session/context binding, so a different Known object cannot mint
+a certificate. This first scope requires unchanged physical INITIAL epoch and
+leader. The existing controlled transaction, durable AppWAL, materialized native
+receipt, immutable native history entry and raw Applied/checkpoint producers
+remain mandatory. An already Prepared target is never re-fenced; existing actual
+full Prepare reattestation is repeated. The returned sealed Ready point must
+exactly match the still-live original completed proof, including H0/H. No engine
+or mutation guard crosses collection. The scheduler proceeds to actual Complete
+and Activate only after this real preparation, then recertifies suffix commands
+through the real wire30 PCC producer from the preceding section.
+
+Persisted provenance is explicitly
+`CompletedDecisionMaterializationQuorum`, with the actual completion decision
+SHA. The actual local attempt binding also stores that SHA. Ordinary historical
+`None` bytes/checksums and its original scope tuple remain unchanged; canonical
+`NativeLogicalHistoryEntryV1::Applied` is unchanged. The new scope digest adds a
+separate domain only when an actual completed proof exists. These are trusted
+local audit receipts, not portable voter signatures or decoded role grants.
+
+The reserved **node-local** reader fence is
+`native_completed_decision_materialization_v1`. Its format metadata is fsynced
+under the actual completed admission/native journal before the first new pending
+record, native transaction or new provenance can persist. It remains sticky
+when later ordinary R3/R4 replaces the current prefix. Loading an extant new-kind
+prefix requires that fence too. Setting the necessary flag alone never creates
+completed materialization permission.
+
+The serialization boundary audit is concrete:
+
+| Sink or transfer | New materialization provenance and reader treatment |
+| --- | --- |
+| `prepare_historical_native_pending` protected `pending:range`, immutable `pending-attempt` archive | Optional new actual decision SHA; sticky format fence persists first. Original None serialization is unchanged. |
+| `complete_native_range_command` protected `prefix:range` page-WAL | Distinct new evidence plus the matching actual attempt digest; ordinary R4 may replace this record, but never removes the root fence. |
+| Local actual AppWAL/native materialization/receipt chain | Existing real local transaction/WAL binding and new pending/prefix audit; same owned root is fenced before any such new publication. |
+| `SourceRangeImageLineage` | Opaque Debug-only local object; it has no Serde export of its private prefix. |
+| `NativeLogicalHistoryEntryV1/StepV1`, `history_export.rs`, image source seal | Only unchanged canonical outcome/command checksum/previous link/H plus receipt SHA as DATA; no local certificate enum or recovery-attempt object is exported. A target constructs its own actual image/base receipts. |
+| Portable schema reader features | New local flag is excluded from `REPLICATED_READER_FEATURES`; it is not represented as portable authority. |
+| Full backup/capture and restore | `backup.rs` and `backup/capture.rs` retain full actual `FormatMetadata`; restore checks `check_backup_restore_compatible` before acceptance. An older capability set must reject the unknown feature. Native DATA cold reopen/restore execution remains separately unqualified. |
+
+Tests include a **SIMULATED** old-feature decoder on an actual fresh native root
+before any completed receipt and after a real format rewrite, with unchanged
+native/catalogue state. The native-gap positive additionally requires that same
+simulated decoder refuse the actual converted target after later ordinary R4,
+and verifies the local flag did not enter portable schema features. Neither test
+executes an old binary. Actual old-binary open/restore remains a separate gate;
+raw copying without required format metadata is not a supported migration.
+
+New required-success scenarios retain the original automatic owners, public
+client, full attempt/Unknown/ACK ledger and unchanged five-second phases,
+two-second client setting and first twenty-second health receipt. No manual
+maintenance fallback is added:
+
+- Real post-Fence and post-Prepare reply loss is armed on the actual recipient
+  runtime, after the genuine producer returns. The one real socket ends without
+  that reply. The same target must remain at actual Active2 or Prepared2 while
+  real R3 and R4 ACK/full Strong succeed, then automatically reach native4/open
+  under its separate twenty-second convergence receipt.
+- A one-shot weakly registered borrowed `!Send` pre-effect hook rejects the
+  actual authenticated NativeApply2 instruction before effect. After actual
+  origin CoreUnknown/release/normal handler EXIT, the test independently proves
+  real target CQ2/body plus native1/H1 and the full old ACK record, while the other
+  peer really materializes2. It stops and drains only that target's listener;
+  DB/Store/writer/coordinator/runtime/admission and metadata owner stay retained.
+  With that actual listener unreachable, the original source must autonomously
+  publish2 and ACK3/4. The same exact owner then rebinds a new immutable listener;
+  dropping only the debt scheduler hold must cause the real completed-decision
+  materialization, Prepare/Complete/Activate and native3/4/full-record convergence.
+  Network rebind supplies no recovery/readiness authority or genesis.
+- Actual authenticated nonleader, missing real CompletedQQ despite raw Applied,
+  and pre-dispatch expired-parent controls require precise refusal and unchanged
+  catalogue/native point/full ACK Record/original hook. They do not count a
+  timeout as a completed-decision semantic refusal.
+
+Expected declaration selectors are now `origin_pre_wal_fault_tests` **11** and
+`native_hot_recovery_` **11**, disjoint **22**, not runtime counts. Original two
+fault test bodies/helpers remain byte-identical except the existing child module
+declaration. The new child scenario runner alone has documented additions.
+
+**Still required before finished self healing:** the retained debt map currently
+blocks a second origin Unknown even after first-session physical convergence.
+This is a safe refusal but a real repeat-fault regression/gate, not completion.
+The next mandatory witness is first Unknown2 to actual all-replica native4/open,
+then second actual Unknown5/sequenceNone/cleanup EXIT through SAME original
+owners/guards to real native5 and next external ACK6/full Strong/all-replica
+convergence. Retirement must independently prove original session completion,
+actual original opens and current canonical ancestry, and transfer all unresolved
+old constraints; `pending.empty()` is never permission to erase tracking.
+Partial old debt must continue as new committed work appears. A pending source
+also needs a distinct read-only protected old completion/archive observation:
+current serving/SourceLineage APIs correctly refuse Pending, and must not be
+relaxed into new readiness. No Activated-to-Active cast, manual recovery, new
+factory or fake genesis is acceptable. Compacted payloads need actual image
+continuation. Lost-origin/cold/replacement/new-domain/Assigned lifecycle and real
+five-node automatic movement remain separate executable gates. No source in
+this section has yet been compiled or run locally or remotely.

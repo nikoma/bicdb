@@ -89,6 +89,7 @@ pub(crate) enum HotRecoveryPhaseRequest {
         request: RecoveryHistoricalCommandRequest,
         apply: bool,
     },
+    MaterializeCompleted(crate::distribution_range_recovery::NativeCompletedMaterializeRequest),
     Prepare(NativeReadyRequest),
     Complete {
         request: NativeCompletionRequest,
@@ -161,6 +162,9 @@ impl TcpClusterRelocationTransport {
             HotRecoveryPhaseRequest::Historical { request: r, .. } => {
                 r.budget_ms = r.budget_ms.min(cap)
             }
+            HotRecoveryPhaseRequest::MaterializeCompleted(r) => {
+                r.historical.budget_ms = r.historical.budget_ms.min(cap)
+            }
             HotRecoveryPhaseRequest::Prepare(r) => r.budget_ms = r.budget_ms.min(cap),
             HotRecoveryPhaseRequest::Complete { request: r, .. } => {
                 r.budget_ms = r.budget_ms.min(cap)
@@ -178,6 +182,10 @@ impl TcpClusterRelocationTransport {
                 } else {
                     ClusterDataRequest::RecoveryCertifyHistorical { request: r.clone() }
                 },
+            ),
+            HotRecoveryPhaseRequest::MaterializeCompleted(r) => (
+                r.cancellation(&call_parent)?,
+                ClusterDataRequest::MaterializeNativeCompleted { request: r.clone() },
             ),
             HotRecoveryPhaseRequest::Prepare(r) => (
                 r.cancellation(&call_parent)?,
@@ -246,6 +254,30 @@ impl TcpClusterRelocationTransport {
                     node: observation.fence().node_id().clone(),
                     store: observation.fence().store_open_id(),
                     database: observation.fence().native_database_incarnation().to_owned(),
+                }
+            }
+            (
+                HotRecoveryPhaseRequest::MaterializeCompleted(r),
+                ClusterDataResponse::NativeReady(reply),
+            ) => {
+                let ready = r.ready_request();
+                let observation = NativeReadyObservation::from_transport(
+                    AuthenticatedNativeReadyReply { reply, peer },
+                    &ready,
+                    token.deadline().unwrap(),
+                )?;
+                observation.require_live()?;
+                if observation.reply().range_index != expected_index
+                    || expected_index != r.historical.command.index
+                {
+                    return Err(transport_error(
+                        "completed materialization returned another actual prepared point",
+                    ));
+                }
+                HotRecoveryPeerOpen {
+                    node: observation.reply().node_id.clone(),
+                    store: observation.reply().store_open_id,
+                    database: observation.reply().native_database_incarnation.clone(),
                 }
             }
             (HotRecoveryPhaseRequest::Prepare(r), ClusterDataResponse::NativeReady(reply)) => {

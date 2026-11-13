@@ -19,7 +19,8 @@ pub(crate) use registration::{
     NativeAssignedRegisteredClosedFence, NativeRegisteredReplicaAdmission,
 };
 pub(crate) use registration::{
-    NativeInitialDataAdmission, NativeMetadataControlHost, NativeMetadataRegistrationController,
+    NativeInitialDataAdmission, NativeInitialOldStep, NativeMetadataControlHost,
+    NativeMetadataRegistrationController,
 };
 pub use registration::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
 

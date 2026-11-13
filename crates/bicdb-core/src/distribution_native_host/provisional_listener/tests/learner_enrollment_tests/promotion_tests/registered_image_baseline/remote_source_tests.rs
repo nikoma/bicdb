@@ -214,17 +214,12 @@ pub(super) fn exercise(
                     &operation,
                 )
                 .unwrap();
-            let recipient_plan =
-                NativeJointHandoffPlan::from_actual_role_and_own(&actual_role, &own, own_business)
-                    .unwrap();
-            assert_eq!(
-                recipient_plan.checksum_sha256().unwrap(),
-                plan.checksum_sha256().unwrap(),
-                "paired actual recipient role/OWN plan must match actual controller plan"
-            );
-            let closed = runtime
-                .close_old(Arc::new(recipient_plan), actual_role, &operation)
-                .unwrap();
+            let closed = controls[i].with_initial_old_step(Arc::new(actual_role), own, own_business,
+                &operation, |step| {
+                    assert_eq!(step.plan().checksum_sha256().unwrap(), plan.checksum_sha256().unwrap(),
+                        "paired actual recipient role/OWN plan must match actual controller plan");
+                    runtime.close_old_for_initial_step(step, &operation)
+                }).unwrap();
             round.record_closed(closed).unwrap();
         }
         let closed = round.finish().unwrap();

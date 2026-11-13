@@ -8,8 +8,10 @@ use std::sync::Weak;
 
 mod cleanup;
 mod hot_recovery;
+mod old_step;
 use cleanup::{NativeInitialDataCleanup, NativeInitialDataCleanupSender};
 use hot_recovery::NativeHotRecoveryMaintenance;
+pub(crate) use old_step::NativeInitialOldStep;
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct NativeInitialDataRangeStatus {
@@ -381,6 +383,17 @@ impl NativeInitialDataHost {
         // Do not revoke an earlier successful publication on a later retry.
         self.published.store(true, Ordering::Release);
         Ok(())
+    }
+    pub(super) fn admission_for_old_step(&self) -> Result<&Arc<NativeInitialDataAdmission>> {
+        if !self.is_running() {
+            return Err(invalid("original initial DATA source is stopping"));
+        }
+        let admission = self
+            .admission
+            .as_ref()
+            .ok_or_else(|| invalid("actual source admission absent"))?;
+        admission.require_live()?;
+        Ok(admission)
     }
     /// Capture actual owner bindings before consuming OLD ownership. No
     /// fallible publication follows a take without an opaque retained owner.

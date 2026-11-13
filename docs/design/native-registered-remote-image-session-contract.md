@@ -246,3 +246,37 @@ Sharing a role is not a new authority, response certificate or mutation bypass.
 The remote OLD step/sink and actual remote certificate remain unimplemented in
 this prerequisite; its eventual guarded admission cannot be replaced by a plan,
 a status getter, a cached passed Boolean or an independently refreshed role.
+
+## Original receiver step at actual OLD persistence boundaries
+
+The next producer is `NativeInitialOldStep`, constructed only through the real
+INITIAL DATA admission, a genuine role/OWN pair and actual same-open protected
+MStore. It RETAINS both original observations, caller, actual service/runtime,
+open/Store-slot guard and native metadata-member proof. It is non-Serde/non-Clone,
+thread-bound and borrowed by a nonescaping `with_initial_old_step` callback.
+It is not an Assigned-donor substitute or a plan/UUID/None-hook permission.
+
+The dedicated Runtime entry requires that exact service and exact original role
+Arc/plan Arc, then uses its real retained freeze and the existing OLD producer.
+At service entry and before/after raw refsync, before permanent raw promise,
+after that write/before native OLD WAL, after native WAL/before confirmation and
+at return, it checks original caller/role/OWN, protected same-DB metadata UUID
+and namespaces, actual DB open, Store slot, exact actual native predecessor,
+ORIGINAL installed writer/registration/current protected audit and loaded native
+catalogue custody. These checks acquire neither MStore nor network under engine
+guards, and run outside the producer's native-journal critical sections. Final
+MStore-current validation occurs after dropping engine/service guards. Original
+generic OLD-close body byte parity holds after removing ONLY these optional TLS
+checks; every old role/freeze/native/raw/pin check stays unchanged.
+
+If cancellation/revocation occurs during a write, a later error does not erase
+its actual permanent refusal or prove rollback. Runtime exclusion stays owned.
+The eventual RPC manager MUST retain the actual returned observation before a
+fallible post-MStore/response check; the callback documents that obligation and
+must not mint a successful reply from merely retained/uncertain state. The
+actual source-wire fixture now drives real OLD close through this admission
+for every original OLD actor, rather than treating the purpose-only plan as an
+owner grant. Actual sink-time cancellation/revocation and remote OLD request/
+readonly-fact observation/transport certificate still require the next focused
+controls and implementation. No dynamic or fault-safe claim follows from this
+source-only step.

@@ -132,13 +132,16 @@ zeroize = { version = "1.9", features = ["derive"] }
 x509-parser = { version = "0.18.1", default-features = false }
 
 # Cluster and recovery tests are CPU-bound in a few third-party crates
-# (SHA-256, JSON, TLS records): unoptimized, they dominate every authenticated
-# RPC and every re-validation. Optimize exactly those in dev/test builds. The
-# list is explicit rather than "*": optimizing all ~1000 dependencies makes a
-# cold single-job workspace build exceed its CI time limit.
+# (signatures, hashing, AEAD/TLS records, JSON, compression): unoptimized,
+# they dominate every authenticated RPC and every re-validation. Optimize
+# exactly those in dev/test builds. The list is explicit rather than "*":
+# optimizing all ~1000 workspace dependencies makes a cold single-job
+# workspace build exceed its CI time limit.
 [profile.dev.package."sha2@0.10.9"]
 opt-level = 3
 [profile.dev.package."sha2@0.11.0"]
+opt-level = 3
+[profile.dev.package."sha1"]
 opt-level = 3
 [profile.dev.package."digest@0.10.7"]
 opt-level = 3
@@ -162,6 +165,86 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package."crypto-common@0.2.2"]
 opt-level = 3
+[profile.dev.package."blake2"]
+opt-level = 3
+[profile.dev.package."hmac@0.12.1"]
+opt-level = 3
+[profile.dev.package."hmac@0.13.0"]
+opt-level = 3
+[profile.dev.package."hkdf@0.12.4"]
+opt-level = 3
+[profile.dev.package."hkdf@0.13.0"]
+opt-level = 3
+[profile.dev.package."ed25519"]
+opt-level = 3
+[profile.dev.package."ed25519-dalek"]
+opt-level = 3
+[profile.dev.package."curve25519-dalek@4.1.3"]
+opt-level = 3
+[profile.dev.package."curve25519-dalek@5.0.0"]
+opt-level = 3
+[profile.dev.package."x25519-dalek"]
+opt-level = 3
+[profile.dev.package."fiat-crypto@0.2.9"]
+opt-level = 3
+[profile.dev.package."fiat-crypto@0.3.0"]
+opt-level = 3
+[profile.dev.package."signature"]
+opt-level = 3
+[profile.dev.package."subtle"]
+opt-level = 3
+[profile.dev.package."zeroize"]
+opt-level = 3
+[profile.dev.package."aes"]
+opt-level = 3
+[profile.dev.package."aes-gcm"]
+opt-level = 3
+[profile.dev.package."chacha20@0.10.0"]
+opt-level = 3
+[profile.dev.package."chacha20@0.9.1"]
+opt-level = 3
+[profile.dev.package."chacha20poly1305@0.10.1"]
+opt-level = 3
+[profile.dev.package."chacha20poly1305@0.11.0"]
+opt-level = 3
+[profile.dev.package."poly1305@0.8.0"]
+opt-level = 3
+[profile.dev.package."poly1305@0.9.1"]
+opt-level = 3
+[profile.dev.package."universal-hash@0.5.1"]
+opt-level = 3
+[profile.dev.package."universal-hash@0.6.1"]
+opt-level = 3
+[profile.dev.package."cipher@0.4.4"]
+opt-level = 3
+[profile.dev.package."cipher@0.5.2"]
+opt-level = 3
+[profile.dev.package."inout@0.1.4"]
+opt-level = 3
+[profile.dev.package."inout@0.2.2"]
+opt-level = 3
+[profile.dev.package."ghash"]
+opt-level = 3
+[profile.dev.package."polyval"]
+opt-level = 3
+[profile.dev.package."aead@0.5.2"]
+opt-level = 3
+[profile.dev.package."aead@0.6.1"]
+opt-level = 3
+[profile.dev.package."rustls"]
+opt-level = 3
+[profile.dev.package."rustls-webpki"]
+opt-level = 3
+[profile.dev.package."rustls-pemfile"]
+opt-level = 3
+[profile.dev.package."rustls-pki-types"]
+opt-level = 3
+[profile.dev.package."ring"]
+opt-level = 3
+[profile.dev.package."aws-lc-rs"]
+opt-level = 3
+[profile.dev.package."untrusted"]
+opt-level = 3
 [profile.dev.package."serde_json"]
 opt-level = 3
 [profile.dev.package."serde"]
@@ -176,21 +259,85 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package."memchr"]
 opt-level = 3
-[profile.dev.package."rustls"]
+[profile.dev.package."base64@0.13.1"]
 opt-level = 3
-[profile.dev.package."rustls-webpki"]
+[profile.dev.package."base64@0.22.1"]
 opt-level = 3
-[profile.dev.package."ring"]
+[profile.dev.package."base64@0.23.0"]
 opt-level = 3
-[profile.dev.package."aws-lc-rs"]
-opt-level = 3
-[profile.dev.package."subtle"]
-opt-level = 3
-[profile.dev.package."zeroize"]
+[profile.dev.package."hex"]
 opt-level = 3
 [profile.dev.package."uuid"]
 opt-level = 3
-[profile.dev.package."hex"]
+[profile.dev.package."crc"]
+opt-level = 3
+[profile.dev.package."crc32fast"]
+opt-level = 3
+[profile.dev.package."xxhash-rust"]
+opt-level = 3
+[profile.dev.package."twox-hash"]
+opt-level = 3
+[profile.dev.package."ahash"]
+opt-level = 3
+[profile.dev.package."hashbrown@0.12.3"]
+opt-level = 3
+[profile.dev.package."hashbrown@0.14.5"]
+opt-level = 3
+[profile.dev.package."hashbrown@0.15.5"]
+opt-level = 3
+[profile.dev.package."hashbrown@0.16.1"]
+opt-level = 3
+[profile.dev.package."hashbrown@0.17.1"]
+opt-level = 3
+[profile.dev.package."rustc-hash"]
+opt-level = 3
+[profile.dev.package."siphasher"]
+opt-level = 3
+[profile.dev.package."zstd"]
+opt-level = 3
+[profile.dev.package."zstd-safe"]
+opt-level = 3
+[profile.dev.package."lz4_flex@0.11.6"]
+opt-level = 3
+[profile.dev.package."lz4_flex@0.13.1"]
+opt-level = 3
+[profile.dev.package."miniz_oxide@0.8.9"]
+opt-level = 3
+[profile.dev.package."miniz_oxide@0.9.1"]
+opt-level = 3
+[profile.dev.package."flate2"]
+opt-level = 3
+[profile.dev.package."postcard"]
+opt-level = 3
+[profile.dev.package."ciborium"]
+opt-level = 3
+[profile.dev.package."ciborium-ll"]
+opt-level = 3
+[profile.dev.package."rand@0.10.1"]
+opt-level = 3
+[profile.dev.package."rand@0.8.6"]
+opt-level = 3
+[profile.dev.package."rand@0.9.4"]
+opt-level = 3
+[profile.dev.package."rand_core@0.10.1"]
+opt-level = 3
+[profile.dev.package."rand_core@0.6.4"]
+opt-level = 3
+[profile.dev.package."rand_core@0.9.5"]
+opt-level = 3
+[profile.dev.package."rand_chacha@0.3.1"]
+opt-level = 3
+[profile.dev.package."rand_chacha@0.9.0"]
+opt-level = 3
+[profile.dev.package."getrandom@0.2.17"]
+opt-level = 3
+[profile.dev.package."getrandom@0.3.4"]
+opt-level = 3
+[profile.dev.package."getrandom@0.4.3"]
+opt-level = 3
+[profile.dev.package."num-bigint@0.4.6"]
+opt-level = 3
+[profile.dev.package."num-bigint@0.5.1"]
 opt-level = 3
 [profile.dev.package."parking_lot"]
 opt-level = 3

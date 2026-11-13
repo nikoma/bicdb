@@ -40,6 +40,17 @@ fn require_original_dropped_binding(
     Ok(())
 }
 impl ActualServiceNativeJointReleaseEvidence {
+    /// Necessary same-open historical released generation only. Expired
+    /// metadata is never revived; a distinct fresh OWN/version and actual
+    /// native/store/hook scope must authorize any later publication.
+    pub(crate) fn historical_released_publication_point(
+        &self,
+    ) -> Result<(Arc<crate::db::NativeJointActivatedOpenGuard>, Uuid, String)> {
+        if self.frozen_owner.is_some() {
+            return Err(data_error("historical publication still owns Frozen"));
+        }
+        self.continuity.actual_released_publication_point()
+    }
     /// Actual post-drop AND armed same-open generation. A Frozen or merely
     /// dropped/unarmed member cannot count toward a Serving-policy quorum.
     pub(crate) fn require_released_open(&self) -> Result<Uuid> {

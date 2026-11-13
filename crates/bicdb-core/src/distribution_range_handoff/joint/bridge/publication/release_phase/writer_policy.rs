@@ -85,6 +85,16 @@ impl NativeJointReleasePhaseQuorum {
     }
 }
 impl NativeJointServingPolicyAdmission {
+    pub(crate) fn historical_native_bridge(
+        &self,
+    ) -> Arc<crate::db::NativeJointServingBridgeReceipt> {
+        self.post.native().clone()
+    }
+    pub(crate) fn historical_released_publication_point(
+        &self,
+    ) -> Result<(Arc<crate::db::NativeJointActivatedOpenGuard>, Uuid, String)> {
+        self.post.historical_released_publication_point()
+    }
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
         &self.phase.continuation.data
     }

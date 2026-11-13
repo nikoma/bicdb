@@ -93,3 +93,62 @@ That origin also retains an actual owned native metadata member and now uses
 its immutable native point and actual version gate at WAL/hook boundaries.
 Its original finite-caller contract is unchanged. Only explicitly init0 lower
 joint fixtures elsewhere retain their separate non-owned-metadata contract.
+
+## Added through-policy fixture successor (not executed)
+
+The `native_registered_fifth_remote_hot_policy_` group contains four component
+selectors: actual original-A through FIRST policy, early ALL-released refusal,
+actual Store-slot replacement refusal, and lost committed decision reply with
+fresh SAME native attempt retry. The new branch in the existing baseline
+retains both original source acknowledgements but moves only the first range;
+all original cases retain two-range placement/fences and their existing budget
+and assertions. The original pre-join gateway object is retained unchanged.
+The new tests deliberately stop through policy and label APP/Strong after
+movement **not tested**; they do not relax the Closed listener. A genuine
+Joined lifecycle adapter and its ordinary-client assertions remain required.
+
+
+## Joined custody and unchanged event client successor (source only)
+
+A distinct original-Registered Joined adapter adopts the exact FIRST attempt,
+installed guard, coordinator, original A/receiver owner and existing cleanup
+worker after the actual Closed socket drains. It does not re-enroll a policy
+or cast remote evidence into INITIAL or local OLD authority. Fallible bind or
+publication leaves that owner retained and application ingress closed. The
+selected range is explicit; another populated descriptor does not obtain a
+target native floor or writer grant.
+
+Dispatcher publication holds actual DB/admission/hook/journal, protected
+native/catalogue Open and released-generation scopes, and the actual attached
+runtime dispatcher and binding slots before the short local metadata version
+guard. Its final operation only replaces the binding and marks ingress
+published; retired binding destruction follows guard release. Actual fresh
+quorum metadata and native epoch/quorum fencing remain necessary. A local
+version guard is not a distributed metadata lease.
+
+Readiness status separates observed copy/applied watermarks, observed leader
+prefix recovery, and the requirement for a new request-specific Strong barrier.
+A follower can bind DATA without pretending to have leader readiness. No status
+bit grants a later read; inability to prove Strong must remain unavailable,
+never a successful false absence.
+
+Four new `native_registered_fifth_remote_hot_data_` selectors are written for
+ordinary unchanged pre-join event-client append/full Strong, lost committed
+DECISION reply, real original FIRST caller expiry then fresh same-xid
+continuation, and follower DATA binding without fake leader recovery. Each
+application intent and returned/uncertain result is retained before assertion.
+A failed append is reconciled by a bounded Strong call before its failure is
+asserted; subsequent visibility does not retroactively acknowledge it. Internal
+SDK wire retries are explicitly unmeasured. The original fixture cases and
+per-call budgets remain unchanged. All these new selectors are **uncompiled
+and unexecuted** at this source freeze; source inspection and formatting do
+not establish a passed behavioral guarantee.
+
+The earlier four through-policy selectors remain separate component gates.
+Actual selected-metadata term/config changes at pre/post-WAL and FIRST hook
+publication, and a partition/new-leader stale APP/Strong control still require
+end-to-end execution and may require additional deterministic fixture seams.
+Authenticated remote phase adapters, automatic lifecycle/controller discovery,
+second populated range adoption, cold resume, production SQL transparency and
+physical post-convergence capacity qualification remain open. The historical
+Azure scale-out qualification remains failed.

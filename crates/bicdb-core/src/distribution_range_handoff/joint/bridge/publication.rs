@@ -333,6 +333,23 @@ pub(crate) struct NativeJointOpenAdmission {
     cancellation: crate::CancellationToken,
 }
 impl NativeJointOpenAdmission {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn retain_registered_release_owner(
+        &self,
+        activation: Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>,
+    ) -> Result<crate::distribution_native_host::NativeRegisteredRemoteJointReleaseOwner> {
+        self.require_live()?;
+        if activation.native().data() != self.data()
+            || activation.native_bridge_sha256() != self.receipt.checksum_sha256()
+        {
+            return Err(invalid(
+                "Registered release changed original actual Open activation",
+            ));
+        }
+        self.local
+            .actual
+            .retain_registered_release_owner(self.local.service.clone(), activation)
+    }
     /// Retain only the actual image target lease for proof-authorized final
     /// release after all preparation/publication owners have drained.
     pub(crate) fn retain_image_release_owner(

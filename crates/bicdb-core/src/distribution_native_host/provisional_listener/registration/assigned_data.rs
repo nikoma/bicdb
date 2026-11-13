@@ -10,6 +10,7 @@ use crate::distribution_range_consensus::RangeWriteCoordinator;
 use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use std::sync::Weak;
 mod registered_serving;
+pub(super) use registered_serving::NativeRegisteredJoinedDataTransfer;
 use registered_serving::RegisteredServingPolicy;
 mod cleanup;
 mod writer_data_domain;

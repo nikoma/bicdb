@@ -64,6 +64,14 @@ pub(super) enum SourceCase {
     RemoteOldCollectorPlanChanged,
     RemoteOldCollectorDonorRevoked,
     RemoteOldCollectorCallerCanceled,
+    TargetHotPolicy,
+    TargetHotEarlyPolicy,
+    TargetHotStoreReplacement,
+    TargetHotDecisionReplyLost,
+    TargetHotData,
+    TargetHotDataReplyLost,
+    TargetHotDataFirstCallerExpired,
+    TargetHotDataFollower,
 }
 #[test]
 fn native_registered_fifth_remote_source_actual_tls_history_rows_seal_local_old_seed() {
@@ -1655,6 +1663,7 @@ pub(super) fn exercise(
         "real_target_namespaces":factory.database.read().capture_range_image_bindings().unwrap().namespace_ids(),
     })).unwrap();
 }
+pub(super) mod hot_policy_tests;
 mod target_final_image_tests;
 mod target_image_tests;
 mod target_installing_tests;

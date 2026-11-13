@@ -547,7 +547,7 @@ impl NativeWriterHostState {
         }
         Ok(())
     }
-    fn require_borrowed_original_hook(
+    pub(super) fn require_borrowed_original_hook(
         &self,
         db: &BicDb,
         hook: &crate::db::commit_admission_hook::CommitAdmissionSlot,

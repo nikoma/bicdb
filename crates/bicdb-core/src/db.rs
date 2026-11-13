@@ -140,6 +140,8 @@ pub(crate) use range_image_native::NativeAssignedWriterInstallAttempt;
 pub(crate) use range_image_native::NativeFirstPolicyPublicationCandidate;
 pub(crate) use range_image_native::NativeInitialDataGenesis;
 #[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeJoinedPublicationScope;
+#[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredClosedPersistScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredJointDecisionAttempt;

@@ -249,6 +249,33 @@ impl NativeAssignedWriterInstallAttempt {
             _ => None,
         }
     }
+    /// Immutable actual Installed policy audit only, never renewed metadata
+    /// authority. The adopting owner must still prove its current request.
+    pub(crate) fn installed_metadata_anchor(&self) -> Result<(Uuid, u64, u64)> {
+        let installed = self
+            .installed_guard()
+            .ok_or_else(|| invalid("FIRST actual Installed policy audit absent"))?;
+        let record = &installed.state.record;
+        Ok((
+            record.metadata_context_id,
+            record.metadata_term,
+            record.metadata_read_index,
+        ))
+    }
+    #[cfg(test)]
+    pub(crate) fn test_publication_evidence(&self) -> Result<serde_json::Value> {
+        let (stage, record) = match &self.publication {
+            Publication::AwaitingNative => ("AwaitingNative", None),
+            Publication::Prepared { record, .. } => ("Prepared", Some(record)),
+            Publication::NativeUncertain { record, .. } => ("NativeUncertain", Some(record)),
+            Publication::NativeReadBack { record, .. } => ("NativeReadBack", Some(record)),
+            Publication::Installed { guard } => ("Installed", Some(&guard.state.record)),
+        };
+        Ok(serde_json::json!({"stage":stage,"record":record,
+            "coordinator_id":self.coordinator_id,"database_open":self.database_incarnation,
+            "original_finite_caller_retained":self.original_caller.is_some(),
+            "observation_is_not_an_outcome_resolver_or_grant":true}))
+    }
     pub(crate) fn unresolved_native_publication(&self) -> bool {
         matches!(
             &self.publication,
@@ -393,6 +420,10 @@ impl NativeAssignedWriterInstallAttempt {
                     Ok(())
                 })?
                 .ok_or_else(|| invalid("assigned policy has no native page store"))?;
+            #[cfg(test)]
+            if matches!(origin, FirstPolicyOrigin::Registered(_)) {
+                registered_after_native_commit::fire();
+            }
         }
         self.require_request(database, coordinator, origin, policy)?;
         // Independently read the attempted actual audit. An absent/foreign
@@ -558,5 +589,35 @@ impl NativeAssignedWriterInstallAttempt {
             origin.range(),
             coordinator,
         )
+    }
+}
+#[cfg(test)]
+mod registered_after_native_commit {
+    use std::cell::RefCell;
+    type Cut = Box<dyn FnOnce()>;
+    thread_local! {static CUT:RefCell<Option<Cut>>=const {RefCell::new(None)};}
+    pub(crate) struct Guard(Option<Cut>);
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            CUT.with(|cut| {
+                cut.replace(self.0.take());
+            });
+        }
+    }
+    pub(crate) fn install(cut: Cut) -> Guard {
+        Guard(CUT.with(|slot| slot.replace(Some(cut))))
+    }
+    pub(super) fn fire() {
+        if let Some(cut) = CUT.with(|slot| slot.borrow_mut().take()) {
+            cut();
+        }
+    }
+}
+#[cfg(test)]
+impl BicDb {
+    pub(crate) fn test_registered_first_policy_after_native_commit(
+        cut: Box<dyn FnOnce()>,
+    ) -> impl Drop {
+        registered_after_native_commit::install(cut)
     }
 }

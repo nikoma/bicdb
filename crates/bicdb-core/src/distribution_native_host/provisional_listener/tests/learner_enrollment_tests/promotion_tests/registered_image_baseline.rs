@@ -199,6 +199,7 @@ fn run_registered_image_baseline_with_placement_and_source(
     assignment: AssignmentMode,
     source_case: Option<remote_source_tests::SourceCase>,
 ) {
+    let hot_policy = source_case.is_some_and(remote_source_tests::hot_policy_tests::is_hot_policy);
     let mut f = EnrollmentFixture::new();
     let (factory, mut host) = f.factory("actual-registered-fifth-image-target");
     assert!(factory.spec.initial_ranges.is_empty());
@@ -432,10 +433,43 @@ fn run_registered_image_baseline_with_placement_and_source(
             );
         }
         phase = "commit_two_data_learner_assignments";
-        let pending = match &automatic_plan {
+        let mut pending = match &automatic_plan {
             Some(plan) => placement_cases::pending(&current, &ranges, plan),
             None => assign_two_ranges(&current, &ranges),
         };
+        if hot_policy {
+            // This new component gate moves ONLY the selected first range.
+            // Both original ACKs still exist; the second descriptor remains
+            // populated on its original nodes and Unknown on the target.
+            let other = &ranges[1];
+            let token = *current
+                .ranges
+                .iter()
+                .find(|(_, range)| range.id == other.id)
+                .unwrap()
+                .0;
+            pending.ranges.insert(token, other.clone());
+            pending
+                .relocations
+                .retain(|_, plan| plan.range_id == ranges[0].id);
+            if matches!(
+                source_case,
+                Some(remote_source_tests::SourceCase::TargetHotDataFollower)
+            ) {
+                let selected = &ranges[0];
+                let retire = selected
+                    .replicas
+                    .iter()
+                    .find(|replica| {
+                        replica.role == RangeReplicaRole::Voter
+                            && replica.node_id != selected.leader
+                    })
+                    .unwrap();
+                pending.relocations.values_mut().next().unwrap().source =
+                    Some(retire.node_id.clone());
+            }
+            pending.validate().unwrap();
+        }
         let entry = metadata[0]
             .lock()
             .propose_topology(pending.clone())
@@ -505,7 +539,7 @@ fn run_registered_image_baseline_with_placement_and_source(
             assert!(point["native_applied_index"].is_null());
         }
         let mut succeeded = 0;
-        for original in &ranges {
+        for original in ranges.iter().take(if hot_policy { 1 } else { 2 }) {
             for (i, guard) in original_writers.iter().enumerate() {
                 assert!(Arc::ptr_eq(
                     guard,
@@ -734,8 +768,27 @@ fn run_registered_image_baseline_with_placement_and_source(
             );
         }
         phase = "required_fence_acceptance";
-        assert_eq!(succeeded,2,"REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute");
-        if let Some(source_case) = source_case {
+        assert_eq!(succeeded,if hot_policy {1} else {2},"REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute");
+        if hot_policy {
+            phase = "actual_remote_original_a_through_first_policy_component";
+            remote_source_tests::hot_policy_tests::exercise(
+                source_case.unwrap(),
+                &mut controls,
+                &clients,
+                &services,
+                &metadata,
+                &target_transport,
+                host.test_registered_image_control_mut().unwrap(),
+                &factory,
+                &pending,
+                &ranges,
+                &ledger,
+                &output,
+                &configs[0],
+                &gateway,
+                &token,
+            );
+        } else if let Some(source_case) = source_case {
             phase = "actual_local_old_quorum_seeded_remote_source_frames";
             let target_runtime = host.test_registered_receiver_parts().unwrap().1;
             remote_source_tests::exercise(

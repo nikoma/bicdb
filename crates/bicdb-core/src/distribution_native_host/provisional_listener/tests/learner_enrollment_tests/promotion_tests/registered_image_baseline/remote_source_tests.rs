@@ -204,12 +204,26 @@ pub(super) fn exercise(
         }
         for ((&i, runtime), provider) in old_indices.iter().zip(&runtimes).zip(&providers) {
             let operation = budget(5000);
-            let closed = runtime
-                .close_old(
-                    plan.clone(),
-                    actual_role(provider, &actor, &plan, &node(i), &operation),
+            let actual_role = actual_role(provider, &actor, &plan, &node(i), &operation);
+            let own_business = Uuid::now_v7();
+            let own = clients[i]
+                .acquire_host_metadata_observation(
+                    &node(0),
+                    own_business,
+                    Duration::from_secs(5),
                     &operation,
                 )
+                .unwrap();
+            let recipient_plan =
+                NativeJointHandoffPlan::from_actual_role_and_own(&actual_role, &own, own_business)
+                    .unwrap();
+            assert_eq!(
+                recipient_plan.checksum_sha256().unwrap(),
+                plan.checksum_sha256().unwrap(),
+                "paired actual recipient role/OWN plan must match actual controller plan"
+            );
+            let closed = runtime
+                .close_old(Arc::new(recipient_plan), actual_role, &operation)
                 .unwrap();
             round.record_closed(closed).unwrap();
         }
@@ -217,6 +231,38 @@ pub(super) fn exercise(
         let source = (0..4)
             .find(|i| node(*i) == *closed.selected_source_id())
             .unwrap();
+        {
+            let original_request = budget(5000);
+            let provider =
+                MetadataReadProvider::new(metadata[source].clone(), clients[source].clone())
+                    .unwrap();
+            let original_role =
+                actual_role(&provider, &actor, &plan, &node(source), &original_request);
+            let foreign_business = Uuid::now_v7();
+            let foreign_own = target
+                .acquire_host_metadata_observation(
+                    &node(0),
+                    foreign_business,
+                    Duration::from_secs(5),
+                    &original_request,
+                )
+                .unwrap();
+            let error = NativeJointHandoffPlan::from_actual_role_and_own(
+                &original_role,
+                &foreign_own,
+                foreign_business,
+            )
+            .unwrap_err();
+            original_request.check().unwrap();
+            original_role.require_live_request().unwrap();
+            foreign_own.require_live_request(foreign_business).unwrap();
+            assert!(
+                error
+                    .to_string()
+                    .contains("OWN metadata differs from original recovery role"),
+                "{error}"
+            );
+        }
         let source_session = CancellationToken::uncancelable();
         let mut old = Some(closed);
         let retained = controls[source]

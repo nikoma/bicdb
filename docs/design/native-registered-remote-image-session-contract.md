@@ -204,3 +204,31 @@ prerequisite; full range1 NEW QQ/open/ACK/Strong THEN range2 on the same Assigne
 writer remains mandatory. The next target/history/row/finalizer producer must
 consume these authenticated historical facts under its DISTINCT original local
 owner/role/caller authority, preserving every target/other-range obligation.
+
+## Recipient Pending-plan producer for remote OLD ingress
+
+`NativeJointHandoffPlan::from_actual_role_and_own` is a separate recipient
+producer. It requires a REAL sealed CommittedHandoff role and independently
+fresh OWN HostMQ with exactly equal term/readIndex/full committed C/restore and
+actual recipient identity. It derives the native birth/member/Pending scope
+internally and checks both original inputs again at return. It does not decode
+a plan from a controller hash, cast an observer/HostMQ into a role, or grant any
+native mutation by itself. Its deadline is bounded by BOTH original proofs.
+Actual DB/Store/MStore/open/freeze/current-role checks remain independently
+mandatory at the future receiver's exact mutation/reply boundaries.
+
+The existing authority-based promise/configuration derivation is extracted to
+a private pure helper; its original body has token-for-token parity after
+whitespace normalization, including hashes and original relocation-map key.
+The old authority range/live checks stay before/after that same derivation.
+The original source-scope fields are constructed through a private shared DATA
+extractor, not an externally callable topology-to-authority adapter.
+
+The source-wire component tests now produce recipient plans from real role/OWN
+pairs before actual local OLD-close calls and require exact scope equality to
+the separately actual controller plan. A foreign OWN observation from the real
+fifth refuses while its original role/caller/foreign observation remain live.
+Those are source-only controls, not a remote OLD-certificate acceptance. The
+remote collector must still collect actual authenticated receiver native-close
+receipts/constraints and verify the selected real source's complete ancestry and
+irreversible commands, without reconstructing local service/pin observations.

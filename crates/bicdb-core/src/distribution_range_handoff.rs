@@ -427,8 +427,7 @@ impl HandoffCutRound {
         authority: HandoffMetadataProof,
         relocation_id: RelocationId,
     ) -> Result<Self> {
-        use crate::distribution::{RangeReplicaRole, RelocationPhase};
-        use sha2::{Digest, Sha256};
+        use crate::distribution::RelocationPhase;
         let topology = authority.topology()?;
         let restore_activation = authority.restore_activation()?;
         let relocation = topology
@@ -452,105 +451,13 @@ impl HandoffCutRound {
             ));
         }
         authority.require_range_scope(&range)?;
-        let activation_epoch = range
-            .epoch
-            .checked_add(2)
-            .ok_or_else(|| BicDbError::Cluster("handoff epoch space exhausted".into()))?;
-        let mut old_voters = std::collections::BTreeMap::new();
-        let mut new_range = range.clone();
-        let mut found_target = false;
-        for replica in &range.replicas {
-            let node = topology
-                .nodes
-                .get(&replica.node_id)
-                .ok_or_else(|| BicDbError::Cluster("handoff replica member is absent".into()))?;
-            if replica.role == RangeReplicaRole::Voter {
-                if old_voters
-                    .insert(node.id.clone(), node.incarnation)
-                    .is_some()
-                {
-                    return Err(BicDbError::Cluster("duplicate handoff data voter".into()));
-                }
-            }
-            if replica.id == relocation.target_replica_id
-                && replica.node_id == relocation.target
-                && replica.role == RangeReplicaRole::Learner
-            {
-                found_target = true;
-            }
-        }
-        if !found_target || old_voters.is_empty() || old_voters.len() > 64 {
-            return Err(BicDbError::Cluster(
-                "invalid or oversized handoff voter configuration".into(),
-            ));
-        }
-        for replica in &mut new_range.replicas {
-            if replica.id == relocation.target_replica_id {
-                replica.role = RangeReplicaRole::Voter;
-            }
-        }
-        if let Some(source) = &relocation.source {
-            if !old_voters.contains_key(source) {
-                return Err(BicDbError::Cluster(
-                    "handoff source is not an old voter".into(),
-                ));
-            }
-            new_range
-                .replicas
-                .retain(|replica| &replica.node_id != source);
-            if &new_range.leader == source {
-                new_range.leader = relocation.target.clone();
-            }
-        }
-        new_range.epoch = activation_epoch;
-        let expected_schema_sha256 = range.required_schema_sha256(&topology.nodes);
-        let config_digest = |descriptor: &RangeDescriptor| -> Result<String> {
-            // Heartbeats, load estimates and placement metrics do not change
-            // the data configuration. Member incarnation and pins do.
-            let mut voters = std::collections::BTreeMap::new();
-            for replica in &descriptor.replicas {
-                if replica.role == RangeReplicaRole::Voter {
-                    let node = &topology.nodes[&replica.node_id];
-                    voters.insert(
-                        node.id.clone(),
-                        (
-                            node.incarnation,
-                            node.tls_certificate_sha256.clone(),
-                            node.pending_tls_certificate_sha256.clone(),
-                        ),
-                    );
-                }
-            }
-            Ok(hex::encode(Sha256::digest(serde_json::to_vec(&(
-                &topology.cluster_id,
-                descriptor.id,
-                descriptor.start_token,
-                descriptor.end_token,
-                descriptor.epoch,
-                &descriptor.leader,
-                voters,
-                expected_schema_sha256,
-                // A reused session cannot silently cross restore activation
-                // lineage. This remains metadata binding, not source-image proof.
-                restore_activation,
-            ))?)))
-        };
-        let session = relocation.handoff_session.as_ref().ok_or_else(|| {
-            BicDbError::Cluster("handoff session must be committed before data promises".into())
-        })?;
-        let request = RangeHandoffPromise {
-            session_id: session.session_id,
+        let (request, new_range, old_voters) = pending_handoff_configuration(
+            topology,
             relocation_id,
-            plan_id: relocation.plan_id.clone(),
-            range_id: range.id,
-            old_epoch: range.epoch,
-            activation_epoch,
-            old_config_sha256: config_digest(&range)?,
-            new_config_sha256: config_digest(&new_range)?,
-            nonce: session.nonce,
-            resolved_through: 0,
-        };
-        request.validate()?;
+            relocation,
+            &range,
+            restore_activation,
+        )?;
         authority.require_live()?;
         Ok(Self {
             authority,
@@ -1663,4 +1570,121 @@ pub(crate) mod tests {
             }
         }
     }
+}
+
+/// Pure configuration/correlation derivation, never authority. Only the actual
+/// authority/paired-role factories call it after their original scope checks.
+fn pending_handoff_configuration(
+    topology: &crate::ClusterTopology,
+    relocation_id: RelocationId,
+    relocation: &crate::distribution::RangeRelocation,
+    range: &RangeDescriptor,
+    restore_activation: Option<&crate::distribution_consensus::MetadataRestoreActivation>,
+) -> Result<(
+    RangeHandoffPromise,
+    RangeDescriptor,
+    std::collections::BTreeMap<ClusterNodeId, u64>,
+)> {
+    use crate::distribution::RangeReplicaRole;
+    use sha2::{Digest, Sha256};
+    let activation_epoch = range
+        .epoch
+        .checked_add(2)
+        .ok_or_else(|| BicDbError::Cluster("handoff epoch space exhausted".into()))?;
+    let mut old_voters = std::collections::BTreeMap::new();
+    let mut new_range = range.clone();
+    let mut found_target = false;
+    for replica in &range.replicas {
+        let node = topology
+            .nodes
+            .get(&replica.node_id)
+            .ok_or_else(|| BicDbError::Cluster("handoff replica member is absent".into()))?;
+        if replica.role == RangeReplicaRole::Voter {
+            if old_voters
+                .insert(node.id.clone(), node.incarnation)
+                .is_some()
+            {
+                return Err(BicDbError::Cluster("duplicate handoff data voter".into()));
+            }
+        }
+        if replica.id == relocation.target_replica_id
+            && replica.node_id == relocation.target
+            && replica.role == RangeReplicaRole::Learner
+        {
+            found_target = true;
+        }
+    }
+    if !found_target || old_voters.is_empty() || old_voters.len() > 64 {
+        return Err(BicDbError::Cluster(
+            "invalid or oversized handoff voter configuration".into(),
+        ));
+    }
+    for replica in &mut new_range.replicas {
+        if replica.id == relocation.target_replica_id {
+            replica.role = RangeReplicaRole::Voter;
+        }
+    }
+    if let Some(source) = &relocation.source {
+        if !old_voters.contains_key(source) {
+            return Err(BicDbError::Cluster(
+                "handoff source is not an old voter".into(),
+            ));
+        }
+        new_range
+            .replicas
+            .retain(|replica| &replica.node_id != source);
+        if &new_range.leader == source {
+            new_range.leader = relocation.target.clone();
+        }
+    }
+    new_range.epoch = activation_epoch;
+    let expected_schema_sha256 = range.required_schema_sha256(&topology.nodes);
+    let config_digest = |descriptor: &RangeDescriptor| -> Result<String> {
+        // Heartbeats, load estimates and placement metrics do not change
+        // the data configuration. Member incarnation and pins do.
+        let mut voters = std::collections::BTreeMap::new();
+        for replica in &descriptor.replicas {
+            if replica.role == RangeReplicaRole::Voter {
+                let node = &topology.nodes[&replica.node_id];
+                voters.insert(
+                    node.id.clone(),
+                    (
+                        node.incarnation,
+                        node.tls_certificate_sha256.clone(),
+                        node.pending_tls_certificate_sha256.clone(),
+                    ),
+                );
+            }
+        }
+        Ok(hex::encode(Sha256::digest(serde_json::to_vec(&(
+            &topology.cluster_id,
+            descriptor.id,
+            descriptor.start_token,
+            descriptor.end_token,
+            descriptor.epoch,
+            &descriptor.leader,
+            voters,
+            expected_schema_sha256,
+            // A reused session cannot silently cross restore activation
+            // lineage. This remains metadata binding, not source-image proof.
+            restore_activation,
+        ))?)))
+    };
+    let session = relocation.handoff_session.as_ref().ok_or_else(|| {
+        BicDbError::Cluster("handoff session must be committed before data promises".into())
+    })?;
+    let request = RangeHandoffPromise {
+        session_id: session.session_id,
+        relocation_id,
+        plan_id: relocation.plan_id.clone(),
+        range_id: range.id,
+        old_epoch: range.epoch,
+        activation_epoch,
+        old_config_sha256: config_digest(&range)?,
+        new_config_sha256: config_digest(&new_range)?,
+        nonce: session.nonce,
+        resolved_through: 0,
+    };
+    request.validate()?;
+    Ok((request, new_range, old_voters))
 }

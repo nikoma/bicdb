@@ -77,6 +77,14 @@ impl NativeRegisteredRemoteJointOwner {
             ),
         }
     }
+    /// Same actual host/receiver/DB/slot lifetime, never a finite phase token
+    /// and never Role/OWN/serving authority. Each advance independently proves
+    /// its own request, current metadata and exact original native candidate.
+    pub(crate) fn require_first_policy_attempt_lifetime(&self) -> Result<()> {
+        self.target.preflight.require_original_process()?;
+        self.target.preflight.original.database.require_live()?;
+        self.target.preflight.original.store.require_live()
+    }
     pub(crate) fn terminal_writer(&self) -> Option<&Arc<crate::db::NativeWriterHostState>> {
         self.terminal_writer.get()
     }

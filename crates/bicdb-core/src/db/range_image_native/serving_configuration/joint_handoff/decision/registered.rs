@@ -16,6 +16,8 @@ enum NativeOutcome {
     Aborted {
         actual_xid: u64,
         original_error: String,
+        retry_allowed: bool,
+        storage_health_error: Option<String>,
     },
     Unknown {
         exact_error: String,
@@ -55,11 +57,15 @@ impl NativeRegisteredJointDecisionAttempt {
                 "Registered decision native attempt bound reached; retained outcomes not discarded",
             ));
         }
-        if self
-            .native
-            .last()
-            .is_some_and(|n| !matches!(n.outcome, NativeOutcome::Aborted { .. }))
-        {
+        if self.native.last().is_some_and(|n| {
+            !matches!(
+                n.outcome,
+                NativeOutcome::Aborted {
+                    retry_allowed: true,
+                    ..
+                }
+            )
+        }) {
             return Err(invalid(
                 "Registered decision original native outcome unresolved; cannot create another xid",
             ));
@@ -84,7 +90,7 @@ impl NativeRegisteredJointDecisionAttempt {
                 NativeOutcome::PreparedBeforePut => serde_json::json!({"state":"candidate_retained_before_first_put"}),
                 NativeOutcome::PutEntered => serde_json::json!({"state":"put_entered_outcome_not_known"}),
                 NativeOutcome::Committed { actual_xid } => serde_json::json!({"state":"actual_commit_returned","actual_xid":actual_xid}),
-                NativeOutcome::Aborted { actual_xid, original_error } => serde_json::json!({"state":"actual_abort_returned","actual_xid":actual_xid,"original_error":original_error}),
+                NativeOutcome::Aborted { actual_xid, original_error, retry_allowed, storage_health_error } => serde_json::json!({"state":"actual_abort_returned","actual_xid":actual_xid,"original_error":original_error,"retry_allowed":retry_allowed,"storage_health_error":storage_health_error}),
                 NativeOutcome::Unknown { exact_error } => serde_json::json!({"state":"unknown_effect","exact_error":exact_error}),
             };
             serde_json::json!({"record":n.record,"native_xid":n.record.native_page_xid,"bytes":n.bytes,
@@ -128,6 +134,25 @@ impl DecisionPublicationPoint<'_, '_> {
     }
 }
 impl BicDb {
+    fn require_registered_joint_decision_storage_healthy(&self) -> Result<()> {
+        self.check_recovery_state()?;
+        let paged = self
+            .paged_records
+            .as_ref()
+            .ok_or_else(|| invalid("Registered DECISION actual native page store ended"))?;
+        paged
+            .store()
+            .durability_health()
+            .check()
+            .map_err(crate::error::durability_error)?;
+        paged
+            .store()
+            .wal()
+            .health()
+            .check()
+            .map_err(crate::error::durability_error)?;
+        self.check_recovery_state()
+    }
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn publish_registered_joint_decision_and_count(
         &self,
@@ -250,13 +275,14 @@ impl BicDb {
             record = existing;
         } else {
             attempt.require_can_begin()?;
+            self.require_registered_joint_decision_storage_healthy()?;
             metadata.require_native_store_point(self, store)?;
             let paged = self
                 .paged_records
                 .as_ref()
                 .ok_or_else(|| invalid("Registered decision requires actual native page WAL"))?;
             let _write = paged.write_guard();
-            self.check_recovery_state()?;
+            self.require_registered_joint_decision_storage_healthy()?;
             // Known stale before begin cannot consume a native xid.
             metadata.require_current_memory()?;
             let (xid, _) = paged.begin();
@@ -295,9 +321,22 @@ impl BicDb {
             if let Err(error) = write {
                 match paged.abort(xid) {
                     Ok(()) => {
+                        // Actual abort status is retained even when another
+                        // storage layer is fenced. Ok(abort) alone cannot
+                        // authorize allocating a replacement native xid.
+                        let healthy = self.require_registered_joint_decision_storage_healthy();
+                        let storage_health_error = healthy.as_ref().err().map(ToString::to_string);
                         attempt.native[index].outcome = NativeOutcome::Aborted {
                             actual_xid: xid,
                             original_error: error.to_string(),
+                            retry_allowed: healthy.is_ok(),
+                            storage_health_error,
+                        };
+                        if let Err(health) = healthy {
+                            self.fence_durability(
+                                "registered.joint.decision.abort.storage_health",
+                                &health,
+                            );
                         }
                     }
                     Err(abort) => {

@@ -83,12 +83,6 @@ impl FirstPolicyOrigin<'_> {
             )),
         }
     }
-    fn original_caller(&self) -> &CancellationToken {
-        match self {
-            Self::Legacy(o) => o.original_caller(),
-            Self::Registered(o) => o.original_caller(),
-        }
-    }
     fn range(&self) -> &RangeDescriptor {
         match self {
             Self::Legacy(o) => o.range(),
@@ -182,7 +176,9 @@ pub(crate) struct NativeAssignedWriterInstallAttempt {
     coordinator: Weak<dyn CommitAdmission>,
     coordinator_id: Uuid,
     database_incarnation: String,
-    original_caller: CancellationToken,
+    // Legacy keeps its original caller contract. Registered lifetime belongs
+    // to the exact retained receiver, never the first finite policy RPC.
+    original_caller: Option<CancellationToken>,
     publication: Publication,
 }
 impl NativeAssignedWriterInstallAttempt {
@@ -230,9 +226,22 @@ impl NativeAssignedWriterInstallAttempt {
             coordinator: Arc::downgrade(&authority),
             coordinator_id: coordinator.native_writer_coordinator_id(),
             database_incarnation: database.incarnation_id().into(),
-            original_caller: origin.original_caller().clone(),
+            original_caller: match origin {
+                FirstPolicyOrigin::Legacy(old) => Some(old.original_caller().clone()),
+                FirstPolicyOrigin::Registered(_) => None,
+            },
             publication: Publication::AwaitingNative,
         })
+    }
+    fn require_original_attempt_lifetime(&self) -> Result<()> {
+        match (&self.origin_identity, &self.original_caller) {
+            (FirstPolicyOriginIdentity::Legacy, Some(caller)) => caller.check(),
+            (FirstPolicyOriginIdentity::Registered(owner), None) => owner
+                .upgrade()
+                .ok_or_else(|| invalid("FIRST Registered original retained owner ended"))?
+                .require_first_policy_attempt_lifetime(),
+            _ => Err(invalid("FIRST policy lifetime changed original provenance")),
+        }
     }
     pub(crate) fn installed_guard(&self) -> Option<&Arc<InstalledNativeWriterHostGuard>> {
         match &self.publication {
@@ -253,7 +262,7 @@ impl NativeAssignedWriterInstallAttempt {
         origin: FirstPolicyOrigin<'_>,
         policy: &SealedHostWriterEnrollment,
     ) -> Result<Arc<dyn CommitAdmission>> {
-        self.original_caller.check()?;
+        self.require_original_attempt_lifetime()?;
         origin.require_identity(&self.origin_identity)?;
         origin.require_live()?;
         policy.require_live()?;
@@ -359,7 +368,7 @@ impl NativeAssignedWriterInstallAttempt {
             let _journal = database.try_native_image_journal()?;
             database
                 .in_paged_transaction(|paged, xid| {
-                    self.original_caller.check()?;
+                    self.require_original_attempt_lifetime()?;
                     origin.require_live()?;
                     policy.require_live()?;
                     origin.require_native_metadata_point(database)?;
@@ -543,7 +552,7 @@ impl NativeAssignedWriterInstallAttempt {
         )?;
         drop(_journal);
         origin.require_current(database, policy)?;
-        self.original_caller.check()?;
+        self.require_original_attempt_lifetime()?;
         self.installed_guard().unwrap().require_for_coordinator(
             database,
             origin.range(),

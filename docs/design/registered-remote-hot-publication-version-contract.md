@@ -68,3 +68,21 @@ service/slot owners. Required adversarial controls include early policy,
 selected Store replacement, lost committed reply, genuine metadata changes
 before and after native WAL, and a stale partitioned actor after a new leader.
 No synthetic Ready, manual floor, new A or local-quorum cast may close a gate.
+
+## Same-owner retry lifetime and actual abort health
+
+The Registered FIRST installer retains the actual original host/receiver/DB/slot
+lifetime, separately from every finite Role/OWN/policy call. Expiring a first
+request does not create a new request or refresh its evidence; a later distinct
+call still needs independently fresh proof and the exact already-retained
+native candidate/xid/coordinator/guard. Legacy first-policy callers retain their
+original finite-caller contract. Process stop, original receiver revocation,
+DB replacement or Store-slot replacement still refuses continuation.
+
+A native `abort()` returning success is retained as actual Aborted, separately
+from retry permission. Core, actual page-store and actual page-WAL health must
+all be healthy before marking that abort retryable, and must be checked again
+before a replacement begin. Aborted-on-fenced-storage is neither Committed nor
+Unknown, but cannot allocate another native transaction. All outcomes and the
+original write/health errors stay in the retained attempt. Actual expiry and
+poisoned-storage fixture controls remain unexecuted.

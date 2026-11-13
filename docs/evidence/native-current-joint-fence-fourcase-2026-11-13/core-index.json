@@ -1,0 +1,24 @@
+{
+  "run_id": 43343984328,
+  "job_id": 131618814672,
+  "source_revision": "5812d5750409e8b4f21d959fbaf367c8d4362f39",
+  "job_name": "Focused Core library (native_current_joint_activation_scope_actual_postcat_)",
+  "job_conclusion": "success",
+  "raw_bytes": 9411103,
+  "raw_sha256": "8f27bf0c6f2a9e2af190161b944a63dffd5445a82df85934bce0fbe12ab22dc8",
+  "gzip_bytes": 598916,
+  "gzip_sha256": "7d6ff9e8fa757df864b2d4155d3345b2234402d837e121addfaf75ad1565f347",
+  "result_lines": [
+    "2026-11-13T01:25:50.6505399Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 976 filtered out; finished in 67.70s"
+  ],
+  "panics": [],
+  "test_results": [
+    "2026-11-13T01:25:47.2975367Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_writer_replacement_refused ... ok",
+    "2026-11-13T01:25:47.3438771Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_foreign_db_and_store_refused ... ok",
+    "2026-11-13T01:25:47.4064677Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_missing_decision_archive_refused ... ok",
+    "2026-11-13T01:25:49.1197628Z test db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_caller_cancel_and_exact_fresh_recovery ... ok"
+  ],
+  "strong_trace_lines": 564,
+  "recovery_probe_trace_lines": 7706,
+  "native_engine_opened_or_replayed_by_capture": false
+}

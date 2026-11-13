@@ -158,6 +158,11 @@ mod client {
         topology: Arc<RwLock<ClusterTopology>>,
         transport: TcpClusterRelocationTransport,
         request_timeout: std::time::Duration,
+        // Discovery ordering hint only: members whose discovery exchange
+        // recently consumed its whole slice without an answer. They are asked
+        // last and only while no other member answered in the same refresh.
+        silent_members:
+            parking_lot::Mutex<std::collections::BTreeMap<ClusterNodeId, std::time::Instant>>,
     }
 
     impl ClusterEventClient {
@@ -173,6 +178,7 @@ mod client {
                 topology,
                 transport,
                 request_timeout: std::time::Duration::from_secs(30),
+                silent_members: parking_lot::Mutex::new(std::collections::BTreeMap::new()),
             })
         }
 
@@ -186,6 +192,20 @@ mod client {
                 ));
             }
             self.request_timeout = timeout;
+            Ok(self)
+        }
+
+        /// Journal exact actual Event/discovery RPC evidence through the
+        /// existing transport. This opt-in may refuse on evidence failure; it
+        /// cannot change replies, routing, retries or admission authority.
+        pub fn with_rpc_evidence_observer(
+            mut self,
+            observer: Arc<dyn crate::ClusterRpcEvidenceObserver>,
+            limits: crate::ClusterRpcEvidenceLimits,
+        ) -> Result<Self> {
+            self.transport = self
+                .transport
+                .with_rpc_evidence_observer(observer, limits)?;
             Ok(self)
         }
 
@@ -204,14 +224,36 @@ mod client {
         }
 
         fn refresh_members_until(&self, deadline: std::time::Instant) -> Result<bool> {
+            self.transport.require_rpc_evidence_current()?;
             let cancellation =
                 crate::CancellationToken::uncancelable().child_with_deadline(deadline);
-            let members: Vec<ClusterNodeId> = self.topology.read().nodes.keys().cloned().collect();
+            let mut members: Vec<ClusterNodeId> =
+                self.topology.read().nodes.keys().cloned().collect();
+            // A member that recently stayed silent for its whole discovery
+            // slice is asked LAST, and not at all once another member answered
+            // in this refresh: one silent member must not take a second of
+            // every retry away from the route that is actually serving. It is
+            // still asked whenever nobody else answers, and again after the
+            // bounded hint expires.
+            let silent = {
+                let now = std::time::Instant::now();
+                let mut silent = self.silent_members.lock();
+                silent.retain(|_, until| now < *until);
+                silent
+                    .keys()
+                    .cloned()
+                    .collect::<std::collections::BTreeSet<_>>()
+            };
+            members.sort_by_key(|member| silent.contains(member));
             let mut observed = false;
             for member in members {
                 if std::time::Instant::now() >= deadline {
                     break;
                 }
+                if observed && silent.contains(&member) {
+                    continue;
+                }
+                let member_started = std::time::Instant::now();
                 // Committed snapshots are available from followers too. A
                 // stale client may know only the former leader, so requiring
                 // leader authority here can prevent learning its replacement.
@@ -239,8 +281,15 @@ mod client {
                 if let Some(topology) = topology {
                     self.transport.install_topology(topology)?;
                     observed = true;
+                    self.silent_members.lock().remove(&member);
+                } else if member_started.elapsed() >= std::time::Duration::from_millis(500) {
+                    self.silent_members.lock().insert(
+                        member.clone(),
+                        std::time::Instant::now() + std::time::Duration::from_secs(10),
+                    );
                 }
             }
+            self.transport.require_rpc_evidence_current()?;
             Ok(observed)
         }
 
@@ -262,6 +311,7 @@ mod client {
                 crate::CancellationToken::uncancelable().child_with_deadline(deadline);
             let mut last_error = invalid("event cluster request failed");
             for attempt in 0..5 {
+                self.transport.require_rpc_evidence_current()?;
                 if std::time::Instant::now() >= deadline {
                     break;
                 }
@@ -317,6 +367,7 @@ mod client {
                     Err(error) => last_error = error,
                 }
             }
+            self.transport.require_rpc_evidence_current()?;
             Err(last_error)
         }
 
@@ -339,6 +390,7 @@ mod client {
             // A finite bound plus the SAME absolute request deadline. Typed
             // route/unavailable results never become a successful empty row.
             for attempt in 0..128 {
+                self.transport.require_rpc_evidence_current()?;
                 parent.check()?;
                 if attempt > 0 {
                     let until = (std::time::Instant::now() + retry_after).min(deadline);

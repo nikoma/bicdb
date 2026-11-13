@@ -1436,3 +1436,6 @@ mod native_read_rpc_tests;
 
 #[cfg(test)]
 mod native_strong_point_tests;
+
+#[path = "native_historical_tls/expired_ready_delivery_tests.rs"]
+mod expired_ready_delivery_tests;

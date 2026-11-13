@@ -1,0 +1,133 @@
+{
+  "source_revision": "4081523f16e0d5ee1c36d332145ad6d56e479080",
+  "requested_source": "4081523f16e0d5ee1c36d332145ad6d56e479080",
+  "authoritative_source_verified": true,
+  "run_id": 43446784706,
+  "job_id": 131958210090,
+  "job_name": "Community-only workspace compiles, tests included",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T14:56:00.873458+00:00",
+  "raw_bytes": 74728,
+  "raw_sha256": "44fe86e6ae6d1527a998c3bfe6d66e6d45224453db470a345830ad46323f86fb",
+  "compressed_file": "job.log.gz",
+  "compressed_sha256": "5d3df6cc61ebcbadca7a3301af1c7e3052bacd7e241bf2f44442571bae313661",
+  "capture_exit_code": 0,
+  "test_summaries": [],
+  "failure_context": [
+    {
+      "line": 728,
+      "remaining": 5,
+      "lines": [
+        "2026-11-13T14:52:28.2906392Z    |                       ^^^^^^^",
+        "2026-11-13T14:52:28.2906511Z",
+        "2026-11-13T14:52:34.5216369Z error[E0609]: no field `database` on type `&provisional_listener::registration::initial_data::NativeInitialDataAdmission`",
+        "2026-11-13T14:52:34.5217381Z    --> crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/old_step/remote_old.rs:276:51",
+        "2026-11-13T14:52:34.5217940Z     |",
+        "2026-11-13T14:52:34.5218308Z 276 |             store.require_listener_database(&self.database)?;",
+        "2026-11-13T14:52:34.5218877Z     |                                                   ^^^^^^^^ unknown field",
+        "2026-11-13T14:52:34.5219240Z     |",
+        "2026-11-13T14:52:34.5219719Z     = note: available fields are: `service`, `runtime`, `writer`, `root`, `store_open` ... and 8 others",
+        "2026-11-13T14:52:34.5220076Z",
+        "2026-11-13T14:52:34.5222576Z error[E0609]: no field `database` on type `&provisional_listener::registration::initial_data::NativeInitialDataAdmission`"
+      ]
+    },
+    {
+      "line": 736,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T14:52:34.5219719Z     = note: available fields are: `service`, `runtime`, `writer`, `root`, `store_open` ... and 8 others",
+        "2026-11-13T14:52:34.5220076Z",
+        "2026-11-13T14:52:34.5222576Z error[E0609]: no field `database` on type `&provisional_listener::registration::initial_data::NativeInitialDataAdmission`",
+        "2026-11-13T14:52:34.5223516Z    --> crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/old_step/remote_old.rs:289:18",
+        "2026-11-13T14:52:34.5224076Z     |",
+        "2026-11-13T14:52:34.5224402Z 289 |             self.database.require_database(&db)?;",
+        "2026-11-13T14:52:34.5224842Z     |                  ^^^^^^^^ unknown field",
+        "2026-11-13T14:52:34.5225318Z     |",
+        "2026-11-13T14:52:34.5226349Z     = note: available fields are: `service`, `runtime`, `writer`, `root`, `store_open` ... and 8 others",
+        "2026-11-13T14:52:34.5226713Z",
+        "2026-11-13T14:52:37.8115929Z warning: unused import: `Verifier`",
+        "2026-11-13T14:52:37.8116408Z    --> crates/bicdb-core/src/db.rs:145:32",
+        "2026-11-13T14:52:37.8116704Z     |",
+        "2026-11-13T14:52:37.8117250Z 145 | use ed25519_dalek::{Signature, Verifier, VerifyingKey};",
+        "2026-11-13T14:52:37.8117680Z     |                                ^^^^^^^^",
+        "2026-11-13T14:52:37.8117881Z"
+      ]
+    }
+  ],
+  "test_observations": [],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T14:51:47Z",
+      "completed_at": "2026-11-13T14:51:49Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T14:51:49Z",
+      "completed_at": "2026-11-13T14:51:53Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T14:51:53Z",
+      "completed_at": "2026-11-13T14:52:01Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T14:52:01Z",
+      "completed_at": "2026-11-13T14:52:18Z"
+    },
+    {
+      "name": "cargo check --workspace --all-targets",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 5,
+      "started_at": "2026-11-13T14:52:18Z",
+      "completed_at": "2026-11-13T14:52:47Z"
+    },
+    {
+      "name": "Workflow consumer compiles without Core defaults",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 6,
+      "started_at": "2026-11-13T14:52:47Z",
+      "completed_at": "2026-11-13T14:52:47Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 11,
+      "started_at": "2026-11-13T14:52:47Z",
+      "completed_at": "2026-11-13T14:52:47Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 12,
+      "started_at": "2026-11-13T14:52:47Z",
+      "completed_at": "2026-11-13T14:52:47Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 13,
+      "started_at": "2026-11-13T14:52:47Z",
+      "completed_at": "2026-11-13T14:52:47Z"
+    }
+  ]
+}

@@ -104,7 +104,7 @@
     "distributed_ranges": {
       "automatic_range_rebalancing": {
         "status": "supported",
-        "summary": "Default balanced controller moves physical range replicas and balances leader counts.",
+        "summary": "The legacy range/event controller moves physical range replicas and balances leader counts; enforced native DATA image/joint handoff is not provided by this capability.",
         "source_paths": [
           "crates/bicdb-pgwire/src/distribution_controller.rs",
           "crates/bicdb-core/src/distribution_supervisor.rs"
@@ -113,6 +113,7 @@
           "crates/bicdb-pgwire/src/validation.rs"
         ],
         "conditions": [
+          "Legacy range/event relocation only; born-v2 enforced native DATA relocation remains unsupported without authenticated image/joint transfer and a native placement controller.",
           "Distribution configuration, live metadata quorum, RF/failure-domain/capacity/schema eligibility; balanced controller enabled."
         ]
       },

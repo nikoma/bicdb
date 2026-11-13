@@ -1,6 +1,11 @@
 //! Ordinary native replica materialization. A sender needs the actual origin
 //! certificate; a receiver independently verifies the authenticated current
 //! leader. Wire observations never become a locally collected voter quorum.
+mod recertify;
+pub(crate) use recertify::{
+    NativeRecertifyObservation, NativeRecertifyReply, NativeRecertifyRequest,
+};
+
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};

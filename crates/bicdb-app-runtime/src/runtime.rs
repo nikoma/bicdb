@@ -61,8 +61,9 @@ use bicdb_extension::{
     ExtensionManifest, ExtensionState, HttpMethod, InvocationContext, InvocationKind,
 };
 use bicdb_sql::{
-    ensure_embedded_table_schema, reconcile_embedded_table_row_policy, EmbeddedTableColumn,
-    EmbeddedTableRowPolicy, EmbeddedTableSchemaReceipt,
+    ensure_embedded_table_schema, missing_embedded_table_constraint_indexes,
+    reconcile_embedded_table_row_policy, EmbeddedTableColumn, EmbeddedTableRowPolicy,
+    EmbeddedTableSchemaReceipt,
 };
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;

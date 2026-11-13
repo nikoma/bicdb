@@ -34,6 +34,7 @@ pub(crate) struct NativeImageProposalIntentBinding {
     database_incarnation: String,
     intent: ImageInstallIntent,
     core_sha256: String,
+    expected_freeze_owner: Uuid,
 }
 impl NativeImageProposalIntentBinding {
     pub(super) fn from_actual_candidate(
@@ -46,7 +47,29 @@ impl NativeImageProposalIntentBinding {
             database_incarnation: native.database_incarnation().to_string(),
             intent: intent.clone(),
             core_sha256: intent.core_sha256()?,
+            expected_freeze_owner: intent.attempt_id,
         })
+    }
+    pub(super) fn from_actual_replacement_candidate(
+        store: &RangeWriteStore,
+        native: &crate::db::NativeRecoveryAdmission,
+        intent: &ImageInstallIntent,
+        source: &TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<Self> {
+        source.require_current()?;
+        role.role().require_live_request()?;
+        if !source.cut().is_actual_replacement_source()
+            || source.cut().resume_proposal().is_none()
+            || frozen.owner() != role.role().recovery_nonce()
+            || intent.session_id != role.role().recovery_nonce()
+        {
+            return Err(range_write_error("replacement proposal requires actual verified replacement cut and current recovery freeze"));
+        }
+        let mut out = Self::from_actual_candidate(store, native, intent)?;
+        out.expected_freeze_owner = role.role().recovery_nonce();
+        Ok(out)
     }
     pub(crate) fn core_sha256(&self) -> &str {
         &self.core_sha256
@@ -95,7 +118,7 @@ impl NativeImageProposalIntentBinding {
             frozen,
             self.intent.purpose,
             self.intent.attempt_id,
-            self.intent.attempt_id,
+            self.expected_freeze_owner,
         )?;
         if current.core_sha256()? != self.core_sha256 {
             return Err(range_write_error(

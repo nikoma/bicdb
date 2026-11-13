@@ -29,14 +29,23 @@ pub const METADATA_READ_AUTHORITY_PROTOCOL_VERSION: u32 = 1;
 pub const METADATA_READ_ACQUISITION_PROTOCOL_VERSION: u32 = 1;
 mod host_read;
 mod native_metadata_store;
+mod native_supervisor;
 pub(crate) use host_read::{
     HostMetadataReadAcquireRequest, HostMetadataReadAcquireResponse, HostMetadataReadObservation,
 };
-pub(crate) use native_metadata_store::NativeMetadataAppendProvenance;
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_metadata_store::same_registration as same_native_registration;
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_metadata_store::NativeLearnerPromotionReadiness;
 pub use native_metadata_store::NativeMetadataAppendReceiver;
 #[cfg(test)]
 pub(crate) use native_metadata_store::NativeMetadataInitializationCut;
 pub(crate) use native_metadata_store::NativeMetadataPreVoteFact;
+pub(crate) use native_metadata_store::{
+    NativeMetadataAppendProvenance, NativeOwnedMetadataMemberObservation,
+    NativeRegisteredMetadataCatchupObservation,
+};
+pub(crate) use native_supervisor::NativeMetadataSupervisorSnapshot;
 
 /// Wire request only. This is not a read authority or a row-read permit.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -117,6 +126,11 @@ pub struct MetadataReadAcquireResponse {
 #[serde(deny_unknown_fields)]
 pub(crate) enum MetadataRecoveryRolePurpose {
     NormalRecovery,
+    /// Request-bound intent only. Every data receiver additionally consumes
+    /// its actual protected activated joint domain and a NEW drained freeze.
+    CurrentJointRecovery {
+        joint_decision_sha256: String,
+    },
     CommittedHandoff {
         relocation_id: crate::distribution::RelocationId,
         plan_id: String,
@@ -130,6 +144,8 @@ pub(crate) enum MetadataRecoveryRolePurpose {
         coordinator_node_id: ClusterNodeId,
         coordinator_incarnation: u64,
         committed_handoff: Option<MetadataRecoveryHandoffBinding>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        current_joint_decision_sha256: Option<String>,
     },
 }
 
@@ -191,13 +207,30 @@ impl MetadataRecoveryRoleRequest {
                 return Err(metadata_error("invalid recovery-role handoff purpose"));
             }
         }
+        if let MetadataRecoveryRolePurpose::CurrentJointRecovery {
+            joint_decision_sha256,
+        } = &self.purpose
+        {
+            if joint_decision_sha256.len() != 64
+                || !joint_decision_sha256.bytes().all(|b| b.is_ascii_hexdigit())
+            {
+                return Err(metadata_error(
+                    "invalid protected current-joint intent digest",
+                ));
+            }
+        }
         if let MetadataRecoveryRolePurpose::ObserveFencedRecovery {
             coordinator_incarnation,
             committed_handoff,
+            current_joint_decision_sha256,
             ..
         } = &self.purpose
         {
             if *coordinator_incarnation == 0
+                || (committed_handoff.is_some() && current_joint_decision_sha256.is_some())
+                || current_joint_decision_sha256.as_ref().is_some_and(|sha| {
+                    sha.len() != 64 || !sha.bytes().all(|b| b.is_ascii_hexdigit())
+                })
                 || committed_handoff.as_ref().is_some_and(|binding| {
                     binding.plan_id.is_empty()
                         || binding.plan_id.len() > 1024
@@ -280,7 +313,8 @@ impl MetadataRecoveryRoleRequest {
             .iter()
             .any(|r| r.node_id == recipient.id && r.role == RangeReplicaRole::Voter);
         match &self.purpose {
-            MetadataRecoveryRolePurpose::NormalRecovery => {
+            MetadataRecoveryRolePurpose::NormalRecovery
+            | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => {
                 if range.leader != initiator.id || !recipient_voter {
                     return Err(invalid());
                 }
@@ -324,6 +358,7 @@ impl MetadataRecoveryRoleRequest {
                 coordinator_node_id,
                 coordinator_incarnation,
                 committed_handoff,
+                current_joint_decision_sha256: _,
             } => {
                 let observer_voter = range
                     .replicas
@@ -401,6 +436,9 @@ impl MetadataRecoveryRoleResponse {
 pub(crate) struct MetadataRecoveryRoleObservation {
     response: MetadataRecoveryRoleResponse,
     deadline: Instant,
+    // Retain the actual acquisition caller, never acquire_authority's internal
+    // CancelOnReturn child (which ends when its durable evidence is returned).
+    original_request: crate::CancellationToken,
 }
 impl MetadataRecoveryRoleObservation {
     pub(crate) fn request(&self) -> &MetadataRecoveryRoleRequest {
@@ -424,6 +462,7 @@ impl MetadataRecoveryRoleObservation {
             .filter(|d| !d.is_zero())
     }
     pub(crate) fn require_live_request(&self, read_request: Uuid, challenge: Uuid) -> Result<()> {
+        self.original_request.check()?;
         if self.request().read_request_id != read_request
             || self.request().recipient_challenge != challenge
             || self.remaining_budget().is_none()
@@ -432,7 +471,7 @@ impl MetadataRecoveryRoleObservation {
                 "recovery-role witness scope changed or expired",
             ));
         }
-        Ok(())
+        self.original_request.check()
     }
     pub(crate) fn committed_topology(
         &self,
@@ -462,6 +501,7 @@ impl MetadataRecoveryRoleObservation {
         }
         Ok(())
     }
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn from_transport(
         request: &MetadataRecoveryRoleRequest,
         cluster: &ClusterId,
@@ -470,7 +510,9 @@ impl MetadataRecoveryRoleObservation {
         response: MetadataRecoveryRoleResponse,
         deadline: Instant,
         started: Instant,
+        original_request: &crate::CancellationToken,
     ) -> Result<Self> {
+        original_request.check()?;
         response.validate(request)?;
         let evidence = &response.evidence;
         let deadline = deadline.min(started + Duration::from_millis(evidence.context_budget_ms));
@@ -497,13 +539,20 @@ impl MetadataRecoveryRoleObservation {
         if !identity.accepts(&participant) {
             return Err(metadata_error("recovery-role metadata source pin mismatch"));
         }
-        Ok(Self { response, deadline })
+        original_request.check()?;
+        Ok(Self {
+            response,
+            deadline,
+            original_request: original_request.clone(),
+        })
     }
     pub(crate) fn from_local_authority(
         authority: MetadataReadAuthority,
         request: MetadataRecoveryRoleRequest,
         recipient: &MetadataReadParticipant,
+        original_request: &crate::CancellationToken,
     ) -> Result<Self> {
+        original_request.check()?;
         let deadline = authority.deadline();
         let response = authority.into_recovery_role_response(request.clone())?;
         if recipient.node_id != request.recipient_node_id
@@ -527,7 +576,12 @@ impl MetadataRecoveryRoleObservation {
         if Instant::now() >= deadline {
             return Err(metadata_error("local recovery-role witness expired"));
         }
-        Ok(Self { response, deadline })
+        original_request.check()?;
+        Ok(Self {
+            response,
+            deadline,
+            original_request: original_request.clone(),
+        })
     }
 }
 
@@ -2202,9 +2256,15 @@ impl MetadataConsensusStore {
                 entry.topology.range_image_bootstrap_id,
             )?;
         }
+        let mut next = request.prev_log_index.checked_add(1);
+        let mut contiguous = true;
+        for entry in &request.entries {
+            validate_log_entry_shape(entry, &self.state.cluster_id)?;
+            contiguous &= next == Some(entry.index);
+            next = entry.index.checked_add(1);
+        }
         self.validate_native_birth_append(&request)?;
         self.step_down(request.term, Some(request.leader_id));
-        self.mark_election_activity();
         let snapshot_frontier = request
             .snapshot
             .as_ref()
@@ -2218,6 +2278,9 @@ impl MetadataConsensusStore {
                 .min(self.last_log_index().saturating_add(1))
                 .max(self.state.base_index.saturating_add(1));
             self.persist()?;
+            if contiguous {
+                self.mark_election_activity();
+            }
             return Ok(self.append_response(false, conflict_index));
         }
         // A matching previous entry (and any installed snapshot) establishes
@@ -2258,7 +2321,9 @@ impl MetadataConsensusStore {
         }
         // Commit only this request's validated prefix, never an untouched tail.
         self.advance_follower_commit(request.leader_commit.min(matched_frontier))?;
-        self.persist_owned_append_response(matched_frontier)
+        let reply = self.persist_owned_append_response(matched_frontier)?;
+        self.mark_election_activity();
+        Ok(reply)
     }
 
     fn validate_native_birth_append(&self, request: &MetadataAppendRequest) -> Result<()> {

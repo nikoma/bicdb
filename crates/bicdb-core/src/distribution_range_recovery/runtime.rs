@@ -2,6 +2,8 @@
 //! drain happen outside service/DB latches. A durable fence retains its freeze
 //! even when its response is lost or the caller's one-shot budget expires.
 use super::*;
+#[cfg(test)]
+mod hot_reply_loss_test;
 use crate::distribution_data::ClusterDataNodeService;
 use crate::distribution_metadata_read_provider::MetadataReadProvider;
 use crate::distribution_range_mutation::{FrozenRangeMutationPermit, RangeMutationGate};
@@ -10,15 +12,24 @@ use parking_lot::Mutex;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+#[cfg(feature = "tls-replication")]
+mod completed_materialize;
+mod current_image_replacement;
 mod current_image_resume;
+mod native_abort;
 mod native_activation;
+#[cfg(test)]
+mod native_apply_pre_effect_test;
 mod native_completion;
 mod native_completion_quorum;
 mod native_read;
 mod native_ready;
 mod native_ready_quorum;
+mod native_recertify;
 mod normal_apply;
 mod participants;
+#[cfg(feature = "tls-replication")]
+mod registered_closed;
 #[cfg(feature = "tls-replication")]
 mod strong_point_read;
 
@@ -41,6 +52,7 @@ struct Session {
 struct Sessions {
     current: BTreeMap<RangeId, Session>,
     installing: BTreeMap<RangeId, current_image_resume::InstallingResumeSession>,
+    replacing: BTreeMap<RangeId, current_image_replacement::InstallingReplacementSession>,
     active: BTreeSet<RangeId>,
     contexts: usize,
 }
@@ -75,6 +87,11 @@ pub(crate) struct RangeRecoveryRuntime {
     participant_transport:
         Option<Arc<dyn crate::distribution_range_consensus::RangeWriteTransport>>,
     #[cfg(test)]
+    test_hot_completion_reply_loss: Mutex<Option<std::sync::Weak<hot_reply_loss_test::ReplyLoss>>>,
+    #[cfg(test)]
+    test_native_apply_pre_effect:
+        Mutex<Option<std::sync::Weak<native_apply_pre_effect_test::NativeApplyPreEffect>>>,
+    #[cfg(test)]
     test_completion_reply_barrier: Mutex<Option<Arc<NativeCompletionReplyBarrier>>>,
     #[cfg(test)]
     test_read_io_barrier: Mutex<Option<Arc<native_read::NativeReadIoBarrier>>>,
@@ -93,6 +110,62 @@ impl Drop for Operation {
         if self.exclusive {
             sessions.active.remove(&self.range);
         }
+    }
+}
+// Declared BEFORE the receiver's original Operation owner so this trace drops
+// AFTER that owner on return/unwind. A Weak count is diagnostic only: never
+// upgraded, never a currentness or capacity grant, and no lifetime extension.
+#[cfg(test)]
+struct NativeProbeOperationExit {
+    operation: Option<std::sync::Weak<Operation>>,
+    trace: NativeProbeTraceSpan,
+}
+#[cfg(test)]
+impl NativeProbeOperationExit {
+    fn new(
+        phase: &'static str,
+        node: &ClusterNodeId,
+        scope: &RecoveryFenceScope,
+        challenge: Uuid,
+        deadline: Option<Instant>,
+    ) -> Self {
+        Self {
+            operation: None,
+            trace: NativeProbeTraceSpan::new(
+                phase,
+                "receiver-operation",
+                node,
+                scope,
+                challenge,
+                deadline,
+            ),
+        }
+    }
+    fn bind(&mut self, operation: &Arc<Operation>) {
+        self.operation = Some(Arc::downgrade(operation));
+        self.trace.detail("reserved=true");
+    }
+    fn detail(&self, fields: impl AsRef<str>) {
+        self.trace.detail(fields);
+    }
+    fn outcome<T>(&mut self, result: &Result<T>) {
+        self.trace.detail(format!(
+            "result_ok={} error={:?}",
+            result.is_ok(),
+            result.as_ref().err().map(ToString::to_string)
+        ));
+        if result.is_ok() {
+            self.trace.complete();
+        }
+    }
+}
+#[cfg(test)]
+impl Drop for NativeProbeOperationExit {
+    fn drop(&mut self) {
+        self.trace.detail(format!(
+            "receiver_operation_strong_after_original_owner_drop={:?}",
+            self.operation.as_ref().map(std::sync::Weak::strong_count)
+        ));
     }
 }
 /// Exclusive owned installer lease. Dropping it preserves an A-owned freeze;
@@ -114,6 +187,140 @@ impl std::fmt::Debug for RecoveryImageInstallFreeze {
     }
 }
 impl RecoveryImageInstallFreeze {
+    /// Consume the exact leased image owner only after genuine joint native
+    /// and catalogue activation. The old recovery refusal stays durable; its
+    /// obsolete in-memory session is retired without minting normal Ready.
+    pub(crate) fn release_after_joint_activation(
+        &mut self,
+        image: &crate::distribution_range_image_install::NativeImageCatalogueFinalization,
+        activation: &crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        activation.require_live()?;
+        let frozen = self
+            .frozen
+            .as_ref()
+            .ok_or_else(|| invalid("joint image lease already consumed"))?;
+        let service = self
+            .runtime
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("joint recovery image release service busy"))?;
+        service.require_native_joint_image_release(image, frozen, activation)?;
+        let preflight = self
+            .preflight
+            .as_ref()
+            .ok_or_else(|| invalid("joint image lost original transfer preflight"))?;
+        let base = image.base();
+        if self.returned
+            || base.capture_range().id != self.scope.range_id
+            || base.attempt_id() != preflight.attempt_id()
+            || base.session_id() != self.scope.freeze_owner()?
+            || base.nonce() != self.scope.recovery_nonce
+            || base.attempt_id() != frozen.owner()
+        {
+            return Err(invalid(
+                "joint image release changed the exact retained recovery transfer",
+            ));
+        }
+        let mut sessions = self
+            .runtime
+            .sessions
+            .try_lock()
+            .ok_or_else(|| invalid("joint recovery image sessions busy"))?;
+        let session = sessions
+            .current
+            .get(&self.scope.range_id)
+            .ok_or_else(|| invalid("joint image lost retained recovery session"))?;
+        if !session.scope.same_session(&self.scope)
+            || session.frozen.is_some()
+            || session.native_prepared.is_some()
+            || sessions.active.contains(&self.scope.range_id)
+        {
+            return Err(invalid(
+                "joint image recovery session still has another operation/owner",
+            ));
+        }
+        parent.check()?;
+        activation.require_live()?;
+        // Every fallible check precedes owner consumption. Drop sees None and
+        // cannot reinstall an obsolete A-owned freeze into recovery N.
+        sessions.current.remove(&self.scope.range_id);
+        self.returned = true;
+        let released = self.frozen.take();
+        drop(sessions);
+        drop(service);
+        drop(released);
+        Ok(())
+    }
+    pub(crate) fn release_after_fresh_joint_activation(
+        &mut self,
+        image: &crate::distribution_range_image_install::NativeImageCatalogueFinalization,
+        admission: &crate::distribution_range_handoff::NativeJointReleaseAdmission,
+    ) -> Result<()> {
+        admission.require_live()?;
+        let frozen = self
+            .frozen
+            .as_ref()
+            .ok_or_else(|| invalid("joint image lease already consumed"))?;
+        let service = self
+            .runtime
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("joint recovery image release service busy"))?;
+        admission.require_recipient(&self.runtime.service, admission.native())?;
+        service.require_fresh_native_joint_image_release(image, frozen, admission)?;
+        let preflight = self
+            .preflight
+            .as_ref()
+            .ok_or_else(|| invalid("joint image lost original transfer preflight"))?;
+        let base = image.base();
+        if self.returned
+            || base.capture_range().id != self.scope.range_id
+            || base.attempt_id() != preflight.attempt_id()
+            || base.session_id() != self.scope.freeze_owner()?
+            || base.nonce() != self.scope.recovery_nonce
+            || base.attempt_id() != frozen.owner()
+        {
+            return Err(invalid(
+                "joint image release changed the exact retained recovery transfer",
+            ));
+        }
+        let mut sessions = self
+            .runtime
+            .sessions
+            .try_lock()
+            .ok_or_else(|| invalid("joint recovery image sessions busy"))?;
+        let session = sessions
+            .current
+            .get(&self.scope.range_id)
+            .ok_or_else(|| invalid("joint image lost retained recovery session"))?;
+        if !session.scope.same_session(&self.scope)
+            || session.frozen.is_some()
+            || session.native_prepared.is_some()
+            || sessions.active.contains(&self.scope.range_id)
+        {
+            return Err(invalid(
+                "joint image recovery session still has another operation/owner",
+            ));
+        }
+        admission.require_live()?;
+        // Every fallible check precedes owner consumption. Drop sees None and
+        // cannot reinstall an obsolete A-owned freeze into recovery N.
+        sessions.current.remove(&self.scope.range_id);
+        self.returned = true;
+        let released = self.frozen.take();
+        drop(sessions);
+        drop(service);
+        drop(released);
+        Ok(())
+    }
+    pub(crate) fn try_as_frozen(&self) -> Result<&FrozenRangeMutationPermit> {
+        self.frozen.as_ref().ok_or_else(|| {
+            invalid("actual image freeze was already consumed; new phase cannot revive it")
+        })
+    }
     pub(crate) fn as_frozen(&self) -> &FrozenRangeMutationPermit {
         self.frozen
             .as_ref()
@@ -444,6 +651,33 @@ impl RangeRecoveryRuntime {
             let service = service.lock();
             (service.node_id().clone(), service.range_mutation_gate())
         };
+        Self::from_actual_service_parts(service, provider, local_node_id, gate)
+    }
+    pub(crate) fn new_cancellable(
+        service: Arc<Mutex<ClusterDataNodeService>>,
+        provider: Arc<MetadataReadProvider>,
+        parent: &CancellationToken,
+    ) -> Result<Self> {
+        let (local_node_id, gate) = loop {
+            parent.check()?;
+            if let Some(actual) = service.try_lock_for(LATCH_POLL) {
+                parent.check()?;
+                break (actual.node_id().clone(), actual.range_mutation_gate());
+            }
+        };
+        Ok(Self::from_actual_service_parts(
+            service,
+            provider,
+            local_node_id,
+            gate,
+        ))
+    }
+    fn from_actual_service_parts(
+        service: Arc<Mutex<ClusterDataNodeService>>,
+        provider: Arc<MetadataReadProvider>,
+        local_node_id: ClusterNodeId,
+        gate: RangeMutationGate,
+    ) -> Self {
         Self {
             service,
             provider,
@@ -453,6 +687,10 @@ impl RangeRecoveryRuntime {
             event_dispatcher: Mutex::new(std::sync::Weak::new()),
             sessions: Arc::new(Mutex::new(Sessions::default())),
             participant_transport: None,
+            #[cfg(test)]
+            test_hot_completion_reply_loss: Mutex::new(None),
+            #[cfg(test)]
+            test_native_apply_pre_effect: Mutex::new(None),
             #[cfg(test)]
             test_completion_reply_barrier: Mutex::new(None),
             #[cfg(test)]
@@ -493,6 +731,12 @@ impl RangeRecoveryRuntime {
             }
         }
         Ok(())
+    }
+    pub(crate) fn active_contexts(&self) -> Result<usize> {
+        self.sessions
+            .try_lock()
+            .map(|sessions| sessions.contexts)
+            .ok_or_else(|| invalid("native runtime context ownership busy"))
     }
     #[cfg(test)]
     pub(crate) fn test_active_context_count(&self) -> usize {
@@ -587,7 +831,9 @@ impl RangeRecoveryRuntime {
                 session.scope = scope.clone();
                 return Ok(Arc::clone(session.frozen.as_ref().unwrap()));
             }
-            if sessions.current.len() + sessions.installing.len() >= MAX_SESSIONS {
+            if sessions.current.len() + sessions.installing.len() + sessions.replacing.len()
+                >= MAX_SESSIONS
+            {
                 return Err(invalid("receiver recovery session bound reached"));
             }
         }
@@ -621,12 +867,40 @@ impl RangeRecoveryRuntime {
         parent: &CancellationToken,
     ) -> Result<RecoveryFenceObservation> {
         let token = request.cancellation(parent)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        let _fence_trace = super::fence_trace::Context::enter(
+            "receiver",
+            &self.local_node_id,
+            &request.scope,
+            None,
+            parent.deadline(),
+            None,
+            token.deadline(),
+        );
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("runtime-reserve-begin");
+        // FENCE_TRACE_END
         let _operation = self.reserve(request.scope.range_id)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("runtime-reserve-ok");
+        // FENCE_TRACE_END
         let business = Uuid::now_v7();
         let challenge = Uuid::now_v7();
         let scope = &request.scope;
         // Actual initiating peer and fresh recipient challenge enter a new
         // metadata leader begin/probe/record/finish; no cached role fallback.
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("recipient-witness-begin");
+        // FENCE_TRACE_END
         let observation = self.provider.witness_recovery_role(
             initiator,
             business,
@@ -637,6 +911,11 @@ impl RangeRecoveryRuntime {
             scope.purpose.clone(),
             &token,
         )?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("recipient-witness-ok");
+        // FENCE_TRACE_END
         let role = RecoveryRoleAdmission::from_witness(
             observation,
             initiator,
@@ -650,25 +929,93 @@ impl RangeRecoveryRuntime {
         )?;
         scope.require_role(&role)?;
         let token = token.child_with_deadline(role.deadline());
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        super::fence_trace::role_ids(business, role.context_id(), role.recipient_challenge());
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        super::fence_trace::deadlines(
+            "recipient-role-bound",
+            parent.deadline(),
+            Some(role.deadline()),
+            token.deadline(),
+        );
+        // FENCE_TRACE_END
+
         {
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark(
+                "preflight-service-acquire-begin",
+            );
+            // FENCE_TRACE_END
             let service = loop {
                 token.check()?;
                 if let Some(service) = self.service.try_lock_for(LATCH_POLL) {
                     break service;
                 }
             };
+
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("preflight-service-acquire-ok");
+            // FENCE_TRACE_END
+
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("service-preflight-begin");
+            // FENCE_TRACE_END
             service.preflight_native_recovery(&role, scope, &token)?;
+            // FENCE_TRACE_BEGIN
+            #[cfg(test)]
+            crate::distribution_range_recovery::fence_trace::mark("service-preflight-ok");
+            // FENCE_TRACE_END
         }
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("runtime-freeze-drain-begin");
+        // FENCE_TRACE_END
         let frozen = self.frozen(scope, &token, true)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("runtime-freeze-drain-ok");
+        // FENCE_TRACE_END
         token.check()?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("postfreeze-service-acquire-begin");
+        // FENCE_TRACE_END
         let mut service = loop {
             token.check()?;
             if let Some(service) = self.service.try_lock_for(LATCH_POLL) {
                 break service;
             }
         };
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("postfreeze-service-acquire-ok");
+        // FENCE_TRACE_END
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("service-fence-producer-begin");
+        // FENCE_TRACE_END
         let reply = service.fence_native_recovery(&role, scope, &frozen, &token)?;
+
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("service-fence-producer-ok");
+        // FENCE_TRACE_END
         token.check()?;
+        // FENCE_TRACE_BEGIN
+        #[cfg(test)]
+        crate::distribution_range_recovery::fence_trace::mark("local-observation-projection-begin");
+        // FENCE_TRACE_END
         RecoveryFenceObservation::from_local(
             reply,
             self.provider.local_participant(),

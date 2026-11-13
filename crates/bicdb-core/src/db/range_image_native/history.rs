@@ -172,8 +172,7 @@ impl NativeLogicalHistoryEntryV1 {
         entry.validate_shape()?;
         Ok(entry)
     }
-    #[cfg(test)]
-    fn canonical_aborted(range: RangeId, index: u64, previous: &str) -> Result<Self> {
+    pub(super) fn canonical_aborted(range: RangeId, index: u64, previous: &str) -> Result<Self> {
         let mut entry = Self {
             format_version: HISTORY_FORMAT,
             range_id: range,

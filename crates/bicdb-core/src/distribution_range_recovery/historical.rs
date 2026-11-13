@@ -72,8 +72,9 @@ fn verify_history(
         MetadataRecoveryRolePurpose::CommittedHandoff { .. } => {
             authority.current_range().epoch.checked_add(2)
         }
-        MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. } => {
-            return Err(invalid("readonly role cannot mint historical authority"))
+        MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+        | MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. } => {
+            return Err(invalid("readonly/current-joint scope cannot mint historical adoption authority in this producer"))
         }
     };
     if progress.node_id != *fence.node_id()
@@ -337,8 +338,10 @@ impl CurrentHistoricalCertificationRound {
             ));
         }
         Ok(RecoveryApplyAdmission {
-            decision: self.decision,
-            certifications: self.votes,
+            proof: RecoveryApplyProof::Ordinary {
+                decision: self.decision,
+                certifications: self.votes,
+            },
         })
     }
 }
@@ -347,62 +350,180 @@ impl CurrentHistoricalCertificationRound {
 /// serde/Clone or constructor from a numeric floor, wire DTO or voter list.
 #[derive(Debug)]
 pub(crate) struct RecoveryApplyAdmission {
-    decision: Arc<HistoricalCommandDecision>,
-    certifications: BTreeMap<ClusterNodeId, HistoricalVote>,
+    proof: RecoveryApplyProof,
+}
+#[derive(Debug)]
+enum RecoveryApplyProof {
+    Ordinary {
+        decision: Arc<HistoricalCommandDecision>,
+        certifications: BTreeMap<ClusterNodeId, HistoricalVote>,
+    },
+    InstallingExisting(super::InstallingCommittedApplyAdmission),
+    CompletedDecision(super::CompletedNativeCommandAdmission),
 }
 impl RecoveryApplyAdmission {
+    pub(crate) fn from_completed_decision(
+        proof: super::CompletedNativeCommandAdmission,
+    ) -> Result<Self> {
+        proof.require_live()?;
+        Ok(Self {
+            proof: RecoveryApplyProof::CompletedDecision(proof),
+        })
+    }
+    pub(crate) fn completed_decision(&self) -> Option<&super::CompletedNativeCommandAdmission> {
+        match &self.proof {
+            RecoveryApplyProof::CompletedDecision(p) => Some(p),
+            _ => None,
+        }
+    }
+    pub(crate) fn from_installing_existing_committed(
+        proof: super::InstallingCommittedApplyAdmission,
+    ) -> Result<Self> {
+        proof.require_live()?;
+        Ok(Self {
+            proof: RecoveryApplyProof::InstallingExisting(proof),
+        })
+    }
+    pub(crate) fn installing_role(&self) -> Option<&RecoveryRoleAdmission> {
+        match &self.proof {
+            RecoveryApplyProof::InstallingExisting(p) => Some(p.role()),
+            _ => None,
+        }
+    }
     pub(crate) fn command(&self) -> &RangeWriteCommand {
-        self.decision.command()
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => decision.command(),
+            RecoveryApplyProof::InstallingExisting(p) => p.command(),
+            RecoveryApplyProof::CompletedDecision(p) => p.command(),
+        }
     }
     pub(crate) fn current_range(&self) -> &RangeDescriptor {
-        self.decision.authority().current_range()
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => decision.authority().current_range(),
+            RecoveryApplyProof::InstallingExisting(p) => p.role().current_range(),
+            RecoveryApplyProof::CompletedDecision(p) => p.role().current_range(),
+        }
     }
     pub(crate) fn bootstrap_id(&self) -> Uuid {
-        self.decision.authority().role().bootstrap_id()
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => {
+                decision.authority().role().bootstrap_id()
+            }
+            RecoveryApplyProof::InstallingExisting(p) => p.role().bootstrap_id(),
+            RecoveryApplyProof::CompletedDecision(p) => p.role().bootstrap_id(),
+        }
     }
     pub(crate) fn restore_activation(&self) -> Option<&MetadataRestoreActivation> {
-        self.decision.authority().role().restore_activation()
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => {
+                decision.authority().role().restore_activation()
+            }
+            RecoveryApplyProof::InstallingExisting(p) => p.role().restore_activation(),
+            RecoveryApplyProof::CompletedDecision(p) => p.role().restore_activation(),
+        }
     }
     pub(crate) fn member_credentials(&self) -> &BTreeMap<ClusterNodeId, RecoveryMemberIdentity> {
-        self.decision.authority().member_credentials()
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => {
+                decision.authority().member_credentials()
+            }
+            RecoveryApplyProof::InstallingExisting(p) => p.role().member_credentials(),
+            RecoveryApplyProof::CompletedDecision(p) => p.role().member_credentials(),
+        }
     }
     pub(crate) fn cluster_id(&self) -> &crate::ClusterId {
-        &self.scope().cluster_id
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => &decision.scope().cluster_id,
+            RecoveryApplyProof::InstallingExisting(p) => p.role().cluster_id(),
+            RecoveryApplyProof::CompletedDecision(p) => p.role().cluster_id(),
+        }
     }
     pub(crate) fn expected_schema_sha256(&self) -> Option<&str> {
-        self.decision.authority().role().expected_schema_sha256()
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => {
+                decision.authority().role().expected_schema_sha256()
+            }
+            RecoveryApplyProof::InstallingExisting(p) => p.role().expected_schema_sha256(),
+            RecoveryApplyProof::CompletedDecision(p) => p.role().expected_schema_sha256(),
+        }
     }
     pub(crate) fn purpose(&self) -> &MetadataRecoveryRolePurpose {
-        self.decision.authority().role().purpose()
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => decision.authority().role().purpose(),
+            RecoveryApplyProof::InstallingExisting(p) => p.role().purpose(),
+            RecoveryApplyProof::CompletedDecision(p) => p.role().purpose(),
+        }
     }
     pub(crate) fn local_node_id(&self) -> &ClusterNodeId {
-        self.decision.authority().role().local_node_id()
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => {
+                decision.authority().role().local_node_id()
+            }
+            RecoveryApplyProof::InstallingExisting(p) => p.role().local_node_id(),
+            RecoveryApplyProof::CompletedDecision(p) => p.role().local_node_id(),
+        }
     }
     pub(crate) fn local_member_incarnation(&self) -> u64 {
-        self.decision.authority().role().local_member_incarnation()
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => {
+                decision.authority().role().local_member_incarnation()
+            }
+            RecoveryApplyProof::InstallingExisting(p) => p.role().local_member_incarnation(),
+            RecoveryApplyProof::CompletedDecision(p) => p.role().local_member_incarnation(),
+        }
     }
     pub(crate) fn context_id(&self) -> Uuid {
-        self.decision.authority().role().context_id()
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => {
+                decision.authority().role().context_id()
+            }
+            RecoveryApplyProof::InstallingExisting(p) => p.role().context_id(),
+            RecoveryApplyProof::CompletedDecision(p) => p.role().context_id(),
+        }
     }
     pub(crate) fn recovery_nonce(&self) -> Uuid {
-        self.decision.scope().recovery_nonce
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => decision.scope().recovery_nonce,
+            RecoveryApplyProof::InstallingExisting(p) => p.scope().recovery_nonce,
+            RecoveryApplyProof::CompletedDecision(p) => p.scope().recovery_nonce,
+        }
     }
     pub(crate) fn scope(&self) -> &RecoveryFenceScope {
-        self.decision.scope()
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => decision.scope(),
+            RecoveryApplyProof::InstallingExisting(p) => p.scope(),
+            RecoveryApplyProof::CompletedDecision(p) => p.scope(),
+        }
     }
     pub(crate) fn deadline(&self) -> Instant {
-        self.decision.authority().deadline()
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => decision.authority().deadline(),
+            RecoveryApplyProof::InstallingExisting(p) => p.deadline(),
+            RecoveryApplyProof::CompletedDecision(p) => p.role().deadline(),
+        }
+    }
+    pub(crate) fn require_live_request(&self) -> Result<()> {
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => decision.require_live(),
+            RecoveryApplyProof::InstallingExisting(p) => p.require_live(),
+            RecoveryApplyProof::CompletedDecision(p) => p.require_live(),
+        }
     }
     pub(crate) fn remaining_budget(&self) -> Option<Duration> {
         self.deadline().checked_duration_since(Instant::now())
     }
-    pub(crate) fn require_live_request(&self) -> Result<()> {
-        self.decision.require_live()
-    }
     pub(crate) fn require_recipient_role(&self, role: &RecoveryRoleAdmission) -> Result<()> {
-        self.decision.require_recipient_role(role)
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { decision, .. } => decision.require_recipient_role(role),
+            RecoveryApplyProof::InstallingExisting(p) => p.require_recipient_role(role),
+            RecoveryApplyProof::CompletedDecision(p) => p.require_recipient_role(role),
+        }
     }
-    pub(crate) fn certified_members(&self) -> impl Iterator<Item = &ClusterNodeId> {
-        self.certifications.keys()
+    pub(crate) fn certified_members(&self) -> Box<dyn Iterator<Item = &ClusterNodeId> + '_> {
+        match &self.proof {
+            RecoveryApplyProof::Ordinary { certifications, .. } => Box::new(certifications.keys()),
+            RecoveryApplyProof::InstallingExisting(p) => Box::new(p.certified_members()),
+            RecoveryApplyProof::CompletedDecision(p) => Box::new(p.distinct_members()),
+        }
     }
 }

@@ -74,7 +74,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
             let plan = NativeRangeCommandIntent::plan_source(
                 command,
                 range,
-                &self.topology.read(),
+                &self.topology.read_recursive(),
                 &lineage,
             )?;
             plan.validate_native_configuration(&lineage)?;

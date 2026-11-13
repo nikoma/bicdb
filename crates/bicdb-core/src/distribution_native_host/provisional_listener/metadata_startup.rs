@@ -1,20 +1,34 @@
 //! Bounded initial metadata orchestration. No background election scheduler,
 //! ordinary listener, range recovery, Serving or first-ACK claim is implied.
 use super::*;
-use crate::distribution_consensus::{MetadataConsensusRole, MetadataConsensusStore};
+use crate::distribution_consensus::MetadataConsensusStore;
 use crate::distribution_range_consensus::RangeWriteCoordinator;
 use std::time::Instant;
 
 /// Owns the real local hook/policy lifetime. This is not a range-ready proof.
 pub(crate) struct NativeInitialWriterEnrollment {
-    _coordinator: Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
-    _guard: crate::db::InstalledNativeWriterHostGuard,
+    pub(super) coordinator: Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
+    pub(super) guard: Arc<crate::db::InstalledNativeWriterHostGuard>,
     pub(crate) metadata_context_id: Uuid,
     pub(crate) metadata_term: u64,
     pub(crate) metadata_read_index: u64,
 }
 impl NativeInitialConsensusLaunch {
-    fn lock_initial_metadata<'a>(
+    pub(in crate::distribution_native_host) fn start_automatic_metadata(
+        &self,
+        network: ClusterNetworkTransportConfig,
+        parent: &CancellationToken,
+    ) -> Result<NativeMetadataSupervisor> {
+        NativeMetadataSupervisor::start(
+            Arc::clone(&self.metadata),
+            &self.service,
+            Arc::clone(&self.topology),
+            network,
+            NativeMetadataSupervisorConfig::default(),
+            parent,
+        )
+    }
+    pub(in crate::distribution_native_host) fn lock_initial_metadata<'a>(
         &'a self,
         parent: &CancellationToken,
     ) -> Result<parking_lot::MutexGuard<'a, MetadataConsensusStore>> {
@@ -30,7 +44,10 @@ impl NativeInitialConsensusLaunch {
     /// Publish only this actual owned store's committed configuration. The
     /// initial plan cannot authenticate a subsequently registered learner.
     /// Network work and topology publication happen after releasing metadata.
-    fn publish_initial_committed_metadata(&self, parent: &CancellationToken) -> Result<()> {
+    pub(super) fn publish_initial_committed_metadata(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
         parent.check()?;
         let actual_open = self
             .service
@@ -51,128 +68,11 @@ impl NativeInitialConsensusLaunch {
     /// An explicit initial candidate, using actual remote votes. Caller policy
     /// decides when to attempt an election; configured node IDs are not votes.
     pub(crate) fn elect_initial_metadata(&self, parent: &CancellationToken) -> Result<u64> {
-        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
-        let (request, peers) = {
-            let mut store = self.lock_initial_metadata(&token)?;
-            let peers = store
-                .committed_topology()
-                .nodes
-                .values()
-                .filter(|m| {
-                    m.lifecycle == ClusterNodeLifecycle::Active
-                        && m.metadata_role == MetadataMemberRole::Voter
-                        && m.id != self.seed.spec.node_id
-                })
-                .map(|m| m.id.clone())
-                .collect::<Vec<_>>();
-            (store.start_election()?, peers)
-        };
-        let mut votes = BTreeSet::from([self.seed.spec.node_id.clone()]);
-        for peer in peers {
-            token.check()?;
-            // No service/DB/metadata latch is held during network work.
-            let reply = match self.transport.request_metadata_vote_cancellable(
-                &peer,
-                request.clone(),
-                &token,
-            ) {
-                Ok(reply) => reply,
-                Err(_) => {
-                    // Durable acceptance of C is historical. An election
-                    // requires a current quorum, not all members still live.
-                    token.check()?;
-                    continue;
-                }
-            };
-            if reply.term > request.term {
-                return Err(invalid("initial election observed a newer metadata term"));
-            }
-            if reply.vote_granted && reply.term == request.term {
-                votes.insert(reply.voter_id);
-            }
-        }
-        let barrier = {
-            let mut store = self.lock_initial_metadata(&token)?;
-            if store.status().current_term != request.term {
-                return Err(invalid(
-                    "initial election term changed during remote voting",
-                ));
-            }
-            store.become_leader(&votes)?;
-            store.status().last_log_index
-        };
-        self.heartbeat_initial_metadata(&token)?;
-        let status = self.lock_initial_metadata(&token)?.status();
-        if status.role != MetadataConsensusRole::Leader || status.commit_index < barrier {
-            return Err(invalid(
-                "initial metadata leadership barrier lacks durable quorum",
-            ));
-        }
-        Ok(status.commit_index)
+        NativeMetadataControlBackend::borrow_initial(self).elect(parent)
     }
-
-    /// A finite batch, not a scheduler. Repeating it keeps followers current;
-    /// a successful transport response never substitutes for commit quorum.
+    /// A finite call with accepted per-peer progress; scheduling is separate.
     pub(crate) fn heartbeat_initial_metadata(&self, parent: &CancellationToken) -> Result<()> {
-        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
-        self.publish_initial_committed_metadata(&token)?;
-        for _ in 0..3 {
-            let peers = {
-                let store = self.lock_initial_metadata(&token)?;
-                if store.status().role != MetadataConsensusRole::Leader {
-                    return Err(invalid("initial heartbeat requires actual metadata leader"));
-                }
-                store
-                    .committed_topology()
-                    .nodes
-                    .values()
-                    .filter(|m| {
-                        m.lifecycle == ClusterNodeLifecycle::Active
-                            && m.id != self.seed.spec.node_id
-                    })
-                    .map(|m| m.id.clone())
-                    .collect::<Vec<_>>()
-            };
-            for peer in peers {
-                let request = {
-                    let store = self.lock_initial_metadata(&token)?;
-                    if store.status().role != MetadataConsensusRole::Leader {
-                        return Err(invalid("initial metadata leader changed during heartbeat"));
-                    }
-                    // An earlier peer's accepted ACK can commit retirement
-                    // while this round still owns its old list of peer IDs.
-                    // Check current membership under the SAME guard as request
-                    // construction; all other builder refusals remain errors.
-                    if !store
-                        .committed_topology()
-                        .nodes
-                        .get(&peer)
-                        .is_some_and(|member| member.lifecycle == ClusterNodeLifecycle::Active)
-                    {
-                        continue;
-                    }
-                    store.append_request_for_peer(&peer, 16)?
-                };
-                let reply = match self
-                    .transport
-                    .append_metadata_cancellable(&peer, request, &token)
-                {
-                    Ok(reply) => reply,
-                    Err(_) => {
-                        token.check()?;
-                        continue;
-                    }
-                };
-                self.lock_initial_metadata(&token)?
-                    .record_append_response(&peer, &reply)?;
-                self.publish_initial_committed_metadata(&token)?;
-            }
-        }
-        if self.lock_initial_metadata(&token)?.status().role != MetadataConsensusRole::Leader {
-            return Err(invalid("initial metadata leader changed during heartbeat"));
-        }
-        self.publish_initial_committed_metadata(&token)?;
-        token.check()
+        NativeMetadataControlBackend::borrow_initial(self).heartbeat(parent)
     }
 
     /// Fresh HostMQ is data about current membership, not range recovery.
@@ -182,6 +82,18 @@ impl NativeInitialConsensusLaunch {
         metadata_leader: &ClusterNodeId,
         parent: &CancellationToken,
     ) -> Result<NativeInitialWriterEnrollment> {
+        let mut retained = None;
+        self.enroll_initial_writer_retained(metadata_leader, parent, |owner| {
+            retained = Some(owner)
+        })?;
+        retained.ok_or_else(|| invalid("initial writer owner was not retained"))
+    }
+    pub(super) fn enroll_initial_writer_retained(
+        &self,
+        metadata_leader: &ClusterNodeId,
+        parent: &CancellationToken,
+        retain: impl FnOnce(NativeInitialWriterEnrollment),
+    ) -> Result<()> {
         let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
         let business = Uuid::now_v7();
         let observed = self.transport.acquire_host_metadata_observation(
@@ -208,7 +120,7 @@ impl NativeInitialConsensusLaunch {
         let context = policy.metadata_context_id();
         let term = policy.metadata_term();
         let read_index = policy.metadata_read_index();
-        let coordinator = Arc::new(RangeWriteCoordinator::new_schema_fenced(
+        let coordinator = Arc::new(RangeWriteCoordinator::new_initial_schema_fenced(
             self.seed.spec.cluster_id.clone(),
             self.seed.spec.node_id.clone(),
             Arc::clone(&self.topology),
@@ -222,13 +134,15 @@ impl NativeInitialConsensusLaunch {
             .try_read()
             .ok_or_else(|| invalid("initial writer DB busy before policy"))?;
         let guard = db.install_enrolled_native_coordinator(Arc::clone(&coordinator), policy)?;
-        token.check()?;
-        Ok(NativeInitialWriterEnrollment {
-            _coordinator: coordinator,
-            _guard: guard,
+        // Transfer actual installed ownership BEFORE a fallible post-install
+        // deadline check. DataOpen retains it on timeout/unknown publication.
+        retain(NativeInitialWriterEnrollment {
+            coordinator,
+            guard: Arc::new(guard),
             metadata_context_id: context,
             metadata_term: term,
             metadata_read_index: read_index,
-        })
+        });
+        token.check()
     }
 }

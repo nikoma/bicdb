@@ -89,12 +89,68 @@ impl NativeActivationReceipt {
         }
         Ok(())
     }
+    pub(crate) fn quorum_for_activation_scope(&self) -> &NativeCompletionQuorum {
+        &self.quorum
+    }
+    pub(crate) fn require_current_in_activation_scope(
+        &self,
+        scope: &crate::db::NativeActivationReadScope<'_>,
+    ) -> Result<()> {
+        scope.require_identity(
+            scope.database(),
+            scope.prepared(),
+            scope.store(),
+            scope.role(),
+        )?;
+        if !std::ptr::eq(scope.quorum(), &self.quorum) {
+            return Err(range_write_error(
+                "activation scope substituted actual receipt quorum",
+            ));
+        }
+        self.scope.require_role(scope.role())?;
+        scope.require_serving_receipt(&self.native)?;
+        self.native_decision
+            .require_current_in_activation_scope(scope)?;
+        if self.native_decision.checksum_sha256() != self.activated.native_activation_sha256
+            || self.native_decision.completion_quorum_sha256()
+                != self.activated.completion_quorum_sha256
+            || self.native_decision.native_serving_sha256() != self.native.checksum_sha256()
+            || !self.native_decision.scope().same_session(&self.scope)
+        {
+            return Err(range_write_error(
+                "activation receipt differs from its protected native-WAL decision",
+            ));
+        }
+        scope
+            .prepared()
+            .require_current_in_activation_scope(scope)?;
+        let store = scope.store();
+        store.require_native_activation_control(self.scope.range_id)?;
+        if self.store_open_id != store.open_id
+            || !self.scope.same_session(scope.prepared().scope())
+            || !matches!(&store.catalog.recovery_fences[&self.scope.range_id].phase, RecoveryFencePhase::NativeActivated(a) if a == &self.activated)
+        {
+            return Err(range_write_error(
+                "activation receipt has stale actual native/store/session identity",
+            ));
+        }
+        scope.parent().check()?;
+        scope.role().require_live_request()
+    }
+}
+enum NativeActivationValidation<'a> {
+    Standalone,
+    Owned {
+        slot: &'a crate::distribution_data::RangeWriteServiceSlotGuard,
+        parent: &'a CancellationToken,
+    },
 }
 impl RangeWriteStore {
     fn require_native_activation_control(&self, range: RangeId) -> Result<()> {
         self.require_durable_recovery_catalog()?;
         self.require_no_image_install(range)?;
-        if self.catalog.handoff_promises.contains_key(&range)
+        let current_joint = self.selected_current_joint_scope(range)?.is_some();
+        if (self.catalog.handoff_promises.contains_key(&range) && !current_joint)
             || self.catalog.backup_fences.contains_key(&range)
         {
             return Err(range_write_error(
@@ -116,6 +172,7 @@ impl RangeWriteStore {
             quorum,
             fresh,
             crate::storage::write_atomic,
+            NativeActivationValidation::Standalone,
         )
     }
     #[cfg(test)]
@@ -127,7 +184,32 @@ impl RangeWriteStore {
         fresh: &RecoveryRoleAdmission,
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
     ) -> Result<NativeActivationReceipt> {
-        self.activate_native_recovery_with(db, prepared, quorum, fresh, write)
+        self.activate_native_recovery_with(
+            db,
+            prepared,
+            quorum,
+            fresh,
+            write,
+            NativeActivationValidation::Standalone,
+        )
+    }
+    pub(crate) fn activate_native_recovery_owned(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        quorum: NativeCompletionQuorum,
+        fresh: &RecoveryRoleAdmission,
+        slot: &crate::distribution_data::RangeWriteServiceSlotGuard,
+        parent: &CancellationToken,
+    ) -> Result<NativeActivationReceipt> {
+        self.activate_native_recovery_with(
+            db,
+            prepared,
+            quorum,
+            fresh,
+            crate::storage::write_atomic,
+            NativeActivationValidation::Owned { slot, parent },
+        )
     }
     fn activate_native_recovery_with(
         &mut self,
@@ -136,8 +218,31 @@ impl RangeWriteStore {
         quorum: NativeCompletionQuorum,
         fresh: &RecoveryRoleAdmission,
         write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+        validation: NativeActivationValidation<'_>,
     ) -> Result<NativeActivationReceipt> {
+        #[cfg(test)]
+        let mut total_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-store-total",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
+        #[cfg(test)]
+        let mut preflight_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-store-preflight",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         quorum.require_prepared_identity_point(prepared, fresh)?;
+        if matches!(validation, NativeActivationValidation::Standalone)
+            && matches!(
+                fresh.purpose(),
+                crate::distribution_consensus::MetadataRecoveryRolePurpose::CurrentJointRecovery { .. }
+            )
+        {
+            self.require_current_joint_recovery_domain(db, fresh)?;
+        }
         let range = prepared.scope().range_id;
         if self.recovery_persistence_uncertain
             && matches!(
@@ -149,6 +254,11 @@ impl RangeWriteStore {
             self.persist_recovery_catalog()?;
         }
         self.require_native_activation_control(range)?;
+        #[cfg(test)]
+        {
+            preflight_trace.complete();
+            drop(preflight_trace);
+        }
         let (activated, native, native_decision) = match &self
             .catalog
             .recovery_fences
@@ -157,9 +267,58 @@ impl RangeWriteStore {
             .phase
         {
             RecoveryFencePhase::NativeCompleted(completed) => {
-                let native = prepared.require_completed_for_activation(db, self, fresh)?;
-                let native_decision =
-                    db.persist_native_activation_decision(prepared, self, &quorum, fresh)?;
+                #[cfg(test)]
+                let mut materialization_trace =
+                    crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                        "recovery-activate-owned-completed-materialization",
+                        fresh.local_node_id(),
+                        fresh.deadline(),
+                    );
+                let native = match &validation {
+                    NativeActivationValidation::Standalone => {
+                        Some(prepared.require_completed_for_activation(db, self, fresh)?)
+                    }
+                    NativeActivationValidation::Owned { .. } => None,
+                };
+                #[cfg(test)]
+                {
+                    materialization_trace.complete();
+                    drop(materialization_trace);
+                }
+                #[cfg(test)]
+                let mut decision_trace =
+                    crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                        "recovery-activate-native-decision-producer",
+                        fresh.local_node_id(),
+                        fresh.deadline(),
+                    );
+                let (native, native_decision) = match &validation {
+                    NativeActivationValidation::Standalone => (
+                        native.expect("standalone physical producer"),
+                        db.persist_native_activation_decision(prepared, self, &quorum, fresh)?,
+                    ),
+                    NativeActivationValidation::Owned { slot, parent } => db
+                        .with_native_activation_read_scope(
+                            prepared,
+                            self,
+                            &quorum,
+                            fresh,
+                            slot,
+                            parent,
+                            |scope| {
+                                let sha = prepared.completed_serving_sha_for_activation(self)?;
+                                let native = scope.observe_serving(&sha)?;
+                                let decision =
+                                    db.persist_native_activation_decision_in_scope(scope)?;
+                                Ok((native, decision))
+                            },
+                        )?,
+                };
+                #[cfg(test)]
+                {
+                    decision_trace.complete();
+                    drop(decision_trace);
+                }
                 let activated = NativeActivatedPoint {
                     completed: completed.clone(),
                     completed_catalog_sha256: self.recovery_range_catalog_sha256(range)?,
@@ -175,17 +334,40 @@ impl RangeWriteStore {
                 if self.recovery_persistence_uncertain {
                     self.persist_recovery_catalog()?;
                 }
-                let native = prepared.require_activated_materialization(db, self, fresh)?;
-                let p = &activated.completed.point;
-                let native_decision = db.observe_native_activation_decision_for_role(
-                    fresh,
-                    prepared.scope(),
-                    &activated.native_activation_sha256,
-                    &activated.completed.native_serving_sha256,
-                    p.range_index(),
-                    p.logical_genesis_sha256(),
-                    p.logical_history_sha256(),
-                )?;
+                let (native, native_decision) = match &validation {
+                    NativeActivationValidation::Standalone => {
+                        let native = prepared.require_activated_materialization(db, self, fresh)?;
+                        let p = &activated.completed.point;
+                        let decision = db.observe_native_activation_decision_for_role(
+                            fresh,
+                            prepared.scope(),
+                            &activated.native_activation_sha256,
+                            &activated.completed.native_serving_sha256,
+                            p.range_index(),
+                            p.logical_genesis_sha256(),
+                            p.logical_history_sha256(),
+                        )?;
+                        (native, decision)
+                    }
+                    NativeActivationValidation::Owned { slot, parent } => db
+                        .with_native_activation_read_scope(
+                            prepared,
+                            self,
+                            &quorum,
+                            fresh,
+                            slot,
+                            parent,
+                            |scope| {
+                                let native = scope
+                                    .observe_serving(&activated.completed.native_serving_sha256)?;
+                                let decision = db.observe_native_activation_decision_in_scope(
+                                    scope,
+                                    &activated.native_activation_sha256,
+                                )?;
+                                Ok((native, decision))
+                            },
+                        )?,
+                };
                 if native_decision.completion_quorum_sha256() != activated.completion_quorum_sha256
                 {
                     return Err(range_write_error(
@@ -201,13 +383,27 @@ impl RangeWriteStore {
             }
         };
         activated.validate()?;
+        quorum.require_prepared_identity_point(prepared, fresh)?;
         self.native_activated_opens.remove(&range);
         self.recovery_persistence_uncertain = true;
         self.catalog.recovery_fences.get_mut(&range).unwrap().phase =
             RecoveryFencePhase::NativeActivated(activated.clone());
         self.catalog.format_version = self.catalog.format_version.max(NATIVE_ACTIVATED_FORMAT);
         native_ready_prepare::validate_native_prepared_catalog(&self.catalog)?;
+        #[cfg(test)]
+        let mut catalog_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-catalogue-fsync",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
         self.persist_recovery_catalog_with(write)?;
+        #[cfg(test)]
+        {
+            catalog_trace.complete();
+            drop(catalog_trace);
+            eprintln!("ACTUAL_RECOVERY_ACTIVATE_CATALOGUE_PERSISTED node={} nonce={} R={} activation_sha={} remaining_ms={}", fresh.local_node_id(), prepared.scope().recovery_nonce, prepared.range_index(), activated.native_activation_sha256, fresh.deadline().saturating_duration_since(std::time::Instant::now()).as_millis());
+        }
         let receipt = NativeActivationReceipt {
             store_open_id: self.open_id,
             scope: prepared.scope().clone(),
@@ -216,7 +412,40 @@ impl RangeWriteStore {
             native_decision,
             quorum,
         };
-        receipt.require_current(db, self, prepared, fresh)?;
+        #[cfg(test)]
+        let mut readback_trace =
+            crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
+                "recovery-activate-catalogue-receipt-current",
+                fresh.local_node_id(),
+                fresh.deadline(),
+            );
+        match &validation {
+            NativeActivationValidation::Standalone => {
+                receipt.require_current(db, self, prepared, fresh)?
+            }
+            NativeActivationValidation::Owned { slot, parent } => {
+                // A DISTINCT journal acquisition after actual catalogue fsync.
+                // No preCAT currentness or native journal crosses that IO.
+                db.with_native_activation_read_scope(
+                    prepared,
+                    self,
+                    &receipt.quorum,
+                    fresh,
+                    slot,
+                    parent,
+                    |scope| {
+                        #[cfg(test)]
+                        scope.test_after_catalogue_entry()?;
+                        receipt.require_current_in_activation_scope(scope)
+                    },
+                )?;
+            }
+        }
+        #[cfg(test)]
+        {
+            readback_trace.complete();
+            total_trace.complete();
+        }
         Ok(receipt)
     }
     pub(crate) fn arm_native_activation_open(
@@ -229,6 +458,31 @@ impl RangeWriteStore {
     ) -> Result<()> {
         receipt.require_current(db, self, prepared, fresh)?;
         let guard = db.native_activated_open_guard(self, prepared, receipt, fresh, frozen)?;
+        self.native_activated_opens
+            .insert(receipt.scope.range_id, guard);
+        Ok(())
+    }
+    pub(crate) fn arm_native_activation_open_owned(
+        &mut self,
+        db: &crate::BicDb,
+        prepared: &PreparedNativeRecoveryReady,
+        receipt: &NativeActivationReceipt,
+        fresh: &RecoveryRoleAdmission,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        slot: &crate::distribution_data::RangeWriteServiceSlotGuard,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let guard = db.with_native_activation_read_scope(
+            prepared,
+            self,
+            receipt.quorum_for_activation_scope(),
+            fresh,
+            slot,
+            parent,
+            |scope| db.native_activated_open_guard_in_scope(scope, receipt, frozen),
+        )?;
+        // Guard cannot be installed before successful full scope exit. It is
+        // the existing actual-open generation binding, never a scope token.
         self.native_activated_opens
             .insert(receipt.scope.range_id, guard);
         Ok(())
@@ -276,5 +530,30 @@ impl RangeWriteStore {
     }
     pub(crate) fn invalidate_native_activation_open(&mut self, range: RangeId) {
         self.native_activated_opens.remove(&range);
+    }
+}
+
+// Actual retained Store/open diagnostics only, never a role/read/write grant.
+#[cfg(test)]
+impl RangeWriteStore {
+    pub(crate) fn test_native_replica_open_state(
+        &self,
+        range: RangeId,
+    ) -> Result<serde_json::Value> {
+        self.require_durable_recovery_catalog()?;
+        let Some(saved) = self.catalog.recovery_fences.get(&range) else {
+            return Ok(
+                serde_json::json!({"phase":"NoRecoveryRecord","actual_store_open":self.open_id,
+                "actual_current_open_valid":false,"scope":"actual absence of recovery record; not a native floor or permission"}),
+            );
+        };
+        let phase = self.recovery_observation_phase(&saved.scope)?;
+        let open = self.require_actual_native_activated_open(range);
+        Ok(
+            serde_json::json!({"phase":phase,"actual_store_open":self.open_id,
+            "actual_scope":saved.scope,"actual_current_open_valid":open.is_ok(),
+            "actual_current_open_error":open.as_ref().err().map(ToString::to_string),
+            "scope":"actual Store/open snapshot DATA only; not permission"}),
+        )
     }
 }

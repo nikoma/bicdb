@@ -22,7 +22,7 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
         self.require_strong_point_runtime(runtime)?;
         let ranges = self
             .topology
-            .read()
+            .read_recursive()
             .ranges
             .values()
             .map(crate::distribution_native_read::canonical_range)
@@ -81,7 +81,7 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
         request: &NativeStrongPointReadRequest,
     ) -> Result<RangeDescriptor> {
         let scope = request.require_metadata(first, &self.local_node_id)?;
-        let topology = self.topology.read();
+        let topology = self.topology.read_recursive();
         let current = topology.range_by_id(scope.range.id).ok_or_else(|| {
             range_write_error("strong point route absent from installed coordinator")
         })?;
@@ -123,6 +123,12 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
         let mut active = self.active_ranges.lock();
         loop {
             parent.check()?;
+            // Necessary scheduling refusal only. BOTH paths hold active_ranges
+            // before the waiter map, so retrying readers cannot overtake an
+            // actual queued hot repair once an existing holder exits.
+            if self.hot_recovery_waiters.lock().contains_key(&range_id) {
+                return Err(range_write_error("selected native range has queued hot recovery; retry within original read budget"));
+            }
             if !active.contains_key(&range_id) {
                 let reservation_id = format!("point-read:{}", Uuid::now_v7());
                 active.insert(range_id, reservation_id.clone());

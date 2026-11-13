@@ -154,6 +154,11 @@ impl EnrolledNativeReadQuorum {
         request: &NativeStrongPointReadRequest,
         parent: &CancellationToken,
     ) -> Result<PendingNativePointRead> {
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let _snapshot =
+            crate::distribution_native_read::trace::Span::current("strong-capture-actual-point");
+        // STRONG_TRACE_END
         self.require_lifetime()?;
         let round = &self.candidate.round;
         let cancellation = request
@@ -255,6 +260,10 @@ impl PendingNativePointRead {
         coordinator: &Arc<RangeWriteCoordinator<T>>,
         parent: &CancellationToken,
     ) -> Result<NativeStrongPointReadValue> {
+        // STRONG_TRACE_BEGIN
+        #[cfg(test)]
+        let _finalize = crate::distribution_native_read::trace::Span::current("strong-finalize");
+        // STRONG_TRACE_END
         parent.check()?;
         self.cancellation.check()?;
         self.enrolled.require_lifetime()?;

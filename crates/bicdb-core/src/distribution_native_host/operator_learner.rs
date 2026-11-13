@@ -1,0 +1,609 @@
+//! Explicit fresh or strict persisted metadata owner. No raw handles, data
+//! data Serving, schema retrofit or metadata identity reset is exposed.
+use super::*;
+use crate::{
+    ClusterNetworkTransportConfig, MetadataConsensusStatus, TcpClusterBootstrapClient,
+    TcpClusterRelocationTransport,
+};
+use std::time::Instant;
+mod discovery;
+
+#[derive(Clone, Debug, Serialize)]
+pub struct NativeMetadataLearnerStatus {
+    pub version: u32,
+    pub node_id: ClusterNodeId,
+    pub birth_id: Uuid,
+    pub birth_sha256: String,
+    pub birth_bound: bool,
+    pub schema_sha256: String,
+    pub namespace_ids: Vec<(String, Uuid)>,
+    pub metadata_store_id: Option<Uuid>,
+    pub metadata_role: MetadataMemberRole,
+    pub metadata: Option<MetadataConsensusStatus>,
+    pub metadata_listener_owned: bool,
+    pub metadata_control_owned: bool,
+    pub replica_receiver: Option<NativeRegisteredReplicaReceiverStatus>,
+    pub last_metadata_maintenance: Option<serde_json::Value>,
+    pub last_metadata_promotion: Option<serde_json::Value>,
+    pub phase: &'static str,
+    pub data_serving: bool,
+}
+pub struct NativeMetadataLearnerHost {
+    factory: Arc<NativeUnassignedLearnerFactory>,
+    host: NativeLearnerLifecycle,
+    transport: Arc<TcpClusterRelocationTransport>,
+    routing: Arc<RwLock<ClusterTopology>>,
+    leader: ClusterNodeId,
+    address: String,
+    network: ClusterNetworkTransportConfig,
+    metadata_started: bool,
+    last_metadata_maintenance: Option<serde_json::Value>,
+    last_metadata_promotion: Option<serde_json::Value>,
+    transitioning: bool,
+    stopped: bool,
+}
+enum NativeLearnerLifecycle {
+    Fresh(NativeUnassignedLearnerHost),
+    Cold(NativeColdLearnerMetadataHost),
+}
+impl NativeMetadataLearnerHost {
+    pub fn start_fresh_metadata_only(
+        root: &Path,
+        cluster: crate::ClusterId,
+        local: ClusterNodeId,
+        address: &str,
+        incarnation: u64,
+        seed: ClusterNodeId,
+        seed_address: &str,
+        network: ClusterNetworkTransportConfig,
+        paged_buffer_pool_bytes: u64,
+        parent: &CancellationToken,
+    ) -> Result<Self> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        token.check()?;
+        network.validate()?;
+        if root.exists()
+            || network.dev_localhost_plaintext
+            || !(8 * 1024 * 1024..=1024 * 1024 * 1024).contains(&paged_buffer_pool_bytes)
+        {
+            return Err(invalid(
+                "fresh learner refuses an existing root, plaintext or unsupported memory",
+            ));
+        }
+        let numeric: std::net::SocketAddr = address
+            .parse()
+            .map_err(|_| invalid("fresh learner needs own numeric endpoint"))?;
+        if numeric.port() == 0 {
+            return Err(invalid("fresh learner requires a fixed port"));
+        }
+        let (transport, routing, first, business) =
+            discovery::discover(&cluster, &local, seed, seed_address, &network, &token)?;
+        // No cached/bootstrap member can admit or permanently reject the
+        // learner. Check exact own identity only against actual fresh MQ.
+        discovery::require_requester(&first, business, &local, address, incarnation)?;
+        let leader = first.metadata_leader_id().clone();
+        let bundle = discovery::schema(&transport, &first, business, &token)?;
+        // Factory authority is separately fresh after schema DATA export.
+        let factory_business = Uuid::now_v7();
+        let current = transport.acquire_host_metadata_observation(
+            &leader,
+            factory_business,
+            Duration::from_secs(5),
+            &token,
+        )?;
+        transport.install_topology(current.committed_topology(factory_business)?.clone())?;
+        discovery::require_requester(&current, factory_business, &local, address, incarnation)?;
+        if current.context_id() == first.context_id()
+            || current.term() < first.term()
+            || current.read_index() < first.read_index()
+            || current.committed_topology(factory_business)?
+                != first.committed_topology(business)?
+            || current.restore_activation(factory_business)?
+                != first.restore_activation(business)?
+        {
+            return Err(invalid(
+                "fresh learner CONFIG/domain changed across schema transfer",
+            ));
+        }
+        token.check()?;
+        let db = DbConfig::default()
+            .with_fsync(true)
+            .with_storage_mode(StorageMode::ServerPaged)
+            .with_paged_buffer_pool_bytes(paged_buffer_pool_bytes);
+        let factory = Arc::new(NativeUnassignedLearnerFactory::create(
+            root,
+            db,
+            &current,
+            factory_business,
+            &network,
+            &bundle,
+            &token,
+        )?);
+        let host = NativeUnassignedLearnerHost::start(
+            Arc::clone(&factory),
+            current,
+            factory_business,
+            network.clone(),
+            &token,
+        )?;
+        Ok(Self {
+            factory,
+            host: NativeLearnerLifecycle::Fresh(host),
+            transport,
+            routing,
+            leader,
+            address: address.to_owned(),
+            network,
+            metadata_started: false,
+            last_metadata_maintenance: None,
+            last_metadata_promotion: None,
+            transitioning: false,
+            stopped: false,
+        })
+    }
+    /// Reopen ONLY the existing enrolled learner root. Bootstrap configuration
+    /// supplies routing DATA; this owner's independently fresh Host MQ and the
+    /// actual protected birth/UUID/original-C checks authorize the cold path.
+    /// No schema import, factory creation or genesis initialization occurs.
+    pub fn reopen_metadata_only(
+        root: &Path,
+        cluster: crate::ClusterId,
+        local: ClusterNodeId,
+        address: &str,
+        incarnation: u64,
+        seed: ClusterNodeId,
+        seed_address: &str,
+        network: ClusterNetworkTransportConfig,
+        paged_buffer_pool_bytes: u64,
+        parent: &CancellationToken,
+    ) -> Result<Self> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        token.check()?;
+        network.validate()?;
+        if !root.is_dir()
+            || network.dev_localhost_plaintext
+            || !(8 * 1024 * 1024..=1024 * 1024 * 1024).contains(&paged_buffer_pool_bytes)
+        {
+            return Err(invalid(
+                "cold learner requires an existing root, TLS and supported memory",
+            ));
+        }
+        let numeric: std::net::SocketAddr = address
+            .parse()
+            .map_err(|_| invalid("cold learner needs own numeric endpoint"))?;
+        if numeric.port() == 0 {
+            return Err(invalid("cold learner requires a fixed port"));
+        }
+        let bootstrap =
+            TcpClusterBootstrapClient::new(cluster.clone(), local.clone(), network.clone())?;
+        let snapshot = bootstrap.fetch_snapshot(&seed, seed_address)?;
+        token.check()?;
+        let leader = snapshot
+            .metadata_leader_id
+            .ok_or_else(|| invalid("cold learner metadata leader unknown"))?;
+        let routing = Arc::new(RwLock::new(snapshot.topology));
+        let transport = Arc::new(TcpClusterRelocationTransport::new(
+            cluster,
+            local.clone(),
+            Arc::clone(&routing),
+            network.clone(),
+        )?);
+        let business = Uuid::now_v7();
+        let current = transport.acquire_host_metadata_observation(
+            &leader,
+            business,
+            Duration::from_secs(5),
+            &token,
+        )?;
+        let member = current
+            .committed_topology(business)?
+            .nodes
+            .get(&local)
+            .ok_or_else(|| invalid("cold learner absent from actual current metadata"))?;
+        if member.address != address || member.incarnation != incarnation {
+            return Err(invalid(
+                "cold learner explicit endpoint/incarnation differs",
+            ));
+        }
+        transport.install_topology(current.committed_topology(business)?.clone())?;
+        let host = NativeColdLearnerMetadataHost::reopen(
+            root,
+            DbConfig::default()
+                .with_fsync(true)
+                .with_storage_mode(StorageMode::ServerPaged)
+                .with_paged_buffer_pool_bytes(paged_buffer_pool_bytes),
+            &current,
+            business,
+            network.clone(),
+            &token,
+        )?;
+        let factory = host.factory_owner();
+        current.require_live_request(business)?;
+        token.check()?;
+        Ok(Self {
+            factory,
+            host: NativeLearnerLifecycle::Cold(host),
+            transport,
+            routing,
+            leader,
+            address: address.to_owned(),
+            network,
+            metadata_started: false,
+            last_metadata_maintenance: None,
+            last_metadata_promotion: None,
+            transitioning: true,
+            stopped: false,
+        })
+    }
+    fn own_metadata(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<(
+        crate::distribution_consensus::HostMetadataReadObservation,
+        Uuid,
+    )> {
+        parent.check()?;
+        // These are routing hints only. No cached leader/C becomes authority.
+        // Each successful attempt below obtains a NEW actual OWN MQ under the
+        // original caller budget, outside DB/service/metadata latches.
+        let mut peers = vec![self.leader.clone()];
+        peers.extend(
+            self.routing
+                .read()
+                .nodes
+                .values()
+                .filter(|m| {
+                    m.lifecycle == ClusterNodeLifecycle::Active
+                        && m.metadata_role == MetadataMemberRole::Voter
+                })
+                .map(|m| m.id.clone())
+                .filter(|id| id != &self.leader)
+                .take(7),
+        );
+        let mut accepted = None;
+        let mut last = String::from("no live known metadata route");
+        for peer in peers {
+            parent.check()?;
+            let attempt = parent.child_with_deadline(Instant::now() + Duration::from_millis(500));
+            let route = match self
+                .transport
+                .fetch_metadata_snapshot_cancellable(&attempt, &peer)
+            {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    last = error.to_string();
+                    continue;
+                }
+            };
+            route.validate()?;
+            let Some(leader) = route.metadata_leader_id else {
+                continue;
+            };
+            self.transport.install_topology(route.topology)?;
+            let business = Uuid::now_v7();
+            match self.transport.acquire_host_metadata_observation(
+                &leader,
+                business,
+                Duration::from_secs(5),
+                parent,
+            ) {
+                Ok(observed) => {
+                    accepted = Some((observed, business));
+                    break;
+                }
+                Err(error) => last = error.to_string(),
+            }
+        }
+        let (observed, business) = accepted
+            .ok_or_else(|| invalid(&format!("owned learner metadata unavailable: {last}")))?;
+        let member = observed
+            .committed_topology(business)?
+            .nodes
+            .get(&self.factory.spec.node_id)
+            .ok_or_else(|| invalid("actual learner member absent"))?;
+        if member.address != self.address
+            || member.incarnation != self.factory.spec.member_incarnation
+        {
+            return Err(invalid(
+                "learner endpoint/incarnation changed; old owner cannot rebind itself",
+            ));
+        }
+        self.transport
+            .install_topology(observed.committed_topology(business)?.clone())?;
+        Ok((observed, business))
+    }
+    pub fn refresh(&mut self, parent: &CancellationToken) -> Result<NativeMetadataLearnerStatus> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        if self.stopped {
+            return Err(invalid("stopped learner cannot refresh or restart"));
+        }
+        let (observed, business) = self.own_metadata(&token)?;
+        let topology = observed.committed_topology(business)?;
+        let mut installed_current = true;
+        if self.metadata_started
+            && topology.nodes[&self.factory.spec.node_id].metadata_role == MetadataMemberRole::Voter
+        {
+            installed_current = match &self.host {
+                NativeLearnerLifecycle::Fresh(host) => {
+                    host.validate_registered_metadata_catchup(&observed, business, &token)?
+                }
+                NativeLearnerLifecycle::Cold(host) => {
+                    host.validate_registered_metadata_catchup(&observed, business, &token)?
+                }
+            };
+            if installed_current {
+                // Lower catch-up facts cannot replace this stronger producer.
+                match &self.host {
+                    NativeLearnerLifecycle::Fresh(host) => {
+                        host.validate_owned_metadata_member(&observed, business, &token)?
+                    }
+                    NativeLearnerLifecycle::Cold(host) => {
+                        host.validate_owned_metadata_member(&observed, business, &token)?
+                    }
+                }
+            }
+        } else if self.transitioning
+            && topology.nodes[&self.factory.spec.node_id].metadata_role == MetadataMemberRole::Voter
+        {
+            self.factory
+                .registered_metadata_context(&observed, business, &self.network)?;
+        } else if self.metadata_started || self.transitioning {
+            self.factory
+                .enrolled_metadata_context(&observed, business, &self.network)?;
+        } else {
+            self.factory
+                .enrollment_proposal(&observed, business, &self.network)?;
+        }
+        let metadata_role = topology.nodes[&self.factory.spec.node_id].metadata_role;
+        let birth = self.factory.actual_birth();
+        let bound = topology.nodes[&self.factory.spec.node_id]
+            .native_store_birth_v1
+            .as_ref()
+            == Some(birth);
+        let (schema_sha256, namespace_ids) = {
+            let db = self
+                .factory
+                .database
+                .try_read()
+                .ok_or_else(|| invalid("learner status DB busy"))?;
+            let schema = db.schema_compatibility_fingerprint()?.sha256;
+            let mut ids = db
+                .collections()
+                .into_iter()
+                .map(|m| {
+                    m.local_namespace_id
+                        .filter(|u| !u.is_nil())
+                        .map(|u| (m.name, u))
+                        .ok_or_else(|| invalid("actual learner namespace missing"))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            ids.sort();
+            (schema, ids)
+        };
+        let metadata = match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.owned_metadata_snapshot(&token)?,
+            NativeLearnerLifecycle::Cold(host) => host.owned_metadata_snapshot(&token)?,
+        };
+        let (metadata_store_id, metadata, listener) = match metadata {
+            Some((id, status, listener)) => (Some(id), Some(status), listener),
+            None => (None, None, false),
+        };
+        observed.require_live_request(business)?;
+        token.check()?;
+        if !self.metadata_started && !self.transitioning {
+            if let NativeLearnerLifecycle::Fresh(host) = &self.host {
+                host.refresh_metadata(observed, business, &token)?;
+            }
+        }
+        let metadata_control_owned = match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.metadata_control_owned(),
+            NativeLearnerLifecycle::Cold(host) => host.metadata_control_owned(),
+        };
+        let replica_receiver = match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.replica_receiver_status(&token)?,
+            NativeLearnerLifecycle::Cold(host) => host.replica_receiver_status(&token)?,
+        };
+        Ok(NativeMetadataLearnerStatus {
+            version: 1,
+            node_id: self.factory.spec.node_id.clone(),
+            birth_id: birth.birth_id(),
+            birth_sha256: birth.birth_sha256().to_string(),
+            birth_bound: bound,
+            schema_sha256,
+            namespace_ids,
+            metadata_store_id,
+            metadata_role,
+            metadata,
+            metadata_listener_owned: listener,
+            metadata_control_owned,
+            replica_receiver,
+            last_metadata_maintenance: self.last_metadata_maintenance.clone(),
+            last_metadata_promotion: self.last_metadata_promotion.clone(),
+            phase: if self.metadata_started
+                && metadata_role == MetadataMemberRole::Voter
+                && !installed_current
+            {
+                "metadata_catchup"
+            } else if self.metadata_started
+                && metadata_role == MetadataMemberRole::Voter
+                && metadata_control_owned
+            {
+                "owned_metadata_voter"
+            } else if self.metadata_started && metadata_role == MetadataMemberRole::Voter {
+                "owned_metadata_voter_awaiting_control"
+            } else if self.metadata_started {
+                "owned_metadata_learner"
+            } else if self.transitioning {
+                "metadata_transition"
+            } else {
+                "provisional_birth"
+            },
+            data_serving: false,
+        })
+    }
+    pub fn start_metadata(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<NativeMetadataLearnerStatus> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        if self.stopped {
+            return Err(invalid("stopped learner cannot start metadata"));
+        }
+        if self.metadata_started {
+            return self.refresh(&token);
+        }
+        let (observed, business) = self.own_metadata(&token)?;
+        if observed.committed_topology(business)?.nodes[&self.factory.spec.node_id].metadata_role
+            == MetadataMemberRole::Voter
+        {
+            self.factory
+                .registered_metadata_context(&observed, business, &self.network)?;
+        } else {
+            self.factory
+                .enrolled_metadata_context(&observed, business, &self.network)?;
+        }
+        self.transitioning = true;
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => {
+                host.start_owned_metadata(&observed, business, &token)?;
+            }
+            NativeLearnerLifecycle::Cold(host) => {
+                host.start(&observed, business, &token)?;
+            }
+        }
+        self.metadata_started = true;
+        self.transitioning = false;
+        self.refresh(&token)
+    }
+    /// Move the existing Registered metadata backend through an actual drain
+    /// to a NEW immutable control listener. No initial-factory permit is minted.
+    pub fn enable_metadata_control(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<NativeMetadataLearnerStatus> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        token.check()?;
+        if !self.metadata_started || self.stopped {
+            return Err(invalid(
+                "actual started metadata owner required before control",
+            ));
+        }
+        let (observed, business) = self.own_metadata(&token)?;
+        let topology = observed.committed_topology(business)?;
+        let local = &topology.nodes[&self.factory.spec.node_id];
+        let config = crate::DistributionConfig {
+            enabled: true,
+            cluster_id: topology.cluster_id.clone(),
+            range_image_bootstrap_id: topology.range_image_bootstrap_id,
+            node_id: local.id.clone(),
+            node_address: self.address.clone(),
+            node_incarnation: local.incarnation,
+            node_capacity_bytes: local.capacity_bytes,
+            node_tls_certificate_sha256: local.tls_certificate_sha256.clone(),
+            replication_factor: topology.replication_factor,
+            // Template planning DATA only, never a data initialization request.
+            initial_ranges: u32::try_from(topology.ranges.len())
+                .map_err(|_| invalid("native range count overflow"))?
+                .checked_next_power_of_two()
+                .ok_or_else(|| invalid("native range count overflow"))?,
+            transport: self.network.clone(),
+            ..Default::default()
+        };
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => {
+                host.enable_metadata_control(&observed, business, config, &token)?
+            }
+            NativeLearnerLifecycle::Cold(host) => {
+                host.enable_metadata_control(&observed, business, config, &token)?
+            }
+        }
+        self.refresh(&token)
+    }
+    /// Hook-free replica ingress only. The SAME successful JoinFresh/cold
+    /// Registered owner must already have strict current owned control. No
+    /// blank native range, recovered epoch or ordinary/Strong permission.
+    pub fn open_replica_receiver(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<NativeMetadataLearnerStatus> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        token.check()?;
+        if self.stopped || !self.metadata_started {
+            return Err(invalid(
+                "actual started Registered metadata owner required for replica receiver",
+            ));
+        }
+        let (observed, business) = self.own_metadata(&token)?;
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => {
+                host.open_registered_replica_receiver(&observed, business, &token)?
+            }
+            NativeLearnerLifecycle::Cold(host) => {
+                host.open_registered_replica_receiver(&observed, business, &token)?
+            }
+        }
+        self.refresh(&token)
+    }
+    pub fn maintain_metadata(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<NativeMetadataLearnerStatus> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        token.check()?;
+        let report = match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.maintain_metadata_control(&token),
+            NativeLearnerLifecycle::Cold(host) => host.maintain_metadata_control(&token),
+        };
+        self.last_metadata_maintenance = Some(match report {
+            Ok(report) => {
+                let value = serde_json::to_value(&report)?;
+                if report.stage == "promoted_and_installed" {
+                    self.last_metadata_promotion = Some(value.clone());
+                }
+                value
+            }
+            Err(error) => {
+                serde_json::json!({"stage":"unavailable_or_pending", "error":error.to_string().chars().take(2048).collect::<String>()})
+            }
+        });
+        self.refresh(&token)
+    }
+    /// Explicit diagnostic election uses actual votes and a committed current-
+    /// term barrier, exactly as the initial-member finite producer does.
+    pub fn elect_metadata(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<NativeMetadataLearnerStatus> {
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        token.check()?;
+        match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.elect_metadata_control(&token)?,
+            NativeLearnerLifecycle::Cold(host) => host.elect_metadata_control(&token)?,
+        }
+        self.refresh(&token)
+    }
+    /// Starts scheduling only after the actual same-service Registered
+    /// backend/listener is owned. The process parent outlives action budgets.
+    pub fn start_automatic_metadata(&mut self, parent: &CancellationToken) -> Result<()> {
+        if !self.metadata_started || self.stopped {
+            return Err(invalid(
+                "automatic metadata requires actual started learner owner",
+            ));
+        }
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.start_automatic_metadata(parent),
+            NativeLearnerLifecycle::Cold(host) => host.start_automatic_metadata(parent),
+        }
+    }
+    pub fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => {
+                host.stop_owned_metadata(parent)?;
+                host.stop_and_drain(parent)?;
+            }
+            NativeLearnerLifecycle::Cold(host) => host.stop(parent)?,
+        }
+        self.stopped = true;
+        Ok(())
+    }
+}

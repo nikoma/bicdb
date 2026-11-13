@@ -25,6 +25,8 @@ pub(crate) struct NativeMetadataStoreRecord {
     birth_sha256: String,
     restore_activation: Option<MetadataRestoreActivation>,
     initial_topology_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    initial_namespace_ids: Option<Vec<(String, Uuid)>>,
     registered: bool,
     checksum_sha256: String,
 }
@@ -47,6 +49,9 @@ impl NativeMetadataStoreRecord {
             || self.incarnation == 0
             || self.birth_sha256.len() != 64
             || self.initial_topology_sha256.len() != 64
+            || self.initial_namespace_ids.as_ref().is_some_and(|ids| {
+                ids.windows(2).any(|p| p[0].0 >= p[1].0) || ids.iter().any(|(_, id)| id.is_nil())
+            })
             || self.checksum()? != self.checksum_sha256
         {
             return Err(invalid("damaged protected initialization receipt"));
@@ -61,6 +66,19 @@ impl NativeMetadataStoreRecord {
     }
     pub(crate) fn registered(&self) -> bool {
         self.registered
+    }
+    pub(crate) fn initial_namespace_ids(&self) -> Option<&[(String, Uuid)]> {
+        self.initial_namespace_ids.as_deref()
+    }
+    pub(crate) fn require_namespaces_current(&self, database: &BicDb) -> Result<()> {
+        if let Some(ids) = &self.initial_namespace_ids {
+            if database.metadata_namespace_ids()? != *ids {
+                return Err(invalid(
+                    "protected metadata initial namespace identities changed",
+                ));
+            }
+        }
+        Ok(())
     }
     fn require_native(&self, native: &NativeRecoveryAdmission) -> Result<()> {
         self.validate()?;
@@ -81,6 +99,20 @@ impl NativeMetadataStoreRecord {
     }
 }
 impl BicDb {
+    fn metadata_namespace_ids(&self) -> Result<Vec<(String, Uuid)>> {
+        let mut names = self.collections.keys().cloned().collect::<Vec<_>>();
+        names.sort();
+        names
+            .into_iter()
+            .map(|name| {
+                let id = self
+                    .local_namespace_identity(&name)?
+                    .filter(|id| !id.is_nil())
+                    .ok_or_else(|| invalid("actual metadata namespace identity absent"))?;
+                Ok((name, id))
+            })
+            .collect()
+    }
     pub(super) fn metadata_native_admission(
         &self,
         topology: &ClusterTopology,
@@ -128,6 +160,13 @@ impl BicDb {
         let initial_topology_sha256 = hex::encode(Sha256::digest(
             crate::distribution_range_image::bounded_json(topology, 4 * 1024 * 1024)?,
         ));
+        let initial_namespace_ids = if topology.nodes[actual.local_node_id()].metadata_role
+            == crate::distribution::MetadataMemberRole::Learner
+        {
+            Some(self.metadata_namespace_ids()?)
+        } else {
+            None
+        };
         let _journal = self.try_native_image_journal()?;
         if self
             .read_native_range_image_record::<NativeMetadataStoreRecord>(KEY)?
@@ -150,6 +189,7 @@ impl BicDb {
             birth_sha256: bound.birth_sha256().to_owned(),
             restore_activation: bound.restore_activation().cloned(),
             initial_topology_sha256,
+            initial_namespace_ids,
             registered: false,
             checksum_sha256: String::new(),
         };
@@ -170,6 +210,7 @@ impl BicDb {
     ) -> Result<()> {
         let actual = self.metadata_native_admission(topology, &expected.node_id)?;
         expected.require_native(&actual)?;
+        expected.require_namespaces_current(self)?;
         let _journal = self.try_native_image_journal()?;
         let stored: NativeMetadataStoreRecord = self
             .read_native_range_image_record(KEY)?
@@ -224,6 +265,16 @@ impl BicDb {
             .read_native_range_image_record(KEY)?
             .ok_or_else(|| invalid("protected store initialization missing"))?;
         record.require_native(&actual)?;
+        if topology.nodes[node].metadata_role == crate::distribution::MetadataMemberRole::Learner
+            && !topology.ranges.values().any(|range| {
+                range
+                    .replicas
+                    .iter()
+                    .any(|replica| &replica.node_id == node)
+            })
+        {
+            record.require_namespaces_current(self)?;
+        }
         Ok(record)
     }
     pub(crate) fn require_native_metadata_uninitialized(&self) -> Result<()> {
@@ -238,6 +289,22 @@ impl BicDb {
     }
     pub(crate) fn native_metadata_owner_open_lifetime(&self) -> std::sync::Weak<()> {
         Arc::downgrade(&self.native_metadata_open_lifetime)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_native_metadata_record_bytes(&self) -> Result<Vec<u8>> {
+        self.check_recovery_state()?;
+        let paged = self
+            .paged_records
+            .as_ref()
+            .ok_or_else(|| invalid("native page store absent"))?;
+        paged
+            .store()
+            .get_as_of(
+                &paged.latest_snapshot(),
+                &super::range_image_native::native_key(KEY),
+            )
+            .map_err(|e| BicDbError::PagedStorage(e.to_string()))?
+            .ok_or_else(|| invalid("actual stored metadata record absent"))
     }
     pub(crate) fn native_metadata_owner_health(&self) -> Result<Arc<bicdb_page::DurabilityHealth>> {
         self.check_recovery_state()?;

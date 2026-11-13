@@ -67,6 +67,12 @@ impl From<crate::distribution_range_recovery::RecoveryImageInstallFreeze>
     }
 }
 impl NativeImageInstallFreeze {
+    pub(crate) fn try_as_frozen(&self) -> Result<&FrozenRangeMutationPermit> {
+        match self {
+            Self::Standalone(f) => Ok(f),
+            Self::Recovery(lease) => lease.try_as_frozen(),
+        }
+    }
     pub(crate) fn as_frozen(&self) -> &FrozenRangeMutationPermit {
         match self {
             Self::Standalone(frozen) => frozen,
@@ -282,6 +288,7 @@ pub(crate) struct AdoptedNativeRangeImageInstall {
 /// DB-open admission and exact intent fence retained. Only consuming an adopted
 /// image can construct it. It grants no serving configuration or user admission.
 pub(crate) struct NativeImageCatalogueFinalization {
+    source_seal: crate::distribution_range_image::LocalRangeImageSealV1,
     database: Arc<RwLock<BicDb>>,
     admission: NativeRecoveryAdmission,
     fence: TargetImageInstallFence,
@@ -289,6 +296,51 @@ pub(crate) struct NativeImageCatalogueFinalization {
     catalogue: NativeImageCatalogueAdoptionReceipt,
 }
 impl NativeImageCatalogueFinalization {
+    pub(crate) fn source_seal(&self) -> &crate::distribution_range_image::LocalRangeImageSealV1 {
+        &self.source_seal
+    }
+    pub(crate) fn base(&self) -> &NativeInstalledRangeImageBase {
+        &self.base
+    }
+    pub(crate) fn native_admission(&self) -> &NativeRecoveryAdmission {
+        &self.admission
+    }
+    pub(crate) fn require_current_with_database(
+        &self,
+        database: &BicDb,
+        store: &RangeWriteStore,
+        role: &NativeImageInstallRole<'_>,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        self.catalogue.require_materialized_current(
+            store,
+            database,
+            &self.admission,
+            &self.base,
+            &self.fence,
+            role,
+            frozen,
+        )
+    }
+    /// Historical actual image/materialization only. No role, readiness,
+    /// membership, mutation or serving capability is derived from this check.
+    pub(crate) fn require_materialized_fact_current(
+        &self,
+        database: &BicDb,
+        store: &RangeWriteStore,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        self.admission.require_current(database)?;
+        self.base.require_current(database, &self.admission)?;
+        database
+            .range_mutation_gate()
+            .validate_frozen(self.base.capture_range().id, frozen)?;
+        if frozen.owner() != self.fence.attempt_id() {
+            return Err(invalid("actual finalized image freeze changed"));
+        }
+        self.catalogue
+            .require_binding_current(store, &self.base, &self.fence)
+    }
     pub(crate) fn catalogue(&self) -> &NativeImageCatalogueAdoptionReceipt {
         &self.catalogue
     }
@@ -347,6 +399,7 @@ impl AdoptedNativeRangeImageInstall {
             base,
         } = self.verified;
         let proof = NativeImageCatalogueFinalization {
+            source_seal: source.seal().clone(),
             database,
             admission,
             fence,
@@ -405,6 +458,13 @@ impl VerifiedNativeRangeImageInstall {
 }
 
 impl NativeRangeImageInstaller {
+    #[cfg(test)]
+    pub(crate) fn test_closed_original_request_live(&self) -> Result<()> {
+        self.fence
+            .closed_original_writer()
+            .ok_or_else(|| invalid("actual closed C1 original request absent"))?
+            .test_require_original_request_live()
+    }
     /// A process may have died after native receipt commit but before catalog
     /// activation. Recompute the actual complete image and mint a new opaque
     /// token for the SAME durable attempt, without clearing or copying rows.
@@ -482,7 +542,10 @@ impl NativeRangeImageInstaller {
         frozen: impl Into<NativeImageInstallFreeze>,
         purpose: ImageInstallPurpose,
         attempt_id: Uuid,
+        slot: Option<crate::distribution_data::RangeWriteServiceSlotGuard>,
+        caller: &CancellationToken,
     ) -> Result<Self> {
+        caller.check()?;
         let frozen = frozen.into();
         source.require_current()?;
         let db = database
@@ -514,16 +577,26 @@ impl NativeRangeImageInstaller {
             source.cut().range().id,
             frozen.as_frozen(),
         )?;
-        let fence = store.begin_native_image_install(
-            &db,
-            &admission,
-            &safety,
-            source,
-            role,
-            frozen.as_frozen(),
-            purpose,
-            attempt_id,
-        )?;
+        let fence = store
+            .begin_native_image_install(
+                &db,
+                &admission,
+                &safety,
+                source,
+                role,
+                frozen.as_frozen(),
+                purpose,
+                attempt_id,
+            )?
+            .bind_closed_original_writer(
+                &db,
+                store,
+                source,
+                role,
+                frozen.as_frozen(),
+                caller,
+                slot.as_ref(),
+            )?;
         store.validate_native_image_install_step(
             &fence,
             &db,
@@ -545,7 +618,8 @@ impl NativeRangeImageInstaller {
             &catalog_obligations,
             role,
             frozen.as_frozen(),
-        )?;
+        )?
+        .with_source_substitution(&db, source)?;
         let history_stage = db.begin_native_history_stage(&context, source)?;
         let catalog = canonical_range_image_catalog(
             source.cut().cluster_id(),
@@ -762,6 +836,7 @@ impl NativeRangeImageInstaller {
                 .as_ref()
                 .ok_or_else(|| invalid("image row grant requires audited history"))?,
             source,
+            cancellation,
         )?;
         let controlled = db
             .range_mutation_gate()
@@ -857,6 +932,7 @@ impl NativeRangeImageInstaller {
                     .as_ref()
                     .ok_or_else(|| invalid("image row grant requires audited history"))?,
                 source,
+                cancellation,
             )?;
             let controlled = db
                 .range_mutation_gate()
@@ -1373,6 +1449,8 @@ pub(crate) mod tests {
                 frozen,
                 ImageInstallPurpose::RelocationLearner,
                 attempt,
+                None,
+                &CancellationToken::uncancelable(),
             )
         }
         fn clear(&mut self, store: &RangeWriteStore, install: &mut NativeRangeImageInstaller) {

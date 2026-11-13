@@ -70,34 +70,38 @@ impl RangeWriteStore {
         let range = scope.range.id;
         self.require_sparse_native_binding(range, native)?;
         self.require_no_image_install(range)?;
+        let joint_recovered = self.native_joint_read_scope_allowed(scope)?;
         if self.root != data_path
             || self.catalog.cluster_id != scope.cluster_id
             || !scope.members.contains_key(&self.catalog.node_id)
-            || self.catalog.handoff_promises.contains_key(&range)
+            || (self.catalog.handoff_promises.contains_key(&range) && !joint_recovered)
             || self.catalog.backup_fences.contains_key(&range)
         {
             return Err(invalid(
                 "read catalogue has another store/scope or retained refusal",
             ));
         }
-        let recovered = if let Some(saved) = self.catalog.recovery_fences.get(&range) {
-            if !matches!(
-                saved.phase,
-                recovery_state::RecoveryFencePhase::NativeActivated(_)
-            ) || saved.scope.range_epoch != scope.range.epoch
-                || saved.local_node_id != self.catalog.node_id
-                || saved.local_member_incarnation
-                    != scope.members[&self.catalog.node_id].incarnation
-            {
-                return Err(invalid(
-                    "native read requires actually activated current recovery",
-                ));
-            }
-            self.require_actual_native_activated_open(range)?;
-            true
-        } else {
-            false
-        };
+        let recovered =
+            if joint_recovered && self.native_joint_covers_prior_recovery_context(range)? {
+                true
+            } else if let Some(saved) = self.catalog.recovery_fences.get(&range) {
+                if !matches!(
+                    saved.phase,
+                    recovery_state::RecoveryFencePhase::NativeActivated(_)
+                ) || saved.scope.range_epoch != scope.range.epoch
+                    || saved.local_node_id != self.catalog.node_id
+                    || saved.local_member_incarnation
+                        != scope.members[&self.catalog.node_id].incarnation
+                {
+                    return Err(invalid(
+                        "native read requires actually activated current recovery",
+                    ));
+                }
+                self.require_actual_native_activated_open(range)?;
+                true
+            } else {
+                false
+            };
         let progress = self.progress(range);
         if progress.last_index != native_r
             || progress.resolved_through != native_r
@@ -106,6 +110,69 @@ impl RangeWriteStore {
         {
             return Err(invalid("native read has unresolved/ahead raw history"));
         }
+        let decisions = self.collect_native_resolved_decisions(range, native_r)?;
+        let sparse_record_commitments = self
+            .catalog
+            .sparse_committed_decisions
+            .as_ref()
+            .and_then(|ranges| ranges.get(&range))
+            .into_iter()
+            .flat_map(|entries| entries.iter())
+            .map(|(index, record)| (*index, record.record_checksum_sha256()))
+            .collect::<BTreeMap<_, _>>();
+        let commitment = (
+            "bicdb-native-read-catalogue-v1",
+            &self.catalog.cluster_id,
+            &self.catalog.node_id,
+            &progress,
+            self.catalog.recovery_fences.get(&range),
+            self.catalog.native_image_bases.get(&range),
+            &decisions,
+            &sparse_record_commitments,
+            self.catalog
+                .native_abort_protocol
+                .as_ref()
+                .and_then(|p| p.range(range)),
+        );
+        validate_native_json_size(&commitment, 4 * 1024 * 1024)?;
+        struct HashWriter(Sha256);
+        impl std::io::Write for HashWriter {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.0.update(bytes);
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let mut hash = HashWriter(Sha256::new());
+        serde_json::to_writer(&mut hash, &commitment)?;
+        if let Some(joint) = self
+            .catalog
+            .current_joint_recoveries
+            .as_ref()
+            .and_then(|m| m.get(&range))
+        {
+            validate_native_json_size(joint, 8 * 1024 * 1024)?;
+            serde_json::to_writer(&mut hash, &("current-joint-refusal-archive-v1", joint))?;
+        }
+        Ok(NativeRangeReadCatalogue {
+            store_open_id: self.open_id,
+            range_id: range,
+            native_r,
+            root: self.root.clone(),
+            checksum: hex::encode(hash.0.finalize()),
+            decisions,
+            recovered,
+        })
+    }
+    /// Data observation only, shared with permanent joint closure. It does not
+    /// bypass serving/lifecycle checks or manufacture a native floor.
+    pub(super) fn collect_native_resolved_decisions(
+        &self,
+        range: RangeId,
+        native_r: u64,
+    ) -> Result<BTreeMap<u64, NativeReadCatalogueDecision>> {
         let mut decisions = BTreeMap::new();
         let mut insert = |index, decision| -> Result<()> {
             if index == 0 || index > native_r {
@@ -154,49 +221,12 @@ impl RangeWriteStore {
                 )?;
             }
         }
+        for (index, checksum) in self.archived_joint_certifications(range)? {
+            insert(index, NativeReadCatalogueDecision::Applied(checksum))?;
+        }
         for (index, checksum) in self.sparse_irreversible_commands(range)? {
             insert(index, NativeReadCatalogueDecision::Applied(checksum))?;
         }
-        let sparse_record_commitments = self
-            .catalog
-            .sparse_committed_decisions
-            .as_ref()
-            .and_then(|ranges| ranges.get(&range))
-            .into_iter()
-            .flat_map(|entries| entries.iter())
-            .map(|(index, record)| (*index, record.record_checksum_sha256()))
-            .collect::<BTreeMap<_, _>>();
-        let commitment = (
-            "bicdb-native-read-catalogue-v1",
-            &self.catalog.cluster_id,
-            &self.catalog.node_id,
-            &progress,
-            self.catalog.recovery_fences.get(&range),
-            self.catalog.native_image_bases.get(&range),
-            &decisions,
-            &sparse_record_commitments,
-        );
-        validate_native_json_size(&commitment, 4 * 1024 * 1024)?;
-        struct HashWriter(Sha256);
-        impl std::io::Write for HashWriter {
-            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-                self.0.update(bytes);
-                Ok(bytes.len())
-            }
-            fn flush(&mut self) -> std::io::Result<()> {
-                Ok(())
-            }
-        }
-        let mut hash = HashWriter(Sha256::new());
-        serde_json::to_writer(&mut hash, &commitment)?;
-        Ok(NativeRangeReadCatalogue {
-            store_open_id: self.open_id,
-            range_id: range,
-            native_r,
-            root: self.root.clone(),
-            checksum: hex::encode(hash.0.finalize()),
-            decisions,
-            recovered,
-        })
+        Ok(decisions)
     }
 }

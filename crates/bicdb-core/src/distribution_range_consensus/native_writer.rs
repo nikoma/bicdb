@@ -68,6 +68,7 @@ impl RangeWriteStore {
     }
     pub(super) fn require_native_writer_command(&self, command: &RangeWriteCommand) -> Result<()> {
         self.require_native_writer_host_base()?;
+        self.native_joint_command_allowed(command)?;
         if crate::format::native_writer_enrollment_active(&self.root)? {
             self.native_writer_host
                 .as_ref()
@@ -110,6 +111,49 @@ impl RangeWriteStore {
     }
 }
 impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
+    /// Assigned publication already owns this EXACT service mutex. Preserve
+    /// the normal validator's conditions without recursively locking it; all
+    /// other lock acquisitions here are nonwaiting and mint no readiness.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn install_assigned_native_writer_host_state(
+        &self,
+        database: &BicDb,
+        actual_service: &Arc<Mutex<ClusterDataNodeService>>,
+        service: &mut ClusterDataNodeService,
+        policy: &SealedHostWriterEnrollment,
+        state: Weak<NativeWriterHostState>,
+    ) -> Result<()> {
+        policy.require_live()?;
+        if !Arc::ptr_eq(&self.local_service, actual_service)
+            || !self.native_image_mode
+            || database.actual_native_writer_enforcement_version()? != 1
+            || database.incarnation_id() != self.local_incarnation
+            || policy.database_incarnation() != self.local_incarnation
+            || policy.facts().cluster_id != self.cluster_id
+            || policy.facts().local_node_id != self.local_node_id
+        {
+            return Err(range_write_error(
+                "Assigned policy actual coordinator/service/DB differs",
+            ));
+        }
+        {
+            let topology = self
+                .topology
+                .try_read()
+                .ok_or_else(|| range_write_error("Assigned policy routing busy at publication"))?;
+            policy.facts().require_topology(&topology)?;
+            for range in topology.ranges.values() {
+                policy.facts().require_range(range)?;
+            }
+        }
+        service.validate_native_writer_enrollment(database, policy)?;
+        service.install_native_writer_host_state(database, policy, state.clone())?;
+        *self
+            .native_writer_host
+            .try_lock()
+            .ok_or_else(|| range_write_error("Assigned writer cache busy"))? = Some(state);
+        policy.require_live()
+    }
     fn expected_enforced_native_store(&self) -> bool {
         self.topology
             .read()
@@ -145,6 +189,17 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
         }
         Ok(())
     }
+    pub(crate) fn require_registry_refresh_service(
+        &self,
+        service: &Arc<Mutex<ClusterDataNodeService>>,
+    ) -> Result<()> {
+        if !Arc::ptr_eq(&self.local_service, service) {
+            return Err(range_write_error(
+                "registry refresh changed actual coordinator service",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn native_writer_coordinator_id(&self) -> Uuid {
         self.native_coordinator_id
     }
@@ -152,6 +207,26 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
         &self,
         database: &BicDb,
         range: &RangeDescriptor,
+    ) -> Result<()> {
+        self.require_native_writer_host_context_under(database, range, None)
+    }
+    /// Same check for a caller that ALREADY holds this coordinator's routing
+    /// read guard. Reacquiring that lock would wait behind any queued routing
+    /// writer, which itself waits for the caller's guard: a self-deadlock
+    /// that also parks every later routing reader on this node.
+    pub(crate) fn require_native_writer_host_context_with_topology(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+        held_topology: &ClusterTopology,
+    ) -> Result<()> {
+        self.require_native_writer_host_context_under(database, range, Some(held_topology))
+    }
+    fn require_native_writer_host_context_under(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+        held_topology: Option<&ClusterTopology>,
     ) -> Result<()> {
         if database.actual_native_writer_enforcement_version()? == 0 {
             return Ok(());
@@ -170,7 +245,10 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
             ));
         }
         state.require_database(database, range)?;
-        state.require_topology(&self.topology.read())
+        match held_topology {
+            Some(topology) => state.require_topology(topology),
+            None => state.require_topology(&self.topology.read_recursive()),
+        }
     }
     pub(crate) fn validate_native_writer_enrollment(
         &self,
@@ -190,7 +268,7 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
             ));
         }
         {
-            let topology = self.topology.read();
+            let topology = self.topology.read_recursive();
             policy.facts().require_topology(&topology)?;
             for range in topology.ranges.values() {
                 policy.facts().require_range(range)?;

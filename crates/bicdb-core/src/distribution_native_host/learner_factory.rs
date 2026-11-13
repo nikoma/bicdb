@@ -9,6 +9,9 @@ use crate::ClusterSchemaBundle;
 use std::fs::File;
 use std::io::Read;
 
+mod assigned_closed;
+mod registered_catchup;
+
 const MANIFEST: &str = "native-unassigned-learner.json";
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -32,6 +35,10 @@ pub(crate) struct NativeUnassignedLearnerFactory {
     manifest: LearnerManifest,
 }
 impl NativeUnassignedLearnerFactory {
+    pub(super) fn actual_birth(&self) -> &NativeStoreBirthV1 {
+        &self.manifest.birth
+    }
+
     fn context(
         observed: &HostMetadataReadObservation,
         business: Uuid,
@@ -208,6 +215,31 @@ impl NativeUnassignedLearnerFactory {
         network: &ClusterNetworkTransportConfig,
         parent: &CancellationToken,
     ) -> Result<Self> {
+        Self::reopen_existing(root, config, observed, business, network, parent, true)
+    }
+
+    /// Strict cold loader only; protected initialization is inspected later by
+    /// the owned metadata constructor. This never asserts a fresh factory.
+    pub(crate) fn reopen_enrolled_metadata(
+        root: &Path,
+        config: DbConfig,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        network: &ClusterNetworkTransportConfig,
+        parent: &CancellationToken,
+    ) -> Result<Self> {
+        Self::reopen_existing(root, config, observed, business, network, parent, false)
+    }
+
+    fn reopen_existing(
+        root: &Path,
+        config: DbConfig,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        network: &ClusterNetworkTransportConfig,
+        parent: &CancellationToken,
+        uninitialized: bool,
+    ) -> Result<Self> {
         let token = parent.child_with_deadline(observed.deadline());
         token.check()?;
         let (topology, local, schema) = Self::context(observed, business, network)?;
@@ -229,7 +261,16 @@ impl NativeUnassignedLearnerFactory {
             ));
         }
         let (db, factory) = BicDb::open_range_image_database(root, config, &manifest.spec)?;
-        db.require_native_metadata_uninitialized()?;
+        if uninitialized {
+            db.require_native_metadata_uninitialized()?;
+        } else if db.current_commit_seq() != 0 {
+            // Necessary refusal only: no range/data authority is inferred from
+            // zero. A root with business-sequence history is not this bounded
+            // unassigned-metadata continuation contract.
+            return Err(invalid(
+                "cold unassigned learner has business-sequence history; quarantined",
+            ));
+        }
         let actual = factory.require_unwritten_enrollment_database(&db, &topology)?;
         if NativeStoreBirthV1::from_actual_native(&actual)? != manifest.birth
             || db.schema_compatibility_fingerprint()?.sha256 != manifest.schema_sha256
@@ -247,6 +288,23 @@ impl NativeUnassignedLearnerFactory {
                 "actual committed learner belongs to a different physical birth",
             ));
         }
+        if !uninitialized
+            && topology.nodes[&local].native_store_birth_v1.as_ref() != Some(&manifest.birth)
+        {
+            return Err(invalid(
+                "cold metadata requires the current committed actual learner birth",
+            ));
+        }
+        if !uninitialized {
+            if let Some(record) = db.native_metadata_initialization_record(
+                &manifest.spec.cluster_id,
+                manifest.spec.bootstrap_id,
+                &local,
+                manifest.spec.member_incarnation,
+            )? {
+                record.require_namespaces_current(&db)?;
+            }
+        }
         observed.require_live_request(business)?;
         token.check()?;
         Ok(Self {
@@ -255,6 +313,106 @@ impl NativeUnassignedLearnerFactory {
             factory,
             manifest,
         })
+    }
+
+    /// Fresh own learner MQ plus actual birth/schema. Valid after metadata
+    /// preparation too; unlike enrollment_proposal this never asserts uninitialized.
+    pub(super) fn enrolled_metadata_context(
+        &self,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        network: &ClusterNetworkTransportConfig,
+    ) -> Result<ClusterTopology> {
+        let (topology, local, schema) = Self::context(observed, business, network)?;
+        if local != self.spec.node_id
+            || schema != self.manifest.schema_sha256
+            || self.spec.restore_activation.as_ref() != observed.restore_activation(business)?
+            || topology.nodes[&local].native_store_birth_v1.as_ref() != Some(&self.manifest.birth)
+        {
+            return Err(invalid(
+                "metadata transition needs current committed actual learner binding",
+            ));
+        }
+        let db = self
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("actual learner DB busy"))?;
+        if db.schema_compatibility_fingerprint()?.sha256 != schema {
+            return Err(invalid(
+                "actual learner schema changed before metadata transition",
+            ));
+        }
+        let native = self
+            .factory
+            .require_unwritten_enrollment_database(&db, &topology)?;
+        if NativeStoreBirthV1::from_actual_native(&native)? != self.manifest.birth {
+            return Err(invalid(
+                "actual learner birth changed before metadata transition",
+            ));
+        }
+        observed.require_live_request(business)?;
+        Ok(topology)
+    }
+
+    /// Post-initialization continuation ONLY, consuming an actual protected
+    /// MStore observation. Blank factory/create predicates stay Learner-only.
+    pub(super) fn require_owned_metadata_member(
+        &self,
+        proof: &crate::distribution_consensus::NativeOwnedMetadataMemberObservation,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        network: &ClusterNetworkTransportConfig,
+    ) -> Result<()> {
+        observed.require_live_request(business)?;
+        let topology = observed.committed_topology(business)?;
+        if proof.topology() != topology
+            || !self.spec.initial_ranges.is_empty()
+            || observed.requester_node_id() != &self.spec.node_id
+            || observed.restore_activation(business)? != self.spec.restore_activation.as_ref()
+            || topology
+                .ranges
+                .values()
+                .any(|r| r.replicas.iter().any(|p| p.node_id == self.spec.node_id))
+        {
+            return Err(invalid(
+                "owned metadata-only member scope differs or has data placement",
+            ));
+        }
+        let member = topology
+            .nodes
+            .get(&self.spec.node_id)
+            .ok_or_else(|| invalid("owned member absent"))?;
+        let pin = crate::replication_transport::replication_certificate_sha256(
+            &network
+                .tls
+                .as_ref()
+                .ok_or_else(|| invalid("owned member TLS absent"))?
+                .cert_path,
+        )?;
+        if network.dev_localhost_plaintext
+            || !member.accepts_tls_certificate_sha256(&pin)
+            || member.lifecycle != ClusterNodeLifecycle::Active
+            || member.incarnation != self.spec.member_incarnation
+            || member.native_store_birth_v1.as_ref() != Some(&self.manifest.birth)
+        {
+            return Err(invalid(
+                "owned metadata member actual birth/identity changed",
+            ));
+        }
+        let db = self
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("owned metadata member DB busy"))?;
+        proof.require_database(&db)?;
+        if db.schema_compatibility_fingerprint()?.sha256 != self.manifest.schema_sha256
+            || topology.ranges.values().any(|r| {
+                r.required_schema_sha256(&topology.nodes)
+                    != Some(self.manifest.schema_sha256.as_str())
+            })
+        {
+            return Err(invalid("owned metadata member actual schema differs"));
+        }
+        observed.require_live_request(business)
     }
 
     /// Configuration proposal only. It must cross authenticated birth

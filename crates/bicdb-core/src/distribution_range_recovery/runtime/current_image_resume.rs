@@ -78,7 +78,9 @@ impl RangeRecoveryRuntime {
                         .ok_or_else(|| invalid("Installing freeze is leased"))?,
                 ))
             } else {
-                if sessions.current.len() + sessions.installing.len() >= MAX_SESSIONS {
+                if sessions.current.len() + sessions.installing.len() + sessions.replacing.len()
+                    >= MAX_SESSIONS
+                {
                     return Err(invalid("recovery session bound reached"));
                 }
                 None

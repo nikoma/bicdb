@@ -369,6 +369,12 @@ impl BicDb {
             other => other,
         };
         let committed = match committed {
+            Err(error) if tx.native_uncertain_admission.is_some() => {
+                self.finish_native_uncertain_admission(tx, error)
+            }
+            Err(error) if tx.native_prepare_only_rejection.is_some() => {
+                self.finish_native_prepare_rejection(tx, error)
+            }
             Err(error) if tx.native_admission_recovery_release.is_some() => {
                 // The synchronous apply stack and page guards have unwound.
                 // Terminate this local attempt BEFORE releasing volatile

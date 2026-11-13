@@ -51,10 +51,14 @@ pub const NATIVE_RECOVERY_SERVING_FEATURE_FLAG: &str = "native_recovery_serving_
 /// Local decision-catalogue custody contract; old writers must refuse.
 pub const NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG: &str = "native_catalogue_custody_v1";
 pub const NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG: &str = "native_writer_enrollment_v1";
+pub const NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG: &str = "native_joint_data_handoff_v1";
+/// Local qualified recovery in an already activated joint domain.
+pub const NATIVE_CURRENT_JOINT_RECOVERY_FEATURE_FLAG: &str = "native_current_joint_recovery_v1";
 /// Local metadata-store initialization/ownership; excluded from portable schema.
 pub const NATIVE_METADATA_STORE_FEATURE_FLAG: &str = "native_metadata_store_v1";
 pub const NATIVE_INITIAL_PREPARATION_FEATURE_FLAG: &str = "native_initial_preparation_v1";
 pub const ORACLE_SIMPLE_CASE_V1_FEATURE_FLAG: &str = "oracle_simple_case_v1";
+pub const NATIVE_ABORT_HISTORY_FEATURE_FLAG: &str = "native_abort_history_v1";
 pub const APPLICATION_UNIQUE_SCOPE_FEATURE_FLAG: &str = "application_unique_scope_transition_v1";
 pub const DECIMAL_PREDICATE_COMPARISON_V1_FEATURE_FLAG: &str = "decimal_predicate_comparison_v1";
 pub const NATIVE_IMMUTABLE_FACTS_FEATURE_FLAG: &str = "native_immutable_fact_publications_v1";
@@ -63,9 +67,13 @@ pub const EXACT_DECIMAL_LIST_SUM_FEATURE_FLAG: &str = "exact_decimal_list_sum_v1
 pub const EXACT_DECIMAL_UNITS_FEATURE_FLAG: &str = "exact_decimal_units_v1";
 pub const NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG: &str =
     "native_fact_projection_contracts_v1";
+/// Sticky node-local receipt semantics. Never a portable schema capability.
+pub const NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG: &str =
+    "native_completed_decision_materialization_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
     SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG,
     EXACT_DECIMAL_UNITS_FEATURE_FLAG,
+    NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG,
     EXACT_DECIMAL_LIST_SUM_FEATURE_FLAG,
     EXACT_PROPORTIONAL_INTERVALS_FEATURE_FLAG,
     NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG,
@@ -87,6 +95,9 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG,
     NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
     NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
+    NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG,
+    NATIVE_CURRENT_JOINT_RECOVERY_FEATURE_FLAG,
+    NATIVE_ABORT_HISTORY_FEATURE_FLAG,
     NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG,
     NATIVE_METADATA_STORE_FEATURE_FLAG,
     NATIVE_INITIAL_PREPARATION_FEATURE_FLAG,
@@ -1050,6 +1061,107 @@ pub(crate) fn native_metadata_store_active(root: &Path) -> Result<bool> {
         .contains(NATIVE_METADATA_STORE_FEATURE_FLAG))
 }
 
+/// Reader refusal only. Actual joint producers additionally require a real
+/// immutable born-v2 record and both independent data-quorum decisions.
+pub(crate) fn enable_native_joint_data_handoff(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "native joint data handoff requires from-birth writer enrollment".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+pub(crate) fn native_joint_data_handoff_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG))
+}
+
+/// Reader refusal only; neither a metadata role nor a native/data quorum.
+/// Deliberately excluded from REPLICATED_READER_FEATURES.
+pub(crate) fn enable_native_completed_decision_materialization(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(NATIVE_ABORT_HISTORY_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "completed materialization needs actual native writer/abort/custody fences".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+#[cfg(test)]
+pub(crate) fn test_simulated_reader_without_completed_materialization(root: &Path) -> Result<()> {
+    let metadata = read_or_legacy_metadata(root)?;
+    let old = KNOWN_FEATURE_FLAGS
+        .iter()
+        .copied()
+        .filter(|name| *name != NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG)
+        .collect::<Vec<_>>();
+    validate_supported_with_flags(&metadata, &old)
+}
+pub(crate) fn native_completed_decision_materialization_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG))
+}
+
+pub(crate) fn enable_native_current_joint_recovery(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(NATIVE_ABORT_HISTORY_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "current joint recovery needs actual joint and abort reader fences".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_CURRENT_JOINT_RECOVERY_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+pub(crate) fn native_current_joint_recovery_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_CURRENT_JOINT_RECOVERY_FEATURE_FLAG))
+}
+
 pub(crate) fn enable_current_image_proposal(root: &Path) -> Result<()> {
     let lock = feature_flags_lock(root);
     let _guard = lock.lock();
@@ -1353,6 +1465,39 @@ mod local_identity_format_tests {
             });
         }
     }
+}
+
+/// Fence old writers before the first monotone abort-aware range start.
+pub(crate) fn enable_native_abort_history(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(NATIVE_METADATA_STORE_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "native abort writer requires from-birth enforced writer and metadata initialization fences".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_ABORT_HISTORY_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+pub(crate) fn native_abort_history_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_ABORT_HISTORY_FEATURE_FLAG))
 }
 
 /// Sticky fence: older native binaries must refuse an offline scope transition.

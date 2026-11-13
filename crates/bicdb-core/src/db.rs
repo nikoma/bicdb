@@ -91,6 +91,8 @@ pub(crate) use range_image_install::{
 pub(crate) use range_image_proposal::{
     NativeCurrentImageProposalReceipt, ProtectedCurrentImagePreimageV1,
 };
+mod native_abort;
+pub use native_abort::{NativeCommitAdmissionResult, NativeTransactionNoEffect};
 mod native_initial_preparation;
 pub(crate) use native_initial_preparation::{
     NativeInitialConfigurationProposalRecord, NativeInitialPreparationRecord,
@@ -98,30 +100,56 @@ pub(crate) use native_initial_preparation::{
 mod native_metadata_store;
 pub(crate) use native_metadata_store::NativeMetadataStoreRecord;
 mod native_activation;
+mod native_joint_activation;
 pub(crate) use native_activation::NativeActivatedOpenGuard;
+pub(crate) use native_joint_activation::{
+    NativeJointActivatedOpenGuard, NativeJointOpenContinuity,
+};
 mod commit_admission_hook;
 mod native_recovery_ready;
+#[cfg(test)]
+mod native_test_custody;
 mod range_image_native;
 pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisibilitySequence};
+pub(crate) use range_image_native::abort_history::NativeNoEffectIntentRecord;
 #[cfg(test)]
 pub(crate) use range_image_native::rf3_fixture::{
     ActualNativeRf3Fixture, ActualNativeRf3RpcObservation,
 };
-pub(crate) use range_image_native::NativeActivationDecisionReceipt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeAssignedWriterInstallAttempt;
+pub(crate) use range_image_native::NativeInitialDataGenesis;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeRegisteredClosedPersistScope;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
     FreshNativeCatalogueBootstrap, FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard,
-    KnownNativeRecoveryPrefix, NativeHistoryPublicationBinding, NativeHistoryStage,
-    NativeHistoryStageProgress, NativeHistoryTargetContext, NativeLogicalHistoryEntryV1,
-    NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint, NativeLogicalHistoryStepV1,
-    NativeRangeInstallSafety, NativeRangePendingApply, NativeRangePrefixObservation,
-    NativeRecoveredServingReceipt, NativeRecoveryAdmission, NativeRecoveryAppliedReceipt,
+    KnownNativeRecoveryPrefix, NativeAbortCatalogueBootstrap, NativeHistoryPublicationBinding,
+    NativeHistoryStage, NativeHistoryStageProgress, NativeHistoryTargetContext,
+    NativeLogicalHistoryEntryV1, NativeLogicalHistoryOutcomeV1, NativeLogicalHistoryPoint,
+    NativeLogicalHistoryStepV1, NativeRangeInstallSafety, NativeRangePendingApply,
+    NativeRangePrefixObservation, NativeRecoveredServingReceipt, NativeRecoveryAbortedReceipt,
+    NativeRecoveryAdmission, NativeRecoveryAppliedReceipt, NativeRegisteredReceiverHook,
     NativeWriterHostState, RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
     StagedNativeHistoryProof,
 };
-pub(crate) use range_image_native::{NativeRangeReadPhysical, NativeReadLocalDbSequence};
+pub(crate) use range_image_native::{
+    NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,
+    NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
+    NativeJointDecisionReceipt, NativeJointHistoricalCutScope, NativeJointOldCloseReceipt,
+    NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
+    NativeJointServingBridgeReceipt, NativeJointServingPreparation, NativeReadyObserverReadScope,
+};
+#[cfg(test)]
+pub(crate) use range_image_native::{
+    NativeOriginAppSpan, NativeOriginFaultArm, NativeOriginFaultProbe,
+};
+pub(crate) use range_image_native::{
+    NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,
+};
 mod range_image_bindings;
 pub(crate) use range_image_bindings::RangeImageDbBindings;
+pub(crate) use range_image_native::ClosedImageOriginalWriter;
 mod read_committed_reservation;
 mod record_read_snapshot;
 pub use record_read_snapshot::RecordReadSnapshot;
@@ -9351,10 +9379,12 @@ struct NativeAdmissionRecoveryRelease {
 impl Drop for NativeAdmissionRecoveryRelease {
     fn drop(&mut self) {
         if let Some(ticket) = self.ticket.take() {
-            if let Err(error) = self
+            let released = self
                 .admission
-                .release_native_application_for_recovery(&ticket)
-            {
+                .release_native_application_for_recovery(&ticket);
+            #[cfg(test)]
+            range_image_native::test_record_origin_release(&ticket, &released);
+            if let Err(error) = released {
                 bicdb_page::health::log_event(
                     &json!({"event":"range_image.native_admission_release_failed","severity":"warn","command_id":ticket.command_id,"error":error.to_string()}),
                 );
@@ -9379,6 +9409,25 @@ pub trait CommitAdmission: std::fmt::Debug + Send + Sync {
     ) -> Result<CommitAdmissionTicket> {
         self.admit(intent)
     }
+    fn admit_native_with_rejection(
+        &self,
+        intent: &CommitAdmissionIntent,
+        database: &BicDb,
+    ) -> Result<NativeCommitAdmissionResult> {
+        self.admit_with_native_context(intent, database)
+            .map(NativeCommitAdmissionResult::Accepted)
+    }
+    fn native_prepare_only_cleaned(
+        &self,
+        _rejection: crate::distribution_range_consensus::NativePrepareOnlyRejection,
+        _no_effect: &NativeTransactionNoEffect,
+        _database: &BicDb,
+    ) -> Result<()> {
+        Err(BicDbError::Cluster(
+            "authority does not support actual prepare-only cleanup publication".into(),
+        ))
+    }
+
     /// Record the exact durable local sequence for an admitted decision.
     /// This callback runs only after the transaction WAL is durable. Keeping
     /// the sequence in this trusted callback lets Cell writer fencing advance
@@ -9597,6 +9646,12 @@ pub struct Transaction {
     native_wal_retention: Option<native_wal_apply::NativeWalRetentionPin>,
     commit_admission_ticket: Option<(Arc<dyn CommitAdmission>, CommitAdmissionTicket)>,
     native_admission_recovery_release: Option<NativeAdmissionRecoveryRelease>,
+    native_uncertain_admission:
+        Option<crate::distribution_range_consensus::NativeUncertainAdmissionRejection>,
+    native_prepare_only_rejection: Option<(
+        Arc<dyn CommitAdmission>,
+        crate::distribution_range_consensus::NativePrepareOnlyRejection,
+    )>,
     committed_seq: Option<u64>,
     // Paged mode: the page-store snapshot captured when this transaction began,
     // used to read rows a lazy collection has never touched this session (they

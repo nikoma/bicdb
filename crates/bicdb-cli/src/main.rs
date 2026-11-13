@@ -8,6 +8,7 @@ mod app_command;
 mod backup_command;
 use backup_command::BackupConnectionArgs;
 mod cluster_events_command;
+mod native_metadata_command;
 mod oracle_command;
 mod server_config;
 mod sync_server;
@@ -1630,6 +1631,11 @@ impl From<CliClusterCertificationPayloadFormat> for ClusterCertificationRawArtif
 
 #[derive(Debug, Subcommand)]
 enum ClusterCommand {
+    /// Explicit fresh native metadata-only lifecycle; no SQL/data listener.
+    NativeMetadata {
+        #[command(subcommand)]
+        command: native_metadata_command::Command,
+    },
     /// Use the member-authenticated immutable application-event data plane.
     Events {
         #[command(subcommand)]
@@ -7504,6 +7510,7 @@ fn wait_for_cluster_certificate_mutation(
 
 fn run_cluster_command(command: ClusterCommand) -> Result<()> {
     match command {
+        ClusterCommand::NativeMetadata { command } => native_metadata_command::run(command)?,
         ClusterCommand::Events { command } => cluster_events_command::run(command)?,
         ClusterCommand::Init {
             path,

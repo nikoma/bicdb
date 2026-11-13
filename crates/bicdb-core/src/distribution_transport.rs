@@ -711,6 +711,7 @@ fn recv_json_frame<T: DeserializeOwned>(
 }
 
 pub struct ClusterDataServerHandle {
+    metadata_ingress: Option<Arc<crate::distribution_data::NativeMetadataIngressRegistration>>,
     local_addr: SocketAddr,
     shutdown: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
@@ -800,6 +801,9 @@ impl ClusterDataServerHandle {
     }
 
     pub fn request_shutdown(&self) {
+        if let Some(ingress) = &self.metadata_ingress {
+            ingress.revoke();
+        }
         self.shutdown.store(true, Ordering::SeqCst);
     }
 
@@ -816,7 +820,7 @@ impl ClusterDataServerHandle {
 
 impl Drop for ClusterDataServerHandle {
     fn drop(&mut self) {
-        self.shutdown.store(true, Ordering::SeqCst);
+        self.request_shutdown();
     }
 }
 
@@ -1025,6 +1029,7 @@ fn start_cluster_data_server_on_bound_listener(
         initial_consensus_only,
         native_metadata_control,
         service_store_open_id,
+        service_store_slot,
     ) = {
         let service = if native_mode.is_some() {
             service.try_lock().ok_or_else(|| {
@@ -1046,6 +1051,7 @@ fn start_cluster_data_server_on_bound_listener(
             service.initial_consensus_only(),
             service.native_metadata_control(),
             service.native_initial_listener_store_open_id(),
+            service.native_replica_listener_store_open_guard(),
         )
     };
     // Capture from the real DB, never a published-topology declaration. This
@@ -1069,7 +1075,32 @@ fn start_cluster_data_server_on_bound_listener(
         })?;
         provider.bind_listener_database(consensus, &local_identity.3)?;
     }
+    let metadata_ingress = metadata_consensus
+        .as_ref()
+        .map(|metadata| {
+            local_identity
+                .3
+                .register_metadata_ingress(metadata, service_store_slot)
+        })
+        .transpose()?;
+    let accept_ingress = metadata_ingress.clone();
     let thread = thread::spawn(move || {
+        // The loop owns revocation even if it panics while the outer handle
+        // is retained. Stop/Drop revoke immediately without waiting for join.
+        struct AcceptIngress(
+            Option<Arc<crate::distribution_data::NativeMetadataIngressRegistration>>,
+        );
+        impl Drop for AcceptIngress {
+            fn drop(&mut self) {
+                if let Some(actual) = &self.0 {
+                    actual.revoke();
+                }
+            }
+        }
+        let _ingress = AcceptIngress(accept_ingress);
+        if let Some(actual) = &_ingress.0 {
+            actual.accept_loop_started();
+        }
         while !thread_shutdown.load(Ordering::SeqCst) {
             match listener.accept() {
                 Ok((stream, peer)) => {
@@ -1185,6 +1216,7 @@ fn start_cluster_data_server_on_bound_listener(
         }
     });
     Ok(ClusterDataServerHandle {
+        metadata_ingress,
         local_addr,
         shutdown,
         thread: Some(thread),

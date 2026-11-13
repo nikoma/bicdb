@@ -1,0 +1,9 @@
+{
+  "path": "crates/bicdb-sql/src/session/rename_table.rs",
+  "last_actually_run_source": "68de99c6450518e8d67d83b1118d2e7afa4e7374",
+  "current_source": "895419dc4274b0988eaf5b3f81049e22361864ef",
+  "original_test_body_sha256": "3f7aaaef65084d4cea84af7f05361aaf541afb9cab246499f9a5fe4e86072c92",
+  "byte_identical": true,
+  "current_source_test_executed": false,
+  "last_actual_result": "0 passed, 1 failed; original positive remains open"
+}

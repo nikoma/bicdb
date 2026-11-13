@@ -155,50 +155,91 @@ fn native_registered_fifth_remote_old_collector_actual_original_caller_cancellat
         Some(SourceCase::RemoteOldCollectorCallerCanceled),
     );
 }
-// The later target-history/row cases exercise the actual production remote
+// These target controls consume the production remote OLD seed. Dedicated
+// local OLD/source and transfer controls retain their finite local contract.
+fn target_uses_remote_old_seed(case: SourceCase) -> bool {
+    matches!(
+        case,
+        SourceCase::TargetNoDomain
+            | SourceCase::TargetNoDomainHookRevoked
+            | SourceCase::TargetNoDomainMemberChanged
+            | SourceCase::TargetNoDomainSchemaRevoked
+            | SourceCase::TargetProposal
+            | SourceCase::TargetProposalPostCanceled
+            | SourceCase::TargetProposalBeforeCanceled
+            | SourceCase::TargetProposalBeforeHookRevoked
+            | SourceCase::TargetProposalReaderFenceRetry
+            | SourceCase::TargetInstalling
+            | SourceCase::TargetInstallingPostCanceled
+            | SourceCase::TargetInstallingDirSyncRetry
+    )
+}
+// Memory-only diagnostics. Existing source-frame/OLD journal persistence
+// retains these entries; no extra file IO ages an active authority window.
+fn target_seed_boundary(
+    case: SourceCase,
+    journal: &mut Vec<serde_json::Value>,
+    value: serde_json::Value,
+) {
+    if !target_uses_remote_old_seed(case) {
+        return;
+    }
+    assert!(
+        journal
+            .iter()
+            .filter(|v| v["operation"] == "target_remote_old_seed_boundary")
+            .count()
+            < 4,
+        "two-range target seed diagnostics are bounded to two boundaries per range"
+    );
+    journal.push(serde_json::json!({"operation":"target_remote_old_seed_boundary", "actual_observation":value,
+        "diagnostic_DATA_only":true,"no_local_quorum_or_role_cast":true}));
+}
+// Target controls and later target-history/row cases exercise the actual production remote
 // collector. Local OLD API cases retain their original finite issuance
 // contract and are deliberately not switched to this lane.
 pub(super) fn uses_actual_remote_old_seed(case: SourceCase) -> bool {
-    matches!(
-        case,
-        SourceCase::SourceDiscovery
-            | SourceCase::SourceDiscoveryReplyLost
-            | SourceCase::SourceDiscoveryWrongActor
-            | SourceCase::SourceDiscoveryRequestConflict
-            | SourceCase::SourceDiscoveryPlanRevoked
-            | SourceCase::SourceDiscoveryProcessRevoked
-            | SourceCase::RemoteOldFrames
-            | SourceCase::RemoteOldRetainedNative
-            | SourceCase::TargetImageRows
-            | SourceCase::TargetImageRowsWithoutAudit
-            | SourceCase::TargetImageRowsPreWalCanceled
-            | SourceCase::TargetImageRowsPostWalCanceled
-            | SourceCase::TargetImageRowsApplyFailed
-            | SourceCase::TargetFinalImage
-            | SourceCase::TargetFinalImageCanceled
-            | SourceCase::TargetFinalImageCorrupt
-            | SourceCase::TargetFinalImageWithoutScan
-            | SourceCase::TargetFinalImageHistorical
-            | SourceCase::TargetNativeBase
-            | SourceCase::TargetNativeBaseCanceled
-            | SourceCase::TargetNativeBaseInvalidated
-            | SourceCase::TargetNativeBaseWithoutFinal
-            | SourceCase::TargetNativeBaseRoleExpiryBeforePut
-            | SourceCase::TargetNativeBaseRoleExpiryAfterCommit
-            | SourceCase::TargetNativeBaseRoleExpiryAfterPut
-            | SourceCase::TargetNativeBaseAbortSyncFailed
-            | SourceCase::TargetNativeBaseCommitSyncUnknown
-            | SourceCase::TargetNativeBaseAbortBudget
-            | SourceCase::TargetCatalogueFloor
-            | SourceCase::TargetCatalogueFloorMissingBase
-            | SourceCase::TargetCatalogueFloorDirSyncRetry
-            | SourceCase::TargetCatalogueFloorCanceled
-            | SourceCase::RemoteOldCollectorExpiredObservation
-            | SourceCase::RemoteOldCollectorUnrelatedAdvance
-            | SourceCase::RemoteOldCollectorPlanChanged
-            | SourceCase::RemoteOldCollectorDonorRevoked
-            | SourceCase::RemoteOldCollectorCallerCanceled
-    )
+    target_uses_remote_old_seed(case)
+        || matches!(
+            case,
+            SourceCase::SourceDiscovery
+                | SourceCase::SourceDiscoveryReplyLost
+                | SourceCase::SourceDiscoveryWrongActor
+                | SourceCase::SourceDiscoveryRequestConflict
+                | SourceCase::SourceDiscoveryPlanRevoked
+                | SourceCase::SourceDiscoveryProcessRevoked
+                | SourceCase::RemoteOldFrames
+                | SourceCase::RemoteOldRetainedNative
+                | SourceCase::TargetImageRows
+                | SourceCase::TargetImageRowsWithoutAudit
+                | SourceCase::TargetImageRowsPreWalCanceled
+                | SourceCase::TargetImageRowsPostWalCanceled
+                | SourceCase::TargetImageRowsApplyFailed
+                | SourceCase::TargetFinalImage
+                | SourceCase::TargetFinalImageCanceled
+                | SourceCase::TargetFinalImageCorrupt
+                | SourceCase::TargetFinalImageWithoutScan
+                | SourceCase::TargetFinalImageHistorical
+                | SourceCase::TargetNativeBase
+                | SourceCase::TargetNativeBaseCanceled
+                | SourceCase::TargetNativeBaseInvalidated
+                | SourceCase::TargetNativeBaseWithoutFinal
+                | SourceCase::TargetNativeBaseRoleExpiryBeforePut
+                | SourceCase::TargetNativeBaseRoleExpiryAfterCommit
+                | SourceCase::TargetNativeBaseRoleExpiryAfterPut
+                | SourceCase::TargetNativeBaseAbortSyncFailed
+                | SourceCase::TargetNativeBaseCommitSyncUnknown
+                | SourceCase::TargetNativeBaseAbortBudget
+                | SourceCase::TargetCatalogueFloor
+                | SourceCase::TargetCatalogueFloorMissingBase
+                | SourceCase::TargetCatalogueFloorDirSyncRetry
+                | SourceCase::TargetCatalogueFloorCanceled
+                | SourceCase::RemoteOldCollectorExpiredObservation
+                | SourceCase::RemoteOldCollectorUnrelatedAdvance
+                | SourceCase::RemoteOldCollectorPlanChanged
+                | SourceCase::RemoteOldCollectorDonorRevoked
+                | SourceCase::RemoteOldCollectorCallerCanceled
+        )
 }
 fn actual_role(
     provider: &MetadataReadProvider,
@@ -901,6 +942,18 @@ fn remote_old_seed(
         // publish a source image or start target installation.
         return None;
     }
+    if target_uses_remote_old_seed(case) {
+        target_seed_boundary(
+            case,
+            journal,
+            serde_json::json!({
+                "phase":"actual_all_old_certificate", "range_id":plan.old_range().id,
+                "plan_sha256":plan.checksum_sha256().unwrap(),"actual_donor":donor,
+                "native_receipts_unchanged":native_after==native_before,
+                "actual_collector":actual.test_actual_collector_evidence(),
+            }),
+        );
+    }
     let mut actual = Some(actual);
     let retained = controls[source]
         .retain_initial_image_from_remote_old(&mut actual, Uuid::now_v7(), &parent)
@@ -1348,6 +1401,22 @@ pub(super) fn exercise(
                 remote_fact.manifest().checksum_sha256,
                 manifest.checksum_sha256
             );
+            if target_uses_remote_old_seed(case) {
+                let mf = remote_fact.manifest();
+                target_seed_boundary(
+                    case,
+                    &mut journal,
+                    serde_json::json!({
+                        "phase":"actual_tls_manifest_fact", "range_id":mf.capture_range.id,
+                        "plan_sha256":plan.checksum_sha256().unwrap(),
+                        "actual_source":mf.source_id,"source_session":mf.source_session,
+                        "target_attempt":mf.target_attempt,"manifest_sha256":mf.checksum_sha256,
+                        "old_quorum_sha256":mf.old_quorum_sha256,
+                        "native_anchor":[mf.range_index,mf.h0,mf.h],
+                        "actual_old_closures":mf.actual_old_closures,
+                    }),
+                );
+            }
             if matches!(
                 case,
                 SourceCase::TargetFinalImage
@@ -1684,6 +1753,48 @@ pub(super) fn exercise(
     }
     assert_eq!(retained_sources.len(), 2);
     assert!(!factory.database.read().commit_admission_ready());
+    if matches!(case, SourceCase::TargetNoDomain) {
+        let boundaries = journal
+            .iter()
+            .filter(|v| v["operation"] == "target_remote_old_seed_boundary")
+            .map(|v| &v["actual_observation"])
+            .collect::<Vec<_>>();
+        assert_eq!(
+            boundaries.len(),
+            4,
+            "both actual ranges retain certificate and authenticated Manifest boundaries"
+        );
+        let certificate_ranges = boundaries
+            .iter()
+            .filter(|v| v["phase"] == "actual_all_old_certificate")
+            .map(|v| v["range_id"].as_u64().unwrap())
+            .collect::<std::collections::BTreeSet<_>>();
+        let manifests = boundaries
+            .iter()
+            .filter(|v| v["phase"] == "actual_tls_manifest_fact")
+            .collect::<Vec<_>>();
+        let manifest_ranges = manifests
+            .iter()
+            .map(|v| v["range_id"].as_u64().unwrap())
+            .collect::<std::collections::BTreeSet<_>>();
+        let expected = ranges
+            .iter()
+            .map(|r| r.id.get())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(certificate_ranges, expected);
+        assert_eq!(manifest_ranges, expected);
+        for key in ["source_session", "target_attempt", "manifest_sha256"] {
+            assert_eq!(
+                manifests
+                    .iter()
+                    .map(|v| v[key].as_str().unwrap())
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .len(),
+                2,
+                "two actual ranges must not share {key}"
+            );
+        }
+    }
     let target_after = state(&factory.database, pending, &node(4), ranges).unwrap();
     assert_eq!(
         target_after, target_before,

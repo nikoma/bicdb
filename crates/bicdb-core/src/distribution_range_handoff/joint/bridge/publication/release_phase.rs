@@ -18,6 +18,7 @@ struct ReleaseMember {
     activation: Arc<NativeJointCatalogueActivationReceipt>,
     // Retain only the original registration, never the Prepared/Frozen owner.
     writer: Arc<crate::db::NativeWriterHostState>,
+    writer_domain: crate::db::NativeJointWriterDomain,
     writer_root: std::path::PathBuf,
     owner: ReleaseOwner,
 }
@@ -130,6 +131,10 @@ impl NativeJointPublishedServingQuorum {
                     native: native.clone(),
                     activation,
                     writer,
+                    writer_domain: self.prepared.observations[node]
+                        .actual
+                        .writer_domain()
+                        .clone(),
                     writer_root,
                     owner,
                 },
@@ -150,7 +155,11 @@ impl NativeJointReleaseContinuation {
             member
                 .writer
                 .require_store(&member.writer_root, member.activation.store_open_id())?;
-            member.writer.require_range(self.data.activation_range())?;
+            member.writer_domain.require_lifetime(
+                &member.writer_root,
+                member.activation.store_open_id(),
+                self.data.activation_range(),
+            )?;
         }
         // ONLY old MQ expiry is historical. Explicit old cancellation and the
         // original caller's independent deadline remain effective forever.
@@ -263,7 +272,8 @@ impl NativeJointReleasePhaseRound {
             let actual = service
                 .try_lock()
                 .ok_or_else(|| invalid("joint release service busy"))?;
-            let evidence = actual.observe_actual_joint_release_member(
+            let evidence = actual.observe_joint_release_member_with_domain(
+                &member.writer_domain,
                 host,
                 business,
                 member.native.clone(),
@@ -350,7 +360,8 @@ impl NativeJointReleasePhaseQuorum {
             let actual = service
                 .try_lock()
                 .ok_or_else(|| invalid("joint release post-QQ service busy"))?;
-            let evidence = actual.observe_actual_joint_release_member(
+            let evidence = actual.observe_joint_release_member_with_domain(
+                &member.writer_domain,
                 host,
                 business,
                 member.native.clone(),
@@ -382,6 +393,10 @@ impl NativeJointReleasePhaseQuorum {
     }
 }
 impl NativeJointReleaseAdmission {
+    pub(crate) fn writer_domain(&self) -> &crate::db::NativeJointWriterDomain {
+        &self.phase.continuation.members[&self.local].writer_domain
+    }
+
     pub(crate) fn native(&self) -> &crate::db::NativeJointServingBridgeReceipt {
         self.post.native()
     }

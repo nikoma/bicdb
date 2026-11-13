@@ -8,9 +8,15 @@ use std::sync::Weak;
 const POLICY_POINTER: &str = "writer-enrollment/current";
 #[cfg(feature = "tls-replication")]
 mod assigned_install;
+#[cfg(feature = "tls-replication")]
+mod data_domains;
+#[cfg(feature = "tls-replication")]
+pub(crate) use data_domains::{NativeClosedWriterDomain, NativeWriterDataDomainTransition};
+mod joint_domain;
 mod registry_refresh;
 #[cfg(feature = "tls-replication")]
 pub(crate) use assigned_install::NativeAssignedWriterInstallAttempt;
+pub(crate) use joint_domain::NativeJointWriterDomain;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -69,6 +75,8 @@ pub(crate) struct NativeWriterHostState {
     registry_extension:
         parking_lot::RwLock<Option<Arc<registry_refresh::VerifiedRegistryExtension>>>,
     registry_publication_pending: std::sync::atomic::AtomicBool,
+    #[cfg(feature = "tls-replication")]
+    data_domains: parking_lot::RwLock<data_domains::WriterDataDomains>,
 }
 impl NativeWriterHostState {
     pub(crate) fn registration_generation(&self) -> Uuid {
@@ -199,7 +207,7 @@ impl NativeWriterHostState {
     }
     // Only registry publication may reconcile a durable-but-unpublished audit.
     // This still proves the actual original DB/hook/policy/open, not a role.
-    fn require_original_database(&self, database: &BicDb, range: &RangeDescriptor) -> Result<()> {
+    fn require_original_identity_database(&self, database: &BicDb) -> Result<()> {
         self.require_lifetime()?;
         database.check_recovery_state()?;
         if database.incarnation_id() != self.record.database_incarnation
@@ -241,7 +249,11 @@ impl NativeWriterHostState {
         if stored != self.record {
             return Err(invalid("native host writer receipt changed"));
         }
-        self.require_range(range)
+        Ok(())
+    }
+    fn require_original_database(&self, database: &BicDb, range: &RangeDescriptor) -> Result<()> {
+        self.require_original_identity_database(database)?;
+        self.record.facts.require_range(range)
     }
 }
 
@@ -750,6 +762,8 @@ impl BicDb {
             coordinator: Arc::downgrade(&authority),
             registry_extension: parking_lot::RwLock::new(None),
             registry_publication_pending: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(feature = "tls-replication")]
+            data_domains: parking_lot::RwLock::new(Default::default()),
         });
         #[cfg(test)]
         if TEST_FAIL_HOST_POLICY_PUBLICATION.with(|flag| flag.replace(false)) {

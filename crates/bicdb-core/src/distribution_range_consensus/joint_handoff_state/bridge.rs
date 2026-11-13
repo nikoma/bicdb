@@ -82,6 +82,54 @@ impl NativeJointBridgeCatalogue {
     }
 }
 impl RangeWriteStore {
+    /// Actual refusal DATA only. A finalized image keeps its real image intent;
+    /// a survivor must have no image install. Native producer validates the
+    /// exact LOCAL promise against CURRENT+archive and global OLD facts.
+    pub(crate) fn closed_writer_local_promise(
+        &self,
+        data: &crate::distribution_range_handoff::NativeJointDecisionData,
+        image: Option<&NativeImageCatalogueFinalization>,
+    ) -> Result<Option<crate::distribution_range_handoff::RangeHandoffPromise>> {
+        self.require_native_writer_host_base()?;
+        let range = data.old_range().id;
+        if image.is_none() {
+            self.require_no_image_install(range)?;
+        }
+        if self.catalog.backup_fences.contains_key(&range) {
+            return Err(range_write_error(
+                "CLOSED writer transition cannot bypass backup refusal",
+            ));
+        }
+        let local = self.catalog.handoff_promises.get(&range);
+        if local.is_some_and(|p| {
+            !p.same_request(data.promise()) || p.resolved_through > data.range_index()
+        }) {
+            return Err(range_write_error(
+                "CLOSED writer transition has foreign/uncovered permanent promise",
+            ));
+        }
+        Ok(local.cloned())
+    }
+
+    pub(crate) fn require_closed_writer_promise(
+        &self,
+        data: &crate::distribution_range_handoff::NativeJointDecisionData,
+        expected: &Option<crate::distribution_range_handoff::RangeHandoffPromise>,
+        old_close: Option<&str>,
+    ) -> Result<()> {
+        self.require_native_writer_host_base()?;
+        if self
+            .catalog
+            .backup_fences
+            .contains_key(&data.old_range().id)
+            || self.catalog.handoff_promises.get(&data.old_range().id) != expected.as_ref()
+        {
+            return Err(range_write_error(
+                "writer DATA domain changed exact permanent LOCAL/backup refusal",
+            ));
+        }
+        self.require_current_joint_local_closure_pointer(data, old_close)
+    }
     fn require_native_joint_bridge_base(
         &self,
         database: &crate::BicDb,
@@ -90,7 +138,22 @@ impl RangeWriteStore {
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
         committed.require_current(database)?;
-        let data = committed.data();
+        self.require_decided_joint_catalogue_base(
+            database,
+            committed.native_receipt(),
+            image,
+            frozen,
+        )
+    }
+    fn require_decided_joint_catalogue_base(
+        &self,
+        database: &crate::BicDb,
+        native: &crate::db::NativeJointDecisionReceipt,
+        image: Option<&NativeImageCatalogueFinalization>,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        native.require_current(database)?;
+        let data = native.data();
         let range = data.old_range().id;
         self.require_native_catalog_durability(database.data_path())?;
         self.require_native_writer_host_base()?;
@@ -100,14 +163,14 @@ impl RangeWriteStore {
             .ok_or_else(|| {
                 range_write_error("joint bridge catalogue is not a decided NEW data voter")
             })?;
-        let native = database.native_recovery_admission(
+        let local_native = database.native_recovery_admission(
             data.cluster_id(),
             data.bootstrap_id(),
             &self.catalog.node_id,
             local.incarnation,
         )?;
-        data.require_actual_native(&native)?;
-        if committed.native_receipt().local_node_id() != &self.catalog.node_id {
+        data.require_actual_native(&local_native)?;
+        if native.local_node_id() != &self.catalog.node_id {
             return Err(range_write_error(
                 "joint bridge uses another service's native decision",
             ));
@@ -121,8 +184,7 @@ impl RangeWriteStore {
         if state.session_id != data.promise().session_id
             || state.nonce != data.promise().nonce
             || state.global_decision_sha256.as_deref() != Some(data.checksum_sha256())
-            || state.global_decision_native_sha256.as_deref()
-                != Some(committed.native_receipt().checksum_sha256())
+            || state.global_decision_native_sha256.as_deref() != Some(native.checksum_sha256())
         {
             return Err(range_write_error(
                 "joint bridge catalogue/native decisions disagree",
@@ -164,6 +226,19 @@ impl RangeWriteStore {
             ));
         }
         Ok(())
+    }
+    pub(crate) fn closed_writer_catalogue_decisions(
+        &self,
+        database: &crate::BicDb,
+        native: &crate::db::NativeJointDecisionReceipt,
+        image: Option<&NativeImageCatalogueFinalization>,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<BTreeMap<u64, NativeReadCatalogueDecision>> {
+        self.require_decided_joint_catalogue_base(database, native, image, frozen)?;
+        self.collect_native_resolved_decisions(
+            native.data().old_range().id,
+            native.data().range_index(),
+        )
     }
     pub(crate) fn observe_native_joint_bridge_catalogue(
         &self,

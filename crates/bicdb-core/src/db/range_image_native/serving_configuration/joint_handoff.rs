@@ -9,6 +9,10 @@ use crate::distribution_range_mutation::{
     ControlledFrozenMutationPermit, FrozenRangeMutationPermit, RangeMutationAuthority,
 };
 
+mod writer_domain;
+pub(in crate::db::range_image_native) use writer_domain::{
+    NativeClosedWriterFact, NativeClosedWriterPoint,
+};
 mod bridge;
 pub(in crate::db::range_image_native) use bridge::NativeJointServingDomain;
 pub(crate) use bridge::{

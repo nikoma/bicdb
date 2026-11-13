@@ -376,6 +376,13 @@ impl SealedHostWriterEnrollment {
         // older OPTIONAL-None contract as a NEGATIVE, never a refresh grant.
         self.facts.member_continuity = None;
     }
+    pub(crate) fn joint_domain_audit(
+        &self,
+        decision: &crate::distribution_range_handoff::NativeJointDecisionData,
+    ) -> Result<serde_json::Value> {
+        self.metadata
+            .joint_writer_domain_audit(self.business, decision)
+    }
     pub(crate) fn stable_registry_audit(&self) -> Result<serde_json::Value> {
         let topology = self.metadata.committed_topology(self.business)?;
         if topology.ranges.values().any(|range| {

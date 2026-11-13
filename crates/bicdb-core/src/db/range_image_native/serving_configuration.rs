@@ -60,6 +60,10 @@ fn replicas(
         .collect()
 }
 impl NativeRecoveredServingConfiguration {
+    /// Immutable checksum DATA for an already validated borrowed record.
+    pub(super) fn checksum_sha256(&self) -> &str {
+        &self.checksum_sha256
+    }
     pub(super) fn range(&self) -> &RangeDescriptor {
         &self.range
     }

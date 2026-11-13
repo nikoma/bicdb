@@ -183,11 +183,7 @@ impl<'a> NativeServingObservationScope<'a> {
                     || slot.id() != self.slot.id()
                     || *schema_generation != self.lineage.current_schema_generation
                     || serving_record_sha256.as_deref()
-                        != self
-                            .lineage
-                            .serving
-                            .as_ref()
-                            .map(|s| s.checksum_sha256.as_str())
+                        != self.lineage.serving.as_ref().map(|s| s.checksum_sha256())
                 {
                     return Err(invalid("serving read scope replaced original writer/slot"));
                 }
@@ -288,7 +284,7 @@ impl<'a> NativeServingObservationScope<'a> {
                     .lineage
                     .serving
                     .as_ref()
-                    .map(|s| s.checksum_sha256.clone()),
+                    .map(|s| s.checksum_sha256().to_owned()),
             },
         };
         Ok((result, parts))

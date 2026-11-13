@@ -170,7 +170,7 @@ fn native_birth_survives_rename_but_never_recreation_or_contract_restore() {
 fn native_birth_untrusted_snapshot_and_commit_metadata_cannot_adopt_or_retrofit_birth() {
     for mode in [StorageMode::EmbeddedMemory, StorageMode::ServerPaged] {
         let source_root = tempfile::tempdir().unwrap();
-        let mut source = BicDb::open_with_config(source_root.path(), config(mode)).unwrap();
+        let mut source = BicDb::open_with_config(source_root.path(), config(mode.clone())).unwrap();
         enable(&mut source);
         source.create_collection("items").unwrap();
         let source_meta = meta(&source, "items");
@@ -185,7 +185,7 @@ fn native_birth_untrusted_snapshot_and_commit_metadata_cannot_adopt_or_retrofit_
         // fence, and a target that never enabled allocation identities.
         for target_kind in 0..3 {
             let target_root = tempfile::tempdir().unwrap();
-            let cfg = config(mode);
+            let cfg = config(mode.clone());
             let mut target = BicDb::open_with_config(target_root.path(), cfg.clone()).unwrap();
             if target_kind == 1 {
                 target.create_collection("items").unwrap();

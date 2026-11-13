@@ -4655,6 +4655,92 @@ impl<'db> SqlEngine<'db> {
         Ok(())
     }
 
+    /// Resolve the unit scale once from typed routine/statement bindings. The
+    /// record and streaming aggregate paths then share a literal Int scale;
+    /// no path evaluates it against a relation row or narrows a SUM first.
+    pub(crate) fn bind_exact_units_scales(&self, query: &Query) -> Result<Option<Query>> {
+        let found = sqlparser::ast::visit_expressions(query, |expr| {
+            if matches!(expr, Expr::Function(function)
+                if object_name(&function.name).is_ok_and(|name| name.eq_ignore_ascii_case("bicdb_exact_sum_units")))
+            {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        });
+        if !found.is_break() {
+            return Ok(None);
+        }
+        fn invariant(expr: &Expr) -> bool {
+            match expr {
+                Expr::Value(_) | Expr::Identifier(_) => true,
+                Expr::Nested(inner)
+                | Expr::Cast { expr: inner, .. }
+                | Expr::UnaryOp { expr: inner, .. } => invariant(inner),
+                Expr::BinaryOp { left, right, .. } => invariant(left) && invariant(right),
+                _ => false,
+            }
+        }
+        let mut bound = query.clone();
+        let result = sqlparser::ast::visit_expressions_mut(&mut bound, |expr| {
+            let Expr::Function(function) = expr else {
+                return ControlFlow::Continue(());
+            };
+            if !object_name(&function.name)
+                .is_ok_and(|name| name.eq_ignore_ascii_case("bicdb_exact_sum_units"))
+            {
+                return ControlFlow::Continue(());
+            }
+            let bind = (|| -> Result<()> {
+                let FunctionArguments::List(args) = &mut function.args else {
+                    return Err(SqlError::ExactUnitsParameter(
+                        "bicdb_exact_sum_units requires two positional arguments".into(),
+                    ));
+                };
+                if args.args.len() != 2
+                    || args
+                        .args
+                        .iter()
+                        .any(|arg| !matches!(arg, FunctionArg::Unnamed(FunctionArgExpr::Expr(_))))
+                {
+                    return Err(SqlError::ExactUnitsParameter(
+                        "bicdb_exact_sum_units requires two positional arguments".into(),
+                    ));
+                }
+                let FunctionArg::Unnamed(FunctionArgExpr::Expr(scale)) = &mut args.args[1] else {
+                    unreachable!()
+                };
+                if !invariant(scale) {
+                    return Err(SqlError::ExactUnitsParameter(
+                        "bicdb_exact_sum_units scale requires an invariant Int binding".into(),
+                    ));
+                }
+                let SqlValue::Int(value) =
+                    self.eval_select_constant_expr(scale).map_err(|error| {
+                        SqlError::ExactUnitsParameter(format!(
+                            "bicdb_exact_sum_units scale is not an invariant Int: {error}"
+                        ))
+                    })?
+                else {
+                    return Err(SqlError::ExactUnitsParameter(
+                        "bicdb_exact_sum_units scale requires an exact Int".into(),
+                    ));
+                };
+                *scale = Expr::Value(Value::Number(value.to_string(), false).into());
+                crate::eval::ExactUnitsAggregate::from_function(function)?;
+                Ok(())
+            })();
+            match bind {
+                Ok(()) => ControlFlow::Continue(()),
+                Err(error) => ControlFlow::Break(error),
+            }
+        });
+        if let ControlFlow::Break(error) = result {
+            return Err(error);
+        }
+        Ok(Some(bound))
+    }
+
     pub(crate) fn inherit_transaction(&self, engine: SqlEngine<'db>) -> SqlEngine<'db> {
         let mut engine = engine
             .with_index_lookup_cache(self.index_lookup_cache.clone())
@@ -5141,6 +5227,8 @@ impl<'db> SqlEngine<'db> {
         self.db_ref().check_recovery_state()?;
         self.require_from_relations_readable(query)?;
         validate_comparison_signatures(self, ComparisonStatement::Query(query))?;
+        let bound_units = self.bind_exact_units_scales(query)?;
+        let query = bound_units.as_ref().unwrap_or(query);
         let _slot_types = crate::slot_types::push_frame();
         let _subqueries = self.subquery_memo.scope();
         let _probes = self.exists_probe_memo.scope(

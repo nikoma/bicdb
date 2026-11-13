@@ -842,6 +842,8 @@ impl<'db> SqlSession<'db> {
         // whether or not the executor ends up scanning it.
         self.sql_engine().require_from_relations_readable(query)?;
         validate_comparison_signatures(&self.sql_engine(), ComparisonStatement::Query(query))?;
+        let bound_units = self.sql_engine().bind_exact_units_scales(query)?;
+        let query = bound_units.as_ref().unwrap_or(query);
         if self.oracle_autonomous && query_has_row_locks(query) {
             // A locking read starts an Oracle transaction even if SELECT INTO
             // subsequently raises NO_DATA_FOUND and its handler catches it.

@@ -1561,6 +1561,7 @@ impl Evaluator<'_> {
             | "finance.prorate_native_units"
             | "finance.display_native_ratio_units"
             | "finance.units_from_limbs"
+            | "finance.native_ratio_representable_units"
             | "finance.abs"
             | "finance.tax_exclusive"
             | "finance.tax_inclusive"
@@ -2817,6 +2818,10 @@ fn carrier_finance(target: &str, values: &[Value]) -> Result<Value> {
             .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string())),
         "finance.display_native_ratio_units" => {
             bicdb_core::nearest_native_full_display_ratio_value(values)
+                .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string()))
+        }
+        "finance.native_ratio_representable_units" => {
+            bicdb_core::native_ratio_representable_units_value(values)
                 .map_err(|error| AppRuntimeError::InvalidRequest(error.to_string()))
         }
         "finance.units_from_limbs" => bicdb_core::exact_units_from_limbs_value(values)

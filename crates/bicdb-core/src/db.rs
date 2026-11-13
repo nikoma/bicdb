@@ -8635,6 +8635,22 @@ fn evaluate_native_invariant_expression(
                 .collect::<Result<Vec<_>>>()?;
             crate::exact_units_from_limbs_value(&values)?
         }
+        NativeInvariantExpression::NativeRatioRepresentableUnits { arguments } => {
+            let values = arguments
+                .iter()
+                .map(|argument| {
+                    evaluate_native_invariant_expression(
+                        db,
+                        tx,
+                        subject_relation,
+                        subject,
+                        bindings,
+                        argument,
+                    )
+                })
+                .collect::<Result<Vec<_>>>()?;
+            crate::native_ratio_representable_units_value(&values)?
+        }
         NativeInvariantExpression::DateAddDays { date, days } => {
             let date = evaluate_native_invariant_expression(
                 db,
@@ -9063,6 +9079,9 @@ fn validate_carrier_invariant(
             NativeInvariantExpression::Overlaps { values, .. } => values.iter().any(has_published),
             NativeInvariantExpression::ProportionalInterval { arguments }
             | NativeInvariantExpression::UnitsFromLimbs { arguments } => {
+                arguments.iter().any(|argument| has_published(argument))
+            }
+            NativeInvariantExpression::NativeRatioRepresentableUnits { arguments } => {
                 arguments.iter().any(|argument| has_published(argument))
             }
             NativeInvariantExpression::DateAddDays { date, days } => {

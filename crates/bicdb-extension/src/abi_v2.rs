@@ -3262,6 +3262,7 @@ impl ApplicationManifestV2 {
                     "finance.prorate_native_units",
                     "finance.display_native_ratio_units",
                     "finance.units_from_limbs",
+                    "finance.native_ratio_representable_units",
                 ],
             ) && !self
                 .required_features
@@ -5234,6 +5235,7 @@ fn validate_carrier_expression(expression: &ApplicationExpressionV1) -> Result<(
                         | "finance.prorate_native_units"
                         | "finance.display_native_ratio_units"
                         | "finance.units_from_limbs"
+                        | "finance.native_ratio_representable_units"
                 )
             {
                 validate_exact_decimal_units_call(expression)?;
@@ -6761,6 +6763,11 @@ fn validate_exact_decimal_units_call(expression: &ApplicationExpressionV1) -> Re
         "finance.display_ratio_units" | "finance.display_native_ratio_units" => {
             (&[Text, Text, Int, Int], &[None, None, None, None], Decimal)
         }
+        "finance.native_ratio_representable_units" => (
+            &[Text, Text, Int, Int],
+            &[None, None, None, None],
+            ApplicationExpressionTypeV1::Bool,
+        ),
         "finance.units_from_limbs" => (
             &[Int, Int, Int, Int, Int, Int],
             &[None, None, None, None, None, None],
@@ -6946,6 +6953,13 @@ fn invariant_scalar_operand_type(
             target,
             ..
         } if target == "finance.units_from_limbs" => Some(ApplicationExpressionTypeV1::String),
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            ..
+        } if target == "finance.native_ratio_representable_units" => {
+            Some(ApplicationExpressionTypeV1::Bool)
+        }
         ApplicationExpressionV1::Aggregate {
             function: ApplicationAggregateFunctionV1::Count,
             ..
@@ -7124,6 +7138,32 @@ fn validate_invariant_expression(
                     != Some(ApplicationExpressionTypeV1::Int)
                 {
                     return invalid("native unit formatter operands must be actual nonnullable signed Int fields or Int expressions");
+                }
+            }
+            Ok(())
+        }
+        ApplicationExpressionV1::Call {
+            kind: ApplicationCallKindV1::Builtin,
+            target,
+            arguments,
+            ..
+        } if target == "finance.native_ratio_representable_units" => {
+            validate_exact_decimal_units_call(expression)?;
+            if !application
+                .required_features
+                .contains(&ApplicationFeature::ExactDecimalUnits)
+            {
+                return invalid(
+                    "native ratio predicate requires signed exact_decimal_units feature",
+                );
+            }
+            use ApplicationExpressionTypeV1::{Int, String as Text};
+            for (argument, expected) in arguments.iter().zip([Text, Text, Int, Int]) {
+                recurse(&argument.value, bindings, dependencies)?;
+                if invariant_scalar_operand_type(application, subject, bindings, &argument.value)
+                    != Some(expected)
+                {
+                    return invalid("native ratio predicate operands must match actual nonnullable String/String/Int/Int fields or expressions");
                 }
             }
             Ok(())

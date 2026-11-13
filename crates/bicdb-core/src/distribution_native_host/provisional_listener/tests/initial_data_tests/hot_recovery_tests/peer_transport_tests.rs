@@ -237,3 +237,51 @@ fn native_hot_recovery_actual_socket_eof_reset_and_authenticated_rejection_are_d
         control.stop(&budget(5000)).unwrap();
     }
 }
+
+#[test]
+fn native_hot_recovery_wire30_refuses_actual29_peer_without_catalogue_mutation() {
+    let (f, mut controls, _) = opened();
+    let (_, _, _, transport) = controls[0].test_hot_recovery_bindings().unwrap();
+    let range = f.hosts[0]
+        .seed
+        .spec
+        .initial_ranges
+        .iter()
+        .find(|r| r.leader == node(0))
+        .unwrap();
+    let path = f.hosts[2]
+        .seed
+        .database
+        .read()
+        .data_path()
+        .join(crate::distribution_range_consensus::DEFAULT_RANGE_WRITE_LOG);
+    let catalog = std::fs::read(&path).unwrap();
+    let before = f.hosts[2]
+        .seed
+        .database
+        .read()
+        .native_range_prefix_observation(range.id)
+        .unwrap();
+    let parent = budget(1500);
+    let message = transport
+        .test_previous_hot_protocol_refusal(&node(2), &parent)
+        .unwrap();
+    parent.check().unwrap();
+    assert!(
+        message.contains("unsupported cluster data protocol 29; expected 30"),
+        "wrong actual old-wire refusal: {message}"
+    );
+    assert_eq!(std::fs::read(path).unwrap(), catalog);
+    assert_eq!(
+        f.hosts[2]
+            .seed
+            .database
+            .read()
+            .native_range_prefix_observation(range.id)
+            .unwrap(),
+        before
+    );
+    for control in &mut controls {
+        control.stop(&budget(5000)).unwrap();
+    }
+}

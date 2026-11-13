@@ -815,3 +815,17 @@ impl NativeMetadataControlHost {
             .hold_controller_for_test(parent)
     }
 }
+
+#[cfg(test)]
+impl NativeMetadataControlHost {
+    pub(crate) fn test_hold_hot_replica_debt_schedule(
+        &self,
+        parent: &CancellationToken,
+    ) -> Result<hot_recovery::NativeHotDebtScheduleHold<'_>> {
+        self.data
+            .as_ref()
+            .and_then(|data| data.hot_recovery.as_ref())
+            .ok_or_else(|| invalid("test debt hold requires actual retained DATA controller"))?
+            .hold_debt_schedule_for_test(parent)
+    }
+}

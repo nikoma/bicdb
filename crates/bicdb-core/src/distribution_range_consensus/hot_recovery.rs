@@ -1,9 +1,11 @@
 //! HOT original-origin coordination. Reservations exclude APP/Strong while
 //! fresh opaque authority is consumed; no raw progress setter is exposed.
 use super::*;
+mod replica_debt;
 use crate::db::InstalledNativeWriterHostGuard;
 use crate::distribution_range_recovery::{RangeRecoveryRuntime, RecoveryRoleAdmission};
 use crate::TcpClusterRelocationTransport;
+pub(crate) use replica_debt::{NativeHotReplicaBinding, NativeHotReplicaProgress};
 
 pub(crate) struct NativeHotRangeReservation<'a> {
     actual: RangeAdmissionReservation<'a, TcpClusterRelocationTransport>,

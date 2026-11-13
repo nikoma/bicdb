@@ -53,7 +53,11 @@ use crate::distribution_metadata_read_provider::{
 mod evidence;
 pub use evidence::{ClusterRpcEvidence, ClusterRpcEvidenceLimits, ClusterRpcEvidenceObserver};
 mod hot_recovery_peer;
-pub(crate) use hot_recovery_peer::{HotRecoveryPeerFailure, HotRecoveryPhaseRequest};
+mod native_recertify;
+pub(crate) use hot_recovery_peer::{
+    HotRecoveryPeerFailure, HotRecoveryPeerOpen, HotRecoveryPhaseRequest,
+};
+pub(crate) use native_recertify::AuthenticatedNativeRecertifyReply;
 mod host_metadata;
 mod initial_birth;
 mod initial_data_listener;
@@ -444,6 +448,9 @@ enum ClusterDataRequest {
     ObserveNativeOrigin {
         request: crate::distribution_native_apply::NativeOriginStatusRequest,
     },
+    RecertifyNativeOrigin {
+        request: crate::distribution_native_apply::NativeRecertifyRequest,
+    },
     AbortRangeWrite {
         command: RangeWriteCommand,
     },
@@ -533,6 +540,7 @@ impl ClusterDataRequest {
             | Self::ExportRangeDigestBucket { range_id, .. }
             | Self::ApplyRangeDigestRepair { range_id, .. } => Some(*range_id),
             Self::ApplyRangeWriteRepair { batch, .. } => Some(batch.range_id),
+            Self::RecertifyNativeOrigin { request } => Some(request.instruction.command.range_id),
             Self::ApplyNativeOrigin { request } => Some(request.command.range_id),
             Self::ObserveNativeOrigin { request } => Some(request.range_id),
             Self::ObserveCurrentNativeRange { request } => Some(request.scope.range.id),
@@ -593,6 +601,7 @@ impl ClusterDataRequest {
                 | Self::MetadataReadAcquire { .. }
                 | Self::HostMetadataReadAcquire { .. }
                 | Self::AcquireMetadataRecoveryRole { .. }
+                | Self::RecertifyNativeOrigin { .. }
         )
     }
 }
@@ -631,6 +640,7 @@ enum ClusterDataResponse {
     RecoveryFencedProbe(crate::distribution_range_recovery::RecoveryFencedProbeReply),
     NativeReady(crate::distribution_range_recovery::NativeReadyReply),
     NativeCompletion(crate::distribution_range_recovery::NativeCompletionReply),
+    NativeRecertify(crate::distribution_native_apply::NativeRecertifyReply),
     NativeAbortCandidate(
         crate::distribution_range_recovery::native_abort::NativeAbortCandidateReply,
     ),
@@ -1687,6 +1697,21 @@ fn handle_cluster_data_connection(
                 .acquire_recovery_role(caller, request, &cancellation)
                 .map(ClusterDataResponse::MetadataRecoveryRole);
         }
+        if let ClusterDataRequest::RecertifyNativeOrigin { request } = request.request {
+            let runtime = recovery_runtime.ok_or_else(|| {
+                transport_error("bounded native recertification receiver is not wired")
+            })?;
+            let caller = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error(
+                    "bounded native recertification requires authenticated current leader",
+                )
+            })?;
+            let token =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return runtime
+                .recertify_native_ordinary(caller, request, &token)
+                .map(|actual| ClusterDataResponse::NativeRecertify(actual.into_reply()));
+        }
         if let ClusterDataRequest::ApplyNativeOrigin { request } = request.request {
             let runtime = recovery_runtime
                 .ok_or_else(|| transport_error("ordinary native receiver is not wired"))?;
@@ -2733,6 +2758,7 @@ fn dispatch_cluster_data_request(
             ))
         }
         ClusterDataRequest::ApplyNativeOrigin { .. }
+        | ClusterDataRequest::RecertifyNativeOrigin { .. }
         | ClusterDataRequest::ObserveNativeOrigin { .. } => Err(transport_error(
             "ordinary native requests require the fresh-role receiver",
         )),
@@ -5180,31 +5206,38 @@ impl TcpClusterRelocationTransport {
         Option<crate::distribution::NativeStoreBirthV1>,
     )> {
         cancellation.check()?;
-        let numeric_metadata_read = matches!(
-            &request,
-            ClusterDataRequest::MetadataReadProbe { .. }
-                | ClusterDataRequest::MetadataReadAcquire { .. }
-                | ClusterDataRequest::HostMetadataReadAcquire { .. }
-                | ClusterDataRequest::NativeInitialBirthOffer { .. }
-                | ClusterDataRequest::NativeInitialPreparation { .. }
-                | ClusterDataRequest::NativeLearnerBirth { .. }
-                | ClusterDataRequest::AcquireMetadataRecoveryRole { .. }
-                | ClusterDataRequest::RecoveryEpochFence { .. }
-                | ClusterDataRequest::RecoveryFencedProbe { .. }
-                | ClusterDataRequest::PrepareNativeReady { .. }
-                | ClusterDataRequest::ObserveNativeReady { .. }
-                | ClusterDataRequest::ObserveNativeAbortCandidate { .. }
-                | ClusterDataRequest::PromiseNativeAbort { .. }
-                | ClusterDataRequest::ObserveNativeAbortPromise { .. }
-                | ClusterDataRequest::ResolveNativeAbort { .. }
-                | ClusterDataRequest::CompleteNativeRecovery { .. }
-                | ClusterDataRequest::ActivateNativeRecovery { .. }
-                | ClusterDataRequest::ObserveNativeCompletion { .. }
-                | ClusterDataRequest::ObserveCurrentNativeRange { .. }
-                | ClusterDataRequest::RecoveryCertifyHistorical { .. }
-                | ClusterDataRequest::RecoveryCertifySparseHistorical { .. }
-                | ClusterDataRequest::RecoveryApplyHistorical { .. }
-        );
+        let numeric_metadata_read = (classify_peer_io
+            && matches!(
+                &request,
+                ClusterDataRequest::ApplyNativeOrigin { .. }
+                    | ClusterDataRequest::ObserveNativeOrigin { .. }
+            ))
+            || matches!(
+                &request,
+                ClusterDataRequest::MetadataReadProbe { .. }
+                    | ClusterDataRequest::MetadataReadAcquire { .. }
+                    | ClusterDataRequest::HostMetadataReadAcquire { .. }
+                    | ClusterDataRequest::NativeInitialBirthOffer { .. }
+                    | ClusterDataRequest::NativeInitialPreparation { .. }
+                    | ClusterDataRequest::NativeLearnerBirth { .. }
+                    | ClusterDataRequest::AcquireMetadataRecoveryRole { .. }
+                    | ClusterDataRequest::RecertifyNativeOrigin { .. }
+                    | ClusterDataRequest::RecoveryEpochFence { .. }
+                    | ClusterDataRequest::RecoveryFencedProbe { .. }
+                    | ClusterDataRequest::PrepareNativeReady { .. }
+                    | ClusterDataRequest::ObserveNativeReady { .. }
+                    | ClusterDataRequest::ObserveNativeAbortCandidate { .. }
+                    | ClusterDataRequest::PromiseNativeAbort { .. }
+                    | ClusterDataRequest::ObserveNativeAbortPromise { .. }
+                    | ClusterDataRequest::ResolveNativeAbort { .. }
+                    | ClusterDataRequest::CompleteNativeRecovery { .. }
+                    | ClusterDataRequest::ActivateNativeRecovery { .. }
+                    | ClusterDataRequest::ObserveNativeCompletion { .. }
+                    | ClusterDataRequest::ObserveCurrentNativeRange { .. }
+                    | ClusterDataRequest::RecoveryCertifyHistorical { .. }
+                    | ClusterDataRequest::RecoveryCertifySparseHistorical { .. }
+                    | ClusterDataRequest::RecoveryApplyHistorical { .. }
+            );
         let network_deadline = observed_network_deadline
             .unwrap_or_else(|| Instant::now() + Duration::from_millis(self.config.io_timeout_ms));
         let deadline = cancellation

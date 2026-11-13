@@ -125,6 +125,8 @@ mod hot_recovered_open;
 #[cfg(feature = "tls-replication")]
 mod hot_recovery;
 #[cfg(feature = "tls-replication")]
+pub(crate) use hot_recovery::NativeHotReplicaBinding;
+#[cfg(feature = "tls-replication")]
 mod initial_data;
 #[cfg(feature = "tls-replication")]
 pub(crate) use hot_recovered_open::NativeHotRecoveredOpen;

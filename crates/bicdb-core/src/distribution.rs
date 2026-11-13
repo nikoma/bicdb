@@ -35,7 +35,9 @@ pub(crate) use native_bootstrap_plan::plan_initial_native_topology;
 // Version 27 requires owned, current-birth native metadata Append ACK provenance.
 // Private ABI: qualified current-joint recovery purpose and physical-domain tag.
 // Private HOT-origin activation arm: mixed old/new wire versions refuse.
-pub const CLUSTER_DATA_PROTOCOL_VERSION: u32 = 29;
+// Version 30 adds bounded native recertification with actual receiver role/expiry checks;
+// version 29 peers are refused, with no generic legacy recertification fallback.
+pub const CLUSTER_DATA_PROTOCOL_VERSION: u32 = 30;
 /// Reserved heartbeat label carrying the canonical local schema identity.
 /// Once the range leader advertises this label, placement and data operations
 /// are fenced to nodes advertising the identical schema.

@@ -3,18 +3,23 @@
 use super::*;
 use crate::distribution_consensus::MetadataRecoveryRolePurpose;
 use crate::distribution_range_consensus::{
-    RangeWriteCommand, RangeWriteCoordinator, RangeWriteState, RangeWriteTransport,
-    RecoveryFenceScope,
+    NativeHotReplicaBinding, RangeWriteCommand, RangeWriteCoordinator, RangeWriteState,
+    RangeWriteTransport, RecoveryFenceScope,
 };
 use crate::distribution_range_recovery::{
     NativeCompletionRequest, NativeReadyRequest, RecoveryEpochFenceRequest,
     RecoveryHistoricalCommandRequest, RecoveryRoleAdmission,
 };
-use crate::distribution_transport::{HotRecoveryPeerFailure, HotRecoveryPhaseRequest};
+use crate::distribution_transport::{
+    HotRecoveryPeerFailure, HotRecoveryPeerOpen, HotRecoveryPhaseRequest,
+};
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
 use std::thread::JoinHandle;
 
+mod replica_debt;
+#[cfg(test)]
+pub(crate) use replica_debt::NativeHotDebtScheduleHold;
 const MAX_JOBS: usize = 64;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Phase {
@@ -25,6 +30,7 @@ enum Phase {
     Complete,
     Activate,
     Publish,
+    Replica,
 }
 struct Job {
     scope: RecoveryFenceScope,
@@ -38,10 +44,14 @@ struct Job {
     phase_observed: BTreeSet<ClusterNodeId>,
     semantic_veto: BTreeMap<ClusterNodeId, Phase>,
     peer_retry_after: BTreeMap<ClusterNodeId, Instant>,
+    recipient_next: BTreeMap<ClusterNodeId, Phase>,
+    replica_binding: Option<NativeHotReplicaBinding>,
+    peer_opens: BTreeMap<ClusterNodeId, HotRecoveryPeerOpen>,
 }
 #[derive(Default)]
 struct State {
     jobs: BTreeMap<crate::RangeId, Job>,
+    replica_debts: BTreeMap<crate::RangeId, replica_debt::ReplicaDebt>,
     cursor: usize,
 }
 pub(super) struct NativeHotRecoveryMaintenance {
@@ -51,6 +61,8 @@ pub(super) struct NativeHotRecoveryMaintenance {
     runtime: Arc<RangeRecoveryRuntime>,
     admission: Arc<NativeInitialDataAdmission>,
     state: Mutex<State>,
+    #[cfg(test)]
+    debt_schedule_test: Mutex<()>,
     last: Mutex<Option<serde_json::Value>>,
     stopping: AtomicBool,
     process: OnceLock<CancellationToken>,
@@ -82,6 +94,8 @@ impl NativeHotRecoveryMaintenance {
                 .ok_or_else(|| invalid("hot DATA owner has no actual admission"))?
                 .clone(),
             state: Mutex::new(State::default()),
+            #[cfg(test)]
+            debt_schedule_test: Mutex::new(()),
             last: Mutex::new(None),
             stopping: AtomicBool::new(false),
             process: OnceLock::new(),
@@ -282,12 +296,21 @@ impl NativeHotRecoveryMaintenance {
                 .coordinator
                 .initial_data_leader_admission_observed(&range)
             {
+                if let Some(debt) = state.replica_debts.get_mut(&range.id) {
+                    return self.run_replica_debt(debt, parent);
+                }
                 return Ok(());
+            }
+            // Do not discard an older session's frozen/uncaught-up physical
+            // obligations when another origin failure appears. A separate
+            // completed-decision/new-session dominance producer is required.
+            if state.replica_debts.contains_key(&range.id) {
+                return Err(invalid("new origin recovery with retained replica session debt needs explicit continuation; old debt is preserved"));
             }
             let Some(command) = self.candidate(&range, parent)? else {
                 return Ok(());
             };
-            if state.jobs.len() >= MAX_JOBS {
+            if state.jobs.len() + state.replica_debts.len() >= MAX_JOBS {
                 return Err(invalid("hot DATA retained job bound exhausted"));
             }
             let role = self.fresh_role(&range, Uuid::now_v7(), parent)?;
@@ -299,6 +322,7 @@ impl NativeHotRecoveryMaintenance {
                 .collect::<Vec<_>>();
             // Actual original origin opens LAST; followers release first.
             members.sort_by_key(|n| *n == self.initial.seed.spec.node_id);
+            let recipient_next = members.iter().cloned().map(|n| (n, Phase::Fence)).collect();
             state.jobs.insert(
                 range.id,
                 Job {
@@ -311,6 +335,9 @@ impl NativeHotRecoveryMaintenance {
                     phase_observed: BTreeSet::new(),
                     semantic_veto: BTreeMap::new(),
                     peer_retry_after: BTreeMap::new(),
+                    recipient_next,
+                    replica_binding: None,
+                    peer_opens: BTreeMap::new(),
                 },
             );
         }
@@ -329,7 +356,17 @@ impl NativeHotRecoveryMaintenance {
         }
         self.record(detail);
         if result.is_ok() {
-            state.jobs.remove(&range.id);
+            let published = state
+                .jobs
+                .remove(&range.id)
+                .expect("actual published job retained");
+            // Allocation/data transfer only, after actual quorum publication.
+            // Never erase unfinished peer obligations with the ready job.
+            state.replica_debts.insert(
+                range.id,
+                replica_debt::ReplicaDebt::from_published(published),
+            );
+            self.record(state.replica_debts[&range.id].diagnostic("queued_after_actual_publish"));
         }
         result
     }
@@ -356,6 +393,22 @@ impl NativeHotRecoveryMaintenance {
                     ));
                 }
                 let fresh = self.fresh_role(&job.range, job.scope.recovery_nonce, &phase_parent)?;
+                if job.replica_binding.is_none() {
+                    job.replica_binding = Some(self.coordinator.capture_hot_replica_binding(
+                        &self.runtime,
+                        &self.host,
+                        &held,
+                        &fresh,
+                        &phase_parent,
+                    )?);
+                }
+                self.coordinator.require_hot_replica_binding(
+                    &self.runtime,
+                    &self.host,
+                    job.replica_binding.as_ref().unwrap(),
+                    &fresh,
+                    &phase_parent,
+                )?;
                 self.coordinator.publish_hot_native_recovery(
                     &self.runtime,
                     &self.host,
@@ -392,7 +445,7 @@ impl NativeHotRecoveryMaintenance {
                     Phase::Prepare => Phase::Complete,
                     Phase::Complete => Phase::Activate,
                     Phase::Activate => Phase::Publish,
-                    Phase::Publish => unreachable!(),
+                    Phase::Publish | Phase::Replica => unreachable!(),
                 };
                 continue;
             }
@@ -449,7 +502,7 @@ impl NativeHotRecoveryMaintenance {
                     },
                     activate: job.phase == Phase::Activate,
                 },
-                Phase::Publish => unreachable!(),
+                Phase::Publish | Phase::Replica => unreachable!(),
             };
             #[cfg(test)]
             eprintln!("NATIVE_HOT_DATA_PHASE node={} target={} phase={:?} command={} nonce={} remaining_ms={} subrequest_ms={}", self.initial.seed.spec.node_id,node,job.phase,job.command.command_id,job.scope.recovery_nonce,budget_ms,io_ms);
@@ -466,8 +519,38 @@ impl NativeHotRecoveryMaintenance {
             role.require_live_request()?;
             held.require_actual_store_slot()?;
             match result {
-                Ok(_actual_receipt) => {
+                Ok(actual_receipt) => {
+                    if let Some(original) = job.peer_opens.get(&node) {
+                        if let Err(error) = original.require_same(actual_receipt.observed_open()) {
+                            job.semantic_veto.insert(node.clone(), job.phase);
+                            return Err(error);
+                        }
+                    } else {
+                        job.peer_opens
+                            .insert(node.clone(), actual_receipt.observed_open().clone());
+                    }
                     job.phase_observed.insert(node.clone());
+                    match job.phase {
+                        Phase::Fence => {
+                            job.recipient_next.insert(node.clone(), Phase::Certify);
+                        }
+                        Phase::Certify => {
+                            job.recipient_next.insert(node.clone(), Phase::Apply);
+                        }
+                        Phase::Apply => {
+                            job.recipient_next.insert(node.clone(), Phase::Prepare);
+                        }
+                        Phase::Prepare => {
+                            job.recipient_next.insert(node.clone(), Phase::Complete);
+                        }
+                        Phase::Complete => {
+                            job.recipient_next.insert(node.clone(), Phase::Activate);
+                        }
+                        Phase::Activate => {
+                            job.recipient_next.remove(&node);
+                        }
+                        Phase::Publish | Phase::Replica => unreachable!(),
+                    }
                     job.semantic_veto.remove(&node);
                     job.peer_retry_after.remove(&node);
                 }

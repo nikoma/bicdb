@@ -21,6 +21,7 @@ mod native_completion_quorum;
 mod native_read;
 mod native_ready;
 mod native_ready_quorum;
+mod native_recertify;
 mod normal_apply;
 mod participants;
 #[cfg(feature = "tls-replication")]

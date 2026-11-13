@@ -98,7 +98,40 @@ pub(crate) enum HotRecoveryPhaseRequest {
 /// Not Clone/Serde and no raw constructor. This is a scheduling receipt only;
 /// the final activated/open + fresh enrolled QQ publisher remains unchanged.
 pub(crate) struct HotRecoveryPhaseReceipt {
-    _actual_node: ClusterNodeId,
+    actual_open: HotRecoveryPeerOpen,
+}
+/// Observed physical-open DATA, never a role/Ready/current-slot proof. Only
+/// actual sealed transport observations construct it; later changes refuse.
+#[derive(Clone)]
+pub(crate) struct HotRecoveryPeerOpen {
+    node: ClusterNodeId,
+    store: Uuid,
+    database: String,
+}
+impl HotRecoveryPeerOpen {
+    pub(crate) fn require_same(&self, observed: &Self) -> Result<()> {
+        self.require_actual_fields(&observed.node, observed.store, &observed.database)
+    }
+    /// Necessary refusal comparison only. These fields never create an open
+    /// observation, slot guard, role, QQ or serving permission.
+    pub(crate) fn require_actual_fields(
+        &self,
+        node: &ClusterNodeId,
+        store: Uuid,
+        database: &str,
+    ) -> Result<()> {
+        if &self.node != node || self.store != store || self.database != database {
+            return Err(transport_error(
+                "hot replica actual original Store/DB open changed",
+            ));
+        }
+        Ok(())
+    }
+}
+impl HotRecoveryPhaseReceipt {
+    pub(crate) fn observed_open(&self) -> &HotRecoveryPeerOpen {
+        &self.actual_open
+    }
 }
 impl TcpClusterRelocationTransport {
     pub(crate) fn hot_recovery_phase_observation(
@@ -180,31 +213,40 @@ impl TcpClusterRelocationTransport {
         // actual peer timeout carries no successful vote/late observation.
         parent.check()?;
         let (response, peer, _) = result?;
-        match (request, response) {
+        let actual_open = match (request, response) {
             (HotRecoveryPhaseRequest::Fence(r), ClusterDataResponse::RecoveryEpochFence(reply)) => {
                 if reply.phase != RecoveryFenceObservationPhase::ActiveRecovery {
                     return Err(transport_error(
                         "epoch fence endpoint returned a non-active authority phase",
                     ));
                 }
-                RecoveryFenceObservation::from_transport(
+                let observation = RecoveryFenceObservation::from_transport(
                     AuthenticatedRecoveryFenceReply { reply, peer },
                     &r.scope,
                     token.deadline().unwrap(),
-                )?
-                .require_live()?;
+                )?;
+                observation.require_live()?;
+                HotRecoveryPeerOpen {
+                    node: observation.node_id().clone(),
+                    store: observation.store_open_id(),
+                    database: observation.native_database_incarnation().to_owned(),
+                }
             }
             (
                 HotRecoveryPhaseRequest::Historical { request: r, .. },
                 ClusterDataResponse::RecoveryFencedProbe(reply),
             ) => {
-                RecoveryHistoryObservation::from_transport(
+                let observation = RecoveryHistoryObservation::from_transport(
                     AuthenticatedRecoveryProbeReply { reply, peer },
                     &r.probe()?,
                     token.deadline().unwrap(),
-                )?
-                .fence()
-                .require_live()?;
+                )?;
+                observation.fence().require_live()?;
+                HotRecoveryPeerOpen {
+                    node: observation.fence().node_id().clone(),
+                    store: observation.fence().store_open_id(),
+                    database: observation.fence().native_database_incarnation().to_owned(),
+                }
             }
             (HotRecoveryPhaseRequest::Prepare(r), ClusterDataResponse::NativeReady(reply)) => {
                 let observation = NativeReadyObservation::from_transport(
@@ -217,6 +259,11 @@ impl TcpClusterRelocationTransport {
                     return Err(transport_error(
                         "hot native preparation changed selected point",
                     ));
+                }
+                HotRecoveryPeerOpen {
+                    node: observation.reply().node_id.clone(),
+                    store: observation.reply().store_open_id,
+                    database: observation.reply().native_database_incarnation.clone(),
                 }
             }
             (
@@ -240,14 +287,17 @@ impl TcpClusterRelocationTransport {
                         "hot native completion/open changed selected point",
                     ));
                 }
+                HotRecoveryPeerOpen {
+                    node: observation.reply().node_id.clone(),
+                    store: observation.reply().store_open_id,
+                    database: observation.reply().native_database_incarnation.clone(),
+                }
             }
             (_, response) => return Err(unexpected_response("actual hot native phase", response)),
-        }
+        };
         // A late/canceled producer result never becomes a scheduling success.
         parent.check()?;
         token.check()?;
-        Ok(HotRecoveryPhaseReceipt {
-            _actual_node: destination.clone(),
-        })
+        Ok(HotRecoveryPhaseReceipt { actual_open })
     }
 }

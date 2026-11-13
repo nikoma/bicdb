@@ -2,6 +2,7 @@
 //! orchestration is expected to FAIL its terminal gate; refusal is not success.
 //! No producer, role, quorum, counter, reservation or deadline is replaced.
 use super::*;
+mod replica_convergence;
 #[derive(Clone, Copy, Debug)]
 enum Scenario {
     Stopped,
@@ -40,6 +41,13 @@ fn run_one_peer_loss(
     )?;
     let (origin_controls, peers) = controls.split_at_mut(1);
     let origin_control = &origin_controls[0];
+    // Separate test-only scheduling hold blocks ONLY post-Publish debt work.
+    // Original actual state hold below still owns the genuine pre-fault cut.
+    let debt_hold = if matches!(scenario, Scenario::LostFollowerReply) {
+        Some(origin_control.test_hold_hot_replica_debt_schedule(&budget(1000))?)
+    } else {
+        None
+    };
     let mut held = Some(origin_control.test_hold_hot_controller_for_fault(&budget(1000))?);
     *stage = "controller_scheduling_held_before_old_ack_and_fault";
     journal.append(
@@ -506,6 +514,34 @@ fn run_one_peer_loss(
             break;
         }
     }
+    let replica_convergence = if matches!(scenario, Scenario::LostFollowerReply) && healthy {
+        let loss = reply_loss.as_ref().unwrap().snapshot();
+        check(
+            loss["suppressed_after_actual_producer"] == true,
+            "follower convergence requires actual post-Complete reply loss first",
+        )?;
+        Some(replica_convergence::run(
+            f,
+            origin_control,
+            journal,
+            &client,
+            &range,
+            &topology,
+            &[
+                (old.as_str(), &old_value),
+                (failed.as_str(), &failed_value),
+                (next.as_str(), &next_value),
+            ],
+            &entry.command,
+            &old_command,
+            loss,
+            debt_hold.unwrap(),
+            last_receipt.unwrap(),
+        )?)
+    } else {
+        drop(debt_hold);
+        None
+    };
     // Post-gate observations are diagnostics, never an extension of the
     // already-measured success receipt or a substitute for a user ACK.
     let final_prefix = (|| -> Result<serde_json::Value> {
@@ -559,7 +595,7 @@ fn run_one_peer_loss(
     // Socket owner is retained through all receipts; dropping it only ends the
     // test-owned nonblocking accept worker, never starts native work.
     drop(socket_fault);
-    let terminal = serde_json::json!({"scenario":format!("{scenario:?}"),"acceptance_contract":if matches!(scenario,Scenario::SemanticThenStopped){"security-negative: retained actual semantic veto; NOT healthy-repair qualification"}else{"REQUIRED actual healthy repair and next ACK/full Strong"},"actual_reply_loss":reply_loss_snapshot,"required_one_peer_loss_repair_and_next_ack":healthy,
+    let terminal = serde_json::json!({"scenario":format!("{scenario:?}"),"acceptance_contract":if matches!(scenario,Scenario::SemanticThenStopped){"security-negative: retained actual semantic veto; NOT healthy-repair qualification"}else{"REQUIRED actual healthy repair and next ACK/full Strong"},"actual_reply_loss":reply_loss_snapshot,"replica_convergence":replica_convergence,"required_one_peer_loss_repair_and_next_ack":healthy,
         "rounds":rounds,"ever_next_user_ack":ever_next_ack,
         "first_actual_origin_error":fault,"first_origin_unknown_is_not_rollback":true,
         "fault_api_user_ack":faulted_append.is_ok(),"terminal_elapsed_ns":health_start.elapsed().as_nanos(),

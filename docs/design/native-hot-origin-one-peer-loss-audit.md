@@ -366,3 +366,140 @@ unchanged original success all remain required; compilation alone cannot qualify
 any of them. Valid CFT observations of incompatible history remain vetoes in
 existing inner collectors. Origin loss/cold, metadata/data domain changes,
 member replacement and real fifth-node movement are still open.
+
+
+### Retained replica debt and wire30 source successor (not executed)
+
+The `23e34d5809d4e457e8af715fddd895c373f822e3` source removed a successful
+job immediately after quorum Publish. Its `LostFollowerReply` scenario could
+therefore pass the public availability gate with the remaining reachable target
+still `NativeCompletedFrozen`. No scheduler subsequently owned that physical
+obligation. This is a source finding, not an executed repair failure or evidence
+of a lost external ACK.
+
+The successor transfers the actual job into a bounded, retained per-range debt
+record only after the existing real publication producer succeeds. It retains
+original command/session, canonical data configuration, actual observed recipient
+DB/Store-open identities, conservative semantic vetoes and per-recipient next
+phase. Those facts choose work only: every continuation obtains a separately
+fresh NormalRecovery role, checks its original acquisition cancellation, and
+revalidates the exact original writer, retained DB open and revocable current
+service Store-slot guard before and after IO. No recovered epoch, genesis,
+policy, quorum or new serving permission comes from a saved phase or progress
+counter. The original same-map range reservation remains required for origin
+publication; it is **not** retained during debt peer IO.
+
+Actual implementation boundaries:
+
+- `initial_data/hot_recovery.rs` transfers jobs to `hot_recovery/replica_debt.rs`.
+  One selected recipient per finite controller attempt and at most eight real
+  steps preserve round-robin work. A ten-second transport retry hint never
+  removes a voter or clears a recorded semantic veto. Successful same-peer,
+  same-phase reattestation is required to clear that veto.
+- A target left at Complete or Activate uses the existing exact-session real
+  Complete/Activate producer, including its fresh inner quorums and actual open
+  reattestation. These calls retain the original anchor even after the source
+  advances. The scheduler never reconstructs a Ready/Completion QQ from a phase
+  counter. The originally observed target DB/Store open must remain identical.
+- `distribution_range_consensus/hot_recovery/replica_debt.rs` consumes the actual
+  source native lineage and retained same-epoch Applied command, proves the
+  command's immutable materialized history leaf, obtains real local Certify and
+  a distinct actual target Prepare/Commit/Certify reply, then feeds these actual
+  physical voter identities into the existing opaque source plan's `certify`.
+  Actual ordinary NativeApply carries that certificate. The source releases all
+  service/DB/topology/mutation owners before every network boundary and checks
+  actual source/native configuration/Slot/writer/role again after it.
+- New wire30 `RecertifyNativeOrigin` is a bounded request with the existing scope
+  v2 command/bootstrap/restore/challenge and original remaining budget. The
+  INITIAL DATA listener alone adds this arm. Registered replica/control
+  allowlists are unchanged. Its runtime acquires an independently fresh role
+  for the actual authenticated current leader; the local producer checks actual
+  enforced birth, protected native Store, policy and ordinary-write eligibility
+  before and after each real Prepare, everCommit-before-Commit, and Certify.
+  The opaque authenticated response preserves the actual ACK, recipient
+  incarnation, DB open and Store open. A decoded voter list cannot certify a
+  command. A late result cannot count after original role/caller expiry.
+- Mixed wire29/30 peers are explicitly refused; the source-only control uses a
+  real mTLS wire29 Ping and checks the real wire30 refusal plus unchanged actual
+  native prefix and catalogue bytes. No silent legacy fallback is introduced.
+- Actual target NativeApply/history/raw coverage and a fresh post-IO role plus
+  actual Activate/open reattestation are required before clearing its pending
+  diagnostic. The record remains tracked for later suffix writes. Actual phase
+  receipts/progress remain scheduling data, not current authority.
+
+The required lost-follower-Complete test now separates two clocks. The unchanged
+first public twenty-second gate requires old/committed/next full Strong and the
+real next ACK. An opaque borrowed `!Send` cfg(test) hold blocks **only** the
+actual debt scheduler, acquired before the fault with all automatic process
+owners already running. The test requires actual target Completed/native2 while
+real R3 has already ACKed, starts a separate twenty-second convergence clock
+**before** dispatching real R4, requires R4 ACK/full Strong, and proves target
+still Completed2 without R3/R4. Ordinary APP replay has therefore not silently
+unfrozen it. Dropping only this hold must allow actual Complete/Activate, real
+recertification and NativeApply3/4, exact full source/target Record and H0/H
+comparison, actual immutable native leaves for commands1..4, actual current
+open and controller-observed pending removal. The convergence receipt is taken
+only after the final full native-history checks. No manual tick/recovery is
+permitted. Earlier availability is not the replica convergence receipt or RTO.
+
+Declaration selectors for the entire uncompiled coherent stack are
+`origin_pre_wal_fault_tests` (8) and `native_hot_recovery_` (9), disjoint, 17 total.
+The original two 8334 test bodies/shared helpers remain byte-identical to the
+preserved base except the already-existing child module declaration. These are
+source counts, **not** runtime results. No local Cargo or hosted dispatch was
+performed. This batch is based on the private main491 descendant; parent must
+compose actual main492/493 mutation identity/native-grant/format/SQL changes
+before final runtime validation. The real fifth Assigned DATA owner requires a
+common sealed necessary owner/Slot lifetime, not an INITIAL wrapper or this
+NormalRecovery domain proof.
+
+Retained work has an explicit capacity: at most 64 jobs plus tracked ranges,
+including converged tracking records; each command retains the existing native
+command bound (up to 3 MiB). No unsafe eviction/compaction or unbounded history
+claim is introduced. Existing protected abort journal limits (4096 slots/range,
+64 MiB inventory) and long-run/8-GiB workload qualification remain separate.
+
+### Remaining native-gap debt: next real producer and required witness
+
+Debt at Fence/Certify/Apply/Prepare is retained with an explicit refusal. A
+peer with nativeR1 and real CQ2 cannot be repaired by casting the source's
+Activated2 anchors into an ActiveFenceQQ or by issuing Prepare2 against a raw
+counter. Existing historical-decision admission requires a genuine active
+fence authority; the two healthy voters may now be Activated2/nativeR3 or R4.
+The late-phase producer above deliberately supplies no such conversion. A
+second origin Unknown while a previous tracked session remains is also refused
+until a genuine same-domain session-dominance/retirement producer exists.
+These are executable liveness gaps; late Complete recovery is not complete
+self healing.
+
+The smallest next materialization producer must independently collect a fresh
+real Completed/Activated decision quorum at exact R2/H2, even if healthy peers
+have advanced to R3/R4. Under fresh actual NormalRecovery/current leader and
+target birth/Store/Slot/session admission, bind actual target native prefixR1
+and matching locally durable CQ2/body to H0 and exact append ancestry yielding
+that QQ's H2. Mint a disjoint opaque completed-decision materialization scope;
+never mint ordinary recovery authority, a new Commit vote, NoData or genesis.
+First scope should require actual target CQ2 already exists. Preserve all
+permanent promises, everCommit, no-effect candidate audits and completed Core
+cleanup. Materializing a separately proven Commit is distinct from casting a
+new Commit vote after a minority NoCommitPromise. Conflicting H0/H2/command,
+changed native birth/Store/slot, stale role/caller or new data domain must refuse
+without new native B/rows. Controlled actual native WAL/prefix/markApplied2 under
+owned freeze must precede actual full Prepare/Complete/Activate; then use the
+real budgeted suffix producer above. Broader candidate-A/decided-B adoption
+still needs its separately proven promise/cleanup protocol.
+
+The next required-success baseline should produce a genuine peer CQ2/native1
+cut via a one-shot actual receiver pre-effect NativeApply failure, while the
+original origin reaches real CoreUnknown/release/normal handler EXIT and the
+other peer really materializes2. A same-owner network-only listener stop/drain
+and strict rebind may preserve that target's actual DB/Store/runtime/writer
+(the public cold DATA reopen path is unsupported). Never retire its hook and
+then recreate INITIAL ownership. Let real source/origin quorum publish2 and
+ACK3, rebind the same retained target, and require automatic actual CQ2 native
+materialization plus R4 convergence without manual protocol. Freeze this as a
+separate required-RED witness until that producer exists; refusal or queued debt
+cannot satisfy it. Do not weaken the already required late-phase convergence
+or availability assertions while adding it. Cold/replacement/higher-domain,
+compacted payloads, NoData suffix, joint/Assigned owner and automatic fifth-node
+movement remain separate open producers and acceptance gates.

@@ -8,7 +8,21 @@ use crate::TcpClusterRelocationTransport;
 pub(crate) struct NativeHotRangeReservation<'a> {
     actual: RangeAdmissionReservation<'a, TcpClusterRelocationTransport>,
     range: RangeDescriptor,
+    store_open: Uuid,
+    store_slot: crate::distribution_data::RangeWriteServiceSlotGuard,
     _waiter: NativeHotWaiter<'a>,
+}
+impl NativeHotRangeReservation<'_> {
+    /// Necessary original-slot refusal, never range/read/write permission.
+    pub(crate) fn require_actual_store_slot(&self) -> Result<()> {
+        self.store_slot.require_live()?;
+        if self.store_slot.id() != self.store_open {
+            return Err(range_write_error(
+                "hot repair original service Store slot/open changed",
+            ));
+        }
+        Ok(())
+    }
 }
 struct NativeHotWaiter<'a> {
     coordinator: &'a RangeWriteCoordinator<TcpClusterRelocationTransport>,
@@ -53,6 +67,15 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             .try_read()
             .ok_or_else(|| range_write_error("hot recovery actual DB busy"))?;
         host.require_for_coordinator(&db, range, self)?;
+        service.require_native_writer_host_for_range(&db, range)?;
+        let store_slot = service.native_replica_listener_store_open_guard();
+        let store_open = service.native_initial_listener_store_open_id();
+        store_slot.require_live()?;
+        if store_slot.id() != store_open {
+            return Err(range_write_error(
+                "hot repair actual service Store slot/open differs",
+            ));
+        }
         parent.check()?;
         drop(db);
         drop(service);
@@ -83,6 +106,7 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             (|| -> Result<RangeAdmissionReservation<'a, TcpClusterRelocationTransport>> {
                 loop {
                     parent.check()?;
+                    store_slot.require_live()?;
                     if !active.contains_key(&range.id) {
                         let reservation_id = format!("hot-recovery:{}", Uuid::now_v7());
                         active.insert(range.id, reservation_id.clone());
@@ -105,6 +129,8 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
         Ok(NativeHotRangeReservation {
             actual,
             range: crate::distribution_native_read::canonical_range(range),
+            store_open,
+            store_slot,
             _waiter: waiter,
         })
     }
@@ -113,6 +139,7 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
         held: &NativeHotRangeReservation<'_>,
         role: &RecoveryRoleAdmission,
     ) -> Result<()> {
+        held.require_actual_store_slot()?;
         if !std::ptr::eq(held.actual.coordinator, self)
             || held.actual.range_id != role.current_range().id
             || held.range != crate::distribution_native_read::canonical_range(role.current_range())
@@ -161,8 +188,10 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             remaining()?,
             &token,
         )?;
+        self.require_hot_reservation(held, role)?;
         let candidate =
             runtime.acquire_native_read_candidate(first, business, Uuid::now_v7(), &token)?;
+        self.require_hot_reservation(held, role)?;
         let collected = {
             let service = loop {
                 token.check()?;
@@ -179,6 +208,7 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             candidate.into_hot_recovered_open(&service, role, scope, command, &token)?
         };
         // No DB/service latch crosses either network boundary.
+        self.require_hot_reservation(held, role)?;
         let final_metadata = self.transport.acquire_metadata_read_observation(
             &metadata_leader,
             business,
@@ -187,6 +217,7 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             remaining()?,
             &token,
         )?;
+        self.require_hot_reservation(held, role)?;
         let service = loop {
             token.check()?;
             if let Some(s) = self.local_service.try_lock_for(Duration::from_millis(5)) {
@@ -222,6 +253,7 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             .check()
             .and_then(|_| final_metadata.require_live_request(business))
             .and_then(|_| role.require_live_request())
+            .and_then(|_| held.require_actual_store_slot())
             .and_then(|_| host.require_for_coordinator(&db, role.current_range(), self))
         {
             self.recovered_epochs.lock().remove(&scope.range_id);

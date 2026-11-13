@@ -290,7 +290,7 @@ fix being prepared separately is a composition prerequisite; this candidate
 also explicitly retains/checks its own original attempt and process tokens.
 
 Focused remote validation, after independent review, should retain the two
-unchanged `origin_pre_wal_fault_tests` controls and five new
+unchanged `origin_pre_wal_fault_tests` controls and six new
 `native_hot_recovery_` controls. The unchanged baseline must now reach its
 existing twenty-second receipt gate through autonomous recovery, with the
 same complete RPC/API ledger, first immutable CoreUnknown/sequence=None,
@@ -309,3 +309,17 @@ old cleanup. Typecheck, no-default compilation and all execution remain
 pending. Higher epochs, changed placement, cold/replaced origin, committed
 suffixes beyond this selected next command, and the four-to-five image/joint
 wire/controller path remain separate gates.
+
+The slot-review successor captures the actual revocable service Store-slot
+guard under the service borrow at reservation preflight. It checks that exact
+token/open before and after network phases, on every held-reservation check,
+and before/after recovered-map publication. The separate recovered-open fact
+also owns an actual same-service slot guard, checked against the actual Store
+UUID and again on revalidation; UUID equality alone is insufficient. The added
+negative retains the real original Store/writer and held reservation, replaces
+the service slot with another actual Store, then restores the same original
+Store/UUID. Both old tokens must stay revoked, while exact slot/reservation
+cleanup preserves current objects, full old ACK row and actual native point.
+An already-ready cached coordinator epoch is used only to skip idle candidate
+scans when no job exists. It cannot grant any permission; an actual uncertain
+origin release removes that readiness, and retained jobs ignore the skip hint.

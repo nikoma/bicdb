@@ -268,6 +268,15 @@ impl NativeHotRecoveryMaintenance {
         let range = (*ranges[state.cursor % ranges.len()]).clone();
         state.cursor = (state.cursor + 1) % ranges.len();
         if !state.jobs.contains_key(&range.id) {
+            // SKIP ONLY: this cached scheduling hint never grants APP/Strong
+            // or repairs a Pending. Actual Unknown release clears readiness;
+            // retained jobs always continue through all fresh proof boundaries.
+            if self
+                .coordinator
+                .initial_data_leader_admission_observed(&range)
+            {
+                return Ok(());
+            }
             let Some(command) = self.candidate(&range, parent)? else {
                 return Ok(());
             };
@@ -324,6 +333,7 @@ impl NativeHotRecoveryMaintenance {
         )?;
         loop {
             self.live(parent)?;
+            held.require_actual_store_slot()?;
             if job.phase == Phase::Publish {
                 let role = self.fresh_role(&job.range, job.scope.recovery_nonce, parent)?;
                 self.coordinator.publish_hot_native_recovery(
@@ -424,6 +434,7 @@ impl NativeHotRecoveryMaintenance {
                 Phase::Publish => unreachable!(),
             }
             self.live(parent)?;
+            held.require_actual_store_slot()?;
             job.position += 1;
         }
     }

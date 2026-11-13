@@ -15,9 +15,11 @@ impl ClusterDataNodeService {
         parent.check()?;
         let db = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_writer_host_for_range(&db, role.current_range())?;
+        let slot = self.range_writes.guard();
+        slot.require_live()?;
         let fact = self
             .range_writes
-            .observe_hot_recovered_open(&db, role, scope, command, parent)?;
+            .observe_hot_recovered_open(&db, role, scope, command, slot, parent)?;
         parent.check()?;
         Ok(fact)
     }

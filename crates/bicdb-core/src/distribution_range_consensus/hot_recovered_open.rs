@@ -7,6 +7,7 @@ use recovery_state::RecoveryFencePhase;
 
 pub(crate) struct NativeHotRecoveredOpen {
     store_open: Uuid,
+    store_slot: crate::distribution_data::RangeWriteServiceSlotGuard,
     database_open: String,
     scope: RecoveryFenceScope,
     range: RangeDescriptor,
@@ -40,7 +41,9 @@ impl NativeHotRecoveredOpen {
         range: &RangeDescriptor,
     ) -> Result<()> {
         self.cancellation.check()?;
-        if self.database_open != db.incarnation_id()
+        self.store_slot.require_live()?;
+        if self.store_slot.id() != self.store_open
+            || self.database_open != db.incarnation_id()
             || self.store_open != store.open_id
             || crate::distribution_native_read::canonical_range(range) != self.range
         {
@@ -81,6 +84,7 @@ impl NativeHotRecoveredOpen {
                 "hot recovered-open current native history changed",
             ));
         }
+        self.store_slot.require_live()?;
         self.cancellation.check()
     }
 }
@@ -91,9 +95,16 @@ impl RangeWriteStore {
         fresh: &RecoveryRoleAdmission,
         scope: &RecoveryFenceScope,
         command: &RangeWriteCommand,
+        store_slot: crate::distribution_data::RangeWriteServiceSlotGuard,
         parent: &CancellationToken,
     ) -> Result<NativeHotRecoveredOpen> {
         parent.check()?;
+        store_slot.require_live()?;
+        if store_slot.id() != self.open_id {
+            return Err(range_write_error(
+                "hot recovered-open requires actual current service Store slot",
+            ));
+        }
         fresh.require_live_request()?;
         scope.require_role(fresh)?;
         if !matches!(fresh.purpose(), MetadataRecoveryRolePurpose::NormalRecovery)
@@ -138,6 +149,7 @@ impl RangeWriteStore {
         )?;
         let fact = NativeHotRecoveredOpen {
             store_open: self.open_id,
+            store_slot,
             database_open: db.incarnation_id().to_owned(),
             scope: scope.clone(),
             range: crate::distribution_native_read::canonical_range(fresh.current_range()),

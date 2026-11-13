@@ -2,6 +2,23 @@
 //! orchestration is expected to FAIL its terminal gate; refusal is not success.
 //! No producer, role, quorum, counter, reservation or deadline is replaced.
 use super::*;
+#[derive(Clone, Copy, Debug)]
+enum Scenario {
+    Stopped,
+    Blackhole,
+    SocketEof,
+    LostFollowerReply,
+    LostOriginReply,
+    SemanticThenStopped,
+}
+impl Scenario {
+    fn stops_peer(self) -> bool {
+        matches!(
+            self,
+            Self::Stopped | Self::Blackhole | Self::SocketEof | Self::SemanticThenStopped
+        )
+    }
+}
 
 fn run_one_peer_loss(
     f: &Fixture,
@@ -11,6 +28,7 @@ fn run_one_peer_loss(
     journal: &Arc<Journal>,
     output: &Path,
     stage: &mut &'static str,
+    scenario: Scenario,
 ) -> Result<()> {
     check(
         controls.len() == 3 && supervisors.len() == 3,
@@ -22,7 +40,7 @@ fn run_one_peer_loss(
     )?;
     let (origin_controls, peers) = controls.split_at_mut(1);
     let origin_control = &origin_controls[0];
-    let held = origin_control.test_hold_hot_controller_for_fault(&budget(1000))?;
+    let mut held = Some(origin_control.test_hold_hot_controller_for_fault(&budget(1000))?);
     *stage = "controller_scheduling_held_before_old_ack_and_fault";
     journal.append(
         serde_json::json!({"kind":"actual_controller_scheduling_hold",
@@ -248,63 +266,123 @@ fn run_one_peer_loss(
     let health_parent = CancellationToken::uncancelable().child_with_deadline(health_end);
     journal.append(
         serde_json::json!({"kind":"health_gate_start_before_peer_stop",
-        "health_limit_ns":20_000_000_000u64,"lost_peer":node(1),
+        "health_limit_ns":20_000_000_000u64,"lost_peer":scenario.stops_peer().then(||node(1)),"scenario":format!("{scenario:?}"),
         "original_controller_hold_still_owned":true,"no_clock_restart_after_stop_or_mq":true}),
     )?;
-    let stop_supervisor = supervisors[1].stop(
-        &health_parent.child_with_deadline(health_end.min(Instant::now() + Duration::from_secs(5))),
-    );
-    journal.append(serde_json::json!({"kind":"actual_peer_supervisor_stop",
+    if matches!(scenario, Scenario::SemanticThenStopped) {
+        // Genuine administrative revocation; keep this real receiver reachable
+        // until the automatic worker observes its authenticated refusal.
+        let original = peers[0].test_hot_recovery_bindings()?.1;
+        let before = original.binding_diagnostic();
+        f.hosts[1].seed.database.write().clear_commit_admission();
+        journal.append(serde_json::json!({"kind":"actual_peer_hook_revocation",
+            "node":node(1),"before":before,"after":original.binding_diagnostic(),
+            "no_new_writer_or_permission":true,"health_elapsed_ns":health_start.elapsed().as_nanos()}))?;
+        drop(held.take());
+        journal.append(serde_json::json!({"kind":"actual_controller_hold_released_for_semantic_negative",
+            "only_mutex_unlock_no_authority":true,"health_elapsed_ns":health_start.elapsed().as_nanos()}))?;
+        let semantic_deadline = health_end.min(Instant::now() + Duration::from_secs(2));
+        loop {
+            health_parent.check()?;
+            let status = origin_control
+                .initial_data_status(&health_parent)?
+                .ok_or_else(|| BicDbError::Cluster("actual origin status ended".into()))?;
+            if status
+                .hot_recovery_last_attempt
+                .as_ref()
+                .is_some_and(|d| d["semantic_veto"]["n1"] == "Fence")
+            {
+                journal.append(serde_json::json!({"kind":"actual_authenticated_semantic_veto_before_peer_loss",
+                    "actual":status.hot_recovery_last_attempt,"health_elapsed_ns":health_start.elapsed().as_nanos()}))?;
+                break;
+            }
+            check(
+                Instant::now() < semantic_deadline,
+                "actual semantic refusal never reached retained job veto",
+            )?;
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+    let loss_runtime = match scenario {
+        Scenario::LostFollowerReply => Some(peers[1].test_hot_recovery_bindings()?.2),
+        Scenario::LostOriginReply => Some(origin_control.test_hot_recovery_bindings()?.2),
+        _ => None,
+    };
+    let reply_loss = loss_runtime
+        .as_ref()
+        .map(|r| r.test_arm_hot_completion_reply_loss(range.id, entry.command.index))
+        .transpose()?;
+    let mut socket_fault = None;
+    if scenario.stops_peer() {
+        let stop_supervisor = supervisors[1].stop(
+            &health_parent
+                .child_with_deadline(health_end.min(Instant::now() + Duration::from_secs(5))),
+        );
+        journal.append(serde_json::json!({"kind":"actual_peer_supervisor_stop",
         "node":node(1),"ok":stop_supervisor.is_ok(),"error":stop_supervisor.as_ref().err().map(ToString::to_string),
         "health_elapsed_ns":health_start.elapsed().as_nanos()}))?;
-    // Attempt the actual listener stop even if supervisor drain failed. Both
-    // results are retained before any precondition assertion.
-    let stop_listener = peers[0].stop(
-        &health_parent.child_with_deadline(health_end.min(Instant::now() + Duration::from_secs(5))),
-    );
-    journal.append(serde_json::json!({"kind":"actual_peer_data_metadata_listener_stop",
+        // Attempt the actual listener stop even if supervisor drain failed. Both
+        // results are retained before any precondition assertion.
+        let stop_listener = peers[0].stop(
+            &health_parent
+                .child_with_deadline(health_end.min(Instant::now() + Duration::from_secs(5))),
+        );
+        journal.append(serde_json::json!({"kind":"actual_peer_data_metadata_listener_stop",
         "node":node(1),"ok":stop_listener.is_ok(),"error":stop_listener.as_ref().err().map(ToString::to_string),
         "health_elapsed_ns":health_start.elapsed().as_nanos(),"engine_files_not_removed":true}))?;
-    stop_supervisor?;
-    stop_listener?;
-    let stopped = peers[0]
-        .initial_data_status(&health_parent)?
-        .ok_or_else(|| BicDbError::Cluster("actual stopped DATA owner disappeared".into()))?;
-    journal.append(
-        serde_json::json!({"kind":"actual_stopped_peer_status_diagnostic",
+        stop_supervisor?;
+        stop_listener?;
+        let stopped = peers[0]
+            .initial_data_status(&health_parent)?
+            .ok_or_else(|| BicDbError::Cluster("actual stopped DATA owner disappeared".into()))?;
+        journal.append(
+            serde_json::json!({"kind":"actual_stopped_peer_status_diagnostic",
         "node":node(1),"status":stopped,"diagnostic_not_authority":true}),
-    )?;
-    check(
-        !stopped.receiver_listening && !stopped.dispatcher_published,
-        "actual peer listener did not drain/unpublish",
-    )?;
-    health_parent.check()?;
-    let peer_address: std::net::SocketAddr = configs[1]
-        .node_address
-        .parse()
-        .map_err(|e| BicDbError::Cluster(format!("actual peer address invalid: {e}")))?;
-    journal.append(serde_json::json!({"kind":"peer_connect_probe_intent",
+        )?;
+        check(
+            !stopped.receiver_listening && !stopped.dispatcher_published,
+            "actual peer listener did not drain/unpublish",
+        )?;
+        health_parent.check()?;
+        let peer_address: std::net::SocketAddr = configs[1]
+            .node_address
+            .parse()
+            .map_err(|e| BicDbError::Cluster(format!("actual peer address invalid: {e}")))?;
+        journal.append(serde_json::json!({"kind":"peer_connect_probe_intent",
         "node":node(1),"address":peer_address,"purpose":"no authority; verify stopped listener unavailable"}))?;
-    health_parent.check()?;
-    let connect_budget = health_end
-        .saturating_duration_since(Instant::now())
-        .min(Duration::from_millis(100));
-    check(
-        !connect_budget.is_zero(),
-        "original health budget expired before peer probe",
-    )?;
-    let peer_connect = std::net::TcpStream::connect_timeout(&peer_address, connect_budget);
-    let refused = peer_connect
-        .as_ref()
-        .err()
-        .is_some_and(|e| e.kind() == io::ErrorKind::ConnectionRefused);
-    journal.append(serde_json::json!({"kind":"peer_connect_probe_result",
+        health_parent.check()?;
+        let connect_budget = health_end
+            .saturating_duration_since(Instant::now())
+            .min(Duration::from_millis(100));
+        check(
+            !connect_budget.is_zero(),
+            "original health budget expired before peer probe",
+        )?;
+        let peer_connect = std::net::TcpStream::connect_timeout(&peer_address, connect_budget);
+        let refused = peer_connect
+            .as_ref()
+            .err()
+            .is_some_and(|e| e.kind() == io::ErrorKind::ConnectionRefused);
+        journal.append(serde_json::json!({"kind":"peer_connect_probe_result",
         "node":node(1),"connected":peer_connect.is_ok(),"connection_refused":refused,
         "error_kind":peer_connect.as_ref().err().map(|e|format!("{:?}",e.kind())),
         "error":peer_connect.as_ref().err().map(ToString::to_string),
         "health_elapsed_ns":health_start.elapsed().as_nanos()}))?;
-    health_parent.check()?;
-    check(refused,"actual stopped peer must refuse the connection; timeout or budget expiry is not the loss witness")?;
+        health_parent.check()?;
+        check(refused,"actual stopped peer must refuse the connection; timeout or budget expiry is not the loss witness")?;
+
+        if matches!(scenario, Scenario::Blackhole | Scenario::SocketEof) {
+            socket_fault = Some(
+                super::super::hot_recovery_tests::peer_transport_tests::SocketFault::bind(
+                    &configs[1].node_address,
+                    matches!(scenario, Scenario::SocketEof),
+                ),
+            );
+            journal.append(serde_json::json!({"kind":"actual_stopped_peer_socket_fault",
+                "scenario":format!("{scenario:?}"),"address":configs[1].node_address,
+                "no_native_metadata_or_tls_authority":true,"health_elapsed_ns":health_start.elapsed().as_nanos()}))?;
+        }
+    }
     // Current leader IDs are routing DATA. Only the following genuine fresh
     // sealed HostMQ proves the surviving cohort can still serve metadata.
     let hint = origin_control.metadata_status(&health_parent)?;
@@ -373,11 +451,11 @@ fn run_one_peer_loss(
         "origin progressed while actual controller serialization was held",
     )?;
     journal.append(serde_json::json!({"kind":"loss_and_surviving_mq_prerequisites_before_hold_release",
-        "origin":before_release,"stopped_peer":node(1),"actual_metadata_context":mq.context_id(),
+        "origin":before_release,"stopped_peer":scenario.stops_peer().then(||node(1)),"scenario":format!("{scenario:?}"),"actual_metadata_context":mq.context_id(),
         "health_elapsed_ns":health_start.elapsed().as_nanos(),"no_recovery_tick_or_mutating_protocol_invoked_by_fixture":true}))?;
-    drop(held);
+    drop(held.take());
     journal.append(serde_json::json!({"kind":"actual_controller_scheduling_hold_released",
-        "only_mutex_unlock_no_authority_refresh":true,"health_elapsed_ns":health_start.elapsed().as_nanos()}))?;
+        "only_mutex_unlock_no_authority_refresh":true,"already_released_for_semantic_negative":matches!(scenario,Scenario::SemanticThenStopped),"health_elapsed_ns":health_start.elapsed().as_nanos()}))?;
     *stage = "required_autonomous_health_gate_with_peer_unavailable";
     let mut healthy = false;
     let mut ever_next_ack = false;
@@ -468,14 +546,27 @@ fn run_one_peer_loss(
         "actual_native":final_native.as_ref().ok(),"actual_native_error":final_native.as_ref().err().map(ToString::to_string),
         "origin_controller_diagnostic":origin_control.initial_data_status(&budget(500)).ok().flatten(),
         "after_gate_diagnostic_not_a_new_grant":true}))?;
-    let terminal = serde_json::json!({"required_one_peer_loss_repair_and_next_ack":healthy,
+    let reply_loss_snapshot = reply_loss.as_ref().map(|r| r.snapshot());
+    if let Some(snapshot) = &reply_loss_snapshot {
+        journal.append(serde_json::json!({"kind":"actual_post_producer_reply_loss",
+            "scenario":format!("{scenario:?}"),"actual":snapshot,
+            "no_ack_inferred_from_reply_loss":true}))?;
+        check(
+            snapshot["suppressed_after_actual_producer"] == true,
+            "required actual durable producer reply-loss boundary never fired",
+        )?;
+    }
+    // Socket owner is retained through all receipts; dropping it only ends the
+    // test-owned nonblocking accept worker, never starts native work.
+    drop(socket_fault);
+    let terminal = serde_json::json!({"scenario":format!("{scenario:?}"),"acceptance_contract":if matches!(scenario,Scenario::SemanticThenStopped){"security-negative: retained actual semantic veto; NOT healthy-repair qualification"}else{"REQUIRED actual healthy repair and next ACK/full Strong"},"actual_reply_loss":reply_loss_snapshot,"required_one_peer_loss_repair_and_next_ack":healthy,
         "rounds":rounds,"ever_next_user_ack":ever_next_ack,
         "first_actual_origin_error":fault,"first_origin_unknown_is_not_rollback":true,
         "fault_api_user_ack":faulted_append.is_ok(),"terminal_elapsed_ns":health_start.elapsed().as_nanos(),
         "last_health_receipt_elapsed_ns":last_receipt,"health_success_receipt_elapsed_ns":if healthy {last_receipt}else{None},
         "health_limit_ns":20_000_000_000u64,"health_clock_started_before_peer_stop":true,
         "no_manual_maintenance_fallback":true,"no_genesis_or_counter_reset":true,
-        "selected_peer_unavailable":node(1),"origin_final_prefix":final_prefix.as_ref().ok(),
+        "selected_peer_unavailable":scenario.stops_peer().then(||node(1)),"origin_final_prefix":final_prefix.as_ref().ok(),
         "origin_final_prefix_error":final_prefix.as_ref().err().map(ToString::to_string),
         "portable_native_db_custody":false,"physical_qualification":false});
     let terminal_write = serde_json::to_vec_pretty(&terminal)
@@ -485,6 +576,29 @@ fn run_one_peer_loss(
         });
     let terminal_journal = journal
         .append(serde_json::json!({"kind":"required_one_peer_loss_terminal","terminal":terminal}));
+    if matches!(scenario, Scenario::SemanticThenStopped) {
+        check(
+            !healthy && !ever_next_ack,
+            "known authenticated semantic ambiguity was silently skipped after peer loss",
+        )?;
+        let status = origin_control
+            .initial_data_status(&budget(1000))?
+            .ok_or_else(|| BicDbError::Cluster("actual origin status ended".into()))?;
+        check(
+            status
+                .hot_recovery_last_attempt
+                .as_ref()
+                .is_some_and(|d| d["semantic_veto"]["n1"] == "Fence" && d["phase"] == "Fence"),
+            "actual prior semantic veto did not survive peer unreachability",
+        )?;
+        check(
+            database.read().native_range_prefix_observation(range.id)? == origin,
+            "semantic-veto refusal changed actual native point/Pending",
+        )?;
+        terminal_write?;
+        terminal_journal?;
+        return Ok(());
+    }
     if !healthy {
         // Preserve the required acceptance result even if supplemental
         // terminal persistence failed. Raw per-operation ledger failures are
@@ -501,8 +615,7 @@ fn run_one_peer_loss(
     Ok(())
 }
 
-#[test]
-fn native_hot_one_peer_loss_actual_rpc_requires_autonomous_tail_recovery() {
+fn run_case(scenario: Scenario) {
     let (mut f, mut controls, configs) = actual_initial_metadata_controls();
     f._root.disable_cleanup(true);
     let output = std::env::var_os("BICDB_TEST_EVIDENCE_ROOT")
@@ -514,7 +627,7 @@ fn native_hot_one_peer_loss_actual_rpc_requires_autonomous_tail_recovery() {
     journal.append(serde_json::json!({"kind":"execution_identity",
         "source":std::env::var("BICDB_TEST_SOURCE_SHA").ok(),"test_executable_sha256":sha_file(&exe).unwrap(),
         "test_executable_bytes":std::fs::metadata(exe).unwrap().len(),
-        "component":"three actual NativeHosts/RF3/TLS in one Core process; not CLI or VMs",
+        "component":"three actual NativeHosts/RF3/TLS in one Core process; not CLI or VMs","scenario":format!("{scenario:?}"),
         "private_original_root":f._root.path(),"portable_native_db_custody":false,
         "no_direct_fixture_recovery_or_reopen":true})).unwrap();
     let process_parent = CancellationToken::uncancelable();
@@ -533,6 +646,7 @@ fn native_hot_one_peer_loss_actual_rpc_requires_autonomous_tail_recovery() {
             &journal,
             &output,
             &mut stage,
+            scenario,
         )
     }));
     let primary_error = match &result {
@@ -592,4 +706,30 @@ fn native_hot_one_peer_loss_actual_rpc_requires_autonomous_tail_recovery() {
             report_write.unwrap();
         }
     }
+}
+
+#[test]
+fn native_hot_one_peer_loss_actual_rpc_requires_autonomous_tail_recovery() {
+    run_case(Scenario::Stopped);
+}
+#[test]
+fn native_hot_peer_blackhole_actual_rpc_requires_autonomous_tail_recovery() {
+    run_case(Scenario::Blackhole);
+}
+#[test]
+fn native_hot_peer_socket_eof_actual_rpc_requires_autonomous_tail_recovery() {
+    run_case(Scenario::SocketEof);
+}
+#[test]
+fn native_hot_peer_lost_actual_follower_completion_reply_requires_fresh_recovery() {
+    run_case(Scenario::LostFollowerReply);
+}
+#[test]
+fn native_hot_peer_lost_actual_origin_completion_reply_requires_fresh_reattest() {
+    run_case(Scenario::LostOriginReply);
+}
+
+#[test]
+fn native_hot_peer_actual_semantic_rejection_then_socket_loss_retains_veto() {
+    run_case(Scenario::SemanticThenStopped);
 }

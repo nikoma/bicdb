@@ -536,3 +536,5 @@ fn native_hot_recovery_retained_original_store_replace_restore_revokes_held_rese
     }
     drop(foreign);
 }
+
+pub(crate) mod peer_transport_tests;

@@ -1266,6 +1266,8 @@ fn handle_cluster_data_connection(
         Some(NativeDataListenerMode::RegisteredReplica(admission)) => Some(admission),
         _ => None,
     };
+    #[cfg(test)]
+    let suppress_actual_completion_reply = std::cell::Cell::new(false);
     let response = (|| {
         if request.protocol_version != CLUSTER_DATA_PROTOCOL_VERSION {
             return Err(transport_error(format!(
@@ -1830,6 +1832,9 @@ fn handle_cluster_data_connection(
             {
                 runtime.test_wait_completion_reply(&token)?;
                 observation.require_live()?;
+                if runtime.test_suppress_actual_hot_completion_reply(observation.reply()) {
+                    suppress_actual_completion_reply.set(true);
+                }
             }
             return Ok(ClusterDataResponse::NativeCompletion(
                 observation.into_reply(),
@@ -1885,6 +1890,12 @@ fn handle_cluster_data_connection(
             Some(&local_open),
         )
     })();
+    #[cfg(test)]
+    if suppress_actual_completion_reply.get() {
+        // Actual producer succeeded; close this actual connection without any
+        // response frame. This is reply loss, not a fabricated remote error.
+        return Ok(());
+    }
     let response = ClusterDataResponseEnvelope {
         actual_native_source: local_open.native_destination_birth().cloned(),
         protocol_version: CLUSTER_DATA_PROTOCOL_VERSION,

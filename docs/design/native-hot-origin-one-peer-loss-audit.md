@@ -318,3 +318,51 @@ calls). The origin uses its full remaining budget and can never be backoff-skipp
 These are bounded scheduling choices, not membership changes or serving proofs.
 All required controls above remain unexecuted until the coherent batch is frozen
 and remotely validated; the original ae584 failure is unchanged.
+
+### Coherent source control matrix (uncompiled)
+
+The source successor retains the original two `origin_pre_wal_fault_tests`
+bodies/helpers exactly (plus their existing child-module declaration). The new
+ae584 child alone is factored into a scenario runner. Its original stopped-peer
+branch keeps the same actual fault prerequisites, stop/refusal/fresh-MQ sequence,
+unconditional four health calls, 2-second client setting, 5-second phase limit,
+20-second receipt gate and `<8s remaining` break. New scenarios re-use these
+actual prerequisites/ledger/cleanup, rather than install a fixture election,
+quorum, recovered epoch, freeze or counter.
+
+- Stopped peer, actual same-endpoint TCP blackhole, and same-endpoint TCP close
+  (Unix zero-linger actual socket reset) all **require** old and committed full
+  Strong values plus next external ACK/full Strong. ConnectionRefused is proved
+  after the genuine listener stops before the test-owned failure socket binds.
+  The failure socket supplies no TLS, metadata, role or data authority.
+- Separate follower and original-origin reply-loss scenarios retain all three
+  real owners. A cfg(test)-only borrowed `!Send` RAII arm is weakly registered in
+  the actual runtime, matching the actual selected range/index. ONLY AFTER the
+  real Complete producer returns a live validated `CompletedFrozen` observation
+  does the server suppress that one actual reply and end its actual connection.
+  The immutable captured fact is diagnostic, not a user ACK/QQ. Each scenario
+  requires that boundary fired and then the full real healthy ACK/read gate.
+  The origin cannot advance on follower-only phase completion. Guard Drop only
+  disarms its exact probe; no strong DB/service/coordinator ownership cycle.
+- A distinct **security-negative**, not healthy-repair qualification, revokes the
+  real peer's existing writer hook after actual peer native R2 is proved. It
+  releases only the controller scheduling hold while that real receiver remains
+  reachable, requires the actual job to retain its authenticated Fence veto,
+  then stops the same receiver. The actual pending/native point must stay
+  unchanged and the veto must survive later connection refusal; no next ACK may
+  appear. This intentionally documents the conservative semantic-taxonomy limit.
+- Two additional actual initial-host/socket controls distinguish silent-peer
+  bounded child timeout from original caller cancellation/expiry, and distinguish
+  a genuine authenticated follower's semantic refusal from a real reset/EOF.
+  No manufactured reply/error is recorded as an authenticated observation.
+
+Source selectors, expected declaration counts only (NOT runtime results):
+`origin_pre_wal_fault_tests` now selects 8 (the original 2 plus 6 child scenarios);
+`native_hot_recovery_` selects 8 (original 6 controls plus 2 socket controls).
+The sets are disjoint. Run only after independent coherent source review; no
+local Cargo, test execution or CI dispatch was performed for this batch. A
+blackhole/reset success, lost-reply reattestation, semantic-veto control and
+unchanged original success all remain required; compilation alone cannot qualify
+any of them. Valid CFT observations of incompatible history remain vetoes in
+existing inner collectors. Origin loss/cold, metadata/data domain changes,
+member replacement and real fifth-node movement are still open.

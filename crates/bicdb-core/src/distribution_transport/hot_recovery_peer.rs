@@ -25,7 +25,7 @@ pub(crate) struct HotRecoveryPeerFailure {
 }
 impl std::fmt::Display for HotRecoveryPeerFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.source.fmt(f)
+        std::fmt::Display::fmt(&self.source, f)
     }
 }
 impl std::error::Error for HotRecoveryPeerFailure {

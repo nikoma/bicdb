@@ -398,6 +398,21 @@ mod tests {
         db.activate_native_collection_birth_v1().unwrap();
         assert_eq!(db.native_collection_birth_id("items").unwrap(), None);
         db.create_collection("born").unwrap();
+        db.insert(
+            "born",
+            Record::new("birth_ACK").with_metadata(serde_json::json!({"value": 41})),
+        )
+        .unwrap();
+        let ack = db
+            .get("born", "birth_ACK")
+            .unwrap()
+            .unwrap()
+            .content_hash()
+            .unwrap();
+        // Protected image capture currently requires the reopened, purely
+        // paged representation, rather than a newly created live collection.
+        db.close().unwrap();
+        let mut db = BicDb::open_with_config(root.path(), config()).unwrap();
         db.schema_compatibility_fingerprint().unwrap();
         let bindings = db.capture_range_image_bindings().unwrap();
         let namespace = db.local_namespace_identity("born").unwrap();
@@ -423,6 +438,14 @@ mod tests {
             .meta
             .native_backing_birth_id = birth;
         db.validate_range_image_bindings(&bindings).unwrap();
+        assert_eq!(
+            db.get("born", "birth_ACK")
+                .unwrap()
+                .unwrap()
+                .content_hash()
+                .unwrap(),
+            ack
+        );
     }
 
     #[test]

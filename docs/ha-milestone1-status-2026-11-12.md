@@ -1,10 +1,10 @@
 # HA Milestone 1: revision-scoped status, November 12, 2026
 
-## Update, November 13, 2026: native candidate composed onto main as 1.0.496-beta
+## Update, November 13, 2026: native candidate composed onto main as 1.0.497-beta
 
 The previously unmerged native HA candidate branches are composed onto main in
 [PR 169](https://github.com/nikoma/bicdb/pull/169) and delivered as source
-**1.0.496-beta**. Sections below describe earlier, revision-scoped checkpoints
+**1.0.497-beta**. Sections below describe earlier, revision-scoped checkpoints
 in which that candidate was still unmerged; they are history, not current state.
 
 What changed in this delivery, beyond composition:

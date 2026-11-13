@@ -1635,6 +1635,8 @@ impl BicDb {
                 if state.get_mut().meta.portable_contract() != meta.portable_contract() {
                     let mut local_meta = meta.portable_contract();
                     local_meta.local_namespace_id = state.get_mut().meta.local_namespace_id;
+                    local_meta.native_backing_birth_id =
+                        state.get_mut().meta.native_backing_birth_id;
                     state.get_mut().meta = local_meta;
                     catalog_changed = true;
                 }

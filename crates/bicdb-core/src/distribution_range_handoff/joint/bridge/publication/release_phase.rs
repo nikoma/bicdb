@@ -379,7 +379,8 @@ impl NativeJointReleasePhaseQuorum {
         self.require_live()?;
         old.require_current()?;
         if self.continuation.data.plan_sha256()? != old.plan().checksum_sha256()?
-            || self.continuation.data.old_closed != old.source_image_materialized_facts()?
+            || self.continuation.data.old_materialized_facts()
+                != &old.source_image_materialized_facts()?
         {
             return Err(invalid(
                 "joint retirement changed actual remote OLD obligations",
@@ -402,7 +403,7 @@ impl NativeJointReleasePhaseQuorum {
             .new_members()
             .contains_key(old.node_id())
             || self.continuation.data.plan_sha256()? != old.plan().checksum_sha256()?
-            || self.continuation.data.old_closed.get(old.node_id())
+            || self.continuation.data.old_materialized_fact(old.node_id())
                 != Some(&old.materialized_facts())
         {
             return Err(invalid("joint retirement must retain retired-source freeze and exact original survivor facts"));

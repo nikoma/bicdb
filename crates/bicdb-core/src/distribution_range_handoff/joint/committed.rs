@@ -4,6 +4,7 @@
 use super::*;
 use crate::distribution_consensus::HostMetadataReadObservation;
 use crate::distribution_data::ActualServiceNativeJointCommittedEvidence;
+use std::sync::Arc;
 
 pub(crate) struct CommittedNativeJointDecisionObservation {
     native: crate::db::NativeJointDecisionReceipt,

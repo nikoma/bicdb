@@ -148,6 +148,12 @@ impl NativeJointDecisionData {
     ) -> Option<&NativeJointMaterializedFacts> {
         self.old_closed.get(node)
     }
+    /// Immutable historical DATA only; this does not reconstruct an OLD quorum.
+    pub(crate) fn old_materialized_facts(
+        &self,
+    ) -> &BTreeMap<ClusterNodeId, NativeJointMaterializedFacts> {
+        &self.old_closed
+    }
     pub(crate) fn promise(&self) -> &RangeHandoffPromise {
         &self.scope.promise
     }

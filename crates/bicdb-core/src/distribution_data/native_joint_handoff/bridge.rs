@@ -47,7 +47,7 @@ impl NativeJointServingLease {
     pub(crate) fn image(&self) -> Option<&dyn NativeJointImageMaterialization> {
         match self {
             Self::Survivor(_) => None,
-            Self::Image { image, .. } => Some(image),
+            Self::Image { image, .. } => Some(image.as_ref()),
             #[cfg(feature = "tls-replication")]
             Self::Registered { owner, .. } => Some(owner.target()),
         }
@@ -810,15 +810,19 @@ impl ClusterDataNodeService {
 
         match domain {
             #[cfg(feature = "tls-replication")]
-            crate::db::NativeJointWriterDomain::Registered(owner) => self
-                .observe_registered_committed_joint_decision(
+            crate::db::NativeJointWriterDomain::Registered(owner) => {
+                let owner = owner.upgrade().ok_or_else(|| {
+                    data_error("Registered decision original retained owner ended")
+                })?;
+                self.observe_registered_committed_joint_decision(
                     domain,
-                    owner,
+                    &owner,
                     metadata,
                     business,
                     range,
                     metadata_point,
-                ),
+                )
+            }
             crate::db::NativeJointWriterDomain::Installed(_) => self
                 .observe_committed_native_joint_decision_with_point(
                     metadata,

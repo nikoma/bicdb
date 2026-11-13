@@ -54,7 +54,9 @@ The final canonical signed unit magnitude must be less than `2^254`.
 The SQL aggregate `bicdb_exact_sum_units(Decimal, Int)` shares the same streaming
 accumulator without a Decimal subtotal or application list limit. It runs over
 the genuine authorized database relation and owning transaction. Its scale is
-constant for the statement, including typed statement parameters. DISTINCT,
+constant for the statement, using literals or actual positional Int bindings.
+Bare named identifiers, correlated row scales and non-Int bindings are refused;
+binding never evaluates against a FROM/outer row. DISTINCT,
 FILTER and window forms are refused. Decimal schema typing is mandatory; null,
 Float, Bool and container coercions fail. Carrier's standalone `.SumUnits(scale)`
 terminal carries an explicit compiler-only native feature marker.

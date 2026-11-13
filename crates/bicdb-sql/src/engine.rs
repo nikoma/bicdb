@@ -4673,7 +4673,7 @@ impl<'db> SqlEngine<'db> {
         }
         fn invariant(expr: &Expr) -> bool {
             match expr {
-                Expr::Value(_) | Expr::Identifier(_) => true,
+                Expr::Value(_) => true,
                 Expr::Nested(inner)
                 | Expr::Cast { expr: inner, .. }
                 | Expr::UnaryOp { expr: inner, .. } => invariant(inner),
@@ -4712,11 +4712,34 @@ impl<'db> SqlEngine<'db> {
                 };
                 if !invariant(scale) {
                     return Err(SqlError::ExactUnitsParameter(
-                        "bicdb_exact_sum_units scale requires an invariant Int binding".into(),
+                        "bicdb_exact_sum_units scale requires a literal or positional Int binding; row and ambiguous named identifiers are not admitted".into(),
                     ));
                 }
+                let mut scalar = scale.clone();
+                let parameters = sqlparser::ast::visit_expressions_mut(&mut scalar, |value| {
+                    let Expr::Value(literal) = value else {
+                        return ControlFlow::Continue(());
+                    };
+                    let Value::Placeholder(name) = &literal.value else {
+                        return ControlFlow::Continue(());
+                    };
+                    let Some(SqlValue::Int(number)) =
+                        crate::select_exec::routine_var_from_name(&self.routine_vars, name)
+                    else {
+                        return ControlFlow::Break(SqlError::ExactUnitsParameter(
+                            "bicdb_exact_sum_units scale requires an actual bound Int".into(),
+                        ));
+                    };
+                    *value = Expr::Value(Value::Number(number.to_string(), false).into());
+                    ControlFlow::Continue(())
+                });
+                if let ControlFlow::Break(error) = parameters {
+                    return Err(error);
+                }
+                // Pure constant evaluation cannot capture a FROM/outer row,
+                // role/GUC or a same-named routine variable as a scale.
                 let SqlValue::Int(value) =
-                    self.eval_select_constant_expr(scale).map_err(|error| {
+                    crate::eval::eval_constant_expr(&scalar).map_err(|error| {
                         SqlError::ExactUnitsParameter(format!(
                             "bicdb_exact_sum_units scale is not an invariant Int: {error}"
                         ))

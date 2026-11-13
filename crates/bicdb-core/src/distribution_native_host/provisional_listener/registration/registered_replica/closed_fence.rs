@@ -160,8 +160,15 @@ impl<'op> NativeAssignedRegisteredClosedFence<'op> {
             || plan.promoted_epoch.is_some()
             || plan.learner_epoch != self.scope.range_epoch
             || plan.expected_epoch.checked_add(1) != Some(plan.learner_epoch)
-            || plan.source.as_ref() != Some(self.role.initiator_node_id())
-            || self.role.initiator_node_id() != &self.role.current_range().leader
+            // `source` names the retiring replica, not the image donor or
+            // authenticated initiator. The actual sealed CommittedHandoff
+            // role already proves the caller is the range OR metadata leader.
+            // This initial replacement lane still requires a real old voter.
+            || plan.source.as_ref().is_none_or(|retiring| {
+                !self.role.current_range().replicas.iter().any(|replica| {
+                    &replica.node_id == retiring && replica.role == RangeReplicaRole::Voter
+                })
+            })
             || !self.role.current_range().replicas.iter().any(|r| {
                 r.id == plan.target_replica_id
                     && r.node_id == plan.target

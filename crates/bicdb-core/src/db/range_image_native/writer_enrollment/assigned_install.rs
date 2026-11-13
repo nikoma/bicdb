@@ -124,7 +124,7 @@ impl FirstPolicyOrigin<'_> {
     }
     fn require_native_metadata_point(&self, db: &BicDb) -> Result<()> {
         match self {
-            Self::Legacy(_) => Ok(()),
+            Self::Legacy(o) => o.require_native_metadata_point(db),
             Self::Registered(o) => o.require_native_metadata_point(db),
         }
     }
@@ -132,7 +132,7 @@ impl FirstPolicyOrigin<'_> {
         &self,
     ) -> Result<Option<crate::distribution_consensus::NativeMetadataPublicationGuard<'_>>> {
         match self {
-            Self::Legacy(_) => Ok(None),
+            Self::Legacy(o) => o.publication_version_guard().map(Some),
             Self::Registered(o) => o.publication_version_guard().map(Some),
         }
     }

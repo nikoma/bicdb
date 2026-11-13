@@ -86,3 +86,10 @@ before a replacement begin. Aborted-on-fenced-storage is neither Committed nor
 Unknown, but cannot allocate another native transaction. All outcomes and the
 original write/health errors stay in the retained attempt. Actual expiry and
 poisoned-storage fixture controls remain unexecuted.
+
+The internal `Legacy` first-policy sum arm denotes the existing protected
+Registered-to-local-image policy origin; it does **not** denote metadata-init0.
+That origin also retains an actual owned native metadata member and now uses
+its immutable native point and actual version gate at WAL/hook boundaries.
+Its original finite-caller contract is unchanged. Only explicitly init0 lower
+joint fixtures elsewhere retain their separate non-owned-metadata contract.

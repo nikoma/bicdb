@@ -10,9 +10,11 @@ larger recovery/relocation candidate remains unmerged; its source-scoped results
 
 ## Current operational verdict
 
-Verified GitHub main is **1.0.491-beta**, `be388fdb20c53ea47ca57003aa7df9087a3ee0a1`
-([documentation/evidence PR166](https://github.com/nikoma/bicdb/pull/166)). The
-read-safety foundation below is already merged. The newer native runtime
+The verified main baseline for this **1.0.493-beta documentation candidate** is
+**1.0.492-beta**, `e37c666660c2ce599fff516c1de9351706154b53`
+([identity-update PR165](https://github.com/nikoma/bicdb/pull/165)). The earlier
+[documentation/evidence PR166](https://github.com/nikoma/bicdb/pull/166) delivered
+1.0.491-beta. The read-safety foundation below is already merged. The newer native runtime
 candidate remains **unmerged**, with separately pinned results; no release binary,
 verified deployment or production admission follows from these results.
 
@@ -25,6 +27,7 @@ verified deployment or production admission follows from these results.
 | Instrumented four-case successor | **Passed four component cases; workflow failed formatting** | `5812d5750409e8b4f21d959fbaf367c8d4362f39`, [run43343984328](https://github.com/nikoma/bicdb/actions/runs/43343984328): **4/0**, 67.70s, compile/consumer pass. All four actual cuts execute. Formatting rejects one blank line, corrected separately. This source adds only passive test diagnostics: its pass does **not** establish a production fix for the earlier timing failure. [Exact logs, role bounds and rederived profile](evidence/native-current-joint-fence-fourcase-2026-11-13/README.md). |
 | One unavailable RF3 voter during hot repair | **Failed required witness** | `ae58458836a070975f1643333c104d0bddce7cc2`, [run43345593406](https://github.com/nikoma/bicdb/actions/runs/43345593406): **0/1**, 21.74s suite. Actual Unknown/release/EXIT, both peers R2, clean n1 loss and fresh surviving metadata QQ precede failure. All 15 worker attempts remain at Fence/n1/position0; no next ACK. Last health sample is 15.333326103s, not a measured full20s outage or RTO. [Complete original failed-run evidence](evidence/native-hot-one-peer-loss-2026-11-13/README.md). |
 | Genuine fifth assigned-receiver handoff | **Failed required witness** | `a98c6a6b1390b0a3853e4ae658e8e103a7749b19`, [run43343369839](https://github.com/nikoma/bicdb/actions/runs/43343369839): **0/1**, 4.31s; compile/consumer pass. Both real range1/2 epoch2 Cgen5 handoff fences return NoWriter with original caller/role live. Four original writers and two full source ACKs remain; target state unchanged. Core fixture commits learner assignment explicitly; no automatic data movement is exercised. [Producer gap](design/native-registered-fifth-closed-image-producer-audit.md). |
+| Registered CLOSED-fence corrective batch | **Required prerequisite passed; full cohort failed 9/1** | `da56e489a34c1776e97a4ea089c1f250215cf8dc`, [run43351805110](https://github.com/nikoma/bicdb/actions/runs/43351805110): **9/1**, 17.87s, compile/consumer/format pass. The unchanged genuine fifth required case and eight controls pass. The foreign control expects different error text but receives the actual earlier birth/bootstrap/local-member binding refusal; its later assertions were not reached. Test-only successor `550c23d0458ab7a4e10af94d1cc625a7eb69bb89` requires that exact typed error and full foreign before/after invariance; execution is pending at this documentation cut. This first refusal-only producer grants no image, APP, Strong or automatic movement. [Source and retained failure receipt](design/native-assigned-registered-closed-fence-source.md). |
 | Physical automatic four-to-five expansion, convergence and sustained capacity gain | **Failed original qualification; no successful successor** | Original Azure status remains FAILED. No new physical run or stable five-node throughput comparison, RPO/RTO or hardware latency qualification is delivered. |
 
 [Full nine/six receipts, logs and all three public attempt journals](evidence/native-serving-cli-focused-2026-11-13/README.md)

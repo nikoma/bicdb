@@ -1,6 +1,15 @@
 //! Existing Registered member control transition; never a fresh-voter factory.
 use super::*;
 impl NativeUnassignedLearnerHost {
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_registered_image_control(
+        &self,
+    ) -> Result<&NativeMetadataControlHost> {
+        self.metadata_transition
+            .control
+            .as_ref()
+            .ok_or_else(|| invalid("actual original Registered image control absent"))
+    }
     pub(in crate::distribution_native_host) fn install_assigned_closed_data_policy(
         &mut self,
         image: crate::distribution_data::NativeJointServingLease,

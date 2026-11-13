@@ -36,8 +36,39 @@ original exclusion after a future typed Installing producer changes native
 inventory; that future producer must validate its own retained exact intent and
 receipt. NoDomain itself performs no writes or authorizes rows.
 
-Still required: composition through the genuine remote-image step, a real fifth
-receiver witness, and original-hook/MStore/schema/slot/revocation controls before
-any Installing production. Source formatting is not runtime evidence. No claim
+The subsequent isolated 494 integration adds the real remote-image step bridge
+and source selectors `native_registered_fifth_remote_step_`: an actual fifth
+receiver point witness and original-hook ABA, actual MStore term-change and
+actual schema-generation invalidation controls. They use actual authenticated
+source frames and the runtime's retained CLOSED freeze. They have not been
+compiled or run. The schema control invalidates the real generation; it does not
+exercise DDL durability. Source formatting is not runtime evidence. No claim
 about repeated movement, populated targets, recovery, scaling or qualification
 follows from this leaf.
+
+The next producer must still meet these concrete requirements:
+
+- Compute native install safety under this already-held journal. Calling the
+  ordinary journal-owning safety helper recursively is an error.
+- Retain the actual Registered install owner and exact attempt before the first
+  durable intent write. Preserve the original runtime session and rotate its
+  unique actual freeze into a distinct install attempt; the handoff session ID
+  cannot double as the attempt ID. A failed response retains that exact attempt.
+- Publish and verify the actual durable Installing refusal before rows, binding
+  the exact source fact, target birth/UID/schema, catalogue UUID and original
+  protected native preimage. An ambiguous write is reconciliation, never absence.
+- Provide a distinct authenticated remote transfer/history/fence/installer path.
+  A remote fact cannot be cast or copied into local SourceRangeImageLineage.
+  Complete source/history obligations remain mandatory before row mutation.
+- Check the actual original target hook/admission and protected MStore point
+  inside each bounded native transaction, with fresh request role/OWN checks
+  outside engine scopes. Validate the producer's own changed intent/receipt
+  afterward; NoDomain cannot validate an Installing result by pretending it is
+  still absent.
+- Produce the real finalized Image plus actual retained InstallFreeze before
+  Assigned policy continuation. Policy publication still precedes the separate
+  ordinary read-quorum, recovered Ready, acknowledged-write and Strong gates.
+
+No Installing producer, row path or genuine completed Image is supplied by this
+integration. Slot replacement, caller cancellation and owner drain/Drop controls
+also remain separate acceptance cases.

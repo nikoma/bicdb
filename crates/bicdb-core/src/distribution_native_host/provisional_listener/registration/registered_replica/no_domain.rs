@@ -167,6 +167,14 @@ impl NativeRegisteredReplicaAdmission {
     }
 }
 impl NativeRegisteredSelectedRangeNoDomain<'_> {
+    #[cfg(test)]
+    pub(crate) fn test_keep_original_registration(
+        &self,
+    ) -> Result<impl std::any::Any + Send + Sync> {
+        self.original
+            .original_hook
+            .test_keep_original_registration()
+    }
     pub(crate) fn range_id(&self) -> crate::RangeId {
         self.role.role().current_range().id
     }

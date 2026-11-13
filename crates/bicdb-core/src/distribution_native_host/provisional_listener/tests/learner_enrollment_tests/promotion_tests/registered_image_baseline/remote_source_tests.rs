@@ -18,6 +18,10 @@ pub(super) enum SourceCase {
     RevokeBeforeNativeWal,
     RemoteOldFrames,
     RemoteOldRetainedNative,
+    TargetNoDomain,
+    TargetNoDomainHookRevoked,
+    TargetNoDomainMemberChanged,
+    TargetNoDomainSchemaRevoked,
 }
 #[test]
 fn native_registered_fifth_remote_source_actual_tls_history_rows_seal_local_old_seed() {
@@ -524,6 +528,10 @@ pub(super) fn exercise(
     services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
     metadata: &[Arc<Mutex<crate::MetadataConsensusStore>>],
     target: &Arc<TcpClusterRelocationTransport>,
+    target_control: &NativeMetadataControlHost,
+    target_runtime: &Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>,
+    target_service: &Arc<Mutex<crate::ClusterDataNodeService>>,
+    target_metadata: &Arc<Mutex<crate::MetadataConsensusStore>>,
     factory: &Arc<crate::distribution_native_host::NativeUnassignedLearnerFactory>,
     pending: &ClusterTopology,
     ranges: &[crate::RangeDescriptor],
@@ -899,6 +907,37 @@ pub(super) fn exercise(
             assert_eq!(seal.record_count, records.len() as u64);
             assert_eq!(seal.range_index, 1);
             assert_eq!(seal.history_entries, 2);
+            if matches!(
+                case,
+                SourceCase::TargetNoDomain
+                    | SourceCase::TargetNoDomainHookRevoked
+                    | SourceCase::TargetNoDomainMemberChanged
+                    | SourceCase::TargetNoDomainSchemaRevoked
+            ) {
+                target_no_domain_tests::exercise(
+                    case,
+                    target_control,
+                    target_runtime,
+                    target_service,
+                    target_metadata,
+                    target,
+                    &actual,
+                    &plan,
+                    &MetadataReadProvider::new(
+                        metadata[leader_index].clone(),
+                        clients[leader_index].clone(),
+                    )
+                    .unwrap(),
+                    &actor,
+                    factory,
+                    pending,
+                    ranges,
+                    output,
+                );
+                if !matches!(case, SourceCase::TargetNoDomain) {
+                    return;
+                }
+            }
             drop(actual);
             retained_remote_facts.push(remote_fact);
         }
@@ -964,3 +1003,4 @@ pub(super) fn exercise(
         "real_target_namespaces":factory.database.read().capture_range_image_bindings().unwrap().namespace_ids(),
     })).unwrap();
 }
+mod target_no_domain_tests;

@@ -85,6 +85,21 @@ impl NativeRegisteredNoDomainScope<'_> {
     }
 }
 impl BicDb {
+    #[cfg(test)]
+    pub(crate) fn test_invalidate_registered_no_domain_schema(
+        &self,
+        scope: &NativeRegisteredNoDomainScope<'_>,
+    ) -> Result<()> {
+        scope.require_database(self)?;
+        let before = self.schema_compatibility.generation();
+        // Real generation invalidation, not invented DTO/UUID. This proves
+        // revocation only; no DDL operation or DDL durability is exercised.
+        self.schema_compatibility.invalidate();
+        if self.schema_compatibility.generation() <= before {
+            return Err(invalid("actual NoDomain schema generation did not advance"));
+        }
+        Ok(())
+    }
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn with_registered_selected_no_domain_exclusion<R>(
         &self,

@@ -201,6 +201,20 @@ impl NativeMetadataControlHost {
     }
 }
 impl NativeRegisteredRemoteImageStep<'_> {
+    /// Necessary actual selected-range absence only. The existing authenticated
+    /// frame, role, OWN and actual runtime freeze remain borrowed by this step.
+    pub(crate) fn observe_selected_no_domain(
+        &self,
+    ) -> Result<super::NativeRegisteredSelectedRangeNoDomain<'_>> {
+        self.require_live()?;
+        self.original.observe_selected_range_no_domain(
+            &self.role,
+            &self.own,
+            self.business,
+            self.frozen,
+            self.parent,
+        )
+    }
     pub(crate) fn source(&self) -> &NativeRemoteImageFact {
         self.frame.source()
     }

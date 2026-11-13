@@ -168,15 +168,11 @@ impl NativeMetadataControlHost {
         if let Some(retained) = self.assigned.as_mut() {
             retained.replace_registered_policy_phase(admission)?;
         } else {
+            let owner = self.registered_remote_joint_owner(range)?;
             let receiver = self
                 .replica
                 .as_ref()
                 .ok_or_else(|| invalid("Registered Serving original receiver absent"))?;
-            let owner = receiver
-                .remote_joint_targets
-                .get(&range)
-                .cloned()
-                .ok_or_else(|| invalid("Registered Serving original A continuation absent"))?;
             let parts = receiver.assigned_parts()?;
             self.assigned = Some(NativeAssignedDataHost::new_registered_serving(
                 parts, owner, admission,

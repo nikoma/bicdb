@@ -46,6 +46,22 @@ qualification remains **FAILED**. Historical sections retain their own
 revision-scoped outcomes; their old pending/open labels do not override this
 current verdict or the later executed results.
 
+## Documentation delivery on current main
+
+[PR #166](https://github.com/nikoma/bicdb/pull/166) merged this documentation-only
+delivery as source **1.0.491-beta** at verified remote main
+`be388fdb20c53ea47ca57003aa7df9087a3ee0a1`; all ten final-head checks passed.
+Its tree equals checked candidate `5479ffeed8f39804230ef1c9c8ade079de242989`.
+It was based on verified GitHub main **1.0.490-beta**,
+`702f0435a12944563c7751525f8429d80374a3d0` (PR 164, November 12, 22:24 UTC).
+It contains evidence, source-scoped audits and the required synchronized version
+metadata. It includes **none of the unmerged native HA implementation or test
+changes** described below and produces no new binary or deployment.
+The candidate results remain pinned to their actual Git SHAs and original source
+versions, even where those versions precede the current main version. Final
+native qualification still requires composition with current main and exact-head
+validation; documentation publication does not satisfy that requirement.
+
 ## Latest HOT original-origin component execution: eight distinct tests pass
 
 The unmerged native candidate has its first executed **autonomous hot original-
@@ -202,10 +218,10 @@ Actual focused executions at exact 68b are:
 
 | Selection | Run | Status at this checkpoint |
 | --- | --- | --- |
-| Four new post-catalogue fault controls | [43315433251](https://github.com/nikoma/bicdb/actions/runs/43315433251) | **Not yet established**; execution/compilation in progress |
-| Unchanged full Abort3 → activation → ACK4/Strong positive | [43315439379](https://github.com/nikoma/bicdb/actions/runs/43315439379) | **Not yet established**; execution/compilation in progress |
-| Existing activation controls and full idempotence continuation | [43315446340](https://github.com/nikoma/bicdb/actions/runs/43315446340) | **Not yet established**; execution/compilation in progress |
-| Original writers retained through both fixture reinstall boundaries | [43315453055](https://github.com/nikoma/bicdb/actions/runs/43315453055) | **Not yet established**; separate required diagnostic baseline |
+| Four new post-catalogue fault controls | [43315433251](https://github.com/nikoma/bicdb/actions/runs/43315433251) | **Inconclusive at launch**; terminal results are recorded above |
+| Unchanged full Abort3 → activation → ACK4/Strong positive | [43315439379](https://github.com/nikoma/bicdb/actions/runs/43315439379) | **Inconclusive at launch**; terminal results are recorded above |
+| Existing activation controls and full idempotence continuation | [43315446340](https://github.com/nikoma/bicdb/actions/runs/43315446340) | **Inconclusive at launch**; terminal results are recorded above |
+| Original writers retained through both fixture reinstall boundaries | [43315453055](https://github.com/nikoma/bicdb/actions/runs/43315453055) | **Inconclusive at launch**; failed required baseline is recorded above |
 
 The preceding diagnostic at source
 `11f5b4b222f4bd84d1f3870dbd59da11ee8cd17c`,

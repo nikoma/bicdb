@@ -3647,20 +3647,21 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         // them only after a real prepare quorum already exists. A silent
         // minority voter therefore cannot add its socket timeout to every
         // ordinary commit; it is still required whenever quorum needs it.
-        let (prompt_voters, stalled_voters): (Vec<&ClusterNodeId>, Vec<&ClusterNodeId>) = voters
+        let (prompt_voters, stalled_voters): (Vec<ClusterNodeId>, Vec<ClusterNodeId>) = voters
             .iter()
             .filter(|node| **node != self.local_node_id)
+            .cloned()
             .partition(|node| {
                 native_database.is_none() || !self.native_voter_recently_stalled(node)
             });
-        let stalled_from = prompt_voters.len();
-        for (order, voter) in prompt_voters.into_iter().chain(stalled_voters).enumerate() {
-            if order >= stalled_from && prepared >= quorum {
-                repair_failures.push(format!(
-                    "{voter}: skipped during bounded transport stall cooldown after actual prepare quorum"
-                ));
-                continue;
-            }
+        // Native voters are independent recipients of the same step; one
+        // exchange per voter runs concurrently and only actual validated
+        // replies are counted, in voter order, exactly as before.
+        let concurrent_voters = native_database.is_some();
+        let transport = &self.transport;
+        // One voter's actual catch-up followed, only after it succeeded, by
+        // its actual Prepare. Nothing is counted here.
+        let contact = |voter: &ClusterNodeId| -> (Result<()>, Option<Result<RangeWriteAck>>) {
             let repair_started = Instant::now();
             let repaired = if let Some(database) = native_database {
                 self.repair_native_voter(database, &range, voter, authority)
@@ -3688,22 +3689,48 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                     }
                 }
             }
-            if let Err(error) = repaired {
-                repair_failures.push(format!("{voter}: {error}"));
-            } else if let Ok(ack) = self.transport.prepare_range_write(voter, &command) {
-                if self.validate_ack(voter, &command, &ack).is_ok()
-                    && matches!(
-                        ack.state,
-                        RangeWriteState::Prepared
-                            | RangeWriteState::Committed
-                            | RangeWriteState::QuorumCommitted
-                            | RangeWriteState::Applied
-                    )
-                {
-                    prepared += 1;
-                    prepared_nodes.push(voter.clone());
+            let prepare = repaired
+                .is_ok()
+                .then(|| transport.prepare_range_write(voter, &command));
+            (repaired, prepare)
+        };
+        let mut outcomes = voter_fan_out(&prompt_voters, concurrent_voters, &contact);
+        let mut stalled_voters = stalled_voters.into_iter();
+        loop {
+            for (voter, outcome) in outcomes.drain(..) {
+                match outcome {
+                    None => {
+                        repair_failures.push(format!("{voter}: voter exchange ended abnormally"))
+                    }
+                    Some((Err(error), _)) => repair_failures.push(format!("{voter}: {error}")),
+                    Some((Ok(()), Some(Ok(ack)))) => {
+                        if self.validate_ack(&voter, &command, &ack).is_ok()
+                            && matches!(
+                                ack.state,
+                                RangeWriteState::Prepared
+                                    | RangeWriteState::Committed
+                                    | RangeWriteState::QuorumCommitted
+                                    | RangeWriteState::Applied
+                            )
+                        {
+                            prepared += 1;
+                            prepared_nodes.push(voter);
+                        }
+                    }
+                    Some((Ok(()), _)) => {}
                 }
             }
+            let Some(voter) = stalled_voters.next() else {
+                break;
+            };
+            if prepared >= quorum {
+                repair_failures.push(format!(
+                    "{voter}: skipped during bounded transport stall cooldown after actual prepare quorum"
+                ));
+                continue;
+            }
+            let outcome = contact(&voter);
+            outcomes.push((voter, Some(outcome)));
         }
         if prepared < quorum {
             if let Some(attempt) = native_abort_attempt {
@@ -3784,11 +3811,6 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         }
         let mut committed = 1usize;
         let mut committed_nodes = Vec::new();
-        // Native voters are independent recipients of the same decision; one
-        // exchange per voter runs concurrently and only actual validated
-        // replies are counted, in voter order, exactly as before.
-        let concurrent_voters = native_database.is_some();
-        let transport = &self.transport;
         for (voter, ack) in voter_fan_out(&prepared_nodes, concurrent_voters, |voter| {
             transport.commit_range_write(voter, &command)
         }) {

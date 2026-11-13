@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 mod closed_fence_controls;
 mod custody;
 mod fifth_data_path_tests;
+mod original_sdk_rpc;
 mod placement_cases;
 mod remote_source_tests;
 use closed_fence_controls::Case;
@@ -324,6 +325,9 @@ fn run_registered_image_baseline_with_placement_and_source(
         }),
     )
     .unwrap();
+    let original_sdk_rpc = source_case
+        .filter(|case| remote_source_tests::uses_original_sdk_rpc_observer(*case))
+        .map(|_| original_sdk_rpc::Journal::create(output.join("original-sdk-rpc")).unwrap());
     let mut phase = "four_initial_control";
     let mut reports = Vec::new();
     let mut ledger = Vec::new();
@@ -379,6 +383,19 @@ fn run_registered_image_baseline_with_placement_and_source(
             .unwrap()
             .with_request_timeout(Duration::from_secs(2))
             .unwrap();
+        // Attach to the one actual pre-join SDK object BEFORE its first APP.
+        // All 8 hot / 6 discovery / 3 local-term variants keep the same 2s
+        // request timeout and unchanged primary/refresh/retry implementation.
+        let gateway = match &original_sdk_rpc {
+            Some(journal) => {
+                let observed = gateway
+                    .with_rpc_evidence_observer(journal.clone(), original_sdk_rpc::LIMITS)
+                    .unwrap();
+                journal.mark_attached_before_first_append();
+                observed
+            }
+            None => gateway,
+        };
         phase = "two_real_source_acks";
         for range in &ranges {
             let key = key_in(&current, range.id);
@@ -828,6 +845,32 @@ fn run_registered_image_baseline_with_placement_and_source(
             );
         }
     }));
+    // Preserve actual primary and topology-refresh responses/errors even when
+    // the SDK's final returned error or the original test assertion differs.
+    let (sdk_rpc_capture, sdk_rpc_error) =
+        match original_sdk_rpc.as_ref().map(|journal| journal.snapshot()) {
+            Some(Ok(value)) => {
+                if value["complete_record_decode_and_contiguous_sequence"] != true {
+                    evidence_errors
+                        .push("original SDK RPC journal contains malformed/gapped records".into());
+                }
+                (Some(value), None)
+            }
+            Some(Err(error)) => {
+                evidence_errors.push(format!("original-sdk-rpc-index: {error}"));
+                (None, Some(error.to_string()))
+            }
+            None => (None, None),
+        };
+    if original_sdk_rpc.is_some() {
+        evidence_after(
+            &output.join("original-sdk-rpc-index.json"),
+            &serde_json::json!({
+            "actual_observer":sdk_rpc_capture,"observer_snapshot_error":sdk_rpc_error,
+            "new_sdk_production_fix_included":false}),
+            &mut evidence_errors,
+        );
+    }
     let capture = custody::capture(&output, &databases, &services, &metadata);
     let (captured, capture_error) = match capture {
         Ok(value) => (Some(value), None),
@@ -844,6 +887,7 @@ fn run_registered_image_baseline_with_placement_and_source(
     let terminal = serde_json::json!({"source":std::env::var("BICDB_TEST_SOURCE_SHA").ok(),"package_version":env!("CARGO_PKG_VERSION"),
         "phase":phase,"required_baseline_succeeded":result.is_ok(),"reports":reports,"ack_ledger":ledger,"assignment_mode":format!("{assignment:?}"),"actual_automatic_plan":automatic_plan,
         "primary_error":primary_error,"existing_metadata_only_validator_refusal":metadata_only_refusal,
+        "original_sdk_rpc_observer":sdk_rpc_capture,"original_sdk_rpc_observer_error":sdk_rpc_error,
         "original_root":f.root.path(),"factory_root":original_factory_path,
         "initial_ranges":factory.spec.initial_ranges,"original_birth":original_birth,
         "protected_metadata_uuid":protected_metadata_uuid,"store_slot":target_slot.id(),

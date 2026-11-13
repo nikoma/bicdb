@@ -83,6 +83,18 @@ pub(super) enum SourceCase {
     TargetHotDecisionTermAfterCommit,
     TargetHotFirstPolicyTermBeforeHook,
 }
+pub(super) fn uses_original_sdk_rpc_observer(case: SourceCase) -> bool {
+    hot_policy_tests::is_hot_policy(case)
+        || matches!(
+            case,
+            SourceCase::SourceDiscovery
+                | SourceCase::SourceDiscoveryReplyLost
+                | SourceCase::SourceDiscoveryWrongActor
+                | SourceCase::SourceDiscoveryRequestConflict
+                | SourceCase::SourceDiscoveryPlanRevoked
+                | SourceCase::SourceDiscoveryProcessRevoked
+        )
+}
 #[test]
 fn native_registered_fifth_remote_source_actual_tls_history_rows_seal_local_old_seed() {
     run_registered_image_baseline_with_source(Case::Required, Some(SourceCase::Frames));

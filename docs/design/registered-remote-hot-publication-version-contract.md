@@ -185,3 +185,34 @@ These are known local-staleness controls. They do not establish a distributed
 metadata lease, partition safety, actual new-leader behavior, cold continuation,
 operator controller convergence, physical scale-out or production qualification.
 The genuine partition/new-leader APP/Strong cohort remains separately open.
+
+## Composed main source and original SDK diagnostics (not executed)
+
+The source-only composition includes main `629857f5e` (1.0.502-beta), the
+Registered hot/Joined adapter, authenticated donor discovery, actual target
+remote-OLD test seeding, and the three local-term controls. Main's 501 test-only
+busy-latch correction and 502 Joined lifecycle remain present. Composition is
+not a merge of this qualification branch to main and carries no new release,
+binary, deployment or qualification claim.
+
+The eight hot, six discovery and three local-term fixtures now attach the
+existing RPC evidence observer to the original pre-join SDK object before its
+first source append. Its original two-second API deadline, routing, refresh,
+retry and error-selection implementation are unchanged. The separate SDK
+production error-selection change `8352e3d6b` is not included. Exact primary
+and refresh request/response frame bytes, destination, topology generation,
+dispatch uncertainty and complete error chain are retained under the existing
+4096-record/64-MiB observer limits; quota or evidence errors fence observed
+transport dispatch rather than truncate its journal.
+
+Each record has a sequence-named logical JSON file in `original-sdk-rpc/`.
+`original-sdk-rpc-index.json` records actual attachment, file hashes/sizes,
+operations/error chains, and decode/sequence completeness after the calls
+return or the original assertion unwinds. Failed setup before SDK attachment
+is distinguishable from observed APP failure. The original panic takes
+precedence over capture errors. Native source/target phase RPCs retain their
+separate journals; this observer covers only the original application SDK.
+These diagnostics add evidence I/O inside the same existing network budgets;
+they do not establish performance or physical RPO/RTO results. The composed
+source and all seventeen selected fixture variants remain uncompiled and
+unexecuted at this freeze.

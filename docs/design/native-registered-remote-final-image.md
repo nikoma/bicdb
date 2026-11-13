@@ -111,8 +111,11 @@ exercise the real fifth receiver and original actual source frames:
 - `post_wal_cancel_reconciles_same_xid`
 - `historical_integrity_uses_immutable_header_archive`
 
-These reuse the genuine local-OLD-seeded wire fixture, not a completed remote
-NEW/decision/release campaign. The corruption control deliberately deletes an
+In the composed candidate, these use the actual production remote OLD collector
+and retain the original authenticated wire journal, donor identity and every
+OLD member's protected close record. This is a different source seed from the
+original source-only local-OLD fixture; no historical failed result is relabeled.
+This is not a completed remote NEW/decision/release campaign. The corruption control deliberately deletes an
 actual target primary row in a page transaction, then requires independent scan
 failure despite the unchanged import hash. The cancellation control revokes the
 actual caller after native final commit, retains its original xid/bytes and

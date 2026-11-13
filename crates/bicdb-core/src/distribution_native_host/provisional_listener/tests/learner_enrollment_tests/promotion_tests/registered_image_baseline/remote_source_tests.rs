@@ -136,6 +136,11 @@ pub(super) fn uses_actual_remote_old_seed(case: SourceCase) -> bool {
             | SourceCase::TargetImageRowsPreWalCanceled
             | SourceCase::TargetImageRowsPostWalCanceled
             | SourceCase::TargetImageRowsApplyFailed
+            | SourceCase::TargetFinalImage
+            | SourceCase::TargetFinalImageCanceled
+            | SourceCase::TargetFinalImageCorrupt
+            | SourceCase::TargetFinalImageWithoutScan
+            | SourceCase::TargetFinalImageHistorical
             | SourceCase::RemoteOldCollectorExpiredObservation
             | SourceCase::RemoteOldCollectorUnrelatedAdvance
             | SourceCase::RemoteOldCollectorPlanChanged
@@ -1598,7 +1603,7 @@ pub(super) fn exercise(
         "actual_session_cancel_after_issued_manifest":matches!(case,SourceCase::CancelAfterIssuedFrame),
         "actual_hosted_process_cancel_after_healthy_frames":matches!(case,SourceCase::Frames | SourceCase::RemoteOldFrames | SourceCase::RemoteOldRetainedNative),
         "original_finite_old_and_publish_acquisitions_ended":true,
-        "source_seed":if matches!(case,SourceCase::RemoteOldFrames | SourceCase::RemoteOldRetainedNative){"actual node-local CLOSE RPC then donor-fetched pinned TLS historical OLD; ALL-old component"}else{"genuine local native OLD QQ, NOT remote collector"},
+        "source_seed":if uses_actual_remote_old_seed(case){"actual node-local CLOSE RPC then donor-fetched pinned TLS historical OLD; ALL-old component"}else{"genuine local native OLD QQ, NOT remote collector"},
         "actual_fifth_target_unchanged":true,"target_rows_installed":false,"serving_granted":false,
         "target_before":target_before,"target_after":target_after,"actual_frame_count":journal.iter().filter(|r|r["operation"]=="source_image_frame").count(),
         "actual_remote_old_close_logical_calls":journal.iter().filter(|r|r["operation"]=="remote_old_close").count(),

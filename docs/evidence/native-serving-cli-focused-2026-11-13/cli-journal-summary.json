@@ -1,0 +1,623 @@
+[
+  {
+    "file": "rpc-journals/client-01a1d26d-8b0c-7173-b3fd-64377c0310e5/journal.jsonl",
+    "bytes": 2471426,
+    "sha256": "fef8db1795be3dd39e9f99307128118201fc1c11c3fdefb31553449ccaec30c5",
+    "test": "initial_data_tests::native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value",
+    "records": 533,
+    "counts": {
+      "journal_started": 1,
+      "logical_request_intent": 11,
+      "logical_public_reply": 11,
+      "actual_rpc_phase": 509,
+      "fixture_case_finished": 1
+    },
+    "attempt_count": 127,
+    "phase_counts": {
+      "invoked": 127,
+      "request_frame_before_dispatch": 127,
+      "response_frame_before_decode": 126,
+      "validated_transport_result_error": 26,
+      "validated_transport_result_ok": 101,
+      "exchange_error_before_cancellation_override": 1,
+      "return_boundary_error_after_evidence": 1
+    },
+    "operations": {
+      "event_append": 32,
+      "metadata_snapshot_discovery": 377,
+      "native_event_get": 100
+    },
+    "wire_frames": 253,
+    "logical": [
+      {
+        "id": "01a1d26d-8b0e-7d42-8365-dd1a0935b2aa",
+        "operation": "authenticated_bootstrap_setup",
+        "key": null,
+        "phase": null,
+        "classification": "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY",
+        "presence": null,
+        "error_chain": null,
+        "reply": {
+          "classification": "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY",
+          "bootstrap_raw_frame_covered": false
+        },
+        "topology_generation": 1,
+        "member_count": 4
+      },
+      {
+        "id": "01a1d26d-8bc9-7771-aa44-305172bc010a",
+        "operation": "append",
+        "key": "before-initial-data-quorum",
+        "phase": null,
+        "classification": "NO_USER_ACK_DURABLE_OUTCOME_UNKNOWN",
+        "presence": null,
+        "error_chain": [
+          "cluster error: cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: initial DATA receiver is pending local leader readiness; retry within the original request budget"
+        ],
+        "reply": {
+          "classification": "NO_USER_ACK_DURABLE_OUTCOME_UNKNOWN",
+          "error_chain": [
+            "cluster error: cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: initial DATA receiver is pending local leader readiness; retry within the original request budget"
+          ]
+        }
+      },
+      {
+        "id": "01a1d26d-92a1-74b2-92e0-754effdda715",
+        "operation": "get_strong",
+        "key": "not-written-before-open",
+        "phase": null,
+        "classification": "NO_SUCCESSFUL_READ_NO_ABSENCE",
+        "presence": null,
+        "error_chain": [
+          "canceling statement due to query timeout"
+        ],
+        "reply": {
+          "classification": "NO_SUCCESSFUL_READ_NO_ABSENCE",
+          "error_chain": [
+            "canceling statement due to query timeout"
+          ]
+        }
+      },
+      {
+        "id": "01a1d26d-9e5d-7a32-8933-df19fa4bca74",
+        "operation": "append",
+        "key": "external-first-ack",
+        "phase": null,
+        "classification": "USER_ACK",
+        "presence": null,
+        "error_chain": null,
+        "reply": {
+          "classification": "USER_ACK",
+          "inserted": true
+        }
+      },
+      {
+        "id": "01a1d26d-9fc4-7a11-a9a1-f86ec35f8f5f",
+        "operation": "get_strong",
+        "key": "external-first-ack",
+        "phase": null,
+        "classification": "STRONG_SUCCESS",
+        "presence": "present",
+        "error_chain": null,
+        "reply": {
+          "classification": "STRONG_SUCCESS",
+          "presence": "present",
+          "value": {
+            "full": {
+              "array": [
+                1,
+                true,
+                null,
+                {
+                  "nested": "retained"
+                }
+              ]
+            },
+            "count": 17,
+            "text": "entire acknowledged payload"
+          }
+        }
+      },
+      {
+        "id": "01a1d26d-a096-7e03-93e5-825a5f2beef5",
+        "operation": "append",
+        "key": "external-json-null",
+        "phase": null,
+        "classification": "USER_ACK",
+        "presence": null,
+        "error_chain": null,
+        "reply": {
+          "classification": "USER_ACK",
+          "inserted": true
+        }
+      },
+      {
+        "id": "01a1d26d-a222-7fc2-a108-92987da57e35",
+        "operation": "get_strong",
+        "key": "external-json-null",
+        "phase": null,
+        "classification": "STRONG_SUCCESS",
+        "presence": "present",
+        "error_chain": null,
+        "reply": {
+          "classification": "STRONG_SUCCESS",
+          "presence": "present",
+          "value": null
+        }
+      },
+      {
+        "id": "01a1d26d-a30d-7871-bd82-4d0b319c5f8a",
+        "operation": "append",
+        "key": "external-empty-object",
+        "phase": null,
+        "classification": "USER_ACK",
+        "presence": null,
+        "error_chain": null,
+        "reply": {
+          "classification": "USER_ACK",
+          "inserted": true
+        }
+      },
+      {
+        "id": "01a1d26d-a4e9-7c73-9d18-9923652418d9",
+        "operation": "get_strong",
+        "key": "external-empty-object",
+        "phase": null,
+        "classification": "STRONG_SUCCESS",
+        "presence": "present",
+        "error_chain": null,
+        "reply": {
+          "classification": "STRONG_SUCCESS",
+          "presence": "present",
+          "value": {}
+        }
+      },
+      {
+        "id": "01a1d26d-a5cd-70b3-9df2-c41398635b49",
+        "operation": "get_strong",
+        "key": "genuine-unwritten-key",
+        "phase": null,
+        "classification": "STRONG_SUCCESS",
+        "presence": "absent",
+        "error_chain": null,
+        "reply": {
+          "classification": "STRONG_SUCCESS",
+          "presence": "absent"
+        }
+      },
+      {
+        "id": "01a1d26d-a779-7b91-9435-525f2573e537",
+        "operation": "get_strong",
+        "key": "external-first-ack",
+        "phase": "same_owner_retry",
+        "classification": "STRONG_SUCCESS",
+        "presence": "present",
+        "error_chain": null,
+        "reply": {
+          "classification": "STRONG_SUCCESS",
+          "presence": "present",
+          "value": {
+            "full": {
+              "array": [
+                1,
+                true,
+                null,
+                {
+                  "nested": "retained"
+                }
+              ]
+            },
+            "count": 17,
+            "text": "entire acknowledged payload"
+          }
+        }
+      }
+    ],
+    "sink_sequence_complete": true,
+    "fixture_finished": {
+      "kind": "fixture_case_finished",
+      "scope": "four_initial_only_original_assertions_passed",
+      "trace_fenced": false,
+      "bootstrap_raw_frame_covered": false,
+      "no_global_wire_or_healthy_postjoin_claim": true,
+      "sink_sequence": 533,
+      "sink_unix_ns": 1794531764316103552
+    }
+  },
+  {
+    "file": "rpc-journals/client-01a1d26e-1b20-7383-86bc-c02331748c69/journal.jsonl",
+    "bytes": 67017,
+    "sha256": "4e1c35c574e67bb7330f970d2922df2e4de69dc0b40ae7bef2a1479c11226281",
+    "test": "replica_receiver_tests::native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner_no_data_grant",
+    "records": 42,
+    "counts": {
+      "journal_started": 1,
+      "logical_request_intent": 8,
+      "logical_public_reply": 8,
+      "actual_rpc_phase": 24,
+      "fixture_case_finished": 1
+    },
+    "attempt_count": 6,
+    "phase_counts": {
+      "invoked": 6,
+      "request_frame_before_dispatch": 6,
+      "response_frame_before_decode": 6,
+      "validated_transport_result_ok": 4,
+      "validated_transport_result_error": 2
+    },
+    "operations": {
+      "event_append": 8,
+      "native_event_get": 12,
+      "event_scan": 4
+    },
+    "wire_frames": 12,
+    "logical": [
+      {
+        "id": "01a1d26e-1fa6-7072-8536-7b7361856866",
+        "operation": "authenticated_bootstrap_setup",
+        "key": null,
+        "phase": null,
+        "classification": "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY",
+        "presence": null,
+        "error_chain": null,
+        "reply": {
+          "classification": "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY",
+          "bootstrap_raw_frame_covered": false
+        },
+        "topology_generation": 1,
+        "member_count": 4
+      },
+      {
+        "id": "01a1d26e-1faa-7392-8295-c4e97ba53ab8",
+        "operation": "append",
+        "key": "ack-before-fifth-replica-receiver",
+        "phase": "before_fifth",
+        "classification": "USER_ACK",
+        "presence": null,
+        "error_chain": null,
+        "reply": {
+          "classification": "USER_ACK",
+          "inserted": true
+        }
+      },
+      {
+        "id": "01a1d26e-2113-7270-831f-066d3a7457ec",
+        "operation": "get_strong",
+        "key": "ack-before-fifth-replica-receiver",
+        "phase": "before_fifth",
+        "classification": "STRONG_SUCCESS",
+        "presence": "present",
+        "error_chain": null,
+        "reply": {
+          "classification": "STRONG_SUCCESS",
+          "presence": "present",
+          "value": {
+            "entire": "external ACK precedes fifth stage",
+            "nested": [
+              17,
+              null,
+              {
+                "retained": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "01a1d26e-283b-70a2-be93-0f542973799e",
+        "operation": "authenticated_bootstrap_after_fifth",
+        "key": null,
+        "phase": null,
+        "classification": "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY",
+        "presence": null,
+        "error_chain": null,
+        "reply": {
+          "classification": "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY",
+          "bootstrap_raw_frame_covered": false
+        },
+        "topology_generation": 4,
+        "member_count": 5
+      },
+      {
+        "id": "01a1d26e-283f-7b80-a096-ed4fe82a744e",
+        "operation": "replica_receiver_refusal_probe",
+        "key": null,
+        "phase": null,
+        "classification": "ACTUAL_RECEIVER_REFUSAL",
+        "presence": null,
+        "error_chain": [
+          "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required"
+        ],
+        "reply": {
+          "classification": "ACTUAL_RECEIVER_REFUSAL",
+          "error_chain": [
+            "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required"
+          ]
+        }
+      },
+      {
+        "id": "01a1d26e-2845-7d40-b989-87b0d93cda32",
+        "operation": "replica_receiver_refusal_probe",
+        "key": null,
+        "phase": null,
+        "classification": "ACTUAL_RECEIVER_REFUSAL",
+        "presence": null,
+        "error_chain": [
+          "cluster error: strong_point_read_unavailable: registered replica-only receiver has no materialized DATA/Strong serving admission"
+        ],
+        "reply": {
+          "classification": "ACTUAL_RECEIVER_REFUSAL",
+          "error_chain": [
+            "cluster error: strong_point_read_unavailable: registered replica-only receiver has no materialized DATA/Strong serving admission"
+          ]
+        }
+      },
+      {
+        "id": "01a1d26e-284f-7a30-ba14-b088c99ab91a",
+        "operation": "replica_receiver_refusal_probe",
+        "key": null,
+        "phase": null,
+        "classification": "ACTUAL_RECEIVER_REFUSAL",
+        "presence": null,
+        "error_chain": [
+          "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required"
+        ],
+        "reply": {
+          "classification": "ACTUAL_RECEIVER_REFUSAL",
+          "error_chain": [
+            "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required"
+          ]
+        }
+      },
+      {
+        "id": "01a1d26e-2859-7ac1-9fe3-a80b1f96b0e7",
+        "operation": "get_strong",
+        "key": "ack-before-fifth-replica-receiver",
+        "phase": "same_gateway_after_fifth",
+        "classification": "STRONG_SUCCESS",
+        "presence": "present",
+        "error_chain": null,
+        "reply": {
+          "classification": "STRONG_SUCCESS",
+          "presence": "present",
+          "value": {
+            "entire": "external ACK precedes fifth stage",
+            "nested": [
+              17,
+              null,
+              {
+                "retained": true
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "sink_sequence_complete": true,
+    "fixture_finished": {
+      "kind": "fixture_case_finished",
+      "scope": "receiver_prerequisite_only_postjoin_continuity_not_qualified",
+      "trace_fenced": false,
+      "bootstrap_raw_frame_covered": false,
+      "no_global_wire_or_healthy_postjoin_claim": true,
+      "sink_sequence": 42,
+      "sink_unix_ns": 1794531797331954288
+    }
+  },
+  {
+    "file": "rpc-journals/client-01a1d26e-5d86-7c72-8e8f-cd5ae15917c8/journal.jsonl",
+    "bytes": 85765,
+    "sha256": "118a5c5a5d6cbb1cdf601df8408b09ebef66da4fb6d956302fabe1a24a7978ad",
+    "test": "writer_registry_refresh_baseline::native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_and_fresh_ack",
+    "records": 54,
+    "counts": {
+      "journal_started": 1,
+      "logical_request_intent": 10,
+      "logical_public_reply": 10,
+      "actual_rpc_phase": 32,
+      "fixture_case_finished": 1
+    },
+    "attempt_count": 8,
+    "phase_counts": {
+      "invoked": 8,
+      "request_frame_before_dispatch": 8,
+      "response_frame_before_decode": 8,
+      "validated_transport_result_ok": 6,
+      "validated_transport_result_error": 2
+    },
+    "operations": {
+      "event_append": 12,
+      "native_event_get": 16,
+      "event_scan": 4
+    },
+    "wire_frames": 16,
+    "logical": [
+      {
+        "id": "01a1d26e-61b4-7c62-bf04-6714c2942ae7",
+        "operation": "authenticated_bootstrap_setup",
+        "key": null,
+        "phase": null,
+        "classification": "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY",
+        "presence": null,
+        "error_chain": null,
+        "reply": {
+          "classification": "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY",
+          "bootstrap_raw_frame_covered": false
+        },
+        "topology_generation": 1,
+        "member_count": 4
+      },
+      {
+        "id": "01a1d26e-6260-7523-8fc5-380e4212648e",
+        "operation": "append",
+        "key": "ack-before-fifth-registry-refresh",
+        "phase": "before_fifth",
+        "classification": "USER_ACK",
+        "presence": null,
+        "error_chain": null,
+        "reply": {
+          "classification": "USER_ACK",
+          "inserted": true
+        }
+      },
+      {
+        "id": "01a1d26e-63d7-7f93-9425-40e723727830",
+        "operation": "get_strong",
+        "key": "ack-before-fifth-registry-refresh",
+        "phase": "before_fifth",
+        "classification": "STRONG_SUCCESS",
+        "presence": "present",
+        "error_chain": null,
+        "reply": {
+          "classification": "STRONG_SUCCESS",
+          "presence": "present",
+          "value": {
+            "entire": "external ACK precedes fifth stage",
+            "nested": [
+              17,
+              null,
+              {
+                "retained": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "01a1d26e-6ae2-7043-84c4-b474bad9a1f1",
+        "operation": "authenticated_bootstrap_after_fifth",
+        "key": null,
+        "phase": null,
+        "classification": "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY",
+        "presence": null,
+        "error_chain": null,
+        "reply": {
+          "classification": "ACTUAL_AUTHENTICATED_BOOTSTRAP_DATA_ONLY",
+          "bootstrap_raw_frame_covered": false
+        },
+        "topology_generation": 4,
+        "member_count": 5
+      },
+      {
+        "id": "01a1d26e-6aeb-7c20-840f-8cb482bbd604",
+        "operation": "replica_receiver_refusal_probe",
+        "key": null,
+        "phase": null,
+        "classification": "ACTUAL_RECEIVER_REFUSAL",
+        "presence": null,
+        "error_chain": [
+          "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required"
+        ],
+        "reply": {
+          "classification": "ACTUAL_RECEIVER_REFUSAL",
+          "error_chain": [
+            "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required"
+          ]
+        }
+      },
+      {
+        "id": "01a1d26e-6af0-7750-8f5f-f67eb91255ee",
+        "operation": "replica_receiver_refusal_probe",
+        "key": null,
+        "phase": null,
+        "classification": "ACTUAL_RECEIVER_REFUSAL",
+        "presence": null,
+        "error_chain": [
+          "cluster error: strong_point_read_unavailable: registered replica-only receiver has no materialized DATA/Strong serving admission"
+        ],
+        "reply": {
+          "classification": "ACTUAL_RECEIVER_REFUSAL",
+          "error_chain": [
+            "cluster error: strong_point_read_unavailable: registered replica-only receiver has no materialized DATA/Strong serving admission"
+          ]
+        }
+      },
+      {
+        "id": "01a1d26e-6afa-7991-b79d-050672c922ea",
+        "operation": "replica_receiver_refusal_probe",
+        "key": null,
+        "phase": null,
+        "classification": "ACTUAL_RECEIVER_REFUSAL",
+        "presence": null,
+        "error_chain": [
+          "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required"
+        ],
+        "reply": {
+          "classification": "ACTUAL_RECEIVER_REFUSAL",
+          "error_chain": [
+            "cluster error: cluster node n4 rejected RPC cluster_data_operation_failed: cluster error: registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required"
+          ]
+        }
+      },
+      {
+        "id": "01a1d26e-6b04-7e43-92d6-fdc07534eb9c",
+        "operation": "get_strong",
+        "key": "ack-before-fifth-registry-refresh",
+        "phase": "strict_after_fifth",
+        "classification": "STRONG_SUCCESS",
+        "presence": "present",
+        "error_chain": null,
+        "reply": {
+          "classification": "STRONG_SUCCESS",
+          "presence": "present",
+          "value": {
+            "entire": "external ACK precedes fifth stage",
+            "nested": [
+              17,
+              null,
+              {
+                "retained": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "01a1d26e-6c14-7810-8faf-7b21cc7e6c4a",
+        "operation": "append",
+        "key": "fresh-ack-after-fifth-registry-addition",
+        "phase": "strict_after_fifth",
+        "classification": "USER_ACK",
+        "presence": null,
+        "error_chain": null,
+        "reply": {
+          "classification": "USER_ACK",
+          "inserted": true
+        }
+      },
+      {
+        "id": "01a1d26e-6daa-7dd2-8823-c5b1eda6d029",
+        "operation": "get_strong",
+        "key": "fresh-ack-after-fifth-registry-addition",
+        "phase": "strict_fresh_ack_read",
+        "classification": "STRONG_SUCCESS",
+        "presence": "present",
+        "error_chain": null,
+        "reply": {
+          "classification": "STRONG_SUCCESS",
+          "presence": "present",
+          "value": {
+            "whole": "new external ACK after registry addition",
+            "nested": [
+              null,
+              {
+                "unchanged_data_assignment": true
+              }
+            ],
+            "empty": {}
+          }
+        }
+      }
+    ],
+    "sink_sequence_complete": true,
+    "fixture_finished": {
+      "kind": "fixture_case_finished",
+      "scope": "strict_registry_health_probes_complete_no_success_implied",
+      "trace_fenced": false,
+      "bootstrap_raw_frame_covered": false,
+      "no_global_wire_or_healthy_postjoin_claim": true,
+      "sink_sequence": 54,
+      "sink_unix_ns": 1794531815247850474
+    }
+  }
+]

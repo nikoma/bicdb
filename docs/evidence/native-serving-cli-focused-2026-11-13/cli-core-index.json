@@ -1,0 +1,20 @@
+{
+  "run_id": 43340175836,
+  "job_id": 131606294115,
+  "source_revision": "5cec7687196fe6b113805485672e8730c8295a56",
+  "job_name": "Focused CLI integration (native_metadata_operator_cli)",
+  "job_conclusion": "success",
+  "raw_bytes": 2170886,
+  "raw_sha256": "e65114e4d49241330d76df0e557d049e9acd3792a8909a6eaa30d3a71b65269b",
+  "gzip_bytes": 260839,
+  "gzip_sha256": "df2b30902d8c8d5885cff4f4a6405575e4fec9e53eb54d2d64028e8f2463b701",
+  "result_lines": [
+    "2026-11-13T01:02:22.9259618Z \u001b[36;1mresults = re.findall(r'test result: (?:ok|FAILED)\\. (\\d+) passed; (\\d+) failed;', path.read_text())\u001b[0m",
+    "2026-11-13T01:03:35.2817857Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 71.94s"
+  ],
+  "panics": [],
+  "test_results": [],
+  "strong_trace_lines": 0,
+  "recovery_probe_trace_lines": 0,
+  "native_engine_opened_or_replayed_by_capture": false
+}

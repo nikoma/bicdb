@@ -227,6 +227,11 @@ impl NativeJointHandoffPlan {
     pub(crate) fn old_range(&self) -> &RangeDescriptor {
         &self.data.old_range
     }
+    /// Placement DATA only. The retiring replica is not the image donor or
+    /// authenticated mutation initiator.
+    pub(crate) fn retiring_source(&self) -> &ClusterNodeId {
+        &self.data.old_source
+    }
     pub(crate) fn activation_range(&self) -> &RangeDescriptor {
         &self.data.activation_range
     }

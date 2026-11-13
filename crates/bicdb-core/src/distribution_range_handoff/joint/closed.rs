@@ -17,6 +17,75 @@ pub(crate) struct NativeJointOldObservation {
     service: Arc<Mutex<ClusterDataNodeService>>,
 }
 impl NativeJointOldObservation {
+    pub(crate) fn plan(&self) -> &Arc<NativeJointHandoffPlan> {
+        &self.plan
+    }
+    /// Historical projection of this actual retained permanent closure only.
+    pub(crate) fn actual_materialized_facts(
+        &self,
+    ) -> Result<super::materialized::NativeJointMaterializedFacts> {
+        self.require_current()?;
+        Ok(self.materialized_facts())
+    }
+    pub(super) fn require_remote_ancestor(
+        &self,
+        index: u64,
+        h0: &str,
+        h: &str,
+        parent: &crate::CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("remote donor source pin busy"))?;
+        let pin = pin
+            .as_ref()
+            .ok_or_else(|| invalid("remote donor source pin ended"))?;
+        self.service
+            .try_lock()
+            .ok_or_else(|| invalid("remote donor source service busy"))?
+            .require_native_joint_old_ancestor_with_parent(
+                &self.plan,
+                &self.native,
+                &self.promise,
+                &self.frozen,
+                pin,
+                index,
+                h0,
+                h,
+                None,
+                parent,
+            )
+    }
+    pub(super) fn remote_command_at(
+        &self,
+        index: u64,
+        parent: &crate::CancellationToken,
+    ) -> Result<Option<String>> {
+        parent.check()?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("remote donor source pin busy"))?;
+        let pin = pin
+            .as_ref()
+            .ok_or_else(|| invalid("remote donor source pin ended"))?;
+        let (_, command) = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("remote donor source service busy"))?
+            .native_joint_old_history_point_with_parent(
+                &self.plan,
+                &self.native,
+                &self.promise,
+                &self.frozen,
+                pin,
+                index,
+                parent,
+            )?;
+        Ok(command)
+    }
     pub(super) fn retained_serving_lease(
         &self,
     ) -> Result<(

@@ -386,6 +386,43 @@ impl NativeJointHandoffRuntime {
         self.close_old_with_role_owner(plan, Arc::new(role), parent)
     }
     #[cfg(feature = "tls-replication")]
+    pub(crate) fn observe_constraints_for_initial_step(
+        &self,
+        step: &crate::distribution_native_host::NativeInitialOldStep<'_>,
+        parent: &crate::CancellationToken,
+    ) -> Result<crate::distribution_data::NativeJointIrrevocableFacts> {
+        step.require_metadata_current()?;
+        step.require_joint_runtime(self)?;
+        let _operation = self.operation(step.plan().old_range().id)?;
+        let frozen = self.freeze(step.plan(), step.role(), parent)?;
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("OLD constraints actual service busy"))?;
+        {
+            let db = service.database();
+            let db = db
+                .try_read()
+                .ok_or_else(|| invalid("OLD constraints actual database busy"))?;
+            service.require_initial_old_step(step, step.plan(), step.role(), &db)?;
+        }
+        let observed = service.observe_native_joint_constraints(
+            step.plan().clone(),
+            step.role(),
+            frozen,
+            parent,
+        )?;
+        let facts = observed.into_actual_facts(&service)?;
+        {
+            let db = service.database();
+            let db = db
+                .try_read()
+                .ok_or_else(|| invalid("OLD constraints database changed before return"))?;
+            service.require_initial_old_step(step, step.plan(), step.role(), &db)?;
+        }
+        Ok(facts)
+    }
+    #[cfg(feature = "tls-replication")]
     pub(crate) fn close_old_for_initial_step(
         &self,
         step: &crate::distribution_native_host::NativeInitialOldStep<'_>,

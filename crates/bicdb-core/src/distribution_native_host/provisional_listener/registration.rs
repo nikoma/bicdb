@@ -581,6 +581,27 @@ impl NativeMetadataControlHost {
             .ok_or_else(|| invalid("actual initial DATA owner absent"))?
             .bind_image_source_process(process)
     }
+    pub(crate) fn collect_initial_remote_old_at_actual_donor(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteOldCutCertificate> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual initial donor absent"))?
+            .collect_remote_old_at_actual_donor(range, parent)
+    }
+    pub(crate) fn retain_initial_image_from_remote_old(
+        &self,
+        old: &mut Option<crate::distribution_range_handoff::NativeRemoteOldCutCertificate>,
+        attempt: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_image::NativeRetainedRemoteImageSource> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual initial donor absent"))?
+            .retain_remote_image_from_remote_old(old, attempt, parent)
+    }
     pub(crate) fn retain_initial_remote_image_source(
         &self,
         old: &mut Option<crate::distribution_range_handoff::NativeJointOldClosedQuorum>,

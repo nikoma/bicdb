@@ -58,6 +58,26 @@ impl ActualServiceNativeJointOldEvidence {
     }
 }
 impl ClusterDataNodeService {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_remote_old_original_writer(
+        &self,
+        database: &BicDb,
+        writer: &Arc<crate::db::NativeWriterHostState>,
+        slot: &crate::distribution_data::RangeWriteServiceSlotGuard,
+        predecessor: &RangeDescriptor,
+    ) -> Result<()> {
+        self.require_native_catalog_database(database)?;
+        slot.require_live()?;
+        if self.range_writes.native_writer_store_open_id() != slot.id()
+            || !Arc::ptr_eq(&self.range_writes.native_writer_host_state()?, writer)
+        {
+            return Err(data_error(
+                "remote OLD original actual writer/Store changed",
+            ));
+        }
+        writer.require_store(database.data_path(), slot.id())?;
+        writer.require_database(database, predecessor)
+    }
     pub(crate) fn close_native_joint_old(
         &mut self,
         plan: Arc<NativeJointHandoffPlan>,
@@ -452,6 +472,40 @@ impl ClusterDataNodeService {
         }
         Ok(())
     }
+    pub(crate) fn require_native_joint_old_ancestor_with_parent(
+        &self,
+        plan: &NativeJointHandoffPlan,
+        native: &NativeJointOldCloseReceipt,
+        promise: &NativeJointOldPromiseReceipt,
+        frozen: &FrozenRangeMutationPermit,
+        pin: &SourceCaptureReadPin,
+        index: u64,
+        h0: &str,
+        history: &str,
+        command: Option<&str>,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        self.require_native_joint_old_observation(plan, native, promise, frozen, Some(pin))?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
+        let lineage = database.current_native_range_source_lineage(plan.old_range().id)?;
+        if index > lineage.range_index() || h0 != lineage.logical_genesis_sha256() {
+            return Err(data_error(
+                "joint observed constraint is beyond the complete selected native source",
+            ));
+        }
+        let step = database.export_native_logical_history_step_with_source_pin(
+            &lineage, frozen, pin, index, 1, parent,
+        )?;
+        let entry = step
+            .entries
+            .first()
+            .ok_or_else(|| data_error("joint native history constraint is missing"))?;
+        if entry.index!=index || entry.commitment_sha256!=history || command.is_some_and(|expected|!matches!(&entry.outcome,crate::db::NativeLogicalHistoryOutcomeV1::Applied{command_checksum_sha256} if command_checksum_sha256==expected)) {
+            return Err(data_error("joint observed constraint conflicts with actual complete source history"));
+        }
+        parent.check()
+    }
     pub(crate) fn native_joint_old_history_point(
         &self,
         plan: &NativeJointHandoffPlan,
@@ -485,6 +539,39 @@ impl ClusterDataNodeService {
             } => Some(command_checksum_sha256.clone()),
             _ => None,
         };
+        Ok((entry.commitment_sha256.clone(), command))
+    }
+    pub(crate) fn native_joint_old_history_point_with_parent(
+        &self,
+        plan: &NativeJointHandoffPlan,
+        native: &NativeJointOldCloseReceipt,
+        promise: &NativeJointOldPromiseReceipt,
+        frozen: &FrozenRangeMutationPermit,
+        pin: &SourceCaptureReadPin,
+        index: u64,
+        parent: &CancellationToken,
+    ) -> Result<(String, Option<String>)> {
+        parent.check()?;
+        self.require_native_joint_old_observation(plan, native, promise, frozen, Some(pin))?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
+        let lineage = database.current_native_range_source_lineage(plan.old_range().id)?;
+        let step = database.export_native_logical_history_step_with_source_pin(
+            &lineage, frozen, pin, index, 1, parent,
+        )?;
+        let entry = step
+            .entries
+            .first()
+            .ok_or_else(|| data_error("joint source history entry missing"))?;
+        if entry.index != index {
+            return Err(data_error("joint source history index mismatch"));
+        }
+        let command = match &entry.outcome {
+            crate::db::NativeLogicalHistoryOutcomeV1::Applied {
+                command_checksum_sha256,
+            } => Some(command_checksum_sha256.clone()),
+            _ => None,
+        };
+        parent.check()?;
         Ok((entry.commitment_sha256.clone(), command))
     }
     pub(crate) fn prepare_native_joint_capture_inputs(

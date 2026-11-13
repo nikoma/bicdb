@@ -204,6 +204,8 @@ impl NativeJointOldRound {
             .get(&relocation.target)
             .ok_or_else(|| invalid("planned new member absent"))?;
         let cut = CertifiedRangeImageCut {
+            #[cfg(feature = "tls-replication")]
+            native_remote_old: None,
             native_old: Some(Arc::new(NativeJointOldImageProof {
                 plan: self.plan.clone(),
                 observations: self

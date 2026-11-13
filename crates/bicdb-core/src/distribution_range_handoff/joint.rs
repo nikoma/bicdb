@@ -14,8 +14,20 @@ mod closed;
 pub(crate) use closed::NativeJointOldObservation;
 
 mod old_quorum;
+#[cfg(feature = "tls-replication")]
+mod remote_old;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_old::{
+    NativeRemoteOldOperationV1, NativeRemoteOldReplyV1, NativeRemoteOldRequestV1,
+};
+#[cfg(feature = "tls-replication")]
+mod remote_old_collect;
 pub(crate) use old_quorum::{
     NativeJointOldClosedQuorum, NativeJointOldImageProof, NativeJointOldRound,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_old_collect::{
+    NativeRemoteOldCutCertificate, NativeRemoteOldImageProof, NativeRemoteOldRound,
 };
 
 mod materialized;

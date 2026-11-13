@@ -16,6 +16,7 @@ pub(super) enum SourceCase {
     Frames,
     CancelAfterIssuedFrame,
     RevokeBeforeNativeWal,
+    RemoteOldFrames,
 }
 #[test]
 fn native_registered_fifth_remote_source_actual_tls_history_rows_seal_local_old_seed() {
@@ -35,6 +36,10 @@ fn native_registered_fifth_remote_old_source_actual_hook_revoked_after_promise_b
         Case::Required,
         Some(SourceCase::RevokeBeforeNativeWal),
     );
+}
+#[test]
+fn native_registered_fifth_remote_old_actual_close_fetch_cut_and_source_tls_without_local_quorum() {
+    run_registered_image_baseline_with_source(Case::Required, Some(SourceCase::RemoteOldFrames));
 }
 fn actual_role(
     provider: &MetadataReadProvider,
@@ -273,6 +278,92 @@ fn frame(
         }
     }
 }
+fn remote_old_seed(
+    controls: &[NativeMetadataControlHost],
+    clients: &[Arc<TcpClusterRelocationTransport>],
+    plan: &Arc<NativeJointHandoffPlan>,
+    process: &CancellationToken,
+    output: &std::path::Path,
+    journal: &mut Vec<serde_json::Value>,
+) -> (
+    usize,
+    crate::distribution_range_image::NativeRetainedRemoteImageSource,
+    Instant,
+) {
+    use crate::distribution_range_handoff::{NativeRemoteOldOperationV1, NativeRemoteOldRequestV1};
+    let mut last_closed = Instant::now();
+    for recipient in plan.old_members().keys() {
+        let parent = budget(5000);
+        let business = Uuid::now_v7();
+        // The real metadata leader is a valid mutation initiator even when
+        // it is not an OLD data voter. Its response is NOT forwarded into the
+        // donor certificate; the donor independently fetches every node later.
+        let own = clients[0]
+            .acquire_host_metadata_observation(&node(0), business, Duration::from_secs(5), &parent)
+            .unwrap();
+        let request = NativeRemoteOldRequestV1::from_plan(
+            plan,
+            NativeRemoteOldOperationV1::Close,
+            business,
+            4000,
+        )
+        .unwrap();
+        journal.push(
+            serde_json::json!({"operation":"remote_old_close", "request":request,
+            "actual_initiator":node(0), "recipient":recipient,"outcome":"not_started"}),
+        );
+        let index = journal.len() - 1;
+        evidence(&output.join("remote-old-ledger.json"), journal).unwrap();
+        let result = clients[0].request_remote_native_old(recipient, plan, &request, &own, &parent);
+        journal[index]["outcome"] = if result.is_ok() {
+            "returned_actual_closure"
+        } else {
+            "error_unknown_effect"
+        }
+        .into();
+        journal[index]["exact_error"] =
+            serde_json::to_value(result.as_ref().err().map(ToString::to_string)).unwrap();
+        if let Ok(actual) = &result {
+            journal[index]["actual_reply"] = serde_json::to_value(actual.reply()).unwrap();
+        }
+        evidence(&output.join("remote-old-ledger.json"), journal).unwrap();
+        let actual = result.unwrap();
+        actual.require_request_live().unwrap();
+        parent.check().unwrap();
+        own.require_live_request(business).unwrap();
+        assert!(actual.reply().closed.is_some());
+        last_closed = Instant::now();
+    }
+    // Every OLD mutation request was <=4s at its real receiver and completed
+    // before this causal local receipt. Waiting >5s ends those original finite
+    // acquisitions; the next readonly facts must not revive any of them.
+    let expiry_bound = last_closed + Duration::from_millis(5001);
+    while Instant::now() <= expiry_bound {
+        process.check().unwrap();
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let donor = plan
+        .old_members()
+        .keys()
+        .find(|id| **id != plan.old_range().leader && *id != plan.retiring_source())
+        .expect("required genuine nonleader donor")
+        .clone();
+    let source = (0..4).find(|i| node(*i) == donor).unwrap();
+    assert_ne!(donor, plan.old_range().leader);
+    assert_ne!(&donor, plan.retiring_source());
+    let parent = budget(5000);
+    let actual = controls[source]
+        .collect_initial_remote_old_at_actual_donor(plan.old_range().id, &parent)
+        .unwrap();
+    assert_eq!(actual.selected_source_id(), &donor);
+    let mut actual = Some(actual);
+    let retained = controls[source]
+        .retain_initial_image_from_remote_old(&mut actual, Uuid::now_v7(), &parent)
+        .unwrap();
+    assert!(actual.is_none());
+    parent.check().unwrap();
+    (source, retained, expiry_bound)
+}
 #[allow(clippy::too_many_arguments)]
 pub(super) fn exercise(
     case: SourceCase,
@@ -321,75 +412,28 @@ pub(super) fn exercise(
             .unwrap();
         let mut round = NativeJointOldRound::begin(observation, business, relocation.id).unwrap();
         let plan = round.plan();
-        let old_indices = plan
-            .old_members()
-            .keys()
-            .map(|id| (0..4).find(|i| node(*i) == *id).unwrap())
-            .collect::<Vec<_>>();
         let mut runtimes = Vec::new();
-        let mut providers = Vec::new();
-        for &i in &old_indices {
-            runtimes.push(Arc::new(
-                NativeJointHandoffRuntime::new(services[i].clone()).unwrap(),
-            ));
-            providers
-                .push(MetadataReadProvider::new(metadata[i].clone(), clients[i].clone()).unwrap());
-        }
-        for ((&i, runtime), provider) in old_indices.iter().zip(&runtimes).zip(&providers) {
-            let operation = budget(5000);
-            let constraints = runtime
-                .observe_constraints(
-                    plan.clone(),
-                    actual_role(provider, &actor, &plan, &node(i), &operation),
-                    &operation,
-                )
-                .unwrap();
-            round.record_constraints(constraints, &services[i]).unwrap();
-        }
-        if original.id == ranges[0].id && !matches!(case, SourceCase::CancelAfterIssuedFrame) {
-            let i = old_indices[0];
-            sink_control(
-                matches!(case, SourceCase::RevokeBeforeNativeWal),
-                i,
-                controls,
-                &runtimes[0],
-                &providers[0],
-                &actor,
-                &plan,
-                clients,
-                services,
-                pending,
-                ranges,
-                output,
-            );
-            if matches!(case, SourceCase::RevokeBeforeNativeWal) {
-                assert_eq!(
-                    state(&factory.database, pending, &node(4), ranges).unwrap(),
-                    target_before
-                );
-                return;
-            }
-            // A recorded failed operation has produced only an actual raw
-            // refusal. Begin a DISTINCT fresh collector, not a renewal of any
-            // counted/issued OLD quorum (the former round counted none).
+        let (source, retained, original_old_expiry) = if matches!(case, SourceCase::RemoteOldFrames)
+        {
+            // The metadata round supplied purpose DATA only. It never records
+            // local service observations and never finishes a local OLD QQ.
             drop(round);
-            let next_parent = budget(5000);
-            let next_business = Uuid::now_v7();
-            let next = clients[leader_index]
-                .acquire_metadata_read_observation(
-                    &node(0),
-                    next_business,
-                    range.id,
-                    range.epoch,
-                    Duration::from_secs(5),
-                    &next_parent,
-                )
-                .unwrap();
-            round = NativeJointOldRound::begin(next, next_business, relocation.id).unwrap();
-            assert_eq!(
-                round.plan().checksum_sha256().unwrap(),
-                plan.checksum_sha256().unwrap()
-            );
+            remote_old_seed(controls, clients, &plan, process, output, &mut journal)
+        } else {
+            let old_indices = plan
+                .old_members()
+                .keys()
+                .map(|id| (0..4).find(|i| node(*i) == *id).unwrap())
+                .collect::<Vec<_>>();
+            let mut providers = Vec::new();
+            for &i in &old_indices {
+                runtimes.push(Arc::new(
+                    NativeJointHandoffRuntime::new(services[i].clone()).unwrap(),
+                ));
+                providers.push(
+                    MetadataReadProvider::new(metadata[i].clone(), clients[i].clone()).unwrap(),
+                );
+            }
             for ((&i, runtime), provider) in old_indices.iter().zip(&runtimes).zip(&providers) {
                 let operation = budget(5000);
                 let constraints = runtime
@@ -401,73 +445,130 @@ pub(super) fn exercise(
                     .unwrap();
                 round.record_constraints(constraints, &services[i]).unwrap();
             }
-        }
-        for ((&i, runtime), provider) in old_indices.iter().zip(&runtimes).zip(&providers) {
-            let operation = budget(5000);
-            let actual_role = actual_role(provider, &actor, &plan, &node(i), &operation);
-            let own_business = Uuid::now_v7();
-            let own = clients[i]
-                .acquire_host_metadata_observation(
-                    &node(0),
-                    own_business,
-                    Duration::from_secs(5),
-                    &operation,
-                )
-                .unwrap();
-            let closed = controls[i]
-                .close_initial_old_step(
-                    runtime.clone(),
-                    Arc::new(actual_role),
-                    own,
-                    own_business,
-                    &operation,
-                )
-                .unwrap();
-            round.record_retained_closed_actual(closed).unwrap();
-        }
-        let closed = round.finish().unwrap();
-        let original_old_expiry = closed.original_issuance_deadline();
-        let source = (0..4)
-            .find(|i| node(*i) == *closed.selected_source_id())
-            .unwrap();
-        {
-            let original_request = budget(5000);
-            let provider =
-                MetadataReadProvider::new(metadata[source].clone(), clients[source].clone())
+            if original.id == ranges[0].id && !matches!(case, SourceCase::CancelAfterIssuedFrame) {
+                let i = old_indices[0];
+                sink_control(
+                    matches!(case, SourceCase::RevokeBeforeNativeWal),
+                    i,
+                    controls,
+                    &runtimes[0],
+                    &providers[0],
+                    &actor,
+                    &plan,
+                    clients,
+                    services,
+                    pending,
+                    ranges,
+                    output,
+                );
+                if matches!(case, SourceCase::RevokeBeforeNativeWal) {
+                    assert_eq!(
+                        state(&factory.database, pending, &node(4), ranges).unwrap(),
+                        target_before
+                    );
+                    return;
+                }
+                // A recorded failed operation has produced only an actual raw
+                // refusal. Begin a DISTINCT fresh collector, not a renewal of any
+                // counted/issued OLD quorum (the former round counted none).
+                drop(round);
+                let next_parent = budget(5000);
+                let next_business = Uuid::now_v7();
+                let next = clients[leader_index]
+                    .acquire_metadata_read_observation(
+                        &node(0),
+                        next_business,
+                        range.id,
+                        range.epoch,
+                        Duration::from_secs(5),
+                        &next_parent,
+                    )
                     .unwrap();
-            let original_role =
-                actual_role(&provider, &actor, &plan, &node(source), &original_request);
-            let foreign_business = Uuid::now_v7();
-            let foreign_own = target
-                .acquire_host_metadata_observation(
-                    &node(0),
-                    foreign_business,
-                    Duration::from_secs(5),
-                    &original_request,
-                )
+                round = NativeJointOldRound::begin(next, next_business, relocation.id).unwrap();
+                assert_eq!(
+                    round.plan().checksum_sha256().unwrap(),
+                    plan.checksum_sha256().unwrap()
+                );
+                for ((&i, runtime), provider) in old_indices.iter().zip(&runtimes).zip(&providers) {
+                    let operation = budget(5000);
+                    let constraints = runtime
+                        .observe_constraints(
+                            plan.clone(),
+                            actual_role(provider, &actor, &plan, &node(i), &operation),
+                            &operation,
+                        )
+                        .unwrap();
+                    round.record_constraints(constraints, &services[i]).unwrap();
+                }
+            }
+            for ((&i, runtime), provider) in old_indices.iter().zip(&runtimes).zip(&providers) {
+                let operation = budget(5000);
+                let actual_role = actual_role(provider, &actor, &plan, &node(i), &operation);
+                let own_business = Uuid::now_v7();
+                let own = clients[i]
+                    .acquire_host_metadata_observation(
+                        &node(0),
+                        own_business,
+                        Duration::from_secs(5),
+                        &operation,
+                    )
+                    .unwrap();
+                let closed = controls[i]
+                    .close_initial_old_step(
+                        runtime.clone(),
+                        Arc::new(actual_role),
+                        own,
+                        own_business,
+                        &operation,
+                    )
+                    .unwrap();
+                round.record_retained_closed_actual(closed).unwrap();
+            }
+            let closed = round.finish().unwrap();
+            let original_old_expiry = closed.original_issuance_deadline();
+            let source = (0..4)
+                .find(|i| node(*i) == *closed.selected_source_id())
                 .unwrap();
-            let error = NativeJointHandoffPlan::from_actual_role_and_own(
-                &original_role,
-                &foreign_own,
-                foreign_business,
-            )
-            .unwrap_err();
-            original_request.check().unwrap();
-            original_role.require_live_request().unwrap();
-            foreign_own.require_live_request(foreign_business).unwrap();
-            assert!(
-                error
-                    .to_string()
-                    .contains("OWN metadata differs from original recovery role"),
-                "{error}"
-            );
-        }
-        let retain_request = budget(5000);
-        let mut old = Some(closed);
-        let retained = controls[source]
-            .retain_initial_remote_image_source(&mut old, Uuid::now_v7(), &retain_request)
-            .unwrap();
-        assert!(old.is_none());
+            {
+                let original_request = budget(5000);
+                let provider =
+                    MetadataReadProvider::new(metadata[source].clone(), clients[source].clone())
+                        .unwrap();
+                let original_role =
+                    actual_role(&provider, &actor, &plan, &node(source), &original_request);
+                let foreign_business = Uuid::now_v7();
+                let foreign_own = target
+                    .acquire_host_metadata_observation(
+                        &node(0),
+                        foreign_business,
+                        Duration::from_secs(5),
+                        &original_request,
+                    )
+                    .unwrap();
+                let error = NativeJointHandoffPlan::from_actual_role_and_own(
+                    &original_role,
+                    &foreign_own,
+                    foreign_business,
+                )
+                .unwrap_err();
+                original_request.check().unwrap();
+                original_role.require_live_request().unwrap();
+                foreign_own.require_live_request(foreign_business).unwrap();
+                assert!(
+                    error
+                        .to_string()
+                        .contains("OWN metadata differs from original recovery role"),
+                    "{error}"
+                );
+            }
+            let retain_request = budget(5000);
+            let mut old = Some(closed);
+            let retained = controls[source]
+                .retain_initial_remote_image_source(&mut old, Uuid::now_v7(), &retain_request)
+                .unwrap();
+            assert!(old.is_none());
+            (source, retained, original_old_expiry)
+        };
         let publish_parent = budget(5000);
         let publish_business = Uuid::now_v7();
         let own = clients[source]
@@ -658,7 +759,7 @@ pub(super) fn exercise(
         retained_sources.push(retained);
         retained_runtimes.extend(runtimes);
     }
-    if matches!(case, SourceCase::Frames) {
+    if matches!(case, SourceCase::Frames | SourceCase::RemoteOldFrames) {
         let manifest = last_manifest.as_ref().unwrap();
         // This session remains healthy immediately before ACTUAL hosted
         // process cancellation; a per-session cancel cannot masquerade here.
@@ -683,13 +784,15 @@ pub(super) fn exercise(
     assert!(!factory.database.read().commit_admission_ready());
     evidence(&output.join("source-frames-result.json"), &serde_json::json!({
         "actual_two_range_manifest_observations":true,
-        "actual_two_range_history_rows_seals":matches!(case,SourceCase::Frames),
+        "actual_two_range_history_rows_seals":matches!(case,SourceCase::Frames | SourceCase::RemoteOldFrames),
         "actual_session_cancel_after_issued_manifest":matches!(case,SourceCase::CancelAfterIssuedFrame),
-        "actual_hosted_process_cancel_after_healthy_frames":matches!(case,SourceCase::Frames),
+        "actual_hosted_process_cancel_after_healthy_frames":matches!(case,SourceCase::Frames | SourceCase::RemoteOldFrames),
         "original_finite_old_and_publish_acquisitions_ended":true,
-        "source_seed":"genuine local native OLD QQ, NOT remote collector",
+        "source_seed":if matches!(case,SourceCase::RemoteOldFrames){"actual node-local CLOSE RPC then donor-fetched pinned TLS historical OLD; ALL-old component"}else{"genuine local native OLD QQ, NOT remote collector"},
         "actual_fifth_target_unchanged":true,"target_rows_installed":false,"serving_granted":false,
-        "target_before":target_before,"actual_frame_count":journal.len(),"original_four_writer_objects_retained":true,
+        "target_before":target_before,"actual_frame_count":journal.iter().filter(|r|r["operation"]=="source_image_frame").count(),
+        "actual_remote_old_close_logical_calls":journal.iter().filter(|r|r["operation"]=="remote_old_close").count(),
+        "original_four_writer_objects_retained":true,
         "real_target_namespaces":factory.database.read().capture_range_image_bindings().unwrap().namespace_ids(),
     })).unwrap();
 }

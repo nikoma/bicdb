@@ -59,14 +59,22 @@ impl Network {
     }
     fn start(&mut self, i: usize) {
         let launch = self.launch(i);
-        self.workers[i] = Some(
-            launch
-                .start_automatic_metadata(
-                    self.fixture.networks[i].clone(),
-                    &CancellationToken::uncancelable(),
-                )
-                .unwrap(),
-        );
+        // Start never waits on the service/metadata latches: an actual peer
+        // RPC persisting under them yields a retryable busy refusal. Like the
+        // operator loop, retry only that refusal, bounded by the usual budget.
+        let retry = budget();
+        self.workers[i] = Some(loop {
+            match launch.start_automatic_metadata(
+                self.fixture.networks[i].clone(),
+                &CancellationToken::uncancelable(),
+            ) {
+                Ok(worker) => break worker,
+                Err(error) if error.to_string().contains("busy") && retry.check().is_ok() => {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Err(error) => panic!("actual metadata supervisor did not start: {error}"),
+            }
+        });
     }
     fn stop(&mut self, i: usize) {
         if let Some(worker) = self.workers[i].as_mut() {

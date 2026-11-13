@@ -887,6 +887,16 @@ impl NativeMetadataControlHost {
 
 #[cfg(test)]
 impl NativeMetadataControlHost {
+    pub(crate) fn test_cancel_next_successor_acquisition(
+        &self,
+        command: &crate::RangeWriteCommand,
+    ) -> Result<hot_recovery::NativeSuccessorCancelArm> {
+        self.data
+            .as_ref()
+            .and_then(|d| d.hot_recovery.as_ref())
+            .ok_or_else(|| invalid("successor test needs actual original DATA owner"))?
+            .arm_successor_cancel(command)
+    }
     pub(crate) fn test_hold_hot_controller_for_fault(
         &self,
         parent: &CancellationToken,

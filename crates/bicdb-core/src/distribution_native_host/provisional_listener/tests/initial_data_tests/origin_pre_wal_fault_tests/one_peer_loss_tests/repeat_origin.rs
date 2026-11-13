@@ -104,6 +104,7 @@ pub(super) fn run(
     old_value: &serde_json::Value,
     originals: &[OriginalWriter],
     first_convergence: &serde_json::Value,
+    cancel_successor: bool,
 ) -> Result<serde_json::Value> {
     let fifth = key_in(topology, range.id, "same-origin-second-unknown5");
     let sixth = key_in(topology, range.id, "same-origin-second-next-ack6");
@@ -249,6 +250,9 @@ pub(super) fn run(
         "actual_origin":prefix,"actual_command":command,"actual_peers":actual_peers,
         "all_unknown_outcomes_remain_immutable":true}),
     )?;
+    let successor_cancel = cancel_successor
+        .then(|| control.test_cancel_next_successor_acquisition(&command.command))
+        .transpose()?;
     let start = Instant::now();
     let end = start + Duration::from_secs(20);
     let parent = CancellationToken::uncancelable().child_with_deadline(end);
@@ -317,6 +321,22 @@ pub(super) fn run(
                 journal.append(serde_json::json!({"kind":"second_actual_all_replica6_sample",
                     "elapsed_ns":start.elapsed().as_nanos(),"actual_all":final_all.as_ref().ok(),"error":final_all.as_ref().err().map(ToString::to_string)}))?;
                 if let Ok(all) = final_all {
+                    let cancellation = successor_cancel.as_ref().map(|arm| arm.snapshot());
+                    if let Some(actual) = &cancellation {
+                        journal.append(serde_json::json!({"kind":"actual_successor_cancellation_custody_gate","actual":actual}))?;
+                        check(
+                            actual["fired"] == true
+                                && actual["actual_failed_acquisition"]["actual_turn_canceled"]
+                                    == true
+                                && actual["actual_failed_acquisition"]["prior_session_retained"]
+                                    == true
+                                && actual["actual_failed_acquisition"]["successor_job_created"]
+                                    == false
+                                && actual["actual_failed_acquisition"]["actual_role_error"]
+                                    .is_string(),
+                            "real canceled successor acquisition lost prior session custody",
+                        )?;
+                    }
                     parent.check()?;
                     let final_receipt_ns = start.elapsed().as_nanos();
                     check(
@@ -325,7 +345,7 @@ pub(super) fn run(
                     )?;
                     let receipt = serde_json::json!({"required_second_unknown5_then_ACK6_all_native6":true,
                         "actual_second_Unknown":fault,"second_health_receipt_ns":elapsed,"all_replicas_receipt_ns":final_receipt_ns,
-                        "actual_all":all,"original_all4":original_all4,"no_manual_recovery":true,
+                        "actual_all":all,"original_all4":original_all4,"actual_successor_cancellation":cancellation,"no_manual_recovery":true,
                         "first_Unknown_and_noACK_not_reclassified":true});
                     journal.append(serde_json::json!({"kind":"required_repeat_origin_success","receipt":receipt}))?;
                     return Ok(receipt);

@@ -11,6 +11,7 @@ enum Scenario {
     SocketEof,
     LostFollowerReply,
     RepeatOriginalOrigin,
+    RepeatOriginCancelSuccessor,
     LostFollowerFenceReply,
     LostFollowerPrepareReply,
     LostOriginReply,
@@ -44,7 +45,10 @@ fn run_one_peer_loss(
         controls.iter().all(|c| c.test_hot_worker_started()),
         "all actual process workers must already be started",
     )?;
-    let original_writers = if matches!(scenario, Scenario::RepeatOriginalOrigin) {
+    let original_writers = if matches!(
+        scenario,
+        Scenario::RepeatOriginalOrigin | Scenario::RepeatOriginCancelSuccessor
+    ) {
         controls
             .iter()
             .map(|control| {
@@ -63,6 +67,7 @@ fn run_one_peer_loss(
         scenario,
         Scenario::LostFollowerReply
             | Scenario::RepeatOriginalOrigin
+            | Scenario::RepeatOriginCancelSuccessor
             | Scenario::LostFollowerFenceReply
             | Scenario::LostFollowerPrepareReply
             | Scenario::NativeGapBeforeFence
@@ -393,6 +398,7 @@ fn run_one_peer_loss(
     let loss_runtime = match scenario {
         Scenario::LostFollowerReply
         | Scenario::RepeatOriginalOrigin
+        | Scenario::RepeatOriginCancelSuccessor
         | Scenario::LostFollowerFenceReply
         | Scenario::LostFollowerPrepareReply => Some(peers[1].test_hot_recovery_bindings()?.2),
         Scenario::LostOriginReply => Some(origin_control.test_hot_recovery_bindings()?.2),
@@ -632,6 +638,7 @@ fn run_one_peer_loss(
         scenario,
         Scenario::LostFollowerReply
             | Scenario::RepeatOriginalOrigin
+            | Scenario::RepeatOriginCancelSuccessor
             | Scenario::LostFollowerFenceReply
             | Scenario::LostFollowerPrepareReply
             | Scenario::NativeGapBeforeFence
@@ -690,7 +697,10 @@ fn run_one_peer_loss(
         drop(debt_hold);
         None
     };
-    let repeat_receipt = if matches!(scenario, Scenario::RepeatOriginalOrigin) {
+    let repeat_receipt = if matches!(
+        scenario,
+        Scenario::RepeatOriginalOrigin | Scenario::RepeatOriginCancelSuccessor
+    ) {
         check(
             replica_convergence.is_some(),
             "second fault requires first actual complete R4 convergence",
@@ -707,6 +717,7 @@ fn run_one_peer_loss(
             &old_value,
             &original_writers,
             replica_convergence.as_ref().unwrap(),
+            matches!(scenario, Scenario::RepeatOriginCancelSuccessor),
         )?)
     } else {
         None
@@ -957,4 +968,9 @@ fn native_hot_peer_lost_actual_follower_prepare_reply_requires_automatic_R4_conv
 fn native_hot_peer_second_actual_origin_unknown5_same_owners_requires_ack6_and_full_replica_convergence(
 ) {
     run_case(Scenario::RepeatOriginalOrigin);
+}
+
+#[test]
+fn native_hot_peer_repeat_unknown_canceled_successor_acquisition_preserves_prior_custody() {
+    run_case(Scenario::RepeatOriginCancelSuccessor);
 }

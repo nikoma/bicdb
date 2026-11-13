@@ -19,7 +19,11 @@ use std::thread::JoinHandle;
 
 mod replica_debt;
 #[cfg(test)]
+mod successor_test;
+#[cfg(test)]
 pub(crate) use replica_debt::NativeHotDebtScheduleHold;
+#[cfg(test)]
+pub(crate) use successor_test::NativeSuccessorCancelArm;
 const MAX_JOBS: usize = 64;
 /// Idle led ranges passed over by one attempt before it yields to pacing.
 const MAX_IDLE_RANGE_SCAN: usize = 64;
@@ -69,6 +73,8 @@ pub(super) struct NativeHotRecoveryMaintenance {
     state: Mutex<State>,
     #[cfg(test)]
     debt_schedule_test: Mutex<()>,
+    #[cfg(test)]
+    successor_cancel_test: Mutex<Option<std::sync::Weak<successor_test::SuccessorCancelProbe>>>,
     last: Mutex<Option<serde_json::Value>>,
     stopping: AtomicBool,
     process: OnceLock<CancellationToken>,
@@ -102,6 +108,8 @@ impl NativeHotRecoveryMaintenance {
             state: Mutex::new(State::default()),
             #[cfg(test)]
             debt_schedule_test: Mutex::new(()),
+            #[cfg(test)]
+            successor_cancel_test: Mutex::new(None),
             last: Mutex::new(None),
             stopping: AtomicBool::new(false),
             process: OnceLock::new(),
@@ -347,7 +355,12 @@ impl NativeHotRecoveryMaintenance {
             if state.jobs.len() + state.replica_debts.len() >= MAX_JOBS {
                 return Err(invalid("hot DATA retained job bound exhausted"));
             }
-            let role = self.fresh_role(&range, Uuid::now_v7(), parent)?;
+            #[cfg(test)]
+            let canceled_turn = self.cancel_actual_successor_turn(&command, parent);
+            let role = self.fresh_role(&range, Uuid::now_v7(), parent);
+            #[cfg(test)]
+            self.observe_successor_acquisition(canceled_turn, &state, &command, parent, &role);
+            let role = role?;
             let scope = RecoveryFenceScope::from_role(&role)?;
             let mut members = role
                 .member_credentials()

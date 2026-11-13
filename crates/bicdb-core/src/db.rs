@@ -87,9 +87,9 @@ pub(crate) use native_joint_activation::{
 };
 mod commit_admission_hook;
 mod native_recovery_ready;
-mod range_image_native;
 #[cfg(test)]
 mod native_test_custody;
+mod range_image_native;
 pub(crate) use native_recovery_ready::{LocalNativeRecoveryReady, NativeLocalVisibilitySequence};
 pub(crate) use range_image_native::abort_history::NativeNoEffectIntentRecord;
 #[cfg(test)]

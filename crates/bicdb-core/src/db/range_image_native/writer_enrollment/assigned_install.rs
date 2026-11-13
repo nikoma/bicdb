@@ -2,7 +2,91 @@
 //! target. Generic policy installation is unchanged. Unknown never restores
 //! NoWriter or discards the actual attempted receipt/registration.
 use super::*;
-use crate::distribution_native_host::NativeAssignedDataPolicyOrigin;
+use crate::distribution_native_host::{
+    NativeAssignedDataPolicyOrigin, NativeRegisteredServingDataPolicyOrigin,
+};
+#[derive(Clone, Copy)]
+enum FirstPolicyOrigin<'a> {
+    Legacy(&'a NativeAssignedDataPolicyOrigin),
+    Registered(&'a NativeRegisteredServingDataPolicyOrigin),
+}
+enum FirstPolicyOriginIdentity {
+    Legacy,
+    Registered(std::sync::Weak<crate::distribution_native_host::NativeRegisteredRemoteJointOwner>),
+}
+impl FirstPolicyOrigin<'_> {
+    fn identity(&self) -> FirstPolicyOriginIdentity {
+        match self {
+            Self::Legacy(_) => FirstPolicyOriginIdentity::Legacy,
+            Self::Registered(o) => {
+                FirstPolicyOriginIdentity::Registered(Arc::downgrade(o.original_joint_owner()))
+            }
+        }
+    }
+    fn require_identity(&self, expected: &FirstPolicyOriginIdentity) -> Result<()> {
+        match (self, expected) {
+            (Self::Legacy(_), FirstPolicyOriginIdentity::Legacy) => Ok(()),
+            (Self::Registered(o), FirstPolicyOriginIdentity::Registered(old))
+                if std::sync::Weak::ptr_eq(old, &Arc::downgrade(o.original_joint_owner())) =>
+            {
+                Ok(())
+            }
+            _ => Err(invalid(
+                "first policy retry changed its actual original provenance owner",
+            )),
+        }
+    }
+    fn original_caller(&self) -> &CancellationToken {
+        match self {
+            Self::Legacy(o) => o.original_caller(),
+            Self::Registered(o) => o.original_caller(),
+        }
+    }
+    fn range(&self) -> &RangeDescriptor {
+        match self {
+            Self::Legacy(o) => o.range(),
+            Self::Registered(o) => o.range(),
+        }
+    }
+    fn require_live(&self) -> Result<()> {
+        match self {
+            Self::Legacy(o) => o.require_live(),
+            Self::Registered(o) => o.require_live(),
+        }
+    }
+    fn require_original_empty_hook(&self, db: &BicDb) -> Result<()> {
+        match self {
+            Self::Legacy(o) => o.require_original_empty_hook(db),
+            Self::Registered(o) => o.require_original_empty_hook(db),
+        }
+    }
+    fn require_current(&self, db: &BicDb, policy: &SealedHostWriterEnrollment) -> Result<()> {
+        match self {
+            Self::Legacy(o) => o.require_current(db, policy),
+            Self::Registered(o) => o.require_current(db, policy),
+        }
+    }
+    fn with_publication_service<R>(
+        &self,
+        db: &BicDb,
+        policy: &SealedHostWriterEnrollment,
+        operation: impl for<'scope> FnOnce(
+            &'scope Arc<parking_lot::Mutex<crate::distribution_data::ClusterDataNodeService>>,
+            &'scope mut crate::distribution_data::ClusterDataNodeService,
+        ) -> Result<R>,
+    ) -> Result<R> {
+        match self {
+            Self::Legacy(o) => o.with_publication_service(db, policy, operation),
+            Self::Registered(o) => o.with_publication_service(db, policy, operation),
+        }
+    }
+    fn retain_installed_writer(&self, state: Arc<NativeWriterHostState>) -> Result<()> {
+        match self {
+            Self::Legacy(_) => Ok(()),
+            Self::Registered(o) => o.retain_installed_writer(state),
+        }
+    }
+}
 
 enum Publication {
     AwaitingNative,
@@ -24,6 +108,7 @@ enum Publication {
     },
 }
 pub(crate) struct NativeAssignedWriterInstallAttempt {
+    origin_identity: FirstPolicyOriginIdentity,
     coordinator: Weak<dyn CommitAdmission>,
     coordinator_id: Uuid,
     database_incarnation: String,
@@ -37,6 +122,32 @@ impl NativeAssignedWriterInstallAttempt {
         origin: &NativeAssignedDataPolicyOrigin,
         policy: &SealedHostWriterEnrollment,
     ) -> Result<Self> {
+        Self::begin_from_origin(
+            database,
+            coordinator,
+            FirstPolicyOrigin::Legacy(origin),
+            policy,
+        )
+    }
+    pub(crate) fn begin_registered<T: RangeWriteTransport + 'static>(
+        database: &BicDb,
+        coordinator: &Arc<RangeWriteCoordinator<T>>,
+        origin: &NativeRegisteredServingDataPolicyOrigin,
+        policy: &SealedHostWriterEnrollment,
+    ) -> Result<Self> {
+        Self::begin_from_origin(
+            database,
+            coordinator,
+            FirstPolicyOrigin::Registered(origin),
+            policy,
+        )
+    }
+    fn begin_from_origin<T: RangeWriteTransport + 'static>(
+        database: &BicDb,
+        coordinator: &Arc<RangeWriteCoordinator<T>>,
+        origin: FirstPolicyOrigin<'_>,
+        policy: &SealedHostWriterEnrollment,
+    ) -> Result<Self> {
         origin.require_current(database, policy)?;
         origin.require_original_empty_hook(database)?;
         coordinator.validate_native_writer_enrollment(database, policy)?;
@@ -45,6 +156,7 @@ impl NativeAssignedWriterInstallAttempt {
         database.require_never_installed_receiver_writer_records()?;
         let authority: Arc<dyn CommitAdmission> = coordinator.clone();
         Ok(Self {
+            origin_identity: origin.identity(),
             coordinator: Arc::downgrade(&authority),
             coordinator_id: coordinator.native_writer_coordinator_id(),
             database_incarnation: database.incarnation_id().into(),
@@ -68,10 +180,11 @@ impl NativeAssignedWriterInstallAttempt {
         &self,
         database: &BicDb,
         coordinator: &Arc<RangeWriteCoordinator<T>>,
-        origin: &NativeAssignedDataPolicyOrigin,
+        origin: FirstPolicyOrigin<'_>,
         policy: &SealedHostWriterEnrollment,
     ) -> Result<Arc<dyn CommitAdmission>> {
         self.original_caller.check()?;
+        origin.require_identity(&self.origin_identity)?;
         origin.require_live()?;
         policy.require_live()?;
         let actual: Arc<dyn CommitAdmission> = coordinator.clone();
@@ -95,6 +208,34 @@ impl NativeAssignedWriterInstallAttempt {
         database: &BicDb,
         coordinator: &Arc<RangeWriteCoordinator<T>>,
         origin: &NativeAssignedDataPolicyOrigin,
+        policy: &SealedHostWriterEnrollment,
+    ) -> Result<()> {
+        self.advance_from_origin(
+            database,
+            coordinator,
+            FirstPolicyOrigin::Legacy(origin),
+            policy,
+        )
+    }
+    pub(crate) fn advance_registered<T: RangeWriteTransport + 'static>(
+        &mut self,
+        database: &BicDb,
+        coordinator: &Arc<RangeWriteCoordinator<T>>,
+        origin: &NativeRegisteredServingDataPolicyOrigin,
+        policy: &SealedHostWriterEnrollment,
+    ) -> Result<()> {
+        self.advance_from_origin(
+            database,
+            coordinator,
+            FirstPolicyOrigin::Registered(origin),
+            policy,
+        )
+    }
+    fn advance_from_origin<T: RangeWriteTransport + 'static>(
+        &mut self,
+        database: &BicDb,
+        coordinator: &Arc<RangeWriteCoordinator<T>>,
+        origin: FirstPolicyOrigin<'_>,
         policy: &SealedHostWriterEnrollment,
     ) -> Result<()> {
         if self.installed_guard().is_some() {
@@ -283,7 +424,7 @@ impl NativeAssignedWriterInstallAttempt {
                     state: state.clone(),
                 }),
             };
-            Ok(())
+            origin.retain_installed_writer(state.clone())
         })?;
         drop(_journal);
         origin.require_current(database, policy)?;

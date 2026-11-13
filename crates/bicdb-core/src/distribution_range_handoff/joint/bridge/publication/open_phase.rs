@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 struct OpenMember {
     committed: CommittedNativeJointDecisionObservation,
-    writer: Arc<crate::db::NativeWriterHostState>,
+    writer: crate::db::NativeJointPhaseOwner,
 }
 pub(crate) struct NativeJointOpenPhaseRound {
     original: Arc<NativeJointPublishedServingQuorum>,
@@ -206,7 +206,7 @@ impl NativeJointOpenPhaseQuorum {
             &member.committed,
             self.original.receipts[node].clone(),
         )?;
-        if !Arc::ptr_eq(&writer, &member.writer) {
+        if !writer.same_actual(&member.writer) {
             return Err(invalid("fresh open writer registration/generation changed"));
         }
         self.require_live()
@@ -234,7 +234,7 @@ impl NativeJointOpenPhaseQuorum {
             &member.committed,
             self.original.receipts[node].clone(),
         )?;
-        if !Arc::ptr_eq(&writer, &member.writer) {
+        if !writer.same_actual(&member.writer) {
             return Err(invalid(
                 "fresh open local native scope writer generation changed",
             ));

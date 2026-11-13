@@ -663,7 +663,7 @@ impl BicDb {
         prepared: &NativeJointServingPreparation,
         store: &RangeWriteStore,
         catalogue: &NativeJointBridgeCatalogue,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<NativeJointServingBridgeReceipt> {
@@ -937,7 +937,7 @@ impl BicDb {
         prepared: &NativeJointServingPreparation,
         store: &RangeWriteStore,
         catalogue: &NativeJointBridgeCatalogue,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<NativeJointServingBridgeReceipt> {
@@ -1047,7 +1047,7 @@ impl BicDb {
         prepared: &NativeJointServingPreparation,
         store: &RangeWriteStore,
         catalogue: &NativeJointBridgeCatalogue,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<Option<NativeJointServingBridgeReceipt>> {

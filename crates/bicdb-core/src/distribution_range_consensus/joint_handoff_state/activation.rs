@@ -5,7 +5,7 @@ use super::*;
 mod fresh;
 use crate::distribution_consensus::MetadataRecoveryRolePurpose;
 use crate::distribution_range_handoff::NativeJointOpenAdmission;
-use crate::distribution_range_image_install::NativeImageCatalogueFinalization;
+use crate::distribution_range_image_install::NativeJointImageMaterialization;
 use crate::distribution_range_mutation::{FrozenRangeMutationPermit, RangeMutationAuthority};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -76,7 +76,7 @@ pub(crate) struct NativeJointCatalogueActivationReceipt {
     activated: NativeJointCatalogueActivation,
     native: Arc<crate::db::NativeJointServingBridgeReceipt>,
     // Request continuity only; never serialized into the durable fact below.
-    writer: Arc<crate::db::NativeWriterHostState>,
+    writer: crate::db::NativeJointPhaseOwner,
     writer_domain: crate::db::NativeJointWriterDomain,
     writer_root: PathBuf,
     cancellation: CancellationToken,
@@ -114,7 +114,7 @@ impl NativeJointCatalogueActivationFact {
         scope.require_native(&self.native)?;
         let database = scope.database();
         store.require_native_catalog_durability(database.data_path())?;
-        store.require_native_writer_host_base()?;
+        store.require_native_joint_host_base(database, self.native.data().old_range().id)?;
         if self.store_open_id != store.open_id
             || self.native.local_node_id() != &store.catalog.node_id
             || self.activated != NativeJointCatalogueActivation::from_actual(&self.native)?
@@ -144,7 +144,7 @@ impl NativeJointCatalogueActivationFact {
         scope.require_native(&self.native)?;
         let database = scope.database();
         store.require_native_catalog_durability(database.data_path())?;
-        store.require_native_writer_host_base()?;
+        store.require_native_joint_host_base(database, self.native.data().old_range().id)?;
         if self.store_open_id != store.open_id
             || self.native.local_node_id() != &store.catalog.node_id
             || self.activated != NativeJointCatalogueActivation::from_actual(&self.native)?
@@ -203,7 +203,7 @@ impl NativeJointCatalogueActivationReceipt {
         store: &RangeWriteStore,
     ) -> Result<()> {
         self.require_live()?;
-        if !Arc::ptr_eq(&self.writer, &store.native_writer_host_state()?) {
+        if !self.writer.same_actual(&self.writer_domain.phase_owner()) {
             return Err(range_write_error(
                 "original joint activation writer registration changed",
             ));
@@ -224,7 +224,7 @@ impl NativeJointCatalogueActivationReceipt {
         self.require_original_writer_current(database, store)?;
         self.native.require_current(database)?;
         store.require_native_catalog_durability(database.data_path())?;
-        store.require_native_writer_host_base()?;
+        store.require_native_joint_host_base(database, self.native.data().old_range().id)?;
         if self.store_open_id != store.open_id
             || self.native.local_node_id() != &store.catalog.node_id
             || self.activated != NativeJointCatalogueActivation::from_actual(&self.native)?
@@ -286,9 +286,10 @@ impl RangeWriteStore {
             ));
         }
         native.require_current(database)?;
-        self.require_native_writer_host_base()?;
-        self.native_writer_host_state()?
-            .require_database(database, data.activation_range())?;
+        self.require_native_joint_host_base(database, data.old_range().id)?;
+        if let Ok(writer) = self.native_writer_host_state() {
+            writer.require_database(database, data.activation_range())?;
+        }
         let range = data.old_range().id;
         let expected = NativeJointCatalogueActivation::from_actual(native)?;
         let state = self
@@ -395,7 +396,8 @@ impl RangeWriteStore {
             return self.recover_fresh_native_joint_activation(database, admission);
         }
 
-        let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+        let (writer, writer_root) =
+            admission.original_phase_owner_for_activation(database, self)?;
         let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
         admission.require_live()?;
         admission.committed().require_current(database)?;
@@ -426,7 +428,8 @@ impl RangeWriteStore {
         database: &crate::BicDb,
         admission: &NativeJointOpenAdmission,
     ) -> Result<()> {
-        let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+        let (writer, writer_root) =
+            admission.original_phase_owner_for_activation(database, self)?;
         let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
         if !self.recovery_persistence_uncertain {
             return Ok(());
@@ -435,7 +438,7 @@ impl RangeWriteStore {
         admission.committed().require_current(database)?;
         let native = admission.native_receipt();
         native.require_current(database)?;
-        self.require_native_writer_host_base()?;
+        self.require_native_joint_host_base(database, native.data().old_range().id)?;
         if !self.fsync
             || self.root.canonicalize()? != database.data_path().canonicalize()?
             || !crate::format::native_joint_data_handoff_active(database.data_path())?
@@ -475,7 +478,7 @@ impl RangeWriteStore {
         admission: &NativeJointOpenAdmission,
         original: &crate::distribution_range_handoff::CommittedNativeJointDecisionObservation,
         catalogue: &NativeJointBridgeCatalogue,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<NativeJointCatalogueActivationReceipt> {
@@ -496,7 +499,8 @@ impl RangeWriteStore {
             return result;
         }
         parent.check()?;
-        let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+        let (writer, writer_root) =
+            admission.original_phase_owner_for_activation(database, self)?;
         let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
 
         admission.require_external_publications_current()?;

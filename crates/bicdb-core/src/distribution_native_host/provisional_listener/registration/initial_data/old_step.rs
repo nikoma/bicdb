@@ -345,3 +345,76 @@ impl NativeInitialDataHost {
         Ok(actual)
     }
 }
+
+impl NativeMetadataControlHost {
+    /// Independently retained ACTUAL native recipient objects. The remote OLD
+    /// certificate remains a separate authority and must match these exactly.
+    pub(crate) fn retained_initial_old_joint_owners(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<(
+        Arc<crate::distribution_range_handoff::NativeJointOldObservation>,
+        Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>,
+    )> {
+        let initial = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("actual INITIAL old recipient owner absent"))?;
+        let actual = initial.retained_actual_old_source(range)?;
+        let entries = initial
+            .old_closures
+            .try_lock()
+            .ok_or_else(|| invalid("actual OLD recipient table busy"))?;
+        let retained = entries
+            .get(&range)
+            .ok_or_else(|| invalid("actual OLD recipient entry absent"))?
+            .try_lock()
+            .ok_or_else(|| invalid("actual OLD recipient entry busy"))?;
+        if retained
+            .actual
+            .as_ref()
+            .is_none_or(|old| !Arc::ptr_eq(old, &actual))
+        {
+            return Err(invalid("actual OLD recipient identity changed"));
+        }
+        Ok((actual, retained.runtime.clone()))
+    }
+    /// Only final OLD survivors may retire their obsolete observation-table
+    /// references. Actual runtime/NEW owners remain retained; retired sources
+    /// keep their original CLOSED runtime until a separate cleanup protocol.
+    pub(crate) fn retire_initial_old_observation_after_joint_open(
+        &self,
+        range: crate::RangeId,
+        phase: &crate::distribution_range_handoff::NativeJointReleasePhaseQuorum,
+    ) -> Result<()> {
+        let initial = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("actual INITIAL survivor absent"))?;
+        let actual = initial.retained_actual_old_source(range)?;
+        phase.require_actual_old_owner_retirement(&actual)?;
+        let mut entries = initial
+            .old_closures
+            .try_lock()
+            .ok_or_else(|| invalid("actual survivor OLD table busy"))?;
+        let retained = entries
+            .get(&range)
+            .ok_or_else(|| invalid("actual survivor OLD entry missing"))?;
+        let entry = retained
+            .try_lock()
+            .ok_or_else(|| invalid("actual survivor OLD entry active"))?;
+        if entry
+            .actual
+            .as_ref()
+            .is_none_or(|old| !Arc::ptr_eq(old, &actual))
+            || entry.outcome.is_some()
+        {
+            return Err(invalid(
+                "cannot retire an uncertain/replaced OLD native outcome",
+            ));
+        }
+        drop(entry);
+        entries.remove(&range);
+        Ok(())
+    }
+}

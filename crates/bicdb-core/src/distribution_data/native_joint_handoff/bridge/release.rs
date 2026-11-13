@@ -15,7 +15,7 @@ pub(crate) struct ActualServiceNativeJointReleaseEvidence {
     committed: CommittedNativeJointDecisionObservation,
     native: Arc<crate::db::NativeJointServingBridgeReceipt>,
     activation: NativeJointCatalogueActivationFact,
-    writer: Arc<crate::db::NativeWriterHostState>,
+    writer: crate::db::NativeJointPhaseOwner,
     writer_domain: crate::db::NativeJointWriterDomain,
     root: std::path::PathBuf,
     frozen_owner: Option<Uuid>,
@@ -76,10 +76,10 @@ impl ActualServiceNativeJointReleaseEvidence {
     }
     pub(crate) fn require_original_writer_identity(
         &self,
-        original: &Arc<crate::db::NativeWriterHostState>,
+        original: &crate::db::NativeJointPhaseOwner,
     ) -> Result<()> {
         self.require_live()?;
-        if !Arc::ptr_eq(original, &self.writer) {
+        if !original.same_actual(&self.writer) {
             return Err(data_error(
                 "joint release cannot replace preparation's original actual writer",
             ));
@@ -148,13 +148,13 @@ impl ActualServiceNativeJointReleaseEvidence {
             .require_current_with_historical_cut_scope(scope)?;
         self.activation
             .require_current_with_historical_cut_scope(scope, store)?;
-        let writer = store.native_writer_host_state()?;
+        let writer = self.writer_domain.phase_owner();
         self.writer_domain.require_current(
             database,
             store,
             self.native.data().activation_range(),
         )?;
-        if !Arc::ptr_eq(&writer, &self.writer) {
+        if !writer.same_actual(&self.writer) {
             return Err(data_error(
                 "joint release current writer registration/open/member changed",
             ));
@@ -226,7 +226,7 @@ impl ClusterDataNodeService {
         let activation = self
             .range_writes
             .observe_native_joint_activation_fact_at_historical_cut(&scope, native.clone())?;
-        let writer = self.range_writes.native_writer_host_state()?;
+        let writer = writer_domain.phase_owner();
         writer_domain.require_current(
             &database,
             &self.range_writes,

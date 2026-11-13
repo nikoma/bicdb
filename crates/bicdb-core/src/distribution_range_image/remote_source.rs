@@ -194,31 +194,43 @@ impl ActualNativeRemoteImageSourceFrame {
 /// separate from every step's original bounded request/fresh OWN metadata.
 enum ActualSourceOld {
     Local(NativeJointOldClosedQuorum),
-    Remote(NativeRemoteOldCutCertificate),
+    Remote(Arc<NativeRemoteOldCutCertificate>),
+    RetiredJoint {
+        plan: Arc<crate::distribution_range_handoff::NativeJointHandoffPlan>,
+        source: ClusterNodeId,
+    },
 }
 impl ActualSourceOld {
     fn plan(&self) -> std::sync::Arc<crate::distribution_range_handoff::NativeJointHandoffPlan> {
         match self {
             Self::Local(x) => x.plan(),
             Self::Remote(x) => x.plan(),
+            Self::RetiredJoint { plan, .. } => plan.clone(),
         }
     }
     fn selected_source_id(&self) -> &ClusterNodeId {
         match self {
             Self::Local(x) => x.selected_source_id(),
             Self::Remote(x) => x.selected_source_id(),
+            Self::RetiredJoint { source, .. } => source,
         }
     }
     fn require_current(&self) -> Result<()> {
         match self {
             Self::Local(x) => x.require_current(),
             Self::Remote(x) => x.require_current(),
+            Self::RetiredJoint { .. } => Err(invalid(
+                "source export retired after actual joint Open; no old owner revived",
+            )),
         }
     }
     fn checksum_sha256(&self) -> Result<String> {
         match self {
             Self::Local(x) => x.checksum_sha256(),
             Self::Remote(x) => x.checksum_sha256(),
+            Self::RetiredJoint { .. } => {
+                Err(invalid("retired source cannot issue old certificate"))
+            }
         }
     }
     fn source_image_materialized_facts(
@@ -227,6 +239,9 @@ impl ActualSourceOld {
         match self {
             Self::Local(x) => x.source_image_materialized_facts(),
             Self::Remote(x) => x.source_image_materialized_facts(),
+            Self::RetiredJoint { .. } => {
+                Err(invalid("retired source has no materialization authority"))
+            }
         }
     }
     fn begin_capture_with_initial_wait(
@@ -237,7 +252,16 @@ impl ActualSourceOld {
     ) -> Result<RangeImageCapture> {
         match self {
             Self::Local(x) => x.begin_capture_with_initial_wait(wait, process, publish),
-            Self::Remote(x) => x.begin_capture_with_initial_wait(wait, process, publish),
+            Self::Remote(x) => Arc::get_mut(x)
+                .ok_or_else(|| {
+                    invalid(
+                        "original source capture cannot begin after actual OLD ownership shared",
+                    )
+                })?
+                .begin_capture_with_initial_wait(wait, process, publish),
+            Self::RetiredJoint { .. } => {
+                Err(invalid("retired source cannot start replacement capture"))
+            }
         }
     }
 }
@@ -699,7 +723,7 @@ impl NativeRemoteImageSourceRegistry {
             metadata,
             writer,
             coordinator,
-            ActualSourceOld::Remote(old),
+            ActualSourceOld::Remote(Arc::new(old)),
             target_attempt,
         )
     }
@@ -839,6 +863,95 @@ impl NativeRetainedRemoteImageSource {
             registry,
             cancellation,
         }
+    }
+    pub(crate) fn actual_remote_old_certificate(
+        &self,
+    ) -> Result<Arc<NativeRemoteOldCutCertificate>> {
+        let source = self
+            .session
+            .try_lock()
+            .ok_or_else(|| invalid("actual source certificate busy"))?;
+        source.original_session.check()?;
+        if !source.published || source.capture.is_none() {
+            return Err(invalid("actual source capture/manifest not published"));
+        }
+        match &source.old {
+            ActualSourceOld::Remote(old) => {
+                old.require_current()?;
+                Ok(old.clone())
+            }
+            _ => Err(invalid(
+                "source is not an actual retained remote OLD certificate",
+            )),
+        }
+    }
+    /// Retire ONLY the completed export read pin. OLD freezes and native
+    /// closure obligations stay retained. Actual target materialization is
+    /// required before the source can stop serving this immutable snapshot.
+    pub(crate) fn retire_export_after_actual_registered_new(
+        &self,
+        target: &crate::distribution_data::ActualServiceNativeRegisteredJointNewEvidence,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        let mut source = self
+            .session
+            .try_lock()
+            .ok_or_else(|| invalid("source export callback still active"))?;
+        target.require_remote_source_retirement(source.manifest()?)?;
+        source.old.require_current()?;
+        parent.check()?;
+        // Session latch excludes every actual exporter before its original
+        // cancellation and snapshot drop. A new frame must fail cancellation.
+        source.original_session.cancel();
+        drop(source.capture.take());
+        Ok(())
+    }
+    pub(crate) fn retire_old_export_custody_after_joint_open(
+        &self,
+        phase: &crate::distribution_range_handoff::NativeJointReleasePhaseQuorum,
+    ) -> Result<()> {
+        // Full foreign phase validation must precede this source latch.
+        let old = {
+            let source = self
+                .session
+                .try_lock()
+                .ok_or_else(|| invalid("source OLD retirement busy"))?;
+            if source.capture.is_some() {
+                return Err(invalid(
+                    "source export reader not drained before joint retirement",
+                ));
+            }
+            match &source.old {
+                ActualSourceOld::Remote(old) => old.clone(),
+                ActualSourceOld::RetiredJoint { .. } => return Ok(()),
+                _ => {
+                    return Err(invalid(
+                        "joint remote retirement cannot cast local OLD quorum",
+                    ))
+                }
+            }
+        };
+        phase.require_remote_old_owner_retirement(&old)?;
+        let mut source = self
+            .session
+            .try_lock()
+            .ok_or_else(|| invalid("source OLD retirement callback busy"))?;
+        match &source.old {
+            ActualSourceOld::Remote(actual) if Arc::ptr_eq(actual, &old) => {}
+            _ => {
+                return Err(invalid(
+                    "source OLD retirement changed original certificate owner",
+                ))
+            }
+        }
+        let retired = ActualSourceOld::RetiredJoint {
+            plan: old.plan(),
+            source: old.selected_source_id().clone(),
+        };
+        source.original_session.cancel();
+        source.old = retired;
+        Ok(())
     }
     /// Revokes only this actual source session's child, never its process or
     /// siblings. This is refusal-only; it creates no replacement identity.

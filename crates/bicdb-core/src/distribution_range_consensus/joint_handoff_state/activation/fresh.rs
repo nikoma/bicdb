@@ -28,7 +28,8 @@ impl RangeWriteStore {
         admission: &NativeJointOpenAdmission,
     ) -> Result<Option<NativeJointCatalogueActivationReceipt>> {
         admission.require_live()?;
-        let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+        let (writer, writer_root) =
+            admission.original_phase_owner_for_activation(database, self)?;
         let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
 
         let native = admission.native_receipt();
@@ -89,12 +90,13 @@ impl RangeWriteStore {
         admission: &NativeJointOpenAdmission,
         original: &crate::distribution_range_handoff::CommittedNativeJointDecisionObservation,
         catalogue: &NativeJointBridgeCatalogue,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<NativeJointCatalogueActivationReceipt> {
         parent.check()?;
-        let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+        let (writer, writer_root) =
+            admission.original_phase_owner_for_activation(database, self)?;
         let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
 
         // Nonwaiting cross-service checks happen BEFORE this local journal.
@@ -133,7 +135,7 @@ impl RangeWriteStore {
             .require_current_with_native_read_scope(&scope)?;
         scope.require_prepared_frozen(admission.local_preparation(), frozen)?;
         self.require_native_catalog_durability(database.data_path())?;
-        self.require_native_writer_host_base()?;
+        self.require_native_joint_host_base(database, data.old_range().id)?;
         if native.local_node_id() != &self.catalog.node_id || data != original.data() {
             return Err(range_write_error(
                 "fresh native activation changed exact local member/decision",

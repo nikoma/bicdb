@@ -121,8 +121,6 @@ pub(crate) use range_image_native::NativeInitialDataGenesis;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredClosedPersistScope;
 #[cfg(feature = "tls-replication")]
-pub(crate) use range_image_native::NativeRegisteredJointScope;
-#[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredNoDomainScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredRemoteAttemptScope;
@@ -166,6 +164,10 @@ pub(crate) use range_image_native::{
 };
 pub(crate) use range_image_native::{
     NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::{
+    NativeRegisteredJointExclusionScope, NativeRegisteredJointIdentityBorrow,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::{
@@ -35702,4 +35704,4 @@ mod analyze_sampling_tests {
 #[path = "db/distribution_event_retry_tests.rs"]
 mod distribution_event_retry_tests;
 
-pub(crate) use range_image_native::NativeJointWriterDomain;
+pub(crate) use range_image_native::{NativeJointPhaseOwner, NativeJointWriterDomain};

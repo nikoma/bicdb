@@ -384,21 +384,26 @@ impl NativeJointOpenAdmission {
         store: &crate::distribution_range_consensus::RangeWriteStore,
     ) -> Result<crate::db::NativeJointWriterDomain> {
         self.require_live()?;
-        self.local.actual.require_original_writer(database, store)?;
+        self.local
+            .actual
+            .require_original_phase_owner(database, store)?;
         let domain = self.local.actual.writer_domain().clone();
         domain.require_current(database, store, self.data().activation_range())?;
         self.require_live()?;
         Ok(domain)
     }
-    pub(crate) fn original_writer_for_activation(
+    pub(crate) fn original_phase_owner_for_activation(
         &self,
         database: &crate::BicDb,
         store: &crate::distribution_range_consensus::RangeWriteStore,
-    ) -> Result<(Arc<crate::db::NativeWriterHostState>, std::path::PathBuf)> {
+    ) -> Result<(crate::db::NativeJointPhaseOwner, std::path::PathBuf)> {
         self.require_live()?;
-        let actual = self.local.actual.require_original_writer(database, store)?;
-        let (original, root) = self.local.actual.original_writer_for_continuation()?;
-        if !Arc::ptr_eq(&actual, &original) {
+        let actual = self
+            .local
+            .actual
+            .require_original_phase_owner(database, store)?;
+        let (original, root) = self.local.actual.original_phase_owner_for_continuation()?;
+        if !actual.same_actual(&original) {
             return Err(invalid("joint activation changed preparation writer"));
         }
         self.require_live()?;

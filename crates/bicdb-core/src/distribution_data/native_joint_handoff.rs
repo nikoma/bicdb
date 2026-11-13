@@ -7,6 +7,10 @@ use crate::distribution_range_handoff::NativeJointHandoffPlan;
 use crate::distribution_range_mutation::{FrozenRangeMutationPermit, SourceCaptureReadPin};
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 
+#[cfg(feature = "tls-replication")]
+mod registered_target;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_target::ActualServiceNativeRegisteredJointNewEvidence;
 mod bridge;
 pub(crate) use bridge::{
     ActualServiceNativeJointPreparedEvidence, ActualServiceNativeJointReleaseEvidence,

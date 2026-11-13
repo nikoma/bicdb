@@ -1,6 +1,9 @@
 //! Sealed original-A Registered materialization. No legacy image-fence, local
 //! OLD quorum or ordinary writer is manufactured from remote Manifest DATA.
 use super::*;
+mod first_data_policy;
+pub(crate) use first_data_policy::NativeRegisteredServingDataPolicyOrigin;
+mod release;
 use crate::db::{
     NativeInstalledRangeImageBase, NativeRegisteredReceiverHook,
     NativeRegisteredRemoteFinalImageReceipt,
@@ -8,13 +11,113 @@ use crate::db::{
 use crate::distribution_range_consensus::{
     NativeRegisteredRemoteCatalogueMaterialization, NativeRegisteredRemoteCataloguePoint,
 };
+pub(crate) use release::NativeRegisteredRemoteJointReleaseOwner;
+use release::RegisteredJointReleaseState;
 pub(crate) struct NativeRegisteredRemoteJointTarget {
     preflight: Arc<NativeRegisteredRemoteInstallPreflight>,
+    database_root: std::path::PathBuf,
     base: NativeInstalledRangeImageBase,
     image: Arc<NativeRegisteredRemoteFinalImageReceipt>,
     catalogue: NativeRegisteredRemoteCatalogueMaterialization,
 }
+/// Process-owned continuation custody, retained in the ORIGINAL receiver
+/// before an API can return or later NEW/decision/phase work can fail.
+/// The real runtime also retains A; no drop creates N or Serving.
+pub(crate) struct NativeRegisteredRemoteJointOwner {
+    terminal_writer: std::sync::OnceLock<Arc<crate::db::NativeWriterHostState>>,
+    release: parking_lot::Mutex<Option<RegisteredJointReleaseState>>,
+    target: Arc<NativeRegisteredRemoteJointTarget>,
+    service: Arc<parking_lot::Mutex<crate::distribution_data::ClusterDataNodeService>>,
+    frozen: parking_lot::Mutex<
+        Option<Arc<crate::distribution_range_image_install::NativeImageInstallFreeze>>,
+    >,
+}
+impl NativeRegisteredRemoteJointOwner {
+    pub(crate) fn terminal_writer(&self) -> Option<&Arc<crate::db::NativeWriterHostState>> {
+        self.terminal_writer.get()
+    }
+    fn retain_terminal_writer(&self, state: Arc<crate::db::NativeWriterHostState>) -> Result<()> {
+        if let Some(old) = self.terminal_writer.get() {
+            if Arc::ptr_eq(old, &state) {
+                return Ok(());
+            }
+            return Err(invalid(
+                "Registered terminal policy cannot replace original actual writer State",
+            ));
+        }
+        self.terminal_writer.set(state).map_err(|_| {
+            invalid("Registered terminal policy publication raced another actual State")
+        })
+    }
+    pub(crate) fn service(
+        &self,
+    ) -> &Arc<parking_lot::Mutex<crate::distribution_data::ClusterDataNodeService>> {
+        &self.service
+    }
+    pub(crate) fn target(&self) -> &Arc<NativeRegisteredRemoteJointTarget> {
+        &self.target
+    }
+    pub(crate) fn retained_freeze(
+        &self,
+    ) -> Result<Arc<crate::distribution_range_image_install::NativeImageInstallFreeze>> {
+        let frozen = self
+            .frozen
+            .try_lock()
+            .ok_or_else(|| invalid("Registered joint continuation custody busy"))?;
+        let original = frozen.as_ref().ok_or_else(|| {
+            invalid("Registered joint freeze moved to actual release continuation")
+        })?;
+        original.try_as_frozen()?;
+        Ok(original.clone())
+    }
+}
 impl NativeRegisteredRemoteJointTarget {
+    pub(crate) fn require_original_preflight(
+        &self,
+        original: &Arc<NativeRegisteredRemoteInstallPreflight>,
+    ) -> Result<()> {
+        if !Arc::ptr_eq(original, &self.preflight) {
+            return Err(invalid(
+                "Registered joint release changed actual original preflight",
+            ));
+        }
+        self.preflight.require_original_process()
+    }
+    pub(crate) fn database_root(&self) -> &std::path::Path {
+        &self.database_root
+    }
+    pub(crate) fn store_open_id(&self) -> Uuid {
+        self.catalogue.store_open_id()
+    }
+    /// Necessary original same-open identity only. Current MQ and actual
+    /// Frozen/dropped/Open state must be independently supplied by each phase.
+    pub(crate) fn require_joint_identity(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
+        self.preflight.require_original_process()?;
+        self.preflight.original.database.require_database(db)?;
+        self.preflight.original.store.require_live()?;
+        self.preflight.native().require_current(db)?;
+        db.validate_range_image_bindings(self.preflight.bindings())?;
+        self.base.require_current(db, self.preflight.native())?;
+        self.catalogue.require_current(store, db, &self.base)
+    }
+    pub(crate) fn require_joint_lifetime(
+        &self,
+        root: &std::path::Path,
+        store: Uuid,
+        range: &crate::RangeDescriptor,
+    ) -> Result<()> {
+        self.preflight.require_original_process()?;
+        if root.canonicalize()? != self.database_root
+            || store != self.store_open_id()
+            || crate::distribution_native_read::canonical_range(range)
+                != *self.base.intended_activation_range()
+        {
+            return Err(invalid(
+                "Registered joint phase changed original root/slot/NEW domain",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn base(&self) -> &NativeInstalledRangeImageBase {
         &self.base
     }
@@ -50,7 +153,7 @@ impl NativeRegisteredRemoteJointTarget {
             ));
         }
         db.range_mutation_gate()
-            .validate_quiescent_frozen(self.base.capture_range().id, frozen)?;
+            .validate_frozen(self.base.capture_range().id, frozen)?;
         self.base.require_current(db, self.preflight.native())?;
         let actual = db.read_registered_final_image_integrity(
             self.preflight.native(),
@@ -83,7 +186,7 @@ impl NativeRegisteredRemoteJointTarget {
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<()> {
-        db.with_registered_joint_scope(self, frozen, parent, |scope| {
+        db.with_registered_joint_exclusion_scope(self, frozen, parent, |scope| {
             scope.require_current(db, store)
         })
     }
@@ -100,10 +203,7 @@ impl NativeMetadataControlHost {
         own: HostMetadataReadObservation,
         business: Uuid,
         parent: &CancellationToken,
-    ) -> Result<(
-        NativeRegisteredRemoteJointTarget,
-        RegisteredRemoteImageInstallFreeze,
-    )> {
+    ) -> Result<Arc<NativeRegisteredRemoteJointOwner>> {
         parent.check()?;
         if self.assigned.is_some() || self.data.is_some() {
             return Err(invalid(
@@ -115,6 +215,11 @@ impl NativeMetadataControlHost {
             .as_mut()
             .ok_or_else(|| invalid("actual original Registered receiver absent"))?;
         let range = role.role().current_range().id;
+        if receiver.remote_joint_targets.contains_key(&range) {
+            return Err(invalid(
+                "Registered joint continuation already retained; use original actual owner",
+            ));
+        }
         let attempt = receiver
             .remote_attempts
             .get_mut(&range)
@@ -210,6 +315,7 @@ impl NativeMetadataControlHost {
                         }
                         Ok(NativeRegisteredRemoteJointTarget {
                             preflight: attempt.preflight.clone(),
+                            database_root: db.data_path().canonicalize()?,
                             base,
                             image: final_image.clone(),
                             catalogue,
@@ -228,6 +334,48 @@ impl NativeMetadataControlHost {
             .lease
             .take()
             .expect("same original lease borrowed above");
-        Ok((target, lease))
+        let owner = Arc::new(NativeRegisteredRemoteJointOwner {
+            terminal_writer: std::sync::OnceLock::new(),
+            release: parking_lot::Mutex::new(None),
+            target: Arc::new(target),
+            service: receiver.backend.service.clone(),
+            frozen: parking_lot::Mutex::new(Some(Arc::new(
+                crate::distribution_range_image_install::NativeImageInstallFreeze::RegisteredRemote(
+                    lease,
+                ),
+            ))),
+        });
+        // Infallible retention follows the infallible original-lease take.
+        receiver.remote_joint_targets.insert(range, owner.clone());
+        // Any following busy/error retains the complete original host owner.
+        // The caller resumes that owner; no second lease/target is created.
+        owner
+            .service()
+            .try_lock()
+            .ok_or_else(|| {
+                invalid("Registered joint Store identity busy; original host custody retained")
+            })?
+            .retain_registered_joint_store_identity(&owner)?;
+        Ok(owner)
+    }
+}
+
+impl NativeMetadataControlHost {
+    pub(crate) fn registered_remote_joint_owner(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<Arc<NativeRegisteredRemoteJointOwner>> {
+        let owner = self
+            .replica
+            .as_ref()
+            .and_then(|receiver| receiver.remote_joint_targets.get(&range))
+            .cloned()
+            .ok_or_else(|| invalid("original actual Registered joint continuation absent"))?;
+        owner
+            .service()
+            .try_lock()
+            .ok_or_else(|| invalid("Registered joint identity continuation service busy"))?
+            .retain_registered_joint_store_identity(&owner)?;
+        Ok(owner)
     }
 }

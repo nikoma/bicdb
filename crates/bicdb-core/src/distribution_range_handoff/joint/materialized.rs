@@ -30,6 +30,10 @@ pub(crate) struct NativeJointMaterializedFacts {
 }
 
 pub(crate) enum NativeJointNewObservation {
+    #[cfg(feature = "tls-replication")]
+    Registered {
+        actual: crate::distribution_data::ActualServiceNativeRegisteredJointNewEvidence,
+    },
     Survivor {
         old: Arc<NativeJointOldObservation>,
         role: crate::distribution_range_recovery::RecoveryRoleAdmission,
@@ -40,6 +44,13 @@ pub(crate) enum NativeJointNewObservation {
     },
 }
 impl NativeJointNewObservation {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn from_registered_actual_target(
+        actual: crate::distribution_data::ActualServiceNativeRegisteredJointNewEvidence,
+    ) -> Result<Self> {
+        actual.require_current()?;
+        Ok(Self::Registered { actual })
+    }
     pub(crate) fn from_finalized_actual_target(
         actual: ActualServiceNativeJointNewEvidence,
         service: Arc<Mutex<ClusterDataNodeService>>,
@@ -54,6 +65,8 @@ impl NativeJointNewObservation {
     }
     pub(crate) fn require_current(&self) -> Result<()> {
         match self {
+            #[cfg(feature = "tls-replication")]
+            Self::Registered { actual } => actual.require_current(),
             Self::Survivor { old, .. } => old.require_current(),
             Self::Target { actual, service } => {
                 let local = service
@@ -65,12 +78,16 @@ impl NativeJointNewObservation {
     }
     pub(super) fn require_live_issuance(&self) -> Result<()> {
         match self {
+            #[cfg(feature = "tls-replication")]
+            Self::Registered { actual } => actual.require_issuance_current(),
             Self::Survivor { old, role } => old.require_new_member_role(role),
             Self::Target { actual, .. } => actual.require_issuance_current(),
         }
     }
     pub(super) fn facts(&self) -> NativeJointMaterializedFacts {
         match self {
+            #[cfg(feature = "tls-replication")]
+            Self::Registered { actual } => actual.facts().clone(),
             Self::Survivor { old, role } => {
                 let mut facts = old.materialized_facts();
                 facts.metadata_term = role.metadata_term();
@@ -84,18 +101,30 @@ impl NativeJointNewObservation {
 }
 
 pub(crate) struct NativeJointNewRound {
-    old: Arc<NativeJointOldClosedQuorum>,
+    old: NativeJointOldDecisionOwners,
     observations: BTreeMap<ClusterNodeId, NativeJointNewObservation>,
 }
 pub(crate) struct NativeJointMaterializedQuorums {
-    pub(super) old: Arc<NativeJointOldClosedQuorum>,
+    pub(super) old: NativeJointOldDecisionOwners,
     pub(super) new: BTreeMap<ClusterNodeId, NativeJointNewObservation>,
 }
 impl NativeJointNewRound {
     pub(crate) fn begin(old: Arc<NativeJointOldClosedQuorum>) -> Result<Self> {
         old.require_current()?;
         Ok(Self {
-            old,
+            old: NativeJointOldDecisionOwners::Local(old),
+            observations: BTreeMap::new(),
+        })
+    }
+    /// The certificate is not cast into a local quorum. Every actual recipient
+    /// owner must independently match the authenticated historical response.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn begin_remote_actual(
+        certificate: Arc<NativeRemoteOldCutCertificate>,
+        recipients: BTreeMap<ClusterNodeId, Arc<NativeJointOldObservation>>,
+    ) -> Result<Self> {
+        Ok(Self {
+            old: NativeJointOldDecisionOwners::from_remote_actual(certificate, recipients)?,
             observations: BTreeMap::new(),
         })
     }
@@ -169,6 +198,8 @@ impl NativeJointMaterializedQuorums {
 impl NativeJointNewObservation {
     pub(super) fn release_capture_pin_for_decision(&self) -> Result<()> {
         match self {
+            #[cfg(feature = "tls-replication")]
+            Self::Registered { actual } => actual.release_capture_pin_for_decision(),
             Self::Survivor { old, .. } => old.release_capture_pin_for_decision(),
             Self::Target { actual, service } => {
                 let service = service
@@ -187,6 +218,8 @@ impl NativeJointNewObservation {
         parent: &crate::CancellationToken,
     ) -> Result<crate::db::NativeJointDecisionReceipt> {
         match self {
+            #[cfg(feature = "tls-replication")]
+            Self::Registered { actual } => actual.publish_decision(admission, parent),
             Self::Survivor { old, .. } => old.publish_decision(admission, parent),
             Self::Target { actual, service } => {
                 let mut service = service
@@ -204,6 +237,8 @@ impl NativeJointNewObservation {
         receipt: &crate::db::NativeJointDecisionReceipt,
     ) -> Result<()> {
         match self {
+            #[cfg(feature = "tls-replication")]
+            Self::Registered { actual } => actual.require_decision_receipt(receipt),
             Self::Survivor { old, .. } => old.require_decision_receipt(receipt),
             Self::Target { service, .. } => service
                 .try_lock()

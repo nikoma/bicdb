@@ -120,7 +120,9 @@ impl NativeJointServingPolicyAdmission {
     ) -> Result<()> {
         self.require_live()?;
         let member = &self.phase.continuation.members[&self.local];
-        if !Arc::ptr_eq(service, &member.service) || !Arc::ptr_eq(original, &member.writer) {
+        if !Arc::ptr_eq(service, &member.service)
+            || !Arc::ptr_eq(original, member.writer.actual_writer()?)
+        {
             return Err(invalid(
                 "writer policy changed actual original service/State",
             ));
@@ -130,6 +132,57 @@ impl NativeJointServingPolicyAdmission {
         self.phase.members[&self.local].require_current_with_scope(actual, &scope, owner)?;
         self.post
             .require_current_with_scope(actual, &scope, owner)?;
+        self.require_live()
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_local_registered_current(
+        &self,
+        service: &Arc<Mutex<ClusterDataNodeService>>,
+        actual: &ClusterDataNodeService,
+        db: &crate::BicDb,
+        original: &Arc<crate::distribution_native_host::NativeRegisteredRemoteJointOwner>,
+    ) -> Result<()> {
+        self.require_live()?;
+        let member = &self.phase.continuation.members[&self.local];
+        let crate::db::NativeJointPhaseOwner::Registered(owner) = &member.writer else {
+            return Err(invalid(
+                "Registered first policy cannot use an existing writer's admission",
+            ));
+        };
+        if !Arc::ptr_eq(service, &member.service)
+            || !std::sync::Weak::ptr_eq(owner, &Arc::downgrade(original))
+        {
+            return Err(invalid(
+                "Registered first policy changed original service/receiver owner",
+            ));
+        }
+        let scope = self.native().historical_cut_scope(db)?;
+        let dropped = NativeJointReleaseOwnerView::Dropped(&member.activation);
+        self.phase.members[&self.local].require_current_with_scope(actual, &scope, dropped)?;
+        self.post
+            .require_current_with_scope(actual, &scope, dropped)?;
+        self.require_live()
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_post_policy_metadata(
+        &self,
+        metadata: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+    ) -> Result<()> {
+        self.require_live()?;
+        metadata.require_live_request(business)?;
+        self.data().require_metadata_domain(
+            metadata.committed_topology(business)?,
+            metadata.restore_activation(business)?,
+        )?;
+        let anchor = self.post.committed().metadata_anchor();
+        if metadata.requester_node_id() != &self.local
+            || metadata.context_id() == anchor.2
+            || metadata.term() < anchor.0
+            || metadata.read_index() < anchor.1
+        {
+            return Err(invalid("Registered first policy requires independently post-all-released actual OWN metadata"));
+        }
         self.require_live()
     }
     pub(crate) fn observe_local_continuity(

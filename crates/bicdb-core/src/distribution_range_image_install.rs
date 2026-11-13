@@ -29,6 +29,8 @@ const MAX_RECORDS: usize = 16_384;
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 const MAX_STEP_BYTES: usize = 9 * 1024 * 1024;
 
+mod joint_materialization;
+pub(crate) use joint_materialization::NativeJointImageMaterialization;
 mod finalized_recovery;
 pub(crate) use finalized_recovery::FinalizedNativeRecoveryImage;
 

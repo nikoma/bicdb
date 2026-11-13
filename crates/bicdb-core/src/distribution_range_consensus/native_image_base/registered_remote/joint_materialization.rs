@@ -37,6 +37,9 @@ impl NativeRegisteredRemoteCataloguePublication {
     }
 }
 impl NativeRegisteredRemoteCatalogueMaterialization {
+    pub(crate) fn store_open_id(&self) -> Uuid {
+        self.store_open
+    }
     pub(crate) fn require_current(
         &self,
         store: &RangeWriteStore,

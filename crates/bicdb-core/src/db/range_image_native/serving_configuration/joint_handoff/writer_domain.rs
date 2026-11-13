@@ -2,7 +2,7 @@
 //! No role, Ready, application or Strong permission is constructed here.
 use super::*;
 use crate::distribution_range_consensus::RangeWriteStore;
-use crate::distribution_range_image_install::NativeImageCatalogueFinalization;
+use crate::distribution_range_image_install::NativeJointImageMaterialization;
 
 /// Persistable constraints ONLY. Reading/decoding these does not construct
 /// the actual same-open fact below or replace independently fresh authority.
@@ -45,7 +45,7 @@ impl NativeClosedWriterFact {
         &self,
         database: &BicDb,
         store: &RangeWriteStore,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
         let current = database.observe_closed_writer_joint_fact(
@@ -71,7 +71,7 @@ impl BicDb {
         native: &NativeRecoveryAdmission,
         data: &crate::distribution_range_handoff::NativeJointDecisionData,
         store: &RangeWriteStore,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<NativeClosedWriterFact> {
         native.require_current(self)?;

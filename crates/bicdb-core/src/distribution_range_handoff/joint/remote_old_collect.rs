@@ -312,6 +312,11 @@ impl NativeRemoteOldCutCertificate {
         self.require_current()?;
         Ok(self.facts.clone())
     }
+    /// Historical DATA is checked against separately retained ACTUAL recipients
+    /// by decision_owners. This getter alone grants no local OLD quorum.
+    pub(super) fn decision_constraints(&self) -> Vec<NativeJointIrrevocableFacts> {
+        self.constraints.values().cloned().collect()
+    }
     pub(crate) fn begin_capture_with_initial_wait(
         &mut self,
         budget: std::time::Duration,

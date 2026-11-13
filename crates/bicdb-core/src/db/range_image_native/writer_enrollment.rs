@@ -15,6 +15,8 @@ pub(crate) use data_domains::{
     NativeClosedWriterDomain, NativeWriterDataDomainPolicy, NativeWriterDataDomainTransition,
     NativeWriterServingDomainPublication,
 };
+mod joint_phase_owner;
+pub(crate) use joint_phase_owner::NativeJointPhaseOwner;
 mod joint_domain;
 #[cfg(feature = "tls-replication")]
 mod registered_joint;
@@ -23,7 +25,9 @@ mod registered_no_domain;
 #[cfg(feature = "tls-replication")]
 mod registered_remote_attempt;
 #[cfg(feature = "tls-replication")]
-pub(crate) use registered_joint::NativeRegisteredJointScope;
+pub(crate) use registered_joint::{
+    NativeRegisteredJointExclusionScope, NativeRegisteredJointIdentityBorrow,
+};
 #[cfg(feature = "tls-replication")]
 mod registered_remote_mutation;
 #[cfg(feature = "tls-replication")]

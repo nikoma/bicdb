@@ -17,7 +17,9 @@ pub(crate) use no_domain::NativeRegisteredSelectedRangeNoDomain;
 pub(crate) use remote_attempt::NativeRegisteredRemoteProposalPoint;
 pub(crate) use remote_attempt::NativeRegisteredRemoteTransactionRequest;
 pub(crate) use remote_attempt::{
-    NativeRegisteredRemoteInstallPreflight, NativeRegisteredRemoteJointTarget,
+    NativeRegisteredRemoteInstallPreflight, NativeRegisteredRemoteJointOwner,
+    NativeRegisteredRemoteJointReleaseOwner, NativeRegisteredRemoteJointTarget,
+    NativeRegisteredServingDataPolicyOrigin,
 };
 pub(crate) use remote_image::NativeRegisteredRemoteImageStep;
 pub(crate) use remote_image::NativeRegisteredRemoteTransferRequest;
@@ -110,6 +112,8 @@ pub(super) struct NativeRegisteredReplicaReceiver {
         crate::RangeId,
         remote_attempt::NativeRegisteredRemoteInstallAttempt,
     >,
+    remote_joint_targets:
+        std::collections::BTreeMap<crate::RangeId, Arc<NativeRegisteredRemoteJointOwner>>,
     remote_images: std::collections::BTreeMap<
         crate::RangeId,
         crate::db::NativeRegisteredRemoteImageInstallation,
@@ -284,6 +288,7 @@ impl NativeRegisteredReplicaReceiver {
             stopping: false,
             remote_attempts: Default::default(),
             remote_images: Default::default(),
+            remote_joint_targets: Default::default(),
         })
     }
     fn advance(

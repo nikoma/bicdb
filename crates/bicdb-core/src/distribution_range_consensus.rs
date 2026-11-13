@@ -156,6 +156,7 @@ mod native_durability;
 mod native_normal;
 mod native_prefix;
 mod native_writer;
+mod registered_joint_identity;
 pub(crate) use joint_handoff_state::{
     NativeJointBridgeCatalogue, NativeJointCatalogueActivationFact,
     NativeJointCatalogueActivationReceipt, NativeJointOldCatalogPreflight,
@@ -860,6 +861,11 @@ pub struct RangeWriteStore {
     native_activated_opens: BTreeMap<RangeId, crate::db::NativeActivatedOpenGuard>,
     native_joint_activated_opens: BTreeMap<RangeId, Arc<crate::db::NativeJointActivatedOpenGuard>>,
     native_writer_host: Option<std::sync::Weak<crate::db::NativeWriterHostState>>,
+    #[cfg(feature = "tls-replication")]
+    registered_joint_owners: BTreeMap<
+        RangeId,
+        std::sync::Weak<crate::distribution_native_host::NativeRegisteredRemoteJointOwner>,
+    >,
     // Necessary lifetime refusal, EMPTY on reopen; never reconstructed from JSON.
     current_joint_recovery_writers:
         BTreeMap<RangeId, std::sync::Weak<crate::db::NativeWriterHostState>>,
@@ -1101,6 +1107,8 @@ impl RangeWriteStore {
             native_activated_opens: BTreeMap::new(),
             native_joint_activated_opens: BTreeMap::new(),
             native_writer_host: None,
+            #[cfg(feature = "tls-replication")]
+            registered_joint_owners: BTreeMap::new(),
             current_joint_recovery_writers: BTreeMap::new(),
             _native_abort_owner: abort_owner,
             recovery_persistence_uncertain: false,

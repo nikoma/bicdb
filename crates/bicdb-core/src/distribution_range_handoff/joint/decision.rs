@@ -346,6 +346,8 @@ impl NativeJointPreparedDecision {
             data: self.data.clone(),
             plan,
             role,
+            #[cfg(feature = "tls-replication")]
+            registered_own: None,
         })
     }
 }
@@ -355,6 +357,11 @@ pub(crate) struct NativeJointDecisionPublicationAdmission {
     data: NativeJointDecisionData,
     plan: Arc<NativeJointHandoffPlan>,
     role: RecoveryRoleAdmission,
+    #[cfg(feature = "tls-replication")]
+    registered_own: Option<(
+        crate::distribution_consensus::HostMetadataReadObservation,
+        Uuid,
+    )>,
 }
 impl NativeJointDecisionPublicationAdmission {
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
@@ -366,8 +373,20 @@ impl NativeJointDecisionPublicationAdmission {
     pub(crate) fn plan(&self) -> &NativeJointHandoffPlan {
         &self.plan
     }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_registered_own(&self) -> Result<()> {
+        let (own, business) = self.registered_own.as_ref().ok_or_else(|| {
+            invalid("Registered joint publication requires independently fresh actual OWN")
+        })?;
+        self.role.require_own_host_metadata(own, *business)?;
+        self.require_live()
+    }
     pub(crate) fn require_live(&self) -> Result<()> {
         self.plan.require_role(&self.role)?;
+        #[cfg(feature = "tls-replication")]
+        if let Some((own, business)) = &self.registered_own {
+            self.role.require_own_host_metadata(own, *business)?;
+        }
         self.data.validate()
     }
 }
@@ -417,6 +436,28 @@ impl NativeJointDecisionPublicationRound {
     ) -> Result<()> {
         parent.check()?;
         let admission = self.prepared.authorize_local_publication(role)?;
+        self.publish_admitted_member(admission, parent)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn publish_actual_registered_member(
+        &mut self,
+        role: RecoveryRoleAdmission,
+        own: crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        parent: &crate::CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        role.require_own_host_metadata(&own, business)?;
+        let mut admission = self.prepared.authorize_local_publication(role)?;
+        admission.registered_own = Some((own, business));
+        admission.require_registered_own()?;
+        self.publish_admitted_member(admission, parent)
+    }
+    fn publish_admitted_member(
+        &mut self,
+        admission: NativeJointDecisionPublicationAdmission,
+        parent: &crate::CancellationToken,
+    ) -> Result<()> {
         let node = admission.role().local_node_id().clone();
         let receipt = if let Some(new) = self.prepared.quorums.new.get(&node) {
             new.publish_decision(&admission, parent)?
@@ -490,6 +531,8 @@ impl NativeJointDurableDecision {
         for (node, observation) in self.prepared.quorums.new {
             let value = match observation {
                 NativeJointNewObservation::Survivor { old, .. } => old.retained_serving_lease()?,
+                #[cfg(feature = "tls-replication")]
+                NativeJointNewObservation::Registered { actual } => actual.into_serving_lease()?,
                 NativeJointNewObservation::Target { actual, service } => {
                     let lease = {
                         let local = service

@@ -9,6 +9,8 @@ use crate::distribution_data::{
 use crate::distribution_range_consensus::RangeWriteCoordinator;
 use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use std::sync::Weak;
+mod registered_serving;
+use registered_serving::RegisteredServingPolicy;
 mod cleanup;
 mod writer_data_domain;
 use cleanup::{AssignedCleanup, AssignedCleanupSender};
@@ -73,6 +75,7 @@ impl NativeAssignedDataAdmission {
 }
 pub(super) struct NativeAssignedDataHost {
     parts: registered_replica::RegisteredAssignedParts,
+    registered: Option<RegisteredServingPolicy>,
     coordinator: Option<Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>>,
     attempt: Option<NativeAssignedWriterInstallAttempt>,
     image: Option<NativeJointServingLease>,
@@ -103,6 +106,7 @@ impl NativeAssignedDataHost {
         }
         let range = actual.base().intended_activation_range().clone();
         Ok(Self {
+            registered: None,
             parts,
             coordinator: None,
             attempt: None,
@@ -117,6 +121,9 @@ impl NativeAssignedDataHost {
         })
     }
     fn install_closed(&mut self, parent: &CancellationToken) -> Result<()> {
+        if self.registered.is_some() {
+            return self.install_registered_serving(parent);
+        }
         parent.check()?;
         if self.stopping {
             return Err(invalid("stopping Assigned DATA owner cannot restart"));

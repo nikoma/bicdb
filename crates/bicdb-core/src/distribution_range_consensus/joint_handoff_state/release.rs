@@ -111,7 +111,10 @@ impl RangeWriteStore {
         scope: &crate::db::NativeJointHistoricalCutScope<'_>,
     ) -> Result<BTreeMap<u64, String>> {
         self.require_native_catalog_durability(scope.database().data_path())?;
-        self.require_native_writer_host_base()?;
+        self.require_native_joint_host_base(
+            scope.database(),
+            scope.native().data().old_range().id,
+        )?;
         let range = scope.native().data().old_range().id;
         if self.progress(range).current_epoch != scope.native().data().activation_range().epoch {
             return Err(range_write_error(

@@ -3,7 +3,7 @@
 use super::*;
 use crate::distribution_range_consensus::NativeJointBridgeCatalogue;
 use crate::distribution_range_handoff::CommittedNativeJointDecisionObservation;
-use crate::distribution_range_image_install::NativeImageCatalogueFinalization;
+use crate::distribution_range_image_install::NativeJointImageMaterialization;
 
 mod activation;
 mod publication_scope;
@@ -213,7 +213,7 @@ impl NativeJointServingPreparation {
         store: &RangeWriteStore,
         committed: &CommittedNativeJointDecisionObservation,
         catalogue: &NativeJointBridgeCatalogue,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
         #[cfg(test)]
@@ -271,11 +271,16 @@ impl BicDb {
         committed: &CommittedNativeJointDecisionObservation,
         store: &RangeWriteStore,
         catalogue: &NativeJointBridgeCatalogue,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<NativeJointServingPreparation> {
         parent.check()?;
+        #[cfg(feature = "tls-replication")]
+        let _registered_identity = image
+            .and_then(|i| i.registered_target())
+            .map(|t| self.borrow_registered_joint_identity(t.clone()))
+            .transpose()?;
         catalogue.require_current(store, self, committed, image, frozen)?;
         let data = committed.data();
         let id = data.old_range().id;

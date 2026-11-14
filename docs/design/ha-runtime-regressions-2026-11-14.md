@@ -99,7 +99,20 @@ per-target receipt and hashes; its full 400,777,285-byte log is retained in the
 independent local capture, not duplicated in the repository. That SQL result
 does not establish transparent distributed SQL.
 
-Native and remaining-workspace results must retain their own actual final
-counts. Earlier 508 compiler failures and the failed Azure qualification remain
+The native job 132380250977 later failed with 273 passes, 47 failures and one
+ignored case. The complete failed log and exact case inventory are archived.
+Observed error-location groups are 22 missing owned metadata context, 13
+range-requester authority refusals, 11 prepared-round timeouts, and one source
+discovery error-contract assertion. These are not 47 independently established
+product defects. The [owned-context correction](native-joint-decision-owned-context-regression.md)
+and [remote setup correction](../evidence/native510-remote-setup-2026-11-14/README.md)
+retain the production guards and original downstream assertions; their fault
+cuts were not reached by the failed setup. The
+[timeout report](native-preparation-deadline-regression-2026-11-14.md) separates
+observed work, the narrow redundant-check removal and untested diagnostics.
+All successor corrections remain unexecuted.
+
+Remaining-workspace results must retain their own actual final counts.
+Earlier 508 compiler failures and the failed Azure qualification remain
 unchanged. Corrected-source execution, cold recovery, native operator/controller
 integration, Joined quorum/release, and physical expansion remain open gates.

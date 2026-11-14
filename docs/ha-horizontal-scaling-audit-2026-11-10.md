@@ -26,6 +26,10 @@ current-main port require their own validation. The later d811 candidate passed
 workspace/all-target and no-default-Core consumer compilation, but failed two
 Core cases and aborted Oracle HR with a stack overflow. Its separate Rails
 check passed 20 tests and 100 assertions. The
+later native suite failed with 273 passes, 47 failures and one ignored case;
+SQL passed 2,681 tests with four ignored. Those native failures include repeated
+setup prerequisites and unresolved prepared-round timeouts, not 47 established
+independent production defects. The
 [runtime regression report](design/ha-runtime-regressions-2026-11-14.md) retains
 the exact source, complete terminal-component logs and prepared corrections.
 Those corrections have not executed. The

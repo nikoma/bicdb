@@ -1,12 +1,19 @@
 # HA recovery integration review — November 13, 2026
 
 This is a source integration checkpoint, not release or production
-qualification. The verified delivered baseline at this checkpoint is
-1.0.506-beta, `6c432f6aaf59ef88252a6a559d400b2946b1bc13`. Its complete
-merge tree equals required-CI-tested head `f71598ecd498aebed0eca52fa13e7ab01fe61497`;
-all required checks passed. It produced no binary or deployment. The code
-described below is an isolated **1.0.508-beta candidate**. The original Azure expansion remains a
-failed scale-out qualification; no replacement physical experiment has run.
+qualification. Current delivered main is **1.0.507-beta**,
+`f69b242c9db3afe0d24e83520f94a853093d4b98`. It adds strong-read request-budget
+and lost-listener fixes; those checks are separate from this candidate's
+qualification. The prior506 documentation merge at
+`6c432f6aaf59ef88252a6a559d400b2946b1bc13` had all required checks pass and its
+complete tree equals tested head f715. No binary or deployment was produced by
+that documentation merge.
+
+The code below is an isolated **1.0.510-beta candidate**, ported to main507.
+Its earlier508 heads and failures remain source-pinned. The separate memo509
+candidate is ordered before510; any newly delivered509 changes require a final
+port and validation. The original Azure expansion remains a failed scale-out
+qualification; no replacement physical experiment has run.
 
 | Finding or change | Evidence and classification | Remaining gate |
 | --- | --- | --- |

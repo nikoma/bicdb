@@ -109,11 +109,19 @@ jobs:
       # --all-targets is the point: `cargo build` alone would not have caught
       # bicdb-sql's unit tests failing to compile against a changed signature.
       - name: cargo check --workspace --all-targets
-        run: cargo check --workspace --all-targets --locked
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-workspace-pressure/alltargets.jsonl" -- cargo check --workspace --all-targets --locked
       # Workspace feature unification enables TLS in Core. Check this actual
       # consumer separately so TLS-only APIs cannot leak into its Core build.
       - name: Workflow consumer compiles without Core defaults
-        run: cargo check -p bicdb-workflow --all-targets --locked
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-workspace-pressure/consumer.jsonl" -- cargo check -p bicdb-workflow --all-targets --locked
+      - name: Retain qualification build pressure and interruption evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-workspace-pressure-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/native-workspace-pressure/
 
   fmt:
     name: Formatting
@@ -249,7 +257,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build projection chaos helper
-        run: cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-core-evidence/helper-pressure.jsonl" -- cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
       - name: Record source and list selected Core library tests
         shell: bash
         run: |
@@ -260,24 +268,40 @@ jobs:
           mkdir -p "$RUNNER_TEMP/native-core-evidence"
           git rev-parse HEAD > "$RUNNER_TEMP/native-core-evidence/source-revision.txt"
           rustc --version --verbose > "$RUNNER_TEMP/native-core-evidence/rustc.txt"
-          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --list \
+          selected_tests=(
+            "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_current_damage_refused_at_exit"
+            "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_finite_open_never_starts_process_worker"
+            "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation"
+            "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root"
+          )
+          printf '%s\n' "${selected_tests[@]}" > "$RUNNER_TEMP/native-core-evidence/requested-tests.txt"
+          python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-core-evidence/list-pressure.jsonl" -- \
+            cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked -- --list "${selected_tests[@]}" \
             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/selected-tests.log"
           python3 - <<'PY'
           import os, pathlib
           path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'native-core-evidence' / 'selected-tests.log'
           count = sum(line.endswith(': test') for line in path.read_text().splitlines())
-          if count == 0:
-              raise SystemExit('The requested Core filter selected no tests')
+          expected = (path.parent / 'requested-tests.txt').read_text().splitlines()
+          actual = [line[:-6] for line in path.read_text().splitlines() if line.endswith(': test')]
+          if count != 4 or sorted(actual) != sorted(expected):
+              raise SystemExit('Diagnostic must select exactly the four original fully-qualified tests')
           print(f'Selected {count} Core library tests; ignored tests remain identified by the execution result')
           PY
-      - name: Execute selected Core library tests
+      - name: Execute the four original native cases serially with passive capture
         shell: bash
         run: |
           set -euo pipefail
           export BICDB_TEST_EVIDENCE_ROOT="$RUNNER_TEMP/native-core-evidence/fault-state"
           export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
           mkdir -p "$BICDB_TEST_EVIDENCE_ROOT"
-          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=4 --show-output \
+          selected_tests=(
+            "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_current_damage_refused_at_exit"
+            "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_finite_open_never_starts_process_worker"
+            "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation"
+            "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root"
+          )
+          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked -- "${selected_tests[@]}" --test-threads=1 --show-output \
             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/tests.log"
       - name: Retain focused source, log and opted-in fault-state evidence
         if: always()

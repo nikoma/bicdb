@@ -357,3 +357,74 @@ same and unrelated ranges are not replaced. Selected catalogue adoption and
 materialized owner, NEW/dual decision/Open/ALL release, actual APP/Strong on the
 new range and cold continuation are still absent. This is uncompiled source,
 not an actual successful base operation or acceptance result.
+
+
+## Actual selected catalogue adoption and retained materialized owner source
+
+The next coherent source batch connects the actual host method
+adopt_joined_remote_catalogue_floor to a dedicated Store consumer and distinct
+NativeJoinedRemoteCataloguePoint/Publication. Its original identity-only scope
+is separate from the generic image Context: ordinary image/history/row/base
+operations continue to refuse uncertain catalogue persistence. Only the
+original host-retained catalogue publication can reach its exact retry path.
+
+Initial adoption checks actual durable current catalogue and selected
+Installing/native base/final/history/rows/Finished proof, then builds its
+candidate from the latest complete catalogue while the actual Store is owned.
+It retains both that candidate and its exact encoded bytes before memory
+assignment or I/O. Each attempted re-fsync retains its actual Role/OWN/MStore
+context, whether durable replace returned, whether exact byte readback returned,
+and its error. The bound is eight retained writes with no eviction or new
+candidate. Disk/memory state outside the exact original/candidate is refused
+while pending, so an old uncertain candidate cannot overwrite later progress.
+The ordinary durability fence remains closed until actual readback and the
+fresh selected-current/metadata-version request publication accept the result.
+
+After known success, a continuation follows the selected intent/base/log and
+actual current disk==memory, allowing unrelated catalogue progress. It never
+replays its retained whole-catalogue candidate. The immutable materialization
+checks only the actual original open/native/image and selected floor; it does
+not pin unrelated range state or claim that an old Role remains live. Actual
+page/cache/native pre/postcheck I/O still requires the independent stalled-I/O
+acceptance gate. Same-candidate retry availability and failure bounds are not
+proved by source inspection.
+
+materialize_joined_remote_image separately consumes those actual successful
+physical and catalogue producers. It constructs a non-deserializable
+NativeJoinedRemoteMaterializedOwner with the real original writer-State Arc,
+original preflight/source, actual protected final and profile-3 base, selected
+catalogue materialization, and sealed observational Frozen identity. It stores
+the same Arc in the SAME original host attempt under the short current/version
+guards before any later fallible postcheck or API return. The A lease remains
+owned by that host attempt and the runtime; this does not copy or extract A,
+return it to N, install a writer, or drop custody on a caller error.
+
+The owner exposes require_joint_identity(db, store) without a captured snapshot
+Role, OWN deadline, old request or original native absence requirement. It
+checks the actual same State/hook/service/runtime/open/slot/native/final/base/
+selected catalogue. A later joint phase must independently provide its fresh
+actual metadata authority and its real lexical A exclusion. A separate check
+accepts only the original actual Joined lease/Frozen; no scalar ID constructs
+one. Service/runtime backedges are Weak, and runtime-retained preflight still
+has no strong runtime edge. Root's later joint adapter must perform the real
+lexical A-lease transfer after this owner is already retained.
+
+This source also refuses unsupported Joined receive/image semantic flags in
+ordinary no-TLS format validation before open/migration writes, and refuses an
+unsupported profile-3 receipt at its common validation entry. A source-defined
+no-TLS control uses a real native-origin fixture plus refusal-only format flags;
+it checks migration refusal and unchanged metadata. It has not executed.
+Legacy flags and profile-1/2 serialization/validators retain their contracts.
+
+All new paths in this batch remain uncompiled and unexecuted at freeze. There
+is no actual two-populated-range test result, injected persistence-failure
+result, measured R1 independence, NEW/decision/Open/ALL release, updated DATA
+range policy, Joined future-donor proof, cold repair, independent-host scale-out
+or production qualification. The next actual acceptance must run first-range
+Serving and original SDK ACK/full Strong, then import the second populated
+range into the same Joined DB while ordinary R1 APP/full Strong continues;
+advance unrelated business and metadata state, exercise same-candidate fsync
+failure/retry, and separately stall genuine selected disk I/O. The earlier
+after-export transport hold cannot substitute for that disk or second-movement
+gate. Root's forthcoming joint/Serving consumer cannot use this source note or
+any historical manifest/certificate DTO as authority.

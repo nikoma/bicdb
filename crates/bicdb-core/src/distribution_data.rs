@@ -70,6 +70,8 @@ mod native_writer;
 pub(crate) use native_assigned_policy::NativeAssignedImagePolicyEvidence;
 pub(crate) use native_writer::NativeAssignedServiceWriterPublication;
 #[cfg(feature = "tls-replication")]
+mod joined_remote_catalogue;
+#[cfg(feature = "tls-replication")]
 mod joined_remote_installing;
 #[cfg(feature = "tls-replication")]
 mod registered_closed_fence;

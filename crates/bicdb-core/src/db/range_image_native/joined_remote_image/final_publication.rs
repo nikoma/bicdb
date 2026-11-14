@@ -255,6 +255,61 @@ pub(crate) struct NativeJoinedRemoteFinalImageReceipt {
     record: Record,
 }
 impl NativeJoinedRemoteFinalImageReceipt {
+    /// Complete physical proof for an ORIGINAL retained catalogue point. This
+    /// checks real native publication and actual current identities, without
+    /// falsely calling uncertain whole-catalogue durability "current".
+    pub(crate) fn require_catalogue_current(
+        &self,
+        db: &BicDb,
+        scope: &NativeJoinedRemoteMutationScope<'_>,
+        point: &NativeJoinedRemoteImagePoint<'_>,
+        physical: &NativeInstalledRangeImageBase,
+    ) -> Result<()> {
+        point.require_live()?;
+        scope.require_database(db)?;
+        physical.require_current(db, scope.native())?;
+        let actual = db.read_joined_final_image_integrity(scope.native(), &self.pointer())?;
+        let r = &self.record;
+        let pf = point.preflight();
+        if bounded_json(&actual.record, MAX_NATIVE_RECEIPT_BYTES)?
+            != bounded_json(r, MAX_NATIVE_RECEIPT_BYTES)?
+            || physical.joined_final_image_pointer() != Some(&self.pointer())
+            || !std::ptr::eq(pf, scope.preflight().as_ref())
+            || r.database_open != db.incarnation_id()
+            || r.attempt != scope.attempt_id()
+            || r.manifest.checksum_sha256 != pf.source().manifest().checksum_sha256
+            || r.namespaces != pf.bindings().namespace_ids()
+            || r.manifest.schema_sha256 != pf.bindings().schema_sha256()
+            || r.manifest.readers != pf.bindings().reader_features()
+            || r.store_open != pf.selected().catalogue().store_open_id()
+            || r.catalogue_id != pf.selected().catalogue().catalogue_id()
+            || r.original_writer_policy_sha256 != scope.original_writer_sha256()
+            || r.image_generations != db.native_range_image_generation_pair(r.range)?
+            || bounded_json(&r.index_definitions, MAX_NATIVE_RECEIPT_BYTES)?
+                != bounded_json(&verification::actual_indexes(db)?, MAX_NATIVE_RECEIPT_BYTES)?
+            || r.metadata_store != point.request().member().store_id()
+            || point.request().own().term() < r.metadata_term
+            || point.request().own().read_index() < r.metadata_index
+            || db.replication_shippable_seq() < r.target_reserved_b
+            || db.current_visibility_watermark() < r.target_reserved_b
+        {
+            return Err(invalid(
+                "Joined catalogue final original physical identity changed",
+            ));
+        }
+        let NativeRemoteImageSourcePayloadV1::Finished(seal) = point.frame().payload()? else {
+            return Err(invalid(
+                "Joined catalogue final requires genuine Finished source frame",
+            ));
+        };
+        if seal != &r.source_seal {
+            return Err(invalid(
+                "Joined catalogue changed original full source seal",
+            ));
+        }
+        point.require_live()?;
+        scope.require_database(db)
+    }
     pub(crate) fn pointer(&self) -> NativeJoinedRemoteFinalImagePointer {
         self.record.pointer()
     }

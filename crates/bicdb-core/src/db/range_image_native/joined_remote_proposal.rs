@@ -140,6 +140,32 @@ impl NativeJoinedRemoteProposalReceipt {
         }
         scope.require_store(db, store)
     }
+    /// Original proposal integrity for a DISTINCT retained catalogue retry.
+    /// Ordinary mutation still requires require_mutation_current/full custody.
+    pub(crate) fn require_catalogue_identity(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        scope: &NativeJoinedRemoteMutationScope<'_>,
+    ) -> Result<()> {
+        scope.require_store_identity(db, store)?;
+        let actual = db.read_native_joined_remote_proposal_record_point(
+            store.native_writer_store_open_id(),
+            scope.native(),
+            scope.range_id(),
+            scope.attempt_id(),
+            scope.original_writer_sha256(),
+            &self.pointer(),
+        )?;
+        if crate::distribution_range_image::bounded_json(&actual.record, MAX_BYTES)?
+            != crate::distribution_range_image::bounded_json(&self.record, MAX_BYTES)?
+        {
+            return Err(invalid(
+                "Joined catalogue changed original exact native proposal",
+            ));
+        }
+        scope.require_store_identity(db, store)
+    }
     pub(in crate::db::range_image_native) fn require_guarded_transaction_current(
         &self,
         db: &BicDb,
@@ -448,6 +474,26 @@ impl BicDb {
         )?;
         scope.require_store(self, store)?;
         Ok(result)
+    }
+    /// DISTINCT retained catalogue retry integrity read. The lexical original
+    /// mutation scope still binds State/open/A/fresh request, not file health.
+    pub(crate) fn read_native_joined_remote_proposal_for_catalogue(
+        &self,
+        store: &RangeWriteStore,
+        scope: &NativeJoinedRemoteMutationScope<'_>,
+        pointer: &NativeJoinedRemoteProposalPointer,
+    ) -> Result<NativeJoinedRemoteProposalReceipt> {
+        scope.require_store_identity(self, store)?;
+        let actual = self.read_native_joined_remote_proposal_record_point(
+            store.native_writer_store_open_id(),
+            scope.native(),
+            scope.range_id(),
+            scope.attempt_id(),
+            scope.original_writer_sha256(),
+            pointer,
+        )?;
+        actual.require_catalogue_identity(self, store, scope)?;
+        Ok(actual)
     }
     // Exact protected integrity reader only. The real lexical scope and
     // fresh request remain mandatory outside this private DATA reader.

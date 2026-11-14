@@ -106,6 +106,11 @@ pub(crate) enum NativeJoinedRemoteImageProgress {
     Rows(NativeJoinedRemoteRowProgress),
     Verification(NativeJoinedRemoteVerificationProgress),
     FinalImage(NativeJoinedRemoteFinalImagePointer),
+    CatalogueFloor {
+        range_index: u64,
+        native_page_xid: u64,
+        native_receipt_sha256: String,
+    },
     NativeBase {
         range_index: u64,
         native_page_xid: u64,

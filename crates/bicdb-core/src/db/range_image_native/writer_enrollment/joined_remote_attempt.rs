@@ -220,9 +220,16 @@ impl NativeJoinedRemoteMutationScope<'_> {
     pub(crate) fn require_database(&self, db: &BicDb) -> Result<()> {
         self.original.require_database_identity(db)
     }
-    pub(crate) fn require_store(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
+    /// Actual original service/Store/State only. This is NOT a durability
+    /// exception for image/row callers. Only the retained catalogue sink uses
+    /// it to reconcile its original exact uncertain file publication.
+    pub(crate) fn require_store_identity(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
         self.require_database(db)?;
         self.preflight().require_original_writer(db, store)?;
+        self.require_database(db)
+    }
+    pub(crate) fn require_store(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
+        self.require_store_identity(db, store)?;
         db.require_native_writer_catalogue_custody(store)?;
         self.require_database(db)
     }

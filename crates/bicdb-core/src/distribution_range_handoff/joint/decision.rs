@@ -662,6 +662,22 @@ impl NativeJointDecisionPublicationRound {
         Ok(())
     }
     pub(crate) fn finish(self) -> Result<NativeJointDurableDecision> {
+        self.try_finish().map_err(|(error, _original)| error)
+    }
+    /// On refusal, return the exact original owned round and durable receipts.
+    /// No fresh attempt or decoded decision can replace uncertain custody.
+    pub(crate) fn try_finish(
+        self,
+    ) -> std::result::Result<NativeJointDurableDecision, (BicDbError, Self)> {
+        if let Err(error) = self.require_finish_current() {
+            return Err((error, self));
+        }
+        Ok(NativeJointDurableDecision {
+            prepared: self.prepared,
+            durable: self.durable,
+        })
+    }
+    fn require_finish_current(&self) -> Result<()> {
         self.prepared.quorums.require_current()?;
         let old = self
             .durable
@@ -684,10 +700,7 @@ impl NativeJointDecisionPublicationRound {
         for receipt in self.durable.values() {
             self.prepared.require_actual_receipt(receipt)?;
         }
-        Ok(NativeJointDurableDecision {
-            prepared: self.prepared,
-            durable: self.durable,
-        })
+        Ok(())
     }
 }
 impl NativeJointDurableDecision {
@@ -705,26 +718,71 @@ impl NativeJointDurableDecision {
             ),
         >,
     > {
+        self.retain_new_serving_owners()
+    }
+    /// Retry custody only: these leases share the genuine original owners.
+    /// Keep this decision until the complete prepared quorum is retained.
+    pub(crate) fn retain_new_serving_owners(
+        &self,
+    ) -> Result<
+        BTreeMap<
+            ClusterNodeId,
+            (
+                Arc<parking_lot::Mutex<crate::distribution_data::ClusterDataNodeService>>,
+                crate::distribution_data::NativeJointServingLease,
+            ),
+        >,
+    > {
         self.require_current()?;
         let mut owners = BTreeMap::new();
-        for (node, observation) in self.prepared.quorums.new {
+        for (node, observation) in &self.prepared.quorums.new {
             let value = match observation {
                 NativeJointNewObservation::Survivor { old, .. } => old.retained_serving_lease()?,
                 #[cfg(feature = "tls-replication")]
-                NativeJointNewObservation::Registered { actual } => actual.into_serving_lease()?,
+                NativeJointNewObservation::Registered { actual } => {
+                    actual.retain_serving_lease()?
+                }
                 NativeJointNewObservation::Target { actual, service } => {
                     let lease = {
                         let local = service
                             .try_lock()
                             .ok_or_else(|| invalid("joint NEW owner service busy"))?;
-                        actual.into_joint_serving_lease(&local)?
+                        actual.retain_joint_serving_lease(&local)?
                     };
-                    (service, lease)
+                    (service.clone(), lease)
                 }
             };
-            owners.insert(node, value);
+            owners.insert(node.clone(), value);
         }
         Ok(owners)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_preparation_custody(&self) -> serde_json::Value {
+        let images = self
+            .prepared
+            .quorums
+            .new
+            .iter()
+            .filter_map(|(node, observation)| match observation {
+                NativeJointNewObservation::Target { actual, .. } => {
+                    Some((node.clone(), actual.test_image_custody_identity()))
+                }
+                _ => None,
+            })
+            .collect::<BTreeMap<_, _>>();
+        let receipts = self
+            .durable
+            .iter()
+            .map(|(node, receipt)| {
+                (
+                    node.clone(),
+                    serde_json::json!({"checksum":receipt.checksum_sha256(),
+                "page_xid":receipt.test_native_page_xid(),
+                "database_open":receipt.native_database_incarnation()}),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        serde_json::json!({"decision":self.data(),"durable_receipts":receipts,"images":images})
     }
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
         &self.prepared.data

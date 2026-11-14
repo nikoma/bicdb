@@ -434,3 +434,25 @@ impl BicDb {
         Ok(receipt)
     }
 }
+
+#[cfg(test)]
+impl BicDb {
+    /// Read actual protected facts as DATA only; never a preparation grant.
+    pub(crate) fn test_joint_preparation_record(
+        &self,
+        range: RangeId,
+    ) -> Result<Option<serde_json::Value>> {
+        let Some(record) = self
+            .read_native_range_image_record::<NativeJointServingPreparationRecord>(
+                &preparation_key(range),
+            )?
+        else {
+            return Ok(None);
+        };
+        record.validate()?;
+        let archive = self.read_native_range_image_record::<NativeJointServingPreparationRecord>(
+            &preparation_history_key(range, &record.checksum_sha256),
+        )?;
+        Ok(Some(serde_json::json!({"record":record,"archive":archive})))
+    }
+}

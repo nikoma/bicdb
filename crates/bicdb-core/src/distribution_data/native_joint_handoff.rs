@@ -869,8 +869,8 @@ impl ClusterDataNodeService {
 pub(crate) struct ActualServiceNativeJointNewEvidence {
     plan: Arc<NativeJointHandoffPlan>,
     role: crate::distribution_range_recovery::HandoffRoleAdmission,
-    image: crate::distribution_range_image_install::NativeImageCatalogueFinalization,
-    frozen: crate::distribution_range_image_install::NativeImageInstallFreeze,
+    image: Arc<crate::distribution_range_image_install::NativeImageCatalogueFinalization>,
+    frozen: Arc<crate::distribution_range_image_install::NativeImageInstallFreeze>,
     pin: parking_lot::Mutex<Option<SourceCaptureReadPin>>,
     facts: crate::distribution_range_handoff::NativeJointMaterializedFacts,
 }
@@ -879,17 +879,29 @@ impl ActualServiceNativeJointNewEvidence {
         self,
         service: &ClusterDataNodeService,
     ) -> Result<NativeJointServingLease> {
+        self.retain_joint_serving_lease(service)
+    }
+    /// Share only these original actual owners. The caller must retain the
+    /// decided owner until its complete preparation quorum takes custody.
+    pub(crate) fn retain_joint_serving_lease(
+        &self,
+        service: &ClusterDataNodeService,
+    ) -> Result<NativeJointServingLease> {
         self.require_current(service)?;
-        let Self {
-            image, frozen, pin, ..
-        } = self;
-        // Only the owned reader is retired. Its actual installer lease is
-        // transferred intact, never converted to a generic Frozen authority.
-        drop(pin.into_inner());
+        let retired = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| data_error("joint target serving pin transition busy"))?
+            .take();
+        drop(retired);
         Ok(NativeJointServingLease::Image {
-            image: Arc::new(image),
-            frozen: Arc::new(frozen),
+            image: self.image.clone(),
+            frozen: self.frozen.clone(),
         })
+    }
+    #[cfg(test)]
+    pub(crate) fn test_image_custody_identity(&self) -> serde_json::Value {
+        ClusterDataNodeService::test_joint_image_custody_identity(&self.image, &self.frozen)
     }
     pub(crate) fn facts(&self) -> &crate::distribution_range_handoff::NativeJointMaterializedFacts {
         &self.facts
@@ -947,6 +959,24 @@ impl ClusterDataNodeService {
         role: crate::distribution_range_recovery::HandoffRoleAdmission,
         image: crate::distribution_range_image_install::NativeImageCatalogueFinalization,
         frozen: crate::distribution_range_image_install::NativeImageInstallFreeze,
+        parent: &CancellationToken,
+    ) -> Result<ActualServiceNativeJointNewEvidence> {
+        self.observe_native_joint_new_target_retained(
+            old,
+            role,
+            Arc::new(image),
+            Arc::new(frozen),
+            parent,
+        )
+    }
+    /// Same constructor checks, borrowing the genuine originally finalized
+    /// pair so a pre-publication refusal cannot destroy retry custody.
+    pub(crate) fn observe_native_joint_new_target_retained(
+        &self,
+        old: &crate::distribution_range_handoff::NativeJointOldClosedQuorum,
+        role: crate::distribution_range_recovery::HandoffRoleAdmission,
+        image: Arc<crate::distribution_range_image_install::NativeImageCatalogueFinalization>,
+        frozen: Arc<crate::distribution_range_image_install::NativeImageInstallFreeze>,
         parent: &CancellationToken,
     ) -> Result<ActualServiceNativeJointNewEvidence> {
         parent.check()?;
@@ -1268,5 +1298,23 @@ impl ClusterDataNodeService {
         let observation=crate::distribution_range_handoff::CommittedNativeJointDecisionObservation::from_actual_service(evidence)?;
         observation.require_current(&database)?;
         Ok(observation)
+    }
+}
+
+#[cfg(test)]
+impl ClusterDataNodeService {
+    pub(crate) fn test_joint_image_custody_identity(
+        image: &Arc<crate::distribution_range_image_install::NativeImageCatalogueFinalization>,
+        frozen: &Arc<crate::distribution_range_image_install::NativeImageInstallFreeze>,
+    ) -> serde_json::Value {
+        let base = image.base();
+        serde_json::json!({
+            "attempt":base.attempt_id(),"base_receipt_sha256":base.native_receipt_sha256(),
+            "base_page_xid":base.native_page_xid(),"session":base.session_id(),"nonce":base.nonce(),
+            "image_root":base.image_root_sha256(),"range_index":base.range_index(),
+            "frozen_owner":frozen.as_frozen().owner(),
+            "image_allocation_diagnostic_only":Arc::as_ptr(image) as usize,
+            "frozen_allocation_diagnostic_only":Arc::as_ptr(frozen) as usize,
+        })
     }
 }

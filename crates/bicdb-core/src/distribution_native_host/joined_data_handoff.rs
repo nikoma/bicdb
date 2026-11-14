@@ -241,6 +241,14 @@ impl Members {
     }
 }
 
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TestHandoffCustodyCut {
+    AfterTargetNew,
+    BeforePreparationOwn,
+    AfterFirstNativePreparation,
+}
+
 /// One handoff of `range` onto `target`, with the custody described in the
 /// module documentation.
 pub(crate) struct NativeJoinedDataHandoff {
@@ -257,7 +265,10 @@ pub(crate) struct NativeJoinedDataHandoff {
     target_leased: bool,
     plan: Option<Arc<NativeJointHandoffPlan>>,
     closed: Option<Arc<NativeJointOldClosedQuorum>>,
-    image: Option<(NativeImageInstallFreeze, NativeImageCatalogueFinalization)>,
+    image: Option<(
+        Arc<NativeImageInstallFreeze>,
+        Arc<NativeImageCatalogueFinalization>,
+    )>,
     publishing: Option<(NativeJointDecisionPublicationRound, BTreeSet<ClusterNodeId>)>,
     decision: Option<NativeJointDurableDecision>,
     policies_installed: bool,
@@ -277,6 +288,16 @@ pub(crate) struct NativeJoinedDataHandoff {
     /// the install passes through, when a test asked for them.
     #[cfg(test)]
     restart_probes: Option<Vec<(&'static str, String)>>,
+    #[cfg(test)]
+    custody_cut: Option<TestHandoffCustodyCut>,
+    #[cfg(test)]
+    custody_trace: Vec<serde_json::Value>,
+    #[cfg(test)]
+    custody_trace_enabled: bool,
+    #[cfg(test)]
+    cut_round_starts: usize,
+    #[cfg(test)]
+    publication_starts: usize,
 }
 
 impl NativeJoinedDataHandoff {
@@ -306,6 +327,48 @@ impl NativeJoinedDataHandoff {
             last_attempt: None,
             #[cfg(test)]
             restart_probes: None,
+            #[cfg(test)]
+            custody_cut: None,
+            #[cfg(test)]
+            custody_trace: Vec::new(),
+            #[cfg(test)]
+            custody_trace_enabled: false,
+            #[cfg(test)]
+            cut_round_starts: 0,
+            #[cfg(test)]
+            publication_starts: 0,
+        }
+    }
+    #[cfg(test)]
+    pub(crate) fn test_cancel_custody_once(&mut self, cut: TestHandoffCustodyCut) {
+        self.custody_cut = Some(cut);
+        self.custody_trace_enabled = true;
+    }
+    #[cfg(test)]
+    pub(crate) fn test_custody_snapshot(&self) -> serde_json::Value {
+        let image = self.image.as_ref().map(|(frozen, image)| {
+            ClusterDataNodeService::test_joint_image_custody_identity(image, frozen)
+        });
+        serde_json::json!({"image":image,"decision":self.decision.as_ref().map(|d|d.test_preparation_custody()),
+            "prepared_retained":self.prepared.is_some(),"publishing_retained":self.publishing.is_some(),
+            "session_canceled":self.session.is_cancel_requested(),"last_attempt":self.last_attempt,
+            "source_cut_rounds":self.cut_round_starts,"publication_rounds":self.publication_starts,
+            "trace":self.custody_trace})
+    }
+    #[cfg(test)]
+    fn test_custody_cut(
+        &mut self,
+        point: TestHandoffCustodyCut,
+        caller: &CancellationToken,
+        detail: serde_json::Value,
+    ) {
+        if self.custody_cut == Some(point) {
+            self.custody_trace
+                .push(serde_json::json!({"point":format!("{point:?}"),
+                "detail":detail,"caller_was_live":caller.check().is_ok(),
+                "session_was_live":self.session.check().is_ok()}));
+            self.custody_cut = None;
+            caller.cancel();
         }
     }
     /// Ask the target runtime to restart a dropped transfer in every state in
@@ -617,6 +680,10 @@ impl NativeJoinedDataHandoff {
         relocation: &RangeRelocation,
         parent: &CancellationToken,
     ) -> Result<()> {
+        #[cfg(test)]
+        {
+            self.cut_round_starts += 1;
+        }
         self.cut_attempted = true;
         self.closed = None;
         self.plan = None;
@@ -694,7 +761,7 @@ impl NativeJoinedDataHandoff {
         let image = self
             .install_on_target(hosts, members, &plan, capture, parent)
             .map_err(|error| stage_error("image transfer", error))?;
-        self.image = Some(image);
+        self.image = Some((Arc::new(image.0), Arc::new(image.1)));
         Ok(())
     }
 
@@ -976,15 +1043,29 @@ impl NativeJoinedDataHandoff {
                     .record_actual_survivor(node, role)
                     .map_err(|error| stage_error("survivor materialization", error))?;
             }
-            let (frozen, image) = self
-                .image
-                .take()
-                .ok_or_else(|| handoff_error("finalized image custody absent before decision"))?;
+            let (frozen, image) =
+                self.image.as_ref().cloned().ok_or_else(|| {
+                    handoff_error("finalized image custody absent before decision")
+                })?;
             let service = members.get(&self.target)?.service.clone();
             let target = service
                 .lock()
-                .observe_native_joint_new_target(&closed, handoff, image, frozen, &self.session)
+                .observe_native_joint_new_target_retained(
+                    &closed,
+                    handoff,
+                    image,
+                    frozen,
+                    &self.session,
+                )
                 .map_err(|error| stage_error("target materialization", error))?;
+            #[cfg(test)]
+            if self.custody_cut == Some(TestHandoffCustodyCut::AfterTargetNew) {
+                self.test_custody_cut(
+                    TestHandoffCustodyCut::AfterTargetNew,
+                    parent,
+                    target.test_image_custody_identity(),
+                );
+            }
             round
                 .record(
                     NativeJointNewObservation::from_finalized_actual_target(target, service)
@@ -997,6 +1078,13 @@ impl NativeJoinedDataHandoff {
                 .map_err(|error| stage_error("decision preparation", error))?
                 .publication_round();
             self.publishing = Some((publication, BTreeSet::new()));
+            #[cfg(test)]
+            {
+                self.publication_starts += 1;
+            }
+            // The actual publication now owns the same finalized image and
+            // freeze. Drain the driver's extra references before publication.
+            self.image = None;
         }
         let plan = self
             .plan
@@ -1033,12 +1121,14 @@ impl NativeJoinedDataHandoff {
             .map_err(|error| stage_error("decision publication", error))?;
             done.insert(node);
         }
-        let (publication, _) = self.publishing.take().unwrap();
-        self.decision = Some(
-            publication
-                .finish()
-                .map_err(|error| stage_error("decision quorum", error))?,
-        );
+        let (publication, done) = self.publishing.take().unwrap();
+        match publication.try_finish() {
+            Ok(decision) => self.decision = Some(decision),
+            Err((error, publication)) => {
+                self.publishing = Some((publication, done));
+                return Err(stage_error("decision quorum", error));
+            }
+        }
         Ok(())
     }
 
@@ -1127,14 +1217,22 @@ impl NativeJoinedDataHandoff {
             self.policies_installed = true;
         }
         if self.prepared.is_none() && self.published.is_none() && self.continuation.is_none() {
-            let decision = self.decision.take().ok_or_else(|| {
+            let decision = self.decision.as_ref().ok_or_else(|| {
                 handoff_error("durable decision custody absent before serving preparation")
             })?;
             let mut round: Option<NativeJointPreparedServingRound> = None;
-            for (local, (service, lease)) in decision
-                .into_new_serving_owners()
-                .map_err(|error| stage_error("serving owners", error))?
-            {
+            let owners = decision
+                .retain_new_serving_owners()
+                .map_err(|error| stage_error("serving owners", error))?;
+            #[cfg(test)]
+            if self.custody_cut == Some(TestHandoffCustodyCut::BeforePreparationOwn) {
+                self.test_custody_cut(
+                    TestHandoffCustodyCut::BeforePreparationOwn,
+                    parent,
+                    serde_json::json!({"actual_lease_count":owners.len()}),
+                );
+            }
+            for (local, (service, lease)) in owners {
                 let business = Uuid::now_v7();
                 let token = bounded(parent, REQUEST);
                 let fresh = members
@@ -1160,6 +1258,16 @@ impl NativeJoinedDataHandoff {
                         .prepare_local_native_joint_serving(committed, lease, &session)
                         .map_err(|error| stage_error("serving preparation", error))?
                 };
+                #[cfg(test)]
+                if self.custody_cut == Some(TestHandoffCustodyCut::AfterFirstNativePreparation) {
+                    let detail = serde_json::json!({"actual_node":local,
+                        "actual_preparation_checksum":actual.prepared().checksum_sha256()});
+                    self.test_custody_cut(
+                        TestHandoffCustodyCut::AfterFirstNativePreparation,
+                        parent,
+                        detail,
+                    );
+                }
                 let observation =
                     NativeJointPreparedServingObservation::from_actual_service(actual, service)
                         .map_err(|error| stage_error("serving preparation", error))?;
@@ -1179,6 +1287,14 @@ impl NativeJoinedDataHandoff {
                 .finish()
                 .map_err(|error| stage_error("serving preparation quorum", error))?;
             self.prepared = Some(Arc::new(prepared));
+            #[cfg(test)]
+            if self.custody_trace_enabled {
+                self.custody_trace.push(serde_json::json!({"point":"complete_prepared_quorum_retained",
+                    "original_decision":self.decision.as_ref().map(|d|d.test_preparation_custody())}));
+            }
+            // Retain the complete successor BEFORE dropping decided custody.
+            // Extra original-owner references must drain before joint release.
+            self.decision = None;
         }
         if self.published.is_none() && self.continuation.is_none() {
             let prepared = self
@@ -1245,7 +1361,7 @@ impl NativeJoinedDataHandoff {
             }
             let image = self
                 .image_owner
-                .take()
+                .as_ref()
                 .ok_or_else(|| handoff_error("target image release owner absent"))?;
             let mut runtimes = BTreeMap::new();
             for node in &survivors {
@@ -1257,9 +1373,12 @@ impl NativeJoinedDataHandoff {
                 runtimes.insert(node.clone(), runtime);
             }
             let continuation = published
-                .retain_release_continuation(self.activations.clone(), runtimes, image)
+                .retain_release_continuation(self.activations.clone(), runtimes, image.clone())
                 .map_err(|error| stage_error("release continuation", error))?;
             self.continuation = Some(Arc::new(continuation));
+            // Only the retained successor now owns the release view. Drop the
+            // extra original reference before the unique-owner release gate.
+            self.image_owner = None;
             // The real freeze owners must drain before release.
             drop(published);
             self.published = None;

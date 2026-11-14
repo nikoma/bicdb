@@ -359,13 +359,26 @@ impl ActualServiceNativeRegisteredJointNewEvidence {
         Arc<parking_lot::Mutex<ClusterDataNodeService>>,
         NativeJointServingLease,
     )> {
+        self.retain_serving_lease()
+    }
+    pub(crate) fn retain_serving_lease(
+        &self,
+    ) -> Result<(
+        Arc<parking_lot::Mutex<ClusterDataNodeService>>,
+        NativeJointServingLease,
+    )> {
         self.require_current()?;
-        drop(self.pin.into_inner());
+        let retired = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| data_error("Registered serving pin transition busy"))?
+            .take();
+        drop(retired);
         Ok((
             self.owner.service().clone(),
             NativeJointServingLease::Registered {
-                owner: self.owner,
-                frozen: self.frozen,
+                owner: self.owner.clone(),
+                frozen: self.frozen.clone(),
             },
         ))
     }

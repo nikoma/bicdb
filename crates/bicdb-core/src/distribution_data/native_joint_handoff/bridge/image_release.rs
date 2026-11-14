@@ -6,6 +6,9 @@ use crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt;
 /// Same-open retry custody only. The original API keeps its receipt deadline;
 /// a distinct fresh full-member phase can validate that receipt as historical
 /// audit without reviving it or creating a replacement freeze/open grant.
+// Clones retain the SAME opaque lease; actual release still requires its
+// unique Arc. A builder's original must drain after successor retention.
+#[derive(Clone)]
 pub(crate) struct NativeJointImageReleaseOwner {
     service: Arc<parking_lot::Mutex<ClusterDataNodeService>>,
     image: Arc<NativeImageCatalogueFinalization>,

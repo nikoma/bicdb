@@ -119,6 +119,10 @@ impl NativeJointDecisionReceipt {
             self.record.post_quorum_metadata_read_index,
         )
     }
+    #[cfg(test)]
+    pub(crate) fn test_native_page_xid(&self) -> u64 {
+        self.record.native_page_xid
+    }
     pub(crate) fn checksum_sha256(&self) -> &str {
         &self.record.checksum_sha256
     }

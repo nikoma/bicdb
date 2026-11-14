@@ -209,3 +209,25 @@ A real remote receipt is still only a native fact. No implementation here
 counts OLD/new majorities or changes placement, routing, authority, ordinary
 read readiness, catalogue decision state, activation/Open, final source
 custody retirement or production qualification.
+
+### Repeated movement and reply-association limits
+
+The initial OLD publisher is explicitly limited to an actual INITIAL source
+admission and the original immutable from-birth predecessor configuration in
+`State.record.facts`. A subsequently received range may be absent from those
+facts; even an originally owned range can acquire a later Serving-overlay
+configuration. Both refuse with an explicit missing-historical-predecessor
+diagnostic. The four OLD controls above cover original INITIAL configurations
+only. This is not repeated movement, a Joined source producer or a complete
+self-healing path. A real retained historical Serving-audit predecessor,
+observed before OLD closure and independently checked afterward without an
+effective-Serving fallback, is still required.
+
+A source review also identified a reply-correlation defect: accepting any OLD
+recipient in receipt DATA without tying it to the reply's authenticated snapshot
+recipient. The successor adds that equality check. Each genuine successful OLD
+reply supplies a pure-DATA negative control: substitute another OLD node ID and
+recompute the outer checksum, then require the actual protocol validator to
+refuse. This does not create a new authenticated frame or native grant. No
+runtime mispublication or durable-data loss was observed; the source defect and
+its unrun control remain distinct from the preserved qualification evidence.

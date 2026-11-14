@@ -58,7 +58,12 @@ impl NativeRemoteOldDecisionWriterScope<'_> {
         self.writer
             .record
             .facts
-            .require_range(&admission.plan().old_native_predecessor_data()?)?;
+            .require_range(&admission.plan().old_native_predecessor_data()?)
+            .map_err(|error| {
+                invalid(format!(
+                    "remote OLD DECISION requires original immutable birth predecessor; retained historical Serving predecessor not implemented: {error}"
+                ))
+            })?;
         let stored: NativeWriterPolicyRecord =
             db.read_native_range_image_record(POLICY_POINTER)?
                 .ok_or_else(|| invalid("remote OLD decision installed policy absent"))?;

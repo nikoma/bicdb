@@ -425,7 +425,12 @@ impl NativeRemoteNewReplyV1 {
         }
         match (&request.operation, &self.native_decision) {
             (NativeRemoteNewOperationV1::PublishDecision { facts }, Some(receipt)) => {
-                receipt.require_request(request, facts)?
+                receipt.require_request(request, facts)?;
+                if receipt.node_id != self.snapshot.node_id {
+                    return Err(invalid(
+                        "remote DECISION receipt differs from authenticated snapshot recipient",
+                    ));
+                }
             }
             (NativeRemoteNewOperationV1::PublishDecision { .. }, None) => {
                 return Err(invalid("native DECISION outcome not proved"))

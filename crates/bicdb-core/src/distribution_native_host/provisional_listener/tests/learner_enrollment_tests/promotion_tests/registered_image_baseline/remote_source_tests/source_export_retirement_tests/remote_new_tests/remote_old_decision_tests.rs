@@ -164,7 +164,9 @@ pub(super) fn exercise(
         "ordinary_gate_error_not_end_to_end_APP":deny_after,"gate_before":gate_before,"gate_after":gate_after,
         "source_APP_ACKs":acknowledged,"every_actual_operation":ledger,"source_frame_journal":journal,
         "no_catalogue_vote_activation_Open_or_Serving":true})).unwrap();
-    let receipt = retry.unwrap().reply().native_decision.clone().unwrap();
+    let actual_retry = retry.unwrap();
+    audit_reply_recipient_association(actual_retry.reply(), mf, output);
+    let receipt = actual_retry.reply().native_decision.clone().unwrap();
     assert_eq!(receipt.node_id, *selected);
     assert_eq!(receipt.native_page_xid, xid);
     let after_native = after_native.unwrap();
@@ -352,4 +354,35 @@ fn observer_refusals(
             assert!(row["actual_reply_validation_error"].is_null());
         }
     }
+}
+
+fn audit_reply_recipient_association(
+    actual: &crate::distribution_range_handoff::NativeRemoteNewReplyV1,
+    mf: &NativeRemoteImageManifestV1,
+    output: &std::path::Path,
+) {
+    actual.require_request(&actual.request).unwrap();
+    let mut altered = actual.clone();
+    let other = mf
+        .old_members
+        .keys()
+        .find(|node| **node != actual.snapshot.node_id)
+        .unwrap();
+    altered.native_decision.as_mut().unwrap().node_id = other.clone();
+    altered.checksum_sha256 = altered.checksum().unwrap();
+    let refused = altered.require_request(&actual.request);
+    evidence(
+        &output.join("remote-old-decision-reply-recipient-before-assertions.json"),
+        &serde_json::json!({
+            "actual_authenticated_snapshot_recipient":actual.snapshot.node_id,"actual_reply":actual,
+            "mutated_decoded_receipt_recipient":other,"outer_checksum_recomputed":true,
+            "actual_refusal":refused.as_ref().err().map(ToString::to_string),
+            "decoded_DATA_control_not_new_RPC_or_authenticated_frame":true,
+        }),
+    )
+    .unwrap();
+    assert!(refused
+        .unwrap_err()
+        .to_string()
+        .contains("differs from authenticated snapshot recipient"));
 }

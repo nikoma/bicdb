@@ -83,7 +83,7 @@ fn call(
     }
 }
 #[allow(clippy::too_many_arguments)]
-pub(super) fn exercise(
+pub(in super::super) fn exercise(
     controls: &[NativeMetadataControlHost],
     clients: &[Arc<TcpClusterRelocationTransport>],
     services: &[Arc<Mutex<crate::ClusterDataNodeService>>],

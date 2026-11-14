@@ -1,0 +1,5 @@
+{
+  "scanned": "All retained ZIP members and both decompressed raw job logs",
+  "recognized_private_key_block_markers": 0,
+  "limitation": "Literal marker scan only; not a guarantee against every secret format. Upstream repository Actions logs/artifacts have their own access and retention rules."
+}

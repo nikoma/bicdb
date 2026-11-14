@@ -1,0 +1,6 @@
+tree 031ebe3e977ce6699f252414972cbc53ee530e62
+parent 7ab56348a8309d4d396b1af87467232bfed1ac96
+author nikoma <niko.manek@gmail.com> 1794618001 -0800
+committer nikoma <niko.manek@gmail.com> 1794618001 -0800
+
+test(ha): run four native failure diagnostics with owned build memory guard

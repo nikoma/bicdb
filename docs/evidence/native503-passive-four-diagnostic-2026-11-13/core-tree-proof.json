@@ -1,0 +1,22 @@
+{
+  "commits": {
+    "7ab56348a8309d4d396b1af87467232bfed1ac96": {
+      "root_tree": "619e9ad85af043886f048664eed098292348e510",
+      "crates_tree": "790c0c13aa753d0975df5b9a225e459ad094b87f",
+      "core_tree": "3e65798272bcc9bd050c505556de481ac2b185a6"
+    },
+    "2b8c2b2de400038729a226ff61b9b275df846d18": {
+      "root_tree": "031ebe3e977ce6699f252414972cbc53ee530e62",
+      "crates_tree": "790c0c13aa753d0975df5b9a225e459ad094b87f",
+      "core_tree": "3e65798272bcc9bd050c505556de481ac2b185a6"
+    }
+  },
+  "object_types": {
+    "7ab56348a8309d4d396b1af87467232bfed1ac96": "commit",
+    "619e9ad85af043886f048664eed098292348e510": "tree",
+    "790c0c13aa753d0975df5b9a225e459ad094b87f": "tree",
+    "3e65798272bcc9bd050c505556de481ac2b185a6": "tree",
+    "2b8c2b2de400038729a226ff61b9b275df846d18": "commit",
+    "031ebe3e977ce6699f252414972cbc53ee530e62": "tree"
+  }
+}

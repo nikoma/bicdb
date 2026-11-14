@@ -1,0 +1,120 @@
+{
+  "source": "2b8c2b2de400038729a226ff61b9b275df846d18",
+  "run": 43537820765,
+  "job": {
+    "id": 132270985379,
+    "run_id": 43537820765,
+    "workflow_name": "tests",
+    "head_branch": "qual/native503-passive-four-7ab",
+    "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43537820765",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOUimcAs8AAAAey_cQow",
+    "head_sha": "2b8c2b2de400038729a226ff61b9b275df846d18",
+    "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132270985379",
+    "html_url": "https://github.com/nikoma/bicdb/actions/runs/43537820765/job/132270985379",
+    "status": "completed",
+    "conclusion": "success",
+    "created_at": "2026-11-14T01:00:15Z",
+    "started_at": "2026-11-14T01:00:17Z",
+    "completed_at": "2026-11-14T01:05:32Z",
+    "name": "Community-only workspace compiles, tests included",
+    "steps": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 1,
+        "started_at": "2026-11-14T01:00:18Z",
+        "completed_at": "2026-11-14T01:00:19Z"
+      },
+      {
+        "name": "Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 2,
+        "started_at": "2026-11-14T01:00:19Z",
+        "completed_at": "2026-11-14T01:00:26Z"
+      },
+      {
+        "name": "Run dtolnay/rust-toolchain@stable",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 3,
+        "started_at": "2026-11-14T01:00:26Z",
+        "completed_at": "2026-11-14T01:00:34Z"
+      },
+      {
+        "name": "Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 4,
+        "started_at": "2026-11-14T01:00:34Z",
+        "completed_at": "2026-11-14T01:00:52Z"
+      },
+      {
+        "name": "cargo check --workspace --all-targets",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 5,
+        "started_at": "2026-11-14T01:00:52Z",
+        "completed_at": "2026-11-14T01:04:56Z"
+      },
+      {
+        "name": "Workflow consumer compiles without Core defaults",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 6,
+        "started_at": "2026-11-14T01:04:56Z",
+        "completed_at": "2026-11-14T01:05:28Z"
+      },
+      {
+        "name": "Retain qualification build pressure and interruption evidence",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 7,
+        "started_at": "2026-11-14T01:05:28Z",
+        "completed_at": "2026-11-14T01:05:29Z"
+      },
+      {
+        "name": "Post Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 13,
+        "started_at": "2026-11-14T01:05:29Z",
+        "completed_at": "2026-11-14T01:05:29Z"
+      },
+      {
+        "name": "Post Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 14,
+        "started_at": "2026-11-14T01:05:29Z",
+        "completed_at": "2026-11-14T01:05:29Z"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 15,
+        "started_at": "2026-11-14T01:05:29Z",
+        "completed_at": "2026-11-14T01:05:29Z"
+      }
+    ],
+    "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132270985379",
+    "labels": [
+      "ubuntu-latest"
+    ],
+    "runner_id": 1000024915,
+    "runner_name": "GitHub Actions 1000024915",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  },
+  "raw_bytes": 2471196,
+  "raw_sha256": "6b456c75be78ade52be25a93739caeb49c54b6d54b71225ef3d1a6495516ee5e",
+  "gzip_sha256": "64c7638c9781ce84c4c0c169b48c373424ff40ee2eddaafc3b39786dfdfee87d",
+  "test_results": [],
+  "summaries": [],
+  "snapshots": 0,
+  "snapshot_parse_errors": [],
+  "failure_lines": []
+}

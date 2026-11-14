@@ -1,0 +1,62 @@
+{
+  "source": "2b8c2b2de400038729a226ff61b9b275df846d18",
+  "artifact": {
+    "id": 14090703744,
+    "node_id": "MDg6QXJ0aWZhY3QxNDA5MDcwMzc0NA==",
+    "name": "focused-core-2b8c2b2de400038729a226ff61b9b275df846d18-1",
+    "size_in_bytes": 211183,
+    "url": "https://api.github.com/repos/nikoma/bicdb/actions/artifacts/14090703744",
+    "archive_download_url": "https://api.github.com/repos/nikoma/bicdb/actions/artifacts/14090703744/zip",
+    "expired": false,
+    "digest": "sha256:9e6ab7215572aaabf60dbc6fceaf6967f2d9512a40e0bb4f1134326f9424bda5",
+    "created_at": "2026-11-14T01:10:18Z",
+    "updated_at": "2026-11-14T01:10:18Z",
+    "expires_at": "2026-11-17T01:10:18Z",
+    "workflow_run": {
+      "id": 43537820765,
+      "repository_id": 1378458626,
+      "head_repository_id": 1378458626,
+      "head_branch": "qual/native503-passive-four-7ab",
+      "head_sha": "2b8c2b2de400038729a226ff61b9b275df846d18"
+    }
+  },
+  "local_zip_sha256": "9e6ab7215572aaabf60dbc6fceaf6967f2d9512a40e0bb4f1134326f9424bda5",
+  "members": [
+    {
+      "name": "list-pressure.jsonl",
+      "bytes": 11978,
+      "sha256": "0145bc85c3e35579ab1cb119623f1fccb19a4f05f78dd496dd292af90da7a010"
+    },
+    {
+      "name": "helper-pressure.jsonl",
+      "bytes": 58993,
+      "sha256": "70f206e1e2ee252ff94f4de3d738324c962f733c0a6e19ceef27f1bd637f583f"
+    },
+    {
+      "name": "requested-tests.txt",
+      "bytes": 733,
+      "sha256": "944f2a223c0bf62ffa546c92379b761b787ca4d2887c0d220abeb6893d0d2db0"
+    },
+    {
+      "name": "rustc.txt",
+      "bytes": 196,
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    {
+      "name": "selected-tests.log",
+      "bytes": 252540,
+      "sha256": "c96ccf293e77a052503c74f623ddee6a0bff530289f71011b385d1af7369a4e7"
+    },
+    {
+      "name": "source-revision.txt",
+      "bytes": 41,
+      "sha256": "ae82a82eef8b4b90df0ecb5b90ce902fa7e107c3dd609a76be3b2c80d674bb97"
+    },
+    {
+      "name": "tests.log",
+      "bytes": 2812092,
+      "sha256": "66c8c6a64ed892e4acbe6b850e38363cf874b70a97921d5e5256f88ade65b3db"
+    }
+  ],
+  "access": "Upstream repository artifact; local copy mode0600. No engine opened."
+}

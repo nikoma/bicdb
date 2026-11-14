@@ -121,3 +121,98 @@ impl NativeWriterHostState {
         Ok(())
     }
 }
+
+#[cfg(test)]
+impl BicDb {
+    /// Denial/identity regression on THIS actual installed native hook. Only
+    /// diagnostics escape; no State, read point, grant or mutable hook escapes.
+    pub(crate) fn test_original_writer_identity_with_queued_hook_writer(
+        &self,
+        queued_marker: &std::path::Path,
+    ) -> Result<serde_json::Value> {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::time::{Duration, Instant};
+        let writer = self
+            .commit_admission
+            .try_read()
+            .ok_or_else(|| invalid("queued-hook actual original hook initially busy"))?
+            .native_writer()
+            .cloned()
+            .ok_or_else(|| invalid("queued-hook test requires real installed native writer"))?;
+        let point = self.borrow_original_native_writer_identity(writer.clone())?;
+        let before = writer.record.checksum_sha256.clone();
+        let entered = AtomicBool::new(false);
+        let acquired = AtomicBool::new(false);
+        std::thread::scope(|scope| {
+            let worker = scope.spawn(|| {
+                entered.store(true, Ordering::Release);
+                // Actual exclusive acquisition, no synthetic queue flag and
+                // no hook replacement. The original read point is still live.
+                let _actual_writer = self.commit_admission.write();
+                acquired.store(true, Ordering::Release);
+            });
+            let until = Instant::now() + Duration::from_secs(1);
+            let mut read_refused = false;
+            while Instant::now() < until {
+                if entered.load(Ordering::Acquire) && self.commit_admission.try_read().is_none() {
+                    read_refused = true;
+                    break;
+                }
+                std::thread::yield_now();
+            }
+            let before_acquired = acquired.load(Ordering::Acquire);
+            let observed = serde_json::json!({
+                "actual_writer_call_entered":entered.load(Ordering::Acquire),
+                "actual_try_read_refused_while_original_read_live":read_refused,
+                "own_writer_acquired_before_point_drop":before_acquired,
+                "actual_original_policy_sha256":before,
+                "actual_native_birth":writer.record.facts.local_birth_id,
+                "actual_original_database_open":self.incarnation_id(),
+                "actual_hook_registration_generation":point.hook.registration().generation(),
+                "method":"owned exclusive write call entered; try_read refused while real original shared point held",
+                "not_a_synthetic_queued_state_or_Serving_grant":true,
+            });
+            let mut prerequisite = read_refused && !before_acquired;
+            // Keep all validation/results as DATA before assertions, and drop
+            // the point BEFORE joining even on prerequisite/evidence errors.
+            let marker_result = if prerequisite {
+                (|| -> Result<()> {
+                    let bytes = serde_json::to_vec_pretty(&observed)?;
+                    let mut file = std::fs::File::create(queued_marker)?;
+                    std::io::Write::write_all(&mut file, &bytes)?;
+                    file.sync_all()?;
+                    std::fs::File::open(queued_marker.parent().unwrap())?.sync_all()?;
+                    Ok(())
+                })()
+            } else {
+                Err(invalid(
+                    "actual queued hook writer prerequisite not reached",
+                ))
+            };
+            let started = Instant::now();
+            let validation = if marker_result.is_ok() {
+                point.require_database(self)
+            } else {
+                prerequisite = false;
+                Err(invalid(
+                    "actual queued hook marker/prerequisite unavailable",
+                ))
+            };
+            let elapsed_us = started.elapsed().as_micros();
+            drop(point);
+            let joined = worker.join().is_ok();
+            let ordinary = writer.require_original_identity_database(self);
+            Ok(serde_json::json!({
+                "queued_observation":observed,"prerequisite_reached":prerequisite,
+                "marker_error":marker_result.as_ref().err().map(ToString::to_string),
+                "borrowed_validation_error":validation.as_ref().err().map(ToString::to_string),
+                "borrowed_validation_elapsed_us":elapsed_us,
+                "own_writer_joined":joined,
+                "own_writer_acquired_after_point_drop":acquired.load(Ordering::Acquire),
+                "ordinary_identity_after_cleanup_error":ordinary.as_ref().err().map(ToString::to_string),
+                "original_policy_unchanged":before==writer.record.checksum_sha256,
+                "scope":"actual installed-writer held-hook identity component only; no Joined A/R2/APP/Strong/physical qualification",
+            }))
+        })
+    }
+}

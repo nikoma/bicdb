@@ -2,6 +2,8 @@
 //! This borrow cannot attest physical preparation/current-history validity.
 //! Those complete checks remain mandatory at scoped publication/recovery.
 use super::*;
+#[cfg(test)]
+mod faults;
 
 /// Comparison identity only. No getter exposes a writer, Frozen, DB or pin.
 pub(crate) struct NativeJointPreparationCollectionIdentity {

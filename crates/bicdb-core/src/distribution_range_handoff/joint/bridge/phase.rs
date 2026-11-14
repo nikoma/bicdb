@@ -2,6 +2,8 @@
 //! Original observations/deadlines are never mutated or made live again.
 use super::*;
 use std::time::{Duration, Instant};
+#[cfg(test)]
+mod collection_faults;
 
 /// Scalar-only, fixed-capacity instrumentation. It owns no native capability,
 /// cancellation token, lock, pin or metadata observation. Formatting happens

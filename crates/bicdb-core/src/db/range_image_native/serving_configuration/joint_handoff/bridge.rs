@@ -437,6 +437,28 @@ impl BicDb {
 
 #[cfg(test)]
 impl BicDb {
+    /// Actual read-only pager counters and protected pointer DATA. This does
+    /// not validate a receipt or authorize publication/recovery.
+    pub(crate) fn test_joint_prepublication_storage(
+        &self,
+        range: RangeId,
+    ) -> Result<serde_json::Value> {
+        self.check_recovery_state()?;
+        let paged = self
+            .paged_records
+            .as_ref()
+            .ok_or_else(|| invalid("prepublication diagnostic actual page store absent"))?;
+        let bridge: Option<serde_json::Value> = self.read_native_range_image_record(&format!(
+            "joint-handoff/serving-bridge/current/{range}"
+        ))?;
+        Ok(serde_json::json!({
+            "native_next_xid":paged.store().transactions().next_xid(),
+            "native_next_lsn":paged.store().wal().next_lsn(),
+            "native_durable_lsn":paged.store().wal().durable_lsn(),
+            "bridge_current":bridge,
+            "preparation":self.test_joint_preparation_record(range)?,
+        }))
+    }
     /// Read actual protected facts as DATA only; never a preparation grant.
     pub(crate) fn test_joint_preparation_record(
         &self,

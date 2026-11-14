@@ -11,12 +11,14 @@ use crate::distribution_range_handoff::{
     NativeJointPreparedServingRound,
 };
 
+mod collection_binding_tests;
 mod fresh_collection_tests;
 mod new_decision_round_tests;
 mod prepared_candidate_tests;
 
 pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
     prepared_candidate_tests::is_case(case)
+        || collection_binding_tests::is_case(case)
         || fresh_collection_tests::is_case(case)
         || new_decision_round_tests::is_case(case)
         || source_export_retirement_tests::is_case(case)
@@ -622,6 +624,13 @@ pub(in super::super) fn exercise(
     let current = metadata[0].lock().committed_topology().clone();
     assert_eq!(current.range_by_id(untouched.id), Some(&untouched));
     let preparation_session = process.child();
+    // The new ancestry control gives the ACTUAL producer a child BEFORE
+    // effects; the independent aggregate/fresh-phase caller stays its parent.
+    let producer_session = if matches!(case, SourceCase::TargetCollectionProducerCanceled) {
+        preparation_session.child()
+    } else {
+        preparation_session.clone()
+    };
     let mut preparation_custody = Vec::new();
     let mut original_round: Option<NativeJointPreparedServingRound> = None;
     let mut closed_control_ran = false;
@@ -728,12 +737,12 @@ pub(in super::super) fn exercise(
                     closed,
                     committed,
                     lease,
-                    &preparation_session,
+                    &producer_session,
                 ),
                 None => actual.prepare_local_registered_joint_serving(
                     committed,
                     lease,
-                    &preparation_session,
+                    &producer_session,
                 ),
             };
             preparation_step!(6, 7, "prepare_local_joint_serving", prepare()).unwrap()
@@ -822,6 +831,22 @@ pub(in super::super) fn exercise(
         let admission = phase
             .acquire_local_activation(&all_clients[i], &node(0))
             .unwrap();
+        if collection_binding_tests::is_case(case) {
+            collection_binding_tests::exercise(
+                case,
+                &phase,
+                &admission,
+                &mut publication,
+                &producer_session,
+                &preparation_session,
+                services,
+                metadata,
+                process,
+                output,
+                acknowledged,
+            );
+            return;
+        }
         operation(output, &mut ledger, "fresh_actual_native_bridge", || {
             publication.publish_actual_local_member(&admission, process)
         })

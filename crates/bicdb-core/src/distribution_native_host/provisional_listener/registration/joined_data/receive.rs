@@ -124,6 +124,37 @@ impl NativeJoinedRangeReceiveOrigin {
             .require_data_domain_origin(db, &coordinator, &writer)?;
         self.require_live()
     }
+    pub(crate) fn require_database_store_borrowed(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        identity: &crate::db::NativeOriginalWriterIdentityBorrow<'_>,
+    ) -> Result<()> {
+        self.require_live()?;
+        self.database.require_database(db)?;
+        db.require_joined_publication_storage_health()?;
+        if self.store.id() != store.native_writer_store_open_id() {
+            return Err(invalid(
+                "additional-range Joined original Store slot changed",
+            ));
+        }
+        let writer = store.native_writer_host_state()?;
+        if self
+            .original()?
+            .terminal_writer()
+            .is_none_or(|old| !Arc::ptr_eq(old, &writer))
+        {
+            return Err(invalid(
+                "additional-range Joined replaced original FIRST State",
+            ));
+        }
+        let coordinator = self
+            .coordinator
+            .upgrade()
+            .ok_or_else(|| invalid("additional-range original Joined coordinator ended"))?;
+        identity.require_guard_origin(db, &self.guard, &coordinator, &writer)?;
+        self.require_live()
+    }
     /// No engine/service/native journal locks span the actual MStore capture.
     /// The caller supplies actual request-specific Role and OWN, never DTOs.
     pub(crate) fn observe_request(

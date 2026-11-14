@@ -428,3 +428,39 @@ failure/retry, and separately stall genuine selected disk I/O. The earlier
 after-export transport hold cannot substitute for that disk or second-movement
 gate. Root's forthcoming joint/Serving consumer cannot use this source note or
 any historical manifest/certificate DTO as authority.
+
+
+## Borrow the actual original hook; never acquire it recursively
+
+A later source review found a concrete source availability problem in the C8
+materialized publication and earlier Joined attempt/mutation Store checks.
+They ran under the actual held hook read guard but called the generic original
+identity helper, which acquired commit_admission.read() again. With a writer
+queued, parking_lot fairness can block the nested read while the outer read
+prevents that writer from progressing. This is not an executed deadlock or a
+causal explanation of the historical Azure run.
+
+The correction uses NativeOriginalWriterIdentityBorrow, a sealed lexical point
+constructed only by a real DB acquiring its actual installed hook read guard.
+It checks the same original native birth/open/registration/policy/registry and
+actual State as the ordinary identity method, using that already-held hook.
+The ordinary identity method and ordinary guard/coordinator method remain
+byte-identical; the new point grants no range, metadata or mutation permission.
+Joined attempt/mutation scopes own this actual point and keep all admission,
+journal, A and fresh-request constraints. Their original Store/State/coordinator
+checks consume that same point instead of calling a generic hook getter.
+
+Materialized current validation similarly uses the scope's actual writer borrow
+and the independent physical final/base/catalogue checks. A later true joint
+exclusion scope can call require_joint_identity_with_writer_borrow (or its
+actual-Frozen point variant) with its own same DB/State held-hook point while
+supplying its separate genuine A and fresh phase proof. This is not a cached
+boolean, deserialized witness, missing lock, or replacement ordinary policy.
+All these physical checks stay outside the final short metadata guard.
+
+This correction is source-only until compiled and tested. A genuine queued
+writer control must prove the actual hook writer is waiting while this real
+borrow remains live, validate through the borrow without recursive acquisition,
+then release/join only its own worker. A bounded child must fail rather than
+hang CI if the old blocking path reappears. Full Joined/R2 movement and actual
+I/O independence remain separate acceptance gates.

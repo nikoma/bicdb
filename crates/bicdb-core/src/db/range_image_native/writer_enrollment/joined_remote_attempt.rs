@@ -15,7 +15,7 @@ pub(crate) struct NativeJoinedRemoteAttemptScope<'a> {
     frame: &'a NativeRemoteImageStep<'a>,
     lease: &'a JoinedRemoteImageInstallFreeze,
     _admission: parking_lot::RwLockReadGuard<'a, ()>,
-    hook: parking_lot::RwLockReadGuard<'a, crate::db::commit_admission_hook::CommitAdmissionSlot>,
+    hook: NativeOriginalWriterIdentityBorrow<'a>,
     journal: NativeImageJournalGuard<'a>,
 }
 impl NativeJoinedRemoteAttemptScope<'_> {
@@ -59,7 +59,10 @@ impl NativeJoinedRemoteAttemptScope<'_> {
         )?;
         self.request.member().require_database_point(db)?;
         let original = &self.request.origin().guard().state;
-        original.require_borrowed_original_hook(db, &self.hook)?;
+        self.hook.require_database(db)?;
+        if !Arc::ptr_eq(self.hook.writer(), original) {
+            return Err(invalid("Joined scope original borrowed hook State changed"));
+        }
         let stored: NativeWriterPolicyRecord =
             db.read_native_range_image_record(POLICY_POINTER)?
                 .ok_or_else(|| invalid("Joined original writer policy disappeared"))?;
@@ -84,7 +87,8 @@ impl NativeJoinedRemoteAttemptScope<'_> {
     /// proves/refsyncs its own original candidate before clearing uncertainty.
     pub(crate) fn require_store_identity(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
         self.require_database(db)?;
-        self.preflight.require_original_writer(db, store)?;
+        self.preflight
+            .require_original_writer_borrowed(db, store, &self.hook)?;
         self.require_database(db)
     }
     pub(crate) fn require_store(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
@@ -142,9 +146,7 @@ impl BicDb {
                 .try_read()
                 .ok_or_else(|| invalid("Joined native attempt admission busy"))?,
             hook: self
-                .commit_admission
-                .try_read()
-                .ok_or_else(|| invalid("Joined native attempt original hook busy"))?,
+                .borrow_original_native_writer_identity(request.origin().guard().state.clone())?,
             journal: self.try_native_image_journal()?,
         };
         scope.require_database(self)?;
@@ -225,13 +227,26 @@ impl NativeJoinedRemoteMutationScope<'_> {
     /// it to reconcile its original exact uncertain file publication.
     pub(crate) fn require_store_identity(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
         self.require_database(db)?;
-        self.preflight().require_original_writer(db, store)?;
+        self.preflight()
+            .require_original_writer_borrowed(db, store, &self.original.hook)?;
         self.require_database(db)
     }
     pub(crate) fn require_store(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
         self.require_store_identity(db, store)?;
         db.require_native_writer_catalogue_custody(store)?;
         self.require_database(db)
+    }
+    pub(crate) fn original_writer_identity(&self) -> &NativeOriginalWriterIdentityBorrow<'_> {
+        &self.original.hook
+    }
+    pub(crate) fn require_original_writer(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+    ) -> Result<Arc<NativeWriterHostState>> {
+        self.require_store_identity(db, store)?;
+        self.preflight()
+            .require_original_writer_borrowed(db, store, &self.original.hook)
     }
     pub(crate) fn require_original_install_safety(&self, db: &BicDb) -> Result<()> {
         self.require_database(db)?;
@@ -276,10 +291,9 @@ impl BicDb {
                     .serializable_commit_admission
                     .try_read()
                     .ok_or_else(|| invalid("Joined mutation original admission busy"))?,
-                hook: self
-                    .commit_admission
-                    .try_read()
-                    .ok_or_else(|| invalid("Joined mutation original hook busy"))?,
+                hook: self.borrow_original_native_writer_identity(
+                    request.origin().guard().state.clone(),
+                )?,
                 journal: self.try_native_image_journal()?,
             },
         };

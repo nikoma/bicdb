@@ -31,6 +31,10 @@ mod joined_receive_rows;
 #[cfg(feature = "tls-replication")]
 pub(crate) use joined_receive_rows::NativeJoinedRowAbsenceScan;
 #[cfg(feature = "tls-replication")]
+mod original_identity;
+#[cfg(feature = "tls-replication")]
+pub(crate) use original_identity::NativeOriginalWriterIdentityBorrow;
+#[cfg(feature = "tls-replication")]
 mod data_domains;
 #[cfg(feature = "tls-replication")]
 pub(crate) use data_domains::{

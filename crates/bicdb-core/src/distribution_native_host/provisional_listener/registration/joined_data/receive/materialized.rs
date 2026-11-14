@@ -125,6 +125,31 @@ impl NativeJoinedRemoteMaterializedOwner {
             .selected()
             .origin()
             .require_database_store(db, store)?;
+        self.require_physical_identity(db, store)
+    }
+    /// Actual same-open hook borrow, not a Boolean skip or detached memo. A
+    /// later joint exclusion scope can retain this point lexically alongside
+    /// the real A/journal and independently fresh phase authority.
+    pub(crate) fn require_joint_identity_with_writer_borrow(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        identity: &crate::db::NativeOriginalWriterIdentityBorrow<'_>,
+    ) -> Result<()> {
+        self.require_lifetime()?;
+        self.preflight
+            .selected()
+            .origin()
+            .require_database_store_borrowed(db, store, identity)?;
+        if !Arc::ptr_eq(identity.writer(), &self.writer) {
+            return Err(invalid(
+                "Joined materialized borrowed identity changed original State",
+            ));
+        }
+        self.require_physical_identity(db, store)
+    }
+    fn require_physical_identity(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
+        self.require_lifetime()?;
         self.preflight.native().require_current(db)?;
         db.validate_range_image_bindings(self.preflight.bindings())?;
         let writer = store.native_writer_host_state()?;
@@ -171,6 +196,18 @@ impl NativeJoinedRemoteMaterializedOwner {
         db.range_mutation_gate()
             .validate_frozen(self.manifest().capture_range.id, actual_a)
     }
+    pub(crate) fn require_joint_point_with_writer_borrow(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        actual_a: &FrozenRangeMutationPermit,
+        identity: &crate::db::NativeOriginalWriterIdentityBorrow<'_>,
+    ) -> Result<()> {
+        self.require_joint_identity_with_writer_borrow(db, store, identity)?;
+        self.frozen.require_same_current(actual_a)?;
+        db.range_mutation_gate()
+            .validate_frozen(self.manifest().capture_range.id, actual_a)
+    }
     pub(crate) fn require_current(
         &self,
         db: &BicDb,
@@ -183,7 +220,12 @@ impl NativeJoinedRemoteMaterializedOwner {
                 "Joined materialized current changed original attempt",
             ));
         }
-        self.require_joint_point(db, store, scope.frozen()?)?;
+        self.require_joint_point_with_writer_borrow(
+            db,
+            store,
+            scope.frozen()?,
+            scope.original_writer_identity(),
+        )?;
         scope.require_store(db, store)
     }
     /// Runtime retention is checked outside service/DB/native guards. The
@@ -306,7 +348,7 @@ impl NativeMetadataControlHost {
                         }
                         Arc::new(NativeJoinedRemoteMaterializedOwner {
                             preflight: preflight.clone(),
-                            writer: preflight.require_original_writer(&db, store)?,
+                            writer: scope.require_original_writer(&db, store)?,
                             database_root: db.data_path().canonicalize()?,
                             service: Arc::downgrade(&backend.service),
                             runtime: Arc::downgrade(&runtime),

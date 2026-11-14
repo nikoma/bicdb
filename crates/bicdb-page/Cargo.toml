@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-page"
-version = "1.0.506-beta"
+version = "1.0.507-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true

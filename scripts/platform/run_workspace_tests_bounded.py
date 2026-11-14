@@ -13,6 +13,14 @@ from pathlib import Path
 import subprocess
 
 
+# Fixtures that start four to six real server processes per test and assert
+# the product's real-time request budgets. Several of them at once on one
+# runner measure runner contention, not the protocol (the same reason the
+# in-process multi-node Core fixtures have their own serial job), so these
+# targets run their tests one at a time. Nothing is skipped.
+SERIAL_TARGETS = {("bicdb-cli", "native_metadata_operator_cli")}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exclude", action="append", default=[])
@@ -42,11 +50,12 @@ def main():
                 # Explicit target discovery must supply their declared features.
                 if target.get("required-features"):
                     selection += ["--features", ",".join(target["required-features"])]
-                invocations.append(selection)
+                serial = (package["name"], target["name"]) in SERIAL_TARGETS
+                invocations.append((selection, "1" if serial else threads))
         if any(target.get("doctest") for target in package["targets"]):
-            invocations.append(["--doc"])
-        for selection in invocations:
-            command = ["cargo", "test", "-p", package["name"], *selection, "--locked", "--message-format=json-render-diagnostics", "--", f"--test-threads={threads}"]
+            invocations.append((["--doc"], threads))
+        for selection, target_threads in invocations:
+            command = ["cargo", "test", "-p", package["name"], *selection, "--locked", "--message-format=json-render-diagnostics", "--", f"--test-threads={target_threads}"]
             print("Running:", " ".join(command), flush=True)
             executables = set()
             process = subprocess.Popen(command, stdout=subprocess.PIPE, text=True)

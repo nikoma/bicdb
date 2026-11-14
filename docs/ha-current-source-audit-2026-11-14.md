@@ -20,8 +20,8 @@ has passed Core, native, PGwire and build jobs; SQL and remaining-workspace are
 still running at this checkpoint. It is not an overall completed pass, and it
 does not deliver the separate streaming or native recovery fixes below. No
 binary, published release or deployment is inferred from that merge.
-No next source version is reserved by this evidence update. Main513 still
-uses HA handshake4 and the issue190 data-epoch behavior; the failed handshake5
+The documentation delivery version changes no runtime behavior. The inspected
+main513 source still uses HA handshake4 and the issue190 data-epoch behavior; the failed handshake5
 streaming candidate is not delivered by that backend refactor.
 
 The earlier delivered-main inspection checkpoint is **1.0.511-beta**,
@@ -88,8 +88,8 @@ or a current-main513 integration test. Actual checkout
 has a terminal native failure: **330 passed, 13 failed, one ignored**, in
 3,134.09 s. The remaining-workspace job is still live at this checkpoint;
 completion of that job cannot turn the failed native suite into a pass.
-All-target compilation, PGwire and Rails passed; no unreported job is inferred
-to have passed.
+All-target compilation, Core, PGwire, SQL and Rails passed on this candidate.
+The native failure still blocks the candidate overall.
 
 All twelve earlier activation failures now reach the actual native-page-WAL
 operation, whose stage records completion, before a later poststate check
@@ -97,12 +97,15 @@ refuses `range mutation gate: controlled WAL/native callback is still active`.
 Source tracing identifies the operation's own Controlled owner: activation keeps
 it until after the postcondition calls a quiescent-Frozen validator. These are
 actual errors after WAL, not evidence of rollback. The failed path does not
-retain a returned native receipt/xid or raw database custody, so neither a
-specific native commit outcome nor an unknown-outcome retry may be invented.
+retain an exact native xid or a returned bridge-success receipt. The WAL stage
+completed, but final Serving admission did not; the API error does not imply
+rollback and does not authorize a new operation or an invented retry outcome.
 The [source reproduction and required repair boundary](https://github.com/nikoma/bicdb/issues/195#issuecomment-6882534454)
-retain this result. The next repair must preserve strict ordinary
-publication/recovery guards and use the actual owned controlled scope where
-required; increasing deadlines or weakening the gate is not justified.
+retain this result. The next repair releases only the operation's own Controlled
+guard after its synchronous writes finish, before the unchanged strict
+postcondition. It retains the same Frozen owner and journal. Any other active
+Controlled owner must still refuse; deadlines and publication/recovery guards
+must remain unchanged.
 
 Five of the six new post-collection negative controls passed their original
 assertions: foreign archive, local archive, producer Session cancellation,
@@ -255,10 +258,11 @@ execution or production qualification.
 | 363 file-backed qualified-epoch Core controls | Passed | All fifteen cases executed; hosted component evidence, not physical qualification. |
 | 363 returning-primary embedded acceptance | Passed | Exact-source original issue197 case passed; this is one hosted scenario, not physical qualification. |
 | 363 original attachment recovery acceptance | Passed | Exact-source original issue198 case passed; the later archive-restore failures remain separate. |
-| 363 scheduled restore/promotion acceptance | Failed | Issue200; Core2/PG1 plus three REST replicated-open cases fail with explicit epoch refusal. All363 jobs are terminal. |
+| 363 scheduled restore/promotion acceptance | Failed | Issue200; the PG case fails with explicit epoch refusal. Separate Core archive and REST bootstrap results are listed below. All363 jobs are terminal. |
+| 363 application replicated-open acceptance | Failed | Three REST cases refuse unqualified history before their intended failover/effect checks. Source bootstrap and PITR causes remain distinct. |
 | 363 original CLI rejoin acceptance | Passed | All four original CLI cases passed; functional evidence, not RTO or an external ledger. |
-| PR201 new collection controls | Partial | Five passed; Store-ABA diagnostic failed before the actual publisher, leaving its intended publisher assertions not tested. REST remains live. |
-| Archive-lineage producer for issue200 | Unimplemented | a9 retains full base refusal DATA only; nonempty suffix qualification remains unapproved pending an actual source-owned proof. |
+| PR201 new collection controls | Failed | Five passed; Store-ABA diagnostic failed before the actual publisher, leaving its intended publisher assertions not tested. REST remains live. |
+| Archive-lineage producer for issue200 | Not tested | No producer implementation exists. a9 retains full base refusal DATA only; nonempty suffix qualification remains unapproved pending an actual source-owned proof. |
 | 363 Core archive restore/promotion acceptance | Failed | Two actual log_archive_pitr failures; no arbitrary Unknown-history qualification is an acceptable correction. |
 | Snapshot target-data-head/ACK-copy protection193 | Not tested | Open source/API gate; the separate genuine regression source 6bb1f64e is unexecuted. |
 | Original transaction-effect replication148 | Failed | Source protocol coverage: intent/command omit the original audit, sync and broker envelope. Dynamic acknowledged-effect loss has not been demonstrated. |

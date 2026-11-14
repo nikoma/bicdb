@@ -11,7 +11,16 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Latest delivered source — 2026-11-14 UTC
+## Current evidence checkpoint — 2026-11-14 UTC
+
+The [November14 checkpoint](ha-current-source-audit-2026-11-14.md) inspects
+main513 and separately records the failed streaming363 and native201 candidates,
+including their exact source identities, terminal component results and open
+recovery/operator gates. Neither candidate is production-qualified. The original
+Azure run remains failed; no stable five-node throughput gain is demonstrated.
+The sections below retain their original historical source scopes.
+
+## Earlier delivered source — 2026-11-14 UTC
 
 The runtime evidence baseline for this documentation update is remote main
 **1.0.505-beta**, `e25b3ba194c6f3ad73e2f393b68b175fbf1edd92`.

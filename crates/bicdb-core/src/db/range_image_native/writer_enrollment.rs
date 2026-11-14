@@ -17,6 +17,10 @@ pub(crate) use joined_publication::NativeJoinedPublicationScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use joined_receive::NativeJoinedReceiveStorageScope;
 #[cfg(feature = "tls-replication")]
+mod joined_receive_rows;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_receive_rows::NativeJoinedRowAbsenceScan;
+#[cfg(feature = "tls-replication")]
 mod data_domains;
 #[cfg(feature = "tls-replication")]
 pub(crate) use data_domains::{

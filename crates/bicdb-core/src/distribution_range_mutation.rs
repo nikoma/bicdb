@@ -170,6 +170,36 @@ pub(crate) struct FrozenRangeMutationPermit {
     lease: Uuid,
 }
 
+/// Non-owning identity DATA for a retained bounded scan. Holding a Weak to the
+/// PERMIT Arc would prevent its legitimate unique N->A rotation. This retains
+/// only the gate identity and private lease nonce; it creates no exclusion,
+/// mutation claim or permission and cannot be deserialized/reconstructed.
+#[derive(Debug)]
+pub(crate) struct FrozenRangeMutationIdentity {
+    inner: Weak<Inner>,
+    range_id: RangeId,
+    owner: Uuid,
+    lease: Uuid,
+}
+impl FrozenRangeMutationIdentity {
+    pub(crate) fn require_same_current(&self, permit: &FrozenRangeMutationPermit) -> Result<()> {
+        if !Weak::ptr_eq(&self.inner, &Arc::downgrade(&permit.inner))
+            || self.inner.upgrade().is_none()
+            || self.range_id != permit.range_id
+            || self.owner != permit.owner
+            || self.lease != permit.lease
+        {
+            return Err(invalid(
+                "retained scan changed actual frozen gate/lease/owner",
+            ));
+        }
+        RangeMutationGate {
+            inner: permit.inner.clone(),
+        }
+        .validate_quiescent_frozen(self.range_id, permit)
+    }
+}
+
 /// An owned controlled writer. It must accompany the actual WAL callback;
 /// dropping its freeze owner cannot reopen normal writes before this drains.
 #[derive(Debug)]
@@ -693,6 +723,16 @@ impl RangeMutationGate {
 }
 
 impl FrozenRangeMutationPermit {
+    pub(crate) fn observe_identity(&self) -> Result<FrozenRangeMutationIdentity> {
+        let point = FrozenRangeMutationIdentity {
+            inner: Arc::downgrade(&self.inner),
+            range_id: self.range_id,
+            owner: self.owner,
+            lease: self.lease,
+        };
+        point.require_same_current(self)?;
+        Ok(point)
+    }
     pub(crate) fn range_id(&self) -> RangeId {
         self.range_id
     }
@@ -875,6 +915,33 @@ mod tests {
         RangeId::new(id).unwrap()
     }
     fn assert_send_sync<T: Send + Sync>() {}
+    #[test]
+    fn frozen_scan_identity_does_not_pin_permit_arc_and_rejects_rotated_owner() {
+        let gate = RangeMutationGate::default();
+        let owner = Uuid::now_v7();
+        let mut frozen = Arc::new(gate.try_freeze(range(1), owner).unwrap());
+        let identity = frozen.observe_identity().unwrap();
+        identity.require_same_current(&frozen).unwrap();
+        let exclusive = Arc::get_mut(&mut frozen)
+            .expect("readonly scan identity must not retain a strong or Weak permit Arc");
+        exclusive.try_rotate_owner(Uuid::now_v7()).unwrap();
+        assert!(identity.require_same_current(&frozen).is_err());
+    }
+    #[test]
+    fn frozen_scan_identity_refuses_same_owner_refreeze_and_foreign_gate() {
+        let gate = RangeMutationGate::default();
+        let owner = Uuid::now_v7();
+        let frozen = gate.try_freeze(range(1), owner).unwrap();
+        let identity = frozen.observe_identity().unwrap();
+        let foreign = RangeMutationGate::default()
+            .try_freeze(range(1), owner)
+            .unwrap();
+        assert!(identity.require_same_current(&foreign).is_err());
+        drop(frozen);
+        let replacement = gate.try_freeze(range(1), owner).unwrap();
+        assert!(identity.require_same_current(&replacement).is_err());
+    }
+
     fn wait_until_pending(gate: &RangeMutationGate, id: RangeId) {
         let deadline = Instant::now() + Duration::from_secs(1);
         loop {

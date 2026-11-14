@@ -2,11 +2,13 @@
 //! blank FIRST receiver, selected NoDomain proof, image or serving permission.
 //! Every later operation must supply its own actual Role/OWN/native evidence.
 use super::*;
+mod preflight;
 use crate::distribution_consensus::{
     HostMetadataReadObservation, NativeOwnedMetadataMemberObservation,
 };
 use crate::distribution_range_consensus::RangeWriteStore;
 use crate::distribution_range_recovery::HandoffRoleAdmission;
+pub(crate) use preflight::NativeJoinedRangeReceivePreflight;
 
 pub(crate) struct NativeJoinedRangeReceiveOrigin {
     parts: registered_replica::RegisteredAssignedParts,
@@ -135,6 +137,100 @@ impl NativeJoinedRangeReceiveRequest {
     }
     pub(crate) fn role(&self) -> &HandoffRoleAdmission {
         &self.role
+    }
+    pub(crate) fn origin_arc(&self) -> &Arc<NativeJoinedRangeReceiveOrigin> {
+        &self.origin
+    }
+    /// Runtime identity lookup occurs outside service/DB/journal locks. A
+    /// caller-supplied Frozen with the same scalar IDs is insufficient.
+    pub(crate) fn require_original_frozen(
+        &self,
+        frozen: &Arc<crate::distribution_range_mutation::FrozenRangeMutationPermit>,
+    ) -> Result<()> {
+        self.require_live()?;
+        let scope =
+            crate::distribution_range_consensus::RecoveryFenceScope::from_role(self.role.role())?;
+        let actual = self.origin.parts.runtime.source_capture_freeze(&scope)?;
+        if !Arc::ptr_eq(&actual, frozen) {
+            return Err(invalid(
+                "Joined selected scan lost actual original runtime Frozen",
+            ));
+        }
+        self.origin
+            .parts
+            .factory
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("Joined selected scan actual DB busy before freeze check"))?
+            .range_mutation_gate()
+            .validate_quiescent_frozen(self.origin.range, frozen)?;
+        self.require_live()
+    }
+    /// Own all external checks around the actual DB borrow. No MStore or
+    /// runtime/session guard spans an engine borrow or the actual scan IO.
+    pub(crate) fn begin_row_absence_scan(
+        &self,
+        frozen: &Arc<crate::distribution_range_mutation::FrozenRangeMutationPermit>,
+    ) -> Result<crate::db::NativeJoinedRowAbsenceScan> {
+        self.require_metadata_current()?;
+        self.require_original_frozen(frozen)?;
+        let scan = {
+            let db = self
+                .origin
+                .parts
+                .factory
+                .database
+                .try_read()
+                .ok_or_else(|| invalid("Joined selected scan DB busy at begin"))?;
+            crate::db::NativeJoinedRowAbsenceScan::begin_local(&db, self, frozen)?
+        };
+        self.require_metadata_current()?;
+        self.require_original_frozen(frozen)?;
+        Ok(scan)
+    }
+    pub(crate) fn advance_row_absence_scan(
+        &self,
+        scan: &mut crate::db::NativeJoinedRowAbsenceScan,
+        frozen: &Arc<crate::distribution_range_mutation::FrozenRangeMutationPermit>,
+    ) -> Result<bool> {
+        self.require_metadata_current()?;
+        self.require_original_frozen(frozen)?;
+        let result = {
+            let db = self
+                .origin
+                .parts
+                .factory
+                .database
+                .try_read()
+                .ok_or_else(|| invalid("Joined selected scan DB busy at advance"))?;
+            scan.advance_local(&db, self, frozen)
+        };
+        // A local successful chunk can precede a stale outside postcheck. Its
+        // cursor remains retained; no absence/grant is returned on that error.
+        let complete = result?;
+        self.require_metadata_current()?;
+        self.require_original_frozen(frozen)?;
+        Ok(complete)
+    }
+    pub(crate) fn require_row_absence_complete(
+        &self,
+        scan: &crate::db::NativeJoinedRowAbsenceScan,
+        frozen: &Arc<crate::distribution_range_mutation::FrozenRangeMutationPermit>,
+    ) -> Result<()> {
+        self.require_metadata_current()?;
+        self.require_original_frozen(frozen)?;
+        {
+            let db = self
+                .origin
+                .parts
+                .factory
+                .database
+                .try_read()
+                .ok_or_else(|| invalid("Joined selected scan DB busy at completion check"))?;
+            scan.require_complete_local(&db, self, frozen)?;
+        }
+        self.require_metadata_current()?;
+        self.require_original_frozen(frozen)
     }
     pub(crate) fn member(&self) -> &NativeOwnedMetadataMemberObservation {
         &self.member

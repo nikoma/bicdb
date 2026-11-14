@@ -1,7 +1,7 @@
 # Additional populated range on an existing Joined target
 
 Source base: `d6409423a8170074ef9adb41bd93dbff83ca512d`.
-This change is the first source foundation, not a completed receive path or
+This change is a source foundation and selected preflight, not a completed receive path or
 qualification result. It was formatted/source-reviewed, not compiled or run.
 
 ## Existing boundary and preserved invariants
@@ -46,6 +46,11 @@ consumes actual Role/OWN, captures an actual member/version point outside engine
 locks, and proves that this selected range is the genuine local target learner.
 No other range is required to be empty or have B0.
 
+`NativeJoinedRangeReceivePreflight` retains the completed scan, exact selected
+raw/refusal/catalogue preimage, native lower-bound constraints and namespace
+pins. Each use revalidates against a fresh real request and the original runtime
+Frozen. It changes neither existing rows nor native/catalogue state.
+
 `NativeJoinedReceiveStorageScope` borrows the actual installed hook/admission
 and native journal. It validates the exact original native policy and birth,
 actual selected Frozen and member/version identity, and can inspect selected
@@ -54,8 +59,11 @@ lower bounds. The distinct retained `NativeJoinedRowAbsenceScan` scans at most
 fresh same-session requests. Its actual paged scan holds neither the global
 native journal nor commit-admission/hook read guard; selected runtime Frozen
 and schema/backing identity stabilize selected absence while unrelated B may
-advance. It checks the actual original writer before/after each chunk. This is
-not yet an actual I/O-stall availability result. Neither scope can authorize a row
+advance. It checks the actual original writer before/after each chunk. A sealed
+non-owning gate/owner/private-lease identity detects thaw/refreeze and ABA
+without retaining a Weak permit Arc that would block unique N-to-A rotation.
+Two primitive tests cover this identity/rotation invariant; they are not run.
+This is not yet an actual I/O-stall availability result. Neither scope can authorize a row
 transaction, native installation, NEW vote or Open. Unknown lower bounds are
 not a certified zero. The scope is deliberately distinct from all FIRST scopes.
 Current-MStore checks occur outside engine locks; local version checks are not
@@ -70,10 +78,19 @@ produce the missing image or joint admission.
 
 ## Remaining implementation before a genuine second-range case
 
-1. Add a distinct selected Joined CLOSED-refusal producer using fresh actual
-   Role/OWN/member/version and the installed-hook scope. Preserve every other
-   range's raw history, abort decisions/slots, image obligations and native
-   records. Do not call the blank Registered producer or synthesize R0.
+1. Use the existing authenticated generic epoch-fence producer for an actual
+   installed Joined State: transport `RecoveryEpochFence` routes to
+   `runtime.fence_epoch`, service `fence_native_recovery`, and
+   `RangeWriteStore::fence_recovery_epoch`. It preserves selected obligations
+   and installs a refusal, not a native zero floor. The blank Registered path
+   is not used. This actual Joined-specific execution is not yet tested here.
+   The new `NativeJoinedRangeCatalogueAbsence` requires that real durable
+   selected refusal, mandatory maps and exact preimage, then refuses selected
+   native/history/invalidation/stage/row-WAL/abort/slot/image/joint obligations.
+   Other ranges are neither emptied nor compared against global B. Retained
+   nonce constraints remain verbatim. `NativeJoinedRangeReceivePreflight`
+   constructs/revalidates these real physical constraints under fresh actual
+   requests; it is not source authority or an image-write grant.
 2. Add a Joined preflight/proposal/mutation origin to the existing range import
    engine. It must verify selected native/raw/slot/row obligations and retain
    exact A/candidate/xids/pins/outcomes before writes. Only the selected range's

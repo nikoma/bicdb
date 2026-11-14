@@ -10,7 +10,7 @@ use crate::distribution_range_consensus::RecoveryFenceScope;
 pub(crate) struct NativeJoinedRowAbsenceScan {
     origin: Arc<NativeJoinedRangeReceiveOrigin>,
     scope: RecoveryFenceScope,
-    frozen: Weak<FrozenRangeMutationPermit>,
+    frozen: crate::distribution_range_mutation::FrozenRangeMutationIdentity,
     bindings: RangeImageDbBindings,
     collection_index: usize,
     after: Option<String>,
@@ -28,7 +28,7 @@ impl NativeJoinedRowAbsenceScan {
         let scan = Self {
             origin: request.origin_arc().clone(),
             scope: RecoveryFenceScope::from_role(request.role().role())?,
-            frozen: Arc::downgrade(frozen),
+            frozen: frozen.observe_identity()?,
             bindings: db.capture_range_image_bindings()?,
             collection_index: 0,
             after: None,
@@ -37,34 +37,59 @@ impl NativeJoinedRowAbsenceScan {
         scan.require_request(db, request, frozen)?;
         Ok(scan)
     }
+    fn require_binding(
+        &self,
+        db: &BicDb,
+        request: &NativeJoinedRangeReceiveRequest,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        request.require_live()?;
+        let current = RecoveryFenceScope::from_role(request.role().role())?;
+        if !Arc::ptr_eq(&self.origin, request.origin_arc()) || !self.scope.same_session(&current) {
+            return Err(invalid(
+                "Joined selected scan replaced original identity/session/Frozen",
+            ));
+        }
+        self.frozen.require_same_current(frozen)?;
+        db.validate_range_image_bindings(&self.bindings)?;
+        db.range_mutation_gate()
+            .validate_quiescent_frozen(self.scope.range_id, frozen)?;
+        request
+            .member()
+            .publication_version()
+            .require_current_memory()?;
+        request.require_live()
+    }
     fn require_request(
         &self,
         db: &BicDb,
         request: &NativeJoinedRangeReceiveRequest,
         frozen: &Arc<FrozenRangeMutationPermit>,
     ) -> Result<()> {
-        request.require_live()?;
-        let current = RecoveryFenceScope::from_role(request.role().role())?;
-        if !Arc::ptr_eq(&self.origin, request.origin_arc())
-            || !self.scope.same_session(&current)
-            || !Weak::ptr_eq(&self.frozen, &Arc::downgrade(frozen))
-            || self.frozen.upgrade().is_none()
+        self.require_binding(db, request, frozen)?;
+        self.origin.guard().require_joined_receive_identity(db)?;
+        db.require_joined_publication_storage_health()?;
+        request.member().require_database(db)?;
+        self.require_binding(db, request, frozen)
+    }
+    /// Caller supplies the real hook/journal storage scope and independently
+    /// verifies it. This does not recursively reacquire those same guards.
+    pub(super) fn require_complete_at_storage_point(
+        &self,
+        db: &BicDb,
+        request: &NativeJoinedRangeReceiveRequest,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        self.require_binding(db, request, frozen)?;
+        if !self.complete
+            || self.collection_index != self.bindings.collections().len()
+            || self.after.is_some()
         {
             return Err(invalid(
-                "Joined selected scan replaced original identity/session/Frozen",
+                "Joined selected row absence scan remains incomplete",
             ));
         }
-        self.origin.guard().require_joined_receive_identity(db)?;
-        db.validate_range_image_bindings(&self.bindings)?;
-        db.require_joined_publication_storage_health()?;
-        db.range_mutation_gate()
-            .validate_quiescent_frozen(self.scope.range_id, frozen)?;
-        request.member().require_database(db)?;
-        request
-            .member()
-            .publication_version()
-            .require_current_memory()?;
-        request.require_live()
+        Ok(())
     }
     /// LOCAL half only: actual MStore/runtime checks must surround the DB
     /// borrow in the Joined request wrapper, never run under this DB guard.

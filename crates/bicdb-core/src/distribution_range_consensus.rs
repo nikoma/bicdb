@@ -58,6 +58,8 @@ pub(crate) use native_image_base::{
 };
 pub(crate) use native_image_ready::FinalizedNativeImageCatalogueObservation;
 #[cfg(feature = "tls-replication")]
+pub(crate) use registered_no_domain::NativeJoinedRangeCatalogueAbsence;
+#[cfg(feature = "tls-replication")]
 pub(crate) use registered_no_domain::NativeRegisteredRangeCatalogueAbsence;
 mod image_install_obligations;
 pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;

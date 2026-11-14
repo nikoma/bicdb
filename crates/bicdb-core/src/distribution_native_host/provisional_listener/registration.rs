@@ -18,7 +18,10 @@ mod joined_data;
 pub(crate) use data_owner::NativeDataOwnerAdmission;
 use joined_data::NativeJoinedDataHost;
 pub use joined_data::NativeJoinedDataStatus;
-pub(crate) use joined_data::{NativeJoinedRangeReceiveOrigin, NativeJoinedRangeReceiveRequest};
+pub(crate) use joined_data::{
+    NativeJoinedRangeReceiveOrigin, NativeJoinedRangeReceivePreflight,
+    NativeJoinedRangeReceiveRequest,
+};
 mod registered_replica;
 mod writer_data_domain;
 use registered_replica::NativeRegisteredReplicaReceiver;

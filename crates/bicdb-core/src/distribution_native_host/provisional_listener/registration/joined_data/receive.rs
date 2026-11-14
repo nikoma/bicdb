@@ -2,11 +2,13 @@
 //! blank FIRST receiver, selected NoDomain proof, image or serving permission.
 //! Every later operation must supply its own actual Role/OWN/native evidence.
 use super::*;
+mod preflight;
 use crate::distribution_consensus::{
     HostMetadataReadObservation, NativeOwnedMetadataMemberObservation,
 };
 use crate::distribution_range_consensus::RangeWriteStore;
 use crate::distribution_range_recovery::HandoffRoleAdmission;
+pub(crate) use preflight::NativeJoinedRangeReceivePreflight;
 
 pub(crate) struct NativeJoinedRangeReceiveOrigin {
     parts: registered_replica::RegisteredAssignedParts,

@@ -52,6 +52,8 @@ pub(crate) use initial_offer::{
 #[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::NativeInitialOldConstraintStep;
 #[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeJoinedRangeReceivePreflight;
+#[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::{
     NativeInitialConsensusLaunch, NativeLearnerMetadataEnrollment, NativeMetadataControlHost,
     NativeMetadataRegistrationController, NativeProvisionalHost,

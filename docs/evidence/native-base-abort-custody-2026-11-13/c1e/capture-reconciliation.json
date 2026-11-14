@@ -1,0 +1,334 @@
+{
+  "source": "c1e4b3a4e8e7ad33c688436830f9af10a4203cc5",
+  "version": "1.0.494-beta",
+  "run": 43510565054,
+  "core_job": 132179457808,
+  "artifact": 14078871155,
+  "workflow": "failure",
+  "qualification": false,
+  "raw_sha256": "587683f6ec471634e1f59baaab8c554504480b745d19b5af2e85e7660ef3ea1c",
+  "cases": [
+    {
+      "case": "TargetNativeBaseAbortSyncFailed",
+      "test_classification": "failed",
+      "test_primary_error": "assertion failed: snapshot[\"owner\"][\"diagnostic_error\"].is_null()",
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "e6e1023e5c974b664ac9734392ec2758e6dc5462a322dc4a06f7dc7358400bdc",
+        "6e5abfcbf333d5740b26109011e630290101416a6fe03e74dcae32cf3a2fd0ea"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 97,
+      "custody_bytes": 3556007,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "sticky native durability failure refusal",
+      "fault_fired": 1,
+      "actual_native_status": "Aborted",
+      "issued_xid": 21,
+      "exact_retained_publisher_unchanged": true,
+      "native_attempts": 1,
+      "retired": 0,
+      "fresh_exact_error": "database refuses writes after a failed durable write at page_log.sync: /tmp/.tmpltF6yV/actual-registered-fifth-image-target/paged/store.wal: Input/output error (os error 5); reopen the database to run recovery and verification",
+      "first_exact_error": "canceling statement due to query timeout",
+      "failure_classification": "fixture incorrectly requires healthy owner diagnostic on intentionally fenced handle",
+      "unreached_assertions": "all assertions after native_abort_tests.rs:284; raw observations independently reconciled, test remains failed",
+      "post_failure_payload_visibility": "not asserted on fenced handle"
+    },
+    {
+      "case": "TargetNativeBaseAbortBudget",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 26,
+      "whole_source_journal_entries": 31,
+      "native_R_H0_H": [
+        1,
+        "d452e471ec7ea3cb3fa0367addb44dbd688ee67862cb669616937e3040b723d0",
+        "28013a72e3055f32bdf236f083d5f8f5afeda6471247d5301310aa4559320fdf"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3523219,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "finite retained attempt history",
+      "actual_aborted_requests": 9,
+      "retired": 8,
+      "no_tenth_native_attempt": true,
+      "exact_budget_error": "cluster error: native target image: Registered native base proven-abort retry budget exhausted; original attempt retained",
+      "byte_budget_exhaustion_tested": false
+    },
+    {
+      "case": "TargetNativeBaseInvalidated",
+      "test_classification": "failed",
+      "test_primary_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 17,
+      "whole_source_journal_entries": 22,
+      "native_R_H0_H": [
+        1,
+        "a23cf010f07bc03ebfd0500a30b13f19f87af378feb27720df5a678d3d30173c",
+        "5168b5abf821fdaa4a1f62a7e253795af96f62e4f0a52085d0cb6929fc40bbce"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3572211,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "prerequisite timeout",
+      "named_control": "not tested",
+      "exact_native_outcome": "inconclusive: no post-error native-base diagnostic retained",
+      "location": "PublishNativeBase:113"
+    },
+    {
+      "case": "TargetNativeBaseCommitSyncUnknown",
+      "test_classification": "failed",
+      "test_primary_error": "assertion failed: snapshot[\"owner\"][\"diagnostic_error\"].is_null()",
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "34a3832b23719508515fef8838f50da502f6f7f5a98a29cee2d30443ab65ae4b",
+        "c9430708f0bdc49d7f3a652fb25ad5f79cc02d1941f6ba98e14dc5a7dcb47d8d"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 97,
+      "custody_bytes": 3572391,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "sticky native durability failure refusal",
+      "fault_fired": 1,
+      "actual_native_status": "InProgress",
+      "issued_xid": 21,
+      "exact_retained_publisher_unchanged": true,
+      "native_attempts": 1,
+      "retired": 0,
+      "fresh_exact_error": "database refuses writes after a failed durable write at page_log.sync: /tmp/.tmpZut3hA/actual-registered-fifth-image-target/paged/store.wal: Input/output error (os error 5); reopen the database to run recovery and verification",
+      "first_exact_error": "commit outcome unknown: commit_seq=none transaction_id=none incarnation=eeb3e400-2167-45c3-a0e8-2c5fe716ba2d: page transaction 21 did not commit cleanly: database refuses writes after a failed durable write at page_log.sync: /tmp/.tmpZut3hA/actual-registered-fifth-image-target/paged/store.wal: Input/output error (os error 5); reopen the database to run recovery and verification; do not assume it committed or rolled back. Reopen the database, then re-read the operation's result: it has no commit sequence, and the page store's recovery kept it only if its commit record reached the disk",
+      "failure_classification": "fixture incorrectly requires healthy owner diagnostic on intentionally fenced handle",
+      "unreached_assertions": "all assertions after native_abort_tests.rs:284; raw observations independently reconciled, test remains failed",
+      "post_failure_payload_visibility": "not asserted on fenced handle"
+    },
+    {
+      "case": "TargetNativeBaseCanceled",
+      "test_classification": "failed",
+      "test_primary_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 15,
+      "whole_source_journal_entries": 20,
+      "native_R_H0_H": [
+        1,
+        "a7af553aacf8483c758b785db38667788e3c0ef8ed76683cab7ea0753a20d360",
+        "1f1482221b8a18bf0d158471960c02772d0d6069a66267e6a4465a37abfaeb7c"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3522859,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "prerequisite timeout",
+      "named_control": "not tested",
+      "exact_native_outcome": "inconclusive: no post-error native-base diagnostic retained",
+      "location": "PublishFinalImage helper:397"
+    },
+    {
+      "case": "TargetNativeBase",
+      "test_classification": "failed",
+      "test_primary_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 17,
+      "whole_source_journal_entries": 22,
+      "native_R_H0_H": [
+        1,
+        "68d152568fece974e2dc8549a63b6a9205af6af0ae8b6165a30ded88ded5165d",
+        "73cbc10b0a3ce1dd0c2d565db91c519e9df87201354c1dafd851d4628e7f20fc"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3572211,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "prerequisite timeout",
+      "named_control": "not tested",
+      "exact_native_outcome": "inconclusive: no post-error native-base diagnostic retained",
+      "location": "PublishNativeBase:113"
+    },
+    {
+      "case": "TargetNativeBaseWithoutFinal",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 11,
+      "whole_source_journal_entries": 16,
+      "native_R_H0_H": [
+        1,
+        "52f45964d459c3960c97b67a5cf722c295427abf55ec5ac5a30ec4aa6d0fa755",
+        "e292991d252cd8e62cc9794406e4937a09e7db76b1241595da2d946df0c61065"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3440659,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "missing actual final image refusal",
+      "exact_error": "cluster error: native range image: Registered native base requires actual final image receipt"
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryAfterCommit",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "956b4f067fec514916eca2eb8e0d0472fd3a0ad1a87b356bc271ba84370420ac",
+        "0139f8f78f0dbc9268ff93f0e1f5ad4c52b694bfba66bfacb3bb3acc6bda657e"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3572211,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "same-open actual Role expiry",
+      "issued_xid": 21,
+      "final_xid": 21,
+      "retired": 0,
+      "actual_attempts": 1,
+      "selected_ack_full_payload_before_after": true,
+      "real_expiry_and_live_parent": true
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryAfterPut",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "b082fa1f75eb7d6267d56ab2f4fbd4399a1692293c92c55be9c81887137c3ba9",
+        "efd947c7bd31ea8b64b16f43712294c6300ff907c8dec9c1ba008fa3eeb6e582"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3605179,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "same-open actual Role expiry",
+      "issued_xid": 21,
+      "final_xid": 23,
+      "retired": 1,
+      "actual_attempts": 2,
+      "selected_ack_full_payload_before_after": true,
+      "real_expiry_and_live_parent": true
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryBeforePut",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "d67f1cde89d93fc587b8d210a26478b08032620f2d071ecc07c8327258fd38e0",
+        "197a891ff75b2fd361b938108aa39008f6bf3bdee9352d735c093904e934ead6"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3572251,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "same-open actual Role expiry",
+      "issued_xid": 21,
+      "final_xid": 22,
+      "retired": 1,
+      "actual_attempts": 2,
+      "selected_ack_full_payload_before_after": true,
+      "real_expiry_and_live_parent": true
+    }
+  ],
+  "test_result": [
+    "test result: FAILED. 5 passed; 5 failed; 0 ignored; 0 measured; 1066 filtered out; finished in 88.92s"
+  ],
+  "selected_tests": [
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_abort_sync_failure_never_replaces_poisoned_owner",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_commit_sync_unknown_never_replaces_owner",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_proven_abort_budget_exhaustion_retains_every_owner",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_integrity_survives_image_invalidation",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_post_wal_cancel_reconciles_same_xid",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_preserves_verified_history_floor",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_refuses_without_live_final_image",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_commit_same_xid_resumes",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_successful_put_proven_abort_same_a_resumes",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_before_put_proven_abort_same_a_resumes"
+  ],
+  "executed_tests": [
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_integrity_survives_image_invalidation",
+      "result": "FAILED"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_commit_sync_unknown_never_replaces_owner",
+      "result": "FAILED"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_abort_sync_failure_never_replaces_poisoned_owner",
+      "result": "FAILED"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_proven_abort_budget_exhaustion_retains_every_owner",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_refuses_without_live_final_image",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_post_wal_cancel_reconciles_same_xid",
+      "result": "FAILED"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_preserves_verified_history_floor",
+      "result": "FAILED"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_commit_same_xid_resumes",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_successful_put_proven_abort_same_a_resumes",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_before_put_proven_abort_same_a_resumes",
+      "result": "ok"
+    }
+  ],
+  "public_projection": {
+    "projection_zip_sha256": "139d46a83da37bddb891106115f967207ce1d6b33c84f7059857d0ad14dda9bb",
+    "projection_zip_bytes": 2116252,
+    "projection_fixture_db_custody_present": false,
+    "original_archive_unchanged": true
+  },
+  "totals": {
+    "app_returned_event_operations": 20,
+    "custody_files_verified": 962,
+    "custody_bytes_verified": 35509198
+  },
+  "limitations": [
+    "5 passed/5 failed; runtime repair not a fully green gate",
+    "two fault controls failed fixture assertions; independently reconciled observations do not relabel failed tests",
+    "three existing controls timed out in prerequisites; cause and native publication outcome inconclusive",
+    "same-open actual native metadata components, not cold replay, general SQL, Serving, source retirement or physical scale-out",
+    "event-storage APP ledger distinct from native metadata xids; post-fault payload visibility not asserted on fenced handles",
+    "guarded live-owner stable file copy, not stopped/atomic/powerloss snapshot",
+    "8-entry exhaustion exercised; 8MiB exhaustion not exercised"
+  ]
+}

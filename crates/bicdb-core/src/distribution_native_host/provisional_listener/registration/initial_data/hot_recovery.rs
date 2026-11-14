@@ -125,6 +125,11 @@ impl NativeHotRecoveryMaintenance {
         let message = error.to_string();
         self.record(serde_json::json!({"phase":"start_refused","error":if message.len()<=4096{message}else{"diagnostic exceeds bound".into()},"diagnostic_not_authority":true}));
     }
+    /// True once a process token was bound; the worker may hold the original
+    /// writer objects from then on.
+    pub(super) fn process_bound(&self) -> bool {
+        self.process.get().is_some()
+    }
     pub(super) fn request_shutdown(&self) {
         self.stopping.store(true, Ordering::Release);
         if let Some(token) = self.process.get() {

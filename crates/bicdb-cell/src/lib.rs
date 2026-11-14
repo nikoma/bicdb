@@ -4718,6 +4718,15 @@ fn prepare_cell_applications(
                 pin.name
             ))
         })?;
+        if application
+            .required_features
+            .contains(&bicdb_extension::abi_v2::ApplicationFeature::AuthenticatedPrincipal)
+        {
+            return Err(CellError::ArtifactMismatch(format!(
+                "cell application {} requires authenticated_principal, which is qualified only for ordinary native BicDB",
+                pin.name
+            )));
+        }
         if let Some(route) = application.routes.iter().find(|route| route.public) {
             return Err(CellError::ArtifactMismatch(format!(
                 "cell application {} declares public route {}; cell application routes must authenticate",

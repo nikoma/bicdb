@@ -1,0 +1,16 @@
+{
+  "format_version": 1,
+  "validation_date": "2026-11-13",
+  "source_evidence_revisions": [
+    "c1e4b3a4e8e7ad33c688436830f9af10a4203cc5",
+    "81733c1fa601fea3bcac1ad5efac8435dd02b090"
+  ],
+  "default_portable_verifier": "passed",
+  "optional_private_raw_verification": "passed",
+  "raw_custody_files_each": 962,
+  "tampered_projection_byte_negative_control": "correctly refused",
+  "engine_opened": false,
+  "network_used_by_verifier": false,
+  "rust_tests_rerun": false,
+  "qualification": false
+}

@@ -1,0 +1,27 @@
+{
+  "format_version": 1,
+  "source_revision": "e1ecfeab71d3f1e104530e9d6aa3bf37971abd65",
+  "source_package_version": "1.0.494-beta",
+  "scope": "Separate later inspection of original failed run43493938281 raw custody; frozen prior packet unchanged",
+  "original_tests_still_failed": 2,
+  "named_fault_controls_still_not_tested": 2,
+  "current_visibility_or_fsync_or_powerloss_qualified": false,
+  "files": {
+    "README.md": {
+      "bytes": 6408,
+      "sha256": "c23c24286240d74d3a73cea2348b6e8dae8f1cc22b8db1368e600b99c889443c"
+    },
+    "inspect-native-wal.py": {
+      "bytes": 20507,
+      "sha256": "bd166f1461ca3a638790cabd0a414a224037fecbb0e63628101c37098029db49"
+    },
+    "observation.json": {
+      "bytes": 22377,
+      "sha256": "58eb4788150e3986cb30757af4b3684ce9302990f9f94cca06bcfa85c4e22e70"
+    },
+    "verify.py": {
+      "bytes": 5779,
+      "sha256": "e8c708f2854dcb395d6e7305010180c31f79a59f3d8d37b566a33c0f9af403d1"
+    }
+  }
+}

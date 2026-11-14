@@ -18304,6 +18304,18 @@ impl Transaction {
                 return Err(BicDbError::EmptyRecordId);
             }
             self.lock_row_for_write(tx_id, collection, id, true)?;
+            if self.isolation != TransactionIsolation::ReadCommitted
+                && self.last_pending_write(collection, id).is_none()
+                && Self::latest_committed_record_sequence(db, collection, id)?
+                    .is_none_or(|sequence| sequence > self.applied_snapshot)
+            {
+                // As for SQL locking reads, a snapshot transaction must fail
+                // before its caller can act on the stale row it read before
+                // waiting. Its own pending write remains its visible version.
+                return Err(BicDbError::TransactionConflict(format!(
+                    "row changed since locking query snapshot: {collection}:{id}"
+                )));
+            }
         }
         Ok(())
     }

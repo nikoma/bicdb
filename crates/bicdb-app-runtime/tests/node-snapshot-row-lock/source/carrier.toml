@@ -1,0 +1,10 @@
+[package]
+name = "qualification/row-lock-snapshot"
+version = "999.500.1"
+
+[module]
+namespace = "qualification.row_lock_snapshot"
+version = "999.500.1"
+
+[runtime]
+source = "vendored"

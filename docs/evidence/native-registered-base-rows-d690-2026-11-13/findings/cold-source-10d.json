@@ -1,0 +1,95 @@
+{
+  "source_commit": "10d17149886e629c535b6b5523a89f87ae83ba81",
+  "scope": "Read-only source investigation; no code, runtime tests, CI, version, merge or qualification.",
+  "same_open_leaf_preserved": "3d55f53e3615b59eb90a439774919bc5564bc522",
+  "earliest_startup_barrier": {
+    "insert_after": "db.rs:10664 PagedRecords::open returned; before10668 and recover_transaction_log10685",
+    "actual_native_recovery": "paged_collection.rs:264 calls PagedStore::open; bicdb-page/src/paged.rs:963 recovers WAL outcomes; statuses reconstructed/frozen before open returns",
+    "available_read": "paged.store().get_as_of(&paged.latest_snapshot(), &native_key(key)); scan_from with exact bounded protected prefix; BicDb is not constructed",
+    "before": [
+      "logical WAL recovery scanner10685, which can repair/truncate torn suffix",
+      "logical row/index materialization11264",
+      "native page checkpoint11286",
+      "broker/audit/CDC outbox replay11365-11418",
+      "direct logical open-time reset11433"
+    ],
+    "limit": "PagedStore open itself may replay native pages, so refusal is not a claim of globally byte-identical database files. It can preserve logical WAL and prevent business-log writes."
+  },
+  "durable_index_proposal": {
+    "admission": "New sticky reader fence/version before first indexed intent; old/unindexed feature history cannot be assumed empty without bounded legacy reconciliation or explicit refusal.",
+    "shape": "Bounded per-attempt/per-step keys in native protected namespace; avoid read-modify-write singleton map lost-update races. Values bind original open/incarnation, database birth, range, attempt, proposal/history/intent/step hashes, logical TxID/mutation hash and actual page intent XID. It is restrictive debt, never grant.",
+    "publish": "Insert exact outstanding entry in SAME actual native page transaction/XID as RowIntent, before any logical commit WAL; readback checks both exact values and committed page outcome.",
+    "clear": "Delete corresponding entry in SAME actual native page transaction/XID as exact RowsHeader protected progress; header is durable restrictive surrogate. Caller postchecks still gate live completion and leases, never reconstructed from cleared entry.",
+    "bounds": "Hard count/per-entry/total-byte admission bounds, cursor scan max+1 rejects overflow. Malformed, mismatched, unknown feature state, scan error or incomplete scan fails closed, never empty.",
+    "guard": "Acquire actual RAM pin before insertion (existing fix); common cut holds native cut guard while checking committed index and doing physical rewrite. Keep explicit gate/pin/index lock order to prevent empty-scan/insert/cut race; startup holds exclusive directory ownership.",
+    "initial_behavior": "Normal open refuses if outstanding entry exists before generic replay. Common cut refuses/defers if any debt. This is evidence preservation/admission only, not cold resume or HA.",
+    "cut_sites": [
+      "db/replication_live.rs:348-395 cut_transaction_log",
+      "db.rs:11421-11433 direct paged-open copy/reset bypass",
+      "db/spatial_paged.rs:2209-2219 recovery verifier copy(offset0) even though bytes preserved/inode changed",
+      "storage.rs:961-975 recovery scanner applies append failure marker and may settle/truncate torn tail at1101-1108; barrier must precede generic scanner"
+    ]
+  },
+  "projection_side_effects": {
+    "wal_format": "TxFrame/TxFrameWire db.rs:7731-7906 contain no imported_projection flag.",
+    "live_generation": "Registered rows.rs:495-498 imported_projection=true, enqueue_memory_jobs_on_commit=false before staging rows. spatial_paged.rs:2805-2820 omits generated CDC/audit outboxes; copy has no explicitly staged broker publishes/imported audit events.",
+    "cold_behavior": "apply_unmaterialized_transaction_log db.rs:21545-21659 directly reapplies actual records and durable indexes; it does not rerun business Transaction callbacks. Open republishes actual persisted outbox frames only.",
+    "finding": "No source evidence that absence of imported_projection WAL flag synthesizes fresh business events. This must be tested with audit/sync/broker/job counters; no executed cold control yet."
+  },
+  "resolver_building_blocks": {
+    "recovery": "db.rs:21178 TxRecovery already has states, writes, materialized_commits, commit_seq_by_tx. recover_transaction_log21320 streams/decodes frames. Commit/CommitMaterialized assign actual TxID-to-sequence; Truncate/Abort semantics are handled.",
+    "critical_loss": "ServerPaged recover_transaction_log discard_materialized_writes=true removes decoded bodies at CommitMaterialized21401-21414; apply_unmaterialized removes remaining writes21506. Need selective bounded resolver before those removals, not after open has cut.",
+    "hash": "db/native_wal_apply.rs:141-189 mutation_hash(domain + exact ordered canonical collection/record_id/record fields). ActualMutations can be adapted to decoded full TxWrite; do not hash raw WAL JSON or only row IDs. Registered writes are full upserts; unexpected patch/outbox/domain fails closed until explicit validation.",
+    "visitor": "storage::stream_frames961 bounded streaming but recovery-mutating; stream_frames_live984 is nonmutating bounded visitor but a stopped scan is not proof of complete durable history. read_frames_readonly_from1607 returns all frames and is not itself aggregate-memory-bounded. Use descriptor/retained generation + strict framing/completeness and bounded selected Tx hash state.",
+    "not_resolver": "CommitResolution commit_resolution.rs resolves original incarnation+known reserved sequence, not TxID/hash. RowIntent rows.rs62-76 lacks logical sequence; global B/visible row/page status must not fill it.",
+    "not_grant": "Exact cold outcome does not recreate original Transaction/owner/source pin/current quorum. Actual recovery continuation needs separate real current open/Slot/OWN/native ancestry/source-cut proofs."
+  },
+  "next_smallest_tests": [
+    {
+      "name": "cold_pending_applied_known_preserves_log_before_generic_open",
+      "method": "Real isolated child reaches existing actual post-applied/pre-header seam and pauses after fsynced external original intent/TxID/hash/outcome marker; parent SIGKILLs that child and waits for lock release, without normal close. Parent hashes logical WAL; fresh normal paged open must refuse actual outstanding index before any logical replay/outbox/reset, with WAL and business logs unchanged. Capture exact error. Row absence cannot imply rollback; no acknowledged target write is asserted by this cancelled projection."
+    },
+    {
+      "name": "index_and_native_intent_atomicity",
+      "method": "Real page WAL crash cuts before/after SAME transaction commit; recovered snapshot must contain both exact intent+index or neither, never intent-only. Malformed/bounds/index mismatch refuse."
+    },
+    {
+      "name": "index_clear_and_header_atomicity",
+      "method": "Real crash before/after SAME RowsHeader+delete commit. Pending branch preserves exact logical bytes; completed branch has exact committed matching header and no entry. A repeat open/cut may not resurrect/lose debt."
+    },
+    {
+      "name": "exact_selected_tx_cold_resolution",
+      "method": "Keep two concurrent transactions/other commits so B and TxID differ; actual resolver must match original TxID/incarnation/payload hash/real commit sequence, honor materialized marker, truncate and abort. Hash mismatch/missing prefix/unknown must remain closed; no replacement Tx."
+    },
+    {
+      "name": "cold_imported_projection_side_effect_parity",
+      "method": "Enable audit/CDC/broker/queue/job observability. Crash real imported rows at durable-pending-apply and AppliedKnown; evidence-preserving recovery must preserve target exact rows+indexes while creating zero fresh business outbox/jobs for copied mutations; unrelated legitimate outboxes replay once by actual IDs. No source flag/boolean as proof."
+    },
+    {
+      "name": "same_open_cut_index_race",
+      "method": "Pause actual pin->intent and index->header boundaries, concurrent explicit checkpoint/common cut; no cut after committed intent until exact surrogate; independent range/caller bounds unchanged. No simulated Ready/grant."
+    }
+  ],
+  "claims_not_made": [
+    "Cold continuation implemented",
+    "Final Image cold recovery",
+    "Ready/Serving admission",
+    "Zero-loss physical HA",
+    "Bounded automatic rebalance",
+    "Four-to-five-node throughput scaling",
+    "Production qualification"
+  ],
+  "self_healing_limit": "A plain open error safely preserves debt but cannot finish relocation or self-heal. A separate CLOSED cold-repair handle must keep exclusive directory ownership, permit only the bounded exact pending-intent resolver/materialization protocol, retain original attempt/Tx/history obligations, and reacquire actual current native/metadata authority before any image publication or Serving. It may not silently fall back to ordinary generic open or create a replacement transaction.",
+  "cold_child_test_precision": "Use a real subprocess and actual SIGKILL after an fsynced external seam marker proving logical outcome AppliedKnown or WalDurablePendingApply but before protected RowsHeader commit. Parent waits for child termination and directory lock release before opening; never graceful Drop/close (that changes cut behavior), never reopen a live store. Preserve before/after logical WAL, native intent/index/hash/page outcomes, actual stderr/error and business log/outbox IDs. This is a physical-process cold component, not independent-machine power loss or HA qualification.",
+  "source_files_sha256": {
+    "crates/bicdb-core/src/db.rs": "fe9b76b85aa60586f666727725c53654ed0041b0cdb783c0ad0dba3db819f64f",
+    "crates/bicdb-core/src/db/range_image_native/registered_remote_image/rows.rs": "e930210dab43365f9d87af7b9edcbb01cf29f604876eaa0c080e548126268e6d",
+    "crates/bicdb-core/src/db/spatial_paged.rs": "f02a7ba6ba15fbc10ddf7048cc03b57ebd367d1fd919ec86daa3bd5703b1c1b9",
+    "crates/bicdb-core/src/db/replication_live.rs": "5e0a89b2371fec6d6fd5ed7884bfcf46b5d70509cde1dd5f2e4699a721ade370",
+    "crates/bicdb-core/src/db/native_wal_apply.rs": "528420820512fe11971aac956351fa054f1c172917aadaa24d8074cb38c1b2c7",
+    "crates/bicdb-core/src/db/commit_resolution.rs": "c7110955c6a2be4776c157eb4ac905d84ada91aa1efc473d15b4ed7a12f3ae75",
+    "crates/bicdb-core/src/paged_collection.rs": "7a80bdeeb63477420fd93aa799eb880ad1f257f26848b0d41ca88a45564553ff",
+    "crates/bicdb-core/src/storage.rs": "e77ccd6c2d2498f592e335931048ad6992c39c600cb3cd479bb6e8203cb4e5a2",
+    "crates/bicdb-page/src/paged.rs": "c9f06d19b35187a18b80bf349f81b2d902f20b0b50f490386903231a1bc2d6f2"
+  }
+}

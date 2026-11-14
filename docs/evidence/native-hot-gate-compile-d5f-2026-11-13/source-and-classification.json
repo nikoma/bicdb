@@ -1,0 +1,30 @@
+{
+  "source": "d5fead60a42348edeaaab59bf28e603d685a9303",
+  "inherited_version": "1.0.500-beta",
+  "run": 43521850216,
+  "alltargets_job": 132217821281,
+  "core_job": 132217852787,
+  "selector": "metadata_publication_version_",
+  "static_tests_added": 6,
+  "selected_tests": 0,
+  "executed_tests": 0,
+  "classification": {
+    "workspace_alltargets": "failed",
+    "independent_consumer": "not tested",
+    "core_helper_build": "failed",
+    "six_local_version_tests": "not tested",
+    "full_hot_APP_Strong_operator_cold_physical": "not tested"
+  },
+  "error_counts": {
+    "alltargets": 6,
+    "core_helper": 6
+  },
+  "qualification": false,
+  "commands": [
+    "cargo check --workspace --all-targets --locked",
+    "cargo build --config 'profile.dev.package.\"*\".opt-level=2' -p bicdb-core --example chaos_child --locked"
+  ],
+  "correction_source_separate": "55c50e07c0f36ee7314342b4c8653988f444a835",
+  "correction_runtime_status_at_capture": "not established by this failed-run packet",
+  "limits": "No runtime fixtures executed and no database custody archive was created by these failed compile steps. No CI runner failure or physical result is inferred."
+}

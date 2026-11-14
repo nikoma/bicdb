@@ -594,6 +594,8 @@ pub(crate) use provisional_listener::{NativeInitialDataAdmission, NativeInitialO
 pub use provisional_listener::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
 
 #[cfg(feature = "tls-replication")]
+pub use provisional_listener::NativeJoinedDataStatus;
+#[cfg(feature = "tls-replication")]
 pub use provisional_listener::NativeRegisteredReplicaReceiverStatus;
 #[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::{

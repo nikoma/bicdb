@@ -1,0 +1,34 @@
+{
+  "checked_at_utc": "2026-11-13T20:43:49.711522+00:00",
+  "source": "34dded55efef6ed989cdf7d141d5751d4f2a2391",
+  "run": 43502925624,
+  "core_job": 132153142118,
+  "private_artifact_sha256": "a493a07ec6519949277d9813d105a7300025afc06059fcda8bf00ead074af573",
+  "test_result": "1PASS1FAIL18.06s",
+  "cases": [
+    {
+      "case": "TargetNativeBaseRoleExpiryAfterCommit",
+      "native_xid": 21,
+      "native_status": "Committed",
+      "classification": "PASSED: genuine fresh request reconciles same committed native xid",
+      "primary_error": "QueryTimedOut",
+      "retry_error": null,
+      "original_parent_remaining_us": 3501802,
+      "outcome_sha256": "17a9c9a74b41ff104625a916b98fb907d3b4ac67c8814606c948af1904891f25"
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryBeforePut",
+      "native_xid": 21,
+      "native_status": "Aborted",
+      "classification": "FAILED desired resumption: exact original same-open native abort remains stuck",
+      "primary_error": "QueryTimedOut",
+      "retry_error": "cluster error: native target image: Registered immutable native-base publication missing",
+      "original_parent_remaining_us": 3501858,
+      "outcome_sha256": "8ab2c29016ae6a8b8052fc8f5b34c9c7d7070a8c6295cdc4e433a85f45c817ea"
+    }
+  ],
+  "scope": "same-open native metadata publication only; no independent hardware/Serving/cold qualification",
+  "original_e1ec_failure_cause_claimed": false,
+  "engine_opened": false,
+  "production_qualified": false
+}

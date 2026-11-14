@@ -1,0 +1,73 @@
+{
+  "runtime_source": "d6908095e0d347e563ef68801f49e52dba35452d",
+  "source_tree": "1a6a35b8c077a7d6c070f5ffe41bfa3596122b7e",
+  "candidate_version": "1.0.494-beta",
+  "source_pins": [
+    {
+      "kind": "measured_runtime_candidate",
+      "commit": "d6908095e0d347e563ef68801f49e52dba35452d",
+      "version": "1.0.494-beta",
+      "files_sha256": {
+        "Cargo.toml": "7c756098550cdd9c86d781044c6427a369dc9983ce9296df07ed4d720ae7a3ad",
+        "crates/bicdb-core/src/db.rs": "05c6abe66cb626382f9fc24cbd90b3aa2d36da786f5a21d9561def364d6a0a92",
+        "crates/bicdb-core/src/db/range_image_install.rs": "85a87db6e582e271f855ebbd025df2a2a3bd49af40654292e505ce3846e24cab",
+        "crates/bicdb-core/src/db/range_image_install/registered_remote.rs": "a23ac339b91d06c3a9e7e4158116454e5bfd8092e1bba1e3b0c2b21cec4a2a3a",
+        "crates/bicdb-core/src/db/native_wal_apply.rs": "9163e9324627ffff7570b7b377d52ff6178f33196efa635f6a68a1cfde837553",
+        "crates/bicdb-core/src/db/replication_live.rs": "5e0a89b2371fec6d6fd5ed7884bfcf46b5d70509cde1dd5f2e4699a721ade370",
+        "crates/bicdb-core/src/db/commit_snapshot.rs": "c5b5471a2b4777eacb7c741b893ecaa863c71d3fdf47fbe76cf45b8dcd9ed8f6",
+        "crates/bicdb-core/src/db/range_image_native/registered_remote_image/rows.rs": "120953bcf781902aa747332b4193dc1ca0cea4775f9476ea88bc702d5a6543a6",
+        "crates/bicdb-core/src/db/range_image_native/registered_remote_image.rs": "f9014ef850c484d1c1e4fa3cc6e302b9859921f3a0d534e0a7b7e5ee6289baf9",
+        "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_attempt/remote_mutation.rs": "7c6f32e0e1d52315386ee7b1323e603774541d6a1dcda66deed381e5dcbc651a",
+        "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_image_tests.rs": "7de6a0ef75fcb08f327ef242652a02ba5504e5c29087ff118fa3564d974adb1c",
+        "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_final_image_tests/native_base_tests.rs": "e1892c767836662b5b7778251dd0b13d646be3b337f30443274f7cc0c4258c3a"
+      }
+    },
+    {
+      "kind": "read_only_source_design_report_not_runtime_evidence",
+      "commit": "10d17149886e629c535b6b5523a89f87ae83ba81",
+      "report": "findings/cold-source-10d.json",
+      "report_sha256": "1e7e994afa4c1c5ef84d438c0902b1098d891cbcfcb81218edf2e0b36ae1f4d8",
+      "files_sha256": {
+        "crates/bicdb-core/src/db.rs": "fe9b76b85aa60586f666727725c53654ed0041b0cdb783c0ad0dba3db819f64f",
+        "crates/bicdb-core/src/db/range_image_native/registered_remote_image/rows.rs": "e930210dab43365f9d87af7b9edcbb01cf29f604876eaa0c080e548126268e6d",
+        "crates/bicdb-core/src/db/spatial_paged.rs": "f02a7ba6ba15fbc10ddf7048cc03b57ebd367d1fd919ec86daa3bd5703b1c1b9",
+        "crates/bicdb-core/src/db/replication_live.rs": "5e0a89b2371fec6d6fd5ed7884bfcf46b5d70509cde1dd5f2e4699a721ade370",
+        "crates/bicdb-core/src/db/native_wal_apply.rs": "528420820512fe11971aac956351fa054f1c172917aadaa24d8074cb38c1b2c7",
+        "crates/bicdb-core/src/db/commit_resolution.rs": "c7110955c6a2be4776c157eb4ac905d84ada91aa1efc473d15b4ed7a12f3ae75",
+        "crates/bicdb-core/src/paged_collection.rs": "7a80bdeeb63477420fd93aa799eb880ad1f257f26848b0d41ca88a45564553ff",
+        "crates/bicdb-core/src/storage.rs": "e77ccd6c2d2498f592e335931048ad6992c39c600cb3cd479bb6e8203cb4e5a2",
+        "crates/bicdb-page/src/paged.rs": "c9f06d19b35187a18b80bf349f81b2d902f20b0b50f490386903231a1bc2d6f2"
+      }
+    },
+    {
+      "kind": "read_only_source_design_report_not_runtime_evidence",
+      "commit": "ea74be38dce1ff16cc3058d0c2d13411aea35e09",
+      "report": "findings/distributed-sql-source-main498.json",
+      "report_sha256": "0b4aa2496b566d6a66075c23c8f59644147da209d69dc32eecd63472f80a484d",
+      "files_sha256": {
+        "docs/distributed-sql-design-2026-11-11.md": "96d486f2d3222474aa10990fa72a3e3dc944916f7e815debfce5d8717743c39e",
+        "docs/design/distributed-sql-minimum-execution-contract.md": "648176995615fb021b07b2b708aca2d261abb44c511f6a8e2b9827df4a100835",
+        "crates/bicdb-core/src/distribution.rs": "93d57e9bb16168b688b95ca36a5a2d16932b54c71b7accc0050f58dfb8188f3d",
+        "crates/bicdb-core/src/distribution_query.rs": "3f4ba08a2694662a163f7ddb7cd41b2ac88f5c1539ac18483d4eb69caedbaa44",
+        "crates/bicdb-core/src/distribution_range_consensus.rs": "aac4246266f5a20dcd6345a3a710f4f4d767c83c96a1d4dfc77931e41d984bb9",
+        "crates/bicdb-core/src/db/record_read_snapshot.rs": "abf6b52158b64bb940a050100f97386a33ce4ae82a648e75eac0742e87f231f7",
+        "crates/bicdb-pgwire/src/lib.rs": "dbb63e242a6c789a5d642fc5cfd5e26501fd25df0d47a858728138d770dc245a",
+        "crates/bicdb-pgwire/src/server_cluster.rs": "222ac30457f01e0627584113d0025ab15d4d61c33ca6d35f8f8ef7135a1f2ee6",
+        "crates/bicdb-core/Cargo.toml": "a0c2747b6a090036ccfea85821e4fc71a77a59464fa6b55fc944100f4e4ce918"
+      }
+    }
+  ],
+  "source_checks": "All listed source hashes verified with git show exact commit during packaging; optional portable --repo repeats this.",
+  "historical_references_only": [
+    {
+      "source": "7ac4f2672c4a10e8ec71c5ddae3de972cb49bd4a",
+      "run": 43478288480,
+      "result": "1 passed /4 failed; four intended controls untested at OLD prerequisite"
+    },
+    {
+      "source": "10d17149886e629c535b6b5523a89f87ae83ba81",
+      "run": 43484879958,
+      "result": "5 passed /0 failed; different earlier Rows source"
+    }
+  ]
+}

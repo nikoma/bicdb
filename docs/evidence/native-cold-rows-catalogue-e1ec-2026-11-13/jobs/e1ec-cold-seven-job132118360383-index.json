@@ -1,0 +1,144 @@
+{
+  "source_revision": "e1ecfeab71d3f1e104530e9d6aa3bf37971abd65",
+  "run_id": 43492849838,
+  "job_id": 132118360383,
+  "job_name": "Focused Core library (registered_row_)",
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "captured_at_utc": "2026-11-13T19:37:35.858195+00:00",
+  "raw_bytes": 1948325,
+  "raw_sha256": "5d479fb49ae242b3196d1136e792ac97228ec4c14a869fa9c038321eb3762bfa",
+  "compressed_file": "e1ec-cold-seven-job132118360383.log.gz",
+  "compressed_sha256": "964d5ea9a489ce8cb6bae4947fcf8bcadf697fbe447d3185e935300bab131422",
+  "test_summaries": [
+    "2026-11-13T19:37:02.0564956Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 1063 filtered out; finished in 16.22s"
+  ],
+  "test_observations": [
+    {
+      "line": 20050,
+      "test": "db::registered_row_retention::tests::registered_row_pending_malformed_index_is_not_empty",
+      "result": "ok"
+    },
+    {
+      "line": 20051,
+      "test": "db::registered_row_retention::tests::registered_row_pending_oversize_index_is_not_empty",
+      "result": "ok"
+    },
+    {
+      "line": 20052,
+      "test": "db::registered_row_retention::tests::registered_row_unindexed_prototype_is_refused_without_upgrade",
+      "result": "ok"
+    },
+    {
+      "line": 20053,
+      "test": "db::registered_row_retention::tests::registered_row_pending_aborted_data_is_not_published",
+      "result": "ok"
+    },
+    {
+      "line": 20054,
+      "test": "db::registered_row_retention::tests::registered_row_pending_foreign_empty_store_cannot_supply_absence",
+      "result": "ok"
+    },
+    {
+      "line": 20055,
+      "test": "storage::tests::registered_row_readonly_complete_descriptor_refuses_damaged_tail_without_repair",
+      "result": "ok"
+    },
+    {
+      "line": 20056,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_image_tests::cold_preservation_tests::native_registered_row_cold_sigkill_preserves_pending_before_generic_open",
+      "result": "ok"
+    }
+  ],
+  "failure_context": [],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T19:30:45Z",
+      "completed_at": "2026-11-13T19:30:46Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T19:30:46Z",
+      "completed_at": "2026-11-13T19:30:53Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T19:30:53Z",
+      "completed_at": "2026-11-13T19:31:03Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T19:31:03Z",
+      "completed_at": "2026-11-13T19:31:12Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T19:31:12Z",
+      "completed_at": "2026-11-13T19:35:14Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T19:35:14Z",
+      "completed_at": "2026-11-13T19:36:45Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-11-13T19:36:45Z",
+      "completed_at": "2026-11-13T19:37:02Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T19:37:02Z",
+      "completed_at": "2026-11-13T19:37:02Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 15,
+      "started_at": "2026-11-13T19:37:02Z",
+      "completed_at": "2026-11-13T19:37:12Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T19:37:12Z",
+      "completed_at": "2026-11-13T19:37:12Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T19:37:12Z",
+      "completed_at": "2026-11-13T19:37:12Z"
+    }
+  ]
+}

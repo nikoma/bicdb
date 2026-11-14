@@ -1,0 +1,386 @@
+{
+  "format": 1,
+  "documentation_base_version": "1.0.497-beta",
+  "documentation_base_commit": "3d9e4701d222e0b15ea547d6a0265490b16eb921",
+  "measured_candidate_package_version": "1.0.494-beta",
+  "qualification": "NOT QUALIFIED",
+  "production_gate_changed": false,
+  "physical_four_to_five_tested": false,
+  "throughput_gain_tested": false,
+  "jobs": [
+    {
+      "label": "0316-compile",
+      "run_id": 43465672013,
+      "job_id": 132024038303,
+      "source": "031681576891112929f65f77b09787e56120b41c",
+      "conclusion": "failure",
+      "index": "jobs/132024038303/capture-index.json",
+      "metadata": "jobs/132024038303/github-job.json",
+      "log": "jobs/132024038303/job.log.gz",
+      "test_summaries": [],
+      "test_observations": []
+    },
+    {
+      "label": "0316-core-not-executed",
+      "run_id": 43465672013,
+      "job_id": 132024082465,
+      "source": "031681576891112929f65f77b09787e56120b41c",
+      "conclusion": "failure",
+      "index": "jobs/132024082465/capture-index.json",
+      "metadata": "jobs/132024082465/github-job.json",
+      "log": "jobs/132024082465/job.log.gz",
+      "test_summaries": [],
+      "test_observations": []
+    },
+    {
+      "label": "d09d-compile",
+      "run_id": 43466821238,
+      "job_id": 132028062769,
+      "source": "d09d1ca494cfb5d629817cafb18b88388f2f1403",
+      "conclusion": "success",
+      "index": "jobs/132028062769/capture-index.json",
+      "metadata": "jobs/132028062769/github-job.json",
+      "log": "jobs/132028062769/job.log.gz",
+      "test_summaries": [],
+      "test_observations": []
+    },
+    {
+      "label": "d09d-serial",
+      "run_id": 43466821238,
+      "job_id": 132028116691,
+      "source": "d09d1ca494cfb5d629817cafb18b88388f2f1403",
+      "conclusion": "success",
+      "index": "jobs/132028116691/capture-index.json",
+      "metadata": "jobs/132028116691/github-job.json",
+      "log": "jobs/132028116691/job.log.gz",
+      "test_summaries": [
+        "2026-11-13T16:56:41.9167106Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1038 filtered out; finished in 9.75s"
+      ],
+      "test_observations": [
+        {
+          "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_observed_traffic_first_diagnostic",
+          "result": "ok"
+        }
+      ]
+    },
+    {
+      "label": "7f2c-compile",
+      "run_id": 43469307523,
+      "job_id": 132036684467,
+      "source": "7f2c5f0abc4b2a65700971e41ec362c5da0fbb03",
+      "conclusion": "success",
+      "index": "jobs/132036684467/capture-index.json",
+      "metadata": "jobs/132036684467/github-job.json",
+      "log": "jobs/132036684467/job.log.gz",
+      "test_summaries": [],
+      "test_observations": []
+    },
+    {
+      "label": "7f2c-failed-four",
+      "run_id": 43469307523,
+      "job_id": 132036734162,
+      "source": "7f2c5f0abc4b2a65700971e41ec362c5da0fbb03",
+      "conclusion": "failure",
+      "index": "jobs/132036734162/capture-index.json",
+      "metadata": "jobs/132036734162/github-job.json",
+      "log": "jobs/132036734162/job.log.gz",
+      "test_summaries": [
+        "2026-11-13T17:12:31.5967306Z test result: FAILED. 0 passed; 4 failed; 0 ignored; 0 measured; 1039 filtered out; finished in 12.25s"
+      ],
+      "test_observations": [
+        {
+          "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::first_app_observed_cohort::native_registered_fifth_remote_transfer_unique_runtime_owner_preserves_data",
+          "result": "FAILED"
+        },
+        {
+          "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::first_app_observed_cohort::native_registered_fifth_remote_transfer_actual_hook_aba_before_rotation_preserves_n",
+          "result": "FAILED"
+        },
+        {
+          "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::first_app_observed_cohort::native_registered_fifth_remote_transfer_actual_cancellation_before_rotation_preserves_n",
+          "result": "FAILED"
+        },
+        {
+          "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::first_app_observed_cohort::native_registered_fifth_remote_transfer_actual_callback_arc_blocks_then_fresh_retry",
+          "result": "FAILED"
+        }
+      ]
+    },
+    {
+      "label": "6d5-compile",
+      "run_id": 43472904695,
+      "job_id": 132049162545,
+      "source": "6d5fe913fb6bdb032c53801b52ad6161fe6d0d95",
+      "conclusion": "success",
+      "index": "jobs/132049162545/capture-index.json",
+      "metadata": "jobs/132049162545/github-job.json",
+      "log": "jobs/132049162545/job.log.gz",
+      "test_summaries": [],
+      "test_observations": []
+    },
+    {
+      "label": "6d5-expiry",
+      "run_id": 43472904695,
+      "job_id": 132049216248,
+      "source": "6d5fe913fb6bdb032c53801b52ad6161fe6d0d95",
+      "conclusion": "success",
+      "index": "jobs/132049216248/capture-index.json",
+      "metadata": "jobs/132049216248/github-job.json",
+      "log": "jobs/132049216248/job.log.gz",
+      "test_summaries": [
+        "2026-11-13T17:32:56.8556269Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1043 filtered out; finished in 7.05s"
+      ],
+      "test_observations": [
+        {
+          "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::old_round_expiry_tests::native_registered_fifth_old_round_expiry_then_fresh_mq_counts_same_live_closes",
+          "result": "ok"
+        }
+      ]
+    },
+    {
+      "label": "943-registered-proposal-positive",
+      "run_id": 43461532306,
+      "job_id": 132009482769,
+      "source": "9434dcdb1f9bc53683dc3e2c433de337dcc3ff83",
+      "conclusion": "success",
+      "index": "jobs/132009482769/capture-index.json",
+      "metadata": "jobs/132009482769/github-job.json",
+      "log": "jobs/132009482769/job.log.gz",
+      "test_summaries": [
+        "2026-11-13T16:25:31.0805181Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1035 filtered out; finished in 9.22s"
+      ],
+      "test_observations": [
+        {
+          "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_wal_current_archive_preserve_data",
+          "result": "ok"
+        }
+      ]
+    },
+    {
+      "label": "943-registered-proposal-cancel-retry",
+      "run_id": 43463319835,
+      "job_id": 132016004732,
+      "source": "9434dcdb1f9bc53683dc3e2c433de337dcc3ff83",
+      "conclusion": "success",
+      "index": "jobs/132016004732/capture-index.json",
+      "metadata": "jobs/132016004732/github-job.json",
+      "log": "jobs/132016004732/job.log.gz",
+      "test_summaries": [
+        "2026-11-13T16:34:27.5529903Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1035 filtered out; finished in 10.62s"
+      ],
+      "test_observations": [
+        {
+          "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_post_wal_cancel_fresh_retry_same_xid",
+          "result": "ok"
+        }
+      ]
+    },
+    {
+      "label": "734-registered-reader-flag-eio",
+      "run_id": 43468856482,
+      "job_id": 132035186132,
+      "source": "7349adaaa987042e164ca06bb7e9eb8522fdb851",
+      "conclusion": "success",
+      "index": "jobs/132035186132/capture-index.json",
+      "metadata": "jobs/132035186132/github-job.json",
+      "log": "jobs/132035186132/job.log.gz",
+      "test_summaries": [
+        "2026-11-13T17:09:33.7195778Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1036 filtered out; finished in 10.36s"
+      ],
+      "test_observations": [
+        {
+          "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_reader_flag_dir_sync_failure_retry",
+          "result": "ok"
+        }
+      ]
+    },
+    {
+      "label": "fd4-registered-installing-positive",
+      "run_id": 43468368964,
+      "job_id": 132033549088,
+      "source": "fd4d0595d70e82dff20889c19918e34dbd42575d",
+      "conclusion": "success",
+      "index": "jobs/132033549088/capture-index.json",
+      "metadata": "jobs/132033549088/github-job.json",
+      "log": "jobs/132033549088/job.log.gz",
+      "test_summaries": [
+        "2026-11-13T17:07:04.7586529Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1039 filtered out; finished in 9.43s"
+      ],
+      "test_observations": [
+        {
+          "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_catalogue_same_owner_preserves_rows",
+          "result": "ok"
+        }
+      ]
+    },
+    {
+      "label": "fd4-registered-installing-fault-cohort",
+      "run_id": 43469675906,
+      "job_id": 132038089731,
+      "source": "fd4d0595d70e82dff20889c19918e34dbd42575d",
+      "conclusion": "success",
+      "index": "jobs/132038089731/capture-index.json",
+      "metadata": "jobs/132038089731/github-job.json",
+      "log": "jobs/132038089731/job.log.gz",
+      "test_summaries": [
+        "2026-11-13T17:11:08.1759784Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 1037 filtered out; finished in 9.95s"
+      ],
+      "test_observations": [
+        {
+          "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_catalogue_same_owner_preserves_rows",
+          "result": "ok"
+        },
+        {
+          "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_after_fsync_cancel_fresh_same_attempt",
+          "result": "ok"
+        },
+        {
+          "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_directory_sync_error_retries_exact_catalogue",
+          "result": "ok"
+        }
+      ]
+    },
+    {
+      "label": "ea7-registered-history-rows-alltargets",
+      "run_id": 43472582176,
+      "job_id": 132048033766,
+      "source": "ea7d8e3494d788fc9b1c88bb87101df2ba1d0d45",
+      "conclusion": "failure",
+      "index": "jobs/132048033766/capture-index.json",
+      "metadata": "jobs/132048033766/github-job.json",
+      "log": "jobs/132048033766/job.log.gz",
+      "test_summaries": [],
+      "test_observations": []
+    },
+    {
+      "label": "ea7-registered-history-rows-core",
+      "run_id": 43472582176,
+      "job_id": 132048081792,
+      "source": "ea7d8e3494d788fc9b1c88bb87101df2ba1d0d45",
+      "conclusion": "failure",
+      "index": "jobs/132048081792/capture-index.json",
+      "metadata": "jobs/132048081792/github-job.json",
+      "log": "jobs/132048081792/job.log.gz",
+      "test_summaries": [],
+      "test_observations": []
+    },
+    {
+      "label": "a5f-registered-history-rows-alltargets",
+      "run_id": 43473382435,
+      "job_id": 132050841240,
+      "source": "a5ffc9d15ce75b2b6b0d987c7ea61f184cfe8988",
+      "conclusion": "failure",
+      "index": "jobs/132050841240/capture-index.json",
+      "metadata": "jobs/132050841240/github-job.json",
+      "log": "jobs/132050841240/job.log.gz",
+      "test_summaries": [],
+      "test_observations": []
+    },
+    {
+      "label": "a5f-registered-history-rows-core",
+      "run_id": 43473382435,
+      "job_id": 132050903126,
+      "source": "a5ffc9d15ce75b2b6b0d987c7ea61f184cfe8988",
+      "conclusion": "failure",
+      "index": "jobs/132050903126/capture-index.json",
+      "metadata": "jobs/132050903126/github-job.json",
+      "log": "jobs/132050903126/job.log.gz",
+      "test_summaries": [],
+      "test_observations": []
+    }
+  ],
+  "artifacts": [
+    {
+      "source": "031681576891112929f65f77b09787e56120b41c",
+      "path": "artifacts/0316-first-app-public-projection.zip",
+      "manifest": "artifacts/0316-first-app-public-projection-manifest.json",
+      "original_sha256": "0bf2c4341f4058d5b288999b2119a827ff852e9fb5b2c0c86b0dac297b55098c",
+      "sha256": "0d8d04e2a849953b3e98ecb3843177182a419224e0426fe9ec8cdf3d510d1a86",
+      "bytes": 5073,
+      "custody": false,
+      "original_custody": false
+    },
+    {
+      "source": "d09d1ca494cfb5d629817cafb18b88388f2f1403",
+      "path": "artifacts/d09d-first-app-public-projection.zip",
+      "manifest": "artifacts/d09d-first-app-public-projection-manifest.json",
+      "original_sha256": "cb42bb2c9efc8236b216e99357c830f6e26b9d5d230abddcb154a623e086b4f2",
+      "sha256": "3a176e051a04003967837cf8db10987d36ffb500bab7d92272716bd2fdaf3194",
+      "bytes": 152162,
+      "custody": false,
+      "original_custody": true
+    },
+    {
+      "source": "7f2c5f0abc4b2a65700971e41ec362c5da0fbb03",
+      "path": "artifacts/7f2c-first-app-cohort-public-projection.zip",
+      "manifest": "artifacts/7f2c-first-app-cohort-public-projection-manifest.json",
+      "original_sha256": "5864bd49abbea6b377e035e0529e0b896e5e94c8cba6505b875090a6b9f187ad",
+      "sha256": "ffab823ca5d2e3891f69752e5e858986726817e878be774b64002591ea96e737",
+      "bytes": 389048,
+      "custody": false,
+      "original_custody": true
+    },
+    {
+      "source": "6d5fe913fb6bdb032c53801b52ad6161fe6d0d95",
+      "path": "artifacts/6d5-old-round-expiry-public-projection.zip",
+      "manifest": "artifacts/6d5-old-round-expiry-public-projection-manifest.json",
+      "original_sha256": "e43db19a328486c085188aef233c26d4dd569fd42a4e44ba76e50b89e8df1264",
+      "sha256": "1a9c66b7e6b24ea17ed6eed9869ec90cdfb9fcc72f4db7990be1cb4fca0860b1",
+      "bytes": 153447,
+      "custody": false,
+      "original_custody": true
+    },
+    {
+      "source": "9434dcdb1f9bc53683dc3e2c433de337dcc3ff83",
+      "path": "artifacts/9434-43461532306-public-projection.zip",
+      "manifest": "artifacts/9434-43461532306-public-projection.json",
+      "original_sha256": "3693a71475484dd3d0a00169812bebd972b0bde65a13853d2bd86706338de793",
+      "sha256": "8a246b1701251220ed17d58915a222eb74cca826de58f8014325e7b603e81578",
+      "bytes": 141227,
+      "custody": false,
+      "original_custody": true
+    },
+    {
+      "source": "9434dcdb1f9bc53683dc3e2c433de337dcc3ff83",
+      "path": "artifacts/9434-43463319835-public-projection.zip",
+      "manifest": "artifacts/9434-43463319835-public-projection.json",
+      "original_sha256": "067751c6c6e1ede5335b006866fbbc96e2543ff370b7496f250292ceead9ea4f",
+      "sha256": "7d12b50ec6468d7b8a44867dde31550cbc46ef952362f77836decaf10c7ab19e",
+      "bytes": 137543,
+      "custody": false,
+      "original_custody": true
+    },
+    {
+      "source": "7349adaaa987042e164ca06bb7e9eb8522fdb851",
+      "path": "artifacts/7349-43468856482-public-projection.zip",
+      "manifest": "artifacts/7349-43468856482-public-projection.json",
+      "original_sha256": "60da542bce80087f74af061ca120152e78cd35acd409746b06ec6b11aea5c618",
+      "sha256": "fd10dc4b8b2a7d606e753257316bfbb9c1370628f255dd39feb696c594c1b14d",
+      "bytes": 137616,
+      "custody": false,
+      "original_custody": true
+    },
+    {
+      "source": "fd4d0595d70e82dff20889c19918e34dbd42575d",
+      "path": "artifacts/fd4d-43468368964-public-projection.zip",
+      "manifest": "artifacts/fd4d-43468368964-public-projection.json",
+      "original_sha256": "1cb4ace77723cf1bcd2d1158d6438c51456a9fb1bc14cb58797c10f0abe7a199",
+      "sha256": "748c77e823136434142c558b534b666994686de836ca8934c756163f7c4c5617",
+      "bytes": 151515,
+      "custody": false,
+      "original_custody": true
+    },
+    {
+      "source": "fd4d0595d70e82dff20889c19918e34dbd42575d",
+      "path": "artifacts/fd4d-43469675906-public-projection.zip",
+      "manifest": "artifacts/fd4d-43469675906-public-projection.json",
+      "original_sha256": "5b60b945bfd723c5aadc20ba4c6e90b700c2c642e7e806ff563dfb7490fdaec5",
+      "sha256": "a3ee2510e6b08d31ca0b12e789767f406f1bec66bc3086c47aa39b132034abb2",
+      "bytes": 360568,
+      "custody": false,
+      "original_custody": true
+    }
+  ],
+  "excluded_later_run": 43474702124,
+  "previous_packet_preserved": true
+}

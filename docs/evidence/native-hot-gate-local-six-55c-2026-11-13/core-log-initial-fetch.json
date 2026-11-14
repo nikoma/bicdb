@@ -1,0 +1,6 @@
+{
+  "command": "gh run view 43523702442 --repo nikoma/bicdb --job 132224155429 --log",
+  "exit_code": 1,
+  "stderr": "EOF",
+  "read_only_fetch_failure_not_test_failure": true
+}

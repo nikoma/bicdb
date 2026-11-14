@@ -1,0 +1,32 @@
+{
+  "format_version": 1,
+  "included_members": [
+    {
+      "bytes": 196,
+      "path": "rustc.txt",
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    {
+      "bytes": 30338,
+      "path": "selected-tests.log",
+      "sha256": "6304ed6cd026ed37887b8154280447ff67e1ddcb3c4ebf5d898ca01bcb0e9098"
+    },
+    {
+      "bytes": 41,
+      "path": "source-revision.txt",
+      "sha256": "ba93f55bc786cc190123fce9ba9f60d13e5ddeddbf7dced0e89a013490b9c565"
+    }
+  ],
+  "omitted_members": [],
+  "original_archive_unchanged": true,
+  "original_fixture_db_custody_present": false,
+  "original_zip_bytes": 5093,
+  "original_zip_sha256": "0bf2c4341f4058d5b288999b2119a827ff852e9fb5b2c0c86b0dac297b55098c",
+  "projection_fixture_db_custody_present": false,
+  "projection_policy": "Only explicit logical JSON ledgers/reports and source/toolchain/test logs; entire DB/custody trees and custody manifests excluded",
+  "projection_zip_bytes": 5073,
+  "projection_zip_sha256": "0d8d04e2a849953b3e98ecb3843177182a419224e0426fe9ec8cdf3d510d1a86",
+  "projector_sha256": "21a11948e5d67b10ed31b137f1b196fef86bc4b429942566319c499328cf1cac",
+  "qualification": "No cold replay, physical HA, target installation, serving or production qualification is implied by retained custody or this projection",
+  "source_commit": "031681576891112929f65f77b09787e56120b41c"
+}

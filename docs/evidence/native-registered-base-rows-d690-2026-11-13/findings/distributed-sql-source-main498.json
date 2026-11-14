@@ -1,0 +1,86 @@
+{
+  "scope": "Independent read-only design and source review. No implementation, compile, runtime test, CI, version, merge or qualification.",
+  "source_commit": "ea74be38dce1ff16cc3058d0c2d13411aea35e09",
+  "source_version": "1.0.498-beta",
+  "source_ref": "refs/remotes/origin/main observed locally; all content read with git show exact SHA",
+  "source_files_sha256": {
+    "docs/distributed-sql-design-2026-11-11.md": "96d486f2d3222474aa10990fa72a3e3dc944916f7e815debfce5d8717743c39e",
+    "docs/design/distributed-sql-minimum-execution-contract.md": "648176995615fb021b07b2b708aca2d261abb44c511f6a8e2b9827df4a100835",
+    "crates/bicdb-core/src/distribution.rs": "93d57e9bb16168b688b95ca36a5a2d16932b54c71b7accc0050f58dfb8188f3d",
+    "crates/bicdb-core/src/distribution_query.rs": "3f4ba08a2694662a163f7ddb7cd41b2ac88f5c1539ac18483d4eb69caedbaa44",
+    "crates/bicdb-core/src/distribution_range_consensus.rs": "aac4246266f5a20dcd6345a3a710f4f4d767c83c96a1d4dfc77931e41d984bb9",
+    "crates/bicdb-core/src/db/record_read_snapshot.rs": "abf6b52158b64bb940a050100f97386a33ce4ae82a648e75eac0742e87f231f7",
+    "crates/bicdb-pgwire/src/lib.rs": "dbb63e242a6c789a5d642fc5cfd5e26501fd25df0d47a858728138d770dc245a",
+    "crates/bicdb-pgwire/src/server_cluster.rs": "222ac30457f01e0627584113d0025ab15d4d61c33ca6d35f8f8ef7135a1f2ee6",
+    "crates/bicdb-core/Cargo.toml": "a0c2747b6a090036ccfea85821e4fc71a77a59464fa6b55fc944100f4e4ce918"
+  },
+  "design_baselines_preserved": {
+    "docs/distributed-sql-design-2026-11-11.md": "Original design1.0.460 c173fa783fb8323fe02c41fb7eda96f130bc29c3; integration reviews through478 and481 are historical, not new498 runtime results.",
+    "docs/design/distributed-sql-minimum-execution-contract.md": "Original design1.0.482 f43583da4c34209e810c5e6a8f5925831b2949a1; 92d5 read-foundation candidate is distinct and not global SQL proof."
+  },
+  "verdict": "The documents describe the required transparent SQL product accurately, with explicit conservative correctness-first choices. Current498 source supplies routing/planning/local snapshot components, not the proposed transparent executor, global snapshot/join runtime or durable production SQL coordinator. No existing abstract API or native Image receipt proves those gaps closed.",
+  "requirements_review": [
+    {
+      "requirement": "Logical locality is an optional optimization",
+      "design": "distributed-sql-design sections1,7/lines325-341; minimum contract introductory scope",
+      "assessment": "Design satisfies requirement: stable versioned logical domain/key policy, related tables may share domain, absent policy and forced separation retain same atomic correctness. Locality migration needs versioned route lookup/cutover.",
+      "actual_source": "distribution.rs1003-1015 hashes namespace+key with fixed versioned SHA256; distribution_range_consensus2698 uses collection+record_id. No implemented SQL tenant/locality declaration inferred.",
+      "status": "Design contract reviewed; implementation gap open; runtime locality migration not tested."
+    },
+    {
+      "requirement": "Ordinary PG clients through healthy fixed endpoint",
+      "design": "minimum sections2,6; report sections2,3",
+      "assessment": "Gateway must intercept both simple and extended protocol before local DB guards, carry authenticated app/RLS/schema/session/portal/operation state, execute typed fragments and hide stale routes only when execution is disproven or same durable outcome resolved. No client range IDs/leader choice. Fixed endpoint needs an operational gateway/LB service; losing socket may remain standard uncertain COMMIT, not transparent connection migration.",
+      "actual_source": "pgwire/lib.rs4132 local SQL dispatch,4498 existing connection transaction,4683/4690 SqlSession from borrowed local BicDb; server_cluster.rs1041 route_point and1061/1078/1095 explicit planning methods. Source hooks do not demonstrate automatic ordinary SQL forwarding.",
+      "status": "Planning/session primitives implemented; transparent range SQL execution not established; endpoint movement acceptance not tested by this review."
+    },
+    {
+      "requirement": "Cross-range SQL snapshot and joins",
+      "design": "minimum sections3,4 lines63-147; report sections5,6",
+      "assessment": "Same exact global decided/read prefix S for all fragments, actual retained per-range S->B_r mapping, schema/backing/lineage pins and token filters. A local lower floor/latest snapshot is insufficient. Missing/expired fragment must error, never return successful subset. SQL NULL/duplicates/outer joins/exact NUMERIC/security semantics and bounded spill need executable operators.",
+      "actual_source": "distribution_query.rs259-438 generic caller-supplied executor/explicit partial response mode; record_read_snapshot.rs15-22 instance_id/local snapshot+pending overlay,62 rejects another DB instance. These are not shared remote read certificates or relational joins.",
+      "status": "Generic bounded helper and local view implemented; global SQL view/joins not established; not runtime-tested here."
+    },
+    {
+      "requirement": "Atomic multi-range business writes and coordinator recovery",
+      "design": "minimum section5; report section4",
+      "assessment": "Registry and invisible participant intents must be actual durable replicated state. Enlist before intent; freeze exact participant/digest set; immutable quorum decision; prepared claims survive leader/coordinator loss; independent resolver resolves every enlisted/contacted recipient including lost prepare reply. Terminal COMMIT cannot turn into ABORT on timeout. First ACK waits all durable apply/visibility and published S.",
+      "actual_source": "distribution_query.rs1054 trait has begin/prepare/decision/commit/abort/finish, no status/enumeration/recover methods; sole impl1602 is cfg(test) RecordingCommitProtocol. execute_distributed_transaction1120 explicitly normal SQL never invokes;1152 aborts only counted successfully prepared prefix after failure, potentially excluding a recipient whose prepare reply was lost. No production correctness inferred from helper.",
+      "status": "Abstract sequencing only; production durable SQL registry/intent/recovery service not established; exact lost-reply scenario remains required acceptance."
+    },
+    {
+      "requirement": "Node movement without application change",
+      "design": "report section7 lines343-351; minimum section3 lines109-119",
+      "assessment": "Initial conservative stage may drain/block active prepares/pins with bounded reasons. Final online movement must transfer versions/read mappings/intents/claims/decision ancestry, fence old authority and preserve stable logical participant lineage. Node replacement or joining alone does not prove those handoffs. Gateway refresh must not convert catching-up unavailable into false absence.",
+      "actual_source": "distribution_range_consensus2699 rejects cross-range final-row intents;2710 rejects current nonleader. Native recovery/image staging is a different authority domain from SQL 2PC votes.",
+      "status": "Explicit staged design, not full online relocation implementation/qualification."
+    }
+  ],
+  "design_decisions_still_required": [
+    "A single decision domain and all-participant visible prefix are conservative correctness choices with central throughput and head-of-line availability costs. Measure registry/visibility capacity and disconnected participant behavior; do not claim node addition increases throughput from this design.",
+    "Minimum section4 initially admits read-only RC/RR. Accounting read/write acceptance needs own-intent visibility, write-conflict/constraint ownership and exact frozen participants. Local SSI is insufficient for advertised global SERIALIZABLE; reject that isolation until actual global claims/validation exist.",
+    "Persistent reader/writer capability fence must ensure legacy SQL/Get and other write APIs cannot bypass shared S and expose later physical versions or unregistered writes.",
+    "Choose executable typed fragments, remote authentication/RLS authority, logical-object to actual backing mapping, schema/DDL lifetime and format downgrade refusal. Local Arc, table name/OID or matching fingerprint cannot become remote permission.",
+    "Define transaction status/receipt resolution accessible through ordinary SQL/session facilities without application shard routing. Stable business operation UUID is permissible business idempotency; gateway-generated TxID/status cannot require application selection of physical ranges. Lost socket COMMIT remains uncertain until resolved.",
+    "Define constraint/index/audit/queue/outbox participants, visibility, GC/tombstones and backup/restore common cut. Prepared transaction/data bytes cannot be discarded merely because a client or old actor disappeared.",
+    "Blocking movement until pins/prepares drain is an honest first capability gate. It cannot satisfy final bounded online scale-out with continuous transactions by itself."
+  ],
+  "minimum_end_to_end_acceptance": {
+    "execution_status": "Proposed future end-to-end acceptance; not executable as a passing current498 capability and not run by this review.",
+    "smallest_component_environment": "Three independent data OS processes, RF3 across >=2 ranges, replicated transaction registry quorum, two SQL gateways behind one stable ordinary endpoint, separate stock PostgreSQL driver and fsynced external ledger. Harness alone chooses fixture account/receipt keys occupying distinct ranges; application carries only SQL and business IDs.",
+    "business_schema": "accounts(id PRIMARY KEY,balance NUMERIC); receipts(operation_id PRIMARY KEY,from_id,to_id,amount NUMERIC), exact business payload/hash retained externally. Seed independently verified balances.",
+    "sql": "BEGIN; UPDATE accounts SET balance=balance-$3 WHERE id=$1; UPDATE accounts SET balance=balance+$3 WHERE id=$2; INSERT INTO receipts VALUES($4,$1,$2,$3); COMMIT;",
+    "fault_schedule": [
+      "After actual durable prepare on one participant but before its response, drop that reply and kill actual gateway/coordinator. New owner must discover that same participant/intent and reach one lawful terminal outcome; no orphan or unilateral timeout abort.",
+      "After actual durable COMMIT decision but before one participant apply/visibility receipt, kill coordinator. Independent resolver must finish original TxID/payload/decision; client may be uncertain, never silently rolled back or duplicated.",
+      "After success response recorded in external ACK ledger, kill coordinator plus replace a range leader within allowed RF3 failure envelope; every acknowledged exact operation survives, not just total balance.",
+      "During a delayed apply, concurrent plain SQL join of accounts+receipts from either gateway sees one exact read view with all-or-none debit/credit/receipt, or explicit bounded unavailable; never fractured success/false not-found.",
+      "Repeat same SQL with no locality, colocation and forced separation. Change range leader between Parse/Bind/Execute; stock driver retains one endpoint with zero range/leader hints. Hold named portal across later commits and require exact original view or explicit expiration."
+    ],
+    "reconciliation": "Durably record every attempt before send and every actual ACK/uncertain/failed/retried result separately. Verify original per-operation debit, credit, exact payload and exactly one matching receipt plus reference query answers; total balance alone is insufficient. Unknown is not rollback. Any business retry uses the same operation UUID/payload and normal whole-transaction conflict/unique handling, never shard-managed partial retry.",
+    "movement_extension": "After correctness component passes, use same client/endpoint and ledger on four->five independent nodes. Add node via supported membership, wait actual data+leadership/load convergence, inject faults at real intent/history handoff, and verify old authority fences. Initial movement refusal is reported as bounded blockage, not successful online relocation.",
+    "capacity_extension": "Separately compare stable four-node vs fully converged five-node sustained successful read/write/mixed throughput at identical p95/p99 and error budgets. Relocation-period throughput kept separate; central registry bottleneck and all-participant frontier stalls explicitly measured.",
+    "publication": "Pin source/version/binary SHA, complete topology/placement/fsync settings, source ledger and client payloads, actual fault phase/proof, raw latency/error samples, retained logs and safe logical evidence. Processes on one machine prove neither independent-host fault safety nor production capacity; existing Azure failed run remains failed."
+  },
+  "qualification": "No transparent distributed SQL runtime, HA, physical throughput gain, cold recovery, production artifact or deployment was produced or qualified by this read-only review."
+}

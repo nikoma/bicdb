@@ -4,6 +4,8 @@
 use super::*;
 use std::collections::BTreeMap;
 
+const DIAGNOSTIC_LATCH_WAIT: Duration = Duration::from_secs(2);
+
 fn snapshot(
     f: &Fixture,
     target: usize,
@@ -11,15 +13,20 @@ fn snapshot(
     keys: &[&str],
 ) -> Result<serde_json::Value> {
     let open = {
-        let service = f.hosts[target]._service.try_lock().ok_or_else(|| {
-            BicDbError::Cluster("actual target service busy during diagnostic".into())
-        })?;
+        // The process worker keeps tracking followers, so the service latch
+        // can be held for a moment; wait briefly rather than fail the witness.
+        let service = f.hosts[target]
+            ._service
+            .try_lock_for(DIAGNOSTIC_LATCH_WAIT)
+            .ok_or_else(|| {
+                BicDbError::Cluster("actual target service busy during diagnostic".into())
+            })?;
         service.test_native_replica_open_state(range.id)?
     };
     let db = f.hosts[target]
         .seed
         .database
-        .try_read()
+        .try_read_for(DIAGNOSTIC_LATCH_WAIT)
         .ok_or_else(|| BicDbError::Cluster("actual target DB busy during diagnostic".into()))?;
     let prefix = db.native_range_prefix_observation(range.id)?;
     let lineage = db.current_native_range_source_lineage(range.id)?;

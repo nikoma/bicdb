@@ -1,0 +1,73 @@
+[
+  {
+    "member": "fault-state/native-registered-fifth-image-01a1d5e4-21ba-7143-8841-4a3c8f37114b/registered-installing-1.json",
+    "mode": "directory_sync_EIO",
+    "execution_identity": {
+      "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_directory_sync_error_retries_exact_catalogue",
+      "assignment_mode": "OriginalLeader",
+      "identity_is_correlation_not_authority": true,
+      "package_version": "1.0.494-beta",
+      "source_case": "TargetInstallingDirSyncRetry",
+      "source_commit": "fd4d0595d70e82dff20889c19918e34dbd42575d"
+    },
+    "actual_A": "01a1d5e4-32b5-7962-92ed-5543002f5242",
+    "native_xid": 8,
+    "exact_errors": [
+      "io error: Input/output error (os error 5)",
+      "io error: Input/output error (os error 5)"
+    ],
+    "failed_candidate_count": 2,
+    "same_exact_candidate_across_all_failures": true,
+    "full_target_state_except_refusal_unchanged": true,
+    "limits": [
+      "Actual post-install hidden native inventory equality is asserted by Rust test but not independently replayed from an after-inventory field; add explicit future native_after evidence",
+      "No native row copying/Serving/cold replay or physical qualification"
+    ]
+  },
+  {
+    "member": "fault-state/native-registered-fifth-image-01a1d5e4-21be-7d11-ad73-8e92a2e65552/registered-installing-1.json",
+    "mode": "happy",
+    "execution_identity": {
+      "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_catalogue_same_owner_preserves_rows",
+      "assignment_mode": "OriginalLeader",
+      "identity_is_correlation_not_authority": true,
+      "package_version": "1.0.494-beta",
+      "source_case": "TargetInstalling",
+      "source_commit": "fd4d0595d70e82dff20889c19918e34dbd42575d"
+    },
+    "actual_A": "01a1d5e4-325d-77b3-b14f-40d38f2e005c",
+    "native_xid": 8,
+    "exact_errors": [],
+    "failed_candidate_count": 0,
+    "same_exact_candidate_across_all_failures": true,
+    "full_target_state_except_refusal_unchanged": true,
+    "limits": [
+      "Actual post-install hidden native inventory equality is asserted by Rust test but not independently replayed from an after-inventory field; add explicit future native_after evidence",
+      "No native row copying/Serving/cold replay or physical qualification"
+    ]
+  },
+  {
+    "member": "fault-state/native-registered-fifth-image-01a1d5e4-21cb-7673-bf47-35e893189e77/registered-installing-1.json",
+    "mode": "post_fsync_cancel",
+    "execution_identity": {
+      "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_after_fsync_cancel_fresh_same_attempt",
+      "assignment_mode": "OriginalLeader",
+      "identity_is_correlation_not_authority": true,
+      "package_version": "1.0.494-beta",
+      "source_case": "TargetInstallingPostCanceled",
+      "source_commit": "fd4d0595d70e82dff20889c19918e34dbd42575d"
+    },
+    "actual_A": "01a1d5e4-31fe-7143-94d1-e447d535b41f",
+    "native_xid": 8,
+    "exact_errors": [
+      "canceling statement due to user request"
+    ],
+    "failed_candidate_count": 1,
+    "same_exact_candidate_across_all_failures": true,
+    "full_target_state_except_refusal_unchanged": true,
+    "limits": [
+      "Actual post-install hidden native inventory equality is asserted by Rust test but not independently replayed from an after-inventory field; add explicit future native_after evidence",
+      "No native row copying/Serving/cold replay or physical qualification"
+    ]
+  }
+]

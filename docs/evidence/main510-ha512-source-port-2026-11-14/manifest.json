@@ -1,0 +1,12 @@
+{
+  "scope": "Preserve historical unmerged HA510 candidate note on importing delivered main510; no old result reclassified",
+  "old_source": "30bbc7e3c0fd8ddbdc56e03963ab3583c2ddec8a",
+  "old_path": "docs/releases/1.0.510-beta.md",
+  "old_blob": "dec96f1a218167e0ccbfd282c91e745b234d31bd",
+  "old_sha256": "9f4b2f075d458f4900529813e199e27538624e31f461bdb9e10e610e16a4689a",
+  "old_bytes": 6312,
+  "canonical_source": "c063c1030dc3ea83773cddba3208b2c7ecad086a",
+  "canonical_sha256": "12a527457d167ac604e34f7976f8ba2433d1db1c56dd12f12b54bced606e50c1",
+  "canonical_bytes": 1309,
+  "canonical_document": "../../../releases/1.0.510-beta.md"
+}

@@ -21,6 +21,8 @@ use crate::distribution_consensus::{
 use crate::error::{BicDbError, Result};
 use crate::CancellationToken;
 mod host_read;
+#[cfg(test)]
+mod probe_diagnostics;
 
 fn acquisition_error(message: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(format!("metadata read acquisition: {}", message.into()))
@@ -385,6 +387,8 @@ impl MetadataReadProvider {
             context.restrict_deadline(token.deadline().unwrap());
             (context, range)
         };
+        #[cfg(test)]
+        let mut probe_diagnostics = probe_diagnostics::ProbeDiagnostics::new(&context, &request);
         let voters = context.remote_voters();
         if voters.len() + 1 > self.limits.max_voters {
             return Err(acquisition_error(
@@ -485,6 +489,8 @@ impl MetadataReadProvider {
                 outstanding.insert(candidate.destination.clone(), candidate);
             }
             if outstanding.is_empty() {
+                #[cfg(test)]
+                probe_diagnostics.report_exhausted();
                 return Err(acquisition_error(
                     "fresh joint quorum unavailable within bounded probe attempts",
                 ));
@@ -494,10 +500,29 @@ impl MetadataReadProvider {
                     let mut candidate = outstanding
                         .remove(&voter)
                         .ok_or_else(|| acquisition_error("unexpected probe worker result"))?;
+                    #[cfg(test)]
+                    let probe_observed_at = Instant::now();
+                    #[cfg(test)]
+                    if let Err(error) = &result {
+                        probe_diagnostics.record_error(
+                            &voter,
+                            candidate.attempts,
+                            error,
+                            probe_observed_at,
+                        );
+                    }
                     let retry = if let Ok(ack) = result {
                         let accepted = self
                             .lock_consensus(&token)?
                             .record_read_authority_ack(&mut context, &ack)?;
+                        #[cfg(test)]
+                        probe_diagnostics.record_ack(
+                            &voter,
+                            candidate.attempts,
+                            &ack,
+                            accepted,
+                            probe_observed_at,
+                        );
                         if !accepted {
                             candidate.next_index = ack
                                 .conflict_index()

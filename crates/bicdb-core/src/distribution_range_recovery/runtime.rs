@@ -49,6 +49,55 @@ const MAX_CONTEXTS: usize = 4;
 const MAX_EXCLUSIVE_CONTEXTS: usize = 2;
 const MAX_SESSIONS: usize = 64;
 const LATCH_POLL: Duration = Duration::from_millis(5);
+/// How long a finished collection waits for its workers to leave. Each worker
+/// holds the operation's range context, so until it exits the next recovery
+/// step on this range is refused as busy although the operation has returned.
+/// Idle workers leave as soon as they are scheduled; only a worker still
+/// inside a peer exchange can outlast this, and then busy is the truth.
+const WORKER_EXIT_WAIT: Duration = Duration::from_millis(250);
+
+/// Waits, bounded by `WORKER_EXIT_WAIT` in total, for already cancelled or
+/// disconnected workers to leave. A worker that outlasts the bound is left
+/// detached and keeps its own context; it is never abandoned mid-exchange.
+fn wait_for_worker_exit(handles: impl IntoIterator<Item = std::thread::JoinHandle<()>>) {
+    let until = Instant::now() + WORKER_EXIT_WAIT;
+    for handle in handles {
+        while !handle.is_finished() && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        if handle.is_finished() {
+            let _ = handle.join();
+        }
+    }
+}
+
+/// Owner of one collection round's workers. Leaving the round cancels them
+/// and waits, bounded, for them to release the operation's range context.
+/// Declare it BEFORE the round's job/result channels: those then drop first,
+/// so an idle worker sees a disconnect at once instead of at its next poll.
+/// The verdict itself is never delayed by a healthy round; only teardown
+/// waits, and only for a worker still inside a peer exchange.
+struct CollectionWorkers {
+    cancellation: CancellationToken,
+    handles: Vec<std::thread::JoinHandle<()>>,
+}
+impl CollectionWorkers {
+    fn new(cancellation: CancellationToken) -> Self {
+        Self {
+            cancellation,
+            handles: Vec::new(),
+        }
+    }
+    fn push(&mut self, handle: std::thread::JoinHandle<()>) {
+        self.handles.push(handle);
+    }
+}
+impl Drop for CollectionWorkers {
+    fn drop(&mut self) {
+        self.cancellation.cancel();
+        wait_for_worker_exit(self.handles.drain(..));
+    }
+}
 
 #[derive(Debug)]
 struct Session {
@@ -1170,6 +1219,72 @@ mod tests {
         DistributionStore, PlannedReplicaMove, RebalancePlan, ReplicaMoveReason, StorageMode,
     };
     use parking_lot::RwLock;
+
+    #[test]
+    fn collection_workers_release_their_context_before_teardown_returns() {
+        let context = Arc::new(());
+        let token = CancellationToken::uncancelable().child();
+        let mut workers = CollectionWorkers::new(token.clone());
+        for _ in 0..4 {
+            let held = Arc::clone(&context);
+            let token = token.clone();
+            workers.push(std::thread::spawn(move || {
+                let _held = held;
+                while token.check().is_ok() {
+                    std::thread::sleep(LATCH_POLL);
+                }
+            }));
+        }
+        assert_eq!(Arc::strong_count(&context), 5);
+        drop(workers);
+        assert_eq!(
+            Arc::strong_count(&context),
+            1,
+            "a finished collection cannot return while cancelled workers still hold its context"
+        );
+    }
+
+    #[test]
+    fn collection_workers_teardown_wait_is_bounded_for_a_stuck_worker() {
+        let context = Arc::new(());
+        let release = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let token = CancellationToken::uncancelable().child();
+        let mut workers = CollectionWorkers::new(token.clone());
+        {
+            let held = Arc::clone(&context);
+            let release = Arc::clone(&release);
+            // Stand-in for an exchange that does not observe cancellation.
+            workers.push(std::thread::spawn(move || {
+                let _held = held;
+                while !release.load(std::sync::atomic::Ordering::SeqCst) {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            }));
+        }
+        let started = Instant::now();
+        drop(workers);
+        let waited = started.elapsed();
+        assert!(token.check().is_err());
+        assert!(
+            waited >= WORKER_EXIT_WAIT,
+            "teardown returned early: {waited:?}"
+        );
+        assert!(
+            waited < Duration::from_secs(5),
+            "teardown wait must stay bounded: {waited:?}"
+        );
+        assert_eq!(
+            Arc::strong_count(&context),
+            2,
+            "a worker that outlasts the bound keeps its context"
+        );
+        release.store(true, std::sync::atomic::Ordering::SeqCst);
+        let until = Instant::now() + Duration::from_secs(5);
+        while Arc::strong_count(&context) != 1 {
+            assert!(Instant::now() < until, "released worker failed to leave");
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    }
 
     #[test]
     fn actual_runtime_handoff_uses_committed_session_owner_after_normal_preflight() {

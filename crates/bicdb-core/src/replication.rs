@@ -535,6 +535,9 @@ pub enum ReplicationFrame {
         node_id: String,
         commit_seq: u64,
         data_epoch: u64,
+        /// Protocol-5 peers without qualified persisted lineage must bootstrap;
+        /// their legacy epoch/sequence tuple is not stream-resume evidence.
+        data_epoch_qualified: bool,
         /// Journal mode shares one logical mesh author across physical hosts.
         /// A differing identity requires a snapshot, never row-only enrollment.
         journal_identity: Option<(String, String)>,

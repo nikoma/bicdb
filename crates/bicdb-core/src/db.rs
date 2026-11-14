@@ -10742,6 +10742,13 @@ impl BicDb {
                 path.display()
             ))
         })?;
+        // Observe actual empty birth under the original directory exclusion,
+        // before format/catalog/recovery writes can make it look pre-existing.
+        // Missing HA state in a populated directory is NEVER genesis proof.
+        let fresh_ha_birth = config.replication.enabled
+            && fs::read_dir(&path)?.try_fold(true, |empty, entry| {
+                Ok::<_, std::io::Error>(empty && entry?.file_name() == "store.lock")
+            })?;
         native_origin::complete_authorized_restore(&path, &directory_lock)?;
         let native_origin = native_origin::load_active(&path, &directory_lock)?;
         // A core fence protects raw SQL and every other opener, not merely the
@@ -11721,6 +11728,7 @@ impl BicDb {
             },
             config.fsync,
             durability.clone(),
+            fresh_ha_birth,
         )?;
         let last_committed_tx = Arc::new(AtomicU64::new(tx_recovery.last_commit_seq));
         let deferred_materializer = match &paged_records {

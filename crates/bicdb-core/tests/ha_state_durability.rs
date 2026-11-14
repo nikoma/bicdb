@@ -520,12 +520,12 @@ fn a_bootstrap_install_completes_only_after_its_directory_sync() {
         }
         // Renamed into place, marker kept until a sync succeeds.
         assert!(!standby_bootstrap_staging(&standby_dir).exists(), "{label}");
-        assert!(standby_dir.join("BOOTSTRAP_READY").exists(), "{label}");
+        assert!(standby_dir.join("BOOTSTRAP_READY_V2").exists(), "{label}");
         assert!(
             finish_standby_bootstrap(&standby_dir).unwrap(),
             "{label}: completed"
         );
-        assert!(!standby_dir.join("BOOTSTRAP_READY").exists(), "{label}");
+        assert!(!standby_dir.join("BOOTSTRAP_READY_V2").exists(), "{label}");
         assert!(!root.path().join("standby.replaced").exists(), "{label}");
         let standby = replicated(
             &standby_dir,

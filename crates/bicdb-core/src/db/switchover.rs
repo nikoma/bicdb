@@ -35,13 +35,37 @@ impl BicDb {
             ));
         }
         if let Some(offer) = self.planned_switchover() {
-            if offer.target_node_id == target {
-                return Ok(offer);
+            if offer.target_node_id != target {
+                return Err(replication_error(
+                    "primary is already drained for another target",
+                ));
             }
-            return Err(replication_error(
-                "primary is already drained for another target",
-            ));
+            // Our own durable drain reserved target_epoch. It is not an old
+            // stream renewal: replay only this exact retained offer/prefix and
+            // ballot, never one superseded by a later election/authority term.
+            let (data_epoch, applied) = self.replication_election_position()?;
+            let current = self.ha_node.read(|file| {
+                file.switchover.as_ref() == Some(&offer)
+                    && file.epoch == offer.source_epoch
+                    && file.election_term == offer.target_epoch
+                    && file
+                        .voted
+                        .as_ref()
+                        .is_some_and(|(term, node)| *term == offer.target_epoch && node == target)
+                    && data_epoch == offer.source_epoch
+                    && applied == offer.commit_seq
+                    && offer.cluster_id == self.config.replication.cluster_id
+                    && offer.source_node_id == self.config.replication.node_id
+            });
+            if !current {
+                return Err(replication_error(
+                    "retained switchover offer was superseded or its exact durable prefix changed",
+                ));
+            }
+            return Ok(offer);
         }
+        self.require_replication_primary_epoch(self.replication_epoch())?;
+        self.replication_election_position()?;
         self.ensure_writable("planned switchover")?;
         let seq = self.last_committed_tx.load(AtomicOrdering::SeqCst);
         if seq != self.current_commit_seq() {
@@ -78,6 +102,8 @@ impl BicDb {
         sql_address: Option<String>,
     ) -> Result<()> {
         let _admission = self.serializable_commit_admission.write();
+        self.require_replication_primary_epoch(offer.source_epoch)?;
+        self.replication_election_position()?;
         let status = self.ha_node_status();
         if !self.replication_verification_healthy()
             || !self.config.fsync
@@ -100,7 +126,7 @@ impl BicDb {
             file.role = Some(NodeRole::Primary);
             file.epoch = offer.target_epoch;
             file.election_term = offer.target_epoch;
-            file.data_epoch = offer.target_epoch;
+            file.qualify_data_epoch(offer.target_epoch, offer.commit_seq);
             file.voted = Some((offer.target_epoch, offer.target_node_id.clone()));
             file.epoch_starts
                 .insert(offer.target_epoch, offer.commit_seq);

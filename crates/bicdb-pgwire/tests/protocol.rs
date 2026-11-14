@@ -11971,8 +11971,21 @@ fn server_query_timeout_and_unsupported_sql_return_errors() {
 #[test]
 fn server_paged_bootstrap_selects_the_installed_engine_before_open() {
     use bicdb_core::{
-        create_backup_from_open_database, stage_standby_bootstrap, BackupCreateOptions, DbConfig,
-        StorageMode,
+        stage_standby_bootstrap, DbConfig, ReplicationConfig, ReplicationMode,
+        ReplicationTlsConfig, StorageMode,
+    };
+    let replication = |mode| ReplicationConfig {
+        enabled: true,
+        mode,
+        listen_addr: Some("127.0.0.1:0".into()),
+        tls: Some(ReplicationTlsConfig {
+            cert_path: Default::default(),
+            key_path: Default::default(),
+            ca_path: Default::default(),
+            require_client_cert: true,
+            dev_localhost_plaintext: true,
+        }),
+        ..ReplicationConfig::default()
     };
     let root = tempfile::tempdir().unwrap();
     let source = root.path().join("source");
@@ -11982,7 +11995,9 @@ fn server_paged_bootstrap_selects_the_installed_engine_before_open() {
     {
         let mut db = BicDb::open_with_config(
             &source,
-            DbConfig::default().with_storage_mode(StorageMode::ServerPaged),
+            DbConfig::default()
+                .with_storage_mode(StorageMode::ServerPaged)
+                .with_replication(replication(ReplicationMode::Primary)),
         )
         .unwrap();
         SqlSession::new(&mut db)
@@ -11990,17 +12005,15 @@ fn server_paged_bootstrap_selects_the_installed_engine_before_open() {
                 "CREATE TABLE bootstrap_rows(value INT); INSERT INTO bootstrap_rows VALUES (73)",
             )
             .unwrap();
-        create_backup_from_open_database(
-            &db,
-            &archive,
-            BackupCreateOptions {
-                passphrase: key.into(),
-                base_backup: None,
-            },
-        )
-        .unwrap();
+        db.create_standby_snapshot(&archive, key).unwrap();
     }
-    drop(BicDb::open(&target).unwrap());
+    drop(
+        BicDb::open_with_config(
+            &target,
+            DbConfig::default().with_replication(replication(ReplicationMode::Standby)),
+        )
+        .unwrap(),
+    );
     assert_eq!(
         bicdb_core::storage_mode(&target).unwrap(),
         StorageMode::EmbeddedMemory

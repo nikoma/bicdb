@@ -183,8 +183,15 @@ impl NativeRegisteredRemoteJointTarget {
         self.preflight.original.store.require_live()?;
         self.preflight.native().require_current(db)?;
         db.validate_range_image_bindings(self.preflight.bindings())?;
-        self.base.require_current(db, self.preflight.native())?;
-        self.catalogue.require_current(store, db, &self.base)
+        // The catalogue's full check includes this exact physical base under
+        // its original native admission. Prove it is the SAME preflight,
+        // rather than traversing installed history twice in one local check.
+        self.catalogue.require_current_for_original_preflight(
+            store,
+            db,
+            &self.base,
+            &self.preflight,
+        )
     }
     pub(crate) fn require_joint_lifetime(
         &self,

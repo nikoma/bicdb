@@ -1,5 +1,11 @@
 # HA and horizontal scaling: evidence checkpoint, November 14, 2026
 
+Latest separate candidate feedback: [native 1fc acceptance](design/native-1fc-acceptance-result.md)
+finished with **330 passed /16 failed /one ignored**. All other non-skipped
+required jobs and Rails passed. That tested head failed acceptance; later
+follow-ups must be assessed separately. The older source-pinned checkpoints
+below retain their original scope.
+
 Status checkpoint: November14, 2026, 18:56UTC. Running jobs below are not
 classified as passes; later completion does not rewrite the pinned failures.
 

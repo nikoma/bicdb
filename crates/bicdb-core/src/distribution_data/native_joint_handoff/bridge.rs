@@ -197,25 +197,11 @@ impl ActualServiceNativeJointPreparedEvidence {
         );
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
-        self.writer_domain.require_current(
-            &database,
-            &service.range_writes,
-            self.committed.data().activation_range(),
-        )?;
         if self.prepared.local_node_id() != &service.node_id {
             return Err(data_error(
                 "joint bridge preparation belongs to another service",
             ));
         }
-        self.require_original_phase_owner(&database, &service.range_writes)?;
-        self.prepared.require_current(
-            &database,
-            &service.range_writes,
-            &self.committed,
-            &self.catalogue,
-            self.lease.image(),
-            self.lease.frozen(),
-        )?;
         let pin = self
             .pin
             .try_lock()
@@ -229,7 +215,32 @@ impl ActualServiceNativeJointPreparedEvidence {
                 self.lease.frozen(),
             )?;
         }
-        self.require_original_phase_owner(&database, &service.range_writes)?;
+        // One actual journal-held physical observation covers this local
+        // validation only. The constructor checks the real preparation,
+        // catalogue, native lineage and every retained history entry. A
+        // retained source-read pin is permitted by quiescent Frozen and is
+        // independently checked above; it is neither drained nor replaced.
+        // Original CLOSED counters/CURRENT/archive/promise and writer identity
+        // are still reread before and after under the same scope. No scope or
+        // local proof escapes to authorize another participant or request.
+        let scope = self.prepared.publication_read_scope(
+            &database,
+            &service.range_writes,
+            &self.committed,
+            &self.catalogue,
+            self.lease.image(),
+            self.lease.frozen(),
+        )?;
+        self.require_original_phase_owner_with_publication_scope(&scope, &service.range_writes)?;
+        if let Some(pin) = pin.as_ref() {
+            gate.validate_source_capture_read_pin(self.committed.data().old_range().id, pin)?;
+        } else {
+            gate.validate_quiescent_frozen(
+                self.committed.data().old_range().id,
+                self.lease.frozen(),
+            )?;
+        }
+        self.require_original_phase_owner_with_publication_scope(&scope, &service.range_writes)?;
         #[cfg(test)]
         trace.complete();
         Ok(())

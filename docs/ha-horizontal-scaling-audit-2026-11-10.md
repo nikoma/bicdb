@@ -11,7 +11,24 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Latest merged-source update — 2026-11-13 UTC
+## Latest delivered source — 2026-11-14 UTC
+
+Remote main is **1.0.504-beta**,
+`3dc753edf9be3865ab8376657f99b14daceaf534`. All required PR178 checks
+passed; the merged complete tree equals tested head `54b325f69693b34b00c3c92325ad11ecd7dbffeb`.
+The source versions are synchronized across 29 packages. This delivery adds
+documentation and retained evidence; it does not produce a release binary,
+verify a deployment or establish physical/production qualification.
+
+The [follow-up qualification checkpoint](ha-qualification-checkpoint-2026-11-13.md)
+separates the original failures, diagnostic passes, exact-source native repeat,
+corrected client controls and missing cross-process/multi-range producers. It
+records main503's exact tree match to c6 and retains the earlier four failures
+as inconclusive causes despite a passing repeat. The 505 client repair and native
+handoff prototypes have their own source/test identities and admission gates;
+their component results are not deployed main504 capabilities.
+
+## Merged-source snapshot — 2026-11-13 UTC (502)
 
 The later inspected remote `main` is **1.0.502-beta**,
 `629857f5eaaeee5f5a9124d505406d8cd6a29535`. It includes the 501 merge.

@@ -6,6 +6,9 @@ pub(in crate::db) struct CommitAdmissionRegistration {
     generation: uuid::Uuid,
     authority: Option<std::sync::Weak<dyn CommitAdmission>>,
     active: std::sync::atomic::AtomicBool,
+    // Slot continuity is distinct from write admission: a current empty
+    // registration is inactive. Retirement is monotonic, including None→None.
+    revoked: std::sync::atomic::AtomicBool,
 }
 impl CommitAdmissionRegistration {
     pub(in crate::db) fn new(authority: Option<&Arc<dyn CommitAdmission>>) -> Arc<Self> {
@@ -13,10 +16,20 @@ impl CommitAdmissionRegistration {
             generation: uuid::Uuid::now_v7(),
             authority: authority.map(Arc::downgrade),
             active: std::sync::atomic::AtomicBool::new(false),
+            revoked: std::sync::atomic::AtomicBool::new(false),
         })
     }
     pub(in crate::db) fn is_active(&self) -> bool {
         self.active.load(std::sync::atomic::Ordering::Acquire)
+    }
+    pub(in crate::db) fn is_revoked(&self) -> bool {
+        self.revoked.load(std::sync::atomic::Ordering::Acquire)
+    }
+    fn revoke(&self) {
+        self.revoked
+            .store(true, std::sync::atomic::Ordering::Release);
+        self.active
+            .store(false, std::sync::atomic::Ordering::Release);
     }
     pub(in crate::db) fn generation(&self) -> uuid::Uuid {
         self.generation
@@ -60,9 +73,7 @@ impl CommitAdmissionSlot {
         registration: Arc<CommitAdmissionRegistration>,
         state: Arc<super::range_image_native::NativeWriterHostState>,
     ) -> Self {
-        self.registration
-            .active
-            .store(false, std::sync::atomic::Ordering::Release);
+        self.registration.revoke();
         let next = Self {
             authority: Some(authority),
             registration,
@@ -79,9 +90,7 @@ impl CommitAdmissionSlot {
         registration: Arc<CommitAdmissionRegistration>,
         state: Option<Arc<super::range_image_native::NativeWriterHostState>>,
     ) {
-        self.registration
-            .active
-            .store(false, std::sync::atomic::Ordering::Release);
+        self.registration.revoke();
         self.authority = authority;
         self.registration = registration;
         self.native_writer = state;
@@ -91,6 +100,8 @@ impl CommitAdmissionSlot {
         );
     }
     pub(in crate::db) fn deactivate_native_writer(&self) {
+        // This fences writes in the SAME slot before fallible native policy
+        // publication. An empty-slot no-op does not retire its identity.
         self.registration
             .active
             .store(false, std::sync::atomic::Ordering::Release);
@@ -102,6 +113,11 @@ impl CommitAdmissionSlot {
     }
     pub(in crate::db) fn registration(&self) -> &Arc<CommitAdmissionRegistration> {
         &self.registration
+    }
+}
+impl Drop for CommitAdmissionSlot {
+    fn drop(&mut self) {
+        self.registration.revoke();
     }
 }
 impl std::ops::Deref for CommitAdmissionSlot {

@@ -391,7 +391,7 @@ impl NativeRegisteredReceiverHook {
             .registration
             .upgrade()
             .ok_or_else(|| invalid("remote NEW original Registered hook ended"))?;
-        if !original.is_active() || self.actual_open.upgrade().is_none() {
+        if original.is_revoked() || original.is_active() || self.actual_open.upgrade().is_none() {
             return Err(invalid("remote NEW original Registered hook/open changed"));
         }
         Ok(())
@@ -423,6 +423,7 @@ impl NativeRegisteredReceiverHook {
             || hook.is_some()
             || hook.native_writer().is_some()
             || original.is_active()
+            || original.is_revoked()
         {
             return Err(invalid(
                 "original registered receiver hook changed; restored None cannot rebase it",

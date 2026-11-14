@@ -285,6 +285,14 @@ struct HaRuntime {
 }
 
 impl HaRuntime {
+    fn new() -> Self {
+        Self {
+            last_heard: Mutex::new(Instant::now()),
+            connections: Mutex::new(std::collections::BTreeMap::new()),
+            stopping: AtomicBool::new(false),
+        }
+    }
+
     fn track(self: &Arc<Self>, socket: &TcpStream, limit: usize) -> Result<Connection> {
         let mut connections = self.connections.lock().unwrap();
         if self.stopping.load(Ordering::Acquire) || connections.len() >= limit {
@@ -365,11 +373,7 @@ pub(crate) fn start(server: Arc<PgWireServer>, config: HaServerConfig) -> Result
     if server.ha_background_started.swap(true, Ordering::SeqCst) {
         return Ok(());
     }
-    let runtime = Arc::new(HaRuntime {
-        last_heard: Mutex::new(Instant::now()),
-        connections: Mutex::new(std::collections::BTreeMap::new()),
-        stopping: AtomicBool::new(false),
-    });
+    let runtime = Arc::new(HaRuntime::new());
     struct StartupGuard {
         server: Arc<PgWireServer>,
         armed: bool,
@@ -772,9 +776,13 @@ fn serve_peer(
                 ));
             }
             let db = server.read_db()?;
-            db.require_replication_primary_epoch(epoch)?;
-            if epoch >= db.replication_epoch() && db.replication_role() != NodeRole::Primary {
-                // The current primary is alive even if its stream is not.
+            if db.require_replication_primary_epoch(epoch).is_ok()
+                && epoch >= db.replication_epoch()
+                && db.replication_role() != NodeRole::Primary
+            {
+                // Only current authority may renew contact. A stale peer still
+                // needs the informational Pong below to learn our actual epoch
+                // and fence/restart itself; this response grants no lease/ACK.
                 runtime.heard_now();
             }
             send(
@@ -1831,4 +1839,190 @@ pub(crate) fn execute_switchover(
         )
         .with_column_types(vec![Some("text".into())]),
     ))
+}
+
+#[cfg(test)]
+mod stale_ping_tests {
+    use super::*;
+    use bicdb_core::{BicDb, DbConfig, ReplicationConfig, ReplicationMode, ReplicationTlsConfig};
+    use std::net::TcpListener;
+
+    #[test]
+    fn stale_ping_reports_actual_epoch_without_renewing_the_original_runtime_contact() {
+        let root = tempfile::tempdir().unwrap();
+        let replication = |id: &str| ReplicationConfig {
+            enabled: true,
+            cluster_id: "stale-ping-control".into(),
+            node_id: id.into(),
+            mode: ReplicationMode::Standby,
+            listen_addr: Some("127.0.0.1:0".into()),
+            tls: Some(ReplicationTlsConfig {
+                cert_path: Default::default(),
+                key_path: Default::default(),
+                ca_path: Default::default(),
+                require_client_cert: false,
+                dev_localhost_plaintext: true,
+            }),
+            ..ReplicationConfig::default()
+        };
+        let open = |id: &str| {
+            BicDb::open_with_config(
+                root.path().join(id),
+                DbConfig::default()
+                    .with_fsync(true)
+                    .with_replication(replication(id)),
+            )
+            .unwrap()
+        };
+        let recipient = open("n0");
+        let leader = open("n1");
+        let other = open("n2");
+        let old_epoch = other.replication_epoch();
+        let term = leader.begin_candidacy("n1").unwrap();
+        let position = leader.replication_election_position().unwrap();
+        assert!(recipient
+            .consider_vote(term, "n1", position.0, position.1)
+            .unwrap());
+        assert!(other
+            .consider_vote(term, "n1", position.0, position.1)
+            .unwrap());
+        leader.promote_by_election(term, "n1", None).unwrap();
+        recipient
+            .record_primary("n1", term, None, &leader.ha_node_status().epoch_starts)
+            .unwrap();
+        let expected = recipient.ha_node_status();
+        assert_eq!(expected.role, NodeRole::Standby);
+        assert!(old_epoch < expected.epoch);
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let leader_listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let other_listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let leader_address = leader_listener.local_addr().unwrap().to_string();
+        let other_address = other_listener.local_addr().unwrap().to_string();
+        let primary = HaServerRole::Primary {
+            listen: address.to_string(),
+            allowed_standbys: ["n1", "n2"]
+                .into_iter()
+                .map(|id| AllowedStandby {
+                    node_id: id.into(),
+                    certificate_sha256: None,
+                })
+                .collect(),
+            synchronous_standbys: 1,
+            synchronous_timeout: Duration::from_secs(3),
+            on_timeout: SyncTimeoutPolicy::Fail,
+        };
+        let config = HaServerConfig {
+            replication: replication("n0"),
+            role: HaServerRole::Standby {
+                primary: leader_address.clone(),
+                primary_server_name: "localhost".into(),
+            },
+            advertise_sql: None,
+            failover: Some(FailoverConfig {
+                peers: vec![
+                    HaPeer {
+                        node_id: "n1".into(),
+                        address: leader_address,
+                    },
+                    HaPeer {
+                        node_id: "n2".into(),
+                        address: other_address,
+                    },
+                ],
+                timeout: Duration::from_secs(3),
+                as_primary: primary,
+                peer_server_name: "localhost".into(),
+            }),
+        };
+        config.validate().unwrap();
+        let server = PgWireServer::open_with_shared(
+            root.path().join("n0"),
+            PgWireConfig {
+                high_availability: Some(config.clone()),
+                ..PgWireConfig::default()
+            },
+            Arc::new(parking_lot::RwLock::new(recipient)),
+        )
+        .unwrap();
+        // The SAME runtime object is passed through the real TCP handler. No
+        // fake clock, contact override, quorum DTO or publication grant exists.
+        let runtime = Arc::new(HaRuntime::new());
+        let before = *runtime.last_heard.lock().unwrap();
+        for epoch in [old_epoch, expected.epoch] {
+            assert_eq!(other.replication_epoch(), epoch);
+            let actual_server = server.clone();
+            let actual_runtime = runtime.clone();
+            let actual_config = config.clone();
+            let actual_listener = listener.try_clone().unwrap();
+            let worker = std::thread::spawn(move || {
+                let (socket, _) = actual_listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                socket
+                    .set_write_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let _connection = actual_runtime
+                    .track(&socket, peer_capacity(&actual_config))
+                    .unwrap();
+                serve_peer(
+                    &actual_server,
+                    &actual_config,
+                    &actual_runtime,
+                    socket,
+                    None,
+                )
+            });
+            let mut peer = TcpStream::connect(address).unwrap();
+            peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+            peer.set_write_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            send(
+                &mut peer,
+                &ReplicationFrame::Hello {
+                    protocol_version: HA_REPLICATION_PROTOCOL_VERSION,
+                    cluster_id: config.replication.cluster_id.clone(),
+                    node_id: "n2".into(),
+                    epoch: other.replication_epoch(),
+                },
+            )
+            .unwrap();
+            send(
+                &mut peer,
+                &ReplicationFrame::Ping {
+                    cluster_id: config.replication.cluster_id.clone(),
+                    node_id: "n2".into(),
+                    epoch,
+                },
+            )
+            .unwrap();
+            let response = receive(&mut peer).unwrap();
+            worker.join().unwrap().unwrap();
+            let ReplicationFrame::Pong {
+                epoch: actual,
+                primary_id,
+                ..
+            } = response
+            else {
+                panic!("expected actual informational Pong, got {response:?}");
+            };
+            assert_eq!(actual, expected.epoch);
+            assert_eq!(primary_id, expected.primary_id);
+            // The next positive request derives from this ACTUAL reply and
+            // persisted authority observation, not a manufactured fresh epoch.
+            other.observe_replication_epoch(actual).unwrap();
+            assert_eq!(other.ha_node_status().data_epoch, position.0);
+            let after = *runtime.last_heard.lock().unwrap();
+            if epoch == old_epoch {
+                assert_eq!(after, before);
+            } else {
+                assert!(after > before);
+            }
+        }
+        assert!(runtime.connections.lock().unwrap().is_empty());
+        runtime.close_connections();
+        server.request_shutdown();
+    }
 }

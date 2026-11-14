@@ -46,17 +46,21 @@
     "native_streaming_ha": {
       "acknowledged_commit_preservation": {
         "status": "conditional",
-        "summary": "Native synchronous HA can preserve acknowledged history with voter-majority copies and nondegrading policy.",
+        "summary": "Voter-majority synchronous implementation; quorum settings alone do not establish acknowledged-commit preservation. Snapshot data-head, legacy upgrade and recovery qualification remain open.",
         "source_paths": [
           "crates/bicdb-pgwire/src/high_availability.rs",
-          "crates/bicdb-core/src/db/replication_live.rs"
+          "crates/bicdb-core/src/db/replication_live.rs",
+          "crates/bicdb-core/src/db/ha_node.rs",
+          "crates/bicdb-core/src/db/ha_bootstrap.rs"
         ],
         "test_paths": [
           "crates/bicdb-pgwire/tests/embedded_ha.rs",
-          "crates/bicdb-cli/tests/ha_failover_cli.rs"
+          "crates/bicdb-cli/tests/ha_failover_cli.rs",
+          "crates/bicdb-core/tests/ha_qualified_data_epoch.rs"
         ],
         "conditions": [
-          "Identical static voting group; K >= floor(N/2); timeout policy fail; durable storage; handshake v4; qualify exact failure model."
+          "Identical static voting group; K >= floor(N/2); timeout policy fail; durable storage; handshake v5 with qualified durable data epochs. These settings alone do not prove preservation.",
+          "Exact-artifact failure/recovery qualification required. Snapshot data-head/acknowledged-copy gate issue193 and trusted all-legacy upgrade remain open; no production admission follows from this declaration."
         ]
       },
       "automatic_primary_failover": {
@@ -70,7 +74,8 @@
           "crates/bicdb-pgwire/tests/embedded_ha.rs"
         ],
         "conditions": [
-          "At least three configured voters; client reconnection/ingress required."
+          "At least three configured voters; client reconnection/ingress required.",
+          "Implementation status is not timed failover/rejoin or snapshot-safety qualification; exact-artifact evidence and recovery gates remain required."
         ]
       },
       "automatic_range_rebalancing": {

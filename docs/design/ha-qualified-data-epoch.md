@@ -209,6 +209,17 @@ Row fsync disabled likewise supplies no power-loss durability claim.
 - `format.rs` recognizes the new **local** sticky refusal feature, forces durable
   replacement and deliberately excludes it from portable reader capabilities.
 
+## First required-CI feedback
+
+The unchanged source `2c0193c37852546c51b99e2918c24ea17bb44e2b` compiled in
+PR194's existing required CI. PGwire then failed an existing returning-writer
+acceptance case after successful failover and an update on the new primary.
+[Issue197's source diagnosis and separate correction](ha-returning-primary-stale-ping-197.md)
+retain that failure. Stale contact must remain refused while an informational
+Pong still tells the returning writer about the actual higher epoch. This
+successor's new control is source-only until the final coherent head is tested.
+It does not change the failed original run or close recovery/qualification gates.
+
 ## Regression and acceptance scope
 
 The added file-backed Core regressions use real durable commits, exported

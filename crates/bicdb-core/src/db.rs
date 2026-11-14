@@ -36317,3 +36317,6 @@ pub(crate) use range_image_native::{
     NativeJoinedRemoteImageInstallation, NativeJoinedRemoteImageOperation,
     NativeJoinedRemoteImageProgress,
 };
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeJoinedJointExclusionScope;

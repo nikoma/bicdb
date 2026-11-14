@@ -2361,3 +2361,6 @@ pub(crate) use joined_remote_proposal::test_joined_remote_proposal_after_native_
 
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRemoteOldDecisionWriterScope;
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeJoinedJointExclusionScope;

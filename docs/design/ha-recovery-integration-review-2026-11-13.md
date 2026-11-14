@@ -46,8 +46,10 @@ explicit borrowed-hook identity path. A full identity helper that reacquires a b
 read while a Joined mutation scope already holds that read can deadlock behind
 a queued writer. The required correction must reuse the actual borrowed hook
 and original identity; dropping exclusion or weakening the identity check is
-not an acceptable workaround. This is a source availability concern pending
-correction and deterministic runtime reproduction, not a measured Azure cause.
+not an acceptable workaround. Source `55141f4d051a3a944128d3c35c32aaef899b20cc`
+adds the actual borrowed-hook correction without changing the ordinary identity
+helper. Its queued-writer regression and runtime qualification remain pending;
+this is not a measured Azure cause.
 
 ## Integration and production gates
 
@@ -66,3 +68,12 @@ zero lost acknowledged commits, correct read consistency and routing, bounded
 fault-safe rebalance, and demonstrated sustained throughput gain after complete
 convergence. Preserve every failed and uncertain operation in the external
 ledger when the physical experiment is repeated.
+
+The distinct `NativeJoinedJointExclusionScope` retains the actual original DB,
+writer-hook borrow, journal, admission and exact materialized image/A identity.
+It is a necessary lexical exclusion point for a later genuine Joined DECISION
+sink, not a decision admission. Its constructor supplies no Role, OWN, remote
+NEW proof or current metadata, and no public raw native-write callback. The
+concrete decision publisher remains outstanding and must separately retain and
+verify those actual inputs. This scope is **not tested** until compiled and
+exercised through the actual multi-range fixture.

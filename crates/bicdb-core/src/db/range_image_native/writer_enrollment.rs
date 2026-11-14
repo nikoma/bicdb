@@ -43,7 +43,11 @@ pub(crate) use data_domains::{
 };
 mod joint_phase_owner;
 pub(crate) use joint_phase_owner::NativeJointPhaseOwner;
+#[cfg(feature = "tls-replication")]
+mod joined_joint;
 mod joint_domain;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_joint::NativeJoinedJointExclusionScope;
 #[cfg(feature = "tls-replication")]
 mod registered_joint;
 #[cfg(feature = "tls-replication")]

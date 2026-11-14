@@ -132,6 +132,28 @@ impl ActualServiceNativeJointPreparedEvidence {
         self.require_original_writer_lifetime()?;
         Ok(self.writer.clone())
     }
+    /// Returns the SAME identity for comparison only. No current physical
+    /// materialization/Serving grant is produced by this necessary check.
+    fn require_original_phase_owner_for_collection(
+        &self,
+        database: &BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
+        self.require_original_writer_lifetime()?;
+        self.writer_domain.require_preparation_collection_identity(
+            database,
+            store,
+            self.committed.data().activation_range(),
+            self.lease.try_frozen()?,
+        )?;
+        if !self.writer.same_actual(&self.writer_domain.phase_owner()) {
+            return Err(data_error(
+                "joint preparation changed original actual phase owner",
+            ));
+        }
+        self.require_original_writer_lifetime()?;
+        Ok(self.writer.clone())
+    }
     fn require_original_phase_owner_with_publication_scope(
         &self,
         scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
@@ -776,14 +798,23 @@ impl ClusterDataNodeService {
         );
         parent.check()?;
         admission.require_publication_service_entry(self)?;
+        if admission.has_fresh_publication_phase() {
+            // Its checked database borrow ends before taking the final borrow;
+            // never recursively read-lock a DB with a waiting writer.
+            admission.require_fresh_publication_service_identity(self, actual)?;
+        }
         let database = checked_database_read(&self.db, &self.storage_policy)?;
-        actual.require_original_phase_owner(&database, &self.range_writes)?;
-        self.require_native_catalog_database(&database)?;
-        actual.writer_domain.require_current(
-            &database,
-            &self.range_writes,
-            admission.data().activation_range(),
-        )?;
+        if admission.has_fresh_publication_phase() {
+            self.require_native_catalog_database(&database)?;
+        } else {
+            actual.require_original_phase_owner(&database, &self.range_writes)?;
+            self.require_native_catalog_database(&database)?;
+            actual.writer_domain.require_current(
+                &database,
+                &self.range_writes,
+                admission.data().activation_range(),
+            )?;
+        }
         if actual.prepared.local_node_id() != &self.node_id {
             return Err(data_error(
                 "joint native bridge publishes on another actual service",
@@ -813,14 +844,9 @@ impl ClusterDataNodeService {
         if admission.has_fresh_publication_phase() {
             // Final foreign sweep and all local proof checks are inside the
             // scoped native reader. It never recreates an absent receipt.
+            admission.require_fresh_publication_service_identity(self, actual)?;
             let database = checked_database_read(&self.db, &self.storage_policy)?;
             self.require_native_catalog_database(&database)?;
-            actual.require_original_phase_owner(&database, &self.range_writes)?;
-            actual.writer_domain.require_current(
-                &database,
-                &self.range_writes,
-                admission.data().activation_range(),
-            )?;
             return database.recover_scoped_native_joint_bridge(
                 admission,
                 &actual.prepared,

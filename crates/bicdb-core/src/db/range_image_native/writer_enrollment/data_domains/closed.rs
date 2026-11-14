@@ -340,6 +340,36 @@ impl NativeClosedWriterDomain {
         }
         Ok(())
     }
+    /// Select only the genuine optional survivor comparison profile. This
+    /// predicate is not authority; all other CLOSED profiles keep full checks.
+    pub(in crate::db::range_image_native) fn has_survivor_comparison_binding(&self) -> bool {
+        self.survivor_frozen.is_some()
+            && self
+                .data()
+                .old_members()
+                .contains_key(&self.writer.record.facts.local_node_id)
+    }
+    /// Same-original identity ONLY for permissionless collection/own-pin drain
+    /// and fresh service entry. No CLOSED native materialization is attested.
+    pub(in crate::db::range_image_native) fn require_preparation_collection_identity(
+        &self,
+        db: &BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        range: &RangeDescriptor,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        if crate::distribution_native_read::canonical_range(range) != *self.range() {
+            return Err(invalid("CLOSED writer changed its selected range"));
+        }
+        self.require_lifetime()?;
+        self.require_publication_identity(store, self.data(), frozen)?;
+        self.open.require_database(db)?;
+        self.writer.require_original_identity_database(db)?;
+        self.writer.require_verified_registry_database(db)?;
+        db.range_mutation_gate()
+            .validate_quiescent_frozen(self.data().old_range().id, frozen)?;
+        self.require_lifetime()
+    }
     pub(in crate::db::range_image_native) fn require_current_for_publication(
         &self,
         scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
@@ -350,12 +380,7 @@ impl NativeClosedWriterDomain {
         // Only an original no-image OLD survivor has this comparison binding.
         // A real installed-image CLOSED owner keeps its original full path;
         // absence of this optional optimization is never a new refusal.
-        if self.survivor_frozen.is_none()
-            || !self
-                .data()
-                .old_members()
-                .contains_key(&self.writer.record.facts.local_node_id)
-        {
+        if !self.has_survivor_comparison_binding() {
             return self.require_current_for_store(db, store, range);
         }
         scope.require_closed_source_lineage(db, store, self)?;

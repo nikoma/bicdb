@@ -640,6 +640,32 @@ impl NativeJointActivationAdmission {
     pub(crate) fn has_fresh_publication_phase(&self) -> bool {
         self.phase.is_some()
     }
+    /// Exact borrowed service/preparation binding before the fresh scoped
+    /// publisher performs ALL foreign and local physical validations.
+    pub(crate) fn require_fresh_publication_service_identity(
+        &self,
+        service: &ClusterDataNodeService,
+        actual: &ActualServiceNativeJointPreparedEvidence,
+    ) -> Result<()> {
+        self.require_live()?;
+        let phase = self
+            .phase
+            .as_ref()
+            .ok_or_else(|| invalid("identity-only publication requires actual fresh phase"))?;
+        if !std::ptr::eq(actual, self.local.actual.as_ref())
+            || !std::ptr::eq(service, self.local.service.data_ptr())
+        {
+            return Err(invalid(
+                "fresh publication substituted original service/preparation",
+            ));
+        }
+        let identity = self
+            .local
+            .borrow_fresh_collection(service, &self.fresh)?
+            .into_comparison_identity()?;
+        phase.require_local_publication_identity(self.local.local_node_id(), &identity)?;
+        self.require_live()
+    }
     pub(crate) fn require_publication_service_entry(
         &self,
         service: &ClusterDataNodeService,

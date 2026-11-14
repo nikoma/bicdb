@@ -313,6 +313,23 @@ impl NativeJointPreparationPhaseQuorum {
         }
         self.require_live()
     }
+    pub(super) fn require_local_publication_identity(
+        &self,
+        node: &ClusterNodeId,
+        identity: &crate::distribution_data::NativeJointPreparationCollectionIdentity,
+    ) -> Result<()> {
+        self.require_live()?;
+        if self
+            .observations
+            .get(node)
+            .is_none_or(|member| !member.identity.same_comparison(identity))
+        {
+            return Err(invalid(
+                "publication service changed original collected phase identity",
+            ));
+        }
+        self.require_live()
+    }
     pub(super) fn require_local_publication_writer(
         &self,
         node: &ClusterNodeId,

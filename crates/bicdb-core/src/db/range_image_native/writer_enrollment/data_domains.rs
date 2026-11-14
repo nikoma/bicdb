@@ -170,6 +170,8 @@ fn archive(generation: Uuid, sequence: u32) -> String {
     format!("writer-data-domain/{generation}/history/{sequence}")
 }
 
+mod historical_predecessor;
+pub(crate) use historical_predecessor::NativeWriterHistoricalPredecessor;
 mod closed;
 pub(crate) use closed::{
     NativeClosedWriterDomain, NativeWriterClosedHistoricalReadScope,

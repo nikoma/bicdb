@@ -196,7 +196,8 @@ pub(crate) use range_image_native::{
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::{
     NativeClosedWriterDomain, NativeWriterClosedHistoricalReadScope, NativeWriterDataDomainPolicy,
-    NativeWriterDataDomainTransition, NativeWriterServingDomainPublication,
+    NativeWriterDataDomainTransition, NativeWriterHistoricalPredecessor,
+    NativeWriterServingDomainPublication,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::{

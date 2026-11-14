@@ -32,8 +32,16 @@ pub(crate) struct ActualServiceNativeJointOldEvidence {
     promise: Arc<NativeJointOldPromiseReceipt>,
     frozen: Arc<FrozenRangeMutationPermit>,
     pin: Arc<SourceCaptureReadPin>,
+    #[cfg(feature = "tls-replication")]
+    predecessor: Option<Arc<crate::db::NativeWriterHistoricalPredecessor>>,
 }
 impl ActualServiceNativeJointOldEvidence {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn take_historical_predecessor(
+        &mut self,
+    ) -> Option<Arc<crate::db::NativeWriterHistoricalPredecessor>> {
+        self.predecessor.take()
+    }
     pub(crate) fn require_current(&self, service: &ClusterDataNodeService) -> Result<()> {
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
@@ -78,6 +86,7 @@ pub(crate) struct NativeJointOldRetainedOutcome {
     promise: Option<Arc<NativeJointOldPromiseReceipt>>,
     native: Option<Arc<NativeJointOldCloseReceipt>>,
     pin: Option<Arc<SourceCaptureReadPin>>,
+    predecessor: Option<Arc<crate::db::NativeWriterHistoricalPredecessor>>,
 }
 impl ClusterDataNodeService {
     #[cfg(feature = "tls-replication")]
@@ -212,6 +221,22 @@ impl ClusterDataNodeService {
         if let Some(step) = step {
             self.require_initial_old_step(step, &plan, &role, &database)?;
         }
+        // The actual step retained this owner BEFORE runtime.freeze invalidated
+        // the previous Serving generation. Never observe current Serving here.
+        #[cfg(feature = "tls-replication")]
+        let predecessor = step.map(|step| step.historical_predecessor().clone());
+        #[cfg(feature = "tls-replication")]
+        if let (Some(step), Some(outcome)) = (step, retained.as_deref_mut()) {
+            match &outcome.predecessor {
+                Some(original) if !Arc::ptr_eq(original, step.historical_predecessor()) => {
+                    return Err(data_error(
+                        "OLD retry changed original pre-freeze predecessor owner",
+                    ));
+                }
+                None => outcome.predecessor = predecessor.clone(),
+                _ => {}
+            }
+        }
         #[cfg(feature = "tls-replication")]
         if let Some(outcome) = retained.as_deref_mut() {
             if let (Some(promise), Some(native), Some(pin)) =
@@ -236,6 +261,7 @@ impl ClusterDataNodeService {
                     promise: promise.clone(),
                     frozen,
                     pin: pin.clone(),
+                    predecessor: predecessor.clone(),
                 });
             }
             if outcome.pin.is_some() {
@@ -378,6 +404,8 @@ impl ClusterDataNodeService {
             promise,
             frozen,
             pin,
+            #[cfg(feature = "tls-replication")]
+            predecessor,
         })
     }
 }

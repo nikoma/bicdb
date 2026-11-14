@@ -141,6 +141,7 @@ impl NativeInitialDataAdmission {
                     let actual_runtime = Arc::new(NativeJointHandoffRuntime::new(service.clone())?);
                     let held = Arc::new(Mutex::new(RetainedInitialOld {
                         remote_new: None,
+                        predecessor: Some(step.historical_predecessor().clone()),
                         writer: step.writer.clone(),
                         plan_sha256: request.scope_sha256.clone(),
                         plan: step.plan().clone(),
@@ -161,6 +162,10 @@ impl NativeInitialDataAdmission {
             {
                 return Err(invalid("OLD source retains another exact session"));
             }
+            held.predecessor
+                .as_ref()
+                .ok_or_else(|| invalid("OLD original pre-freeze predecessor absent"))?
+                .require_same_owner(step.historical_predecessor())?;
             step.require_joint_runtime(&held.runtime)?;
             if held.constraints.is_none() {
                 held.constraints = Some(
@@ -282,6 +287,7 @@ impl NativeInitialDataAdmission {
                 let runtime = Arc::new(NativeJointHandoffRuntime::new(service.clone())?);
                 let owner = Arc::new(Mutex::new(RetainedInitialOld {
                     remote_new: None,
+                    predecessor: None,
                     writer: Arc::clone(step.writer_snapshot()),
                     plan_sha256: request.scope_sha256.clone(),
                     plan: step.plan().clone(),

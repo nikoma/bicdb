@@ -231,3 +231,50 @@ recompute the outer checksum, then require the actual protocol validator to
 refuse. This does not create a new authenticated frame or native grant. No
 runtime mispublication or durable-data loss was observed; the source defect and
 its unrun control remain distinct from the preserved qualification evidence.
+
+
+### Retained historical predecessor producer (source successor)
+
+The successor introduces `NativeWriterHistoricalPredecessor`, produced from the
+actual original State and DB before the actual runtime range freeze. This
+ordering matters: `RangeMutationGate::freeze` invalidates the prior Serving
+generation. Capturing a new Serving observation after freeze is forbidden.
+The actual retained OLD table owns this proof before calling the runtime; the
+producer outcome and original OLD observation retain that same allocation.
+Fresh retries of the exact plan recover that owner from the original table.
+Missing, different-State or different-plan custody refuses instead of rebuilding
+it from native DATA.
+
+The born profile keeps the exact immutable original predecessor checks. The
+Serving profile additionally requires the actual cached verified publication,
+real native Serving CURRENT and immutable archive, its exact original CLOSED
+record/archive, original open continuity and prior quorum audit at capture.
+After freeze, only the retained historical object can check those immutable
+archives and original State/plan/base/namespace/history. It does not consult
+current effective Serving, renew a released generation or turn a historical
+audit into APP/Strong permission. In particular, the next CLOSED CURRENT may
+advance without replacing the captured predecessor's immutable archive.
+The ordinary writer, APP, Strong and no-image guards are unchanged.
+
+The existing original-INITIAL OLD controls now retain and compare their born
+profile in the first/retry evidence. The actual Serving-profile path is source
+implementation only; a second real handoff after a genuine first Serving
+publication, archive-erasure/wrong-State refusals and the Joined OLD/discovery
+adapter still require independent execution. Joined ingress is not enabled by
+this producer, and it is not a repeated-movement or production qualification.
+No cold reconstruction, new attempts after uncertainty, catalogue votes,
+activation/Open, final OLD retirement or controller integration is supplied.
+
+
+A follow-up source review of the frozen predecessor component identified a
+concurrent-admission ambiguity: two still-current steps could capture distinct
+owners before either inserted the original table entry. The successor checks
+exact predecessor allocation at both actual retained admission sites, before
+constraints, freeze or native closure. A losing duplicate capture refuses
+before effects; a genuinely fresh step retrieves the table's original owner.
+The original outcome also continues to reject replacement owners. The existing
+`RemoteOldFrames` case adds one separately bounded component observation using
+two genuine pre-freeze DB producers and that same production guard, recording
+its refusal and unchanged native-close absence before assertions. It is not a
+concurrent TCP schedule test, a new runtime case or proof of the Serving profile.
+The original frozen source and all failed qualification evidence remain intact.

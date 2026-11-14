@@ -554,6 +554,61 @@ fn remote_old_seed(
         let native_fault = fault_after_native && ordinal == 0;
         let recipient_index = (0..4).find(|i| node(*i) == *recipient).unwrap();
         let database = services[recipient_index].lock().database();
+        if matches!(case, SourceCase::RemoteOldFrames) && ordinal == 0 {
+            // A separate bounded pre-close component control. Both opaque
+            // predecessors come from the actual original State/DB producer;
+            // no table insertion, freeze, native write or test parts constructor.
+            let control_parent = budget(5000);
+            let control_business = Uuid::now_v7();
+            let provider = MetadataReadProvider::new(
+                metadata[recipient_index].clone(),
+                clients[recipient_index].clone(),
+            )
+            .unwrap();
+            let role = Arc::new(actual_role(
+                &provider,
+                &clients[0].local_metadata_read_participant(),
+                plan,
+                recipient,
+                &control_parent,
+            ));
+            let own = clients[recipient_index]
+                .acquire_host_metadata_observation(
+                    &node(0),
+                    control_business,
+                    Duration::from_secs(5),
+                    &control_parent,
+                )
+                .unwrap();
+            let observed = controls[recipient_index].with_initial_old_step(
+                role,
+                own,
+                control_business,
+                &control_parent,
+                |step| step.test_duplicate_predecessor_admission(),
+            );
+            let observation = serde_json::json!({"operation":"pre_freeze_duplicate_actual_predecessor_guard_control",
+                "recipient":recipient,"actual_result":observed.as_ref().ok(),"error":observed.as_ref().err().map(ToString::to_string),
+                "not_a_concurrent_RPC_or_new_runtime_case":true});
+            journal.push(observation.clone());
+            evidence(
+                &output.join("pre-freeze-duplicate-predecessor-before-assertions.json"),
+                &observation,
+            )
+            .unwrap();
+            evidence(&output.join("remote-old-ledger.json"), journal).unwrap();
+            let observed = observed.unwrap();
+            assert_eq!(observed["same_original_owner_accepted"], true);
+            assert!(observed["distinct_genuine_capture_refusal"]
+                .as_str()
+                .unwrap()
+                .contains("changed original pre-freeze predecessor owner"));
+            assert!(observed["native_close_before"].is_null());
+            assert_eq!(
+                observed["native_close_before"],
+                observed["native_close_after"]
+            );
+        }
         let hook = native_fault.then(|| {
             crate::distribution_native_host::CancelRemoteOldAfterNativeWal::install(
                 &database,

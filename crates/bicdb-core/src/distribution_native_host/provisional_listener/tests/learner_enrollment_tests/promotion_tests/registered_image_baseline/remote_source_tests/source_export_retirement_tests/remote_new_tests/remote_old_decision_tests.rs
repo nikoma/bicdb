@@ -119,6 +119,14 @@ pub(super) fn exercise(
         "ordinary_gate_error_not_end_to_end_APP":deny_before,"source_APP_ACKs":acknowledged,
         "every_actual_operation":ledger,"source_frame_journal":journal,"no_catalogue_vote_or_Serving":true})).unwrap();
     let first_native = first_native.unwrap();
+    assert_eq!(
+        first_native["retained_pre_freeze_predecessor"]["profile"],
+        "actual-preclose-born"
+    );
+    assert_eq!(
+        first_native["retained_pre_freeze_predecessor"]["range"]["id"],
+        serde_json::to_value(mf.capture_range.id).unwrap()
+    );
     let actual = &first_native["native"]["actual_native_attempt"];
     let xid = actual["native_xid"].as_u64().unwrap();
     assert!(xid > 0);
@@ -171,6 +179,10 @@ pub(super) fn exercise(
     assert_eq!(receipt.native_page_xid, xid);
     let after_native = after_native.unwrap();
     assert_eq!(first_native["native"], after_native["native"]);
+    assert_eq!(
+        first_native["retained_pre_freeze_predecessor"],
+        after_native["retained_pre_freeze_predecessor"]
+    );
     for observed in after_native["source_callback_actual_observers"]
         .as_array()
         .unwrap()

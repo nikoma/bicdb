@@ -47,6 +47,24 @@ impl NativeRemoteDecisionAdmission<'_> {
     pub(crate) fn plan(&self) -> &NativeJointHandoffPlan {
         self.plan
     }
+    pub(crate) fn require_old_predecessor(
+        &self,
+        db: &crate::BicDb,
+        writer: &crate::db::NativeWriterHostState,
+    ) -> Result<()> {
+        match &self.participant.original {
+            OriginalParticipant::Old {
+                actual,
+                writer: original,
+                ..
+            } if std::ptr::eq(original.as_ref(), writer) => {
+                actual.require_remote_decision_predecessor(db, writer)
+            }
+            _ => Err(invalid(
+                "remote OLD predecessor changed original participant/State",
+            )),
+        }
+    }
     pub(crate) fn require_old_parts(
         &self,
         native: &crate::db::NativeJointOldCloseReceipt,
@@ -302,6 +320,12 @@ impl NativeRemoteNewParticipant {
         Ok(())
     }
     pub(crate) fn test_remote_decision_evidence(&self) -> Result<serde_json::Value> {
+        let predecessor = match &self.original {
+            OriginalParticipant::Old { actual, .. } => {
+                Some(actual.test_remote_decision_predecessor()?)
+            }
+            _ => None,
+        };
         let held = self
             .decision
             .try_lock()
@@ -311,6 +335,7 @@ impl NativeRemoteNewParticipant {
             "retained_encoded_bytes":held.encoded_bytes,"native":held.native.as_ref().map(|n|n.test_evidence()),
             "source_callback_actual_observers":held.contexts.iter().map(|c|serde_json::json!({"node":c.source.actual_observer(),"birth":c.source.actual_observer_birth()})).collect::<Vec<_>>(),
             "original_phase":self.snapshot.phase_id,"original_MF_binding":self.snapshot.binding,
+            "retained_pre_freeze_predecessor":predecessor,
             "no_catalogue_vote_or_serving":true}),
         )
     }

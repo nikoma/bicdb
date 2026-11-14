@@ -1,0 +1,9 @@
+{
+  "ref": "qual/native-cli-first-ack-pressure-68b",
+  "inputs": {
+    "core_filter": "",
+    "pgwire_filter": "",
+    "cli_target": "native_metadata_operator_cli",
+    "cli_failure_db_custody": "false"
+  }
+}

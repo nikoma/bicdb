@@ -1,0 +1,51 @@
+{
+  "same_two_test_names_and_bytes": true,
+  "test_blob_sha256": "a7e9f0b65a5ea9db0c3cc699ff30eaca282add7353001cc1cc6349e24432fd80",
+  "workflow_sha256": "48c255ae145e842d8e6667e915a951ebf170190ec9617b303cb08372ca7f4c47",
+  "both_alltargets_and_consumer": "passed",
+  "b18": {
+    "run": 43532705713,
+    "head": "560d8a873e65a7931226a0e38fc460f38c058ae6",
+    "outcome": "test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 1089 filtered out; finished in 0.01s",
+    "observations": [
+      {
+        "accepted_tcp_connections": 1,
+        "application_frames": 1,
+        "expired_scope": false,
+        "result": "Ok(true)"
+      },
+      {
+        "accepted_tcp_connections": 1,
+        "application_frames": 1,
+        "expired_scope": true,
+        "result": "Ok(true)"
+      }
+    ],
+    "receipt_sha256": "1b2b09c8105ea6e2edd034e816e4c344524f474d9c84013e4697f6c4adf84203"
+  },
+  "505": {
+    "run": 43532727697,
+    "head": "8ec10012cf7aa9f746bc503fca104de1e896f418",
+    "outcome": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1096 filtered out; finished in 1.00s",
+    "observations": [
+      {
+        "accepted_tcp_connections": 1,
+        "application_frames": 1,
+        "expired_scope": false,
+        "result": "Ok(true)"
+      },
+      {
+        "accepted_tcp_connections": 0,
+        "application_frames": 0,
+        "expired_scope": true,
+        "result": "Err(QueryTimedOut)"
+      }
+    ],
+    "receipt_sha256": "69eb5fd34825b22a4f8d0dbf542608291862b58ddfeeba6aa01a6b88ed4d5bd6"
+  },
+  "conclusion": "Confirmed expired-caller-query-scope dispatch regression in b18 worker implementation compared with synchronous505",
+  "root_cause_of_unrelated_original_first_APP68": "not established",
+  "HA_qualification": false,
+  "production_implementation_fix": false,
+  "CI_retries": 0
+}

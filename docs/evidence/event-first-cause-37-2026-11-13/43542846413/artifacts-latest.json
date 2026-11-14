@@ -1,0 +1,45 @@
+{
+  "total_count": 2,
+  "artifacts": [
+    {
+      "id": 14093101399,
+      "node_id": "MDg6QXJ0aWZhY3QxNDA5MzEwMTM5OQ==",
+      "name": "focused-core-6dd0313c7e41a276960c725978927fcfcc7cdd94-1",
+      "size_in_bytes": 55402,
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/artifacts/14093101399",
+      "archive_download_url": "https://api.github.com/repos/nikoma/bicdb/actions/artifacts/14093101399/zip",
+      "expired": false,
+      "digest": "sha256:37046bf5e8b1b3198775375012feefbade9a40b7843d3a6a33f17d8dfa482aba",
+      "created_at": "2026-11-14T02:01:27Z",
+      "updated_at": "2026-11-14T02:01:27Z",
+      "expires_at": "2026-11-17T02:01:26Z",
+      "workflow_run": {
+        "id": 43542846413,
+        "repository_id": 1378458626,
+        "head_repository_id": 1378458626,
+        "head_branch": "qual/event-first-cause-corrected-0c960",
+        "head_sha": "6dd0313c7e41a276960c725978927fcfcc7cdd94"
+      }
+    },
+    {
+      "id": 14092079731,
+      "node_id": "MDg6QXJ0aWZhY3QxNDA5MjA3OTczMQ==",
+      "name": "native-workspace-pressure-6dd0313c7e41a276960c725978927fcfcc7cdd94-1",
+      "size_in_bytes": 3611,
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/artifacts/14092079731",
+      "archive_download_url": "https://api.github.com/repos/nikoma/bicdb/actions/artifacts/14092079731/zip",
+      "expired": false,
+      "digest": "sha256:5208027498be3c2adff98d22b6acbbda1df1f8e778a49ba80a225c253f690bb3",
+      "created_at": "2026-11-14T01:55:33Z",
+      "updated_at": "2026-11-14T01:55:33Z",
+      "expires_at": "2026-11-17T01:55:32Z",
+      "workflow_run": {
+        "id": 43542846413,
+        "repository_id": 1378458626,
+        "head_repository_id": 1378458626,
+        "head_branch": "qual/event-first-cause-corrected-0c960",
+        "head_sha": "6dd0313c7e41a276960c725978927fcfcc7cdd94"
+      }
+    }
+  ]
+}

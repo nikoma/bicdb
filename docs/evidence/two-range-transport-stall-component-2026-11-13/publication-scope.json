@@ -1,0 +1,60 @@
+{
+  "original_private_zip_sha256": "1637503905e7db9dc971e4adc1285f0c978b472d59cda5614b2e4fe26d217ad1",
+  "original_private_zip_bytes": 397780,
+  "original_members": 153,
+  "original_uncompressed_bytes": 5595680,
+  "included_members": 52,
+  "omitted_entire_custody_members": 101,
+  "omitted_mesh_signing_key_files": 5,
+  "private_directory_mode": "0o700",
+  "private_zip_mode": "0o600",
+  "raw_original_zip_published": false,
+  "literal_scans": {
+    "runs/43547094599/job132300848308.log.gz": {
+      "-----BEGIN PRIVATE KEY-----": 0,
+      "-----BEGIN RSA PRIVATE KEY-----": 0,
+      "-----BEGIN EC PRIVATE KEY-----": 0,
+      "\"private_key\"": 0,
+      "\"secret_key\"": 0,
+      "\"seed\"": 0,
+      "mesh_signing_key.json": 0
+    },
+    "runs/43547094599/job132300870146.log.gz": {
+      "-----BEGIN PRIVATE KEY-----": 0,
+      "-----BEGIN RSA PRIVATE KEY-----": 0,
+      "-----BEGIN EC PRIVATE KEY-----": 0,
+      "\"private_key\"": 0,
+      "\"secret_key\"": 0,
+      "\"seed\"": 0,
+      "mesh_signing_key.json": 0
+    },
+    "runs/43548089992/job132303983971.log.gz": {
+      "-----BEGIN PRIVATE KEY-----": 0,
+      "-----BEGIN RSA PRIVATE KEY-----": 0,
+      "-----BEGIN EC PRIVATE KEY-----": 0,
+      "\"private_key\"": 0,
+      "\"secret_key\"": 0,
+      "\"seed\"": 0,
+      "mesh_signing_key.json": 0
+    },
+    "runs/43548089992/job132304020107.log.gz": {
+      "-----BEGIN PRIVATE KEY-----": 0,
+      "-----BEGIN RSA PRIVATE KEY-----": 0,
+      "-----BEGIN EC PRIVATE KEY-----": 0,
+      "\"private_key\"": 0,
+      "\"secret_key\"": 0,
+      "\"seed\"": 0,
+      "mesh_signing_key.json": 10
+    },
+    "logical_projection": {
+      "-----BEGIN PRIVATE KEY-----": 0,
+      "-----BEGIN RSA PRIVATE KEY-----": 0,
+      "-----BEGIN EC PRIVATE KEY-----": 0,
+      "\"private_key\"": 0,
+      "\"secret_key\"": 0,
+      "\"seed\"": 0,
+      "mesh_signing_key.json": 30
+    }
+  },
+  "limits": "Filenames identify omitted DB/WAL/seed/signing-key trees; key contents not decoded/rendered. Literal/path scans do not establish absence of arbitrary secrets. Public GitHub original artifact access/retention is not confidentiality; this projection does not remove previously hosted originals. Live guarded DB copies are not a cold-replay proof. Full synthetic RPC frames/payloads intentionally retained."
+}

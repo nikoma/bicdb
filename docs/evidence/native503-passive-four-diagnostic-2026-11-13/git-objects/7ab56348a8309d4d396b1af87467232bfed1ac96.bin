@@ -1,0 +1,6 @@
+tree 619e9ad85af043886f048664eed098292348e510
+parent c6a081a6026f4efd00d80f392c94b67f2f2f4e12
+author nikoma <niko.manek@gmail.com> 1794617137 -0800
+committer nikoma <niko.manek@gmail.com> 1794617137 -0800
+
+Capture passive native quorum, preparation and lifecycle failure boundaries

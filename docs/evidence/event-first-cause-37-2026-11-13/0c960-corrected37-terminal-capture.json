@@ -1,0 +1,22 @@
+{
+  "qualifier_source": "6dd0313c7e41a276960c725978927fcfcc7cdd94",
+  "runtime_source": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+  "source_version": "1.0.505-beta inherited/unmerged",
+  "run": 43542846413,
+  "core_job": 132287156501,
+  "workspace_job": 132287134837,
+  "actual_result": "test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 1075 filtered out; finished in 12.48s",
+  "exact37names": true,
+  "actual_checkout_verified_for_all_four_jobs": true,
+  "old_run": 43542004108,
+  "old_rust_compile_failures": "Both jobs2E0308;0tests;no cancellation",
+  "actual_new_controls": "2priorityphases/concurrentfirstcause+escalation/caughtunwindallverifiedfromactualJSON;legacyTLS/mockresponses,notdatabasecommits",
+  "guard_outcomes": "7logscomplete;oldhelper0,list101,alltargets101;corrected4all0;no74/75/omissions",
+  "dispatch_count": 1,
+  "source_or_TTL_changes_after_dispatch": false,
+  "capture_dir": "/tmp/bicdb-event-first-cause-corrected-run-43542846413",
+  "summary_sha256": "7aa4022a1c43da6e1ef8b1e52d32187c8ec7165f57e6c84f6dbf01aa3b021931",
+  "manifest_sha256": "8adfc5ba215536eedf9efe3a17f942e8e66b236afa6cbc48fee92b3525672414",
+  "no_native_DB_or_physical_qualification": true,
+  "no_engine_open": true
+}

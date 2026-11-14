@@ -1,0 +1,6 @@
+tree a4712298110429f1c0d7ce63876b200e42a874b3
+parent a2ba83f2260597bb0d4c604e602771c5827f4aad
+author nikoma <niko.manek@gmail.com> 1794613333 -0800
+committer nikoma <niko.manek@gmail.com> 1794613333 -0800
+
+release: qualify principal and snapshot recovery candidate at 1.0.503-beta

@@ -1,0 +1,168 @@
+{
+  "scope": "bounded UTF-8/literal private-key-header inspection only; not comprehensive secret detection",
+  "no_runtime_custody_or_projection": true,
+  "original_artifacts_access": "GitHub-hosted artifacts of a public repository, subject to GitHub access and retention; not claimed owner-only private",
+  "literal_markers": [
+    "-----BEGIN PRIVATE KEY-----",
+    "-----BEGIN RSA PRIVATE KEY-----",
+    "-----BEGIN EC PRIVATE KEY-----",
+    "-----BEGIN OPENSSH PRIVATE KEY-----"
+  ],
+  "files": [
+    {
+      "path": "505/artifact-verification.json",
+      "inspected_bytes": 2783,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "505/artifacts.json",
+      "inspected_bytes": 770,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "505/core-job.log.gz",
+      "inspected_bytes": 1682521,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "505/jobs-terminal.json",
+      "inspected_bytes": 14964,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "505/original-focused-core.zip!rustc.txt",
+      "inspected_bytes": 196,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "505/original-focused-core.zip!source-revision.txt",
+      "inspected_bytes": 41,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "505/original-focused-core.zip!selected-tests.log",
+      "inspected_bytes": 252038,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "505/original-focused-core.zip!tests.log",
+      "inspected_bytes": 252983,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "505/request.json",
+      "inspected_bytes": 707,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "505/run-terminal.json",
+      "inspected_bytes": 11502,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "505/test-only-source.patch.gz",
+      "inspected_bytes": 7862,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "505/workspace-job.log.gz",
+      "inspected_bytes": 2467491,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "b18/artifact-verification.json",
+      "inspected_bytes": 2828,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "b18/artifacts.json",
+      "inspected_bytes": 770,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "b18/core-job.log.gz",
+      "inspected_bytes": 1667638,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "b18/jobs-terminal.json",
+      "inspected_bytes": 14964,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "b18/original-focused-core.zip!rustc.txt",
+      "inspected_bytes": 196,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "b18/original-focused-core.zip!selected-tests.log",
+      "inspected_bytes": 252038,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "b18/original-focused-core.zip!source-revision.txt",
+      "inspected_bytes": 41,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "b18/original-focused-core.zip!tests.log",
+      "inspected_bytes": 253482,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "b18/request.json",
+      "inspected_bytes": 704,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "b18/run-terminal.json",
+      "inspected_bytes": 11502,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "b18/test-only-source.patch.gz",
+      "inspected_bytes": 7829,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "b18/workspace-job.log.gz",
+      "inspected_bytes": 2457564,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "pair-terminal-verification.json",
+      "inspected_bytes": 1828,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "source/caller_query_budget_tests.rs",
+      "inspected_bytes": 6539,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "source/identity.json",
+      "inspected_bytes": 1065,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "source/pre-run-b18-source-receipt.json",
+      "inspected_bytes": 1708,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "source/pre-run505-preservation.json",
+      "inspected_bytes": 1150,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "source/read-only-review-before-pair.md",
+      "inspected_bytes": 6602,
+      "private_key_header_literal_matches": 0
+    },
+    {
+      "path": "source/tests.yml",
+      "inspected_bytes": 19916,
+      "private_key_header_literal_matches": 0
+    }
+  ]
+}

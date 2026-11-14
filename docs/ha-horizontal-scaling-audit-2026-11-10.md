@@ -11,7 +11,34 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Latest merged-source update — 2026-11-13 UTC
+## Latest delivered source — 2026-11-14 UTC
+
+The runtime evidence baseline for this documentation update is remote main
+**1.0.505-beta**, `e25b3ba194c6f3ad73e2f393b68b175fbf1edd92`.
+[PR183](https://github.com/nikoma/bicdb/pull/183) merged client request-budget,
+uncertain-outcome and original error-evidence fixes. All required checks passed;
+the complete merge tree `6e1547a07a2749be2946ba50f2028b74ac080b90` equals
+tested head `99f1a05bce08ba0ad5f8a777a844317d6c7a6d2b`. The serial native
+suite passed212/0 with one ignored; this is hosted regression evidence, not
+physical qualification. Source versions are synchronized across29 packages.
+No release binary or verified deployment was produced by that merge.
+
+The [follow-up qualification checkpoint](ha-qualification-checkpoint-2026-11-13.md)
+separates original failures, diagnostic passes, the exact-source native repeat,
+corrected client controls and missing cross-process/multi-range producers.
+The newer native handoff prototypes remain separate source branches. The
+source-record successor executed82 cases with74 passes/eight failures at
+Registered DECISION catalogue publication. Its catalogue successor executed87
+cases with79 passes/eight failures at a later writer-policy boundary; five new
+catalogue fault controls passed. A diagnostic successor executed all15
+export-reference controls successfully, including actual original-handler
+completion after timeout; its result does not settle the earlier14/1 failure.
+The [checkpoint follow-up](ha-qualification-checkpoint-2026-11-13.md#follow-up-captured-november-14-2026)
+also records the failed CLI fixture prerequisites and unexecuted successors.
+These prototype changes are not delivered or production-qualified by505 or this506 update.
+The original Azure scale-out qualification remains failed.
+
+## Merged-source snapshot — 2026-11-13 UTC (502)
 
 The later inspected remote `main` is **1.0.502-beta**,
 `629857f5eaaeee5f5a9124d505406d8cd6a29535`. It includes the 501 merge.

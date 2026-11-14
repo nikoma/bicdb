@@ -1,0 +1,914 @@
+{
+  "run": 43544810818,
+  "raw_artifact": "root-artifact-14094258684.zip",
+  "artifact_sha256": "bdf53f0eb21bf88397a14099f6a971460db1497104bcb799ae078b3d85c03561",
+  "source": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+  "records": [
+    {
+      "case": "TargetHotDataFirstCallerExpired",
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dc-61e0-70d2-b8ac-45065f047b94",
+      "actual_donor_from_collector": "n2",
+      "actual_frames": [
+        {
+          "operation": "Manifest",
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": "n2",
+          "manifest_A": "01a1d7dc-839d-7191-868a-586e08d7d102",
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "History": {
+              "cursor": {
+                "complete": false,
+                "next_index": 0,
+                "step": 0
+              },
+              "max_entries": 256
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        }
+      ],
+      "copied_MStore_node0": {
+        "node_id": "n0",
+        "current_term": 1,
+        "role": "leader",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "copied_MStore_node4": {
+        "node_id": "n4",
+        "current_term": 1,
+        "role": "follower",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "range_leader": "n1",
+      "retiree": "n1",
+      "selected_range": 1,
+      "phase_at_panic": "actual_remote_original_a_through_first_policy_component",
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "report_hashes": {
+        "execution_identity": "2252b3429d1cd6c639ba7bbac2e1118d80ed00f3f262f48ad17cd19564d69e1f",
+        "remote_old_ledger": "13bc874a2dca92e5758cb814d7dd190eac282fb956f89948f5020c0e8902dbf2",
+        "source_frame_ledger": "43e071c450bc49aefcdf4b2bc9a407118b5b8a2845527bf5fd3bf46fd7a83896",
+        "copied_MStore_node0": "853afd74fff4b679a0b87aaacf26442546ee851facaf66584b33e493e450bf93"
+      },
+      "native_phase_rpc_not_recorded_by_sdk": true,
+      "copied_json_not_fsync_or_engine_recovery_proof": true
+    },
+    {
+      "case": "TargetHotDataFollower",
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dc-8cfa-7aa2-9022-a591a55b977b",
+      "actual_donor_from_collector": "n3",
+      "actual_frames": [
+        {
+          "operation": "Manifest",
+          "outcome": "returned",
+          "source": "n3",
+          "target": "n4",
+          "manifest_source": "n3",
+          "manifest_A": "01a1d7dc-acf2-7101-bb07-4b8e1c72d4c8",
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "History": {
+              "cursor": {
+                "complete": false,
+                "next_index": 0,
+                "step": 0
+              },
+              "max_entries": 256
+            }
+          },
+          "outcome": "returned",
+          "source": "n3",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        }
+      ],
+      "copied_MStore_node0": {
+        "node_id": "n0",
+        "current_term": 1,
+        "role": "leader",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "copied_MStore_node4": {
+        "node_id": "n4",
+        "current_term": 1,
+        "role": "follower",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "range_leader": "n1",
+      "retiree": "n2",
+      "selected_range": 1,
+      "phase_at_panic": "actual_remote_original_a_through_first_policy_component",
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "report_hashes": {
+        "execution_identity": "9ccdc97bd39d23bf170b76226f826aa8afd420f0327c4246ca852dfc5ac18b6d",
+        "remote_old_ledger": "33130899afc0123876ad599fcd80d4c2f61dfe5bcb1c5f6350f7ec1e0167efad",
+        "source_frame_ledger": "ac8a8007b3945d85acd27aadafcad0ec7caaf0ca5fd27ada9cd0067735feaa81",
+        "copied_MStore_node0": "23449689074391a065a3c93d68155888fe27ddf9e5ed8e7ed81c66ee6f48f119"
+      },
+      "native_phase_rpc_not_recorded_by_sdk": true,
+      "copied_json_not_fsync_or_engine_recovery_proof": true
+    },
+    {
+      "case": "TargetHotDataReplyLost",
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dc-b527-79c3-a00b-73a71b470563",
+      "actual_donor_from_collector": "n2",
+      "actual_frames": [
+        {
+          "operation": "Manifest",
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": "n2",
+          "manifest_A": "01a1d7dc-d98a-7832-bcfd-f92de5e00ae2",
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "History": {
+              "cursor": {
+                "complete": false,
+                "next_index": 0,
+                "step": 0
+              },
+              "max_entries": 256
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        }
+      ],
+      "copied_MStore_node0": {
+        "node_id": "n0",
+        "current_term": 1,
+        "role": "leader",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "copied_MStore_node4": {
+        "node_id": "n4",
+        "current_term": 1,
+        "role": "follower",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "range_leader": "n1",
+      "retiree": "n1",
+      "selected_range": 1,
+      "phase_at_panic": "actual_remote_original_a_through_first_policy_component",
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "report_hashes": {
+        "execution_identity": "642d44a19ccb90cebd59adb0567f1ee75db068bd917d33c32b000e6cb915179a",
+        "remote_old_ledger": "25c9c545705f73e898fb70f46039c2086f5d6f5b06d98c8feb28e06b1fcfbb13",
+        "source_frame_ledger": "095d2d09fedfff17a0430a3c9ad3c07ac56e241611e30ad8f680c780aa4a0d49",
+        "copied_MStore_node0": "4cdb789315266799f1761f71155d87aacbc4685294d72fab88ce62de2c3cc759"
+      },
+      "native_phase_rpc_not_recorded_by_sdk": true,
+      "copied_json_not_fsync_or_engine_recovery_proof": true
+    },
+    {
+      "case": "TargetHotData",
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dc-e34f-7a13-a5b5-a0102807faac",
+      "actual_donor_from_collector": "n2",
+      "actual_frames": [
+        {
+          "operation": "Manifest",
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": "n2",
+          "manifest_A": "01a1d7dd-0619-7180-a4d1-a06512c8ac05",
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "History": {
+              "cursor": {
+                "complete": false,
+                "next_index": 0,
+                "step": 0
+              },
+              "max_entries": 256
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        }
+      ],
+      "copied_MStore_node0": {
+        "node_id": "n0",
+        "current_term": 1,
+        "role": "leader",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "copied_MStore_node4": {
+        "node_id": "n4",
+        "current_term": 1,
+        "role": "follower",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "range_leader": "n1",
+      "retiree": "n1",
+      "selected_range": 1,
+      "phase_at_panic": "actual_remote_original_a_through_first_policy_component",
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "report_hashes": {
+        "execution_identity": "92e695d3b172a0c6ababeaf4d61d35c6c5707869b2afb79e8582876027de6223",
+        "remote_old_ledger": "fc7e751436a873d16a11f9eeebfeb614dfa566188af736f4f2a2c6f38394168a",
+        "source_frame_ledger": "42dadd261e43c033a69d3bbe9f93a446ccbf038830f31a605d41954f8f9baf1c",
+        "copied_MStore_node0": "78a28c8d31f75b789b3f58793aa5245da193f3197aa73f26c618b40e90ccabe4"
+      },
+      "native_phase_rpc_not_recorded_by_sdk": true,
+      "copied_json_not_fsync_or_engine_recovery_proof": true
+    },
+    {
+      "case": "TargetHotDecisionTermAfterCommit",
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dd-0dd9-7f32-adeb-a965f077c35a",
+      "actual_donor_from_collector": "n2",
+      "actual_frames": [
+        {
+          "operation": "Manifest",
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": "n2",
+          "manifest_A": "01a1d7dd-2e0a-70c0-976e-85e42a304d9f",
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "History": {
+              "cursor": {
+                "complete": false,
+                "next_index": 0,
+                "step": 0
+              },
+              "max_entries": 256
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        }
+      ],
+      "copied_MStore_node0": {
+        "node_id": "n0",
+        "current_term": 1,
+        "role": "leader",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "copied_MStore_node4": {
+        "node_id": "n4",
+        "current_term": 1,
+        "role": "follower",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "range_leader": "n1",
+      "retiree": "n1",
+      "selected_range": 1,
+      "phase_at_panic": "actual_remote_original_a_through_first_policy_component",
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "report_hashes": {
+        "execution_identity": "26c8799e7784c906089f4c95eb65774b10b1dc5f4c7ddea65871206f373b7749",
+        "remote_old_ledger": "f028d1604cbc753ae3252ce54990665beedec1fd34274ddd3cb62dabb0a8d588",
+        "source_frame_ledger": "26d3c5c75c05ca69f46421fb742fc1a8d7c32a0012db87157a6465a959ce74db",
+        "copied_MStore_node0": "af4a7c9f851d4ea66868fd6e03be55e97b00439470181b05b456981c430728ae"
+      },
+      "native_phase_rpc_not_recorded_by_sdk": true,
+      "copied_json_not_fsync_or_engine_recovery_proof": true
+    },
+    {
+      "case": "TargetHotFirstPolicyTermBeforeHook",
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dd-3a89-7061-a3a4-5be20e4ab9bd",
+      "actual_donor_from_collector": "n2",
+      "actual_frames": [
+        {
+          "operation": "Manifest",
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": "n2",
+          "manifest_A": "01a1d7dd-5bd8-7893-bd83-e01a4791abe7",
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "History": {
+              "cursor": {
+                "complete": false,
+                "next_index": 0,
+                "step": 0
+              },
+              "max_entries": 256
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        }
+      ],
+      "copied_MStore_node0": {
+        "node_id": "n0",
+        "current_term": 1,
+        "role": "leader",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "copied_MStore_node4": {
+        "node_id": "n4",
+        "current_term": 1,
+        "role": "follower",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "range_leader": "n1",
+      "retiree": "n1",
+      "selected_range": 1,
+      "phase_at_panic": "actual_remote_original_a_through_first_policy_component",
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "report_hashes": {
+        "execution_identity": "4aa575b5d37b9ef99ca29ef8c8c6aa837764c7476749c544d062c98dac84543d",
+        "remote_old_ledger": "150dcfafd7d58b426bebecc14c412a7c40493f5529b8f230906eb9f871416e8a",
+        "source_frame_ledger": "0e551a54cefa770213957f32d3ca8de27a98edce6c055e523102517a6ee3e5c1",
+        "copied_MStore_node0": "919b0a50f15adf6c97321e3e7171ae092a05ebb71e0b6b49c15e2a1513c72145"
+      },
+      "native_phase_rpc_not_recorded_by_sdk": true,
+      "copied_json_not_fsync_or_engine_recovery_proof": true
+    },
+    {
+      "case": "TargetHotDecisionTermBeforePut",
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dd-63ee-7ae2-9624-509ebf0fa675",
+      "actual_donor_from_collector": "n2",
+      "actual_frames": [
+        {
+          "operation": "Manifest",
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": "n2",
+          "manifest_A": "01a1d7dd-836a-7d21-9de8-a74501638834",
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "History": {
+              "cursor": {
+                "complete": false,
+                "next_index": 0,
+                "step": 0
+              },
+              "max_entries": 256
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        }
+      ],
+      "copied_MStore_node0": {
+        "node_id": "n0",
+        "current_term": 1,
+        "role": "leader",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "copied_MStore_node4": {
+        "node_id": "n4",
+        "current_term": 1,
+        "role": "follower",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "range_leader": "n1",
+      "retiree": "n1",
+      "selected_range": 1,
+      "phase_at_panic": "actual_remote_original_a_through_first_policy_component",
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "report_hashes": {
+        "execution_identity": "3633821a3293da764ef4ec9e87ecc09021b3dfcbba12ee9e4753ed0ef67d9fa5",
+        "remote_old_ledger": "f505f53d37279ae133dadc6166ad9badef1787f8fddc8885fc884b138b1442e1",
+        "source_frame_ledger": "fa4ba40603d1a22c7a458c554e2c17dc0480139097cf2743975a8713d616dfaa",
+        "copied_MStore_node0": "c0054d393162021df4a8c43e06ef3ffe7e28459d9a63967107f681072bd85a2f"
+      },
+      "native_phase_rpc_not_recorded_by_sdk": true,
+      "copied_json_not_fsync_or_engine_recovery_proof": true
+    },
+    {
+      "case": "TargetHotPolicy",
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dd-8c0b-78f2-94e1-7c2b1ba56d00",
+      "actual_donor_from_collector": "n2",
+      "actual_frames": [
+        {
+          "operation": "Manifest",
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": "n2",
+          "manifest_A": "01a1d7dd-aa76-71b1-90eb-7ac62aa3a03d",
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "History": {
+              "cursor": {
+                "complete": false,
+                "next_index": 0,
+                "step": 0
+              },
+              "max_entries": 256
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        }
+      ],
+      "copied_MStore_node0": {
+        "node_id": "n0",
+        "current_term": 1,
+        "role": "leader",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "copied_MStore_node4": {
+        "node_id": "n4",
+        "current_term": 1,
+        "role": "follower",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "range_leader": "n1",
+      "retiree": "n1",
+      "selected_range": 1,
+      "phase_at_panic": "actual_remote_original_a_through_first_policy_component",
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "report_hashes": {
+        "execution_identity": "53d7b323d60e117b483f856b26bdd65c4e9a6daeba2c7f5acd6c730e3c1a9dff",
+        "remote_old_ledger": "aa3fc729ed9a38470429441ec221b9793923b1c4c1211c5d0071ea5ac4dc9345",
+        "source_frame_ledger": "6bad58a0df0bbf153649852320a825ab87198a7bfb6bbb571f4580f05f596db7",
+        "copied_MStore_node0": "36e356f15798e186722fb04b47e04cb0e51c544266dfa6ba3895ba2b9f3278b3"
+      },
+      "native_phase_rpc_not_recorded_by_sdk": true,
+      "copied_json_not_fsync_or_engine_recovery_proof": true
+    },
+    {
+      "case": "TargetHotStoreReplacement",
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dd-b35e-70b3-a663-c99bf03f3621",
+      "actual_donor_from_collector": "n2",
+      "actual_frames": [
+        {
+          "operation": "Manifest",
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": "n2",
+          "manifest_A": "01a1d7dd-d1a5-7753-a967-2b1363f3dfce",
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "History": {
+              "cursor": {
+                "complete": false,
+                "next_index": 0,
+                "step": 0
+              },
+              "max_entries": 256
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        }
+      ],
+      "copied_MStore_node0": {
+        "node_id": "n0",
+        "current_term": 1,
+        "role": "leader",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "copied_MStore_node4": {
+        "node_id": "n4",
+        "current_term": 1,
+        "role": "follower",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "range_leader": "n1",
+      "retiree": "n1",
+      "selected_range": 1,
+      "phase_at_panic": "actual_remote_original_a_through_first_policy_component",
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "report_hashes": {
+        "execution_identity": "6d6d78fb6e0199f0fe897a55a4ba257d7900cb02d5365953f36ad8804bbfa1e0",
+        "remote_old_ledger": "7d6bed0d720d678b0b8c0d864940a1e6d3114bd3a8c2df20b35c63752f412cb0",
+        "source_frame_ledger": "c7dd21d32fc6c16a54b81b2ae713da3eddeb3e6a5eb21a1af8f05341b43373dd",
+        "copied_MStore_node0": "62d2e0d91cf7a3977e35591a32c6d619a874460f94900e40c9cbd866f8a366df"
+      },
+      "native_phase_rpc_not_recorded_by_sdk": true,
+      "copied_json_not_fsync_or_engine_recovery_proof": true
+    },
+    {
+      "case": "TargetHotEarlyPolicy",
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dd-da17-74c3-afd5-e8e421460d1a",
+      "actual_donor_from_collector": "n2",
+      "actual_frames": [
+        {
+          "operation": "Manifest",
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": "n2",
+          "manifest_A": "01a1d7dd-f8dd-7b02-90bb-6760e244d49e",
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "History": {
+              "cursor": {
+                "complete": false,
+                "next_index": 0,
+                "step": 0
+              },
+              "max_entries": 256
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        }
+      ],
+      "copied_MStore_node0": {
+        "node_id": "n0",
+        "current_term": 1,
+        "role": "leader",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "copied_MStore_node4": {
+        "node_id": "n4",
+        "current_term": 1,
+        "role": "follower",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "range_leader": "n1",
+      "retiree": "n1",
+      "selected_range": 1,
+      "phase_at_panic": "actual_remote_original_a_through_first_policy_component",
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "report_hashes": {
+        "execution_identity": "ab2b4516950004ae86ed5a3dee1105b1b23ca66ee143b0df78a7a4179ad23016",
+        "remote_old_ledger": "5ef2ab564920982ee6a3e7d0e70acfff6625a4deb71a9fc76c4ffbd04baac87c",
+        "source_frame_ledger": "1c6783523a4a139fb19e323c92b7096d5ff57394166c213d8964600ae435093d",
+        "copied_MStore_node0": "e62048da9e560e90eafbf75d5f3d325b69e3692beb1525ea63eb8c8ece5b271e"
+      },
+      "native_phase_rpc_not_recorded_by_sdk": true,
+      "copied_json_not_fsync_or_engine_recovery_proof": true
+    },
+    {
+      "case": "TargetHotDecisionReplyLost",
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7de-00db-7f10-937e-b9b397e35ec8",
+      "actual_donor_from_collector": "n2",
+      "actual_frames": [
+        {
+          "operation": "Manifest",
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": "n2",
+          "manifest_A": "01a1d7de-1f87-7291-a16a-31944684e992",
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "History": {
+              "cursor": {
+                "complete": false,
+                "next_index": 0,
+                "step": 0
+              },
+              "max_entries": 256
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        }
+      ],
+      "copied_MStore_node0": {
+        "node_id": "n0",
+        "current_term": 1,
+        "role": "leader",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "copied_MStore_node4": {
+        "node_id": "n4",
+        "current_term": 1,
+        "role": "follower",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "range_leader": "n1",
+      "retiree": "n1",
+      "selected_range": 1,
+      "phase_at_panic": "actual_remote_original_a_through_first_policy_component",
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "report_hashes": {
+        "execution_identity": "66fa76e00c851441a640113340600eb373c8256d99de928cce6b509bbb986293",
+        "remote_old_ledger": "a30a466b1d871737aa55f7a26ef1496756e6f1e617079b5d560f567e90fa3708",
+        "source_frame_ledger": "1b32adf67b1c145a8540c3de0d2b6d9a53e76564bb23f8c7cc14c9224aabbb3c",
+        "copied_MStore_node0": "70210e9aff5fb11ecefaa62794970e77d3aaf7ad76925011b9a0dd6cdcd18892"
+      },
+      "native_phase_rpc_not_recorded_by_sdk": true,
+      "copied_json_not_fsync_or_engine_recovery_proof": true
+    },
+    {
+      "case": "TargetNoDomainMemberChanged",
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7e8-0268-7882-a21b-e474380df398",
+      "actual_donor_from_collector": "n2",
+      "actual_frames": [
+        {
+          "operation": "Manifest",
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": "n2",
+          "manifest_A": "01a1d7e8-2253-7741-9692-4de06199d821",
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "History": {
+              "cursor": {
+                "complete": false,
+                "next_index": 0,
+                "step": 0
+              },
+              "max_entries": 256
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "Rows": {
+              "cursor": {
+                "after_key": null,
+                "collection_index": 0,
+                "step": 0
+              },
+              "options": {
+                "max_bytes_per_batch": 8388608,
+                "max_record_bytes": 8388608,
+                "max_records_per_batch": 1024
+              }
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "Rows": {
+              "cursor": {
+                "after_key": null,
+                "collection_index": 0,
+                "step": 0
+              },
+              "options": {
+                "max_bytes_per_batch": 8388608,
+                "max_record_bytes": 8388608,
+                "max_records_per_batch": 1024
+              }
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "Rows": {
+              "cursor": {
+                "after_key": "items/registered-fifth-ack-r2-0",
+                "collection_index": 0,
+                "step": 1
+              },
+              "options": {
+                "max_bytes_per_batch": 8388608,
+                "max_record_bytes": 8388608,
+                "max_records_per_batch": 1024
+              }
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "Rows": {
+              "cursor": {
+                "after_key": "items/registered-fifth-ack-r2-0",
+                "collection_index": 0,
+                "step": 1
+              },
+              "options": {
+                "max_bytes_per_batch": 8388608,
+                "max_record_bytes": 8388608,
+                "max_records_per_batch": 1024
+              }
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "Rows": {
+              "cursor": {
+                "after_key": null,
+                "collection_index": 1,
+                "step": 2
+              },
+              "options": {
+                "max_bytes_per_batch": 8388608,
+                "max_record_bytes": 8388608,
+                "max_records_per_batch": 1024
+              }
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": {
+            "Rows": {
+              "cursor": {
+                "after_key": null,
+                "collection_index": 1,
+                "step": 2
+              },
+              "options": {
+                "max_bytes_per_batch": 8388608,
+                "max_record_bytes": 8388608,
+                "max_records_per_batch": 1024
+              }
+            }
+          },
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        },
+        {
+          "operation": "Finish",
+          "outcome": "returned",
+          "source": "n2",
+          "target": "n4",
+          "manifest_source": null,
+          "manifest_A": null,
+          "original_parent_live": true,
+          "original_own_live": true
+        }
+      ],
+      "copied_MStore_node0": {
+        "node_id": "n0",
+        "current_term": 1,
+        "role": "leader",
+        "leader_id": "n0",
+        "commit_index": 5
+      },
+      "copied_MStore_node4": {
+        "node_id": "n4",
+        "current_term": 2,
+        "role": "follower",
+        "leader_id": null,
+        "commit_index": 5
+      },
+      "range_leader": "n1",
+      "retiree": "n1",
+      "selected_range": 1,
+      "phase_at_panic": "actual_local_old_quorum_seeded_remote_source_frames",
+      "primary_error": "cluster error: metadata consensus: actual metadata authority version changed/dirty; retained native outcome is not a current grant",
+      "report_hashes": {
+        "execution_identity": "fb53d9382f8407970deca1eff25534b8744e8573571053e6c5410b1528164a2c",
+        "remote_old_ledger": "af66fc3dbd8eadb44b771a91e0d1068c1a024f5c1d345b4bbb4b75a1eb4c68f0",
+        "source_frame_ledger": "9befe5734db680f5e5a42d4d4fc976b7b71e6ac5f049306001c033c1ffbd67bf",
+        "copied_MStore_node0": "c3eacf48f81b11b95a4294cefd08b5111a47ea5d50fcb787903ac0dbbc1baf43"
+      },
+      "native_phase_rpc_not_recorded_by_sdk": true,
+      "copied_json_not_fsync_or_engine_recovery_proof": true
+    }
+  ],
+  "engine_opened": false,
+  "production_role_modified": false
+}

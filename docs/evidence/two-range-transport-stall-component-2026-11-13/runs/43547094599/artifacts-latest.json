@@ -1,0 +1,45 @@
+{
+  "total_count": 2,
+  "artifacts": [
+    {
+      "id": 14094414929,
+      "node_id": "MDg6QXJ0aWZhY3QxNDA5NDQxNDkyOQ==",
+      "name": "focused-core-b01ed646b476cbb5f76a495d0f71bc8d13b929d6-1",
+      "size_in_bytes": 11608,
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/artifacts/14094414929",
+      "archive_download_url": "https://api.github.com/repos/nikoma/bicdb/actions/artifacts/14094414929/zip",
+      "expired": false,
+      "digest": "sha256:d8078590c9cd66cedea452a5b5e9d779955586dafb7f1e825a15dffb1c3b4095",
+      "created_at": "2026-11-14T02:44:13Z",
+      "updated_at": "2026-11-14T02:44:13Z",
+      "expires_at": "2026-11-17T02:44:12Z",
+      "workflow_run": {
+        "id": 43547094599,
+        "repository_id": 1378458626,
+        "head_repository_id": 1378458626,
+        "head_branch": "qual/native-source-stall-component-c08",
+        "head_sha": "b01ed646b476cbb5f76a495d0f71bc8d13b929d6"
+      }
+    },
+    {
+      "id": 14094194341,
+      "node_id": "MDg6QXJ0aWZhY3QxNDA5NDE5NDM0MQ==",
+      "name": "native-workspace-pressure-b01ed646b476cbb5f76a495d0f71bc8d13b929d6-1",
+      "size_in_bytes": 2151,
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/artifacts/14094194341",
+      "archive_download_url": "https://api.github.com/repos/nikoma/bicdb/actions/artifacts/14094194341/zip",
+      "expired": false,
+      "digest": "sha256:2e515bb040a3e445139d47d81ac4d9806eb0177f9647b15f2c48596a5a968429",
+      "created_at": "2026-11-14T02:38:55Z",
+      "updated_at": "2026-11-14T02:38:55Z",
+      "expires_at": "2026-11-17T02:38:54Z",
+      "workflow_run": {
+        "id": 43547094599,
+        "repository_id": 1378458626,
+        "head_repository_id": 1378458626,
+        "head_branch": "qual/native-source-stall-component-c08",
+        "head_sha": "b01ed646b476cbb5f76a495d0f71bc8d13b929d6"
+      }
+    }
+  ]
+}

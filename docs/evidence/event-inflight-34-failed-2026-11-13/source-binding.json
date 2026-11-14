@@ -1,0 +1,18 @@
+{
+  "qualifier": "91713c0fed694505086f5351a2b0df755b7c6ffa",
+  "runtime": "1ce471aa315b93f58c00ddce5c0577505df472ab",
+  "runtime_parent": "01308fb09512f02e0c61b740fc339382e44b3521",
+  "source_version": "1.0.505-beta unmerged qualification source",
+  "Core_subtree": "700ec073513e7ac7cc46df10bb0dc292abc215cd",
+  "qualifier_Core_identical": true,
+  "only_qualifier_paths": [
+    ".github/workflows/tests.yml",
+    "scripts/qualification/guard-build-memory.py"
+  ],
+  "test_threads": 1,
+  "test_assertions_and_budgets": "unchanged",
+  "historical_pair": "b18 child560 1/1 failed vs synchronous505 child8ec2/0; separate evidence",
+  "historical_SDK8352": "12/0; separate evidence",
+  "HA_qualified": false,
+  "implementation_fix_delivered": false
+}

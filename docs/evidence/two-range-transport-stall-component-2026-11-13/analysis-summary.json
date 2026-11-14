@@ -1,0 +1,444 @@
+{
+  "source": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+  "runtime": "c9680e82acf9ceb01ad8994b7bb0b67b25768782",
+  "version": "1.0.502-beta inherited/unmerged",
+  "run": 43548089992,
+  "core_job": 132304020107,
+  "workspace_job": 132303983971,
+  "result": "1passed/0failed/0ignored/1170filtered12.29s",
+  "actual_inventory": 83,
+  "inventory_scope": "listed original82+new1; ONLYnewcomponentexecuted",
+  "scope": "actual transport-held Rows response after source export; no targetrows/secondServingrange/disk/controller/physical/throughput qualification",
+  "fixture_prefix": "fault-state/native-registered-fifth-image-01a1d7fd-f896-7d62-a834-ba1951fdcea2",
+  "component": {
+    "selected_range": {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "end_token": 4611686018427387904,
+      "epoch": 2,
+      "id": 1,
+      "leader": "n1",
+      "placement": {
+        "distinct_failure_domains": [],
+        "required_node_labels": {}
+      },
+      "replicas": [
+        {
+          "id": 5,
+          "node_id": "n1",
+          "role": "voter"
+        },
+        {
+          "id": 9,
+          "node_id": "n2",
+          "role": "voter"
+        },
+        {
+          "id": 13,
+          "node_id": "n3",
+          "role": "voter"
+        },
+        {
+          "id": 14,
+          "node_id": "n4",
+          "role": "learner"
+        }
+      ],
+      "start_token": 0
+    },
+    "other_range": {
+      "approximate_bytes": 0,
+      "approximate_qps": 0,
+      "end_token": 9223372036854775808,
+      "epoch": 1,
+      "id": 2,
+      "leader": "n2",
+      "placement": {
+        "distinct_failure_domains": [],
+        "required_node_labels": {}
+      },
+      "replicas": [
+        {
+          "id": 2,
+          "node_id": "n0",
+          "role": "voter"
+        },
+        {
+          "id": 6,
+          "node_id": "n2",
+          "role": "voter"
+        },
+        {
+          "id": 10,
+          "node_id": "n3",
+          "role": "voter"
+        }
+      ],
+      "start_token": 4611686018427387904
+    },
+    "source_donor": "n2",
+    "target": "n4",
+    "remaining_request_us_at_hold": 1446644,
+    "held_before_and_after_all3_calls": true,
+    "three_inside_calls_elapsed_us": [
+      266954,
+      310869,
+      294897
+    ],
+    "hold_release_resumed_without_expiry": true,
+    "actual_frame_original_scope_validated": true,
+    "original_manifest_prefix_preserved": true
+  },
+  "APP_ledger": {
+    "original_actual_APP_ACKs": 2,
+    "inside_hold_fresh_APP_ACKs": 1,
+    "Strong_full_value_returns": 4,
+    "uncertain_logical_APP_returns": 0,
+    "failed_logical_API_returns": 0,
+    "external_to_engine_but_same_process_host_file": true,
+    "no_independent_fault_ledger_RPO_claim": true
+  },
+  "wire": {
+    "actual_records": 28,
+    "actual_attempts": 7,
+    "recorded_app_requests": 3,
+    "recorded_strong_requests": 4,
+    "recorded_refresh_or_retry_requests": 0,
+    "actual_error_or_404_responses": 0,
+    "requests": [
+      {
+        "attempt_id": "01a1d7fd-fcd8-7fd1-bd7e-e4ef880b710e",
+        "wire_request_id": 1,
+        "operation": "append",
+        "key": "registered-fifth-ack-r1-8",
+        "actual_destination": "n1",
+        "actual_range": 1,
+        "actual_epoch": 1,
+        "actual_sdk_cached_topology_generation": 4,
+        "actual_strong_response_route": null,
+        "actual_strong_audit": null,
+        "wire_response_ok": true,
+        "payload_sha256": "a4123271a05a418aaccc67d998660f949209258545268e1f7573501ee0231555"
+      },
+      {
+        "attempt_id": "01a1d7fd-fde7-73c0-90fe-6d4924cc88d4",
+        "wire_request_id": 2,
+        "operation": "append",
+        "key": "registered-fifth-ack-r2-0",
+        "actual_destination": "n2",
+        "actual_range": 2,
+        "actual_epoch": 1,
+        "actual_sdk_cached_topology_generation": 4,
+        "actual_strong_response_route": null,
+        "actual_strong_audit": null,
+        "wire_response_ok": true,
+        "payload_sha256": "392cbf7c149065bb0e1c9d2cc7684c0c45b9ed228b5649e51e265629fe05b6a7"
+      },
+      {
+        "attempt_id": "01a1d7fe-0096-7610-800d-34205c4d5518",
+        "wire_request_id": 3,
+        "operation": "strong",
+        "key": "registered-fifth-ack-r2-0",
+        "actual_destination": "n2",
+        "actual_range": 2,
+        "actual_epoch": 1,
+        "actual_sdk_cached_topology_generation": 4,
+        "actual_strong_response_route": {
+          "generation": 5,
+          "range_id": 2,
+          "range_epoch": 1,
+          "leader": "n2"
+        },
+        "actual_strong_audit": {
+          "business_request_id": "01a1d7fe-0096-7610-800d-3403a0f2de92",
+          "challenge": "01a1d7fe-0096-7610-800d-341f2b103c16",
+          "range_id": 2,
+          "range_epoch": 1,
+          "range_index": 1,
+          "logical_genesis_sha256": "fdbe7f65e48668af5f1bc11280b3764adba0127089d9b6aee9980da19f114d48",
+          "logical_history_sha256": "a8d001e2ff3981473333657e93977608bb2ec87796b67ab20e3a3e6ce031f0ef",
+          "target_local_visibility_db_sequence": 2,
+          "snapshot_sequence": 2,
+          "first_metadata_context_id": "01a1d7fe-00ad-7aa2-9497-cc0e9b40d561",
+          "final_metadata_context_id": "01a1d7fe-014f-7f80-aa92-c166a422864e",
+          "final_metadata_generation": 5,
+          "final_metadata_term": 1,
+          "final_metadata_read_index": 5
+        },
+        "wire_response_ok": true,
+        "payload_sha256": "392cbf7c149065bb0e1c9d2cc7684c0c45b9ed228b5649e51e265629fe05b6a7"
+      },
+      {
+        "attempt_id": "01a1d7fe-1b47-7690-8081-f5a5d4e28dd3",
+        "wire_request_id": 4,
+        "operation": "strong",
+        "key": "registered-fifth-ack-r2-0",
+        "actual_destination": "n2",
+        "actual_range": 2,
+        "actual_epoch": 1,
+        "actual_sdk_cached_topology_generation": 4,
+        "actual_strong_response_route": {
+          "generation": 5,
+          "range_id": 2,
+          "range_epoch": 1,
+          "leader": "n2"
+        },
+        "actual_strong_audit": {
+          "business_request_id": "01a1d7fe-1b47-7690-8081-f5898ed5c4cc",
+          "challenge": "01a1d7fe-1b47-7690-8081-f59c071b5af2",
+          "range_id": 2,
+          "range_epoch": 1,
+          "range_index": 1,
+          "logical_genesis_sha256": "fdbe7f65e48668af5f1bc11280b3764adba0127089d9b6aee9980da19f114d48",
+          "logical_history_sha256": "a8d001e2ff3981473333657e93977608bb2ec87796b67ab20e3a3e6ce031f0ef",
+          "target_local_visibility_db_sequence": 2,
+          "snapshot_sequence": 2,
+          "first_metadata_context_id": "01a1d7fe-1b60-7082-880e-9b7d5c4ac2bc",
+          "final_metadata_context_id": "01a1d7fe-1c04-76a3-ae19-0ad453856f5c",
+          "final_metadata_generation": 5,
+          "final_metadata_term": 1,
+          "final_metadata_read_index": 5
+        },
+        "wire_response_ok": true,
+        "payload_sha256": "392cbf7c149065bb0e1c9d2cc7684c0c45b9ed228b5649e51e265629fe05b6a7"
+      },
+      {
+        "attempt_id": "01a1d7fe-1c54-7261-8925-86d9214b1f63",
+        "wire_request_id": 5,
+        "operation": "append",
+        "key": "two-range-source-stall-6",
+        "actual_destination": "n2",
+        "actual_range": 2,
+        "actual_epoch": 1,
+        "actual_sdk_cached_topology_generation": 4,
+        "actual_strong_response_route": null,
+        "actual_strong_audit": null,
+        "wire_response_ok": true,
+        "payload_sha256": "222e0910059d42d1a36e723ad2f12146edf7395111f4990c9b99980218604c74"
+      },
+      {
+        "attempt_id": "01a1d7fe-1d8d-77c3-a6a1-c4453ff750cf",
+        "wire_request_id": 6,
+        "operation": "strong",
+        "key": "two-range-source-stall-6",
+        "actual_destination": "n2",
+        "actual_range": 2,
+        "actual_epoch": 1,
+        "actual_sdk_cached_topology_generation": 4,
+        "actual_strong_response_route": {
+          "generation": 5,
+          "range_id": 2,
+          "range_epoch": 1,
+          "leader": "n2"
+        },
+        "actual_strong_audit": {
+          "business_request_id": "01a1d7fe-1d8d-77c3-a6a1-c42b26312ebb",
+          "challenge": "01a1d7fe-1d8d-77c3-a6a1-c43685570de8",
+          "range_id": 2,
+          "range_epoch": 1,
+          "range_index": 2,
+          "logical_genesis_sha256": "fdbe7f65e48668af5f1bc11280b3764adba0127089d9b6aee9980da19f114d48",
+          "logical_history_sha256": "c40bed82b6230546dc09e0dae521dfe1a7350f27329f053b80ef815fbde78ecc",
+          "target_local_visibility_db_sequence": 3,
+          "snapshot_sequence": 3,
+          "first_metadata_context_id": "01a1d7fe-1da2-7c32-b0e1-f9bef70a6662",
+          "final_metadata_context_id": "01a1d7fe-1e58-7e63-8603-e919c01c78a9",
+          "final_metadata_generation": 5,
+          "final_metadata_term": 1,
+          "final_metadata_read_index": 5
+        },
+        "wire_response_ok": true,
+        "payload_sha256": "222e0910059d42d1a36e723ad2f12146edf7395111f4990c9b99980218604c74"
+      },
+      {
+        "attempt_id": "01a1d7fe-1eb9-7693-8f8d-8de8c8a125b3",
+        "wire_request_id": 7,
+        "operation": "strong",
+        "key": "two-range-source-stall-6",
+        "actual_destination": "n2",
+        "actual_range": 2,
+        "actual_epoch": 1,
+        "actual_sdk_cached_topology_generation": 4,
+        "actual_strong_response_route": {
+          "generation": 5,
+          "range_id": 2,
+          "range_epoch": 1,
+          "leader": "n2"
+        },
+        "actual_strong_audit": {
+          "business_request_id": "01a1d7fe-1eb9-7693-8f8d-8dced43148bc",
+          "challenge": "01a1d7fe-1eb9-7693-8f8d-8dd17af7d480",
+          "range_id": 2,
+          "range_epoch": 1,
+          "range_index": 2,
+          "logical_genesis_sha256": "fdbe7f65e48668af5f1bc11280b3764adba0127089d9b6aee9980da19f114d48",
+          "logical_history_sha256": "c40bed82b6230546dc09e0dae521dfe1a7350f27329f053b80ef815fbde78ecc",
+          "target_local_visibility_db_sequence": 3,
+          "snapshot_sequence": 3,
+          "first_metadata_context_id": "01a1d7fe-1ed1-71e1-b813-8f728d3d6e8e",
+          "final_metadata_context_id": "01a1d7fe-1f92-79a2-8126-baaa7f956be5",
+          "final_metadata_generation": 5,
+          "final_metadata_term": 1,
+          "final_metadata_read_index": 5
+        },
+        "wire_response_ok": true,
+        "payload_sha256": "222e0910059d42d1a36e723ad2f12146edf7395111f4990c9b99980218604c74"
+      }
+    ],
+    "snapshot_scope": "contiguous complete retained28records; not global network/background quiescence proof; native phase RPCs outside SDK observer"
+  },
+  "source_frame_logical_journal": {
+    "prefix_entries": 5,
+    "total_entries": 6,
+    "original_manifest_and_one_rows_retained": true,
+    "request_scope_same_mf_A_session": true,
+    "native_MQ_internal_RPC_frames_not_all_in_this_log": true
+  },
+  "pressure": [
+    {
+      "run": 43547094599,
+      "artifact": 14094414929,
+      "member": "helper-pressure.jsonl",
+      "sample_count": 238,
+      "min_sampled_MemAvailable": 11340984320,
+      "completed": {
+        "child_returncode": 0,
+        "elapsed_seconds": 476.10049324400006,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 0,
+        "omitted_sample_records": 0
+      },
+      "scope": "build/check/list only; not runtime/cgroup/OOM/disk qualification"
+    },
+    {
+      "run": 43547094599,
+      "artifact": 14094414929,
+      "member": "list-pressure.jsonl",
+      "sample_count": 20,
+      "min_sampled_MemAvailable": 11962998784,
+      "completed": {
+        "child_returncode": 101,
+        "elapsed_seconds": 40.00858334999998,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 101,
+        "omitted_sample_records": 0
+      },
+      "scope": "build/check/list only; not runtime/cgroup/OOM/disk qualification"
+    },
+    {
+      "run": 43547094599,
+      "artifact": 14094194341,
+      "member": "alltargets.jsonl",
+      "sample_count": 102,
+      "min_sampled_MemAvailable": 11699400704,
+      "completed": {
+        "child_returncode": 101,
+        "elapsed_seconds": 204.04574504299998,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 101,
+        "omitted_sample_records": 0
+      },
+      "scope": "build/check/list only; not runtime/cgroup/OOM/disk qualification"
+    },
+    {
+      "run": 43548089992,
+      "artifact": 14095447597,
+      "member": "helper-pressure.jsonl",
+      "sample_count": 295,
+      "min_sampled_MemAvailable": 11723968512,
+      "completed": {
+        "child_returncode": 0,
+        "elapsed_seconds": 590.134342293,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 0,
+        "omitted_sample_records": 0
+      },
+      "scope": "build/check/list only; not runtime/cgroup/OOM/disk qualification"
+    },
+    {
+      "run": 43548089992,
+      "artifact": 14095447597,
+      "member": "inventory-pressure.jsonl",
+      "sample_count": 1,
+      "min_sampled_MemAvailable": 15366922240,
+      "completed": {
+        "child_returncode": 0,
+        "elapsed_seconds": 2.0008999650000305,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 0,
+        "omitted_sample_records": 0
+      },
+      "scope": "build/check/list only; not runtime/cgroup/OOM/disk qualification"
+    },
+    {
+      "run": 43548089992,
+      "artifact": 14095447597,
+      "member": "list-pressure.jsonl",
+      "sample_count": 57,
+      "min_sampled_MemAvailable": 10849107968,
+      "completed": {
+        "child_returncode": 0,
+        "elapsed_seconds": 114.02651868800001,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 0,
+        "omitted_sample_records": 0
+      },
+      "scope": "build/check/list only; not runtime/cgroup/OOM/disk qualification"
+    },
+    {
+      "run": 43548089992,
+      "artifact": 14095127454,
+      "member": "alltargets.jsonl",
+      "sample_count": 113,
+      "min_sampled_MemAvailable": 11681538048,
+      "completed": {
+        "child_returncode": 0,
+        "elapsed_seconds": 226.049222225,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 0,
+        "omitted_sample_records": 0
+      },
+      "scope": "build/check/list only; not runtime/cgroup/OOM/disk qualification"
+    },
+    {
+      "run": 43548089992,
+      "artifact": 14095127454,
+      "member": "consumer.jsonl",
+      "sample_count": 14,
+      "min_sampled_MemAvailable": 13217890304,
+      "completed": {
+        "child_returncode": 0,
+        "elapsed_seconds": 28.005850315999965,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 0,
+        "omitted_sample_records": 0
+      },
+      "scope": "build/check/list only; not runtime/cgroup/OOM/disk qualification"
+    }
+  ],
+  "old_compile_failed_run": 43547094599,
+  "old_E0603_scope": "both jobs compilefailed0tests; selected1/whole83notlisted there",
+  "engine_opened": false,
+  "new_dispatches": 1,
+  "cancellations_or_retries_by_capture": 0,
+  "source_rows_batch": {
+    "physical_collection": "__bic_cluster_events",
+    "SDK_logical_namespace": "items",
+    "actual_range_id": 1,
+    "actual_batch_epoch": 2,
+    "records": 1,
+    "record_id": "items/registered-fifth-ack-r1-8",
+    "payload_sha256": "a4123271a05a418aaccc67d998660f949209258545268e1f7573501ee0231555",
+    "snapshot_sequence": 2,
+    "Rows_stream_complete": false,
+    "scope": "one actual selected batch exported before hold; no Finish/full-range receive or target installation"
+  }
+}

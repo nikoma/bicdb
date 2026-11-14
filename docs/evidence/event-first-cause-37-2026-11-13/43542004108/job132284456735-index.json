@@ -1,0 +1,189 @@
+{
+  "source": "521243e597c2d833be840773acac728a85161969",
+  "run": 43542004108,
+  "job": {
+    "id": 132284456735,
+    "run_id": 43542004108,
+    "workflow_name": "tests",
+    "head_branch": "qual/event-first-cause-cd366",
+    "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43542004108",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOUimcAs8AAAAezMSfHw",
+    "head_sha": "521243e597c2d833be840773acac728a85161969",
+    "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132284456735",
+    "html_url": "https://github.com/nikoma/bicdb/actions/runs/43542004108/job/132284456735",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-11-14T01:40:37Z",
+    "started_at": "2026-11-14T01:40:39Z",
+    "completed_at": "2026-11-14T01:44:00Z",
+    "name": "Community-only workspace compiles, tests included",
+    "steps": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 1,
+        "started_at": "2026-11-14T01:40:40Z",
+        "completed_at": "2026-11-14T01:40:41Z"
+      },
+      {
+        "name": "Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 2,
+        "started_at": "2026-11-14T01:40:41Z",
+        "completed_at": "2026-11-14T01:40:49Z"
+      },
+      {
+        "name": "Run dtolnay/rust-toolchain@stable",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 3,
+        "started_at": "2026-11-14T01:40:49Z",
+        "completed_at": "2026-11-14T01:40:58Z"
+      },
+      {
+        "name": "Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 4,
+        "started_at": "2026-11-14T01:40:58Z",
+        "completed_at": "2026-11-14T01:41:16Z"
+      },
+      {
+        "name": "cargo check --workspace --all-targets",
+        "status": "completed",
+        "conclusion": "failure",
+        "number": 5,
+        "started_at": "2026-11-14T01:41:16Z",
+        "completed_at": "2026-11-14T01:43:56Z"
+      },
+      {
+        "name": "Workflow consumer compiles without Core defaults",
+        "status": "completed",
+        "conclusion": "skipped",
+        "number": 6,
+        "started_at": "2026-11-14T01:43:56Z",
+        "completed_at": "2026-11-14T01:43:56Z"
+      },
+      {
+        "name": "Retain qualification build pressure and interruption evidence",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 7,
+        "started_at": "2026-11-14T01:43:56Z",
+        "completed_at": "2026-11-14T01:43:57Z"
+      },
+      {
+        "name": "Post Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "skipped",
+        "number": 13,
+        "started_at": "2026-11-14T01:43:57Z",
+        "completed_at": "2026-11-14T01:43:57Z"
+      },
+      {
+        "name": "Post Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 14,
+        "started_at": "2026-11-14T01:43:57Z",
+        "completed_at": "2026-11-14T01:43:57Z"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 15,
+        "started_at": "2026-11-14T01:43:57Z",
+        "completed_at": "2026-11-14T01:43:57Z"
+      }
+    ],
+    "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132284456735",
+    "labels": [
+      "ubuntu-latest"
+    ],
+    "runner_id": 1000024941,
+    "runner_name": "GitHub Actions 1000024941",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  },
+  "raw_bytes": 1091492,
+  "raw_sha256": "8d308fcababe3b60efa890550141bec14911e90b1d06f4a968ece3e5fc974da6",
+  "gzip_sha256": "90a43f6bc1b9082a0d6a09716da893f40c6752542e6f0da5c749e8579bc0b413",
+  "summaries": [],
+  "failure_lines": [
+    {
+      "line": 11332,
+      "text": "2026-11-14T01:43:36.1379295Z error[E0308]: mismatched types"
+    },
+    {
+      "line": 11341,
+      "text": "2026-11-14T01:43:36.1401388Z error[E0308]: mismatched types"
+    },
+    {
+      "line": 11516,
+      "text": "2026-11-14T01:43:56.7603933Z ##[error]Process completed with exit code 101."
+    }
+  ],
+  "failure_contexts": [
+    {
+      "line": 11332,
+      "remaining": 1,
+      "lines": [
+        "2026-11-14T01:43:22.2056186Z    |                                                       ^^^^^^^^^^^^^^^^^^^^^",
+        "2026-11-14T01:43:22.2056387Z",
+        "2026-11-14T01:43:36.1379295Z error[E0308]: mismatched types",
+        "2026-11-14T01:43:36.1380308Z    --> crates/bicdb-core/src/distribution_transport/evidence/tests/first_cause_tests.rs:171:30",
+        "2026-11-14T01:43:36.1380992Z     |",
+        "2026-11-14T01:43:36.1381473Z 171 |     for result in [&primary, &before_dispatched_peer] {",
+        "2026-11-14T01:43:36.1382489Z     |                              ^^^^^^^^^^^^^^^^^^^^^^^ expected `&Result<ClusterDataResponse, BicDbError>`, found `&Result<(), BicDbError>`",
+        "2026-11-14T01:43:36.1383270Z     |",
+        "2026-11-14T01:43:36.1384526Z     = note: expected reference `&std::result::Result<distribution_transport::ClusterDataResponse, _>`",
+        "2026-11-14T01:43:36.1385322Z                found reference `&std::result::Result<(), _>`",
+        "2026-11-14T01:43:36.1385626Z",
+        "2026-11-14T01:43:36.1401388Z error[E0308]: mismatched types"
+      ]
+    },
+    {
+      "line": 11341,
+      "remaining": 0,
+      "lines": [
+        "2026-11-14T01:43:36.1385322Z                found reference `&std::result::Result<(), _>`",
+        "2026-11-14T01:43:36.1385626Z",
+        "2026-11-14T01:43:36.1401388Z error[E0308]: mismatched types",
+        "2026-11-14T01:43:36.1401971Z    --> crates/bicdb-core/src/distribution_transport/evidence/tests/first_cause_tests.rs:177:35",
+        "2026-11-14T01:43:36.1402383Z     |",
+        "2026-11-14T01:43:36.1402732Z 177 |     for result in [&first_result, &after_dispatched_peer] {",
+        "2026-11-14T01:43:36.1403411Z     |                                   ^^^^^^^^^^^^^^^^^^^^^^ expected `&Result<ClusterDataResponse, BicDbError>`, found `&Result<(), BicDbError>`",
+        "2026-11-14T01:43:36.1403914Z     |",
+        "2026-11-14T01:43:36.1404491Z     = note: expected reference `&std::result::Result<distribution_transport::ClusterDataResponse, _>`",
+        "2026-11-14T01:43:36.1405051Z                found reference `&std::result::Result<(), _>`",
+        "2026-11-14T01:43:36.1405264Z",
+        "2026-11-14T01:43:39.3448003Z warning: variable does not need to be mutable",
+        "2026-11-14T01:43:39.3448622Z     --> crates/bicdb-core/src/broker.rs:2624:13"
+      ]
+    },
+    {
+      "line": 11516,
+      "remaining": 0,
+      "lines": [
+        "2026-11-14T01:43:55.1268702Z error: could not compile `bicdb-core` (lib test) due to 2 previous errors; 64 warnings emitted",
+        "2026-11-14T01:43:56.7539643Z OWNED_BUILD_GROUP_CLEANED pid=2311 returncode=101",
+        "2026-11-14T01:43:56.7603933Z ##[error]Process completed with exit code 101.",
+        "2026-11-14T01:43:56.7663928Z ##[group]Run actions/upload-artifact@v4",
+        "2026-11-14T01:43:56.7664177Z with:",
+        "2026-11-14T01:43:56.7664482Z   name: native-workspace-pressure-521243e597c2d833be840773acac728a85161969-1",
+        "2026-11-14T01:43:56.7664829Z   retention-days: 3",
+        "2026-11-14T01:43:56.7665026Z   if-no-files-found: warn",
+        "2026-11-14T01:43:56.7665288Z   path: /home/runner/work/_temp/native-workspace-pressure/",
+        "2026-11-14T01:43:56.7665576Z   compression-level: 6",
+        "2026-11-14T01:43:56.7665764Z   overwrite: false",
+        "2026-11-14T01:43:56.7665950Z   include-hidden-files: false",
+        "2026-11-14T01:43:56.7666146Z env:"
+      ]
+    }
+  ],
+  "observed_test_start_lines": []
+}

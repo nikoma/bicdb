@@ -15,14 +15,7 @@ fn archive(attempt: Uuid, xid: u64) -> String {
 fn is_digest(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
-/// Integrity DATA only. It cannot construct an actual scope/lease/receipt.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct NativeJoinedRemoteProposalPointer {
-    pub attempt_id: Uuid,
-    pub native_page_xid: u64,
-    pub checksum_sha256: String,
-}
+pub(crate) use crate::distribution_range_consensus::NativeJoinedRemoteProposalPointer;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct JoinedProposalV2 {
@@ -107,6 +100,21 @@ pub(crate) struct NativeJoinedRemoteProposalReceipt {
     record: JoinedProposalV2,
 }
 impl NativeJoinedRemoteProposalReceipt {
+    pub(crate) fn source_manifest(&self) -> &NativeRemoteImageManifestV1 {
+        &self.record.source
+    }
+    pub(crate) fn intent_bytes(&self) -> &[u8] {
+        &self.record.intent_bytes
+    }
+    pub(crate) fn intent_sha256(&self) -> &str {
+        &self.record.intent_sha256
+    }
+    pub(crate) fn native_preimage_sha256(&self) -> &str {
+        &self.record.selected_native_preimage_sha256
+    }
+    pub(crate) fn catalogue_preimage_sha256(&self) -> &str {
+        &self.record.selected_catalogue_preimage_sha256
+    }
     pub(crate) fn pointer(&self) -> NativeJoinedRemoteProposalPointer {
         self.record.pointer()
     }
@@ -309,7 +317,7 @@ impl BicDb {
         scope: &NativeJoinedRemoteAttemptScope<'_>,
         pointer: &NativeJoinedRemoteProposalPointer,
     ) -> Result<NativeJoinedRemoteProposalReceipt> {
-        scope.require_initial_preimage(self, store)?;
+        scope.require_store_identity(self, store)?;
         if !crate::format::native_joined_remote_receive_active(self.data_path())? {
             return Err(invalid("Joined proposal sticky v2 reader fence absent"));
         }
@@ -350,7 +358,7 @@ impl BicDb {
                 "Joined exact original native xid not proven committed; retain uncertainty",
             ));
         }
-        scope.require_initial_preimage(self, store)?;
+        scope.require_store_identity(self, store)?;
         Ok(NativeJoinedRemoteProposalReceipt { record })
     }
 }

@@ -45,3 +45,30 @@ during local native I/O. This is not evidence that an unrelated range can
 continue through stalled disk I/O. The existing after-export transport-stall
 component and the still-open complete second-movement acceptance remain
 separate.
+
+## Selected Installing successor
+
+The successor adds a distinct Joined pointer to ImageInstallIntent and catalogue
+format 18. Format 17 still requires the Registered FIRST pointer; mixed pointer
+provenance is rejected. Joined requires its own sticky reader feature before
+catalogue persistence, and the generic native-image fence refuses this Joined
+intent. A DTO cannot reconstruct the distinct opaque Installing fence.
+
+The dedicated Installing sink constructs its first full candidate from current
+Store state after selected-preimage checks. It retains original/candidate/exact
+bytes before I/O. Failure keeps that same candidate and uncertainty; retry
+refuses to overwrite different later state. Once an actual durable readback is
+verified, the fence checks the selected intent against current memory and disk,
+so it does not compare unrelated R1 progress to an obsolete full snapshot.
+
+A separate original-owner check allows the same pending candidate to reach its
+real re-fsync despite uncertain catalogue custody. It grants no row mutation.
+The durable proof clears uncertainty only after real fsync, readback and fresh
+request/postchecks; native proposal evidence alone does not clear it.
+
+There is a source-defined integrity DTO control for format-17 refusal and mixed
+pointer provenance. It has not run and constructs no live native authority.
+Actual unrelated-R1 progress, failed persistence/same-candidate recovery, and
+unchanged original native xid require the later genuine host/row fixture.
+The production sink exists as source, but there is still no complete host row,
+base/catalogue/activation path or executed additional-range result.

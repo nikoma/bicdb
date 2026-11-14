@@ -186,10 +186,8 @@ impl NativeJoinedRemoteInstallPreflight {
             let db = database
                 .try_read()
                 .ok_or_else(|| invalid("Joined attempt actual DB busy"))?;
-            service.with_writer_data_domain_store(&db, |store| {
-                db.with_joined_remote_attempt_scope(store, self, request, frame, lease, |scope| {
-                    operation(&db, store, scope)
-                })
+            db.with_joined_remote_attempt_scope(self, request, frame, lease, |scope| {
+                service.with_writer_data_domain_store(&db, |store| operation(&db, store, scope))
             })
         };
         let post = self

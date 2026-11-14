@@ -75,9 +75,15 @@ impl NativeJoinedRemoteAttemptScope<'_> {
             .require_current_memory()?;
         self.preflight.require_request(self.request, self.frame)
     }
-    pub(crate) fn require_store(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
+    /// Exact actual owners only. A retained catalogue continuation separately
+    /// proves/refsyncs its own original candidate before clearing uncertainty.
+    pub(crate) fn require_store_identity(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
         self.require_database(db)?;
         self.preflight.require_original_writer(db, store)?;
+        self.require_database(db)
+    }
+    pub(crate) fn require_store(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
+        self.require_store_identity(db, store)?;
         db.require_native_writer_catalogue_custody(store)?;
         self.require_database(db)
     }
@@ -114,7 +120,6 @@ impl BicDb {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn with_joined_remote_attempt_scope<'a, R>(
         &'a self,
-        store: &'a RangeWriteStore,
         preflight: &'a Arc<NativeJoinedRemoteInstallPreflight>,
         request: &'a NativeJoinedRangeReceiveRequest,
         frame: &'a NativeRemoteImageStep<'a>,
@@ -137,9 +142,9 @@ impl BicDb {
                 .ok_or_else(|| invalid("Joined native attempt original hook busy"))?,
             journal: self.try_native_image_journal()?,
         };
-        scope.require_store(self, store)?;
+        scope.require_database(self)?;
         let result = operation(&scope);
-        let post = scope.require_store(self, store);
+        let post = scope.require_database(self);
         match result {
             Err(primary) => {
                 let _ = post;

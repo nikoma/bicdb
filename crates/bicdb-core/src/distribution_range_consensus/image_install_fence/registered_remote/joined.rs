@@ -180,6 +180,7 @@ impl RangeWriteStore {
             schema_sha256: binding.schema_sha256().to_string(),
             protected_proposal: None,
             registered_proposal: None,
+            joined_proposal: None,
         };
         intent.validate()?;
         target.require_at_storage_point(db, self, request, scope)?;

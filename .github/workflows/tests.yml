@@ -109,11 +109,19 @@ jobs:
       # --all-targets is the point: `cargo build` alone would not have caught
       # bicdb-sql's unit tests failing to compile against a changed signature.
       - name: cargo check --workspace --all-targets
-        run: cargo check --workspace --all-targets --locked
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-workspace-pressure/alltargets.jsonl" -- cargo check --workspace --all-targets --locked
       # Workspace feature unification enables TLS in Core. Check this actual
       # consumer separately so TLS-only APIs cannot leak into its Core build.
       - name: Workflow consumer compiles without Core defaults
-        run: cargo check -p bicdb-workflow --all-targets --locked
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-workspace-pressure/consumer.jsonl" -- cargo check -p bicdb-workflow --all-targets --locked
+      - name: Retain qualification build pressure and interruption evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-workspace-pressure-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/native-workspace-pressure/
 
   fmt:
     name: Formatting
@@ -269,8 +277,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Build projection chaos helper
-        run: cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
+      - name: Record unused projection helper exclusion
+        run: |
+          mkdir -p "$RUNNER_TEMP/native-core-evidence"
+          echo 'Projection chaos helper NOT BUILT: selected invariant memo controls do not call it.' > "$RUNNER_TEMP/native-core-evidence/helper-not-built.txt"
       - name: Record source and list selected Core library tests
         shell: bash
         run: |
@@ -280,25 +290,32 @@ jobs:
           esac
           mkdir -p "$RUNNER_TEMP/native-core-evidence"
           git rev-parse HEAD > "$RUNNER_TEMP/native-core-evidence/source-revision.txt"
+          git show --no-patch --format=fuller HEAD > "$RUNNER_TEMP/native-core-evidence/source-commit.txt"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/native-core-evidence/tracked-source.tar.gz" HEAD
+          git rev-parse HEAD:crates/bicdb-core > "$RUNNER_TEMP/native-core-evidence/core-tree.txt"
           rustc --version --verbose > "$RUNNER_TEMP/native-core-evidence/rustc.txt"
-          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --list \
+          python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-core-evidence/list-pressure.jsonl" -- \
+            cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --list \
             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/selected-tests.log"
           python3 - <<'PY'
           import os, pathlib
           path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'native-core-evidence' / 'selected-tests.log'
           count = sum(line.endswith(': test') for line in path.read_text().splitlines())
-          if count == 0:
-              raise SystemExit('The requested Core filter selected no tests')
+          expected = ['db::invariant_relation_snapshot_tests::raw_invariant_active_memo_refuses_late_raw_issuance_without_waiting', 'db::invariant_relation_snapshot_tests::raw_invariant_escaped_store_arc_blocks_fresh_open_until_last_writer_drops', 'db::invariant_relation_snapshot_tests::raw_invariant_escaped_writer_forces_fresh_complete_scans_and_never_resets', 'db::invariant_relation_snapshot_tests::raw_invariant_memo_cap_falls_back_without_truncation_or_new_memory_refusal', 'db::invariant_relation_snapshot_tests::raw_invariant_memo_combined_cap_falls_back_and_counts_each_arc_body_once', 'db::invariant_relation_snapshot_tests::raw_invariant_memo_hit_preserves_expired_scope_and_existing_memory_failure', 'db::invariant_relation_snapshot_tests::raw_invariant_memo_preserves_all_roots_and_original_transaction_overlay', 'db::invariant_relation_snapshot_tests::raw_invariant_memo_requires_same_database_exclusive_and_serializable', 'db::invariant_relation_snapshot_tests::raw_invariant_memo_without_active_budget_still_has_bounded_retention', 'db::invariant_relation_snapshot_tests::raw_invariant_reentrant_admission_getter_refuses_without_deadlocking']
+          actual = [line[:-6] for line in path.read_text().splitlines() if line.endswith(': test')]
+          if count != 10 or sorted(actual) != expected:
+              raise SystemExit('Qualification requires all ten original invariant memo controls with unchanged assertions')
           print(f'Selected {count} Core library tests; ignored tests remain identified by the execution result')
           PY
-      - name: Execute selected Core library tests
+      - name: Execute all ten invariant memo controls serially
         shell: bash
         run: |
           set -euo pipefail
           export BICDB_TEST_EVIDENCE_ROOT="$RUNNER_TEMP/native-core-evidence/fault-state"
           export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
           mkdir -p "$BICDB_TEST_EVIDENCE_ROOT"
-          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=4 --show-output \
+          python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-core-evidence/tests-pressure.jsonl" -- \
+            cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=1 --show-output \
             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/tests.log"
       - name: Retain focused source, log and opted-in fault-state evidence
         if: always()

@@ -12,9 +12,11 @@ use crate::distribution_range_image::{
 use crate::distribution_transport::AuthenticatedNativeRemoteImageSourceFrame;
 mod source_discovery_tests;
 mod source_export_retirement_tests;
+pub(super) mod two_range_stall_tests;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum SourceCase {
+    TwoRangeSourceReplyStall,
     TargetSourceExportRetire,
     TargetSourceExportReplyLost,
     TargetSourceExportStartReplyLost,
@@ -101,6 +103,7 @@ pub(super) enum SourceCase {
 }
 pub(super) fn uses_original_sdk_rpc_observer(case: SourceCase) -> bool {
     hot_policy_tests::is_hot_policy(case)
+        || matches!(case, SourceCase::TwoRangeSourceReplyStall)
         || matches!(
             case,
             SourceCase::SourceDiscovery

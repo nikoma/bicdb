@@ -201,6 +201,11 @@ fn run_registered_image_baseline_with_placement_and_source(
     source_case: Option<remote_source_tests::SourceCase>,
 ) {
     let hot_policy = source_case.is_some_and(remote_source_tests::hot_policy_tests::is_hot_policy);
+    let two_range_stall = matches!(
+        source_case,
+        Some(remote_source_tests::SourceCase::TwoRangeSourceReplyStall)
+    );
+    let single_range_move = hot_policy || two_range_stall;
     let mut f = EnrollmentFixture::new();
     let (factory, mut host) = f.factory("actual-registered-fifth-image-target");
     assert!(factory.spec.initial_ranges.is_empty());
@@ -458,7 +463,7 @@ fn run_registered_image_baseline_with_placement_and_source(
             Some(plan) => placement_cases::pending(&current, &ranges, plan),
             None => assign_two_ranges(&current, &ranges),
         };
-        if hot_policy {
+        if single_range_move {
             // This new component gate moves ONLY the selected first range.
             // Both original ACKs still exist; the second descriptor remains
             // populated on its original nodes and Unknown on the target.
@@ -560,7 +565,7 @@ fn run_registered_image_baseline_with_placement_and_source(
             assert!(point["native_applied_index"].is_null());
         }
         let mut succeeded = 0;
-        for original in ranges.iter().take(if hot_policy { 1 } else { 2 }) {
+        for original in ranges.iter().take(if single_range_move { 1 } else { 2 }) {
             for (i, guard) in original_writers.iter().enumerate() {
                 assert!(Arc::ptr_eq(
                     guard,
@@ -789,8 +794,23 @@ fn run_registered_image_baseline_with_placement_and_source(
             );
         }
         phase = "required_fence_acceptance";
-        assert_eq!(succeeded,if hot_policy {1} else {2},"REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute");
-        if hot_policy {
+        assert_eq!(succeeded,if single_range_move {1} else {2},"REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute");
+        if two_range_stall {
+            phase = "selected_actual_rows_transport_stall_other_populated_range_progress";
+            remote_source_tests::two_range_stall_tests::exercise(
+                &controls,
+                &clients,
+                &services,
+                &metadata,
+                &target_transport,
+                &pending,
+                &ranges,
+                &ledger,
+                &gateway,
+                &output,
+                &token,
+            );
+        } else if hot_policy {
             phase = "actual_remote_original_a_through_first_policy_component";
             remote_source_tests::hot_policy_tests::exercise(
                 source_case.unwrap(),

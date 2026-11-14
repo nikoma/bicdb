@@ -363,3 +363,5 @@ impl NativeProvisionalHost {
         Ok(())
     }
 }
+
+pub(crate) use registration::{NativeJoinedRemoteImagePoint, NativeJoinedRemoteTransactionRequest};

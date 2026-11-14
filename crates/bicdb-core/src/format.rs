@@ -81,7 +81,11 @@ pub const NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG: &str = "native_registere
 /// Existing-Joined selected native proposal/import semantics. Old readers
 /// must refuse even though Registered FIRST v1 remains independently valid.
 pub const NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG: &str = "native_joined_remote_receive_v2";
+/// Additional Joined history/row projection; must include the SAME strict
+/// pending-WAL index reader before the first intent can reach native WAL.
+pub const NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG: &str = "native_joined_remote_image_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG,
     NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG,
     SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG,
     NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG,
@@ -1969,4 +1973,52 @@ pub(crate) fn native_joined_remote_receive_active(root: &Path) -> Result<bool> {
     Ok(metadata
         .feature_flags
         .contains(NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG))
+}
+
+pub(crate) fn enable_native_joined_remote_image(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG)
+    {
+        return Err(BicDbError::FormatCompatibility(
+            "Joined rows require actual v2 proposal reader fence".into(),
+        ));
+    }
+    if metadata
+        .feature_flags
+        .contains(NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG)
+        && !metadata
+            .feature_flags
+            .contains(NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG)
+    {
+        return Err(BicDbError::FormatCompatibility(
+            "unindexed Joined image prototype requires explicit recovery".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG.into());
+    metadata
+        .feature_flags
+        .insert(NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG.into());
+    persist_metadata_with(root, &metadata, true, |path, bytes, sync| {
+        storage::replace_durably(
+            path,
+            storage::ReplaceContents::Plain(bytes),
+            sync,
+            "joined_remote_image.format",
+            storage::FailClosed::No,
+        )
+    })
+}
+pub(crate) fn native_joined_remote_image_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG))
 }

@@ -118,6 +118,50 @@ impl NativeJoinedRemoteProposalReceipt {
     pub(crate) fn pointer(&self) -> NativeJoinedRemoteProposalPointer {
         self.record.pointer()
     }
+    pub(crate) fn require_mutation_current(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        scope: &NativeJoinedRemoteMutationScope<'_>,
+    ) -> Result<()> {
+        scope.require_store(db, store)?;
+        let actual = db.read_native_joined_remote_proposal_record_point(
+            store.native_writer_store_open_id(),
+            scope.native(),
+            scope.range_id(),
+            scope.attempt_id(),
+            scope.original_writer_sha256(),
+            &self.pointer(),
+        )?;
+        if crate::distribution_range_image::bounded_json(&actual.record, MAX_BYTES)?
+            != crate::distribution_range_image::bounded_json(&self.record, MAX_BYTES)?
+        {
+            return Err(invalid("Joined row context changed exact proposal"));
+        }
+        scope.require_store(db, store)
+    }
+    pub(in crate::db::range_image_native) fn require_guarded_transaction_current(
+        &self,
+        db: &BicDb,
+        native: &NativeRecoveryAdmission,
+        lexical: &writer_enrollment::JoinedRemoteMutationScopeLiveness,
+    ) -> Result<()> {
+        lexical.require_current(db, self.record.attempt, self.record.range)?;
+        let actual = db.read_native_joined_remote_proposal_record_point(
+            self.record.target_store_open,
+            native,
+            self.record.range,
+            self.record.attempt,
+            &self.record.original_writer_policy_sha256,
+            &self.pointer(),
+        )?;
+        if crate::distribution_range_image::bounded_json(&actual.record, MAX_BYTES)?
+            != crate::distribution_range_image::bounded_json(&self.record, MAX_BYTES)?
+        {
+            return Err(invalid("Joined guarded row proposal readback changed"));
+        }
+        lexical.require_current(db, self.record.attempt, self.record.range)
+    }
     pub(crate) fn require_current(
         &self,
         db: &BicDb,
@@ -376,6 +420,47 @@ impl BicDb {
         pointer: &NativeJoinedRemoteProposalPointer,
     ) -> Result<NativeJoinedRemoteProposalReceipt> {
         scope.require_store_identity(self, store)?;
+        let result = self.read_native_joined_remote_proposal_record_point(
+            store.native_writer_store_open_id(),
+            scope.native(),
+            scope.range_id(),
+            scope.attempt_id(),
+            scope.original_writer_sha256(),
+            pointer,
+        )?;
+        scope.require_store_identity(self, store)?;
+        Ok(result)
+    }
+    pub(crate) fn read_native_joined_remote_proposal_for_mutation(
+        &self,
+        store: &RangeWriteStore,
+        scope: &NativeJoinedRemoteMutationScope<'_>,
+        pointer: &NativeJoinedRemoteProposalPointer,
+    ) -> Result<NativeJoinedRemoteProposalReceipt> {
+        scope.require_store(self, store)?;
+        let result = self.read_native_joined_remote_proposal_record_point(
+            store.native_writer_store_open_id(),
+            scope.native(),
+            scope.range_id(),
+            scope.attempt_id(),
+            scope.original_writer_sha256(),
+            pointer,
+        )?;
+        scope.require_store(self, store)?;
+        Ok(result)
+    }
+    // Exact protected integrity reader only. The real lexical scope and
+    // fresh request remain mandatory outside this private DATA reader.
+    fn read_native_joined_remote_proposal_record_point(
+        &self,
+        store_open: Uuid,
+        native: &NativeRecoveryAdmission,
+        range: RangeId,
+        attempt: Uuid,
+        writer_sha256: &str,
+        pointer: &NativeJoinedRemoteProposalPointer,
+    ) -> Result<NativeJoinedRemoteProposalReceipt> {
+        native.require_current(self)?;
         if !crate::format::native_joined_remote_receive_active(self.data_path())? {
             return Err(invalid("Joined proposal sticky v2 reader fence absent"));
         }
@@ -389,15 +474,15 @@ impl BicDb {
         archived.validate()?;
         if record.pointer() != *pointer
             || archived.pointer() != *pointer
-            || record.attempt != scope.attempt_id()
-            || record.range != scope.range_id()
-            || record.target_store_open != store.native_writer_store_open_id()
-            || record.target_database_open != scope.native().database_incarnation()
+            || record.attempt != attempt
+            || record.range != range
+            || record.target_store_open != store_open
+            || record.target_database_open != native.database_incarnation()
             || record.target_birth
-                != crate::distribution::NativeStoreBirthV1::from_actual_native(scope.native())?
+                != crate::distribution::NativeStoreBirthV1::from_actual_native(native)?
             || record.target_namespaces != self.capture_range_image_bindings()?.namespace_ids()
             || self.native_abort_catalogue_store_id()? != Some(record.target_catalogue)
-            || record.original_writer_policy_sha256 != scope.original_writer_sha256()
+            || record.original_writer_policy_sha256 != writer_sha256
             || crate::distribution_range_image::bounded_json(&record, MAX_BYTES)?
                 != crate::distribution_range_image::bounded_json(&archived, MAX_BYTES)?
         {
@@ -416,7 +501,6 @@ impl BicDb {
                 "Joined exact original native xid not proven committed; retain uncertainty",
             ));
         }
-        scope.require_store_identity(self, store)?;
         Ok(NativeJoinedRemoteProposalReceipt { record })
     }
 }

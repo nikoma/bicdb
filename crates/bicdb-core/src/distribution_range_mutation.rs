@@ -281,6 +281,23 @@ impl FrozenRangeMutationIdentity {
         // The private map borrow prevents any intervening gate mutation.
         require_frozen_owner_publication_state(Some(&actual.state), self.owner, self.lease)
     }
+    /// Exact identity under the ACTUAL already-held current gate; memory only,
+    /// never reacquires the gate or permits owner rotation/ordinary writes.
+    pub(crate) fn require_in_current_publication(
+        &self,
+        actual: &FrozenRangeCurrentPublication<'_>,
+    ) -> Result<()> {
+        if !Weak::ptr_eq(&self.inner, &Arc::downgrade(actual._inner))
+            || self.range_id != actual.range_id
+            || self.owner != actual._owner
+            || self.lease != actual._lease
+        {
+            return Err(invalid(
+                "frozen current publication changed original private identity",
+            ));
+        }
+        require_frozen_publication_state(Some(&*actual._state), self.owner, self.lease)
+    }
     pub(crate) fn require_same_current(&self, permit: &FrozenRangeMutationPermit) -> Result<()> {
         if !Weak::ptr_eq(&self.inner, &Arc::downgrade(&permit.inner))
             || self.inner.upgrade().is_none()

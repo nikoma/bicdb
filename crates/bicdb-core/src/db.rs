@@ -144,8 +144,6 @@ pub(crate) use range_image_native::NativeJoinedPublicationScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeJoinedReceiveStorageScope;
 #[cfg(feature = "tls-replication")]
-pub(crate) use range_image_native::NativeJoinedRemoteAttemptScope;
-#[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeJoinedRemoteRotationPoint;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeJoinedRowAbsenceScan;
@@ -191,6 +189,10 @@ pub(crate) use range_image_native::{
 pub(crate) use range_image_native::{
     NativeClosedWriterDomain, NativeWriterDataDomainPolicy, NativeWriterDataDomainTransition,
     NativeWriterServingDomainPublication,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::{
+    NativeJoinedRemoteAttemptScope, NativeJoinedRemoteMutationScope,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::{
@@ -9710,6 +9712,9 @@ pub struct Transaction {
     #[cfg(feature = "tls-replication")]
     native_registered_remote_row_grant:
         Option<range_image_native::NativeRegisteredRemoteRowTransactionGrant>,
+    #[cfg(feature = "tls-replication")]
+    native_joined_remote_row_grant:
+        Option<range_image_native::NativeJoinedRemoteRowTransactionGrant>,
     range_mutation_claim: Option<crate::distribution_range_mutation::RangeMutationClaim>,
     database_mutation_permit: Option<crate::distribution_range_mutation::DatabaseMutationPermit>,
     native_wal_retention: Option<native_wal_apply::NativeWalRetentionPin>,
@@ -19396,6 +19401,33 @@ impl Transaction {
             .as_ref()
             .ok_or_else(|| {
                 BicDbError::Cluster("Registered row commit requires actual private grant".into())
+            })?
+            .require_current(database, &self)?;
+        let sequence = database.commit_transaction(&mut self)?;
+        database.tx_log.write_durable(sequence)?;
+        self.finalize_commit_admission()?;
+        self.finalize_committed_broker_outbox();
+        self.finalize_committed_memory_jobs()?;
+        Ok(sequence)
+    }
+
+    /// Distinct original Joined guarded import. A private actual grant is
+    /// required; no ordinary require_range bypass or FIRST grant is reused.
+    #[cfg(feature = "tls-replication")]
+    fn commit_joined_remote_image_with_sequence(mut self) -> Result<u64> {
+        let db = self.db;
+        let database = unsafe { db.as_ref() };
+        if self.native_registered_remote_row_grant.is_some()
+            || self.native_image_row_grant.is_some()
+        {
+            return Err(BicDbError::Cluster(
+                "Joined row commit has mixed grant provenance".into(),
+            ));
+        }
+        self.native_joined_remote_row_grant
+            .as_ref()
+            .ok_or_else(|| {
+                BicDbError::Cluster("Joined row commit needs actual private grant".into())
             })?
             .require_current(database, &self)?;
         let sequence = database.commit_transaction(&mut self)?;
@@ -36258,3 +36290,9 @@ pub(crate) use range_image_native::{NativeJointPhaseOwner, NativeJointWriterDoma
 
 #[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use range_image_native::test_joined_remote_proposal_after_native_begin;
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::{
+    NativeJoinedRemoteImageContext, NativeJoinedRemoteImageInstallation,
+    NativeJoinedRemoteImageOperation, NativeJoinedRemoteImageProgress,
+};

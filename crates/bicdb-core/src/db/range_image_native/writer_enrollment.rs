@@ -21,7 +21,11 @@ pub(crate) use joined_receive::NativeJoinedRemoteRotationPoint;
 #[cfg(feature = "tls-replication")]
 mod joined_remote_attempt;
 #[cfg(feature = "tls-replication")]
-pub(crate) use joined_remote_attempt::NativeJoinedRemoteAttemptScope;
+pub(in crate::db::range_image_native) use joined_remote_attempt::JoinedRemoteMutationScopeLiveness;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_remote_attempt::{
+    NativeJoinedRemoteAttemptScope, NativeJoinedRemoteMutationScope,
+};
 #[cfg(feature = "tls-replication")]
 mod joined_receive_rows;
 #[cfg(feature = "tls-replication")]

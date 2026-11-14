@@ -20,7 +20,8 @@ pub(crate) use registered_target::ActualServiceNativeRegisteredJointNewEvidence;
 mod bridge;
 pub(crate) use bridge::{
     ActualServiceNativeJointPreparedEvidence, ActualServiceNativeJointReleaseEvidence,
-    NativeJointImageReleaseOwner, NativeJointReleaseOwnerView, NativeJointServingLease,
+    NativeJointImageReleaseOwner, NativeJointPreparationCollectionBorrow,
+    NativeJointPreparationCollectionIdentity, NativeJointReleaseOwnerView, NativeJointServingLease,
 };
 
 /// Single-use actual service evidence. No request IDs, peer identities, points

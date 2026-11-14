@@ -81,6 +81,17 @@ pub(super) enum PreparedHistory<'a> {
     Custody(&'a crate::distribution_range_handoff::NativeJointPreparationCustody),
 }
 impl PreparedHistory<'_> {
+    pub(super) fn require_collection_origin(
+        &self,
+        actual: &ActualServiceNativeJointPreparedEvidence,
+    ) -> Result<()> {
+        match self {
+            Self::OriginalRequest => actual.committed.require_historical_request_memory()?,
+            Self::Custody(_) => self.require_origin(actual)?,
+        }
+        // This is the actual producer-sealed Session, not a supplied new parent.
+        actual.origin.require_actual(actual)
+    }
     fn require_origin(&self, actual: &ActualServiceNativeJointPreparedEvidence) -> Result<()> {
         match self {
             Self::OriginalRequest => Ok(()),

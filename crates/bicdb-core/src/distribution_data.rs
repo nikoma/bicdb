@@ -88,7 +88,8 @@ pub(crate) use native_joint_handoff::{
     ActualServiceNativeJointConstraints, ActualServiceNativeJointNewEvidence,
     ActualServiceNativeJointOldEvidence, ActualServiceNativeJointPreparedEvidence,
     ActualServiceNativeJointReleaseEvidence, NativeJointImageReleaseOwner,
-    NativeJointIrrevocableFacts, NativeJointReleaseOwnerView, NativeJointServingLease,
+    NativeJointIrrevocableFacts, NativeJointPreparationCollectionBorrow,
+    NativeJointPreparationCollectionIdentity, NativeJointReleaseOwnerView, NativeJointServingLease,
 };
 pub(crate) use native_writer::NativeWriterRegistryRefresh;
 mod current_image_replacement;

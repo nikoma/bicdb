@@ -127,6 +127,18 @@ impl NativeJointPreparedServingObservation {
                 .require_current_under_fresh_phase(service, fresh),
         }
     }
+    fn borrow_fresh_collection<'a>(
+        &'a self,
+        service: &'a ClusterDataNodeService,
+        fresh: &'a CommittedNativeJointDecisionObservation,
+    ) -> Result<crate::distribution_data::NativeJointPreparationCollectionBorrow<'a>> {
+        if let Some(custody) = &self.custody {
+            custody.require_actual(&self.actual)?;
+            custody.require_service(&self.service)?;
+        }
+        self.actual
+            .borrow_preparation_collection(service, fresh, self.custody.as_deref())
+    }
     fn release_fresh_pin(
         &self,
         service: &ClusterDataNodeService,

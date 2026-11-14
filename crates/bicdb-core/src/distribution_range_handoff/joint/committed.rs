@@ -158,6 +158,13 @@ impl CommittedNativeJointDecisionObservation {
         }
         Ok(())
     }
+    /// Historical cancellation/open identity only, not physical currentness or
+    /// renewed metadata authority. Full native validation remains at the sink.
+    pub(crate) fn require_historical_request_memory(&self) -> Result<()> {
+        self.metadata
+            .require_historical_request_not_canceled(self.business)?;
+        self.require_captured_native_open_identity()
+    }
     /// The actual service producer alone can retain this owner. Native/metadata
     /// records cannot construct it; ordinary/Installed observations keep None.
     pub(crate) fn closed_writer_domain(&self) -> Option<&crate::db::NativeJointWriterDomain> {

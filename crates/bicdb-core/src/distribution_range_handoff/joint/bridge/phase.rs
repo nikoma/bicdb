@@ -95,7 +95,7 @@ pub(crate) struct NativeJointPreparationPhaseRound {
 }
 pub(super) struct FreshPreparedMember {
     pub(super) committed: CommittedNativeJointDecisionObservation,
-    writer: crate::db::NativeJointPhaseOwner,
+    identity: crate::distribution_data::NativeJointPreparationCollectionIdentity,
 }
 pub(crate) struct NativeJointPreparationPhaseQuorum {
     original: Arc<NativeJointPreparedServingQuorum>,
@@ -184,7 +184,7 @@ impl NativeJointPreparationPhaseRound {
             business,
             &self.cancellation,
         )?;
-        let (committed, writer) = {
+        let (committed, identity) = {
             let service = old
                 .service
                 .try_lock()
@@ -196,8 +196,10 @@ impl NativeJointPreparationPhaseRound {
                 self.original.data.old_range().id,
                 metadata_point,
             )?;
-            let writer = old.require_fresh_phase_current(&service, &committed)?;
-            (committed, writer)
+            let identity = old
+                .borrow_fresh_collection(&service, &committed)?
+                .into_comparison_identity()?;
+            (committed, identity)
         };
         if committed.data() != &self.original.data {
             return Err(invalid(
@@ -206,8 +208,13 @@ impl NativeJointPreparationPhaseRound {
         }
         self.cancellation = self.cancellation.child_with_deadline(committed.deadline());
         self.cancellation.check()?;
-        self.observations
-            .insert(node.clone(), FreshPreparedMember { committed, writer });
+        self.observations.insert(
+            node.clone(),
+            FreshPreparedMember {
+                committed,
+                identity,
+            },
+        );
         Ok(())
     }
     pub(crate) fn finish(self) -> Result<NativeJointPreparationPhaseQuorum> {
@@ -253,9 +260,9 @@ impl NativeJointPreparationPhaseQuorum {
         self.original.require_original_caller()?;
         for (node, member) in &self.observations {
             member.committed.require_metadata_current()?;
-            self.original.observations[node]
-                .actual
-                .require_phase_writer_lifetime(&member.writer)?;
+            member
+                .identity
+                .require_actual_lifetime(&self.original.observations[node].actual)?;
         }
         Ok(())
     }
@@ -297,7 +304,7 @@ impl NativeJointPreparationPhaseQuorum {
             .get(node)
             .ok_or_else(|| invalid("fresh joint phase omitted participant"))?;
         let writer = observation.require_fresh_phase_current(service, &fresh.committed)?;
-        if !writer.same_actual(&fresh.writer) {
+        if !fresh.identity.is_same_owner(&writer) {
             return Err(invalid(
                 "fresh joint writer registration/generation changed",
             ));
@@ -313,7 +320,7 @@ impl NativeJointPreparationPhaseQuorum {
         if self
             .observations
             .get(node)
-            .is_none_or(|member| !member.writer.same_actual(actual))
+            .is_none_or(|member| !member.identity.is_same_owner(actual))
         {
             return Err(invalid(
                 "publication final scope actual writer registration changed",
@@ -348,8 +355,8 @@ impl NativeJointPreparationPhaseQuorum {
             return self.require_live();
         }
         #[cfg(all(test, feature = "tls-replication"))]
-        trace.mark("pin_release_before_full_sweep");
-        self.require_current()?;
+        trace.mark("pin_release_before_collection_binding");
+        self.require_live()?;
         #[cfg(all(test, feature = "tls-replication"))]
         trace.mark("pin_release_actual_members");
         for (node, fresh) in &self.observations {
@@ -358,11 +365,12 @@ impl NativeJointPreparationPhaseQuorum {
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("fresh joint pin release service busy"))?;
-            old.release_fresh_pin(&service, &fresh.committed)?;
+            old.borrow_fresh_collection(&service, &fresh.committed)?
+                .drain_owned_capture_pin()?;
         }
         #[cfg(all(test, feature = "tls-replication"))]
-        trace.mark("pin_release_after_full_sweep");
-        self.require_current()
+        trace.mark("pin_release_after_collection_binding");
+        self.require_live()
     }
     #[cfg(feature = "tls-replication")]
     pub(crate) fn acquire_local_activation(
@@ -418,8 +426,8 @@ impl NativeJointPreparationPhaseQuorum {
         {
             return Err(invalid("fresh phase activation actual recipient changed"));
         }
-        // This operation checks ALL actual members before AND after pin release.
-        // Do not add an identical third sweep before this same operation.
+        // Permissionless collection/drain of the SAME owned pins. Complete
+        // physical F is mandatory at the unchanged scoped publication boundary.
         self.release_read_pins(
             #[cfg(test)]
             trace,

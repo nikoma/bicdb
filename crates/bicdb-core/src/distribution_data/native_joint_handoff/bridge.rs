@@ -7,7 +7,11 @@ use crate::distribution_range_image_install::{
     NativeImageCatalogueFinalization, NativeImageInstallFreeze, NativeJointImageMaterialization,
 };
 
+mod collection_binding;
 mod image_release;
+pub(crate) use collection_binding::{
+    NativeJointPreparationCollectionBorrow, NativeJointPreparationCollectionIdentity,
+};
 pub(super) mod preparation_origin;
 mod release;
 pub(crate) use image_release::NativeJointImageReleaseOwner;

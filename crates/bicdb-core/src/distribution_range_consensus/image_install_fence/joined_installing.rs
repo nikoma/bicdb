@@ -126,6 +126,35 @@ impl NativeJoinedRemoteInstallingFence {
         }
         Ok(())
     }
+    /// Identity plus selected persisted intent only, for the DISTINCT exact
+    /// retained catalogue retry. Does not clear uncertainty or admit writes.
+    pub(crate) fn require_catalogue_identity(
+        &self,
+        store: &RangeWriteStore,
+        db: &crate::BicDb,
+        scope: &crate::db::NativeJoinedRemoteMutationScope<'_>,
+        receipt: &NativeJoinedRemoteProposalReceipt,
+    ) -> Result<()> {
+        scope.require_store_identity(db, store)?;
+        receipt.require_catalogue_identity(db, store, scope)?;
+        self.require_mutation_database_binding(db, scope.preflight(), receipt)?;
+        if self.store_open != store.open_id
+            || self.catalogue
+                != db
+                    .native_abort_catalogue_store_id()?
+                    .ok_or_else(|| range_write_error("Joined catalogue original identity absent"))?
+            || store
+                .catalog
+                .image_install_intents
+                .get(&self.intent.range.id)
+                != Some(&self.intent)
+        {
+            return Err(range_write_error(
+                "Joined catalogue retry changed selected actual Installing intent",
+            ));
+        }
+        scope.require_store_identity(db, store)
+    }
     pub(crate) fn require_mutation_current(
         &self,
         store: &RangeWriteStore,

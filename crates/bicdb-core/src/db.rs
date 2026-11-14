@@ -88,6 +88,8 @@ mod range_image_install;
 pub(crate) use range_image_final_pointer::{
     NativeJoinedRemoteFinalImagePointer, NativeRegisteredRemoteFinalImagePointer,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_install::JoinedRemoteBaseBoundary;
 mod range_image_proposal;
 #[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use range_image_install::test_registered_remote_base_after_wal;

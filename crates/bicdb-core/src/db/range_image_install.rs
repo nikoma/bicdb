@@ -105,6 +105,13 @@ impl NativeInstalledRangeImageReceipt {
         )?)))
     }
     fn validate(&self) -> Result<()> {
+        #[cfg(not(feature = "tls-replication"))]
+        if self.format_version == JOINED_INSTALL_FORMAT || self.joined_final_image.is_some() {
+            return Err(invalid(
+                "Joined installed profile requires tls-replication reader",
+            ));
+        }
+
         let digest =
             |value: &str| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit());
         if !matches!(

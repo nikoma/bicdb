@@ -50,13 +50,16 @@ mod registered_no_domain;
 #[cfg(feature = "tls-replication")]
 pub(crate) use image_install_fence::NativeJoinedRemoteImageIntent;
 #[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use native_image_base::test_joined_remote_adoption_after_fsync;
+#[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use native_image_base::test_registered_remote_adoption_after_fsync;
 pub(crate) use native_image_base::NativeImageCatalogueAdoptionReceipt;
 use native_image_base::{NativeImageCatalogueBase, NATIVE_IMAGE_CATALOG_FORMAT};
 #[cfg(feature = "tls-replication")]
 pub(crate) use native_image_base::{
-    NativeRegisteredRemoteCatalogueMaterialization, NativeRegisteredRemoteCataloguePoint,
-    NativeRegisteredRemoteCataloguePublication,
+    NativeJoinedRemoteCatalogueMaterialization, NativeJoinedRemoteCataloguePoint,
+    NativeJoinedRemoteCataloguePublication, NativeRegisteredRemoteCatalogueMaterialization,
+    NativeRegisteredRemoteCataloguePoint, NativeRegisteredRemoteCataloguePublication,
 };
 pub(crate) use native_image_ready::FinalizedNativeImageCatalogueObservation;
 #[cfg(feature = "tls-replication")]

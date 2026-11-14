@@ -19,6 +19,7 @@ pub(crate) use data_owner::NativeDataOwnerAdmission;
 use joined_data::NativeJoinedDataHost;
 pub use joined_data::NativeJoinedDataStatus;
 pub(crate) use joined_data::NativeJoinedRemoteInstallPreflight;
+pub(crate) use joined_data::NativeJoinedRemoteMaterializedOwner;
 pub(crate) use joined_data::{
     NativeJoinedRangeReceiveOrigin, NativeJoinedRangeReceivePreflight,
     NativeJoinedRangeReceiveRequest,

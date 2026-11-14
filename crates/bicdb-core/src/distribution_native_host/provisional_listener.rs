@@ -17,6 +17,7 @@ pub(crate) use registration::NativeInitialOldConstraintStep;
 pub use registration::NativeJoinedDataStatus;
 pub(crate) use registration::NativeJoinedRangeReceivePreflight;
 pub(crate) use registration::NativeJoinedRemoteInstallPreflight;
+pub(crate) use registration::NativeJoinedRemoteMaterializedOwner;
 pub(in crate::distribution_native_host) use registration::NativeMetadataMaintenanceReport;
 pub use registration::NativeRegisteredReplicaReceiverStatus;
 #[cfg(test)]

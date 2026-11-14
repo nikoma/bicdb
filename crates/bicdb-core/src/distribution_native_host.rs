@@ -56,6 +56,8 @@ pub(crate) use provisional_listener::NativeJoinedRangeReceivePreflight;
 #[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::NativeJoinedRemoteInstallPreflight;
 #[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeJoinedRemoteMaterializedOwner;
+#[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::{
     NativeInitialConsensusLaunch, NativeLearnerMetadataEnrollment, NativeMetadataControlHost,
     NativeMetadataRegistrationController, NativeProvisionalHost,

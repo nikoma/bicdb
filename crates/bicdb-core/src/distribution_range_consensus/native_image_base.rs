@@ -12,6 +12,16 @@ pub(crate) use registered_remote::{
     NativeRegisteredRemoteCataloguePublication,
 };
 
+#[cfg(feature = "tls-replication")]
+mod joined_remote;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use joined_remote::test_joined_remote_adoption_after_fsync;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_remote::{
+    NativeJoinedRemoteCatalogueMaterialization, NativeJoinedRemoteCataloguePoint,
+    NativeJoinedRemoteCataloguePublication,
+};
+
 pub(super) const NATIVE_IMAGE_CATALOG_FORMAT: u32 = 6;
 const MAX_NATIVE_BASES: usize = 65_536;
 

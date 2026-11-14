@@ -680,6 +680,19 @@ fn migrate_to_current(
 }
 
 fn validate_supported(metadata: &FormatMetadata) -> Result<()> {
+    #[cfg(not(feature = "tls-replication"))]
+    if metadata
+        .feature_flags
+        .contains(NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG)
+        || metadata
+            .feature_flags
+            .contains(NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG)
+    {
+        return Err(BicDbError::FormatCompatibility(
+            "Joined image semantic profile requires tls-replication reader".into(),
+        ));
+    }
+
     validate_supported_with_flags(metadata, KNOWN_FEATURE_FLAGS)
 }
 fn validate_supported_with_flags(metadata: &FormatMetadata, known: &[&str]) -> Result<()> {
@@ -2021,4 +2034,46 @@ pub(crate) fn native_joined_remote_image_active(root: &Path) -> Result<bool> {
     Ok(metadata
         .feature_flags
         .contains(NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG))
+}
+
+#[cfg(all(test, not(feature = "tls-replication")))]
+pub(crate) fn test_publish_joined_reader_refusal_only(root: &Path, image: bool) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata.feature_flags.insert(
+        if image {
+            NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG
+        } else {
+            NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG
+        }
+        .into(),
+    );
+    persist_metadata(root, &metadata, true)
+}
+#[cfg(all(test, not(feature = "tls-replication")))]
+mod joined_unsupported_reader_tests {
+    #[test]
+    fn joined_semantic_format_without_tls_refuses_before_migration_mutation() {
+        for image in [false, true] {
+            let (_root, database, _topology, _spec) =
+                crate::distribution_range_consensus::native_origin_fixture();
+            let db = database.read();
+            let root = db.data_path();
+            super::test_publish_joined_reader_refusal_only(root, image).unwrap();
+            let before = super::read_or_legacy_metadata(root).unwrap();
+            let error = super::plan_migration(root, false).unwrap_err().to_string();
+            let after = super::read_or_legacy_metadata(root).unwrap();
+            eprintln!(
+                "JOINED_NON_TLS_FORMAT_REFUSAL {}",
+                serde_json::json!({"image_profile":image,"actual_error":error,"native_birth_not_fabricated":true,"flag_only_refusal_fixture_not_import_qualification":true})
+            );
+            assert!(error.contains("requires tls-replication reader"));
+            assert_eq!(
+                serde_json::to_value(before).unwrap(),
+                serde_json::to_value(after).unwrap()
+            );
+        }
+    }
 }

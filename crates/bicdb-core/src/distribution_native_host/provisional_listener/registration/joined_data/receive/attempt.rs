@@ -8,14 +8,17 @@ use crate::distribution_range_image::NativeRemoteImageStep;
 use crate::distribution_range_recovery::JoinedRemoteImageInstallFreeze;
 
 pub(in super::super) struct NativeJoinedRemoteInstallAttempt {
-    preflight: Arc<NativeJoinedRemoteInstallPreflight>,
-    lease: Option<JoinedRemoteImageInstallFreeze>,
+    pub(super) preflight: Arc<NativeJoinedRemoteInstallPreflight>,
+    pub(super) lease: Option<JoinedRemoteImageInstallFreeze>,
     proposal: Option<crate::db::NativeJoinedRemoteProposalPublication>,
-    installing: Option<NativeJoinedRemoteInstallingPublication>,
-    image: Option<crate::db::NativeJoinedRemoteImageInstallation>,
+    pub(super) installing: Option<NativeJoinedRemoteInstallingPublication>,
+    pub(super) image: Option<crate::db::NativeJoinedRemoteImageInstallation>,
+    pub(super) catalogue:
+        Option<crate::distribution_range_consensus::NativeJoinedRemoteCataloguePublication>,
+    pub(super) materialized: Option<Arc<super::materialized::NativeJoinedRemoteMaterializedOwner>>,
 }
 impl NativeJoinedRangeReceiveOrigin {
-    fn require_host(&self, host: &NativeJoinedDataHost) -> Result<()> {
+    pub(super) fn require_host(&self, host: &NativeJoinedDataHost) -> Result<()> {
         host.require_writer_data_owner()?;
         self.require_live()?;
         if !std::sync::Weak::ptr_eq(&self.life, &Arc::downgrade(&host.life))
@@ -29,7 +32,7 @@ impl NativeJoinedRangeReceiveOrigin {
     }
 }
 impl NativeMetadataControlHost {
-    fn joined_receive_host_mut(&mut self) -> Result<&mut NativeJoinedDataHost> {
+    pub(super) fn joined_receive_host_mut(&mut self) -> Result<&mut NativeJoinedDataHost> {
         if self.data.is_some() || self.assigned.is_some() || self.replica.is_some() {
             return Err(invalid(
                 "Joined receive requires its exclusive actual DATA owner",
@@ -73,6 +76,8 @@ impl NativeMetadataControlHost {
                     proposal: None,
                     installing: None,
                     image: None,
+                    catalogue: None,
+                    materialized: None,
                 });
         if attempt.lease.is_none() {
             let lease =
@@ -187,10 +192,10 @@ impl NativeMetadataControlHost {
 
 /// Borrowed real host attempt, not a Manifest/DTO constructor.
 pub(crate) struct NativeJoinedRemoteImagePoint<'a> {
-    preflight: &'a Arc<NativeJoinedRemoteInstallPreflight>,
-    lease: &'a JoinedRemoteImageInstallFreeze,
-    request: &'a NativeJoinedRangeReceiveRequest,
-    frame: &'a NativeRemoteImageStep<'a>,
+    pub(super) preflight: &'a Arc<NativeJoinedRemoteInstallPreflight>,
+    pub(super) lease: &'a JoinedRemoteImageInstallFreeze,
+    pub(super) request: &'a NativeJoinedRangeReceiveRequest,
+    pub(super) frame: &'a NativeRemoteImageStep<'a>,
 }
 impl NativeJoinedRemoteImagePoint<'_> {
     pub(crate) fn preflight(&self) -> &NativeJoinedRemoteInstallPreflight {

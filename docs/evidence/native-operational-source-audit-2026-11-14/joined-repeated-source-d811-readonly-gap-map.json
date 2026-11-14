@@ -1,0 +1,73 @@
+{
+  "schema": "joined-repeated-source-readonly-gap-map-v1",
+  "source": "d8115fedf13b0bd7107cfddd2664f2c6ea2f261f",
+  "source_version": "1.0.510-beta candidate; not merged/qualified by this review",
+  "scope": "Read-only current frozen source; no code/build/CI/provisioning",
+  "paths": {
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data.rs": "9c011d95b5fd77e20590e8edc462135f08a4a4b8e7caf45298966beac3c3ca6a",
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data.rs": "70a60cce9103d32ac1158be0c893c0468e9b3dda1202f8bc47c3ec731338ecf7",
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration.rs": "2b037b4a6690355f74a9dd6c82a5e8328a02ee4a18c25023493f93b3d7d752ce",
+    "crates/bicdb-core/src/distribution_transport/initial_data_listener.rs": "16d4f4405357e3538f165bcc4c563212d8cd2ac2a7d134ec726ca109a8d201d5",
+    "crates/bicdb-core/src/distribution_transport.rs": "26d795e1f583b33430a54488c289eae321ae29448806ad2d1354b0afc16f33d5",
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/source_discovery.rs": "2a35b303d110dfce26dec3d761897e0167a9b4bf6c32a489a8e4d8ff4641d5b2",
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/old_step.rs": "2fe1c3e02f709a165ca30b51a6301de2c35c37c7d9b085fca1e9d4c387194d48",
+    "crates/bicdb-core/src/db/range_image_native/writer_enrollment/data_domains/historical_predecessor.rs": "fea8d9843a42f0bd10477bddd36c1690ec07ac743195d8981fa44e504e9f56f2",
+    "crates/bicdb-core/src/distribution_range_image/remote_source.rs": "4d268785b15a6441717edbd8cc8db115cd2b9b70dcf3b47fdc0546e910bb873b",
+    "crates/bicdb-core/src/db/range_image_native/writer_enrollment.rs": "62f5a71a1cff60501fc47d806b0f23b6bf259118a4d3d875563d746a84e03308",
+    "crates/bicdb-core/src/distribution_range_mutation.rs": "45489a07f23469de91f23ddb5029065e3cda3e3f4ee33e6eeca9b6c7be24a6cd"
+  },
+  "confirmed_source_boundaries": [
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data.rs",
+      "line": 132,
+      "finding": "for_joined_owner binds actual APP/Strong lifetime State/Store but source_writer/coordinator/image_sources/OLD table/metadata/provider/transport are empty; no Joined source producer."
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data.rs",
+      "line": 280,
+      "finding": "Joined bind uses for_joined_owner and immutable Initial listener; it does not obtain OLD/source authority."
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport/initial_data_listener.rs",
+      "line": 41,
+      "finding": "OLD/source/discovery/NEW/provenance/export source RPC families require_initial_source_hosting BEFORE handler; Joined refuses."
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/source_discovery.rs",
+      "line": 227,
+      "finding": "Discovery requires original registry plus retained actual OLD; fresh OWN/MStore and independent pinned OLD collection. No missing registry can be repaired by request DATA."
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/old_step.rs",
+      "line": 43,
+      "finding": "Only actual INITIAL step reaches real pre-freeze historical capture via table owner. Constraints-first also captures there before freeze."
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_image/remote_source.rs",
+      "line": 433,
+      "finding": "Source begin calls ordinary InstalledGuard.require_for_coordinator after capture; per-frame check also at565. That calls ordinary State.require_database/effective Serving. A previously Served range freeze invalidates released generation, so historical pre-freeze OLD proof alone does not authorize subsequent source export."
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_mutation.rs",
+      "line": 560,
+      "finding": "Actual freeze invalidates prior Serving generation; historical source scope must consume retained proof/OLD/capture, never reobserve current Serving after closure."
+    }
+  ],
+  "production_callsite_observation": "At this source request_remote_image_source_discovery has only test callers plus method definition; concrete production NativeRemoteOld request construction is readonly Observe in donor collector; Close senders are fixture callers. Generic transport relocation uses old ExportSnapshot/ApplySnapshot messages. Controller mapping separately owned by policy reviewer.",
+  "correction": "Earlier reviewer message said production source process binding absent based on public wrapper callsites. Corrected: INITIAL operator lifecycle retains_data_process -> start_hot_process -> sources.bind_original_process at initial_data.rs303, registration.rs799, initial_data.rs1137. Joined lacks the actual source registry/lifecycle consumer; no new INITIAL process-binding defect is asserted.",
+  "smallest_adapter": [
+    "Actual NativeJoinedSourceOwner retained by NativeJoinedDataHost from original genuine FIRST State/guard/coordinator/runtime and protected Serving publication, with original host process cancellation inherited once; no from-DTO or for_joined-as-INITIAL cast. Own bounded OLD/session tables and registry; weak back-links prevent cycles.",
+    "Explicit immutable Joined source listener/admission variant, constructed from actual source owner (stop/drain earlier listener if necessary). Allow only enumerated source/OLD/discovery RPC families under that actual owner; retain existing APP/Strong/Registered generic refusals.",
+    "Joined OLD step must acquire real phase Role/OWN/current MStore, use actual source original State/slot and capture genuine Serving predecessor BEFORE constraints/freeze; same original table/candidate/attempt identity retained across errors. Reuse bounded storage OLD producers through sealed actual-owner interface, never local QQ conversion.",
+    "Distinct historical source writer/coordinator scope at real source begin and frame sinks: same original installed State/hook/coordinator Arc, original DB/Store/MStore/native birth, retained pre-freeze predecessor, actual OLD close/promise/Frozen/readpin/cert and capture lineage+UID, plus fresh OWN/process/session. Preserve coordinator identity and routing/restore/schema checks with phase-appropriate current metadata; do not skip entire generic check or weaken ordinary writer admission.",
+    "Reuse strict pinned TLS discovery/certificate/manifest/history/row/Finish logic with sealed Initial/Joined source-origin variants. Retain certificate/session before capture; unknown attempted capture never recreated; lost Start reply Describe returns exact same original session/MF/A.",
+    "Operator-driven test additionally requires genuine native phase controller caller for Close/Start (absent from concrete production caller graph here), distinct from listener adapter component."
+  ],
+  "acceptance_cases": {
+    "A_repeated_source": "First genuine move makes node5 Joined serving populated R1, proves APP acknowledgments/full Strong via fixed original2s SDK. Commit SECOND pending relocation with node5 as real OLD donor and fresh native target6. Original metadata leader initiates real Constrain/Close on node5; assert actual-preclose-Serving profile, original State/coordinator/birth/Store and exact prior Serving/CLOSED archives, same original Frozen/native receipts on lost Close reply. Real target6 Start/Describe/History/Rows/Finished reconcile full R1 acknowledged ledger, no private fixture source handles or renewed token. Retain source component boundary if final NEW/decision/ALLOpen unavailable.",
+    "A_negative": "Actual stale birth/peer/role/OWN/MStore/process, changed plan, erased captured archive and lost Start reply/unknown capture controls; explicit refusal or exact original reconciliation, no new owner/capture. Ordinary Strong/APP while closed must refuse retryably, never return false absence.",
+    "B_receive_R2_distinct": "Same Joined node already serving R1 receives populated R2 under distinct actual A; this tests receiver scope, NEW/decision/Open/Serving and unaffected R1, not Joined donor/OLD admission. Policy owns this map/test.",
+    "C_failed_node_replacement_distinct": "A dead OLD voter plus current surviving donor/majority and new native replacement must be separate actual case. Current collect_remote_old_for_source loops every OLD and propagates exchange errors, so all-OLD positive does not prove unavailable-peer replacement."
+  },
+  "status": "All new adapters/cases proposed, not implemented/executed by this read-only task; no physical/self-healing qualification."
+}

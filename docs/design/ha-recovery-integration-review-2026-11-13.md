@@ -15,6 +15,12 @@ candidate is ordered before510; any newly delivered509 changes require a final
 port and validation. The original Azure expansion remains a failed scale-out
 qualification; no replacement physical experiment has run.
 
+The [runtime regression report](ha-runtime-regressions-2026-11-14.md) records
+the later d811 candidate's actual compilation pass, two Core failures and
+Oracle process abort. The [operational gate audit](native-operational-gates-2026-11-14.md)
+separates implemented initial source binding from incomplete native scheduling,
+Joined decision/release, repeated movement and cold data-continuation gates.
+
 | Finding or change | Evidence and classification | Remaining gate |
 | --- | --- | --- |
 | Assembled 508 candidate, first required CI | **Failed compilation:** PR188 head `2b216186f942a62b2cb16eea4ca78da6fb0899ab`, run 43570873924 (Rails 43570874007). The build reported E0599 at the role-retention call and E0369 at two fallible catalogue-ID comparisons. Checked PR merge tree equals the candidate tree. | Local correction retains the actual HandoffRole owner and propagates catalogue read errors. It must compile and execute through the required CI; other jobs are retained until terminal. |

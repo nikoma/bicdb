@@ -1,8 +1,10 @@
 //! Kill-the-primary: a three-node group with synchronous replication and
 //! automatic failover loses no acknowledged write when its primary is killed,
 //! elects a new primary, and takes the old one back as a standby.
+use bicdb_core::replication::ReplicationFrame;
+use bicdb_core::replication_transport::{recv_frame, send_frame};
 use std::collections::BTreeSet;
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -13,6 +15,10 @@ struct Node {
     id: &'static str,
     sql_port: u16,
     replication_port: u16,
+    sql_reservation: Option<TcpListener>,
+    replication_reservation: Option<TcpListener>,
+    last_exit: Option<String>,
+    last_pid: Option<u32>,
     child: Option<Child>,
 }
 
@@ -22,23 +28,26 @@ struct Group {
     runtime: tokio::runtime::Runtime,
 }
 
-fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
-}
-
 impl Group {
     fn new(root: &Path) -> Self {
         let nodes = NODES
             .iter()
-            .map(|id| Node {
-                id,
-                sql_port: free_port(),
-                replication_port: free_port(),
-                child: None,
+            .map(|id| {
+                // Retain every real listener, including across other parallel
+                // Groups. An address selected then immediately dropped is not
+                // a reservation and can repeat even within this six-port set.
+                let sql = TcpListener::bind("127.0.0.1:0").unwrap();
+                let replication = TcpListener::bind("127.0.0.1:0").unwrap();
+                Node {
+                    id,
+                    sql_port: sql.local_addr().unwrap().port(),
+                    replication_port: replication.local_addr().unwrap().port(),
+                    sql_reservation: Some(sql),
+                    replication_reservation: Some(replication),
+                    last_exit: None,
+                    last_pid: None,
+                    child: None,
+                }
             })
             .collect();
         Self {
@@ -93,13 +102,134 @@ impl Group {
         command
             .stdout(Stdio::from(log.try_clone().unwrap()))
             .stderr(Stdio::from(log));
-        self.nodes[index].child = Some(command.spawn().unwrap());
+        // Only this child's pair is released. All future children and parallel
+        // fixtures retain their endpoints until their own immediate spawn.
+        drop(self.nodes[index].sql_reservation.take());
+        drop(self.nodes[index].replication_reservation.take());
+        self.nodes[index].last_exit = None;
+        let child = command.spawn().unwrap();
+        self.nodes[index].last_pid = Some(child.id());
+        self.nodes[index].child = Some(child);
+        // This establishes actual child/listener readiness, not a sleep or a
+        // TCP connection to another fixture. There is no port reallocation or
+        // restart-on-failure that could hide the original startup error.
+        self.wait_listener_ready(index);
     }
 
+    fn child_live(&mut self, index: usize) -> Result<(), String> {
+        let node = &mut self.nodes[index];
+        let child = node
+            .child
+            .as_mut()
+            .ok_or_else(|| format!("{} child absent", node.id))?;
+        match child
+            .try_wait()
+            .map_err(|error| format!("{} try_wait: {error}", node.id))?
+        {
+            Some(status) => {
+                node.last_exit = Some(status.to_string());
+                Err(format!(
+                    "{} pid={} exited before readiness: {status}; SQL={} replication={}",
+                    node.id,
+                    child.id(),
+                    node.sql_port,
+                    node.replication_port
+                ))
+            }
+            None => Ok(()),
+        }
+    }
+    fn listeners_ready(&self, index: usize) -> Result<(), String> {
+        let node = &self.nodes[index];
+        let rows = self.execute(index, "SELECT * FROM bicdb_region")?;
+        let id = rows
+            .first()
+            .ok_or("SQL identity result is empty")?
+            .get::<_, String>(1);
+        if id != node.id {
+            return Err(format!(
+                "SQL endpoint identifies {id}, expected {}",
+                node.id
+            ));
+        }
+        let address = format!("127.0.0.1:{}", node.replication_port)
+            .parse()
+            .unwrap();
+        let mut stream = TcpStream::connect_timeout(&address, Duration::from_millis(200))
+            .map_err(|error| format!("{} replication connect: {error}", node.id))?;
+        stream
+            .set_read_timeout(Some(Duration::from_millis(500)))
+            .map_err(|e| e.to_string())?;
+        stream
+            .set_write_timeout(Some(Duration::from_millis(500)))
+            .map_err(|e| e.to_string())?;
+        // A deliberately foreign cluster is refused before peer/epoch/contact
+        // handling. This proves the real HA protocol listener is serving while
+        // never renewing a primary heartbeat or submitting an election vote.
+        send_frame(
+            &mut stream,
+            &ReplicationFrame::Hello {
+                protocol_version: bicdb_pgwire::HA_REPLICATION_PROTOCOL_VERSION,
+                cluster_id: "ha-cli-readiness-not-the-configured-cluster".into(),
+                node_id: "readiness-observer".into(),
+                epoch: 0,
+            },
+            64 * 1024,
+        )
+        .map_err(|e| e.to_string())?;
+        match recv_frame(&mut stream, 64 * 1024).map_err(|e| e.to_string())? {
+            ReplicationFrame::Error { code, message }
+                if code == "replication_refused" && message == "cluster_id mismatch" =>
+            {
+                Ok(())
+            }
+            other => Err(format!(
+                "{} unexpected replication readiness response: {other:?}",
+                node.id
+            )),
+        }
+    }
+    fn wait_listener_ready(&mut self, index: usize) {
+        let mut last_error = None;
+        let ready = eventually(Duration::from_secs(30), || {
+            if let Err(error) = self.child_live(index) {
+                panic!("{error}\n{}", self.logs());
+            }
+            match self.listeners_ready(index) {
+                Ok(()) => Some(()),
+                Err(error) => {
+                    last_error = Some(error);
+                    None
+                }
+            }
+        });
+        self.child_live(index)
+            .unwrap_or_else(|error| panic!("{error}\n{}", self.logs()));
+        assert!(
+            ready.is_some(),
+            "{} listeners not ready: {last_error:?}\n{}",
+            self.nodes[index].id,
+            self.logs()
+        );
+    }
+    fn require_all_live_and_listening(&mut self) {
+        for index in 0..self.nodes.len() {
+            self.wait_listener_ready(index);
+        }
+        // Check all actual process owners once more after the last listener
+        // probe. This is a fixture prerequisite, not a replica catch-up proof.
+        for index in 0..self.nodes.len() {
+            self.child_live(index)
+                .unwrap_or_else(|error| panic!("{error}\n{}", self.logs()));
+        }
+    }
     fn kill(&mut self, index: usize) {
         if let Some(mut child) = self.nodes[index].child.take() {
             let _ = child.kill();
-            let _ = child.wait();
+            self.nodes[index].last_exit = Some(match child.wait() {
+                Ok(status) => status.to_string(),
+                Err(error) => format!("wait failed: {error}"),
+            });
         }
     }
 
@@ -143,10 +273,10 @@ impl Group {
             .map(|id| {
                 let log = std::fs::read_to_string(self.root.join(format!("{id}.log")))
                     .unwrap_or_default();
-                let tail = log.lines().rev().take(40).collect::<Vec<_>>();
+                let node = self.nodes.iter().find(|node| node.id == *id).unwrap();
                 format!(
-                    "== {id}\n{}",
-                    tail.into_iter().rev().collect::<Vec<_>>().join("\n")
+                    "== {id} SQL={} replication={} pid={:?} last_exit={:?}\n{log}",
+                    node.sql_port, node.replication_port, node.last_pid, node.last_exit
                 )
             })
             .collect::<Vec<_>>()
@@ -158,6 +288,14 @@ impl Drop for Group {
     fn drop(&mut self) {
         for index in 0..self.nodes.len() {
             self.kill(index);
+        }
+        if std::thread::panicking() {
+            // Process termination precedes this read, so the complete final
+            // child logs survive TempDir cleanup in the original test output.
+            eprintln!(
+                "complete HA CLI child logs after owned teardown\n{}",
+                self.logs()
+            );
         }
     }
 }
@@ -181,6 +319,7 @@ fn killing_the_primary_loses_no_acknowledged_write() {
         group.start(index);
         std::thread::sleep(Duration::from_millis(500));
     }
+    group.require_all_live_and_listening();
     eventually(Duration::from_secs(30), || {
         group
             .execute(0, "CREATE TABLE t (id INT PRIMARY KEY, v TEXT)")
@@ -202,6 +341,7 @@ fn killing_the_primary_loses_no_acknowledged_write() {
     }
     assert!(!acked.is_empty(), "no write acknowledged\n{}", group.logs());
 
+    group.require_all_live_and_listening();
     group.kill(0);
     let killed = Instant::now();
     let primary = eventually(Duration::from_secs(45), || {
@@ -296,6 +436,7 @@ fn planned_switchover_preserves_all_acknowledged_writes_and_fences_the_source() 
         group.start(index);
         std::thread::sleep(Duration::from_millis(500));
     }
+    group.require_all_live_and_listening();
     eventually(Duration::from_secs(30), || {
         group
             .execute(0, "CREATE TABLE t (id INT PRIMARY KEY, v TEXT)")
@@ -307,6 +448,7 @@ fn planned_switchover_preserves_all_acknowledged_writes_and_fences_the_source() 
             .execute(0, &format!("INSERT INTO t VALUES ({id}, 'acknowledged')"))
             .unwrap();
     }
+    group.require_all_live_and_listening();
     let output = Command::new(env!("CARGO_BIN_EXE_bicdb"))
         .args([
             "ha",
@@ -345,4 +487,57 @@ fn planned_switchover_preserves_all_acknowledged_writes_and_fences_the_source() 
         (group.ids(1) == (1..=6).collect()).then_some(())
     })
     .unwrap();
+}
+
+#[test]
+fn held_endpoint_reservations_exclude_parallel_ha_groups() {
+    let root = tempfile::tempdir().unwrap();
+    let groups = std::thread::scope(|threads| {
+        let first = threads.spawn(|| Group::new(root.path()));
+        let second = threads.spawn(|| Group::new(root.path()));
+        [first.join().unwrap(), second.join().unwrap()]
+    });
+    let ports = groups
+        .iter()
+        .flat_map(|group| {
+            group
+                .nodes
+                .iter()
+                .flat_map(|node| [node.sql_port, node.replication_port])
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(ports.iter().copied().collect::<BTreeSet<_>>().len(), 12);
+    for port in ports {
+        let error = TcpListener::bind(("127.0.0.1", port)).unwrap_err();
+        assert_eq!(
+            error.kind(),
+            std::io::ErrorKind::AddrInUse,
+            "held actual endpoint {port}"
+        );
+    }
+}
+#[test]
+fn occupied_replication_listener_is_reported_before_ha_fault() {
+    let root = tempfile::tempdir().unwrap();
+    let mut group = Group::new(root.path());
+    // Hold the ACTUAL selected replication endpoint through child startup.
+    // No arbitrary guessed port or synthetic child outcome is used.
+    let _occupied = group.nodes[0].replication_reservation.take().unwrap();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| group.start(0)));
+    let panic =
+        result.expect_err("occupied HA listener must fail readiness before fault injection");
+    let message = panic
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| panic.downcast_ref::<&str>().copied())
+        .unwrap_or("");
+    assert!(
+        message.contains("n1") && message.contains("exited before readiness"),
+        "{message}"
+    );
+    let log = std::fs::read_to_string(root.path().join("n1.log")).unwrap();
+    assert!(
+        log.contains("Address already in use") || log.contains("address already in use"),
+        "{log}"
+    );
 }

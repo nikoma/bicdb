@@ -227,6 +227,7 @@ fn run(
             let damage = phase.test_remove_post_collection_archive(&selected, process)?;
             if damage["original_current"] != damage["removed_archive"]
                 || damage["actual_archive_absent"] != true
+                || damage["actual_controlled_admission_validated_before_and_after"] != true
             {
                 return Err(invalid("post-collection actual archive fault not proven"));
             }

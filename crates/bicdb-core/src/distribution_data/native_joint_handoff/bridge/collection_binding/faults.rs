@@ -27,7 +27,30 @@ impl ActualServiceNativeJointPreparedEvidence {
         let database = database
             .try_read()
             .ok_or_else(|| data_error("archive fault DB busy"))?;
-        database.test_remove_joint_preparation_archive(self.prepared(), parent)
+        let gate = database.range_mutation_gate();
+        let range = self.committed.data().old_range().id;
+        let controlled = gate.try_controlled_mutation(self.lease.try_frozen()?)?;
+        gate.validate(
+            range,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Controlled(&controlled),
+        )?;
+        let result = database.test_remove_joint_preparation_archive(self.prepared(), parent);
+        let post = gate.validate(
+            range,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Controlled(&controlled),
+        );
+        drop(controlled); // before the later counter baseline / actual publisher
+        match result {
+            Ok(mut value) => {
+                post?;
+                value["actual_controlled_admission_validated_before_and_after"] = true.into();
+                Ok(value)
+            }
+            Err(primary) => {
+                let _ = post;
+                Err(primary)
+            }
+        }
     }
     pub(crate) fn test_post_collection_controlled_hold(
         &self,

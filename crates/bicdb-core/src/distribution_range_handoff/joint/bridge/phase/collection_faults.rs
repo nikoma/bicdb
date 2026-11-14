@@ -3,6 +3,21 @@ use super::*;
 
 impl NativeJointPreparationPhaseQuorum {
     pub(crate) fn test_prepublication_snapshot(&self) -> Result<serde_json::Value> {
+        // ALL authority clocks are copied BEFORE any forensic storage read.
+        // Later diagnostic work cannot masquerade as operation-time expiry.
+        let started = Instant::now();
+        let phase_remaining_us = self
+            .cancellation
+            .deadline()
+            .map(|d| d.saturating_duration_since(started).as_micros());
+        let phase_cancel_requested = self.cancellation.is_cancel_requested();
+        let aggregate_caller_cancel_requested = self.original.caller.is_cancel_requested();
+        let aggregate_caller_live = self.original.caller.check().is_ok();
+        let clocks: BTreeMap<_, _> = self
+            .observations
+            .iter()
+            .map(|(node, observation)| (node.clone(), observation.committed.test_request_memory()))
+            .collect();
         let mut members = BTreeMap::new();
         for (node, old) in &self.original.observations {
             let service = old
@@ -10,14 +25,16 @@ impl NativeJointPreparationPhaseQuorum {
                 .try_lock()
                 .ok_or_else(|| invalid("prepublication diagnostic service busy"))?;
             let mut value = old.actual.test_prepublication_owner_snapshot(&service)?;
-            value["request"] = self.observations[node].committed.test_request_memory();
+            value["request"] = clocks[node].clone();
             members.insert(node.clone(), value);
         }
         Ok(serde_json::json!({"members":members,
-            "phase_cancel_requested":self.cancellation.is_cancel_requested(),
-            "phase_remaining_us":self.cancellation.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_micros()),
-            "aggregate_caller_cancel_requested":self.original.caller.is_cancel_requested(),
-            "aggregate_caller_live":self.original.caller.check().is_ok(),
+            "phase_cancel_requested":phase_cancel_requested,
+            "phase_remaining_us":phase_remaining_us,
+            "aggregate_caller_cancel_requested":aggregate_caller_cancel_requested,
+            "aggregate_caller_live":aggregate_caller_live,
+            "clocks_captured_at_snapshot_entry_before_storage":true,
+            "diagnostic_elapsed_us":started.elapsed().as_micros(),
             "memory_observation_not_authority":true}))
     }
     pub(crate) fn test_remove_post_collection_archive(

@@ -2,6 +2,7 @@
 //! a source retainer, target owner, local NEW or certificate to the donor RPC.
 use super::*;
 mod callback_liveness_tests;
+mod original_work_tests;
 use crate::distribution_range_image::{
     NativeSourceDiscoveryOperationV1 as DiscoveryOp, NativeSourceDiscoveryRequestV1,
     NativeSourceExportOperationV1 as ExportOp, NativeSourceExportRequestV1,
@@ -463,7 +464,7 @@ pub(super) fn exercise(
                 evidence(&path,&serde_json::json!({"phase":"actual_mutation_intent","before":before,"requested_term":requested,"original_own_remaining_us":own_deadline.saturating_duration_since(Instant::now()).as_micros(),"local_term_only_not_new_leader":true}))?;
                 let changed = store.observe_remote_term(requested)?;
                 let after = store.test_actual_publication_version_evidence()?;
-                Ok(serde_json::json!({"phase":"actual_mutation_returned","changed":changed,"before":before,"after":after,"previous_term":previous,"requested_term":requested,"actual_term":store.status().current_term,"original_own_remaining_us":own_deadline.saturating_duration_since(Instant::now()).as_micros(),"original_parent_live":caller.check().is_ok(),"local_term_only_not_new_leader":true}))
+                Ok(serde_json::json!({"phase":"actual_mutation_returned","changed":changed,"before":before,"after":after,"previous_term":previous,"requested_term":requested,"actual_term":store.status().current_term,"original_own_remaining_us":own_deadline.saturating_duration_since(Instant::now()).as_micros(),"client_parent_live":caller.check().is_ok(),"local_term_only_not_new_leader":true}))
             })();
             let value = serde_json::json!({"observation":result.as_ref().ok(),"exact_error":result.as_ref().err().map(|e|format!("{e:?}"))});
             *trace.lock() = value.clone();
@@ -479,12 +480,12 @@ pub(super) fn exercise(
         let caller = request_parent.clone();
         let path = output.join("source-export-final-detach-original-window.json");
         controls[donor].test_source_export_before_detach(Box::new(move |own_deadline, original_process| {
-            let before = serde_json::json!({"seam_reached":true,"actual_source_process_cancelled":original_process.is_cancel_requested(),"original_own_remaining_us":own_deadline.saturating_duration_since(Instant::now()).as_micros(),"original_parent_live":caller.check().is_ok()});
+            let before = serde_json::json!({"seam_reached":true,"actual_source_process_cancelled":original_process.is_cancel_requested(),"original_own_remaining_us":own_deadline.saturating_duration_since(Instant::now()).as_micros(),"client_parent_live":caller.check().is_ok()});
             evidence(&path,&serde_json::json!({"before":before,"cut_not_yet_applied":true})).unwrap();
             if matches!(case,SourceCase::TargetSourceExportExpiryAtDetach) {
                 while Instant::now() <= own_deadline { caller.check().unwrap(); std::thread::sleep(Duration::from_millis(5)); }
             } else { original_process.cancel(); }
-            let after = serde_json::json!({"seam_reached":true,"actual_source_process_cancelled":original_process.is_cancel_requested(),"original_own_remaining_us":own_deadline.saturating_duration_since(Instant::now()).as_micros(),"original_parent_live":caller.check().is_ok()});
+            let after = serde_json::json!({"seam_reached":true,"actual_source_process_cancelled":original_process.is_cancel_requested(),"original_own_remaining_us":own_deadline.saturating_duration_since(Instant::now()).as_micros(),"client_parent_live":caller.check().is_ok()});
             let value=serde_json::json!({"before":before,"after":after,"no_clock_or_scope_replacement":true});
             *trace.lock()=value.clone();
             evidence(&path,&value).unwrap();
@@ -511,6 +512,7 @@ pub(super) fn exercise(
             | SourceCase::TargetSourceExportWrongBirth
             | SourceCase::TargetSourceExportNativeUnknown
     );
+    let rpc_started = Instant::now();
     let result = call(
         output,
         &mut ledger,
@@ -534,15 +536,48 @@ pub(super) fn exercise(
             }
         },
     );
+    // Preserve the ORIGINAL RPC result before touching source/target state.
+    // In particular, transport timeout does not prove recipient work ended.
+    let saved = evidence(
+        &output.join("source-export-rpc-outcome-before-diagnostics.json"),
+        &serde_json::json!({"case":format!("{case:?}"),"exact_request":request,
+            "elapsed_us":rpc_started.elapsed().as_micros(),"actual_reply":result.as_ref().ok(),
+            "actual_error":result.as_ref().err().map(|e|format!("{e:?}")),
+            "client_parent_live":request_parent.check().is_ok(),
+            "client_parent_remaining_us":request_parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_micros()),
+            "client_parent_configured_ms":5000,"server_parent_is_distinct":true,
+            "recipient_completion_not_inferred_from_RPC_return":true}),
+    );
+    if let Err(error) = &saved {
+        eprintln!("S2_RPC_OUTCOME_EVIDENCE_ERROR original_rpc={result:?} diagnostic={error}");
+    }
+    saved.expect("original RPC outcome evidence missing");
+    if matches!(case, SourceCase::TargetSourceExportExpiryAtDetach) {
+        original_work_tests::await_original_work(&controls[donor], &request, &result, output);
+    }
     let target_gate_after = factory
         .database
         .read()
         .range_mutation_gate()
         .test_source_capture_pin_state(selected.id)
         .unwrap();
-    let after = controls[donor]
-        .test_source_discovery_state(selected.id)
-        .unwrap();
+    let source_after = controls[donor].test_source_discovery_state(selected.id);
+    let source_snapshot_saved = evidence(
+        &output.join("source-export-source-snapshot-outcome.json"),
+        &serde_json::json!({"case":format!("{case:?}"),"exact_request":request,
+            "original_rpc_error":result.as_ref().err().map(|e|format!("{e:?}")),
+            "source_state":source_after.as_ref().ok(),"diagnostic_error":source_after.as_ref().err().map(|e|format!("{e:?}")),
+            "busy_is_not_accepted":true}),
+    );
+    if let Err(error) = &source_snapshot_saved {
+        eprintln!("S2_SOURCE_STATE_EVIDENCE_ERROR original_rpc={result:?} snapshot={source_after:?} diagnostic={error}");
+    }
+    source_snapshot_saved.expect("source diagnostic outcome evidence missing");
+    let after = source_after.expect("actual source state unavailable after diagnostic boundary");
+    if matches!(case, SourceCase::TargetSourceExportExpiryAtDetach) {
+        assert_eq!(after["source"]["original_export_session_cancel_requested"],false,
+            "request/OWN expiry must preserve the original exporter session for its real continuation");
+    }
     let native_after = old_records(services, &plan);
     let negative = matches!(
         case,
@@ -591,7 +626,7 @@ pub(super) fn exercise(
             trace["observation"]["requested_term"],
             trace["observation"]["actual_term"]
         );
-        assert_eq!(trace["observation"]["original_parent_live"], true);
+        assert_eq!(trace["observation"]["client_parent_live"], true);
         assert!(
             trace["observation"]["original_own_remaining_us"]
                 .as_u64()
@@ -615,7 +650,7 @@ pub(super) fn exercise(
         let trace = detach_trace.lock().clone();
         evidence(&output.join("source-export-final-detach-window-before-assertions.json"),&serde_json::json!({"case":format!("{case:?}"),"trace":trace,"before":before,"after":after,"exact_error":result.as_ref().err().map(|e|format!("{e:?}")),"acknowledged":acknowledged})).unwrap();
         assert_eq!(trace["before"]["seam_reached"], true);
-        assert_eq!(trace["after"]["original_parent_live"], true);
+        assert_eq!(trace["after"]["client_parent_live"], true);
         if matches!(case, SourceCase::TargetSourceExportExpiryAtDetach) {
             assert_eq!(trace["after"]["original_own_remaining_us"], 0);
         } else {

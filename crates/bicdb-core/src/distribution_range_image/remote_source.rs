@@ -679,6 +679,8 @@ pub(crate) struct NativeRemoteImageSourceRegistry {
     export_callback_final_bits: std::sync::atomic::AtomicU16,
     #[cfg(test)]
     export_callback_final_own_remaining_us: std::sync::atomic::AtomicU64,
+    #[cfg(test)]
+    export_work_diagnostics: export_retirement::ExportWorkDiagnostics,
     transport: Arc<TcpClusterRelocationTransport>,
     provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
     original_process: std::sync::OnceLock<CancellationToken>,
@@ -705,6 +707,8 @@ impl NativeRemoteImageSourceRegistry {
             export_callback_final_bits: std::sync::atomic::AtomicU16::new(0),
             #[cfg(test)]
             export_callback_final_own_remaining_us: std::sync::atomic::AtomicU64::new(0),
+            #[cfg(test)]
+            export_work_diagnostics: Default::default(),
             transport,
             provider,
             original_process: std::sync::OnceLock::new(),

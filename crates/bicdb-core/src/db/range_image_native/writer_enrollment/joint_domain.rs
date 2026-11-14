@@ -58,6 +58,31 @@ impl NativeJointWriterDomain {
             }
         }
     }
+    /// SAME actual CLOSED owner under an existing borrowed publication scope.
+    /// Other profiles keep their unchanged full currentness path.
+    pub(crate) fn require_current_with_publication_scope(
+        &self,
+        scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        range: &RangeDescriptor,
+    ) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        if let Self::Closed(domain) = self {
+            let db = scope.database();
+            store.require_native_writer_host_base()?;
+            self.require_lifetime(db.data_path(), store.native_writer_store_open_id(), range)?;
+            if !Arc::ptr_eq(domain.actual_writer(), &store.native_writer_host_state()?) {
+                return Err(invalid("joint writer domain changed original actual State"));
+            }
+            domain.require_current_for_publication(scope, store, range)?;
+            return self.require_lifetime(
+                db.data_path(),
+                store.native_writer_store_open_id(),
+                range,
+            );
+        }
+        self.require_current(scope.database(), store, range)
+    }
     pub(crate) fn require_current(
         &self,
         db: &BicDb,

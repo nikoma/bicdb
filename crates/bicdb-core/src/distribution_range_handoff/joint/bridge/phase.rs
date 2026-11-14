@@ -52,6 +52,7 @@ impl ActivationFailureTrace {
             .map(|(node, member)| {
                 let (term, index, context) = member.committed.metadata_anchor();
                 serde_json::json!({"node":node.as_str().chars().take(128).collect::<String>(),
+                "node_id_truncated":node.as_str().chars().count()>128,
                 "term":term,"read_index":index,"context_id":context,
                 "deadline":clock(Some(member.committed.deadline()))})
             })
@@ -68,6 +69,7 @@ impl ActivationFailureTrace {
         let value = serde_json::json!({
             "schema":"native-activation-failure-v1",
             "error":error.to_string().chars().take(4096).collect::<String>(),
+            "error_truncated":error.to_string().chars().count()>4096,
             "elapsed_us":ended.saturating_duration_since(self.started).as_micros(),
             "phase_deadline":clock(self.phase_deadline),
             "original_caller_deadline":clock(self.caller_deadline),

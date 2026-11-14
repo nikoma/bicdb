@@ -93,6 +93,26 @@ pub(super) fn exercise(
     let after = Instant::now();
     let error = result.as_ref().err().map(ToString::to_string);
     let chosen_node = chosen.lock().node_id().clone();
+    // The TempDir JSON is not uploaded by required CI. Report the returned
+    // outcome before the evidence write or an assertion can fail. This makes
+    // even unexpected success explicit without changing any original check.
+    eprintln!(
+        "NATIVE_PREPARED_CANDIDATE_RESULT {}",
+        serde_json::json!({
+            "case":format!("{case:?}"),
+            "original_node":original_node.as_str().chars().take(128).collect::<String>(),
+            "chosen_actual_service_node":chosen_node.as_str().chars().take(128).collect::<String>(),
+            "node_ids_truncated":original_node.as_str().chars().count()>128 || chosen_node.as_str().chars().count()>128,
+            "original_preparation_checksum":original_checksum,
+            "actual_error":error.as_deref().map(|e|e.chars().take(4096).collect::<String>()),
+            "error_truncated":error.as_deref().is_some_and(|e|e.chars().count()>4096),
+            "original_own_live_before_count":own_live_before_count,
+            "original_own_live_after_count":after<original_deadline,
+            "past_original_deadline_us":after.saturating_duration_since(original_deadline).as_micros(),
+            "count_parent_cancel_requested_at_report":count_parent.is_cancel_requested(),
+            "count_refused":result.is_err(),"memory_observation_not_authority":true,
+        })
+    );
     evidence(
         &output.join("prepared-candidate-count-negative.json"),
         &serde_json::json!({
@@ -111,24 +131,6 @@ pub(super) fn exercise(
     let error = result
         .err()
         .expect("uncounted candidate must not become a quorum");
-    // The TempDir JSON is not uploaded by required CI. Preserve the exact
-    // returned refusal before any liveness or expected-error assertion fails.
-    // No new request validation, service read or authority is performed here.
-    eprintln!(
-        "NATIVE_PREPARED_CANDIDATE_REFUSAL {}",
-        serde_json::json!({
-            "case":format!("{case:?}"),
-            "original_node":original_node.as_str().chars().take(128).collect::<String>(),
-            "chosen_actual_service_node":chosen_node.as_str().chars().take(128).collect::<String>(),
-            "original_preparation_checksum":original_checksum,
-            "actual_error":error.to_string().chars().take(4096).collect::<String>(),
-            "original_own_live_before_count":own_live_before_count,
-            "original_own_live_after_count":after<original_deadline,
-            "past_original_deadline_us":after.saturating_duration_since(original_deadline).as_micros(),
-            "count_parent_cancel_requested_at_report":count_parent.is_cancel_requested(),
-            "count_refused":true,"memory_observation_not_authority":true,
-        })
-    );
     request.check().unwrap();
     process.check().unwrap();
     match case {

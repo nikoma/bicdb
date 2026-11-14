@@ -146,9 +146,11 @@ pub(super) fn exercise(
         }
         SourceCase::TargetPreparedCandidateForeignService => {
             assert!(own_live_before_count && after < original_deadline);
-            assert!(error
-                .to_string()
-                .contains("cluster service belongs to another actual database/open"));
+            assert!(matches!(
+                error,
+                crate::BicDbError::Cluster(detail)
+                    if detail == "native range image: native writer store/root/open changed"
+            ));
             assert!(!count_parent.is_cancel_requested());
         }
         SourceCase::TargetPreparedCandidateMissingArchive => {

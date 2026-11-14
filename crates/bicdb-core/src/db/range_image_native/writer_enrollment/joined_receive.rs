@@ -210,11 +210,7 @@ impl InstalledNativeWriterHostGuard {
             .data_domains
             .try_read()
             .ok_or_else(|| invalid("Joined selected DATA-domain publication busy"))?;
-        if domains.pending.contains(&range) || domains.serving.contains_key(&range) {
-            return Err(invalid(
-                "Joined receive selected range already has a retained DATA-domain continuation",
-            ));
-        }
+        domains.require_unstarted_range(range)?;
         Ok(())
     }
     /// Full same-State hook/native-policy check for each row-scan chunk. This

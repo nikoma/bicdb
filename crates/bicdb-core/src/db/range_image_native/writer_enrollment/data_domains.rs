@@ -11,6 +11,18 @@ pub(super) struct WriterDataDomains {
     serving: BTreeMap<RangeId, Arc<VerifiedServingDomain>>,
     pending: BTreeSet<RangeId>,
 }
+impl WriterDataDomains {
+    /// Necessary refusal for a new receive lane. No fields or permission are
+    /// exported; the owning module interprets both current and pending state.
+    pub(super) fn require_unstarted_range(&self, range: RangeId) -> Result<()> {
+        if self.pending.contains(&range) || self.serving.contains_key(&range) {
+            return Err(invalid(
+                "Joined receive selected range already has a retained DATA-domain continuation",
+            ));
+        }
+        Ok(())
+    }
+}
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct OriginalWriterBinding {

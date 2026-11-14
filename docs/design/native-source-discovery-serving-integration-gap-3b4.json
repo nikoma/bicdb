@@ -1,0 +1,104 @@
+{
+  "format": 1,
+  "source": "3b4bef4eecbdf1e770bba2428cd860fda89e7dba",
+  "worktree": "/tmp/bicdb-native-discovery-to-joined-3b4",
+  "branch": "test/native-discovery-to-joined-3b4",
+  "scope": "Test-only integration preflight. STOPPED before any edits because existing production source continuation cannot compose. No new tests/selectors, source changes, build, CI, version, push, or modification of running qualifier29.",
+  "source_pins": [
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/source_discovery.rs",
+      "bytes": 16516,
+      "sha256": "12ac2a827f831d8baafe7bf324f22267e382dcd7e78e87a19b2f6bcea99d1bc6",
+      "blob": "a01bce2100efa81bbe65dcafa44ee4b8f0207e3f"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_image/remote_source/discovery.rs",
+      "bytes": 14721,
+      "sha256": "46cfd69a78a848bb65471c181c51f3fb63c57e6e4467aa0b0a44487927aad82f",
+      "blob": "33b032718279826310272629812dd70f491bb474"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_image/remote_source.rs",
+      "bytes": 40531,
+      "sha256": "c546a7141b006122fffb5d68fefe6d85030f78a76f4540e5bb4c71b2e6965fa7",
+      "blob": "35ae75c6bedf2792301aaa4cca6ca57375d9fa29"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport/native_source_discovery.rs",
+      "bytes": 6755,
+      "sha256": "3d921ccd58190caa8d560d49466f31347f0e585ad439b5caae33b93902a2199d",
+      "blob": "1e147ac85e06c0bc275b96e09f7da96804160c7e"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/remote_old_collect.rs",
+      "bytes": 13415,
+      "sha256": "660f1676431c44af360c9f0c10d215715a8a9022cd607fe805cbf4e620781199",
+      "blob": "3004089f61c48af74d511e0d19b508cafdac50a3"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/old_step/remote_old.rs",
+      "bytes": 20200,
+      "sha256": "1066f87cdbe774ae9b877b67c0649c46d9d18040c776d092cbbbdfd7e197c571",
+      "blob": "199d869c6d087443eca63ae7589c7ebfba9e1ff8"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration.rs",
+      "bytes": 34386,
+      "sha256": "11545fd0558507060b0b6f86a6c2cd35911f6b25324c9bb2b2e28768847a37b3",
+      "blob": "4543fff227d9a7e297c8c7be4f73e24d09725305"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data.rs",
+      "bytes": 53739,
+      "sha256": "a4877c83beb5f9a4b414d734ec7306639ee460d8235e9c2d79e8e8a9ce8c5586",
+      "blob": "08890cc1a431c393da01c9ee1aa2a42e043921c9"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_discovery_tests.rs",
+      "bytes": 13320,
+      "sha256": "26234826c1048ab4bc921d4bcdc2edc69161f081e9f63464572072f770f5133d",
+      "blob": "8f831d11531efa9d3ec1a93d6b1d643b58cda777"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "bytes": 30412,
+      "sha256": "bc8b9f0caa408a1035e82fc144f469be94fbd98219ff25731d38a7149974dc55",
+      "blob": "475b8de7da3b54431f9dd1a13fd8c07311dc611d"
+    }
+  ],
+  "can_compose_without_new_authority": [
+    "Existing actual NativeRemoteOld Close requests can prepare original OLD peers without invoking local retained.publish; S2 recipient then independently collects complete actual OLD under fresh donor OWN.",
+    "Actual target transport can send Start then fresh Describe with the same target attempt A; NativeRemoteImageFact::from_actual_discovery accepts only its strict authenticated wrapper and feeds existing target image/import path.",
+    "A fresh donor-local collect_initial_remote_old_at_actual_donor can produce an actual historical certificate. Its digest is over immutable plan/source/spine/facts/constraints, not dynamic request IDs; a new test could assert exact equality to the discovered MF.old_quorum_sha256. No need to cast Manifest DATA to a certificate."
+  ],
+  "missing_production_continuation": {
+    "title": "Recipient-owned source export/OLD retirement after S2 discovery has no host or transport consumer.",
+    "retention": "registration/initial_data/source_discovery.rs:300-391 creates and retains the actual source in NativeSourceDiscoveryAttempt. remote_source/discovery.rs:222-326 keeps its Arc privately within the registry. The host test observer exposes only serde state DATA, not the retained source owner.",
+    "required_export_boundary": "hot_policy_tests.rs:374-376 invokes retained.retire_export_after_actual_registered_new(&actual_new, process), before survivor NEW/decision progress. remote_source.rs:902-918 validates actual target NEW against exact MF, cancels only original export session and drops the actual capture/pins.",
+    "required_old_boundary": "hot_policy_tests.rs:636-646 invokes retained.retire_old_export_custody_after_joint_open(&phase). remote_source.rs:921-966 validates actual ALL-Open release phase against the same retained OLD certificate, then replaces obsolete actual OLD references with explicit RetiredJoint DATA.",
+    "api_search": "No NativeMetadataControlHost or transport operation exposes/drives these boundaries for the source retained by S2. NativeSourceDiscoveryOperationV1 has Start and Describe only. Existing source-frame operations do not include retirement. The two retirement primitives are only on NativeRetainedRemoteImageSource; current hot fixture gets it from local remote_old_seed.",
+    "why_not_omit": "S2 registry retains actual source/capture and OLD owner Arcs. Dropping the client wrapper does not drop those pins/owners. Current hot lane deliberately retires them before subsequent actual survivor/decision/release stages. Omitting retirement is not an equivalent end-to-end test.",
+    "why_not_bypass": "Obtaining private source registry/session state through a new test-only getter or fabricating NativeRetainedRemoteImageSource/NEW/release authority would bypass the missing production continuation. A DTO manifest/diagnostic state cannot authorize native pin or OLD-owner retirement.",
+    "classification": "Confirmed source-level integration blocker for the two requested full end-to-end tests, not a newly observed safety failure or evidence that the bounded S2 Start/Describe contract is wrong."
+  },
+  "smallest_independent_next_slice": [
+    "Add a narrow recipient-owned continuation that resolves the exact retained S2 attempt/session by full plan/source/target birth/A/MF binding and drives existing typed export-retirement primitive from genuine actual Registered NEW evidence, never returns or constructs authority from DTO.",
+    "Also drive the exact source OLD-retirement primitive after genuine ALL-Open/released phase, retaining uncertainty and original session identity on errors. A multi-process product path ultimately needs authenticated remote phase evidence; an in-process owner reference must not be described as an RPC.",
+    "Keep these production adapters separate from this requested test-only change. After they exist, normal and real Start-reply-loss/fresh-Describe cases can reuse original target image/import/joint/FIRST/Joined code and original two-second SDK object without hints, deadline changes or local publish."
+  ],
+  "proposed_tests_not_created": [
+    {
+      "name": "native_registered_fifth_discovery_to_joined_actual_tcp_original_sdk_ack_full_strong",
+      "requirements": "Actual Close RPCs -> Start/Describe -> strict fact -> original A -> protected image/import/joint/FIRST -> original-SDK APP/full Strong; exact source and target retirement owners retained."
+    },
+    {
+      "name": "native_registered_fifth_discovery_to_joined_actual_tcp_lost_start_reply_describe_same_a",
+      "requirements": "Arm existing real recipient reply suppression; preserve first Start error/uncertain capture, obtain fresh Describe, assert same MF/source session/A, finish genuine protocol and unchanged SDK APP/full Strong."
+    }
+  ],
+  "preserved": {
+    "existing_17_cases": "All bytes/assertions/deadlines unchanged; worktree clean at frozen3b4.",
+    "running_qualifier29": "Untouched; no dispatch/cancel.",
+    "qualification": "None. No physical capacity, controller, general SQL, second populated range or cold Serving claim."
+  }
+}

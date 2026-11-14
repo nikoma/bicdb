@@ -1,0 +1,14 @@
+{
+  "run": 43542004108,
+  "source": "521243e597c2d833be840773acac728a85161969",
+  "ref": "qual/event-first-cause-cd366",
+  "event": "workflow_dispatch",
+  "run_attempt": 1,
+  "original_pre_POST_request_body_saved": false,
+  "limitation": "Root confirms the original dispatch request/intent body was not saved before POST. No original request artifact can be reproduced.",
+  "Root_reported_executed_CLI_from_tool_transcript": "gh workflow run tests.yml --ref qual/event-first-cause-cd366 -f core_filter=event_client_",
+  "Root_reported_dispatch_count": 1,
+  "count_scope": "Root tool-transcript report, not an independent exhaustive API audit or original request-body artifact",
+  "afterward_run_identity_verified": true,
+  "new_dispatch_created_for_this_packet": false
+}

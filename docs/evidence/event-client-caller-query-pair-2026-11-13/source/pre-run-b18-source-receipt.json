@@ -1,0 +1,40 @@
+{
+  "at_utc": "2026-11-14T00:07:30.093589+00:00",
+  "fixture_parent": "b18fb02685de53a90529adff3eb429e5f0957aad",
+  "source_version": "1.0.500-beta",
+  "synchronous_baseline": "01308fb09512f02e0c61b740fc339382e44b3521",
+  "synchronous_runtime_qualified_historical": "8352e3d6bcf30ca5d03576a0ef70f98cc4244fec",
+  "selector": "event_client_caller_query_budget_",
+  "expected_selected_count": 2,
+  "expired_expected_contract": "QueryTimedOut before TCP connection/frame; source-derived expected FAIL on b18, expected PASS on synchronous505",
+  "healthy_expected_contract": "realTCPmock ACK exactly1connection/1APP",
+  "real_clock": true,
+  "public_QueryMemoryScope": true,
+  "test_file_sha256": "a7e9f0b65a5ea9db0c3cc699ff30eaca282add7353001cc1cc6349e24432fd80",
+  "executed": false,
+  "compiled": false,
+  "CI_dispatched": false,
+  "foreign182_edited": false,
+  "production_semantics_modified": false,
+  "unknown_write_existing505_regression": "event_client_unknown_write_survives_later_refusal_and_refresh_or_deadline; preserve unchanged when integrating; b18 has no retention helper",
+  "merge_conflicts": {
+    "crates/bicdb-core/src/distribution_events.rs": {
+      "merge_file_status": 3,
+      "conflict_starts": 3,
+      "hypothetical_only": true
+    },
+    "crates/bicdb-core/src/distribution_transport.rs": {
+      "merge_file_status": 0,
+      "conflict_starts": 0,
+      "hypothetical_only": true
+    }
+  },
+  "frozen_test_leaf": "560d8a873e65a7931226a0e38fc460f38c058ae6",
+  "worktree": "/tmp/bicdb-event-client-caller-budget-b18",
+  "branch": "test/event-client-caller-budget-b18",
+  "static_checks": {
+    "fmt": "passed",
+    "diff": "passed",
+    "version29": "passed; source remains500"
+  }
+}

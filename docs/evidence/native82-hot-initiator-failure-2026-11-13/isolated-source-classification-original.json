@@ -1,0 +1,257 @@
+{
+  "run": 43544810818,
+  "head": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+  "runtime": "5a85900f571c389ff97e278a0b9555048bdeadec",
+  "decompressed_log_sha256": "241738e911657e0ed0e6d975f5ddf14ff10076f40e222699f859bf945a1181d0",
+  "decompressed_log_bytes": 22693709,
+  "observed_overall_result": {
+    "passed": 70,
+    "failed": 12,
+    "ignored": 0,
+    "duration_seconds": 941.3
+  },
+  "records": [
+    {
+      "case_root": "native-registered-fifth-image-01a1d7dc-61e0-70d2-b8ac-45065f047b94",
+      "phase": "actual_remote_original_a_through_first_policy_component",
+      "source": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+      "range": 1,
+      "range_leader": "n1",
+      "retiring_replica": "n1",
+      "old_voters": [
+        "n1",
+        "n2",
+        "n3"
+      ],
+      "source_derived_actual_donor": "n2",
+      "actor_source_expression": "clients[donor].local_metadata_read_participant()",
+      "metadata_rpc_rejector": "n0",
+      "committed_handoff_initiator_predicate_satisfied": false,
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "source_APP_ACKs": 2,
+      "native_phase_rpc_observed_in_sdk_journal": false
+    },
+    {
+      "case_root": "native-registered-fifth-image-01a1d7dc-8cfa-7aa2-9022-a591a55b977b",
+      "phase": "actual_remote_original_a_through_first_policy_component",
+      "source": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+      "range": 1,
+      "range_leader": "n1",
+      "retiring_replica": "n2",
+      "old_voters": [
+        "n1",
+        "n2",
+        "n3"
+      ],
+      "source_derived_actual_donor": "n3",
+      "actor_source_expression": "clients[donor].local_metadata_read_participant()",
+      "metadata_rpc_rejector": "n0",
+      "committed_handoff_initiator_predicate_satisfied": false,
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "source_APP_ACKs": 2,
+      "native_phase_rpc_observed_in_sdk_journal": false
+    },
+    {
+      "case_root": "native-registered-fifth-image-01a1d7dc-b527-79c3-a00b-73a71b470563",
+      "phase": "actual_remote_original_a_through_first_policy_component",
+      "source": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+      "range": 1,
+      "range_leader": "n1",
+      "retiring_replica": "n1",
+      "old_voters": [
+        "n1",
+        "n2",
+        "n3"
+      ],
+      "source_derived_actual_donor": "n2",
+      "actor_source_expression": "clients[donor].local_metadata_read_participant()",
+      "metadata_rpc_rejector": "n0",
+      "committed_handoff_initiator_predicate_satisfied": false,
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "source_APP_ACKs": 2,
+      "native_phase_rpc_observed_in_sdk_journal": false
+    },
+    {
+      "case_root": "native-registered-fifth-image-01a1d7dc-e34f-7a13-a5b5-a0102807faac",
+      "phase": "actual_remote_original_a_through_first_policy_component",
+      "source": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+      "range": 1,
+      "range_leader": "n1",
+      "retiring_replica": "n1",
+      "old_voters": [
+        "n1",
+        "n2",
+        "n3"
+      ],
+      "source_derived_actual_donor": "n2",
+      "actor_source_expression": "clients[donor].local_metadata_read_participant()",
+      "metadata_rpc_rejector": "n0",
+      "committed_handoff_initiator_predicate_satisfied": false,
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "source_APP_ACKs": 2,
+      "native_phase_rpc_observed_in_sdk_journal": false
+    },
+    {
+      "case_root": "native-registered-fifth-image-01a1d7dd-0dd9-7f32-adeb-a965f077c35a",
+      "phase": "actual_remote_original_a_through_first_policy_component",
+      "source": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+      "range": 1,
+      "range_leader": "n1",
+      "retiring_replica": "n1",
+      "old_voters": [
+        "n1",
+        "n2",
+        "n3"
+      ],
+      "source_derived_actual_donor": "n2",
+      "actor_source_expression": "clients[donor].local_metadata_read_participant()",
+      "metadata_rpc_rejector": "n0",
+      "committed_handoff_initiator_predicate_satisfied": false,
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "source_APP_ACKs": 2,
+      "native_phase_rpc_observed_in_sdk_journal": false
+    },
+    {
+      "case_root": "native-registered-fifth-image-01a1d7dd-3a89-7061-a3a4-5be20e4ab9bd",
+      "phase": "actual_remote_original_a_through_first_policy_component",
+      "source": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+      "range": 1,
+      "range_leader": "n1",
+      "retiring_replica": "n1",
+      "old_voters": [
+        "n1",
+        "n2",
+        "n3"
+      ],
+      "source_derived_actual_donor": "n2",
+      "actor_source_expression": "clients[donor].local_metadata_read_participant()",
+      "metadata_rpc_rejector": "n0",
+      "committed_handoff_initiator_predicate_satisfied": false,
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "source_APP_ACKs": 2,
+      "native_phase_rpc_observed_in_sdk_journal": false
+    },
+    {
+      "case_root": "native-registered-fifth-image-01a1d7dd-63ee-7ae2-9624-509ebf0fa675",
+      "phase": "actual_remote_original_a_through_first_policy_component",
+      "source": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+      "range": 1,
+      "range_leader": "n1",
+      "retiring_replica": "n1",
+      "old_voters": [
+        "n1",
+        "n2",
+        "n3"
+      ],
+      "source_derived_actual_donor": "n2",
+      "actor_source_expression": "clients[donor].local_metadata_read_participant()",
+      "metadata_rpc_rejector": "n0",
+      "committed_handoff_initiator_predicate_satisfied": false,
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "source_APP_ACKs": 2,
+      "native_phase_rpc_observed_in_sdk_journal": false
+    },
+    {
+      "case_root": "native-registered-fifth-image-01a1d7dd-8c0b-78f2-94e1-7c2b1ba56d00",
+      "phase": "actual_remote_original_a_through_first_policy_component",
+      "source": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+      "range": 1,
+      "range_leader": "n1",
+      "retiring_replica": "n1",
+      "old_voters": [
+        "n1",
+        "n2",
+        "n3"
+      ],
+      "source_derived_actual_donor": "n2",
+      "actor_source_expression": "clients[donor].local_metadata_read_participant()",
+      "metadata_rpc_rejector": "n0",
+      "committed_handoff_initiator_predicate_satisfied": false,
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "source_APP_ACKs": 2,
+      "native_phase_rpc_observed_in_sdk_journal": false
+    },
+    {
+      "case_root": "native-registered-fifth-image-01a1d7dd-b35e-70b3-a663-c99bf03f3621",
+      "phase": "actual_remote_original_a_through_first_policy_component",
+      "source": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+      "range": 1,
+      "range_leader": "n1",
+      "retiring_replica": "n1",
+      "old_voters": [
+        "n1",
+        "n2",
+        "n3"
+      ],
+      "source_derived_actual_donor": "n2",
+      "actor_source_expression": "clients[donor].local_metadata_read_participant()",
+      "metadata_rpc_rejector": "n0",
+      "committed_handoff_initiator_predicate_satisfied": false,
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "source_APP_ACKs": 2,
+      "native_phase_rpc_observed_in_sdk_journal": false
+    },
+    {
+      "case_root": "native-registered-fifth-image-01a1d7dd-da17-74c3-afd5-e8e421460d1a",
+      "phase": "actual_remote_original_a_through_first_policy_component",
+      "source": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+      "range": 1,
+      "range_leader": "n1",
+      "retiring_replica": "n1",
+      "old_voters": [
+        "n1",
+        "n2",
+        "n3"
+      ],
+      "source_derived_actual_donor": "n2",
+      "actor_source_expression": "clients[donor].local_metadata_read_participant()",
+      "metadata_rpc_rejector": "n0",
+      "committed_handoff_initiator_predicate_satisfied": false,
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "source_APP_ACKs": 2,
+      "native_phase_rpc_observed_in_sdk_journal": false
+    },
+    {
+      "case_root": "native-registered-fifth-image-01a1d7de-00db-7f10-937e-b9b397e35ec8",
+      "phase": "actual_remote_original_a_through_first_policy_component",
+      "source": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+      "range": 1,
+      "range_leader": "n1",
+      "retiring_replica": "n1",
+      "old_voters": [
+        "n1",
+        "n2",
+        "n3"
+      ],
+      "source_derived_actual_donor": "n2",
+      "actor_source_expression": "clients[donor].local_metadata_read_participant()",
+      "metadata_rpc_rejector": "n0",
+      "committed_handoff_initiator_predicate_satisfied": false,
+      "primary_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+      "source_APP_ACKs": 2,
+      "native_phase_rpc_observed_in_sdk_journal": false
+    },
+    {
+      "case_root": "native-registered-fifth-image-01a1d7e8-0268-7882-a21b-e474380df398",
+      "phase": "actual_local_old_quorum_seeded_remote_source_frames",
+      "source": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+      "range": 1,
+      "range_leader": "n1",
+      "retiring_replica": "n1",
+      "old_voters": [
+        "n1",
+        "n2",
+        "n3"
+      ],
+      "source_derived_actual_donor": "n2",
+      "actor_source_expression": "clients[donor].local_metadata_read_participant()",
+      "metadata_rpc_rejector": null,
+      "committed_handoff_initiator_predicate_satisfied": false,
+      "primary_error": "cluster error: metadata consensus: actual metadata authority version changed/dirty; retained native outcome is not a current grant",
+      "source_APP_ACKs": 2,
+      "native_phase_rpc_observed_in_sdk_journal": null
+    }
+  ],
+  "actor_is_source_derivation_from_retained_topology_and_frozen_code_not_new_RPC_capture": true,
+  "new_runtime_or_cause_reproduction": false
+}

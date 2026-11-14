@@ -1,0 +1,135 @@
+{
+  "source": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+  "run": 43548089992,
+  "job": {
+    "id": 132304020107,
+    "run_id": 43548089992,
+    "workflow_name": "tests",
+    "head_branch": "qual/native-source-stall-component-c968",
+    "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43548089992",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOUimcAs8AAAAeze8iiw",
+    "head_sha": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+    "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132304020107",
+    "html_url": "https://github.com/nikoma/bicdb/actions/runs/43548089992/job/132304020107",
+    "status": "completed",
+    "conclusion": "success",
+    "created_at": "2026-11-14T02:46:10Z",
+    "started_at": "2026-11-14T02:46:12Z",
+    "completed_at": "2026-11-14T02:58:55Z",
+    "name": "Focused Core library (native_registered_fifth_remote_selected_rows_reply_stall_other_populated_range_original_sdk_progress)",
+    "steps": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 1,
+        "started_at": "2026-11-14T02:46:13Z",
+        "completed_at": "2026-11-14T02:46:14Z"
+      },
+      {
+        "name": "Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 2,
+        "started_at": "2026-11-14T02:46:14Z",
+        "completed_at": "2026-11-14T02:46:20Z"
+      },
+      {
+        "name": "Run dtolnay/rust-toolchain@stable",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 3,
+        "started_at": "2026-11-14T02:46:20Z",
+        "completed_at": "2026-11-14T02:46:29Z"
+      },
+      {
+        "name": "Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 4,
+        "started_at": "2026-11-14T02:46:29Z",
+        "completed_at": "2026-11-14T02:46:39Z"
+      },
+      {
+        "name": "Build projection chaos helper",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 5,
+        "started_at": "2026-11-14T02:46:39Z",
+        "completed_at": "2026-11-14T02:56:29Z"
+      },
+      {
+        "name": "Record exact source and list one component plus whole inventory",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 6,
+        "started_at": "2026-11-14T02:56:29Z",
+        "completed_at": "2026-11-14T02:58:25Z"
+      },
+      {
+        "name": "Execute only the exact transport-stall component serially",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 7,
+        "started_at": "2026-11-14T02:58:25Z",
+        "completed_at": "2026-11-14T02:58:38Z"
+      },
+      {
+        "name": "Retain focused source, log and opted-in fault-state evidence",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 8,
+        "started_at": "2026-11-14T02:58:38Z",
+        "completed_at": "2026-11-14T02:58:40Z"
+      },
+      {
+        "name": "Post Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 15,
+        "started_at": "2026-11-14T02:58:40Z",
+        "completed_at": "2026-11-14T02:58:52Z"
+      },
+      {
+        "name": "Post Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 16,
+        "started_at": "2026-11-14T02:58:52Z",
+        "completed_at": "2026-11-14T02:58:52Z"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 17,
+        "started_at": "2026-11-14T02:58:52Z",
+        "completed_at": "2026-11-14T02:58:52Z"
+      }
+    ],
+    "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132304020107",
+    "labels": [
+      "ubuntu-latest"
+    ],
+    "runner_id": 1000025036,
+    "runner_name": "GitHub Actions 1000025036",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  },
+  "raw_bytes": 2843682,
+  "raw_sha256": "7179f6ff272fb4eba36a68a84a29ea79b217a374cc7b5b798f19e78162ca7f5e",
+  "gzip_sha256": "68571bf15987cc94cf2afe39b29a09780c9d87917807be4bdbc960f4472dbd43",
+  "summaries": [
+    "2026-11-14T02:58:38.3286200Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1170 filtered out; finished in 12.29s"
+  ],
+  "failure_lines": [],
+  "failure_contexts": [],
+  "observed_test_start_lines": [
+    {
+      "line": 24543,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::two_range_stall_tests::native_registered_fifth_remote_selected_rows_reply_stall_other_populated_range_original_sdk_progress",
+      "suffix": "NATIVE_STRONG_TRACE pid=9775 t_us=0 node=n0 business=01a1d7fd-f904-7031-8f48-fe5f1626bf6e challenge=01a1d7fd-f928-7ca2-85b2-855f95ba43ab range=r4 epoch=1 deadline_us=Some(1381988) remaining_us=Some(1381987) stage=read-collector event=begin"
+    }
+  ]
+}

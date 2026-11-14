@@ -1,0 +1,6 @@
+tree eed2f400cd7bf9a0282dba4223865e6c30f85ade
+parent cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f
+author nikoma <niko.manek@gmail.com> 1794620757 -0800
+committer nikoma <niko.manek@gmail.com> 1794620757 -0800
+
+Fix first-cause test result typing without changing refusal assertions

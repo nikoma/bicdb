@@ -1,5 +1,11 @@
 # Authenticated native donor Start/Describe discovery
 
+This document retains design and source-review findings from the **unmerged**
+runtime composition `3b4bef4eecbdf1e770bba2428cd860fda89e7dba`. Including it
+in this documentation batch does not include that runtime in main. The test
+statuses below describe the recorded source reviews; later qualification
+results must be read with their own exact source and evidence.
+
 This component is based on integrated source `981b7eef7447783270a1db4b8c967aa596cc132e`
 (main500 plus frozen817). It adds a source-side TCP adapter; it does not complete
 the automatic relocation controller or admit target rows, a writer, APP or Strong
@@ -100,3 +106,48 @@ engine locks before and after capture; protected member observations also retain
 the actual local version point. No metadata point is reconstructed from the
 remote manifest, and this does not mint target or current publication authority.
 The six discovery tests are preserved; they remain unexecuted in this port.
+
+## Source Start to Serving remains blocked
+
+A test-only composition review at exact source
+`3b4bef4eecbdf1e770bba2428cd860fda89e7dba` found a missing production
+continuation. The [source-pinned report](native-source-discovery-serving-integration-gap-3b4.json)
+retains ten exact source/blob hashes. No new tests, runtime changes or runtime
+result followed from that review; the frozen existing CI cohort keeps its
+original source, selection and evidence scope.
+
+Actual TCP `Start`/fresh `Describe` can supply the strict authenticated manifest
+and `NativeRemoteImageFact` to the original-A target image/import path. An
+independent actual donor collector can supply a historical OLD certificate;
+manifest DATA cannot substitute for that certificate. The hot fixture still
+obtains a local opaque source handle from `remote_old_seed`, calls
+`retained.publish`, and later uses that handle for two necessary retirements:
+`retire_export_after_actual_registered_new` after genuine target NEW, and
+`retire_old_export_custody_after_joint_open` after genuine ALL-Open evidence.
+
+S2 retains its source inside the original discovery registry. No existing host
+or transport operation drives those two retirements for that same retained
+source. `Start`/`Describe` and the source-frame operations do not provide this
+consumer. Dropping the client does not release registry-owned capture pins or
+OLD ownership. A new test-only getter, a manufactured local source handle or a
+manifest/diagnostic DTO cast would conceal this gap.
+
+The smallest next production slice is an exact recipient-owned source
+continuation that drives the existing typed retirement primitives from genuine
+NEW and ALL-Open evidence while preserving the same plan, births, A, manifest
+and session on failure. A crate-local host consumer is distinct from a real
+wire-phase consumer: passing an in-process actual evidence object does not
+establish authenticated cross-process phase delivery or controller automation.
+
+The two smallest acceptance cases, **not added or executed**, are:
+
+| Case | Required complete path |
+| --- | --- |
+| Normal discovery to Joined | Actual OLD Close RPCs, actual TCP Start/Describe, strict fact, original-A image/import/joint/FIRST, both genuine source retirement boundaries, then original fixed-gateway SDK APP and exact full-value Strong. |
+| Lost actual Start reply | Suppress the real completed Start reply; preserve its error and uncertain capture outcome; use fresh Describe to recover the same manifest/session/A; complete the same retirement and Joined path, then original SDK APP and full-value Strong. |
+
+Both must preserve the existing assertions, two-second SDK budget and gateway,
+without manual hint refresh, local publish or renewed old authority. Until that
+producer and these cases exist, separate discovery and hot Joined fixtures do
+not prove end-to-end Source Start to Serving. This is an integration blocker,
+not a relabeling of the frozen CI run or a new production-qualification claim.

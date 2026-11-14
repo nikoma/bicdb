@@ -1,0 +1,66 @@
+{
+  "run": 43532705713,
+  "source": "560d8a873e65a7931226a0e38fc460f38c058ae6",
+  "run_conclusion": "failure",
+  "core_job": 132254119527,
+  "core_conclusion": "failure",
+  "workspace_job": 132254084400,
+  "workspace_alltargets_and_consumer": "passed",
+  "selected_count": 2,
+  "selected_tests": [
+    "distribution_transport::event_client_retry_tests::caller_query_budget_tests::event_client_caller_query_budget_expired_refuses_before_tcp_dispatch",
+    "distribution_transport::event_client_retry_tests::caller_query_budget_tests::event_client_caller_query_budget_live_scope_accepts_actual_mock_ack"
+  ],
+  "test_result": "test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 1089 filtered out; finished in 0.01s",
+  "actual_observations_before_assertions": [
+    {
+      "accepted_tcp_connections": 1,
+      "application_frames": 1,
+      "expired_scope": false,
+      "result": "Ok(true)"
+    },
+    {
+      "accepted_tcp_connections": 1,
+      "application_frames": 1,
+      "expired_scope": true,
+      "result": "Ok(true)"
+    }
+  ],
+  "regression_classification": "FAILED: already-expired public caller scope dispatched APP and returned success",
+  "actual_expired_scope_defect_confirmed": true,
+  "artifact_id": 14088672023,
+  "artifact_bytes": 42333,
+  "artifact_sha256": "1f8ac7a8e42c98abb0be65ba128591daf1389579ee40ff0468ed46b72d6e1309",
+  "github_digest_matches": true,
+  "members": {
+    "rustc.txt": {
+      "bytes": 196,
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    "selected-tests.log": {
+      "bytes": 252038,
+      "sha256": "c1d411b10b03c49d08d367edaab8fa04cb457ed19223dda91a30d65ead95ebd4"
+    },
+    "source-revision.txt": {
+      "bytes": 41,
+      "sha256": "d240d9ca6501f67f8610773db32cba89e6f94b64c29f8872ab8631f48829d94a"
+    },
+    "tests.log": {
+      "bytes": 253482,
+      "sha256": "fd2664bc4cad2424fe6010411d8cb6e41cd7391722d31d73f314e4b0d9fe6a9a"
+    }
+  },
+  "custody_present": false,
+  "original_four_text_artifact_included_not_projection": true,
+  "scope": "SDK public entrypoint with real plaintext loopback TCP and mock ACK; no actual engine commit or HA/physical/production qualification",
+  "counterpart505_pending": true,
+  "source_or_test_retry": false,
+  "file_hashes": {
+    "core-job.log": "e454ea143a91664f1f16f336fad6912bf2a8770587d4ba8a3676c592833334db",
+    "workspace-job.log": "d486e4053efc697837ffc8ed55a01ea4d0e3439781e9dd975ab9edb23e54632c",
+    "request.json": "7ff8c0ac9f63b051318ca0c1ae35abc88b16afaeb9b9a8d356258e27fe1f5072",
+    "run-terminal.json": "7e5c739e8e91e887ba99fc86d5d89e5f695f9ae211cf827ee01420829cb3f15e",
+    "jobs-terminal.json": "ee6aba839e237e75f4237ee8b9b9a8aae66df96bacc122fd8811c136aa1132c3",
+    "artifacts.json": "63feb5c39e95b4b4869be51b2b1eeb1f1f7f47bfe56560a7477501b69b8eaa60"
+  }
+}

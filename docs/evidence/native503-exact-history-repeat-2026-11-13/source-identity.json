@@ -1,0 +1,38 @@
+{
+  "source": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+  "tree": "a4712298110429f1c0d7ce63876b200e42a874b3",
+  "core_tree": "9d68f85bc8471c6b546903abf61da61adc700429",
+  "version": "1.0.503-beta",
+  "source_pins": {
+    ".github/workflows/tests.yml": {
+      "blob": "77037dae9d25b16fd3ce0b215f5ec57b1faaa383",
+      "sha256": "48c255ae145e842d8e6667e915a951ebf170190ec9617b303cb08372ca7f4c47"
+    },
+    "crates/bicdb-core/src/distribution_metadata_read_provider.rs": {
+      "blob": "012a0d635904f1386fdc010713f6e44f97cd4e84",
+      "sha256": "ed9a1e00026dacb42c8aff6fa786aa00018bf238897c0008fa531d507774e7b9"
+    },
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests.rs": {
+      "blob": "9ef655bcdb7fd8df586d48e8bf9b68433c78a1ed",
+      "sha256": "13410f1d44d38d79faebef4a08d53faccac03daddc19f585c83af97930c6d124"
+    },
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/hot_recovery_tests.rs": {
+      "blob": "4582d8e74ba7fb4f38371e0dcdd027ca4004f6e6",
+      "sha256": "d5a6f83aca125b0969c88b156a83d6cf7c6c6a9e8ba50b715bc13863bdd7a924"
+    },
+    "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_strong_point_tests/serving_observation_scope_tests/normal_serving_record_tests.rs": {
+      "blob": "f9b74ee05198884246e4ebfac6ed4a12caa9ffbf",
+      "sha256": "5a22a251df148385d94a41839a85c2639b3a6848afe6d3950af5f1b25a463a1c"
+    }
+  },
+  "workflow_and_assertions_unchanged": true,
+  "no_diagnostic_instrumentation_or_build_memory_guard": true,
+  "original_failed_job": 132242099377,
+  "original_failed_run": 43529104485,
+  "original_log": "/root/erp-modernization/evidence/native503-core-serial-failure.log",
+  "original_log_sha256": "8af0ca1ea94ef88ae64a0ed4101d907d044072acd20ff8ce2c22d4149da09e54",
+  "retry_job": 132276661454,
+  "attempt": 2,
+  "only_new_job_counted": true,
+  "earlier_pass_jobs_reused_not_rerun": true
+}

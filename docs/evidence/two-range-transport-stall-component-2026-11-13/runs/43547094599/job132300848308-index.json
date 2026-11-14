@@ -1,0 +1,167 @@
+{
+  "source": "b01ed646b476cbb5f76a495d0f71bc8d13b929d6",
+  "run": 43547094599,
+  "job": {
+    "id": 132300848308,
+    "run_id": 43547094599,
+    "workflow_name": "tests",
+    "head_branch": "qual/native-source-stall-component-c08",
+    "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43547094599",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOUimcAs8AAAAezb68tA",
+    "head_sha": "b01ed646b476cbb5f76a495d0f71bc8d13b929d6",
+    "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132300848308",
+    "html_url": "https://github.com/nikoma/bicdb/actions/runs/43547094599/job/132300848308",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-11-14T02:34:52Z",
+    "started_at": "2026-11-14T02:34:54Z",
+    "completed_at": "2026-11-14T02:38:59Z",
+    "name": "Community-only workspace compiles, tests included",
+    "steps": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 1,
+        "started_at": "2026-11-14T02:34:55Z",
+        "completed_at": "2026-11-14T02:34:56Z"
+      },
+      {
+        "name": "Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 2,
+        "started_at": "2026-11-14T02:34:56Z",
+        "completed_at": "2026-11-14T02:35:03Z"
+      },
+      {
+        "name": "Run dtolnay/rust-toolchain@stable",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 3,
+        "started_at": "2026-11-14T02:35:03Z",
+        "completed_at": "2026-11-14T02:35:12Z"
+      },
+      {
+        "name": "Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 4,
+        "started_at": "2026-11-14T02:35:12Z",
+        "completed_at": "2026-11-14T02:35:30Z"
+      },
+      {
+        "name": "cargo check --workspace --all-targets",
+        "status": "completed",
+        "conclusion": "failure",
+        "number": 5,
+        "started_at": "2026-11-14T02:35:30Z",
+        "completed_at": "2026-11-14T02:38:54Z"
+      },
+      {
+        "name": "Workflow consumer compiles without Core defaults",
+        "status": "completed",
+        "conclusion": "skipped",
+        "number": 6,
+        "started_at": "2026-11-14T02:38:54Z",
+        "completed_at": "2026-11-14T02:38:54Z"
+      },
+      {
+        "name": "Retain qualification build pressure and interruption evidence",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 7,
+        "started_at": "2026-11-14T02:38:54Z",
+        "completed_at": "2026-11-14T02:38:55Z"
+      },
+      {
+        "name": "Post Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "skipped",
+        "number": 13,
+        "started_at": "2026-11-14T02:38:55Z",
+        "completed_at": "2026-11-14T02:38:55Z"
+      },
+      {
+        "name": "Post Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 14,
+        "started_at": "2026-11-14T02:38:55Z",
+        "completed_at": "2026-11-14T02:38:56Z"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 15,
+        "started_at": "2026-11-14T02:38:56Z",
+        "completed_at": "2026-11-14T02:38:56Z"
+      }
+    ],
+    "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132300848308",
+    "labels": [
+      "ubuntu-latest"
+    ],
+    "runner_id": 1000025025,
+    "runner_name": "GitHub Actions 1000025025",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  },
+  "raw_bytes": 1374750,
+  "raw_sha256": "01da789a8578f08503b0f3865645c6ca8f58f178d7fdf1d06621f6e8f3a518f1",
+  "gzip_sha256": "0cf3a1732863e26c367807a44635f1323451946f7512d6f2b67421ac2ce19a9b",
+  "summaries": [],
+  "failure_lines": [
+    {
+      "line": 14285,
+      "text": "2026-11-14T02:38:13.4453600Z error[E0603]: function `exercise` is private"
+    },
+    {
+      "line": 14541,
+      "text": "2026-11-14T02:38:54.6073960Z ##[error]Process completed with exit code 101."
+    }
+  ],
+  "failure_contexts": [
+    {
+      "line": 14285,
+      "remaining": 0,
+      "lines": [
+        "2026-11-14T02:38:06.2400652Z",
+        "2026-11-14T02:38:06.2507373Z warning: `bicdb-core` (test \"v3_end_to_end\") generated 1 warning (run `cargo fix --test \"v3_end_to_end\" -p bicdb-core` to apply 1 suggestion)",
+        "2026-11-14T02:38:13.4453600Z error[E0603]: function `exercise` is private",
+        "2026-11-14T02:38:13.4454770Z    --> crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs:800:57",
+        "2026-11-14T02:38:13.4455714Z     |",
+        "2026-11-14T02:38:13.4456345Z 800 |             remote_source_tests::two_range_stall_tests::exercise(",
+        "2026-11-14T02:38:13.4457076Z     |                                                         ^^^^^^^^ private function",
+        "2026-11-14T02:38:13.4457556Z     |",
+        "2026-11-14T02:38:13.4457887Z note: the function `exercise` is defined here",
+        "2026-11-14T02:38:13.4459063Z    --> crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/two_range_stall_tests.rs:86:1",
+        "2026-11-14T02:38:13.4460744Z     |",
+        "2026-11-14T02:38:13.4461158Z  86 | / pub(super) fn exercise(",
+        "2026-11-14T02:38:13.4461719Z  87 | |     controls: &[NativeMetadataControlHost],"
+      ]
+    },
+    {
+      "line": 14541,
+      "remaining": 0,
+      "lines": [
+        "2026-11-14T02:38:53.3467996Z error: could not compile `bicdb-core` (lib test) due to 1 previous error; 70 warnings emitted",
+        "2026-11-14T02:38:54.5996091Z OWNED_BUILD_GROUP_CLEANED pid=3019 returncode=101",
+        "2026-11-14T02:38:54.6073960Z ##[error]Process completed with exit code 101.",
+        "2026-11-14T02:38:54.6147228Z ##[group]Run actions/upload-artifact@v4",
+        "2026-11-14T02:38:54.6147546Z with:",
+        "2026-11-14T02:38:54.6147919Z   name: native-workspace-pressure-b01ed646b476cbb5f76a495d0f71bc8d13b929d6-1",
+        "2026-11-14T02:38:54.6148384Z   retention-days: 3",
+        "2026-11-14T02:38:54.6148616Z   if-no-files-found: warn",
+        "2026-11-14T02:38:54.6148929Z   path: /home/runner/work/_temp/native-workspace-pressure/",
+        "2026-11-14T02:38:54.6149559Z   compression-level: 6",
+        "2026-11-14T02:38:54.6149900Z   overwrite: false",
+        "2026-11-14T02:38:54.6150127Z   include-hidden-files: false",
+        "2026-11-14T02:38:54.6150370Z env:"
+      ]
+    }
+  ],
+  "observed_test_start_lines": []
+}

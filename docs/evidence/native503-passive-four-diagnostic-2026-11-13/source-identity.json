@@ -1,0 +1,23 @@
+{
+  "qualifier": "2b8c2b2de400038729a226ff61b9b275df846d18",
+  "diagnostic_source": "7ab56348a8309d4d396b1af87467232bfed1ac96",
+  "identical_core_tree": "3e65798272bcc9bd050c505556de481ac2b185a6",
+  "changed_paths_only": [
+    ".github/workflows/tests.yml",
+    "scripts/qualification/guard-build-memory.py"
+  ],
+  "qualifier_files": [
+    {
+      "path": ".github/workflows/tests.yml",
+      "blob": "9ed547ab981538717c166d59d71688d4fe116056",
+      "sha256": "a70dd2b36e40a5c4eb3ba85ef80df74453a660557f6640d38e00c75a4b62320a"
+    },
+    {
+      "path": "scripts/qualification/guard-build-memory.py",
+      "blob": "050171a6befd2163e3b94c6b69ff384a98f67deb",
+      "sha256": "1fc9b018175b95de49ad59738f37209e76427f05a890aeae24d55bdcb59736c7"
+    }
+  ],
+  "version": "1.0.503-beta inherited/unmerged",
+  "observation": "Focused diagnostic qualifier only; unchanged Core source and original test budgets/assertions. Not runtime fix or broad required-suite qualification."
+}

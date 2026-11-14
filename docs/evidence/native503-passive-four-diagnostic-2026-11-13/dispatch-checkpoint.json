@@ -1,0 +1,41 @@
+{
+  "head": "2b8c2b2de400038729a226ff61b9b275df846d18",
+  "diagnostic_source": "7ab56348a8309d4d396b1af87467232bfed1ac96",
+  "original_failed_source": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+  "source_version": "1.0.503-beta inherited/unmerged",
+  "ref": "qual/native503-passive-four-7ab",
+  "inputs": {
+    "core_filter": "native503_passive_four"
+  },
+  "expected_selected": [
+    "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_current_damage_refused_at_exit",
+    "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_finite_open_never_starts_process_worker",
+    "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation",
+    "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root"
+  ],
+  "expected_count": 4,
+  "runtime": "four existing exact native cases, serial1 as original broadnative job",
+  "test_deadlines_assertions_order_retries_changed": false,
+  "new_protocol_or_recovery_fix": false,
+  "capture": "bounded test-only weak memory observations emitted afteroriginalcalls, explicitbackgroundgaps; notdurableexternalACKledger",
+  "qualifier_diff_only": [
+    ".github/workflows/tests.yml",
+    "scripts/qualification/guard-build-memory.py"
+  ],
+  "build_guard": {
+    "scope": "build/check/list only",
+    "available_headroom_mib": 1024,
+    "interval_seconds": 2,
+    "consecutive_low_samples": 2,
+    "no_oom_guarantee": true,
+    "tool_smoke": "7ab-memory-guard-smoke-v2/result.json; actualtoolcleanupcontrols, nottrueRAMexhaustion/HAproof",
+    "guard_source_sha256": "1fc9b018175b95de49ad59738f37209e76427f05a890aeae24d55bdcb59736c7"
+  },
+  "dispatch_count": 1,
+  "created_at_utc": "2026-11-14T01:00:01.075489+00:00",
+  "dispatch_post_returned_success_at_utc": "2026-11-14T01:00:14.644524+00:00",
+  "run": 43537820765,
+  "status": "in_progress",
+  "last_verified_at_utc": "2026-11-14T01:01:07.388391+00:00",
+  "capture_dir": "/tmp/bicdb-native503-passive-run-43537820765"
+}

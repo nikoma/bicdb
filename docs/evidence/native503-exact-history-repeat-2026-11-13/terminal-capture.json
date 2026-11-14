@@ -1,0 +1,17 @@
+{
+  "capture_dir": "/tmp/bicdb-native503-exact-repeat-43529104485-attempt2",
+  "source": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+  "run": 43529104485,
+  "attempt": 2,
+  "job": 132276661454,
+  "result": "212 passed;0failed;1ignored;877filtered;913.06s",
+  "actual_checkout": "de15f8f9836e0e93fb2e912ad230437bc975aa6a",
+  "tree": "a4712298110429f1c0d7ce63876b200e42a874b3",
+  "same213order": true,
+  "original_four_passed": true,
+  "reused_other_passes_not_rerun": true,
+  "original_cause": "inconclusive",
+  "summary_sha256": "3e749934d8c66e276ceb7aa555baef92ed11d19638842f2988917a0075aa561f",
+  "manifest_sha256": "9f9b45fc4310c879ca698980f8adaa340ff0195bfa3f525a6d915a3e45db7d06",
+  "no_further_dispatch": true
+}

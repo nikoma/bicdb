@@ -1,0 +1,413 @@
+{
+  "run": 43538783755,
+  "head": "91713c0fed694505086f5351a2b0df755b7c6ffa",
+  "runtime_source": "1ce471aa315b93f58c00ddce5c0577505df472ab",
+  "source_version": "1.0.505-beta inherited/unmerged",
+  "whole_result": "test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 1075 filtered out; finished in 12.39s",
+  "whole_classification": "FAILED_RUNTIME_ASSERTION",
+  "core_job": 132274186176,
+  "workspace_job": 132274164014,
+  "alltargets_and_consumer": "passed",
+  "selected_count": 34,
+  "executed_count": 34,
+  "selected_full_names": [
+    "distribution_events::client::error_retention_tests::event_client_no_operation_keeps_discovery_error",
+    "distribution_events::client::error_retention_tests::event_client_unknown_write_survives_later_refusal_and_refresh_or_deadline",
+    "distribution_events::client::inflight_tests::event_client_out_of_order_worker_unknown_survives_later_refusal_and_cleanup",
+    "distribution_events::client::inflight_tests::event_client_typed_same_operation_response_keeps_all_worker_outcomes_until_cleanup",
+    "distribution_transport::event_client_retry_tests::a_known_follower_can_supply_committed_route_discovery",
+    "distribution_transport::event_client_retry_tests::a_leader_still_committing_past_the_attempt_slice_answers_the_same_request",
+    "distribution_transport::event_client_retry_tests::an_exhausted_request_budget_is_not_reported_as_unreachable_members",
+    "distribution_transport::event_client_retry_tests::caller_query_budget_tests::event_client_caller_query_budget_expired_refuses_before_tcp_dispatch",
+    "distribution_transport::event_client_retry_tests::caller_query_budget_tests::event_client_caller_query_budget_live_scope_accepts_actual_mock_ack",
+    "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_append_preserves_actual_error_when_route_discovery_fails",
+    "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_append_preserves_primary_when_conflicting_discovery_stops_retry",
+    "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_get_preserves_actual_error_when_route_discovery_exhausts_deadline",
+    "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_refresh_without_operation_keeps_no_member_error",
+    "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_different_sink_nested_request_is_allowed_without_global_callback_lock",
+    "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_nested_caller_deadline_expires_during_actual_mock_reply",
+    "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_same_sink_reentry_after_response_preserves_parent_dispatch_uncertainty",
+    "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_same_sink_reentry_before_dispatch_refuses_child_and_parent_without_io",
+    "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_sibling_cleanup_evidence_failure_cannot_hide_behind_actual_mock_ack",
+    "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_worker_memory_envelope_updates_original_caller_peak_and_refuses_io",
+    "distribution_transport::event_client_retry_tests::legacy_metadata_controllers_remain_usable_for_discovery",
+    "distribution_transport::event_client_retry_tests::permanently_silent_old_leader_refreshes_from_another_member",
+    "distribution_transport::event_client_retry_tests::silent_discovery_member_cannot_exhaust_the_retry_budget",
+    "distribution_transport::event_client_retry_tests::silent_event_route_leaves_budget_for_discovery_and_retry",
+    "distribution_transport::event_client_retry_tests::transient_topology_refresh_does_not_abort_an_event_request",
+    "distribution_transport::evidence::tests::actual_rpc_evidence_complete_record_quota_fences_without_truncation",
+    "distribution_transport::evidence::tests::actual_rpc_evidence_large_complete_frame_byte_quota_refuses_before_dispatch",
+    "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_canceled_before_dispatch_records_original_cancellation",
+    "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_exact_frames_and_discovery_errors_survive_fallback",
+    "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_parallel_requests_share_journal_without_false_reentrancy",
+    "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_response_retained_before_original_cancellation_override",
+    "distribution_transport::evidence::tests::actual_rpc_evidence_post_response_sync_failure_returns_unknown_and_never_rearms",
+    "distribution_transport::evidence::tests::actual_rpc_evidence_pre_dispatch_sync_failure_fences_without_application_mutation",
+    "distribution_transport::evidence::tests::actual_rpc_evidence_same_thread_reentry_refuses_without_dispatch",
+    "query_budget::worker_context_tests::event_client_query_budget_context_keeps_tight_nested_deadline_and_shared_peak"
+  ],
+  "executed_results": [
+    {
+      "name": "distribution_events::client::error_retention_tests::event_client_no_operation_keeps_discovery_error",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_events::client::error_retention_tests::event_client_unknown_write_survives_later_refusal_and_refresh_or_deadline",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_events::client::inflight_tests::event_client_out_of_order_worker_unknown_survives_later_refusal_and_cleanup",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_events::client::inflight_tests::event_client_typed_same_operation_response_keeps_all_worker_outcomes_until_cleanup",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::a_known_follower_can_supply_committed_route_discovery",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::a_leader_still_committing_past_the_attempt_slice_answers_the_same_request",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::an_exhausted_request_budget_is_not_reported_as_unreachable_members",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::caller_query_budget_tests::event_client_caller_query_budget_expired_refuses_before_tcp_dispatch",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::caller_query_budget_tests::event_client_caller_query_budget_live_scope_accepts_actual_mock_ack",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_append_preserves_actual_error_when_route_discovery_fails",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_append_preserves_primary_when_conflicting_discovery_stops_retry",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_get_preserves_actual_error_when_route_discovery_exhausts_deadline",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_refresh_without_operation_keeps_no_member_error",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_different_sink_nested_request_is_allowed_without_global_callback_lock",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_nested_caller_deadline_expires_during_actual_mock_reply",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_same_sink_reentry_after_response_preserves_parent_dispatch_uncertainty",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_same_sink_reentry_before_dispatch_refuses_child_and_parent_without_io",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_sibling_cleanup_evidence_failure_cannot_hide_behind_actual_mock_ack",
+      "result": "FAILED"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_worker_memory_envelope_updates_original_caller_peak_and_refuses_io",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::legacy_metadata_controllers_remain_usable_for_discovery",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::permanently_silent_old_leader_refreshes_from_another_member",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::silent_discovery_member_cannot_exhaust_the_retry_budget",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::silent_event_route_leaves_budget_for_discovery_and_retry",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::event_client_retry_tests::transient_topology_refresh_does_not_abort_an_event_request",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::evidence::tests::actual_rpc_evidence_complete_record_quota_fences_without_truncation",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::evidence::tests::actual_rpc_evidence_large_complete_frame_byte_quota_refuses_before_dispatch",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_canceled_before_dispatch_records_original_cancellation",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_exact_frames_and_discovery_errors_survive_fallback",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_parallel_requests_share_journal_without_false_reentrancy",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_response_retained_before_original_cancellation_override",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::evidence::tests::actual_rpc_evidence_post_response_sync_failure_returns_unknown_and_never_rearms",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::evidence::tests::actual_rpc_evidence_pre_dispatch_sync_failure_fences_without_application_mutation",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_transport::evidence::tests::actual_rpc_evidence_same_thread_reentry_refuses_without_dispatch",
+      "result": "ok"
+    },
+    {
+      "name": "query_budget::worker_context_tests::event_client_query_budget_context_keeps_tight_nested_deadline_and_shared_peak",
+      "result": "ok"
+    }
+  ],
+  "failed": [
+    "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_sibling_cleanup_evidence_failure_cannot_hide_behind_actual_mock_ack"
+  ],
+  "failure_stage": "first assertion requiring original callback error detail; later control assertions not executed",
+  "failure_actual_result": "Err(RpcEvidenceFailure { may_have_dispatched: true, detail: \"cluster RPC evidence failure (may_have_dispatched=true): evidence observer failed or reached its bound; future observed dispatch is fenced; observed dispatch is fenced\" })",
+  "failure_partial_observations_independently_reconciled": {
+    "applications": 2,
+    "mock_acks": 1,
+    "injected_callback_errors": 1,
+    "validated_ACK_phase_before_sibling_cancel_partial": true,
+    "may_have_dispatched_stays_true": true,
+    "original_detail_preserved": false
+  },
+  "guard_exit74_monitor_failure": false,
+  "guard_exit75_resource_interruption": false,
+  "pressure": [
+    {
+      "artifact": 14091141775,
+      "member": "helper-pressure.jsonl",
+      "events": 242,
+      "samples": 240,
+      "minimum_available_bytes": 11583983616,
+      "terminal": {
+        "child_returncode": 0,
+        "elapsed_seconds": 480.10919974399997,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 0,
+        "omitted_sample_records": 0
+      },
+      "interruptions": []
+    },
+    {
+      "artifact": 14091141775,
+      "member": "list-pressure.jsonl",
+      "events": 47,
+      "samples": 45,
+      "minimum_available_bytes": 10765242368,
+      "terminal": {
+        "child_returncode": 0,
+        "elapsed_seconds": 90.02110764500003,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 0,
+        "omitted_sample_records": 0
+      },
+      "interruptions": []
+    },
+    {
+      "artifact": 14090654425,
+      "member": "alltargets.jsonl",
+      "events": 146,
+      "samples": 144,
+      "minimum_available_bytes": 11929268224,
+      "terminal": {
+        "child_returncode": 0,
+        "elapsed_seconds": 288.199875527,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 0,
+        "omitted_sample_records": 0
+      },
+      "interruptions": []
+    },
+    {
+      "artifact": 14090654425,
+      "member": "consumer.jsonl",
+      "events": 21,
+      "samples": 19,
+      "minimum_available_bytes": 13269057536,
+      "terminal": {
+        "child_returncode": 0,
+        "elapsed_seconds": 38.00948083499998,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 0,
+        "omitted_sample_records": 0
+      },
+      "interruptions": []
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 14091141775,
+      "name": "focused-core-91713c0fed694505086f5351a2b0df755b7c6ffa-1",
+      "bytes": 53316,
+      "sha256": "2d87f9051135c77ec96e6dce81dfbfa9f388130de8d91b4b08786f9a7b6da8bc",
+      "members": [
+        "helper-pressure.jsonl",
+        "list-pressure.jsonl",
+        "rustc.txt",
+        "requested-filters.txt",
+        "selected-tests.log",
+        "source-revision.txt",
+        "tests.log"
+      ],
+      "custody_present": false
+    },
+    {
+      "id": 14090654425,
+      "name": "native-workspace-pressure-91713c0fed694505086f5351a2b0df755b7c6ffa-1",
+      "bytes": 3591,
+      "sha256": "4edd485a9b2e8e12210a68c51ec541afce05763a3adddf295e11f109e78b0215",
+      "members": [
+        "alltargets.jsonl",
+        "consumer.jsonl"
+      ],
+      "custody_present": false
+    }
+  ],
+  "artifact_members": {
+    "14091141775:helper-pressure.jsonl": {
+      "bytes": 60052,
+      "sha256": "66e8d107935079025f9bbd981d955a106e74310e2d14532eac95416c6da525b5"
+    },
+    "14091141775:list-pressure.jsonl": {
+      "bytes": 11784,
+      "sha256": "7e170bfd0cdd4703e8b624a75cfb66dacf3f1d67fd2077e280d09613bb6c6703"
+    },
+    "14091141775:rustc.txt": {
+      "bytes": 196,
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    "14091141775:requested-filters.txt": {
+      "bytes": 35,
+      "sha256": "31320aafc246b51589a1a879f73c1c11c9e33345df0bcfe8bdee7f14ed67a2b8"
+    },
+    "14091141775:selected-tests.log": {
+      "bytes": 256319,
+      "sha256": "28bf27202da345f564f6784a20c2ccad10c1ee32037a02be515baaff0c5717f2"
+    },
+    "14091141775:source-revision.txt": {
+      "bytes": 41,
+      "sha256": "5558e2798ad7038c7310e3348f1b0081fdd7bac65a56ac91bcb7bef980defd17"
+    },
+    "14091141775:tests.log": {
+      "bytes": 293347,
+      "sha256": "c87e62d392c5bd8b856c9f6db3c04827735468e2ab43ca898f9308c7371651d1"
+    },
+    "14090654425:alltargets.jsonl": {
+      "bytes": 36149,
+      "sha256": "70865572006c178ddef971f111bf45a2f45cf0b8a6fae968daae61d6ae91e4cb"
+    },
+    "14090654425:consumer.jsonl": {
+      "bytes": 5202,
+      "sha256": "6d0d2e338770965dd72a06c74fdc0fa5c0faabb040c13d63bacc39b3602701a3"
+    }
+  },
+  "bounded_literal_content_inspection": [
+    {
+      "artifact": 14091141775,
+      "member": "helper-pressure.jsonl",
+      "bytes": 60052,
+      "UTF8": true,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "artifact": 14091141775,
+      "member": "list-pressure.jsonl",
+      "bytes": 11784,
+      "UTF8": true,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "artifact": 14091141775,
+      "member": "rustc.txt",
+      "bytes": 196,
+      "UTF8": true,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "artifact": 14091141775,
+      "member": "requested-filters.txt",
+      "bytes": 35,
+      "UTF8": true,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "artifact": 14091141775,
+      "member": "selected-tests.log",
+      "bytes": 256319,
+      "UTF8": true,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "artifact": 14091141775,
+      "member": "source-revision.txt",
+      "bytes": 41,
+      "UTF8": true,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "artifact": 14091141775,
+      "member": "tests.log",
+      "bytes": 293347,
+      "UTF8": true,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "artifact": 14090654425,
+      "member": "alltargets.jsonl",
+      "bytes": 36149,
+      "UTF8": true,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "artifact": 14090654425,
+      "member": "consumer.jsonl",
+      "bytes": 5202,
+      "UTF8": true,
+      "literal_private_key_header_matches": 0
+    }
+  ],
+  "custody_projection": false,
+  "public_repository_artifact_access": "GitHub access and retention; local0700/0600 does not imply owner-only GitHub artifact privacy",
+  "qualification": "SDK/TCPmock/numeric/RPCevidence regressions only; no HA/physical/native-distributed commit qualification",
+  "source_changes_or_reruns": false,
+  "file_sha256": {
+    "core-job.log": "c4592db0cd1426f21f61a46b52f3d8aea0edf697bb4ac3ed8e1d78bccc1cbbb0",
+    "workspace-job.log": "c3f1fac6b631401811e3ec2011a67f4cbcdbb0c0d78e7913ff1efa1d56c710d9",
+    "request.json": "7f711362a909475d0b91c6d0f9e26546326d9f7a57fdf4d85af1f033de37f218",
+    "run-terminal.json": "bd8b0ce2e8e0807af4520e0377606b351cbde94d87052c07a8b8782fc5b8a019",
+    "jobs-terminal.json": "19718d9b000816af40192762ea6327d3bab6d9a57d0f80316145f2583614c922",
+    "artifacts.json": "249d7759afc1431ea9550b4332a0b726ecabe129576495fbc95170a86e78906a",
+    "actual-observations.json": "2cb8d3787697fcef91608ea79a901d0aa78fbe62ecad6e6adda167f8e97a9b58"
+  }
+}

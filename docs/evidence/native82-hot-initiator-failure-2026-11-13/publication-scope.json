@@ -1,0 +1,81 @@
+{
+  "original_full_zip_contains": {
+    "mesh_signing_key_json_files": 410,
+    "database_pages_WAL_seed_and_custody": true
+  },
+  "original_full_zip_in_public_packet": false,
+  "private_original_expected_location": "/root/bicdb-ha-private-evidence/native82-43544810818 (outside Git, custodian-owned0700/0600)",
+  "original_hosted_artifact_privacy": "Public repository artifact access/retention is not a privacy guarantee; projection does not remove existing hosted originals.",
+  "projected_scope": "Exact logical reports/all82operationledgers/full synthetic RPC frames; complete custody/key/seed/DB prefix omitted",
+  "literal_scans": {
+    "raw_core_log": [
+      {
+        "literal": "-----BEGIN PRIVATE KEY-----",
+        "occurrences": 0
+      },
+      {
+        "literal": "-----BEGIN RSA PRIVATE KEY-----",
+        "occurrences": 0
+      },
+      {
+        "literal": "-----BEGIN EC PRIVATE KEY-----",
+        "occurrences": 0
+      },
+      {
+        "literal": "\"private_key\"",
+        "occurrences": 0
+      },
+      {
+        "literal": "\"secret_key\"",
+        "occurrences": 0
+      },
+      {
+        "literal": "\"seed\"",
+        "occurrences": 0
+      },
+      {
+        "literal": "mesh_signing_key.json",
+        "occurrences": 820
+      }
+    ],
+    "logical_projection": [
+      {
+        "literal": "-----BEGIN PRIVATE KEY-----",
+        "occurrences": 0
+      },
+      {
+        "literal": "-----BEGIN RSA PRIVATE KEY-----",
+        "occurrences": 0
+      },
+      {
+        "literal": "-----BEGIN EC PRIVATE KEY-----",
+        "occurrences": 0
+      },
+      {
+        "literal": "\"private_key\"",
+        "occurrences": 0
+      },
+      {
+        "literal": "\"secret_key\"",
+        "occurrences": 0
+      },
+      {
+        "literal": "\"seed\"",
+        "occurrences": 0
+      },
+      {
+        "literal": "mesh_signing_key.json",
+        "occurrences": 2460
+      }
+    ]
+  },
+  "scope_limit": "Literal scans/path allowlists do not establish absence of arbitrary secrets. Signing-key contents never decoded/rendered; omitted bytes only hashed. Derived MStore points are selected noncredential fields from omitted JSON, with provenance and optional original rederivation. No engine opened or repaired.",
+  "persistent_private_original_verified": {
+    "path": "/root/bicdb-ha-private-evidence/native82-43544810818/original-artifact-14094258684.zip",
+    "bytes": 23829148,
+    "sha256": "bdf53f0eb21bf88397a14099f6a971460db1497104bcb799ae078b3d85c03561",
+    "directory_mode": "0700",
+    "file_mode": "0600",
+    "engine_opened": false
+  }
+}

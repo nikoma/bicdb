@@ -1,0 +1,442 @@
+name: tests
+
+# The reason this exists: three separate defects shipped in a single week
+# because nothing ran the test suite on a pull request. One of them was a
+# crate that did not compile. Reviewing diffs is not a substitute for
+# building them.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      core_filter:
+        description: 'Optional Core library substring for focused manual validation; empty selectors run every suite'
+        type: string
+        required: false
+        default: ''
+      pgwire_filter:
+        description: 'Optional PGwire library substring; mutually exclusive with other selectors'
+        type: string
+        required: false
+        default: ''
+      cli_target:
+        description: 'Optional CLI integration-test target for manual validation; requires empty core_filter'
+        type: string
+        required: false
+        default: ''
+      cli_failure_db_custody:
+        description: 'Opt in to bounded stopped native metadata CLI DB roots on failure; never TLS or quarantine uploads'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # GitHub's hosted runner has limited disk and memory. Eight simultaneous
+  # static links have produced SIGBUS failures, and building every workspace
+  # example before every matrix suite has exhausted the runner's disk.
+  # One linker at a time, no incremental object cache, and no debug symbols in
+  # CI keeps the complete suite below the runner's hard memory/disk ceilings.
+  CARGO_BUILD_JOBS: "1"
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  RUST_TEST_THREADS: "4"
+
+jobs:
+  validate-selectors:
+    name: Validate focused test selectors
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CORE_FILTER: ${{ inputs.core_filter }}
+      PGWIRE_FILTER: ${{ inputs.pgwire_filter }}
+      CLI_TARGET: ${{ inputs.cli_target }}
+      CLI_DB_CUSTODY: ${{ inputs.cli_failure_db_custody }}
+    steps:
+      - name: Reject incompatible or malformed selectors
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYCODE'
+          import os, re
+          values = {name: os.environ.get(name, '') for name in ('CORE_FILTER', 'PGWIRE_FILTER', 'CLI_TARGET')}
+          selected = [name for name, value in values.items() if value]
+          if len(selected) > 1:
+              raise SystemExit('Select at most one of core_filter, pgwire_filter and cli_target')
+          for name, value in values.items():
+              if value and (value.startswith('-') or len(value) > 512 or any(ord(c) < 32 or ord(c) == 127 for c in value)):
+                  raise SystemExit(f'{name} must be a bounded single-line substring, not an option')
+          if values['CLI_TARGET'] and not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_-]{0,127}', values['CLI_TARGET']):
+              raise SystemExit('CLI_TARGET must be a bounded Cargo integration-target name')
+          if os.environ.get('CLI_DB_CUSTODY') == 'true' and values['CLI_TARGET'] != 'native_metadata_operator_cli':
+              raise SystemExit('DB custody requires explicit manual native_metadata_operator_cli target')
+          print('Selected: ' + (selected[0] if selected else 'all broad suites'))
+          PYCODE
+
+  architecture:
+    name: Public repository has no private dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install boundary scanner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+      - name: Enforce open-core dependency direction
+        run: ./scripts/check-open-core-boundary.sh
+
+  build:
+    name: Community-only workspace compiles, tests included
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # --all-targets is the point: `cargo build` alone would not have caught
+      # bicdb-sql's unit tests failing to compile against a changed signature.
+      - name: cargo check --workspace --all-targets
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-workspace-pressure/alltargets.jsonl" -- cargo check --workspace --all-targets --locked
+      # Workspace feature unification enables TLS in Core. Check this actual
+      # consumer separately so TLS-only APIs cannot leak into its Core build.
+      - name: Workflow consumer compiles without Core defaults
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-workspace-pressure/consumer.jsonl" -- cargo check -p bicdb-workflow --all-targets --locked
+      - name: Retain qualification build pressure and interruption evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-workspace-pressure-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/native-workspace-pressure/
+
+  fmt:
+    name: Formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  licensing:
+    name: Licensing invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: scripts/validate-licensing.sh
+        run: ./scripts/validate-licensing.sh
+
+  test:
+    needs: validate-selectors
+    if: github.event_name != 'workflow_dispatch' || (inputs.core_filter == '' && inputs.cli_target == '' && inputs.pgwire_filter == '')
+    name: ${{ matrix.suite.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    # Message brokers for the connector tests (crates/bicdb-pgwire/tests/
+    # connectors.rs). Without these variables those tests skip themselves.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+      rabbitmq:
+        image: rabbitmq:3-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: bicdb
+          RABBITMQ_DEFAULT_PASS: bicdb-ci
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s
+          --health-timeout 10s
+          --health-retries 20
+    env:
+      BICDB_TEST_REDIS_URL: redis://127.0.0.1:6379
+      BICDB_TEST_AMQP_URL: amqp://bicdb:bicdb-ci@127.0.0.1:5672/%2f
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - name: bicdb-core
+            args: -p bicdb-core
+          # Multi-node native fixtures start three to five TLS nodes each and
+          # assert the product's real-time protocol budgets. Four of them at
+          # once on one runner measure runner contention, not the protocol,
+          # so they run one at a time in their own job. Nothing is skipped:
+          # this job and the parallel job together cover every Core test.
+          - name: bicdb-core native multi-node (serial)
+            args: -p bicdb-core --lib
+          - name: bicdb-sql
+            args: -p bicdb-sql
+          - name: bicdb-pgwire
+            args: -p bicdb-pgwire
+          - name: rest of workspace
+            args: >-
+              --workspace
+              --exclude bicdb-core
+              --exclude bicdb-sql
+              --exclude bicdb-pgwire
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install test-target scanner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+      - uses: actions/setup-node@v4
+        if: matrix.suite.name == 'rest of workspace'
+        with:
+          node-version: '22'
+      - uses: Swatinem/rust-cache@v2
+      # bicdb-core's projection chaos test deliberately refuses to run unless
+      # its out-of-process crash helper exists. No other suite needs the full
+      # workspace's examples, so build exactly that helper in the core job.
+      - name: Build projection chaos helper
+        if: startsWith(matrix.suite.name, 'bicdb-core')
+        run: cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
+      - name: cargo test ${{ matrix.suite.args }}
+        if: matrix.suite.name == 'bicdb-pgwire'
+        run: cargo test ${{ matrix.suite.args }} --locked -- --test-threads=4
+      - name: cargo test bicdb-core without the serial native multi-node fixtures
+        if: matrix.suite.name == 'bicdb-core'
+        run: >-
+          cargo test --config 'profile.dev.package."*".opt-level=2' ${{ matrix.suite.args }} --locked -- --test-threads=4
+          --skip distribution_native_host::
+          --skip range_image_native::rf3_fixture::
+      - name: cargo test bicdb-core native multi-node fixtures one at a time
+        if: matrix.suite.name == 'bicdb-core native multi-node (serial)'
+        run: >-
+          cargo test --config 'profile.dev.package."*".opt-level=2' ${{ matrix.suite.args }} --locked --
+          distribution_native_host:: range_image_native::rf3_fixture::
+          --test-threads=1
+      - name: cargo test bicdb-sql with bounded linked artifacts
+        if: matrix.suite.name == 'bicdb-sql'
+        run: ./scripts/run-cargo-test-targets-bounded.sh bicdb-sql
+      - name: cargo test remaining workspace with bounded linked artifacts
+        if: matrix.suite.name == 'rest of workspace'
+        run: >-
+          python3 scripts/platform/run_workspace_tests_bounded.py
+          --exclude bicdb-core --exclude bicdb-sql --exclude bicdb-pgwire
+      - name: Cluster harness and offline queue contracts
+        if: matrix.suite.name == 'rest of workspace'
+        run: |
+          python3 -m unittest discover -s scripts/platform -p 'test_*.py'
+          python3 -m unittest discover -s examples/oracle/hr -p 'test_*.py'
+          python3 -m unittest discover -s examples/oracle/reference -p 'test_*.py'
+          python3 examples/oracle/hr/prepare.py --check
+          node --test examples/platform/notebook/*.test.mjs
+
+  focused-core:
+    needs: validate-selectors
+    name: Focused Core library (${{ inputs.core_filter }})
+    if: github.event_name == 'workflow_dispatch' && inputs.core_filter != '' && inputs.cli_target == '' && inputs.pgwire_filter == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      BICDB_CORE_TEST_FILTER: ${{ inputs.core_filter }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build projection chaos helper
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-core-evidence/helper-pressure.jsonl" -- cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
+      - name: Record source and list selected Core library tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$BICDB_CORE_TEST_FILTER" in
+            -*) echo 'A test substring cannot begin with an option prefix' >&2; exit 2 ;;
+          esac
+          mkdir -p "$RUNNER_TEMP/native-core-evidence"
+          git rev-parse HEAD > "$RUNNER_TEMP/native-core-evidence/source-revision.txt"
+          rustc --version --verbose > "$RUNNER_TEMP/native-core-evidence/rustc.txt"
+          selected_filters=("event_client_" "actual_rpc_evidence_")
+          printf '%s\n' "${selected_filters[@]}" > "$RUNNER_TEMP/native-core-evidence/requested-filters.txt"
+          python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-core-evidence/list-pressure.jsonl" -- \
+            cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked -- --list "${selected_filters[@]}" \
+            2>&1 | tee "$RUNNER_TEMP/native-core-evidence/selected-tests.log"
+          python3 - <<'PY'
+          import os, pathlib
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'native-core-evidence' / 'selected-tests.log'
+          count = sum(line.endswith(': test') for line in path.read_text().splitlines())
+          expected = ['a_known_follower_can_supply_committed_route_discovery', 'a_leader_still_committing_past_the_attempt_slice_answers_the_same_request', 'actual_rpc_evidence_complete_record_quota_fences_without_truncation', 'actual_rpc_evidence_large_complete_frame_byte_quota_refuses_before_dispatch', 'actual_rpc_evidence_mtls_canceled_before_dispatch_records_original_cancellation', 'actual_rpc_evidence_mtls_exact_frames_and_discovery_errors_survive_fallback', 'actual_rpc_evidence_mtls_parallel_requests_share_journal_without_false_reentrancy', 'actual_rpc_evidence_mtls_response_retained_before_original_cancellation_override', 'actual_rpc_evidence_post_response_sync_failure_returns_unknown_and_never_rearms', 'actual_rpc_evidence_pre_dispatch_sync_failure_fences_without_application_mutation', 'actual_rpc_evidence_same_thread_reentry_refuses_without_dispatch', 'an_exhausted_request_budget_is_not_reported_as_unreachable_members', 'event_client_append_preserves_actual_error_when_route_discovery_fails', 'event_client_append_preserves_primary_when_conflicting_discovery_stops_retry', 'event_client_caller_query_budget_expired_refuses_before_tcp_dispatch', 'event_client_caller_query_budget_live_scope_accepts_actual_mock_ack', 'event_client_different_sink_nested_request_is_allowed_without_global_callback_lock', 'event_client_get_preserves_actual_error_when_route_discovery_exhausts_deadline', 'event_client_nested_caller_deadline_expires_during_actual_mock_reply', 'event_client_no_operation_keeps_discovery_error', 'event_client_out_of_order_worker_unknown_survives_later_refusal_and_cleanup', 'event_client_query_budget_context_keeps_tight_nested_deadline_and_shared_peak', 'event_client_refresh_without_operation_keeps_no_member_error', 'event_client_same_sink_reentry_after_response_preserves_parent_dispatch_uncertainty', 'event_client_same_sink_reentry_before_dispatch_refuses_child_and_parent_without_io', 'event_client_sibling_cleanup_evidence_failure_cannot_hide_behind_actual_mock_ack', 'event_client_typed_same_operation_response_keeps_all_worker_outcomes_until_cleanup', 'event_client_unknown_write_survives_later_refusal_and_refresh_or_deadline', 'event_client_worker_memory_envelope_updates_original_caller_peak_and_refuses_io', 'legacy_metadata_controllers_remain_usable_for_discovery', 'permanently_silent_old_leader_refreshes_from_another_member', 'silent_discovery_member_cannot_exhaust_the_retry_budget', 'silent_event_route_leaves_budget_for_discovery_and_retry', 'transient_topology_refresh_does_not_abort_an_event_request']
+          actual = [line[:-6].rsplit('::', 1)[-1] for line in path.read_text().splitlines() if line.endswith(': test')]
+          if count != 34 or sorted(actual) != expected:
+              raise SystemExit('Qualification must select exactly the 25 client and nine existing RPC-evidence cases')
+          print(f'Selected {count} Core library tests; ignored tests remain identified by the execution result')
+          PY
+      - name: Execute client and existing RPC-evidence cases serially
+        shell: bash
+        run: |
+          set -euo pipefail
+          export BICDB_TEST_EVIDENCE_ROOT="$RUNNER_TEMP/native-core-evidence/fault-state"
+          export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
+          mkdir -p "$BICDB_TEST_EVIDENCE_ROOT"
+          selected_filters=("event_client_" "actual_rpc_evidence_")
+          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked -- "${selected_filters[@]}" --test-threads=1 --show-output \
+            2>&1 | tee "$RUNNER_TEMP/native-core-evidence/tests.log"
+      - name: Retain focused source, log and opted-in fault-state evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: focused-core-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/native-core-evidence/
+
+  focused-cli:
+    needs: validate-selectors
+    name: Focused CLI integration (${{ inputs.cli_target }})
+    if: github.event_name == 'workflow_dispatch' && inputs.cli_target != '' && inputs.core_filter == '' && inputs.pgwire_filter == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      BICDB_CLI_TEST_TARGET: ${{ inputs.cli_target }}
+      BICDB_CAPTURE_CLI_DB_FAILURE: ${{ inputs.cli_failure_db_custody }}
+      RUST_TEST_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Record exact source and list CLI integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/native-cli-evidence"
+          git rev-parse HEAD > "$RUNNER_TEMP/native-cli-evidence/source-revision.txt"
+          git show --no-patch --format=fuller HEAD > "$RUNNER_TEMP/native-cli-evidence/source-commit.txt"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/native-cli-evidence/tracked-source.tar.gz" HEAD
+          rustc --version --verbose > "$RUNNER_TEMP/native-cli-evidence/rustc.txt"
+          if [[ ! "$BICDB_CLI_TEST_TARGET" =~ ^[A-Za-z0-9_][A-Za-z0-9_-]{0,127}$ ]]; then
+            echo 'CLI target must be a bounded Cargo integration-target name, not an option/path' >&2
+            exit 2
+          fi
+          printf '%s\n' "$BICDB_CLI_TEST_TARGET" > "$RUNNER_TEMP/native-cli-evidence/cli-target.txt"
+          cargo test -p bicdb-cli --test "$BICDB_CLI_TEST_TARGET" --locked -- --list \
+            2>&1 | tee "$RUNNER_TEMP/native-cli-evidence/selected-tests.log"
+          python3 - <<'PYCODE'
+          import os, pathlib
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'native-cli-evidence' / 'selected-tests.log'
+          count = sum(line.endswith(': test') for line in path.read_text().splitlines())
+          if count == 0:
+              raise SystemExit('The requested CLI integration target selected no tests')
+          print(f'Selected {count} CLI integration tests; actual execution remains required')
+          PYCODE
+      - name: Execute CLI integration target serially
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No BICDB_TEST_EVIDENCE_ROOT: generated TLS/DB fixture directories
+          # stay private and are deliberately outside this uploaded subtree.
+          export BICDB_TEST_CLI_EVIDENCE_ROOT="$RUNNER_TEMP/native-cli-evidence/failure-diagnostics"
+          export BICDB_TEST_CLI_RPC_EVIDENCE_ROOT="$RUNNER_TEMP/native-cli-evidence/rpc-journals"
+          if [[ "$BICDB_CAPTURE_CLI_DB_FAILURE" == 'true' ]]; then
+            export BICDB_TEST_CLI_DB_EVIDENCE_ROOT="$RUNNER_TEMP/native-cli-db-custody"
+            mkdir -p "$BICDB_TEST_CLI_DB_EVIDENCE_ROOT"
+          fi
+          export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
+          cargo test -p bicdb-cli --test "$BICDB_CLI_TEST_TARGET" --locked -- --nocapture --test-threads=1 \
+            2>&1 | tee "$RUNNER_TEMP/native-cli-evidence/tests.log"
+          python3 - <<'PYCODE'
+          import os, pathlib, re
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'native-cli-evidence' / 'tests.log'
+          results = re.findall(r'test result: (?:ok|FAILED)\. (\d+) passed; (\d+) failed;', path.read_text())
+          if sum(int(passed) + int(failed) for passed, failed in results) == 0:
+              raise SystemExit('CLI target ran no non-ignored tests')
+          PYCODE
+      - name: Retain exact tracked source and full CLI logs only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: focused-cli-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/native-cli-evidence/
+
+      - name: Retain explicitly opted-in stopped native databases only
+        if: always() && inputs.cli_failure_db_custody
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-cli-stopped-databases-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: warn
+          # Exact subtree only. Private .native-cli-db-quarantine siblings and
+          # generated fixture TLS roots are deliberately OUTSIDE this path.
+          path: ${{ runner.temp }}/native-cli-db-custody/
+
+  focused-pgwire:
+    name: Focused PGwire library (${{ inputs.pgwire_filter }})
+    needs: validate-selectors
+    if: github.event_name == 'workflow_dispatch' && inputs.pgwire_filter != '' && inputs.core_filter == '' && inputs.cli_target == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      BICDB_PGWIRE_TEST_FILTER: ${{ inputs.pgwire_filter }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Record exact source and list selected PGwire library tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pgwire-library-evidence"
+          git rev-parse HEAD > "$RUNNER_TEMP/pgwire-library-evidence/source-revision.txt"
+          git show --no-patch --format=fuller HEAD > "$RUNNER_TEMP/pgwire-library-evidence/source-commit.txt"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/pgwire-library-evidence/tracked-source.tar.gz" HEAD
+          rustc --version --verbose > "$RUNNER_TEMP/pgwire-library-evidence/rustc.txt"
+          printf '%s\n' "$BICDB_PGWIRE_TEST_FILTER" > "$RUNNER_TEMP/pgwire-library-evidence/test-filter.txt"
+          cargo test -p bicdb-pgwire --lib --locked "$BICDB_PGWIRE_TEST_FILTER" -- --list \
+            2>&1 | tee "$RUNNER_TEMP/pgwire-library-evidence/selected-tests.log"
+          python3 - <<'PYCODE'
+          import os, pathlib
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pgwire-library-evidence' / 'selected-tests.log'
+          count = sum(line.endswith(': test') for line in path.read_text().splitlines())
+          if count == 0:
+              raise SystemExit('The requested PGwire filter selected no tests')
+          print(f'Selected {count} PGwire library tests; actual execution remains required')
+          PYCODE
+      - name: Execute selected PGwire library tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
+          cargo test -p bicdb-pgwire --lib --locked "$BICDB_PGWIRE_TEST_FILTER" -- --test-threads=4 --show-output \
+            2>&1 | tee "$RUNNER_TEMP/pgwire-library-evidence/tests.log"
+          python3 - <<'PYCODE'
+          import os, pathlib, re
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pgwire-library-evidence' / 'tests.log'
+          results = re.findall(r'test result: (?:ok|FAILED)\. (\d+) passed; (\d+) failed;', path.read_text())
+          if sum(int(passed) + int(failed) for passed, failed in results) == 0:
+              raise SystemExit('PGwire filter ran no non-ignored tests')
+          PYCODE
+      - name: Retain exact source and full PGwire library logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: focused-pgwire-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/pgwire-library-evidence/

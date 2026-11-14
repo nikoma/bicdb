@@ -166,6 +166,15 @@ pub(super) fn exercise(
         assert_eq!(current["gate"]["poisoned"], false);
         assert!(current["gate"]["capture_pin"].is_null());
         for member in [original, current] {
+            assert_eq!(member["lease_current_error_truncated"], false);
+            if matches!(case, SourceCase::TargetCollectionStoreRevoked) && id.as_str() == "n4" {
+                assert_eq!(
+                    member["lease_current_error"],
+                    "cluster error: actual service range Store slot ended or changed"
+                );
+            } else {
+                assert!(member["lease_current_error"].is_null());
+            }
             assert_eq!(member["request"]["cancel_requested"], false);
             assert!(member["request"]["remaining_us"]
                 .as_u64()
@@ -216,6 +225,17 @@ fn run(
     process.check()?;
     admission.require_live()?;
     let before_fault = phase.test_prepublication_snapshot()?;
+    for member in before_fault["members"]
+        .as_object()
+        .ok_or_else(|| invalid("pre-fault member snapshot absent"))?
+        .values()
+    {
+        if !member["lease_current_error"].is_null() {
+            return Err(invalid(
+                "post-collection fault started with an already invalid original lease",
+            ));
+        }
+    }
     if before_fault["members"][local.as_str()]["frozen_owner"] != serde_json::to_value(original_a)?
     {
         return Err(invalid(

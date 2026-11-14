@@ -3,12 +3,27 @@
 //! record alone cannot release a freeze or admit an application operation.
 use super::*;
 mod continuity;
+#[cfg(test)]
+mod failure_diagnostics;
 mod recovery;
 use crate::distribution_range_handoff::{
     NativeJointActivationAdmission, NativeJointDecisionData, NativeJointPreparedServingVoteData,
 };
 pub(crate) use continuity::NativeJointHistoricalCutScope;
 pub(crate) use recovery::{NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain};
+
+// Preserve the exact result/guard order. Test-only failure observations contain
+// DATA and are emitted by the fixture after its service/DB guards have dropped.
+macro_rules! post_wal_check {
+    ($operation:expr, $scope:expr, $record:expr, $admission:expr, $recovered:expr, $stage:expr) => {{
+        let result = $operation;
+        #[cfg(test)]
+        if result.is_err() {
+            failure_diagnostics::record($scope, $record, $admission, $recovered, $stage);
+        }
+        result
+    }};
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -882,8 +897,9 @@ impl NativeJointPreparedPublicationScope<'_> {
             self.catalogue,
             &actual,
         )?;
-        // This checker does not demand controlled==0. The actual Controlled
-        // token above replaces quiescence during our own durable callback.
+        // The complete catalogue check includes quiescence. The publisher
+        // ends its own callback before calling this strict postcondition;
+        // another retained Controlled callback still refuses publication.
         self.catalogue.require_current(
             self.store,
             self.database,
@@ -935,6 +951,11 @@ impl NativeJointPreparedPublicationScope<'_> {
     }
 }
 impl BicDb {
+    #[cfg(test)]
+    pub(crate) fn test_take_native_joint_post_wal_failure() -> Option<serde_json::Value> {
+        failure_diagnostics::take()
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn publish_scoped_native_joint_bridge(
         &self,
@@ -947,6 +968,8 @@ impl BicDb {
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<NativeJointServingBridgeReceipt> {
+        #[cfg(test)]
+        failure_diagnostics::clear();
         parent.check()?;
         // Complete final SAME physical participant set, before the local
         // journal. No foreign service/database or network call occurs below.
@@ -1040,25 +1063,98 @@ impl BicDb {
             #[cfg(test)]
             wal_trace.complete();
         }
-        let receipt = scope.receipt_from_actual(record)?;
-        scope.require_bridge_postcondition(&receipt, controlled.as_ref())?;
-        admission.require_local_publication_scope(&scope, store)?;
-        admission
-            .committed()
-            .require_native_publication_metadata(self, store)?;
+        #[cfg(test)]
+        let diagnostic_record = record.clone();
+        let receipt = scope.receipt_from_actual(record);
+        #[cfg(test)]
+        if receipt.is_err() {
+            failure_diagnostics::record(
+                &scope,
+                &diagnostic_record,
+                admission,
+                recovered,
+                "actual_receipt",
+            );
+        }
+        let receipt = receipt?;
+        // The synchronous native commit and receipt construction have ended.
+        // Release ONLY this callback's lease before the unchanged full strict
+        // poststate checks. Frozen, journal, DB/service and metadata stay held;
+        // any other Controlled callback still prevents quiescence.
         drop(controlled);
-        self.range_mutations
-            .validate_quiescent_frozen(prepared.record.range_id, frozen)?;
+        post_wal_check!(
+            scope.require_bridge_postcondition(&receipt, None),
+            &scope,
+            &receipt.record,
+            admission,
+            recovered,
+            "complete_postcondition"
+        )?;
+        post_wal_check!(
+            admission.require_local_publication_scope(&scope, store),
+            &scope,
+            &receipt.record,
+            admission,
+            recovered,
+            "local_publication_scope"
+        )?;
+        post_wal_check!(
+            admission
+                .committed()
+                .require_native_publication_metadata(self, store),
+            &scope,
+            &receipt.record,
+            admission,
+            recovered,
+            "postcondition_metadata"
+        )?;
+        post_wal_check!(
+            self.range_mutations
+                .validate_quiescent_frozen(prepared.record.range_id, frozen),
+            &scope,
+            &receipt.record,
+            admission,
+            recovered,
+            "postcondition_quiescence"
+        )?;
         // Actual fsync is historical on any later refusal. The SAME actual
         // scope/journal/hook/A remains held through the local version gate.
-        parent.check()?;
-        admission.require_live()?;
-        admission
-            .committed()
-            .require_native_publication_metadata(self, store)?;
+        post_wal_check!(
+            parent.check(),
+            &scope,
+            &receipt.record,
+            admission,
+            recovered,
+            "parent_after_postcondition"
+        )?;
+        post_wal_check!(
+            admission.require_live(),
+            &scope,
+            &receipt.record,
+            admission,
+            recovered,
+            "admission_after_postcondition"
+        )?;
+        post_wal_check!(
+            admission
+                .committed()
+                .require_native_publication_metadata(self, store),
+            &scope,
+            &receipt.record,
+            admission,
+            recovered,
+            "final_metadata"
+        )?;
         #[cfg(test)]
         eprintln!("ACTUAL_JOINT_SCOPED_PUBLICATION node={} recovered_exact_original_audit={} new-pointer-archive-and-unchanged-physical-poststate=true",prepared.local_node_id(),recovered);
-        let _version = admission.committed().native_publication_guard()?;
+        let _version = post_wal_check!(
+            admission.committed().native_publication_guard(),
+            &scope,
+            &receipt.record,
+            admission,
+            recovered,
+            "final_version_guard"
+        )?;
         Ok(receipt)
     }
     #[allow(clippy::too_many_arguments)]

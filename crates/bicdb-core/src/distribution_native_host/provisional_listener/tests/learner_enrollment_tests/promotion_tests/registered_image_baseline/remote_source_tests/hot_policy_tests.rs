@@ -79,6 +79,12 @@ fn operation<T>(
     ledger.push(serde_json::json!({"operation":name,"outcome":"not_started","effect_unknown_on_error":false}));
     evidence(&output.join("registered-hot-policy-ledger.json"), ledger)?;
     let result = call();
+    if let Some(actual) = BicDb::test_take_native_joint_post_wal_failure() {
+        // The actual publisher has returned and its service/DB guards are
+        // gone. Persist forensic DATA before the original caller assertion.
+        eprintln!("NATIVE_POST_WAL_FAILURE {actual}");
+        ledger[at]["post_wal_failure_observation"] = actual;
+    }
     ledger[at]["outcome"] = if result.is_ok() {
         "returned"
     } else {

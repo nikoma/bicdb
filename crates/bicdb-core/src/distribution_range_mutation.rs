@@ -1328,6 +1328,27 @@ mod tests {
     }
 
     #[test]
+    fn dropping_own_controlled_callback_keeps_another_callback_and_frozen_owner() {
+        let gate = RangeMutationGate::default();
+        let id = range(1);
+        let frozen = gate.try_freeze(id, Uuid::now_v7()).unwrap();
+        let owner = frozen.owner();
+        let own = gate.try_controlled_mutation(&frozen).unwrap();
+        let other = gate.try_controlled_mutation(&frozen).unwrap();
+        let own_claim = RangeMutationAuthority::Controlled(&own).claim();
+        drop(own);
+        assert!(gate.validate_claim(&own_claim).is_err());
+        gate.validate_controlled(id, &other).unwrap();
+        assert!(gate.validate_quiescent_frozen(id, &frozen).is_err());
+        assert!(gate.try_enter(id).is_err());
+        assert_eq!(frozen.owner(), owner);
+        drop(other);
+        gate.validate_quiescent_frozen(id, &frozen).unwrap();
+        gate.validate_frozen(id, &frozen).unwrap();
+        assert_eq!(frozen.owner(), owner);
+    }
+
+    #[test]
     fn owned_permits_cross_threads_and_capture_drains_the_last_callback() {
         assert_send_sync::<RangeMutationGate>();
         assert_send_sync::<RangeMutationPermit>();

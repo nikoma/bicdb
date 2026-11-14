@@ -1,0 +1,15 @@
+{
+  "label": "b18",
+  "head": "560d8a873e65a7931226a0e38fc460f38c058ae6",
+  "ref": "qual/caller-query-scope-b18-560d8a87",
+  "inputs": {
+    "core_filter": "event_client_caller_query_budget_"
+  },
+  "static_expected": 2,
+  "assertions_and_test_bytes": "identical between pair",
+  "expected_not_observed": "source-derived expected refusal regression; actual result pending",
+  "purpose": "prove/refute source-derived worker-thread caller query-budget regression through public SDK and actual mock TCP counts; no HA/native commit/physical proof",
+  "dispatch_count": 1,
+  "created_at_utc": "2026-11-14T00:13:13.566826+00:00",
+  "dispatch_post_returned_success_at_utc": "2026-11-14T00:13:25.513362+00:00"
+}

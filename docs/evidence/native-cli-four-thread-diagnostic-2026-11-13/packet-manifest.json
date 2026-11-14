@@ -1,0 +1,145 @@
+{
+  "format": 1,
+  "files": {
+    "README.md": {
+      "bytes": 8287,
+      "sha256": "070bc658aa4609784e92763b192e1ff08e3cedd70c1c3bef02d6450c4eb41bb1"
+    },
+    "issues.json": {
+      "bytes": 4288,
+      "sha256": "f9121ea9afd8476fad8281b485c92fd8c5ca2600f493d08a3c6813c704a69e10"
+    },
+    "logical-projection.json": {
+      "bytes": 364297,
+      "sha256": "f4cd3307548eb1ba64608ff626faac765835594eb94a00fdaa21bc42b22e4dad"
+    },
+    "logs/community-alltargets-job132235387195.log.gz": {
+      "bytes": 288820,
+      "sha256": "d8b02afb0c4006369c3f113fe78d88701273b53698736491fb910c17ddd07352"
+    },
+    "logs/focused-cli-job132235428483.log.gz": {
+      "bytes": 278937,
+      "sha256": "b4050570f468d30f1846d255111ddaee71e56bb926b1aba8525a53635454a237"
+    },
+    "logs/original-job132191138917-lines633560-633610.log": {
+      "bytes": 27135,
+      "sha256": "50173bc65819872b614b1ecd62ca72173f0def47cef0d3bd7e71fb47c681100b"
+    },
+    "project_artifact.py": {
+      "bytes": 9216,
+      "sha256": "87d88e129385ff78b5665d16032fd94a41f79a66bef3937435769f9b07a53b5f"
+    },
+    "provenance/artifact-anonymous-api-http-status.txt": {
+      "bytes": 4,
+      "sha256": "5d94ef1d04a57469912deb42e29ecee5168b983c775efa906cb9268596ba9f84"
+    },
+    "provenance/artifact-metadata.json": {
+      "bytes": 743,
+      "sha256": "3c70b87cf460421fadb1110ee937e3e4f198fdc9ff189dbb89619f2357bd1344"
+    },
+    "provenance/dispatch-checkpoint.json": {
+      "bytes": 581,
+      "sha256": "79a4a6775a473050a9a23450b8a93a68608c5ea4582f581fcbbccd048e15d835"
+    },
+    "provenance/dispatch-request.json": {
+      "bytes": 209,
+      "sha256": "cbdfb04146540fa71f03634d670598dee8b2a4b8791649717b1b275d1cd35efa"
+    },
+    "provenance/focused-job.json": {
+      "bytes": 2856,
+      "sha256": "5f82ba035dc4eee3c9c6bcd31dc72846ad084a53e8f02790c460f174c5dacda2"
+    },
+    "provenance/foreign-broad-retry-terminal-job.json": {
+      "bytes": 4254,
+      "sha256": "e3c36ea02c6f3a31009ca9538e268115a1b8c9e9c51ea09111c32652068e7713"
+    },
+    "provenance/jobs.json": {
+      "bytes": 15013,
+      "sha256": "28142171e5d151914449ef058504bc18ec06e7a11b7996be007cc3273092ca67"
+    },
+    "provenance/original-failure-forensics.json": {
+      "bytes": 44613,
+      "sha256": "409ecdf736a95cf1dcd4e517821686e8d40c3ae5a0bac7f55830a1f7914608f5"
+    },
+    "provenance/original-job.json": {
+      "bytes": 4250,
+      "sha256": "117b6632b05bfe165b2002b008b23334318636a44fa8a5b46ae231cb9d67507e"
+    },
+    "provenance/qualifier-before-dispatch.json": {
+      "bytes": 1004,
+      "sha256": "1f962b9403f975c5a7ab9b5d9d89bcb2f03892c7d7af3a64d72520c11869ba80"
+    },
+    "provenance/repository-visibility.json": {
+      "bytes": 112,
+      "sha256": "399ce4d75eab78f60911270d3578bde5424d1cfc1e4c580ed731bfd20bc8cf6f"
+    },
+    "provenance/run.json": {
+      "bytes": 11488,
+      "sha256": "cd6af6c62a2ab126007a8b8120385b2720ea30c64329eb687cceef5a93e1a187"
+    },
+    "provenance/workflow-only.diff": {
+      "bytes": 1415,
+      "sha256": "08b5cb49fcb634ee691427e89e008ef749cc65bd71709076bfb02610e7d3208c"
+    },
+    "source/.github/workflows/tests.yml": {
+      "bytes": 19930,
+      "sha256": "4f5d1c33a96365600ae023aa158c0e33b0dd573a8bc48f688836a6e9849cc2bd"
+    },
+    "source/Cargo.toml": {
+      "bytes": 5576,
+      "sha256": "7c756098550cdd9c86d781044c6427a369dc9983ce9296df07ed4d720ae7a3ad"
+    },
+    "source/crates/bicdb-cli/src/native_metadata_command.rs": {
+      "bytes": 39078,
+      "sha256": "9c36f303dd7f3d6bb94ef2d895773e2e5168995dd411354dcf92f50eb0b8a8bb"
+    },
+    "source/crates/bicdb-cli/tests/native_metadata_operator_cli/custody.rs": {
+      "bytes": 13573,
+      "sha256": "1835e17e5bb68fa7e12bdd0d039588244c813995d369c906bb7a50af82668480"
+    },
+    "source/crates/bicdb-cli/tests/native_metadata_operator_cli/initial_data_tests.rs": {
+      "bytes": 14757,
+      "sha256": "4ce4779afcb43583010f37a9c9c1abb2b5a09faca9c11d6c9a00d9df0903d24e"
+    },
+    "source/crates/bicdb-cli/tests/native_metadata_operator_cli/replica_receiver_tests.rs": {
+      "bytes": 11869,
+      "sha256": "ad40f656fe41d16f8c83cee9d8f241437fe37045bb6099849bd3e68785f9226b"
+    },
+    "source/crates/bicdb-cli/tests/native_metadata_operator_cli/rpc_evidence.rs": {
+      "bytes": 12925,
+      "sha256": "cad7672b6477692bd8938898ed80f9b08eeb8581e7e5bef421ac754f88bdb87d"
+    },
+    "source/crates/bicdb-cli/tests/native_metadata_operator_cli.rs": {
+      "bytes": 40003,
+      "sha256": "f269766469be08eb5a81a98ae3d2e1846a1b8d960aa2190f189eacd1016c21dd"
+    },
+    "source/crates/bicdb-core/src/distribution_events.rs": {
+      "bytes": 35079,
+      "sha256": "1a7d2fcef974e75b72392e7bf28fac1c07f57a87c81e5d947ae1a69627ba6079"
+    },
+    "source/crates/bicdb-core/src/distribution_native_host/operator.rs": {
+      "bytes": 19205,
+      "sha256": "346d6d50f2d52ce7f5ef16fb789d28b24cb6b622fd8dc681ad732b7ee829e51c"
+    },
+    "source/crates/bicdb-core/src/distribution_native_host/provisional_listener.rs": {
+      "bytes": 13534,
+      "sha256": "49bff77e3920649809fdc1a16088f5bc1d5d93063ed10e67cc439f8ba21a202b"
+    },
+    "source/rust-toolchain.toml": {
+      "bytes": 31,
+      "sha256": "66894b16254576f70fc56e3e3abf4d489c678e08feaec17e101ec405207b9d84"
+    },
+    "source/scripts/platform/run_workspace_tests_bounded.py": {
+      "bytes": 3544,
+      "sha256": "8856c5ac5613bff1fc4a7c1a9dda200f0ed9e9a6583e03727f5a767e71112291"
+    },
+    "source-index.json": {
+      "bytes": 6109,
+      "sha256": "07f811bbe1c844d11b517b946b859cd0e49dee82b25c3e9df079fa48776fbbde"
+    },
+    "verify.py": {
+      "bytes": 10538,
+      "sha256": "a245f9e9f501c2e3055d36c8ce879a706ac0ff05afc96028d690692f1f474730"
+    }
+  }
+}

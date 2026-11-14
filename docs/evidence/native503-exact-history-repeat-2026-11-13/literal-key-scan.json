@@ -1,0 +1,5 @@
+{
+  "scan_scope": "both complete decompressed native job logs",
+  "recognized_private_key_block_markers": 0,
+  "limitations": "literal marker check only; not exhaustive secret detection. No native DB/key/custody archive packaged."
+}

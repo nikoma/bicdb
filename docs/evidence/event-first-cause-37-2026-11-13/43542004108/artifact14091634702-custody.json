@@ -1,0 +1,58 @@
+{
+  "source": "521243e597c2d833be840773acac728a85161969",
+  "run": 43542004108,
+  "artifact": {
+    "id": 14091634702,
+    "node_id": "MDg6QXJ0aWZhY3QxNDA5MTYzNDcwMg==",
+    "name": "focused-core-521243e597c2d833be840773acac728a85161969-1",
+    "size_in_bytes": 11448,
+    "url": "https://api.github.com/repos/nikoma/bicdb/actions/artifacts/14091634702",
+    "archive_download_url": "https://api.github.com/repos/nikoma/bicdb/actions/artifacts/14091634702/zip",
+    "expired": false,
+    "digest": "sha256:5b0d6167875d3699354fdf171d7a979c505a33886446a0883cc2cf4247718fe3",
+    "created_at": "2026-11-14T01:51:54Z",
+    "updated_at": "2026-11-14T01:51:54Z",
+    "expires_at": "2026-11-17T01:51:53Z",
+    "workflow_run": {
+      "id": 43542004108,
+      "repository_id": 1378458626,
+      "head_repository_id": 1378458626,
+      "head_branch": "qual/event-first-cause-cd366",
+      "head_sha": "521243e597c2d833be840773acac728a85161969"
+    }
+  },
+  "zip_sha256": "5b0d6167875d3699354fdf171d7a979c505a33886446a0883cc2cf4247718fe3",
+  "members": [
+    {
+      "name": "helper-pressure.jsonl",
+      "bytes": 73497,
+      "sha256": "ac343c9a66e56c0c9ef1f7ef9294f7fc573ef1b4b18a2e59116d3b2a0869887d"
+    },
+    {
+      "name": "list-pressure.jsonl",
+      "bytes": 7045,
+      "sha256": "dbf79e64339a2dfd3710f27801cd31f844ceeb0fde3198b19ffe5c08b9d6b540"
+    },
+    {
+      "name": "requested-filters.txt",
+      "bytes": 35,
+      "sha256": "31320aafc246b51589a1a879f73c1c11c9e33345df0bcfe8bdee7f14ed67a2b8"
+    },
+    {
+      "name": "rustc.txt",
+      "bytes": 196,
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    {
+      "name": "selected-tests.log",
+      "bytes": 32641,
+      "sha256": "f811219a81576d697de6aae2d874ace84d2f18a004887e7a7989e4db199c42ec"
+    },
+    {
+      "name": "source-revision.txt",
+      "bytes": 41,
+      "sha256": "a168b9ff96ba7b59f67727da88bba4cf1cecfaccb273bfcf8db0539676154f83"
+    }
+  ],
+  "scope": "full upstream artifact; localfiles0600/dir0700; no engine opening"
+}

@@ -1,0 +1,78 @@
+{
+  "runtime_diagnostic_source": "7ab56348a8309d4d396b1af87467232bfed1ac96",
+  "qualifier_source": "2b8c2b2de400038729a226ff61b9b275df846d18",
+  "source_version": "1.0.503-beta inherited/unmerged",
+  "files": [
+    {
+      "source": "7ab56348a8309d4d396b1af87467232bfed1ac96",
+      "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_strong_point_tests/serving_observation_scope_tests/normal_serving_record_tests.rs",
+      "blob": "ec1b5978adc80a00e7c8a93cc376bd1f76bda83d",
+      "sha256": "e285b69ed2073cf315c9f7897fc3e7fd7c58722874a57d7cbfc7cd061d46bf0a"
+    },
+    {
+      "source": "7ab56348a8309d4d396b1af87467232bfed1ac96",
+      "path": "crates/bicdb-core/src/distribution_consensus.rs",
+      "blob": "4200f40a848449ea50735c1789f4a67754bc44df",
+      "sha256": "747271275c0cc77abdab3738fb2dbaf61ad49e57da23cbe4ce631d8d6f28b35c"
+    },
+    {
+      "source": "7ab56348a8309d4d396b1af87467232bfed1ac96",
+      "path": "crates/bicdb-core/src/distribution_metadata_read_provider.rs",
+      "blob": "5bacd455136779a87a0883cb4445057ffe0139c1",
+      "sha256": "0402388f0187c26bf772f68d2b0db4a5d2e1f22fda5886238a97e6e19e87a5b5"
+    },
+    {
+      "source": "7ab56348a8309d4d396b1af87467232bfed1ac96",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener.rs",
+      "blob": "49ffd53e6df06313e30b7405581b221e25905b4d",
+      "sha256": "03d4c7f8dc27264dc1bbd1d42bc230e670b95d488e3d86ea3ee42f3032f59afb"
+    },
+    {
+      "source": "7ab56348a8309d4d396b1af87467232bfed1ac96",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests.rs",
+      "blob": "e625f1a690f666706972ecaf6dd8873447aa0136",
+      "sha256": "978cbe266db967317eaf84b772cfad228fc7e5f7b375dce8c9bd78837417270c"
+    },
+    {
+      "source": "7ab56348a8309d4d396b1af87467232bfed1ac96",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/hot_recovery_tests.rs",
+      "blob": "d03c130b65ebe19eb917e2d14290135b45fcb193",
+      "sha256": "b28f648956bea9d474169242801195bed8dc1aacb189c43e6938418fbb7f4ca7"
+    },
+    {
+      "source": "7ab56348a8309d4d396b1af87467232bfed1ac96",
+      "path": "crates/bicdb-core/src/lib.rs",
+      "blob": "b4253fde4af2eafe6f0b22680f5083248b153e4b",
+      "sha256": "b8591b0f79b917721a5affd4ceff305715aef160bd69d948d3e1ff9c3d8a7011"
+    },
+    {
+      "source": "7ab56348a8309d4d396b1af87467232bfed1ac96",
+      "path": "crates/bicdb-core/src/native_passive_diagnostics.rs",
+      "blob": "7f7a8f8e0e63d2d864adf41147921fe40018a597",
+      "sha256": "b85d0475607ba6f58e21706749a8c99fe6ba08597190d5a52b211541e914b55d"
+    },
+    {
+      "source": "7ab56348a8309d4d396b1af87467232bfed1ac96",
+      "path": "docs/design/native503-passive-four-case-diagnostics.md",
+      "blob": "c08950beeb73cce5faefed4259379bf195f5d29f",
+      "sha256": "a30a462c35a9e3401740acfc1b67382772a60f413514d1d4c8572d0cf206bf96"
+    },
+    {
+      "source": "2b8c2b2de400038729a226ff61b9b275df846d18",
+      "path": ".github/workflows/tests.yml",
+      "blob": "9ed547ab981538717c166d59d71688d4fe116056",
+      "sha256": "a70dd2b36e40a5c4eb3ba85ef80df74453a660557f6640d38e00c75a4b62320a"
+    },
+    {
+      "source": "2b8c2b2de400038729a226ff61b9b275df846d18",
+      "path": "scripts/qualification/guard-build-memory.py",
+      "blob": "050171a6befd2163e3b94c6b69ff384a98f67deb",
+      "sha256": "1fc9b018175b95de49ad59738f37209e76427f05a890aeae24d55bdcb59736c7"
+    }
+  ],
+  "only_qualifier_changed_paths": [
+    ".github/workflows/tests.yml",
+    "scripts/qualification/guard-build-memory.py"
+  ],
+  "source_identity_scope": "Retained Git object path proves actual Core tree equality. Individual source paths are optionally checked against a local repository, not all copied into the portable packet."
+}

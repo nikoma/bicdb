@@ -1,0 +1,187 @@
+{
+  "artifact": 14093101399,
+  "zip_sha256": "37046bf5e8b1b3198775375012feefbade9a40b7843d3a6a33f17d8dfa482aba",
+  "zip_crc_ok": true,
+  "files": [
+    "helper-pressure.jsonl",
+    "rustc.txt",
+    "requested-filters.txt",
+    "list-pressure.jsonl",
+    "selected-tests.log",
+    "source-revision.txt",
+    "tests.log"
+  ],
+  "source": "6dd0313c7e41a276960c725978927fcfcc7cdd94",
+  "runtime": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+  "delivery_candidate": "94bf56ed3",
+  "equal_core_tree": "091a94aac3f7f3ab8deb56710b0ee55c5dacdcc6",
+  "selected": 37,
+  "actual_results": [
+    [
+      "distribution_events::client::error_retention_tests::event_client_no_operation_keeps_discovery_error",
+      "ok"
+    ],
+    [
+      "distribution_events::client::error_retention_tests::event_client_unknown_write_survives_later_refusal_and_refresh_or_deadline",
+      "ok"
+    ],
+    [
+      "distribution_events::client::inflight_tests::event_client_out_of_order_worker_unknown_survives_later_refusal_and_cleanup",
+      "ok"
+    ],
+    [
+      "distribution_events::client::inflight_tests::event_client_typed_same_operation_response_keeps_all_worker_outcomes_until_cleanup",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::a_known_follower_can_supply_committed_route_discovery",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::a_leader_still_committing_past_the_attempt_slice_answers_the_same_request",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::an_exhausted_request_budget_is_not_reported_as_unreachable_members",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::caller_query_budget_tests::event_client_caller_query_budget_expired_refuses_before_tcp_dispatch",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::caller_query_budget_tests::event_client_caller_query_budget_live_scope_accepts_actual_mock_ack",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_append_preserves_actual_error_when_route_discovery_fails",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_append_preserves_primary_when_conflicting_discovery_stops_retry",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_get_preserves_actual_error_when_route_discovery_exhausts_deadline",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_refresh_without_operation_keeps_no_member_error",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_different_sink_nested_request_is_allowed_without_global_callback_lock",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_nested_caller_deadline_expires_during_actual_mock_reply",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_same_sink_reentry_after_response_preserves_parent_dispatch_uncertainty",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_same_sink_reentry_before_dispatch_refuses_child_and_parent_without_io",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_sibling_cleanup_evidence_failure_cannot_hide_behind_actual_mock_ack",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_worker_memory_envelope_updates_original_caller_peak_and_refuses_io",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::legacy_metadata_controllers_remain_usable_for_discovery",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::permanently_silent_old_leader_refreshes_from_another_member",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::silent_discovery_member_cannot_exhaust_the_retry_budget",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::silent_event_route_leaves_budget_for_discovery_and_retry",
+      "ok"
+    ],
+    [
+      "distribution_transport::event_client_retry_tests::transient_topology_refresh_does_not_abort_an_event_request",
+      "ok"
+    ],
+    [
+      "distribution_transport::evidence::tests::actual_rpc_evidence_complete_record_quota_fences_without_truncation",
+      "ok"
+    ],
+    [
+      "distribution_transport::evidence::tests::actual_rpc_evidence_large_complete_frame_byte_quota_refuses_before_dispatch",
+      "ok"
+    ],
+    [
+      "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_canceled_before_dispatch_records_original_cancellation",
+      "ok"
+    ],
+    [
+      "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_exact_frames_and_discovery_errors_survive_fallback",
+      "ok"
+    ],
+    [
+      "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_parallel_requests_share_journal_without_false_reentrancy",
+      "ok"
+    ],
+    [
+      "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_response_retained_before_original_cancellation_override",
+      "ok"
+    ],
+    [
+      "distribution_transport::evidence::tests::actual_rpc_evidence_post_response_sync_failure_returns_unknown_and_never_rearms",
+      "ok"
+    ],
+    [
+      "distribution_transport::evidence::tests::actual_rpc_evidence_pre_dispatch_sync_failure_fences_without_application_mutation",
+      "ok"
+    ],
+    [
+      "distribution_transport::evidence::tests::actual_rpc_evidence_same_thread_reentry_refuses_without_dispatch",
+      "ok"
+    ],
+    [
+      "distribution_transport::evidence::tests::first_cause_tests::actual_rpc_evidence_first_cause_survives_concurrent_fence_before_primary_worker_report",
+      "ok"
+    ],
+    [
+      "distribution_transport::evidence::tests::first_cause_tests::actual_rpc_evidence_first_cause_unwind_publishes_cause_before_future_fence",
+      "ok"
+    ],
+    [
+      "distribution_transport::evidence::tests::first_cause_tests::actual_rpc_evidence_first_cause_wins_over_original_cancellation_without_admitting_success",
+      "ok"
+    ],
+    [
+      "query_budget::worker_context_tests::event_client_query_budget_context_keeps_tight_nested_deadline_and_shared_peak",
+      "ok"
+    ]
+  ],
+  "summary": [
+    "test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 1075 filtered out; finished in 12.48s"
+  ],
+  "new_control_observations": [
+    {
+      "prefix": "actual_rpc_evidence_first_cause_priority",
+      "records": 2
+    },
+    {
+      "prefix": "actual_rpc_evidence_concurrent_first_cause",
+      "records": 1
+    },
+    {
+      "prefix": "actual_rpc_evidence_unwind_first_cause",
+      "records": 1
+    }
+  ],
+  "scope": "Actual37 client/mock/localTLS controls only, no native commits or physical qualification"
+}

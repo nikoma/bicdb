@@ -1,0 +1,590 @@
+{
+  "total_count": 9,
+  "jobs": [
+    {
+      "id": 132270985064,
+      "run_id": 43537820765,
+      "workflow_name": "tests",
+      "head_branch": "qual/native503-passive-four-7ab",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43537820765",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAey_cPaA",
+      "head_sha": "2b8c2b2de400038729a226ff61b9b275df846d18",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132270985064",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43537820765/job/132270985064",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-14T01:00:15Z",
+      "started_at": "2026-11-14T01:00:17Z",
+      "completed_at": "2026-11-14T01:01:07Z",
+      "name": "Public repository has no private dependencies",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-14T01:00:18Z",
+          "completed_at": "2026-11-14T01:00:20Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-14T01:00:20Z",
+          "completed_at": "2026-11-14T01:00:25Z"
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-14T01:00:25Z",
+          "completed_at": "2026-11-14T01:00:36Z"
+        },
+        {
+          "name": "Install boundary scanner",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-14T01:00:36Z",
+          "completed_at": "2026-11-14T01:00:58Z"
+        },
+        {
+          "name": "Enforce open-core dependency direction",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-14T01:00:58Z",
+          "completed_at": "2026-11-14T01:01:06Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-11-14T01:01:06Z",
+          "completed_at": "2026-11-14T01:01:06Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-11-14T01:01:06Z",
+          "completed_at": "2026-11-14T01:01:06Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132270985064",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000024914,
+      "runner_name": "GitHub Actions 1000024914",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 132270985379,
+      "run_id": 43537820765,
+      "workflow_name": "tests",
+      "head_branch": "qual/native503-passive-four-7ab",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43537820765",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAey_cQow",
+      "head_sha": "2b8c2b2de400038729a226ff61b9b275df846d18",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132270985379",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43537820765/job/132270985379",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-14T01:00:15Z",
+      "started_at": "2026-11-14T01:00:17Z",
+      "completed_at": "2026-11-14T01:05:32Z",
+      "name": "Community-only workspace compiles, tests included",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-14T01:00:18Z",
+          "completed_at": "2026-11-14T01:00:19Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-14T01:00:19Z",
+          "completed_at": "2026-11-14T01:00:26Z"
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-14T01:00:26Z",
+          "completed_at": "2026-11-14T01:00:34Z"
+        },
+        {
+          "name": "Run Swatinem/rust-cache@v2",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-14T01:00:34Z",
+          "completed_at": "2026-11-14T01:00:52Z"
+        },
+        {
+          "name": "cargo check --workspace --all-targets",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-14T01:00:52Z",
+          "completed_at": "2026-11-14T01:04:56Z"
+        },
+        {
+          "name": "Workflow consumer compiles without Core defaults",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-14T01:04:56Z",
+          "completed_at": "2026-11-14T01:05:28Z"
+        },
+        {
+          "name": "Retain qualification build pressure and interruption evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-14T01:05:28Z",
+          "completed_at": "2026-11-14T01:05:29Z"
+        },
+        {
+          "name": "Post Run Swatinem/rust-cache@v2",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-11-14T01:05:29Z",
+          "completed_at": "2026-11-14T01:05:29Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-11-14T01:05:29Z",
+          "completed_at": "2026-11-14T01:05:29Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15,
+          "started_at": "2026-11-14T01:05:29Z",
+          "completed_at": "2026-11-14T01:05:29Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132270985379",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000024915,
+      "runner_name": "GitHub Actions 1000024915",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 132270985443,
+      "run_id": 43537820765,
+      "workflow_name": "tests",
+      "head_branch": "qual/native503-passive-four-7ab",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43537820765",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAey_cQ4w",
+      "head_sha": "2b8c2b2de400038729a226ff61b9b275df846d18",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132270985443",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43537820765/job/132270985443",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-14T01:00:15Z",
+      "started_at": "2026-11-14T01:00:17Z",
+      "completed_at": "2026-11-14T01:00:45Z",
+      "name": "Formatting",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-14T01:00:18Z",
+          "completed_at": "2026-11-14T01:00:20Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-14T01:00:20Z",
+          "completed_at": "2026-11-14T01:00:26Z"
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@1.96.0",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-14T01:00:26Z",
+          "completed_at": "2026-11-14T01:00:34Z"
+        },
+        {
+          "name": "Run cargo fmt --all -- --check",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-14T01:00:34Z",
+          "completed_at": "2026-11-14T01:00:44Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-14T01:00:44Z",
+          "completed_at": "2026-11-14T01:00:44Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-14T01:00:44Z",
+          "completed_at": "2026-11-14T01:00:44Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132270985443",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000024918,
+      "runner_name": "GitHub Actions 1000024918",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 132270985471,
+      "run_id": 43537820765,
+      "workflow_name": "tests",
+      "head_branch": "qual/native503-passive-four-7ab",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43537820765",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAey_cQ_w",
+      "head_sha": "2b8c2b2de400038729a226ff61b9b275df846d18",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132270985471",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43537820765/job/132270985471",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-14T01:00:15Z",
+      "started_at": "2026-11-14T01:00:17Z",
+      "completed_at": "2026-11-14T01:00:26Z",
+      "name": "Licensing invariants",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-14T01:00:18Z",
+          "completed_at": "2026-11-14T01:00:18Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-14T01:00:18Z",
+          "completed_at": "2026-11-14T01:00:25Z"
+        },
+        {
+          "name": "scripts/validate-licensing.sh",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-14T01:00:25Z",
+          "completed_at": "2026-11-14T01:00:25Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-14T01:00:25Z",
+          "completed_at": "2026-11-14T01:00:25Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-14T01:00:25Z",
+          "completed_at": "2026-11-14T01:00:25Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132270985471",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000024916,
+      "runner_name": "GitHub Actions 1000024916",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 132270985515,
+      "run_id": 43537820765,
+      "workflow_name": "tests",
+      "head_branch": "qual/native503-passive-four-7ab",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43537820765",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAey_cRKw",
+      "head_sha": "2b8c2b2de400038729a226ff61b9b275df846d18",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132270985515",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43537820765/job/132270985515",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-14T01:00:15Z",
+      "started_at": "2026-11-14T01:00:17Z",
+      "completed_at": "2026-11-14T01:00:19Z",
+      "name": "Validate focused test selectors",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-14T01:00:18Z",
+          "completed_at": "2026-11-14T01:00:18Z"
+        },
+        {
+          "name": "Reject incompatible or malformed selectors",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-14T01:00:18Z",
+          "completed_at": "2026-11-14T01:00:18Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-14T01:00:18Z",
+          "completed_at": "2026-11-14T01:00:18Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132270985515",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000024917,
+      "runner_name": "GitHub Actions 1000024917",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 132271009934,
+      "run_id": 43537820765,
+      "workflow_name": "tests",
+      "head_branch": "qual/native503-passive-four-7ab",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43537820765",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAey_dwjg",
+      "head_sha": "2b8c2b2de400038729a226ff61b9b275df846d18",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132271009934",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43537820765/job/132271009934",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-14T01:00:19Z",
+      "started_at": "2026-11-14T01:00:21Z",
+      "completed_at": "2026-11-14T01:10:31Z",
+      "name": "Focused Core library (native503_passive_four)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-14T01:00:22Z",
+          "completed_at": "2026-11-14T01:00:23Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-14T01:00:23Z",
+          "completed_at": "2026-11-14T01:00:27Z"
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-14T01:00:27Z",
+          "completed_at": "2026-11-14T01:00:35Z"
+        },
+        {
+          "name": "Run Swatinem/rust-cache@v2",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-14T01:00:35Z",
+          "completed_at": "2026-11-14T01:00:43Z"
+        },
+        {
+          "name": "Build projection chaos helper",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-14T01:00:43Z",
+          "completed_at": "2026-11-14T01:08:35Z"
+        },
+        {
+          "name": "Record source and list selected Core library tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-14T01:08:35Z",
+          "completed_at": "2026-11-14T01:10:01Z"
+        },
+        {
+          "name": "Execute the four original native cases serially with passive capture",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-14T01:10:01Z",
+          "completed_at": "2026-11-14T01:10:18Z"
+        },
+        {
+          "name": "Retain focused source, log and opted-in fault-state evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-14T01:10:18Z",
+          "completed_at": "2026-11-14T01:10:19Z"
+        },
+        {
+          "name": "Post Run Swatinem/rust-cache@v2",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15,
+          "started_at": "2026-11-14T01:10:19Z",
+          "completed_at": "2026-11-14T01:10:29Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16,
+          "started_at": "2026-11-14T01:10:29Z",
+          "completed_at": "2026-11-14T01:10:29Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17,
+          "started_at": "2026-11-14T01:10:29Z",
+          "completed_at": "2026-11-14T01:10:29Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132271009934",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000024919,
+      "runner_name": "GitHub Actions 1000024919",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 132271011194,
+      "run_id": 43537820765,
+      "workflow_name": "tests",
+      "head_branch": "qual/native503-passive-four-7ab",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43537820765",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAey_d1eg",
+      "head_sha": "2b8c2b2de400038729a226ff61b9b275df846d18",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132271011194",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43537820765/job/132271011194",
+      "status": "completed",
+      "conclusion": "skipped",
+      "created_at": "2026-11-14T01:00:20Z",
+      "started_at": "2026-11-14T01:00:20Z",
+      "completed_at": "2026-11-14T01:00:19Z",
+      "name": "Focused PGwire library (${{ inputs.pgwire_filter }})",
+      "steps": [],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132271011194",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": null,
+      "runner_name": null,
+      "runner_group_id": null,
+      "runner_group_name": null
+    },
+    {
+      "id": 132271011319,
+      "run_id": 43537820765,
+      "workflow_name": "tests",
+      "head_branch": "qual/native503-passive-four-7ab",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43537820765",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAey_d19w",
+      "head_sha": "2b8c2b2de400038729a226ff61b9b275df846d18",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132271011319",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43537820765/job/132271011319",
+      "status": "completed",
+      "conclusion": "skipped",
+      "created_at": "2026-11-14T01:00:20Z",
+      "started_at": "2026-11-14T01:00:20Z",
+      "completed_at": "2026-11-14T01:00:19Z",
+      "name": "Focused CLI integration (${{ inputs.cli_target }})",
+      "steps": [],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132271011319",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": null,
+      "runner_name": null,
+      "runner_group_id": null,
+      "runner_group_name": null
+    },
+    {
+      "id": 132271012984,
+      "run_id": 43537820765,
+      "workflow_name": "tests",
+      "head_branch": "qual/native503-passive-four-7ab",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43537820765",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAey_d8eA",
+      "head_sha": "2b8c2b2de400038729a226ff61b9b275df846d18",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132271012984",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43537820765/job/132271012984",
+      "status": "completed",
+      "conclusion": "skipped",
+      "created_at": "2026-11-14T01:00:20Z",
+      "started_at": "2026-11-14T01:00:20Z",
+      "completed_at": "2026-11-14T01:00:19Z",
+      "name": "matrix.suite.name",
+      "steps": [],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132271012984",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": null,
+      "runner_name": null,
+      "runner_group_id": null,
+      "runner_group_name": null
+    }
+  ]
+}

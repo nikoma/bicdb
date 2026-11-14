@@ -1,0 +1,7 @@
+tree a25798570d16209cedc469de011ad3836c59dd4a
+parent 5a18203e82232e571ba657613ac9373b4f01cc84
+parent 54b325f69693b34b00c3c92325ad11ecd7dbffeb
+author nikoma <niko.manek@gmail.com> 1794614320 -0800
+committer nikoma <niko.manek@gmail.com> 1794614320 -0800
+
+release: prepare event client error preservation at 1.0.505-beta

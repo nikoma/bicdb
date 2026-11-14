@@ -1,0 +1,118 @@
+{
+  "inspection": "bounded UTF8 and literal private-key-header scan; not comprehensive secret detection",
+  "custody_present": false,
+  "projection": false,
+  "access": "public-repository GitHub artifacts under GitHub access/retention; local restricted permissions do not establish owner-only GitHub privacy",
+  "files": [
+    {
+      "file": "actual-observations.json",
+      "bytes_inspected": 91775,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "artifact-verification.json",
+      "bytes_inspected": 18755,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "artifact14090654425.zip!alltargets.jsonl",
+      "bytes_inspected": 36149,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "artifact14090654425.zip!consumer.jsonl",
+      "bytes_inspected": 5202,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "artifact14091141775.zip!helper-pressure.jsonl",
+      "bytes_inspected": 60052,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "artifact14091141775.zip!list-pressure.jsonl",
+      "bytes_inspected": 11784,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "artifact14091141775.zip!rustc.txt",
+      "bytes_inspected": 196,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "artifact14091141775.zip!requested-filters.txt",
+      "bytes_inspected": 35,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "artifact14091141775.zip!selected-tests.log",
+      "bytes_inspected": 256319,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "artifact14091141775.zip!source-revision.txt",
+      "bytes_inspected": 41,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "artifact14091141775.zip!tests.log",
+      "bytes_inspected": 293347,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "artifacts.json",
+      "bytes_inspected": 1511,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "core-job.log.gz",
+      "bytes_inspected": 1731267,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "guard-build-memory.py",
+      "bytes_inspected": 4627,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "jobs-terminal.json",
+      "bytes_inspected": 15137,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "qualification-workflow.yml",
+      "bytes_inspected": 23779,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "qualifier-only.patch.gz",
+      "bytes_inspected": 12320,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "request.json",
+      "bytes_inspected": 4006,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "run-terminal.json",
+      "bytes_inspected": 11501,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "runtime-source.patch.gz",
+      "bytes_inspected": 82365,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "source-binding.json",
+      "bytes_inspected": 746,
+      "literal_private_key_header_matches": 0
+    },
+    {
+      "file": "workspace-job.log.gz",
+      "bytes_inspected": 2476693,
+      "literal_private_key_header_matches": 0
+    }
+  ]
+}

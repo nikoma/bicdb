@@ -1,0 +1,135 @@
+{
+  "format": 1,
+  "product_source": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+  "diagnostic_source": "03454e72cab0dea71b4783153fabf6716d9784fd",
+  "diagnostic_parent": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+  "runtime_tests_and_all_nonworkflow_tracked_blobs_identical": true,
+  "only_changed_path": ".github/workflows/tests.yml",
+  "pins": [
+    {
+      "revision": "03454e72cab0dea71b4783153fabf6716d9784fd",
+      "path": ".github/workflows/tests.yml",
+      "retained": "source/.github/workflows/tests.yml",
+      "git_blob": "501571ec3f8adc9b21e0ebaf886d7e9c4a5f8082",
+      "sha256": "4f5d1c33a96365600ae023aa158c0e33b0dd573a8bc48f688836a6e9849cc2bd",
+      "bytes": 19930
+    },
+    {
+      "revision": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+      "path": "rust-toolchain.toml",
+      "retained": "source/rust-toolchain.toml",
+      "git_blob": "0f87b44803318603cc5d0ed8b336b1624e6f5d83",
+      "sha256": "66894b16254576f70fc56e3e3abf4d489c678e08feaec17e101ec405207b9d84",
+      "bytes": 31
+    },
+    {
+      "revision": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+      "path": "Cargo.toml",
+      "retained": "source/Cargo.toml",
+      "git_blob": "9417817c48ec70a66ea2f60b7e547d13dc67b9d1",
+      "sha256": "7c756098550cdd9c86d781044c6427a369dc9983ce9296df07ed4d720ae7a3ad",
+      "bytes": 5576
+    },
+    {
+      "revision": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+      "path": "crates/bicdb-cli/tests/native_metadata_operator_cli.rs",
+      "retained": "source/crates/bicdb-cli/tests/native_metadata_operator_cli.rs",
+      "git_blob": "6f2a3922507b0977b5f7c593f3f0e1b050a1a6c0",
+      "sha256": "f269766469be08eb5a81a98ae3d2e1846a1b8d960aa2190f189eacd1016c21dd",
+      "bytes": 40003
+    },
+    {
+      "revision": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+      "path": "crates/bicdb-cli/tests/native_metadata_operator_cli/initial_data_tests.rs",
+      "retained": "source/crates/bicdb-cli/tests/native_metadata_operator_cli/initial_data_tests.rs",
+      "git_blob": "68d3f98943a2e666c1c68089f30b70158aa12dc0",
+      "sha256": "4ce4779afcb43583010f37a9c9c1abb2b5a09faca9c11d6c9a00d9df0903d24e",
+      "bytes": 14757
+    },
+    {
+      "revision": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+      "path": "crates/bicdb-cli/tests/native_metadata_operator_cli/replica_receiver_tests.rs",
+      "retained": "source/crates/bicdb-cli/tests/native_metadata_operator_cli/replica_receiver_tests.rs",
+      "git_blob": "dc0cf02f3a931238f082a1b4a1512a06f097af63",
+      "sha256": "ad40f656fe41d16f8c83cee9d8f241437fe37045bb6099849bd3e68785f9226b",
+      "bytes": 11869
+    },
+    {
+      "revision": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+      "path": "crates/bicdb-cli/tests/native_metadata_operator_cli/rpc_evidence.rs",
+      "retained": "source/crates/bicdb-cli/tests/native_metadata_operator_cli/rpc_evidence.rs",
+      "git_blob": "719cbd6f8e11186c58ecff1a762f9ac89588cb1a",
+      "sha256": "cad7672b6477692bd8938898ed80f9b08eeb8581e7e5bef421ac754f88bdb87d",
+      "bytes": 12925
+    },
+    {
+      "revision": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+      "path": "crates/bicdb-cli/tests/native_metadata_operator_cli/custody.rs",
+      "retained": "source/crates/bicdb-cli/tests/native_metadata_operator_cli/custody.rs",
+      "git_blob": "30c4329256ec330187455d931b93971e8b1860a7",
+      "sha256": "1835e17e5bb68fa7e12bdd0d039588244c813995d369c906bb7a50af82668480",
+      "bytes": 13573
+    },
+    {
+      "revision": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+      "path": "crates/bicdb-cli/src/native_metadata_command.rs",
+      "retained": "source/crates/bicdb-cli/src/native_metadata_command.rs",
+      "git_blob": "e729bc3d738263d97d49285683ee9df6ab8e98c4",
+      "sha256": "9c36f303dd7f3d6bb94ef2d895773e2e5168995dd411354dcf92f50eb0b8a8bb",
+      "bytes": 39078
+    },
+    {
+      "revision": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+      "path": "crates/bicdb-core/src/distribution_events.rs",
+      "retained": "source/crates/bicdb-core/src/distribution_events.rs",
+      "git_blob": "2b74233b982cf253112824bdd76d1052bf69967e",
+      "sha256": "1a7d2fcef974e75b72392e7bf28fac1c07f57a87c81e5d947ae1a69627ba6079",
+      "bytes": 35079
+    },
+    {
+      "revision": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+      "path": "crates/bicdb-core/src/distribution_native_host/operator.rs",
+      "retained": "source/crates/bicdb-core/src/distribution_native_host/operator.rs",
+      "git_blob": "9f43b09487dfa976928c5602208e4acec3435ac5",
+      "sha256": "346d6d50f2d52ce7f5ef16fb789d28b24cb6b622fd8dc681ad732b7ee829e51c",
+      "bytes": 19205
+    },
+    {
+      "revision": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener.rs",
+      "retained": "source/crates/bicdb-core/src/distribution_native_host/provisional_listener.rs",
+      "git_blob": "8cf019ccf557e820cdf335a6e5639a58ff137c80",
+      "sha256": "49bff77e3920649809fdc1a16088f5bc1d5d93063ed10e67cc439f8ba21a202b",
+      "bytes": 13534
+    },
+    {
+      "revision": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+      "path": "scripts/platform/run_workspace_tests_bounded.py",
+      "retained": "source/scripts/platform/run_workspace_tests_bounded.py",
+      "git_blob": "997ea5a14e71edb7244b344e4d0402c3380d1625",
+      "sha256": "8856c5ac5613bff1fc4a7c1a9dda200f0ed9e9a6583e03727f5a767e71112291",
+      "bytes": 3544
+    }
+  ],
+  "original_job": 132191138917,
+  "original_run": 43513943520,
+  "diagnostic_job": 132235428483,
+  "diagnostic_run": 43527079466,
+  "community_alltargets_job": 132235387195,
+  "full_original_log": {
+    "bytes": 85450921,
+    "sha256": "3242de730d7a436416b07051fbb4b276a3260d730a053ea74e8fb82c5b96c2cf",
+    "included_lines": [
+      633560,
+      633610
+    ],
+    "complete_log_omitted": true
+  },
+  "raw_artifact_omitted": {
+    "id": 14086103789,
+    "bytes": 144099955,
+    "sha256": "1934f0a43ac6ad8eda96fbbb478f88bccf91d3a92f5570fa84d31b2d9132e2af",
+    "members_hash_manifest": "logical-projection.json#artifact_members",
+    "raw_stopped_custody_and_frames_not_published": true
+  }
+}

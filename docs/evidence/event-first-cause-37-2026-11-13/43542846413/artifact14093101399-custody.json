@@ -1,0 +1,63 @@
+{
+  "source": "6dd0313c7e41a276960c725978927fcfcc7cdd94",
+  "run": 43542846413,
+  "artifact": {
+    "id": 14093101399,
+    "node_id": "MDg6QXJ0aWZhY3QxNDA5MzEwMTM5OQ==",
+    "name": "focused-core-6dd0313c7e41a276960c725978927fcfcc7cdd94-1",
+    "size_in_bytes": 55402,
+    "url": "https://api.github.com/repos/nikoma/bicdb/actions/artifacts/14093101399",
+    "archive_download_url": "https://api.github.com/repos/nikoma/bicdb/actions/artifacts/14093101399/zip",
+    "expired": false,
+    "digest": "sha256:37046bf5e8b1b3198775375012feefbade9a40b7843d3a6a33f17d8dfa482aba",
+    "created_at": "2026-11-14T02:01:27Z",
+    "updated_at": "2026-11-14T02:01:27Z",
+    "expires_at": "2026-11-17T02:01:26Z",
+    "workflow_run": {
+      "id": 43542846413,
+      "repository_id": 1378458626,
+      "head_repository_id": 1378458626,
+      "head_branch": "qual/event-first-cause-corrected-0c960",
+      "head_sha": "6dd0313c7e41a276960c725978927fcfcc7cdd94"
+    }
+  },
+  "zip_sha256": "37046bf5e8b1b3198775375012feefbade9a40b7843d3a6a33f17d8dfa482aba",
+  "members": [
+    {
+      "name": "helper-pressure.jsonl",
+      "bytes": 71433,
+      "sha256": "ac6ace49765ce04a79ebac55fbc0cec9f73f576554369bd736bed199597ec871"
+    },
+    {
+      "name": "rustc.txt",
+      "bytes": 196,
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    {
+      "name": "requested-filters.txt",
+      "bytes": 35,
+      "sha256": "31320aafc246b51589a1a879f73c1c11c9e33345df0bcfe8bdee7f14ed67a2b8"
+    },
+    {
+      "name": "list-pressure.jsonl",
+      "bytes": 13289,
+      "sha256": "8f004b463b82382dd0c2628164759ce5a77d4e5578fb4646d77cb8422f0bf48a"
+    },
+    {
+      "name": "selected-tests.log",
+      "bytes": 256769,
+      "sha256": "073781e54cdee714c1919211eee54992d7062249c0533d325b400a965f2bfe56"
+    },
+    {
+      "name": "source-revision.txt",
+      "bytes": 41,
+      "sha256": "dc1cd6d58cd23df08582602b3aa322d716ec3a8bf9d7aea0dc9d97473eaa2a68"
+    },
+    {
+      "name": "tests.log",
+      "bytes": 301347,
+      "sha256": "5d0d83ffe886731a9187c7fa71273aacb78f451680182434d546827dae7261ab"
+    }
+  ],
+  "scope": "full upstream artifact; localfiles0600/dir0700; no engine opening"
+}

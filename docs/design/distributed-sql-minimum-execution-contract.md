@@ -16,6 +16,43 @@ transparent replay of an uncertain business transaction are not promised.
 Locality is an optional placement optimization. Correctness must hold when
 related rows, indexes and constraint authorities occupy different ranges.
 
+## Source 502 recheck and execution-context constraint
+
+The [separate source checkpoint](distributed-sql-main502-source-and-context-checkpoint.json)
+pins main **1.0.502-beta**, `629857f5eaaeee5f5a9124d505406d8cd6a29535`,
+and compares the separately unmerged native composition `3b4bef4eecbd`.
+The nine inspected boundaries still do not supply transparent SQL execution,
+a shared cross-range SQL snapshot or a production multi-range coordinator.
+The new one-range fifth-member DATA fixture is a storage result; it does not
+turn business SQL into the protocol proposed here. This recheck runs no SQL
+tests and does not relabel the historical design baseline or qualify main.
+
+Execution context also needs an explicit worker boundary. Identical public-SDK
+and loopback TCP mock tests showed that an unmerged threaded event-client
+candidate dispatched APP from an already-expired caller query scope
+([failed worker control](https://github.com/nikoma/bicdb/actions/runs/43532705713)),
+while the unmerged synchronous 505 candidate's test-only successor refused before TCP
+([passing baseline](https://github.com/nikoma/bicdb/actions/runs/43532727697)).
+These tests do not execute SQL or native database commits. Their narrow result
+supports the following **design requirement**, not an implemented SQL capability:
+
+- Local SQL workers must explicitly inherit the actual caller's tightest nested
+  cancellation/deadline and memory envelope, security/session identity, and
+  retained read view. A thread-local guard on the gateway thread does not
+  automatically cover work on another thread. Numeric budget data cannot grant
+  row access or replace a recipient-owned view pin.
+- A remote fragment reauthenticates and admits its own bounded execution. It
+  must not deserialize a process-local `Instant`, snapshot handle, writer guard
+  or role label as authority. Retries retain the original operation and view;
+  they cannot renew either deadline or snapshot by starting another exchange.
+- After a durable COMMIT decision, caller cancellation stops waiting or new
+  caller work; it cannot choose ABORT or erase the outcome. Independent bounded
+  resolution must retain every enlisted/uncertain participant and exact payload.
+
+The worker bug is not attributed to main502 SQL. Implementing its client fix
+would not provide this gateway/participant contract. PostgreSQL and Oracle
+acceptance remain separate, and P0 native HA qualification proceeds independently.
+
 ## 1. Existing implementation versus this proposal
 
 | Inspected source | Current contract | Addition required |

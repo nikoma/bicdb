@@ -391,6 +391,28 @@ impl NativeMetadataControlHost {
     ) -> Option<NativeJoinedDataStatus> {
         self.joined.as_ref().map(|owner| owner.status())
     }
+    /// The joined owner's own recovery runtime and DATA transport. A joint
+    /// handoff installs its image through exactly these objects; they carry
+    /// no permission of their own.
+    #[allow(clippy::type_complexity)]
+    pub(in crate::distribution_native_host) fn joined_data_handoff_parts(
+        &self,
+    ) -> Result<(
+        Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>,
+        Arc<TcpClusterRelocationTransport>,
+    )> {
+        let owner = self
+            .joined
+            .as_ref()
+            .ok_or_else(|| invalid("joined DATA owner absent"))?;
+        if owner.enrollment.is_none() || owner.listener.is_none() {
+            return Err(invalid("joined DATA owner is not open"));
+        }
+        Ok((
+            Arc::clone(&owner.parts.runtime),
+            Arc::clone(&owner.parts.backend.transport),
+        ))
+    }
 }
 
 #[cfg(test)]

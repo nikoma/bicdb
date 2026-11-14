@@ -1,0 +1,197 @@
+{
+  "source": "521243e597c2d833be840773acac728a85161969",
+  "run": 43542004108,
+  "job": {
+    "id": 132284483732,
+    "run_id": 43542004108,
+    "workflow_name": "tests",
+    "head_branch": "qual/event-first-cause-cd366",
+    "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43542004108",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOUimcAs8AAAAezMUIlA",
+    "head_sha": "521243e597c2d833be840773acac728a85161969",
+    "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132284483732",
+    "html_url": "https://github.com/nikoma/bicdb/actions/runs/43542004108/job/132284483732",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-11-14T01:40:42Z",
+    "started_at": "2026-11-14T01:40:44Z",
+    "completed_at": "2026-11-14T01:51:55Z",
+    "name": "Focused Core library (event_client_)",
+    "steps": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 1,
+        "started_at": "2026-11-14T01:40:44Z",
+        "completed_at": "2026-11-14T01:40:45Z"
+      },
+      {
+        "name": "Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 2,
+        "started_at": "2026-11-14T01:40:45Z",
+        "completed_at": "2026-11-14T01:40:52Z"
+      },
+      {
+        "name": "Run dtolnay/rust-toolchain@stable",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 3,
+        "started_at": "2026-11-14T01:40:52Z",
+        "completed_at": "2026-11-14T01:41:02Z"
+      },
+      {
+        "name": "Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 4,
+        "started_at": "2026-11-14T01:41:02Z",
+        "completed_at": "2026-11-14T01:41:11Z"
+      },
+      {
+        "name": "Build projection chaos helper",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 5,
+        "started_at": "2026-11-14T01:41:11Z",
+        "completed_at": "2026-11-14T01:51:01Z"
+      },
+      {
+        "name": "Record source and list selected Core library tests",
+        "status": "completed",
+        "conclusion": "failure",
+        "number": 6,
+        "started_at": "2026-11-14T01:51:01Z",
+        "completed_at": "2026-11-14T01:51:53Z"
+      },
+      {
+        "name": "Execute client and RPC-evidence first-cause cases serially",
+        "status": "completed",
+        "conclusion": "skipped",
+        "number": 7,
+        "started_at": "2026-11-14T01:51:53Z",
+        "completed_at": "2026-11-14T01:51:53Z"
+      },
+      {
+        "name": "Retain focused source, log and opted-in fault-state evidence",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 8,
+        "started_at": "2026-11-14T01:51:53Z",
+        "completed_at": "2026-11-14T01:51:54Z"
+      },
+      {
+        "name": "Post Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "skipped",
+        "number": 15,
+        "started_at": "2026-11-14T01:51:54Z",
+        "completed_at": "2026-11-14T01:51:54Z"
+      },
+      {
+        "name": "Post Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 16,
+        "started_at": "2026-11-14T01:51:54Z",
+        "completed_at": "2026-11-14T01:51:54Z"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 17,
+        "started_at": "2026-11-14T01:51:54Z",
+        "completed_at": "2026-11-14T01:51:54Z"
+      }
+    ],
+    "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132284483732",
+    "labels": [
+      "ubuntu-latest"
+    ],
+    "runner_id": 1000024943,
+    "runner_name": "GitHub Actions 1000024943",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  },
+  "raw_bytes": 1026339,
+  "raw_sha256": "bfe828ed042d1129fec929060212d73d2ae5c5e53470003f6eab7b7929889045",
+  "gzip_sha256": "7deb7266256ca42960a4bf8dcfa126a8ee9e7e9c4670c17cfa6a32c79aee32b9",
+  "summaries": [],
+  "failure_lines": [
+    {
+      "line": 10609,
+      "text": "2026-11-14T01:51:24.8246889Z error[E0308]: mismatched types"
+    },
+    {
+      "line": 10618,
+      "text": "2026-11-14T01:51:24.8278126Z error[E0308]: mismatched types"
+    },
+    {
+      "line": 10918,
+      "text": "2026-11-14T01:51:53.4717355Z ##[error]Process completed with exit code 101."
+    }
+  ],
+  "failure_contexts": [
+    {
+      "line": 10609,
+      "remaining": 1,
+      "lines": [
+        "2026-11-14T01:51:06.9060134Z    |                       ^^^^^^^",
+        "2026-11-14T01:51:06.9060415Z",
+        "2026-11-14T01:51:24.8246889Z error[E0308]: mismatched types",
+        "2026-11-14T01:51:24.8248039Z    --> crates/bicdb-core/src/distribution_transport/evidence/tests/first_cause_tests.rs:171:30",
+        "2026-11-14T01:51:24.8248896Z     |",
+        "2026-11-14T01:51:24.8249536Z 171 |     for result in [&primary, &before_dispatched_peer] {",
+        "2026-11-14T01:51:24.8250927Z     |                              ^^^^^^^^^^^^^^^^^^^^^^^ expected `&Result<ClusterDataResponse, BicDbError>`, found `&Result<(), BicDbError>`",
+        "2026-11-14T01:51:24.8252276Z     |",
+        "2026-11-14T01:51:24.8253293Z     = note: expected reference `&std::result::Result<distribution_transport::ClusterDataResponse, _>`",
+        "2026-11-14T01:51:24.8254660Z                found reference `&std::result::Result<(), _>`",
+        "2026-11-14T01:51:24.8255016Z",
+        "2026-11-14T01:51:24.8278126Z error[E0308]: mismatched types"
+      ]
+    },
+    {
+      "line": 10618,
+      "remaining": 0,
+      "lines": [
+        "2026-11-14T01:51:24.8254660Z                found reference `&std::result::Result<(), _>`",
+        "2026-11-14T01:51:24.8255016Z",
+        "2026-11-14T01:51:24.8278126Z error[E0308]: mismatched types",
+        "2026-11-14T01:51:24.8279399Z    --> crates/bicdb-core/src/distribution_transport/evidence/tests/first_cause_tests.rs:177:35",
+        "2026-11-14T01:51:24.8280619Z     |",
+        "2026-11-14T01:51:24.8281302Z 177 |     for result in [&first_result, &after_dispatched_peer] {",
+        "2026-11-14T01:51:24.8282687Z     |                                   ^^^^^^^^^^^^^^^^^^^^^^ expected `&Result<ClusterDataResponse, BicDbError>`, found `&Result<(), BicDbError>`",
+        "2026-11-14T01:51:24.8284047Z     |",
+        "2026-11-14T01:51:24.8285123Z     = note: expected reference `&std::result::Result<distribution_transport::ClusterDataResponse, _>`",
+        "2026-11-14T01:51:24.8286289Z                found reference `&std::result::Result<(), _>`",
+        "2026-11-14T01:51:24.8286725Z",
+        "2026-11-14T01:51:28.3955171Z warning: unused import: `Verifier`",
+        "2026-11-14T01:51:28.3955700Z    --> crates/bicdb-core/src/db.rs:164:32"
+      ]
+    },
+    {
+      "line": 10918,
+      "remaining": 0,
+      "lines": [
+        "2026-11-14T01:51:51.7598003Z error: could not compile `bicdb-core` (lib test) due to 2 previous errors; 64 warnings emitted",
+        "2026-11-14T01:51:53.4637141Z OWNED_BUILD_GROUP_CLEANED pid=9203 returncode=101",
+        "2026-11-14T01:51:53.4717355Z ##[error]Process completed with exit code 101.",
+        "2026-11-14T01:51:53.4790391Z ##[group]Run actions/upload-artifact@v4",
+        "2026-11-14T01:51:53.4790710Z with:",
+        "2026-11-14T01:51:53.4791005Z   name: focused-core-521243e597c2d833be840773acac728a85161969-1",
+        "2026-11-14T01:51:53.4791359Z   retention-days: 3",
+        "2026-11-14T01:51:53.4791578Z   include-hidden-files: true",
+        "2026-11-14T01:51:53.4791816Z   if-no-files-found: warn",
+        "2026-11-14T01:51:53.4792090Z   path: /home/runner/work/_temp/native-core-evidence/",
+        "2026-11-14T01:51:53.4792413Z   compression-level: 6",
+        "2026-11-14T01:51:53.4792624Z   overwrite: false",
+        "2026-11-14T01:51:53.4792811Z env:"
+      ]
+    }
+  ],
+  "observed_test_start_lines": []
+}

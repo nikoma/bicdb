@@ -1,0 +1,18 @@
+{
+  "artifact": 14095447597,
+  "original_zip_sha256": "1637503905e7db9dc971e4adc1285f0c978b472d59cda5614b2e4fe26d217ad1",
+  "original_zip_bytes": 397780,
+  "members": 153,
+  "private_storage": "/root/bicdb-ha-private-evidence/two-range-component-43548089992/original-artifact-14095447597.zip",
+  "crc_ok": true,
+  "source": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+  "runtime": "c9680e82acf9ceb01ad8994b7bb0b67b25768782",
+  "actual_selected_case_passed": true,
+  "ledger_calls": 5,
+  "held_calls_exact": 3,
+  "held_append_acknowledged": 1,
+  "held_full_strong_reads": 2,
+  "same_original_request_unexpired_on_resume": true,
+  "scope": "transport-after-export independent-range component only; not disk, target install, second Joined movement, controller, physical or production qualification",
+  "public_upload": false
+}

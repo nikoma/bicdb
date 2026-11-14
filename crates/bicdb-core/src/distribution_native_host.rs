@@ -55,6 +55,8 @@ pub(crate) use provisional_listener::{
     NativeMetadataRegistrationController, NativeProvisionalHost,
 };
 #[cfg(feature = "tls-replication")]
+mod joined_data_handoff;
+#[cfg(feature = "tls-replication")]
 mod metadata_supervisor;
 #[cfg(feature = "tls-replication")]
 use provisional_listener::{NativeMetadataControlBackend, NativeMetadataMaintenanceReport};

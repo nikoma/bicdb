@@ -1,0 +1,457 @@
+{
+  "format": 1,
+  "scope": "Read-only four-failure forensic classification. No source changes, builds, dispatch, retry, skip, TTL change, PR mutation, DB opening or qualification.",
+  "source": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+  "version": "1.0.503-beta",
+  "main_comparison": "629857f5eaaeee5f5a9124d505406d8cd6a29535",
+  "run": 43529104485,
+  "job": 132242099377,
+  "job_name": "bicdb-core native multi-node (serial)",
+  "result": {
+    "passed": 208,
+    "failed": 4,
+    "ignored": 1,
+    "filtered": 877,
+    "duration_seconds": 1197.5,
+    "ignored_was_not_executed": true
+  },
+  "raw_log": {
+    "path": "/root/erp-modernization/evidence/native503-core-serial-failure.log",
+    "bytes": 3946909,
+    "sha256": "8af0ca1ea94ef88ae64a0ed4101d907d044072acd20ff8ce2c22d4149da09e54",
+    "lines": 16222
+  },
+  "metadata_capture": {
+    "ERP_metadata": "/root/erp-modernization/evidence/native503-core-serial-failure.json",
+    "authoritative_job": "/tmp/bicdb-native-foundations-ci/c6-native503-job132242099377.json",
+    "run_observation": "/tmp/bicdb-native-foundations-ci/c6-native503-run43529104485.json",
+    "whole_run_still_in_progress_at_inspection": true
+  },
+  "source_pins": [
+    {
+      "path": ".github/workflows/tests.yml",
+      "revision": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+      "blob": "77037dae9d25b16fd3ce0b215f5ec57b1faaa383",
+      "bytes": 19916,
+      "sha256": "48c255ae145e842d8e6667e915a951ebf170190ec9617b303cb08372ca7f4c47",
+      "byte_identical_to_main629": true
+    },
+    {
+      "path": "crates/bicdb-core/src/db.rs",
+      "revision": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+      "blob": "63078c8a0002258c8802873c45fc0df9b59dc612",
+      "bytes": 1446473,
+      "sha256": "0de6eb073f31ec4ef73beaba969a5d318dfc2e2fd63dcf32914ab20586ea8932",
+      "byte_identical_to_main629": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_metadata_read_provider.rs",
+      "revision": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+      "blob": "012a0d635904f1386fdc010713f6e44f97cd4e84",
+      "bytes": 81655,
+      "sha256": "ed9a1e00026dacb42c8aff6fa786aa00018bf238897c0008fa531d507774e7b9",
+      "byte_identical_to_main629": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport.rs",
+      "revision": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+      "blob": "c4817aa271766b1944799849ce8eed8d8e1d093a",
+      "bytes": 324900,
+      "sha256": "5818da06482694fbb73043ec52a2aea30c0846e43f0d471b761c4a848337cc49",
+      "byte_identical_to_main629": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener.rs",
+      "revision": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+      "blob": "9101f618f92c9c6e51db9f9f375f160326b1e4df",
+      "bytes": 13580,
+      "sha256": "bcd165cf24b8ab7029fbabd3b630d01d5e8676ca987f96ca6acc44ecb22d0ad1",
+      "byte_identical_to_main629": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests.rs",
+      "revision": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+      "blob": "55a62ab39bdfdb89e454c0d71e398873f06d609d",
+      "bytes": 14467,
+      "sha256": "20798d33c57c4906e02e286da2ab586cff5d1f03ac9dbbca0fa5814e3a728131",
+      "byte_identical_to_main629": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests.rs",
+      "revision": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+      "blob": "9ef655bcdb7fd8df586d48e8bf9b68433c78a1ed",
+      "bytes": 18394,
+      "sha256": "13410f1d44d38d79faebef4a08d53faccac03daddc19f585c83af97930c6d124",
+      "byte_identical_to_main629": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests/hot_recovery_tests.rs",
+      "revision": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+      "blob": "4582d8e74ba7fb4f38371e0dcdd027ca4004f6e6",
+      "bytes": 19116,
+      "sha256": "d5a6f83aca125b0969c88b156a83d6cf7c6c6a9e8ba50b715bc13863bdd7a924",
+      "byte_identical_to_main629": true
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture.rs",
+      "revision": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+      "blob": "553ddded4d3d22632b8b5171e6b532c3f42c854f",
+      "bytes": 30761,
+      "sha256": "d0f070b7d1ae004a78e24c91591fd4220eb95aeac2a9210d44667719b4a28da1",
+      "byte_identical_to_main629": true
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_strong_point_tests.rs",
+      "revision": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+      "blob": "7bba38f66062ded8a0c956cb75f94527680839c5",
+      "bytes": 37196,
+      "sha256": "477c5fc0c9177f2ba959807c28681d0747a3dbc1452b685983aecb7a45ffc2cb",
+      "byte_identical_to_main629": true
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_strong_point_tests/serving_observation_scope_tests/normal_serving_record_tests.rs",
+      "revision": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+      "blob": "f9b74ee05198884246e4ebfac6ed4a12caa9ffbf",
+      "bytes": 6150,
+      "sha256": "5a22a251df148385d94a41839a85c2639b3a6848afe6d3950af5f1b25a463a1c",
+      "byte_identical_to_main629": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_recovery/runtime/native_completion_quorum.rs",
+      "revision": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+      "blob": "7f523325a90fdaaf3d70cd0b9d939b65525de74b",
+      "bytes": 18477,
+      "sha256": "7dedbe35b4615b8c4058ca084bcc435d4b2ae2ecc9ee0369c74aba5b5082c81e",
+      "byte_identical_to_main629": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_recovery/runtime/native_ready_quorum.rs",
+      "revision": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+      "blob": "f5e95593da10a6fb4f9c5195982940277b74bbed",
+      "bytes": 15806,
+      "sha256": "42c085f39b928d17e7161c617afea78d2650cdef53393a0c66f79143c69e020c",
+      "byte_identical_to_main629": true
+    },
+    {
+      "path": "crates/bicdb-app-runtime/src/host.rs",
+      "revision": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+      "blob": "874188e87c6d88a771f3472dc96b4dcfc7fd2050",
+      "bytes": 387401,
+      "sha256": "15b4c7f7f625a31e5efc4c91bff74a18886f931ace87b2ad77a93c21ce8026b7",
+      "byte_identical_to_main629": true
+    }
+  ],
+  "failure_stdout_headers": [
+    {
+      "line": 13991,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_current_damage_refused_at_exit"
+    },
+    {
+      "line": 15952,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_finite_open_never_starts_process_worker"
+    },
+    {
+      "line": 15958,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation"
+    },
+    {
+      "line": 15963,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root"
+    }
+  ],
+  "cases": [
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_current_damage_refused_at_exit",
+      "classification": "FAILED prerequisite availability; intended current-damage refusal NOT TESTED",
+      "panic": {
+        "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_strong_point_tests/serving_observation_scope_tests/normal_serving_record_tests.rs",
+        "line": 112,
+        "call": "acquire_metadata_read_observation(&n1, business, r1, epoch2, Duration::from_secs(5), &parent).unwrap()",
+        "exact_error": "cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: metadata read acquisition: fresh joint quorum unavailable within bounded probe attempts"
+      },
+      "actually_reached": [
+        "Three fixture Transaction::commit success returns: two other-range writes and one selected ACK (source control-flow inference from reaching line112). This is not a public PostgreSQL or external SDK ACK dataset.",
+        "Selected record read succeeded and its ledger file+directory fsyncs completed in normal_recovered lines9-24 (source control-flow inference); retained runner paths printed but DB/ledger bytes not available in this log.",
+        "Committed leader transition r1 epoch1->epoch2/n2; actual writer policy refresh, all-three prepare/complete/activate operations and recover_local_leadership returned success; snapshot_at before MQ completed. Native+catalogue completion and activation are explicitly traced."
+      ],
+      "not_reached": [
+        "NativeReadQuorumRound construction after line112",
+        "Installing current/archive damage callback at121",
+        "Fault injection at124-130",
+        "Reached flag at134",
+        "Expected damaged-record refusal and after-damage row/native equality assertions"
+      ],
+      "acknowledgments": {
+        "fixture_commit_success_returns": 3,
+        "selected_ledger_records": 1,
+        "failed_metadata_read_is_write": false,
+        "public_APP_ACK_count": "not applicable to this internal fixture contract"
+      },
+      "cause": "INCONCLUSIVE: actual per-voter metadata probe failures are discarded at provider497-510; aggregate does not identify refusal vs transport/slice failure."
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_finite_open_never_starts_process_worker",
+      "classification": "FAILED shared initial CONFIG preparation; hot-worker control NOT TESTED",
+      "panic": {
+        "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests.rs",
+        "line": 132,
+        "call": "host.prepare_common_initial_configuration(&configuration, &budget(5000)).unwrap()",
+        "exact_error": "Io(Custom { kind: TimedOut, error: \"cluster RPC deadline expired\" })"
+      },
+      "actually_reached": [
+        "Fixture::new actual paged/TLS owners",
+        "Initial configuration observation succeeded (line126)",
+        "Entered sequential host preparation .iter().map, failing host/recipient ordinal unrecorded"
+      ],
+      "not_reached": [
+        "finish_initial_consensus/listener/election",
+        "open_initial_data in opened()",
+        "Hot-worker not-started assertion, canceled automatic start, real automatic worker start/stop (hot_recovery_tests195-208)"
+      ],
+      "acknowledgments": {
+        "APP_calls_reached": 0,
+        "internal_native_preparation_effect": "unknown partial state; do not infer no native writes"
+      },
+      "cause": "INCONCLUSIVE; no host/member/stage or remaining-deadline trace."
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation",
+      "classification": "FAILED same CONFIG prerequisite; intended actual slot ABA control NOT TESTED",
+      "panic": {
+        "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests.rs",
+        "line": 132,
+        "call": "host.prepare_common_initial_configuration(&configuration, &budget(5000)).unwrap()",
+        "exact_error": "Io(Custom { kind: TimedOut, error: \"cluster RPC deadline expired\" })"
+      },
+      "actually_reached": [
+        "Fixture and initial configuration, then some unknown prefix of sequential host/member preparation"
+      ],
+      "not_reached": [
+        "opened() completion and DATA opening",
+        "APP/Strong at hot_recovery_tests408-409",
+        "Held hot reservation",
+        "Actual RangeWriteStore replacement/restoration",
+        "Slot-revocation assertion and preservation checks"
+      ],
+      "acknowledgments": {
+        "APP_calls_reached": 0,
+        "internal_native_preparation_effect": "unknown partial state"
+      },
+      "cause": "INCONCLUSIVE; shared error is not proof of a shared root cause."
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root",
+      "classification": "FAILED current-mode first APP; complete three-mode lifecycle contract not qualified",
+      "panic": {
+        "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/initial_data_tests.rs",
+        "line": 339,
+        "call": "assert!(gateway.append(\"items\", key, expected.clone()).unwrap());",
+        "next_line_340": "gateway.get_strong(...).unwrap()",
+        "exact_error": "QueryTimedOut"
+      },
+      "actually_reached": [
+        "Current mode actual initial metadata/control setup and all three open_initial_data calls returned ready.",
+        "Actual bootstrap and original public ClusterEventClient construction succeeded.",
+        "Entered append of items/actual-before-owner-drop, expected payload includes unrecorded mode0,1 or2, two-second request budget."
+      ],
+      "not_reached_in_failing_mode": [
+        "Successful append acknowledgment",
+        "Strong at340",
+        "All-three physical ACK/materialized lineage checks at345-372",
+        "Current-mode explicit canceled stop or durability fault at403-421",
+        "Current-mode drop/release-sentinel checks",
+        "Current-mode cold same-root reopen/readback"
+      ],
+      "acknowledgments": {
+        "failing_mode": "UNMEASURED (0,1 or2)",
+        "current_mode_returned_APP_ACK": false,
+        "current_mode_write_effect": "UNCERTAIN; timeout does not prove rollback or no durable commit",
+        "previous_completed_modes": "UNMEASURED (0..2)",
+        "case_total_previous_returned_APP_ACKs": "0..2, not measured; do NOT claim zero ACKs for the entire test",
+        "previous_mode_scope": "If modes preceded the failure, their APP/Strong and lifecycle/reopen assertions completed before this iteration, but no per-mode ledger is retained."
+      },
+      "cause": "INCONCLUSIVE; no linked actual APP attempt/route/refresh/native outcome or mode trace. Broken-pipe/EOF lines have no request identities and may be cleanup or canceled siblings."
+    }
+  ],
+  "normal_recovery_trace": {
+    "stdout_line_range": [
+      13991,
+      15950
+    ],
+    "trace_prefix_counts": {
+      "ACTUAL_JOINT_COMPONENT": 888,
+      "ACTUAL_RECOVERY_PREPARE_REQUEST": 3,
+      "ACTUAL_RECOVERY_PREPARE_CATALOGUE_PERSISTED": 3,
+      "ACTUAL_RECOVERY_COMPLETE_REQUEST": 3,
+      "NATIVE_PROBE_TRACE": 945,
+      "bicdb": 36,
+      "ACTUAL_RECOVERY_COMPLETE_NATIVE_WAL_RETURNED": 3,
+      "ACTUAL_RECOVERY_COMPLETE_NATIVE_PERSISTED": 3,
+      "ACTUAL_RECOVERY_COMPLETE_CATALOGUE_PERSISTED": 3,
+      "ACTUAL_REFRESH_GENESIS_RANGE": 60,
+      "ACTUAL_RECOVERY_ACTIVATE_NATIVE_WAL_RETURNED": 3,
+      "ACTUAL_RECOVERY_ACTIVATE_CATALOGUE_PERSISTED": 3,
+      "": 1,
+      "thread": 1
+    },
+    "native_probe_phases": {
+      "completion-status": 725,
+      "ready": 220
+    },
+    "recorded_native_and_catalogue_boundaries": [
+      {
+        "line": 14343,
+        "text": "ACTUAL_RECOVERY_COMPLETE_NATIVE_WAL_RETURNED node=n0 nonce=01a1d75f-739c-7933-ae7f-847f8c60940a R=1 H=a99988da70613be05b28519903e27e53380a445d815f3227ea92d623e34e5555 B=3 serving_sha=a59f842f5c7c1465ad721a3e42cc23a028ac69974c33cce2b09ae35d2ee604ab rewritten=true remaining_ms=3344"
+      },
+      {
+        "line": 14355,
+        "text": "ACTUAL_RECOVERY_COMPLETE_CATALOGUE_PERSISTED node=n0 nonce=01a1d75f-739c-7933-ae7f-847f8c60940a point=NativePreparedPoint { format_version: 1, range_index: 1, logical_genesis_sha256: \"cd8416452a2632340e6ccdeef7e5abbde311e6164cf4b99f7e0b9486b6157422\", logical_history_sha256: \"a99988da70613be05b28519903e27e53380a445d815f3227ea92d623e34e5555\", native_receipt_sha256: \"db6666405f4334ded34698293af64598f0dcd8ce2ce1f3a504e270348fbc47bb\", local_visibility_sequence: 3 } serving_sha=a59f842f5c7c1465ad721a3e42cc23a028ac69974c33cce2b09ae35d2ee604ab uncertain=false"
+      },
+      {
+        "line": 14839,
+        "text": "ACTUAL_RECOVERY_COMPLETE_NATIVE_WAL_RETURNED node=n1 nonce=01a1d75f-739c-7933-ae7f-847f8c60940a R=1 H=a99988da70613be05b28519903e27e53380a445d815f3227ea92d623e34e5555 B=3 serving_sha=176d991fbb1b7b7e0b2d82032986994bd39cf1ca2ec0bc032345a4e8e14ec04a rewritten=true remaining_ms=3354"
+      },
+      {
+        "line": 14851,
+        "text": "ACTUAL_RECOVERY_COMPLETE_CATALOGUE_PERSISTED node=n1 nonce=01a1d75f-739c-7933-ae7f-847f8c60940a point=NativePreparedPoint { format_version: 1, range_index: 1, logical_genesis_sha256: \"cd8416452a2632340e6ccdeef7e5abbde311e6164cf4b99f7e0b9486b6157422\", logical_history_sha256: \"a99988da70613be05b28519903e27e53380a445d815f3227ea92d623e34e5555\", native_receipt_sha256: \"819fa31771b217477c5bcbb9ee848f6a4cf614df643680352271b65ac74905a8\", local_visibility_sequence: 3 } serving_sha=176d991fbb1b7b7e0b2d82032986994bd39cf1ca2ec0bc032345a4e8e14ec04a uncertain=false"
+      },
+      {
+        "line": 15205,
+        "text": "ACTUAL_RECOVERY_COMPLETE_NATIVE_WAL_RETURNED node=n2 nonce=01a1d75f-739c-7933-ae7f-847f8c60940a R=1 H=a99988da70613be05b28519903e27e53380a445d815f3227ea92d623e34e5555 B=3 serving_sha=61996975489efa70f92ad500146ccdabacbd7fc941df8e732a945cdafbd0d0ab rewritten=true remaining_ms=3375"
+      },
+      {
+        "line": 15217,
+        "text": "ACTUAL_RECOVERY_COMPLETE_CATALOGUE_PERSISTED node=n2 nonce=01a1d75f-739c-7933-ae7f-847f8c60940a point=NativePreparedPoint { format_version: 1, range_index: 1, logical_genesis_sha256: \"cd8416452a2632340e6ccdeef7e5abbde311e6164cf4b99f7e0b9486b6157422\", logical_history_sha256: \"a99988da70613be05b28519903e27e53380a445d815f3227ea92d623e34e5555\", native_receipt_sha256: \"15a329bd41281f30174cff17fe059c89ef8bb00bb09ad19a14d65b918572a337\", local_visibility_sequence: 3 } serving_sha=61996975489efa70f92ad500146ccdabacbd7fc941df8e732a945cdafbd0d0ab uncertain=false"
+      },
+      {
+        "line": 15441,
+        "text": "ACTUAL_JOINT_COMPONENT begin stage=recovery-activate-total node=n0 remaining_ms=Some(3499) canceled=false"
+      },
+      {
+        "line": 15591,
+        "text": "ACTUAL_RECOVERY_ACTIVATE_NATIVE_WAL_RETURNED node=n0 nonce=01a1d75f-739c-7933-ae7f-847f8c60940a R=1 activation_sha=6c2096b9d8bf092fda073cf5785e5723c393c5bb04d25a230193cb32c095ee21 xid=33 remaining_ms=3375"
+      },
+      {
+        "line": 15601,
+        "text": "ACTUAL_RECOVERY_ACTIVATE_CATALOGUE_PERSISTED node=n0 nonce=01a1d75f-739c-7933-ae7f-847f8c60940a R=1 activation_sha=6c2096b9d8bf092fda073cf5785e5723c393c5bb04d25a230193cb32c095ee21 remaining_ms=3354"
+      },
+      {
+        "line": 15625,
+        "text": "ACTUAL_JOINT_COMPONENT end stage=recovery-activate-total node=n0 elapsed_us=248221 remaining_ms=Some(3251) canceled=Some(false) completed=true query_budget_active=false query_budget_error=None"
+      },
+      {
+        "line": 15626,
+        "text": "ACTUAL_JOINT_COMPONENT begin stage=recovery-activate-total node=n1 remaining_ms=Some(3499) canceled=false"
+      },
+      {
+        "line": 15758,
+        "text": "ACTUAL_RECOVERY_ACTIVATE_NATIVE_WAL_RETURNED node=n1 nonce=01a1d75f-739c-7933-ae7f-847f8c60940a R=1 activation_sha=620bca4b112dc8a38327ea6612818880ffd0f97885d26dac3850237ab4fea4a4 xid=33 remaining_ms=3043"
+      },
+      {
+        "line": 15768,
+        "text": "ACTUAL_RECOVERY_ACTIVATE_CATALOGUE_PERSISTED node=n1 nonce=01a1d75f-739c-7933-ae7f-847f8c60940a R=1 activation_sha=620bca4b112dc8a38327ea6612818880ffd0f97885d26dac3850237ab4fea4a4 remaining_ms=3022"
+      },
+      {
+        "line": 15791,
+        "text": "ACTUAL_JOINT_COMPONENT end stage=recovery-activate-total node=n1 elapsed_us=572804 remaining_ms=Some(2927) canceled=Some(false) completed=true query_budget_active=false query_budget_error=None"
+      },
+      {
+        "line": 15792,
+        "text": "ACTUAL_JOINT_COMPONENT begin stage=recovery-activate-total node=n2 remaining_ms=Some(3499) canceled=false"
+      },
+      {
+        "line": 15910,
+        "text": "ACTUAL_RECOVERY_ACTIVATE_NATIVE_WAL_RETURNED node=n2 nonce=01a1d75f-739c-7933-ae7f-847f8c60940a R=1 activation_sha=be12e140136bae18bd9c166e8743826c20fb2ddb36bd3aa44e3ef5c74d802de0 xid=33 remaining_ms=3380"
+      },
+      {
+        "line": 15920,
+        "text": "ACTUAL_RECOVERY_ACTIVATE_CATALOGUE_PERSISTED node=n2 nonce=01a1d75f-739c-7933-ae7f-847f8c60940a R=1 activation_sha=be12e140136bae18bd9c166e8743826c20fb2ddb36bd3aa44e3ef5c74d802de0 remaining_ms=3359"
+      },
+      {
+        "line": 15944,
+        "text": "ACTUAL_JOINT_COMPONENT end stage=recovery-activate-total node=n2 elapsed_us=243478 remaining_ms=Some(3256) canceled=Some(false) completed=true query_budget_active=false query_budget_error=None"
+      }
+    ],
+    "range": "r1",
+    "epoch": 2,
+    "leader": "n2",
+    "range_index": 1,
+    "activation_native_xids": {
+      "n0": 33,
+      "n1": 33,
+      "n2": 33
+    },
+    "logical_history_sha256": "a99988da70613be05b28519903e27e53380a445d815f3227ea92d623e34e5555",
+    "failed_new_metadata_acquisition_per_voter_errors_present": false,
+    "trace_limit": "NATIVE_PROBE_TRACE covers ready/completion collection, not the failed later metadata acquire. Success/cancellation there cannot identify a cause in the later fresh quorum round. Buffered GitHub stdout timestamps are flush times, not operation times; native t_us is process-monotonic only.",
+    "surplus_cancellation": "Source explicitly cancels sibling metadata probes on successful return; native recovery collectors similarly cancel surplus work. Earlier canceled peers while receiver results succeed are not by themselves a safety defect or proof of time-budget exhaustion."
+  },
+  "c6_vs_main629": {
+    "core_changed_files": [
+      "crates/bicdb-core/Cargo.toml",
+      "crates/bicdb-core/src/db.rs"
+    ],
+    "semantic_core_delta": "12 added lines inside Transaction::lock_rows_authorized; snapshot transactions recheck latest committed sequence after acquiring a row lock. Existing actorSome requirement precedes this branch.",
+    "actual_callsite": "Only crates/bicdb-app-runtime/src/host.rs:3355 calls lock_rows_authorized in tracked crates. Failed HA fixtures do not invoke AppRuntime actor row locks.",
+    "unchanged_failure_paths": "Every pinned HA test/provider/transport/preparation/fixture path is byte-identical to main629; workflow also unchanged.",
+    "causality": "No direct source call path from this12-line change to the four HA failures found. This is NOT proof that every build/runtime/environment effect is excluded, and does not justify ignoring required failures."
+  },
+  "execution_environment": {
+    "command": "cargo test --config profile.dev.package.\"*\".opt-level=2 -p bicdb-core --lib --locked -- distribution_native_host:: range_image_native::rf3_fixture:: --test-threads=1",
+    "scope": "Actual required serial native job;213 selected tests. No parallel Rust test fixture execution is claimed. Product/background protocol worker concurrency still exists.",
+    "build_jobs": 1,
+    "incremental": false,
+    "profile_and_serial_selection": "Inherited environment/check configuration, not proof of the original cause. The command\u2019s dependency optimization/serial changes must not be used to relabel prior failing runs."
+  },
+  "minimum_bounded_passive_capture": [
+    {
+      "boundary": "distribution_metadata_read_provider.rs:395-515",
+      "record": [
+        "actual acquisition_id/read_request_id/context ID, requester, leader, selected range/epoch and voter sets/term/read index",
+        "voter identity and candidate attempt ordinal/next_index",
+        "queue/start/return monotonic times; original/context/attempt deadlines and remaining slice",
+        "exact actual transport Err chain before it is discarded; or actual accepted/rejected ACK term/index/conflict fields and record_read_authority_ack result",
+        "terminal reason: ready, deadline check, no outstanding/candidates, attempts exhausted, receiver invalidation; queued/outstanding counts"
+      ],
+      "constraints": "No extra probe, retry, TTL/attempt/slice change, metadata mutation, fake response or read grant. Use bounded test-only observational storage, with explicit cap/incomplete flag, emitted after the original call/outside locks; do not fsync per probe or run a callback under engine/MStore locks. It must preserve original aggregate error and assertions."
+    },
+    {
+      "boundary": "actual_initial_metadata_controls:127-134 and NativeProvisionalHost::prepare_common_initial_configuration:212-226",
+      "record": [
+        "actual preparing host index/node and recipient/member ordinal",
+        "stage entry/exit, exact returned error, original parent deadline and remaining budget, per-recipient elapsed time",
+        "after-call readonly status/actual partial metadata identity only if safe and separately labeled DATA; never fabricate native absence or reset uncertain preparation"
+      ],
+      "constraints": "Preserve .iter() order, all recipient checks, native persistence semantics and5000ms budgets. Do not retry/skip/widen or create a new factory/store."
+    },
+    {
+      "boundary": "initial_data_tests.rs lifecycle loop306-478",
+      "record": [
+        "mode before fixture construction",
+        "append intent logicalID/key/full expected payload/hash and configured2s budget",
+        "actual returned APP result and uncertain-effect distinction before unwrap; exact Strong result only if reached",
+        "markers for actual materialization, fault arming, drop and reopen stages; existing readonly prefix/record observation after call can be separate if authorized"
+      ],
+      "constraints": "No Strong warmup, synthetic readiness, manual route refresh or inserted retry. Preserve each returned ACK even if later diagnostic persistence fails; failed APP is not rollback. Avoid I/O inside the live request window."
+    },
+    {
+      "boundary": "cohort runner diagnostics",
+      "record": [
+        "bounded host CPU/memory/IO pressure and actual thread/context/worker counts before/after relevant cases, if available without protocol changes"
+      ],
+      "constraints": "Resource data can distinguish hypotheses but alone does not prove their cause. Do not label failures timing-flaky."
+    }
+  ],
+  "next_smallest_deterministic_tests": [
+    "One diagnostic reproduction of the same failing acceptance boundaries after the passive capture is reviewed; preserve original source/results. No retry is authorized by this report.",
+    "Metadata boundary control that returns genuine per-voter errors without changing existing limit or request lifetimes; assert aggregate preserves exact context and count of actual attempts, not fictitious all-peer outage.",
+    "Preparation recipient-stage control that crosses the original deadline and proves exact pending state is retained, with host/member identity and no APP/Strong grant.",
+    "Lifecycle test with mode-linked primary ledger and actual client attempt evidence; reconcile a timeout separately from returned ACKs before any teardown. Do not hide the original failure or claim zero-loss from a missing ledger."
+  ],
+  "open_blockers": [
+    "Required native serial suite remains failed; causes of allfour availability failures unestablished.",
+    "Intended current-damage refusal and two hot-specific controls were not exercised in these failing cases.",
+    "Complete three-mode drop/reopen contract not qualified by a mid-loop unmeasured APP timeout.",
+    "No physical fault/RPO/RTO/throughput or current-release production qualification follows."
+  ]
+}

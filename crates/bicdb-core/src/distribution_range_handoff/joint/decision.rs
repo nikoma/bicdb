@@ -352,10 +352,12 @@ impl NativeJointMaterializedQuorums {
         &self,
         stage: &'static str,
         failed_member: Option<&ClusterNodeId>,
-        entered: std::time::Instant,
+        prepare_entered: std::time::Instant,
+        current_returned: std::time::Instant,
+        step_entered: std::time::Instant,
+        returned: std::time::Instant,
         error: &BicDbError,
     ) {
-        let returned = std::time::Instant::now();
         let clocks: Vec<_> = self
             .new
             .iter()
@@ -365,10 +367,15 @@ impl NativeJointMaterializedQuorums {
                 serde_json::json!({"member_bytes":&bytes[..bytes.len().min(128)],
                 "member_original_bytes":bytes.len(),"member_truncated":bytes.len()>128,
                 "failed_member":failed_member==Some(node),
-                "clock":observation.test_issuance_clock(entered,returned)})
+                "prepare_entry_and_initial_current_return":observation.test_issuance_clock(prepare_entered,current_returned),
+                    "actual_check_boundary":observation.test_issuance_clock(step_entered,returned)})
             })
             .collect();
-        let report = serde_json::json!({"stage":stage,"elapsed_us":returned.duration_since(entered).as_micros(),
+        let report = serde_json::json!({"stage":stage,"step_elapsed_us":returned.duration_since(step_entered).as_micros(),
+            "initial_current_elapsed_us":current_returned.duration_since(prepare_entered).as_micros(),
+            "step_entered_since_prepare_us":step_entered.duration_since(prepare_entered).as_micros(),
+            "failure_return_since_prepare_us":returned.duration_since(prepare_entered).as_micros(),
+            "cancellation_snapshot_time":"during post-error diagnostic, not historical stage time",
             "members":clocks,"member_limit":64,"omitted_members":self.new.len().saturating_sub(64),
             "actual_error_discriminant":format!("{:?}",std::mem::discriminant(error)),
             "primary_error":"preserved by original Result propagation and caller unwrap",
@@ -380,11 +387,21 @@ impl NativeJointMaterializedQuorums {
     }
     pub(crate) fn prepare_decision(self) -> Result<NativeJointPreparedDecision> {
         #[cfg(test)]
-        let entered = std::time::Instant::now();
+        let prepare_entered = std::time::Instant::now();
         let current = self.require_current();
         #[cfg(test)]
+        let current_returned = std::time::Instant::now();
+        #[cfg(test)]
         if let Err(error) = &current {
-            self.report_preparation_refusal("initial_actual_current", None, entered, error);
+            self.report_preparation_refusal(
+                "initial_actual_current",
+                None,
+                prepare_entered,
+                current_returned,
+                prepare_entered,
+                current_returned,
+                error,
+            );
         }
         current?;
         for (_node, obs) in &self.new {
@@ -392,11 +409,16 @@ impl NativeJointMaterializedQuorums {
             let entered = std::time::Instant::now();
             let issued = obs.require_live_issuance();
             #[cfg(test)]
+            let returned = std::time::Instant::now();
+            #[cfg(test)]
             if let Err(error) = &issued {
                 self.report_preparation_refusal(
                     "member_live_issuance",
                     Some(_node),
+                    prepare_entered,
+                    current_returned,
                     entered,
+                    returned,
                     error,
                 );
             }

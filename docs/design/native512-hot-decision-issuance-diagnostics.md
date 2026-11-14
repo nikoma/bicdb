@@ -37,3 +37,10 @@ current service/native/MStore check and original deadline before counting.
 Formatting, diff and version checks are source checks. No compilation, tests,
 CI retry, deadline increase or successful repair is claimed by this leaf.
 Original 512 failures remain at their recorded source revision.
+
+The follow-up preserves preparation entry, initial physical-current return,
+actual member-check entry and actual error return before any rendering. It
+reports both the initial-sweep and failing-check budget positions, so expiry
+already present at entry is distinguishable from time spent during the sweep.
+Cancellation flags are explicitly snapshots taken during the post-error
+diagnostic, not historical measurements at the earlier stage markers.

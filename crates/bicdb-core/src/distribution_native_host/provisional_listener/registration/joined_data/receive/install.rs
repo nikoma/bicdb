@@ -118,6 +118,12 @@ impl NativeJoinedRemoteInstallPreflight {
         self.require_request(request, frame)?;
         request.require_original_frozen(&temporary_n)?;
         let origin = self.selected.origin();
+        // Lexical strong owners, never stored in runtime custody: the final
+        // memory refusal need not upgrade/drop complex owners under its short
+        // gate, and host teardown cannot destroy these checked originals
+        // until after that callback and all physical guards have returned.
+        let _original = origin.original()?;
+        let _admission = origin.admission()?;
         let backend = origin.backend()?;
         let factory = origin.factory()?;
         let service = backend.service.try_lock().ok_or_else(|| {

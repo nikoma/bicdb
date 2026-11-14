@@ -160,7 +160,9 @@ The final memory-only refusal path checks the actual Joined lifetime, copied
 open/slot witnesses and whether the original weak FIRST owner has ended. That
 weak-count check is only an additional refusal, never proof of authority. It
 must not upgrade/drop a possible final complex owner under the publication
-guard. The lexical physical point still owns the checked State/hook/native
+guard. The physical wrapper lexically retains the upgraded exact FIRST owner and
+admission outside the gate; those owners drop only after the callback and
+physical guards return. The lexical physical point still owns the checked State/hook/native
 journal/DB/service guards and the sink independently requires the fresh request,
 actual local metadata version and unique original N.
 

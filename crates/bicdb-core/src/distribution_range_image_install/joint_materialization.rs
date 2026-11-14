@@ -7,6 +7,11 @@ mod sealed {
     impl Sealed for super::NativeImageCatalogueFinalization {}
     #[cfg(feature = "tls-replication")]
     impl Sealed for std::sync::Arc<crate::distribution_native_host::NativeRegisteredRemoteJointTarget> {}
+    #[cfg(feature = "tls-replication")]
+    impl Sealed
+        for std::sync::Arc<crate::distribution_native_host::NativeJoinedRemoteMaterializedOwner>
+    {
+    }
 }
 pub(crate) trait NativeJointImageMaterialization: sealed::Sealed {
     fn base(&self) -> &NativeInstalledRangeImageBase;
@@ -18,6 +23,15 @@ pub(crate) trait NativeJointImageMaterialization: sealed::Sealed {
         store: &RangeWriteStore,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()>;
+    /// Distinct actual Joined provenance. It is never the Registered/FIRST
+    /// target or a legacy local finalization, and carries no phase authority.
+    #[cfg(feature = "tls-replication")]
+    fn joined_target(
+        &self,
+    ) -> Option<&std::sync::Arc<crate::distribution_native_host::NativeJoinedRemoteMaterializedOwner>>
+    {
+        None
+    }
     #[cfg(feature = "tls-replication")]
     fn registered_target(
         &self,
@@ -71,6 +85,37 @@ impl NativeJointImageMaterialization
     fn registered_target(
         &self,
     ) -> Option<&std::sync::Arc<crate::distribution_native_host::NativeRegisteredRemoteJointTarget>>
+    {
+        Some(self)
+    }
+}
+
+#[cfg(feature = "tls-replication")]
+impl NativeJointImageMaterialization
+    for std::sync::Arc<crate::distribution_native_host::NativeJoinedRemoteMaterializedOwner>
+{
+    fn base(&self) -> &NativeInstalledRangeImageBase {
+        self.as_ref().base()
+    }
+    fn native_admission(&self) -> &NativeRecoveryAdmission {
+        self.as_ref().native()
+    }
+    fn source_seal(&self) -> &crate::distribution_range_image::LocalRangeImageSealV1 {
+        self.as_ref().source_seal()
+    }
+    fn require_materialized_fact_current(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        // Full original State/hook/birth/open/native final+base/catalogue and
+        // actual frozen allocation checks. No saved snapshot request revival.
+        self.require_joint_point(db, store, frozen)
+    }
+    fn joined_target(
+        &self,
+    ) -> Option<&std::sync::Arc<crate::distribution_native_host::NativeJoinedRemoteMaterializedOwner>>
     {
         Some(self)
     }

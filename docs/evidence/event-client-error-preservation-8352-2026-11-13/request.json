@@ -1,0 +1,41 @@
+{
+  "workflow": "tests.yml",
+  "ref": "qual/event-client-primary-error-8352e3d6b",
+  "source_revision": "8352e3d6bcf30ca5d03576a0ef70f98cc4244fec",
+  "source_version": "1.0.500-beta",
+  "inputs": {
+    "core_filter": "event_client_"
+  },
+  "static_selected_tests": [
+    "distribution_events::client::error_retention_tests::event_client_no_operation_keeps_discovery_error",
+    "distribution_events::client::error_retention_tests::event_client_unknown_write_survives_later_refusal_and_refresh_or_deadline",
+    "distribution_transport::event_client_retry_tests::a_known_follower_can_supply_committed_route_discovery",
+    "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_append_preserves_actual_error_when_route_discovery_fails",
+    "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_append_preserves_primary_when_conflicting_discovery_stops_retry",
+    "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_get_preserves_actual_error_when_route_discovery_exhausts_deadline",
+    "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_refresh_without_operation_keeps_no_member_error",
+    "distribution_transport::event_client_retry_tests::legacy_metadata_controllers_remain_usable_for_discovery",
+    "distribution_transport::event_client_retry_tests::permanently_silent_old_leader_refreshes_from_another_member",
+    "distribution_transport::event_client_retry_tests::silent_discovery_member_cannot_exhaust_the_retry_budget",
+    "distribution_transport::event_client_retry_tests::silent_event_route_leaves_budget_for_discovery_and_retry",
+    "distribution_transport::event_client_retry_tests::transient_topology_refresh_does_not_abort_an_event_request"
+  ],
+  "static_total": 12,
+  "new_regression_names": [
+    "event_client_append_preserves_actual_error_when_route_discovery_fails",
+    "event_client_get_preserves_actual_error_when_route_discovery_exhausts_deadline",
+    "event_client_refresh_without_operation_keeps_no_member_error",
+    "event_client_append_preserves_primary_when_conflicting_discovery_stops_retry",
+    "event_client_unknown_write_survives_later_refusal_and_refresh_or_deadline",
+    "event_client_no_operation_keeps_discovery_error"
+  ],
+  "required_new_regression_count": 6,
+  "hosted_list_must_confirm_all_static_and_six_new": true,
+  "scope": "SDK routing/error unit tests and actual loopback TCP mock responses; no database/HA qualification",
+  "preserved_retry_counts_deadlines_policy": true,
+  "rust_threads": 4,
+  "cargo_jobs": 1,
+  "incremental": 0,
+  "dependency_opt_level": 2,
+  "authorization": "ONE exact focused run; no duplicate/rerun/cancel/version/main/PR/release/sourcechanges"
+}

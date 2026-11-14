@@ -1,0 +1,20 @@
+# Preserve the first actual RPC-evidence failure
+
+Runtime candidate `1ce471aa315b93f58c00ddce5c0577505df472ab` was qualified through workflow head `91713c0fed694505086f5351a2b0df755b7c6ffa` in hosted run43538783755. The complete cohort **failed33/1**. Its cleanup control returned a dispatched-uncertainty refusal after an actual mock ACK and sibling cancellation, but lost the original callback error detail. Later assertions in that control were not executed. The original failed evidence remains immutable in the separate `event-inflight-34-failed-2026-11-13` packet.
+
+The successor preserves an actual `RpcEvidenceFailure` from the exchange before caller cancellation/deadline logic can replace that non-success with a different error. This does not admit a late successful response: decoded successes still pass all existing cancellation, original deadline, identity and evidence checks. A later evidence emission is not used to replace the original failure.
+
+The observer also retains its first actual cause in a `OnceLock` before publishing its atomic fence. Concurrent readers can obtain the same cause even before the worker that produced it reports its result. Dispatch uncertainty remains monotone: a later actual dispatched failure can raise the flag without replacing the first cause. Error formatting occurs before the once-cell operation, and no sink I/O runs under its initialization lock. Callback unwinding publishes a static cause variant before the fence without formatting or allocating a message in the unwind guard. No error-string matching or worker-arrival-order selection supplies the cause.
+
+The original34 test bodies, including the failed detail assertion, are unchanged. Three additional controls use the existing local legacy mTLS Ping fixture and actual journal callbacks: evidence failure plus original cancellation before/after dispatch; concurrent first-cause retention and uncertainty escalation while the primary worker's report is held; and callback-unwind cause publication. A successful reply canceled without an evidence error remains covered by its unchanged existing regression. These tests do not write a business transaction or qualify native distributed commits, HA, scale-out or production admission.
+
+This is a source successor, not a passing rerun. Compilation and runtime qualification remain pending. The fixed union is expected to select37 tests (the unchanged34 plus3 new controls); the hosted list must confirm it. No request timeout, retry policy, test budget, wire schema, source version, source acknowledgment rule or original evidence was changed.
+
+The first37-test qualifier, `521243e597c2d833be840773acac728a85161969`
+(run43542004108), exposed two E0308 test compilation errors: the new concurrent
+control combined `Result<ClusterDataResponse, _>` and `Result<(), _>` in the
+same reference array. Its successor compares their actual error references,
+including refusal of every successful result, while retaining exact error kind,
+dispatch uncertainty and cause assertions. This is a test-only type correction;
+the production fix and original34 tests are unchanged. Runtime execution remains
+unestablished until the corrected source is separately listed and exercised.

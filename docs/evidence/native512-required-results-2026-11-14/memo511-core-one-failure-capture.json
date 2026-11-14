@@ -1,0 +1,39 @@
+{
+  "head": "2ec5f7545b5bb3706b2e229151a17c2569103bfe",
+  "actual_checkout": "62d4f066af62945747ead2c0c9fa43fb10c30ae0",
+  "tree": "87e34c5d45cf423914af4bdd500464279c0d6a15",
+  "run": 43580010702,
+  "job": 132402546409,
+  "conclusion": "FAILED actual Rust test",
+  "outer_core_library": {
+    "passed": 901,
+    "failed": 1,
+    "ignored": 8,
+    "filtered": 217,
+    "elapsed_seconds": 161.52
+  },
+  "nested_targeted_child": {
+    "passed": 1,
+    "filtered": 1126,
+    "not_additive_to_outer_result": true
+  },
+  "raw_bytes": 1520964,
+  "raw_sha256": "643c6ad463fc90f4ac4d80989f9760ad89f6029d338cf79d292d6063a24f1b0e",
+  "failures": [
+    {
+      "line": 14765,
+      "panic": "2026-11-14T09:37:51.1818586Z thread 'distribution_range_handoff::tests::remote::transport_observation_rejects_wrong_uuid_other_range_and_expiration' (23256) panicked at crates/bicdb-core/src/distribution_range_handoff.rs:1457:22:",
+      "following_lines": [
+        "2026-11-14T09:37:51.1820185Z called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n1 rejected RPC cluster_data_operation_failed: cluster error: metadata read acquisition: fresh joint quorum unavailable within bounded probe attempts\")",
+        "2026-11-14T09:37:51.1821408Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "2026-11-14T09:37:51.1822000Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-14T09:37:51.1822523Z bicdb cluster data RPC error: io error: Broken pipe (os error 32)"
+      ]
+    }
+  ],
+  "limits": [
+    "Literal error only; no concurrency/timing/actor/root-cause attribution.",
+    "Intended wrongUUID/range/expiry control reach must be established from exact source/raw evidence, not test name.",
+    "No runtime/routing/production qualification frompassingcompile orother512source."
+  ]
+}

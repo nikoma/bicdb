@@ -1,0 +1,120 @@
+{
+  "schema": "bicdb-independent-source-review-v1",
+  "candidate": "23ce51e7b76adeb33fcbae014db93462ff4d6655",
+  "diagnostic_ancestors": [
+    "522eaa6da3ba667bcf247eb4a40b7b2e5c0fc42e",
+    "d137b099e32620304f3bba0e4e54a99db4bc71ee"
+  ],
+  "actual_composition": "30bbc7e3c0fd8ddbdc56e03963ab3583c2ddec8a",
+  "checks": {
+    "strict_observation_ctor_byte_exact_vs_d137": true,
+    "record_byte_exact_vs_d137": true,
+    "record_inner_byte_exact_vs_d137": true,
+    "finish_byte_exact_vs_d137": true,
+    "composed_full_candidate_bridge_byte_exact_23ce": true,
+    "composed_test_remove_joint_preparation_archive_byte_exact_parent": true,
+    "composed_test_joint_preparation_record_byte_exact_parent": true,
+    "all_three_callers_Duration_expressions_byte_exact": true,
+    "original_test_custody_cut_helper_byte_exact_in_composition": true,
+    "original_request_first_and_earliest_count_deadlines_and_final_version_guard_present": true
+  },
+  "confirmed_blockers": [],
+  "scope": "READ-ONLY source review; no compilation/tests/jobs/edits. No claim original10 issuance errors or2 prepared-boundary timeouts are fixed.",
+  "candidate_findings": [
+    "No Clone/Deserialize/current/grant/getter API; private owned actual evidence is retained, not reconstructed or newly authorized.",
+    "begin_candidate initializes empty round from original evidence data/deadline then privately routes to unchanged record; record_candidate likewise privately destructures directly to record.",
+    "Full actual service/native/MStore/writer/domain/original-deadline/body/member/history/duplicate checks and actual publication-version guard remain before count.",
+    "Strict existing Observation factory still validates immediately; unrelated legacy callers keep its behavior.",
+    "All3 aggregation callers remove only the redundant wrapper current check; full record remains, same original requests/Session/deadlines.",
+    "Foreign service control genuinely chooses another real service; missingarchive control requires actual original DB/receipt and deletes exact actual archive via native metadata WAL; none fabricates receipt/grant.",
+    "Nonexpiry negatives explicitly require actual original deadline stilllive and exact intended errors; timeouts/busy do not count as intended negative. ExpiredOwn case awaits real original deadline under originalrequest and fails if prerequisites prevent isolation."
+  ],
+  "diagnostic_findings": [
+    "Role/OWN immutable deadlines are evaluated against captured prepare entry/current-return and member-step/error-return Instants.",
+    "Cancellation flags are explicitly labelled sampled during post-error reporting, not retrospectively at the boundary.",
+    "64-member and128-byte recipient caps/omitted/truncated fields; no fullerror Display/borrow stored, only borrowed discriminant formatting.",
+    "No I/O/protocol/current checks in clock getters; existing token temporary clone only reads cancellation, no authority owner/guard/error retained beyond diagnostic call.",
+    "Formatting/stderr runs only after actual error and after current/issuance call guards return; no success output. Success test path adds Instant reads; non-test diagnostics cfgcompiledout."
+  ],
+  "composition_findings": [
+    "Both actual protected preparation readout and destructive archive fault helpers preserved exactly from respective parents.",
+    "AfterFirstNativePreparation actualcaller cut remains before Candidate at original wrapper position.",
+    "decision retained until preparedSome; original Session retained; no new logical/native attempt or deadline refresh added."
+  ],
+  "not_executed": [
+    "All4 new candidate controls",
+    "candidate full pipeline",
+    "clock diagnostic runtime observations",
+    "composed compile/test suite"
+  ],
+  "pinned_files": [
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs",
+      "sha256": "187485c371e6ef5961573cfdc5d95bcf067e52cf917811647147acfd480dc2dd"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/serving_configuration/joint_handoff/bridge.rs",
+      "sha256": "fb36943ecd485d174488abc558efe3c28659576e670b81f494f0839dc2f0dfea"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_consensus.rs",
+      "sha256": "12531c1f2bb952b9540de2c704881cc8038d582d8d0b96be9759aed970225091"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff.rs",
+      "sha256": "619eb0160e55c8043f11324946c74f2e7b0a2e8d1f19af33d575d244345dff4f"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff/registered_target.rs",
+      "sha256": "d91002bc9367c06c170dfcc47feba0b4a2acf9b529823c01b93162e9d329b497"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/joined_data_handoff.rs",
+      "sha256": "8e885936ec6431144e03f3344e8aea02ec310bc8dfa8e74f1f6d9727c3f43fb7"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs",
+      "sha256": "2452a8d3b66232ce059588120fe9b6e3c445938a5d00e2166fb930a876127578"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "sha256": "dd942ae6836f1dc5c592a3f40863fd5ac93da05b34682a7772b59bd1c2e7b2b6"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests/prepared_candidate_tests.rs",
+      "sha256": "a78a30f89c063fae2dbccfe174c5f47ecd43205e80918a98b44d9c0b2c9e192a"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff.rs",
+      "sha256": "741a3aed5bced146de0eb29c0ec8db0f936c1eb20c46a9d57afcd26eff83909c"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint.rs",
+      "sha256": "e4ecbfc3b2bcea899f5d536004c35e5791abc78acef54c4ba655bb212945ef3a"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge.rs",
+      "sha256": "c6743d4207a945f27310f33aef86312f2b3fd8590283c4e786bcf25cd15b0854"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/decision.rs",
+      "sha256": "d92d6270ca246a1215d9ced955b9aa93e49b8c80b57bc75e644bb971fb3cc182"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/materialized.rs",
+      "sha256": "46b7442dcb9cbf240cd4803d6921bfa4afa3ea76cf369006a4b6c68ca2033bf4"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_recovery.rs",
+      "sha256": "9885893d92f86882cd99748bf8526bd220f608f04c64996b4948903bd786565b"
+    },
+    {
+      "path": "docs/design/native512-hot-decision-issuance-diagnostics.md",
+      "sha256": "4494a2f8c8dac132f9bbdcdb09f930d5b532a04d784e0b6fdc21522ff9811a6a"
+    },
+    {
+      "path": "docs/design/native512-uncounted-preparation-candidate.md",
+      "sha256": "1e5ec819ab633f7957c5e2a332a9aba8794d3914985ce45d00c8b8078ccca3f7"
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "format": "bicdb.native512-development-evidence/v1",
+  "captured_at_utc": "2026-11-14T11:09:02.059752+00:00",
+  "remote_main": {
+    "version": "1.0.510-beta",
+    "source": "c063c1030dc3ea83773cddba3208b2c7ecad086a"
+  },
+  "executed_sources": {
+    "memo511": "2ec5f7545b5bb3706b2e229151a17c2569103bfe",
+    "native512": "1742776ab02957a053aded2ad4f665500d9325bf"
+  },
+  "classifications": [
+    {
+      "scope": "Memo511 required workflow",
+      "disposition": "failed",
+      "reason": "one actualCorelibraryfailure; othercomponentpassesretained"
+    },
+    {
+      "scope": "Native512 native job",
+      "disposition": "failed",
+      "result": {
+        "passed": 280,
+        "failed": 43,
+        "ignored": 1
+      }
+    },
+    {
+      "scope": "Native512 remaining workspace",
+      "disposition": "inconclusive",
+      "reason": "job132406489542 still live at checkpoint; no outcome inferred"
+    },
+    {
+      "scope": "W1/W2,point,slot,candidate source reviews/static checks",
+      "disposition": "passed",
+      "limit": "source-only exactstatedscope; no Rustcompile/runtimeacceptance"
+    },
+    {
+      "scope": "new combined head runtime",
+      "disposition": "not_tested"
+    },
+    {
+      "scope": "current-artifact physical convergence,RPO/RTO,latency,capacity",
+      "disposition": "not_tested"
+    },
+    {
+      "scope": "original Azure scale-out qualification",
+      "disposition": "failed",
+      "historical_result_unchanged": true
+    }
+  ],
+  "files": [
+    {
+      "path": "ha512-native-terminal-failures-and-510-map.json",
+      "bytes": 282581,
+      "sha256": "36180829031e7fa3e9a1ed2bce1641ebfd375c6ca6c1418e5f8c60b4a92cda14"
+    },
+    {
+      "path": "ha512-preparation-clock-boundary-analysis.json",
+      "bytes": 10218,
+      "sha256": "ef35d504b30f2a3c89ee63415184bbfc5b3e098f43dc403757021675ef52c8d7"
+    },
+    {
+      "path": "ha512-native-pressure-capture.json",
+      "bytes": 2507,
+      "sha256": "bb2f3d08774cbc45a3bf4fdffce0634697d9d0387c2954160ddb9aecce628ec5"
+    },
+    {
+      "path": "memo511-core-one-failure-capture.json",
+      "bytes": 1854,
+      "sha256": "481bb5899769e4e235e62a351eea7245426e76d23a437665e5ba075a00b7a9fb"
+    },
+    {
+      "path": "memo511-rest-success-capture.json",
+      "bytes": 81428,
+      "sha256": "49263ea4ffb638084cd0060075aa8d206f3c71eb4a8a74863c846315ecf789bf"
+    },
+    {
+      "path": "memo511-required-terminal-complete-capture.json",
+      "bytes": 21838,
+      "sha256": "48ad9c112372a557fefcaba721797f60494a2ec216e926e153424ed51baaaa6c"
+    },
+    {
+      "path": "ha512-side-effects-source-audit-1742776.json",
+      "bytes": 18857,
+      "sha256": "ba2e61c95839dbf85263346e75d4d90b4bc50acca20becccd2952797e31f6114"
+    },
+    {
+      "path": "ha512-side-effects-native-broker-preflight-erratum.json",
+      "bytes": 5050,
+      "sha256": "af6ab3aeae022677b1106443db90ed07f305d234c6659e4dfd56b6c2d3300674"
+    },
+    {
+      "path": "native512-w1w2-33613-independent-source-review.json",
+      "bytes": 7654,
+      "sha256": "94b4d7441adfe6c4a9a7c28df9587f6a1433485fbe2c86f21ffed319be5d3cbb"
+    },
+    {
+      "path": "native512-registered-hook-5341-independent-source-review.json",
+      "bytes": 5830,
+      "sha256": "4cac328174616682587b2196fc8de7afae0b54186172e44067ea73efd0f481cd"
+    },
+    {
+      "path": "native512-prepared-candidate-23ce-composition30bbc-independent-review.json",
+      "bytes": 7242,
+      "sha256": "bca7ef4c0466c3af11f9985bb47c36ba9a2e0544f4fcf8dd6f4222d84d7107f3"
+    },
+    {
+      "path": "native512-remote-catalogue-rebase-availability-correction-1742776.json",
+      "bytes": 15794,
+      "sha256": "570002d9b971fb2c8c19064ff058519c469883c349a1c79bcc2e48fa4f737684"
+    },
+    {
+      "path": "ha512-custody-composition-static-checks.json",
+      "bytes": 2426,
+      "sha256": "6829fc07bcb724db3eded9eba2c369381678aedf7a5adcdd18c95bdc57e655e0"
+    }
+  ],
+  "raw_custody": "complete rawCIlogs and ZIPs retained outsideGit under/root/bicdb-ha-private-evidence; linked run/job/rawSHA in individualreceipts. This compact packet includes completepercase nativefailure sections, not allrawlogs/DBcustody.",
+  "correction": "Originalba2 sideeffectaudit retained verbatim; affected brokerinterpretations supersededonlybyaf6erratum. Bornnative broker-only/mixed refuse; laternonbroker sidecars remain distinct.",
+  "production_qualified": false,
+  "new_binary_or_deployment_produced": false
+}

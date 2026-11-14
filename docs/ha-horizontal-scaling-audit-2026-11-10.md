@@ -5,29 +5,48 @@ Initial audit of remote `main`: **1.0.455-beta**, commit
 This document and its required source-version bump do not change runtime behavior.
 Paths and symbols below refer to that revision unless an older revision is named.
 
-**The ultimate requirement is not met:** adding a node can trigger automatic
-range replica movement and leader balancing, but BicDB does not currently offer
+**The ultimate requirement is not met:** the legacy range/event controller can
+trigger automatic replica movement and leader balancing; the enforced native
+path still lacks its production relocation controller. BicDB does not currently offer
 transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
 ## Latest source and current recovery candidate — November 14, 2026 UTC
 
-Verified remote main is **1.0.509-beta**,
-`7ad192a7d01ba1e0c1967bc4f1bc79d176a4c385`. The preceding 508 merge adds a
-[narrow abort/resume driver](releases/1.0.508-beta.md): same-process only, no
-production caller, an unwritable range during movement, and two known
-safe-but-stuck consuming windows. Main 509 fixes intermittent test causes and
-extends the existing focused selector. Neither change establishes physical
-scale-out or automatic operator-level recovery.
+Verified remote main is **1.0.510-beta**,
+`c063c1030dc3ea83773cddba3208b2c7ecad086a`. Its bounded recovery-worker cleanup
+is documented in [510's delivered contract](releases/1.0.510-beta.md). The
+preceding508 driver remains local and same-process, with no production caller
+and an unwritable movement interval. None of these source deliveries establishes
+automatic enforced-native relocation or physical qualification.
 
-The current **512 source candidate** combines that baseline with frozen memo
-511 (`2ec5f7545b5bb3706b2e229151a17c2569103bfe`) and the corrected native
-batch. Its [release scope](releases/1.0.512-beta.md) separates actual source
-implementation, historical test results and missing qualification. The eleven
-prepared-round timeouts have no demonstrated fix. Original 510 failures remain
-at their exact source below; they are not results for 512. No new physical
-experiment or production deployment is established.
+The original511 candidate2ec5f754 failed one Core case; its other components
+passed. The original512 candidate1742776 passed compilation/Core/SQL/PG/Rails
+but its native job failed **280/43/one ignored**. Its remaining workspace was
+still live at this checkpoint. The [complete per-case source/CI packet](evidence/native512-required-results-2026-11-14/README.md)
+retains actual identities, all43 failure sections, literal failure groups,
+clock limits and separate source-only reviews. Later assertions not reached by
+a failed prerequisite are not tested. Historical successes do not make either
+failed candidate green.
+
+The current512 follow-up imports main510 and current-main memo511
+(`dd61ccce453531fe4f1898810316e0dc36fbeea2`). It retains original handoff custody
+on local retries, distinguishes current empty hooks from retired identities,
+supplies actual fixture MStore points and uses an uncounted preparation candidate
+whose full original validation still precedes counting. Its [release scope](releases/1.0.512-beta.md)
+separates implemented source from unexecuted controls. Ten decision-scope errors
+remain without measured per-member attribution; two begin timeouts have measured
+OWN expiry but no demonstrated runtime fix. The eleven previous hot failures
+remain failed at their exact original source.
+
+Explicit [release capabilities](release-capabilities.md) distinguish the legacy
+automatic range/event controller from unsupported native automatic rebalancing,
+cold handoff and broker transactions. Native pending broker publishes refuse
+before Prepare/WAL; the packet's separate erratum corrects the earlier missed
+preflight without implying acknowledged local-only broker writes. Nonbroker
+sidecars require separate replication evidence. The failed Azure qualification,
+open SQL/controller/recovery gates and absent physical capacity gain are unchanged.
 
 ## Historical recovery candidate — 510
 

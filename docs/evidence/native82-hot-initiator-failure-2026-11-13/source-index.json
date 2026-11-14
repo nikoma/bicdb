@@ -1,0 +1,120 @@
+{
+  "head_sha": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+  "runtime_sha": "5a85900f571c389ff97e278a0b9555048bdeadec",
+  "head_tree": "265bad38c9050e5f856ea3814a72931ce45940ce",
+  "runtime_tree": "87cac8c97234f1b61cf902207424854d4b682932",
+  "core_tree": "0472ff801146f2cdf51a6db769c0354315eb5b04",
+  "complete_trees_equal": false,
+  "differing_paths": [
+    ".github/workflows/tests.yml",
+    "scripts/qualification/guard-build-memory.py"
+  ],
+  "source_pins": [
+    {
+      "path": ".github/workflows/tests.yml",
+      "blob": "6798068aa7f2a873c09ad10345032ec13f7d798c",
+      "bytes": 41876,
+      "sha256": "ec41a1d46c7552281cafe9efaec1869379b0239449feef5560b8b09efcddd8ae",
+      "same_runtime_blob": false
+    },
+    {
+      "path": "scripts/qualification/guard-build-memory.py",
+      "blob": "050171a6befd2163e3b94c6b69ff384a98f67deb",
+      "bytes": 4627,
+      "sha256": "1fc9b018175b95de49ad59738f37209e76427f05a890aeae24d55bdcb59736c7",
+      "same_runtime_blob": false
+    },
+    {
+      "path": "Cargo.toml",
+      "blob": "9417817c48ec70a66ea2f60b7e547d13dc67b9d1",
+      "bytes": 5576,
+      "sha256": "7c756098550cdd9c86d781044c6427a369dc9983ce9296df07ed4d720ae7a3ad",
+      "same_runtime_blob": true
+    },
+    {
+      "path": "crates/bicdb-core/Cargo.toml",
+      "blob": "baf0efd419253db6b50f77df1bc9e2073df91566",
+      "bytes": 2084,
+      "sha256": "9b6de6573937e707f4e4bd99365ae797706b784c3b80a71f16c840275d7656ce",
+      "same_runtime_blob": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_consensus.rs",
+      "blob": "7e7951837566e756285f4594497e5443e69a5a35",
+      "bytes": 170379,
+      "sha256": "9b1c68b9bb2f6561853bba1d03938bc90e32c1b4d4f6d01afd75abb1375804e4",
+      "same_runtime_blob": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_consensus/publication_version.rs",
+      "blob": "fb5066a3f664fa56edff04f9e2b8c1225b3deb73",
+      "bytes": 17183,
+      "sha256": "71786594b8df1aef476c3d6228317403740a4a7bc18bb9885d2f08825028b76e",
+      "same_runtime_blob": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_consensus/native_metadata_store/owned_member.rs",
+      "blob": "13200d7331728fb43966107b05454fec8d562a74",
+      "bytes": 7481,
+      "sha256": "43943fab4c65f663ce8d205e8391475fc90e50589005b3d379f24f77c1c4cad0",
+      "same_runtime_blob": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs",
+      "blob": "69975b241541dfd01b04775e209b257dc52486d2",
+      "bytes": 42511,
+      "sha256": "b6a2be588deee03502b47eb0311c9e2300b339c17caad3e6018498e4f4b96b26",
+      "same_runtime_blob": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/original_sdk_rpc.rs",
+      "blob": "f47ed67bec2aaa6993a34ad82788ad776678c9a0",
+      "bytes": 7501,
+      "sha256": "fb8a0f26d83901a625c072557e083067b2255092ec587eb621f5009a7283b363",
+      "same_runtime_blob": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs",
+      "blob": "02d7161dffb86735bf15b1734a9a4cc4a6d45a5c",
+      "bytes": 77047,
+      "sha256": "1d78b29054accaf8d6a2d4461d17b79b6daae1af40a5d99264fb4b4927092f77",
+      "same_runtime_blob": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "blob": "475b8de7da3b54431f9dd1a13fd8c07311dc611d",
+      "bytes": 30412,
+      "sha256": "bc8b9f0caa408a1035e82fc144f469be94fbd98219ff25731d38a7149974dc55",
+      "same_runtime_blob": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests/data_tests.rs",
+      "blob": "df3a5d629a75420b38ef4f7c77792ed14c725aa8",
+      "bytes": 15173,
+      "sha256": "02b087b59a149afb96c5e4060b6f84159ba44408d3dfe84879b7971951ed00bd",
+      "same_runtime_blob": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests/local_term_tests.rs",
+      "blob": "62e7813e6c22575f7f066f9ce149e704ce16c7be",
+      "bytes": 18062,
+      "sha256": "0316d1e71ac4cc59ee73845f4fba5e13a09db97c10417eb1f6de0e19b933d505",
+      "same_runtime_blob": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_final_image_tests.rs",
+      "blob": "2d08d49e701c0379d34c46e75666f09c55a54f8b",
+      "bytes": 23605,
+      "sha256": "fd8737ea5488ffdecc85c97df3d52e533bd18b8c0ab0c05128a885a325e977c4",
+      "same_runtime_blob": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_no_domain_tests.rs",
+      "blob": "ff705d0596f55c93f064a254aca2303a6b829735",
+      "bytes": 8214,
+      "sha256": "e6543346a05e66460d49e7fd6f755b34c3b9e6ae4c79555ddadaa62e688f5f88",
+      "same_runtime_blob": true
+    }
+  ],
+  "scope": "Actual checkout88 and runtime5a have identical complete Core tree; workflow/guard-script differ. No later fixture/production fix copied."
+}

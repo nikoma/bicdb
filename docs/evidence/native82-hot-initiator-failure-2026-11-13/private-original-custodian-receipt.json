@@ -1,0 +1,14 @@
+{
+  "captured_at": "2026-11-14T03:15:32.993280+00:00",
+  "run": 43544810818,
+  "artifact": 14094258684,
+  "source": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+  "runtime": "5a85900f571c389ff97e278a0b9555048bdeadec",
+  "original_zip_bytes": 23829148,
+  "original_zip_sha256": "bdf53f0eb21bf88397a14099f6a971460db1497104bcb799ae078b3d85c03561",
+  "scope": "full synthetic-test artifact; includes native DB/pages/WAL and mesh signing key files, not for public Git",
+  "storage": "persistent local outside repository; retained original bytes, no engine opened or repaired",
+  "inspection": "ZIPmembernames identify private material; key contents not rendered; hashing/CRC not secret absence proof",
+  "public_projection": "separate allowlisted logical evidence with explicit omission inventory",
+  "production_qualification": false
+}

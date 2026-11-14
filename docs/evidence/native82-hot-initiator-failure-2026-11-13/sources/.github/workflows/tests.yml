@@ -1,0 +1,439 @@
+name: tests
+
+# The reason this exists: three separate defects shipped in a single week
+# because nothing ran the test suite on a pull request. One of them was a
+# crate that did not compile. Reviewing diffs is not a substitute for
+# building them.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      core_filter:
+        description: 'Optional Core library substring for focused manual validation; empty selectors run every suite'
+        type: string
+        required: false
+        default: ''
+      pgwire_filter:
+        description: 'Optional PGwire library substring; mutually exclusive with other selectors'
+        type: string
+        required: false
+        default: ''
+      cli_target:
+        description: 'Optional CLI integration-test target for manual validation; requires empty core_filter'
+        type: string
+        required: false
+        default: ''
+      cli_failure_db_custody:
+        description: 'Opt in to bounded stopped native metadata CLI DB roots on failure; never TLS or quarantine uploads'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # GitHub's hosted runner has limited disk and memory. Eight simultaneous
+  # static links have produced SIGBUS failures, and building every workspace
+  # example before every matrix suite has exhausted the runner's disk.
+  # One linker at a time, no incremental object cache, and no debug symbols in
+  # CI keeps the complete suite below the runner's hard memory/disk ceilings.
+  CARGO_BUILD_JOBS: "1"
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  RUST_TEST_THREADS: "4"
+
+jobs:
+  validate-selectors:
+    name: Validate focused test selectors
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CORE_FILTER: ${{ inputs.core_filter }}
+      PGWIRE_FILTER: ${{ inputs.pgwire_filter }}
+      CLI_TARGET: ${{ inputs.cli_target }}
+      CLI_DB_CUSTODY: ${{ inputs.cli_failure_db_custody }}
+    steps:
+      - name: Reject incompatible or malformed selectors
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYCODE'
+          import os, re
+          values = {name: os.environ.get(name, '') for name in ('CORE_FILTER', 'PGWIRE_FILTER', 'CLI_TARGET')}
+          selected = [name for name, value in values.items() if value]
+          if len(selected) > 1:
+              raise SystemExit('Select at most one of core_filter, pgwire_filter and cli_target')
+          for name, value in values.items():
+              if value and (value.startswith('-') or len(value) > 512 or any(ord(c) < 32 or ord(c) == 127 for c in value)):
+                  raise SystemExit(f'{name} must be a bounded single-line substring, not an option')
+          if values['CLI_TARGET'] and not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_-]{0,127}', values['CLI_TARGET']):
+              raise SystemExit('CLI_TARGET must be a bounded Cargo integration-target name')
+          if os.environ.get('CLI_DB_CUSTODY') == 'true' and values['CLI_TARGET'] != 'native_metadata_operator_cli':
+              raise SystemExit('DB custody requires explicit manual native_metadata_operator_cli target')
+          print('Selected: ' + (selected[0] if selected else 'all broad suites'))
+          PYCODE
+
+  architecture:
+    name: Public repository has no private dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install boundary scanner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+      - name: Enforce open-core dependency direction
+        run: ./scripts/check-open-core-boundary.sh
+
+  build:
+    name: Community-only workspace compiles, tests included
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # --all-targets is the point: `cargo build` alone would not have caught
+      # bicdb-sql's unit tests failing to compile against a changed signature.
+      - name: cargo check --workspace --all-targets
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-workspace-pressure/alltargets.jsonl" -- cargo check --workspace --all-targets --locked
+      # Workspace feature unification enables TLS in Core. Check this actual
+      # consumer separately so TLS-only APIs cannot leak into its Core build.
+      - name: Workflow consumer compiles without Core defaults
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-workspace-pressure/consumer.jsonl" -- cargo check -p bicdb-workflow --all-targets --locked
+      - name: Retain qualification build pressure and interruption evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-workspace-pressure-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/native-workspace-pressure/
+
+  fmt:
+    name: Formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.96.0
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  licensing:
+    name: Licensing invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: scripts/validate-licensing.sh
+        run: ./scripts/validate-licensing.sh
+
+  test:
+    needs: validate-selectors
+    if: github.event_name != 'workflow_dispatch' || (inputs.core_filter == '' && inputs.cli_target == '' && inputs.pgwire_filter == '')
+    name: ${{ matrix.suite.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    # Message brokers for the connector tests (crates/bicdb-pgwire/tests/
+    # connectors.rs). Without these variables those tests skip themselves.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+      rabbitmq:
+        image: rabbitmq:3-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: bicdb
+          RABBITMQ_DEFAULT_PASS: bicdb-ci
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s
+          --health-timeout 10s
+          --health-retries 20
+    env:
+      BICDB_TEST_REDIS_URL: redis://127.0.0.1:6379
+      BICDB_TEST_AMQP_URL: amqp://bicdb:bicdb-ci@127.0.0.1:5672/%2f
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - name: bicdb-core
+            args: -p bicdb-core
+          # Multi-node native fixtures start three to five TLS nodes each and
+          # assert the product's real-time protocol budgets. Four of them at
+          # once on one runner measure runner contention, not the protocol,
+          # so they run one at a time in their own job. Nothing is skipped:
+          # this job and the parallel job together cover every Core test.
+          - name: bicdb-core native multi-node (serial)
+            args: -p bicdb-core --lib
+          - name: bicdb-sql
+            args: -p bicdb-sql
+          - name: bicdb-pgwire
+            args: -p bicdb-pgwire
+          - name: rest of workspace
+            args: >-
+              --workspace
+              --exclude bicdb-core
+              --exclude bicdb-sql
+              --exclude bicdb-pgwire
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install test-target scanner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+      - uses: actions/setup-node@v4
+        if: matrix.suite.name == 'rest of workspace'
+        with:
+          node-version: '22'
+      - uses: Swatinem/rust-cache@v2
+      # bicdb-core's projection chaos test deliberately refuses to run unless
+      # its out-of-process crash helper exists. No other suite needs the full
+      # workspace's examples, so build exactly that helper in the core job.
+      - name: Build projection chaos helper
+        if: startsWith(matrix.suite.name, 'bicdb-core')
+        run: cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
+      - name: cargo test ${{ matrix.suite.args }}
+        if: matrix.suite.name == 'bicdb-pgwire'
+        run: cargo test ${{ matrix.suite.args }} --locked -- --test-threads=4
+      - name: cargo test bicdb-core without the serial native multi-node fixtures
+        if: matrix.suite.name == 'bicdb-core'
+        run: >-
+          cargo test --config 'profile.dev.package."*".opt-level=2' ${{ matrix.suite.args }} --locked -- --test-threads=4
+          --skip distribution_native_host::
+          --skip range_image_native::rf3_fixture::
+      - name: cargo test bicdb-core native multi-node fixtures one at a time
+        if: matrix.suite.name == 'bicdb-core native multi-node (serial)'
+        run: >-
+          cargo test --config 'profile.dev.package."*".opt-level=2' ${{ matrix.suite.args }} --locked --
+          distribution_native_host:: range_image_native::rf3_fixture::
+          --test-threads=1
+      - name: cargo test bicdb-sql with bounded linked artifacts
+        if: matrix.suite.name == 'bicdb-sql'
+        run: ./scripts/run-cargo-test-targets-bounded.sh bicdb-sql
+      - name: cargo test remaining workspace with bounded linked artifacts
+        if: matrix.suite.name == 'rest of workspace'
+        run: >-
+          python3 scripts/platform/run_workspace_tests_bounded.py
+          --exclude bicdb-core --exclude bicdb-sql --exclude bicdb-pgwire
+      - name: Cluster harness and offline queue contracts
+        if: matrix.suite.name == 'rest of workspace'
+        run: |
+          python3 -m unittest discover -s scripts/platform -p 'test_*.py'
+          python3 -m unittest discover -s examples/oracle/hr -p 'test_*.py'
+          python3 -m unittest discover -s examples/oracle/reference -p 'test_*.py'
+          python3 examples/oracle/hr/prepare.py --check
+          node --test examples/platform/notebook/*.test.mjs
+
+  focused-core:
+    needs: validate-selectors
+    name: Focused Core library (${{ inputs.core_filter }})
+    if: github.event_name == 'workflow_dispatch' && inputs.core_filter != '' && inputs.cli_target == '' && inputs.pgwire_filter == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      BICDB_CORE_TEST_FILTER: ${{ inputs.core_filter }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build projection chaos helper
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-core-evidence/helper-pressure.jsonl" -- cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
+      - name: Record source and list selected Core library tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$BICDB_CORE_TEST_FILTER" in
+            -*) echo 'A test substring cannot begin with an option prefix' >&2; exit 2 ;;
+          esac
+          mkdir -p "$RUNNER_TEMP/native-core-evidence"
+          git rev-parse HEAD > "$RUNNER_TEMP/native-core-evidence/source-revision.txt"
+          rustc --version --verbose > "$RUNNER_TEMP/native-core-evidence/rustc.txt"
+          python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-core-evidence/list-pressure.jsonl" -- \
+            cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --list \
+            2>&1 | tee "$RUNNER_TEMP/native-core-evidence/selected-tests.log"
+          python3 - <<'PY'
+          import os, pathlib
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'native-core-evidence' / 'selected-tests.log'
+          count = sum(line.endswith(': test') for line in path.read_text().splitlines())
+          expected = ['distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_assigned_policy_requires_image', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_durable_invalidation_is_not_unknown_absence', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_foreign_database_refused', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_nonleader_rpc_initiator_refused', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_receiver_stop_refused', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_sink_fsync_then_original_cancel_retains_refusal', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_sink_io_unknown_exact_live_refsync', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_store_slot_restore_refused', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_captured_original_caller_cancel_refused', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_generic_ingress_stays_strict', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_original_empty_hook_aba_refused', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_baseline', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::placement_cases::native_registered_fifth_placement_actual_metadata_leader_can_initiate', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::placement_cases::native_registered_fifth_placement_actual_planner_retiree_is_not_initiator', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_first_policy_real_caller_expiry_fresh_same_xid', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_original_client_ack_and_full_strong', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_decision_commit_retains_xid_refuses_vote', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_policy_readback_refuses_hook', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_before_decision_first_put_refuses_vote', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_store_slot_replacement_refuses', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_lost_committed_decision_reply_same_native_attempt', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_actual_close_fetch_cut_and_source_tls_without_local_quorum', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_collector_actual_fresh_final_mq_after_observation_expiry', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_collector_actual_original_caller_cancellation_refuses', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_collector_actual_original_donor_revocation_refuses', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_collector_actual_selected_plan_phase_change_refuses', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_collector_actual_unrelated_metadata_advance_is_allowed', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_constraint_only_guarded_capture_is_not_closed_vote', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_post_native_cancel_retains_outcome_and_exact_fresh_retry', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_source_actual_hook_revoked_after_promise_before_native_wal', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_source_actual_session_cancel_preserves_issued_facts_target_closed', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_source_actual_tls_history_rows_seal_local_old_seed', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_current_plan_revocation_refuses', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_exact_request_conflict_refuses', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_lost_reply_same_session', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_original_process_revocation_before_capture', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_start_describe_and_frames', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_wrong_actor_before_capture', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::catalogue_tests::native_registered_fifth_remote_catalogue_floor_actual_missing_native_base_refuses', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::catalogue_tests::native_registered_fifth_remote_catalogue_floor_actual_native_base_and_catalogue_match', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::catalogue_tests::native_registered_fifth_remote_catalogue_floor_actual_post_fsync_cancel_same_native_base_retry', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::catalogue_tests::native_registered_fifth_remote_catalogue_floor_actual_repeated_directory_eio_same_candidate', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_abort_sync_failure_never_replaces_poisoned_owner', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_commit_sync_unknown_never_replaces_owner', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_proven_abort_budget_exhaustion_retains_every_owner', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_integrity_survives_image_invalidation', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_post_wal_cancel_reconciles_same_xid', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_preserves_verified_history_floor', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_refuses_without_live_final_image', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_commit_same_xid_resumes', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_successful_put_proven_abort_same_a_resumes', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_before_put_proven_abort_same_a_resumes', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_registered_fifth_remote_final_image_actual_historical_integrity_uses_immutable_header_archive', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_registered_fifth_remote_final_image_actual_independent_scan_and_native_receipt', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_registered_fifth_remote_final_image_actual_missing_physical_row_is_not_hidden_by_import_hash', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_registered_fifth_remote_final_image_actual_post_wal_cancel_reconciles_same_xid', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_registered_fifth_remote_final_image_actual_refuses_without_independent_target_scan', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_image_tests::native_registered_fifth_remote_image_actual_durable_row_cancel_same_tx_fresh_progress', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_image_tests::native_registered_fifth_remote_image_actual_inner_durable_apply_failure_retains_pending', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_image_tests::native_registered_fifth_remote_image_actual_pre_wal_caller_revoked_same_tx_retry', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_image_tests::native_registered_fifth_remote_image_actual_rows_refuse_without_stored_history_audit', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_image_tests::native_registered_fifth_remote_image_actual_stored_history_rows_beyond_b0_preserve_other_range', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_after_fsync_cancel_fresh_same_attempt', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_catalogue_same_owner_preserves_rows', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_directory_sync_error_retries_exact_catalogue', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_actual_no_domain_preserves_all_state', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_no_domain_actual_mstore_term_change_refuses', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_no_domain_actual_schema_generation_revokes', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_no_domain_original_hook_aba_refuses', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_post_wal_cancel_fresh_retry_same_xid', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_pre_wal_caller_revocation_preserves_data', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_pre_wal_hook_aba_preserves_data', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_reader_flag_dir_sync_failure_retry', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_wal_current_archive_preserve_data', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_actual_callback_arc_blocks_then_fresh_retry', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_actual_cancellation_before_rotation_preserves_n', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_actual_hook_aba_before_rotation_preserves_n', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_unique_runtime_owner_preserves_data']
+          actual = [line[:-6] for line in path.read_text().splitlines() if line.endswith(': test')]
+          if count != 82 or sorted(actual) != expected:
+              raise SystemExit('Qualification must select exactly all 82 compiler-listed native_registered_fifth_ cases, including eleven existing macro-generated controls')
+          print(f'Selected {count} Core library tests; ignored tests remain identified by the execution result')
+          PY
+      - name: Execute selected Core native library tests serially
+        shell: bash
+        run: |
+          set -euo pipefail
+          export BICDB_TEST_EVIDENCE_ROOT="$RUNNER_TEMP/native-core-evidence/fault-state"
+          export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
+          mkdir -p "$BICDB_TEST_EVIDENCE_ROOT"
+          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=1 --show-output \
+            2>&1 | tee "$RUNNER_TEMP/native-core-evidence/tests.log"
+      - name: Retain focused source, log and opted-in fault-state evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: focused-core-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/native-core-evidence/
+
+  focused-cli:
+    needs: validate-selectors
+    name: Focused CLI integration (${{ inputs.cli_target }})
+    if: github.event_name == 'workflow_dispatch' && inputs.cli_target != '' && inputs.core_filter == '' && inputs.pgwire_filter == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      BICDB_CLI_TEST_TARGET: ${{ inputs.cli_target }}
+      BICDB_CAPTURE_CLI_DB_FAILURE: ${{ inputs.cli_failure_db_custody }}
+      RUST_TEST_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Record exact source and list CLI integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/native-cli-evidence"
+          git rev-parse HEAD > "$RUNNER_TEMP/native-cli-evidence/source-revision.txt"
+          git show --no-patch --format=fuller HEAD > "$RUNNER_TEMP/native-cli-evidence/source-commit.txt"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/native-cli-evidence/tracked-source.tar.gz" HEAD
+          rustc --version --verbose > "$RUNNER_TEMP/native-cli-evidence/rustc.txt"
+          if [[ ! "$BICDB_CLI_TEST_TARGET" =~ ^[A-Za-z0-9_][A-Za-z0-9_-]{0,127}$ ]]; then
+            echo 'CLI target must be a bounded Cargo integration-target name, not an option/path' >&2
+            exit 2
+          fi
+          printf '%s\n' "$BICDB_CLI_TEST_TARGET" > "$RUNNER_TEMP/native-cli-evidence/cli-target.txt"
+          cargo test -p bicdb-cli --test "$BICDB_CLI_TEST_TARGET" --locked -- --list \
+            2>&1 | tee "$RUNNER_TEMP/native-cli-evidence/selected-tests.log"
+          python3 - <<'PYCODE'
+          import os, pathlib
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'native-cli-evidence' / 'selected-tests.log'
+          count = sum(line.endswith(': test') for line in path.read_text().splitlines())
+          if count == 0:
+              raise SystemExit('The requested CLI integration target selected no tests')
+          print(f'Selected {count} CLI integration tests; actual execution remains required')
+          PYCODE
+      - name: Execute CLI integration target serially
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No BICDB_TEST_EVIDENCE_ROOT: generated TLS/DB fixture directories
+          # stay private and are deliberately outside this uploaded subtree.
+          export BICDB_TEST_CLI_EVIDENCE_ROOT="$RUNNER_TEMP/native-cli-evidence/failure-diagnostics"
+          export BICDB_TEST_CLI_RPC_EVIDENCE_ROOT="$RUNNER_TEMP/native-cli-evidence/rpc-journals"
+          if [[ "$BICDB_CAPTURE_CLI_DB_FAILURE" == 'true' ]]; then
+            export BICDB_TEST_CLI_DB_EVIDENCE_ROOT="$RUNNER_TEMP/native-cli-db-custody"
+            mkdir -p "$BICDB_TEST_CLI_DB_EVIDENCE_ROOT"
+          fi
+          export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
+          cargo test -p bicdb-cli --test "$BICDB_CLI_TEST_TARGET" --locked -- --nocapture --test-threads=1 \
+            2>&1 | tee "$RUNNER_TEMP/native-cli-evidence/tests.log"
+          python3 - <<'PYCODE'
+          import os, pathlib, re
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'native-cli-evidence' / 'tests.log'
+          results = re.findall(r'test result: (?:ok|FAILED)\. (\d+) passed; (\d+) failed;', path.read_text())
+          if sum(int(passed) + int(failed) for passed, failed in results) == 0:
+              raise SystemExit('CLI target ran no non-ignored tests')
+          PYCODE
+      - name: Retain exact tracked source and full CLI logs only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: focused-cli-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/native-cli-evidence/
+
+      - name: Retain explicitly opted-in stopped native databases only
+        if: always() && inputs.cli_failure_db_custody
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-cli-stopped-databases-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: warn
+          # Exact subtree only. Private .native-cli-db-quarantine siblings and
+          # generated fixture TLS roots are deliberately OUTSIDE this path.
+          path: ${{ runner.temp }}/native-cli-db-custody/
+
+  focused-pgwire:
+    name: Focused PGwire library (${{ inputs.pgwire_filter }})
+    needs: validate-selectors
+    if: github.event_name == 'workflow_dispatch' && inputs.pgwire_filter != '' && inputs.core_filter == '' && inputs.cli_target == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      BICDB_PGWIRE_TEST_FILTER: ${{ inputs.pgwire_filter }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Record exact source and list selected PGwire library tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pgwire-library-evidence"
+          git rev-parse HEAD > "$RUNNER_TEMP/pgwire-library-evidence/source-revision.txt"
+          git show --no-patch --format=fuller HEAD > "$RUNNER_TEMP/pgwire-library-evidence/source-commit.txt"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/pgwire-library-evidence/tracked-source.tar.gz" HEAD
+          rustc --version --verbose > "$RUNNER_TEMP/pgwire-library-evidence/rustc.txt"
+          printf '%s\n' "$BICDB_PGWIRE_TEST_FILTER" > "$RUNNER_TEMP/pgwire-library-evidence/test-filter.txt"
+          cargo test -p bicdb-pgwire --lib --locked "$BICDB_PGWIRE_TEST_FILTER" -- --list \
+            2>&1 | tee "$RUNNER_TEMP/pgwire-library-evidence/selected-tests.log"
+          python3 - <<'PYCODE'
+          import os, pathlib
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pgwire-library-evidence' / 'selected-tests.log'
+          count = sum(line.endswith(': test') for line in path.read_text().splitlines())
+          if count == 0:
+              raise SystemExit('The requested PGwire filter selected no tests')
+          print(f'Selected {count} PGwire library tests; actual execution remains required')
+          PYCODE
+      - name: Execute selected PGwire library tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
+          cargo test -p bicdb-pgwire --lib --locked "$BICDB_PGWIRE_TEST_FILTER" -- --test-threads=4 --show-output \
+            2>&1 | tee "$RUNNER_TEMP/pgwire-library-evidence/tests.log"
+          python3 - <<'PYCODE'
+          import os, pathlib, re
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pgwire-library-evidence' / 'tests.log'
+          results = re.findall(r'test result: (?:ok|FAILED)\. (\d+) passed; (\d+) failed;', path.read_text())
+          if sum(int(passed) + int(failed) for passed, failed in results) == 0:
+              raise SystemExit('PGwire filter ran no non-ignored tests')
+          PYCODE
+      - name: Retain exact source and full PGwire library logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: focused-pgwire-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          include-hidden-files: true
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/pgwire-library-evidence/

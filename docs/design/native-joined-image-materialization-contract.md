@@ -1,0 +1,192 @@
+# Existing Joined: concrete image materialization boundary
+
+Source reviewed: `818a8f4cd125505bbb2981d7b55608eb5a663a7e` and its inherited
+corrected transfer branch `d47d4edf2ace1e6b7dda4c36978525c34584eefa`.
+This is the implementation contract for the remaining A engine, not implemented
+history/row/base/catalogue capability or qualification evidence. The a78
+composition's compile/fence run does not execute these future operations.
+
+## Existing producers that must remain distinct
+
+`joined_data/receive/attempt.rs` already retains the exact preflight and actual
+A in the original Joined host before later native work. Its proposal v2 and
+catalogue-18 Installing result bind the original writer, selected preimage,
+actual source Manifest/attempt/session, native/open/Store and fresh requests.
+They do not import rows or admit ordinary writes for the selected range.
+
+`registered_remote_image.rs::NativeRegisteredRemoteImageContext` and
+`writer_enrollment/registered_remote_mutation.rs` require the Registered
+never-writer hook and FIRST ancestry. They cannot be constructed for Joined.
+The new context must remain `NativeJoinedRemoteImageContext`, borrowing the
+actual Joined attempt scope and Installing fence. It may share pure wire/hash
+helpers with Registered, but cannot construct or alias a Registered context,
+NoDomain proof, local source lineage, OLD quorum, or ordinary writer grant.
+
+The new context rechecks actual original State/hook, source frame, fresh
+Role/OWN/member/current local version, selected A, proposal CURRENT/archive/xid,
+and the actual selected Installing fence. Each operation obtains its own
+finite request. Local version remains a local fence, not a metadata lease.
+After a native base write, it may recognize only that exact owned base boundary;
+it must not generally waive the original native lower-bound obligations.
+
+## History and actual pending rows
+
+The host must retain `NativeJoinedRemoteImageInstallation` before allocating a
+new history generation or issuing native writes. History frames come from the
+actual authenticated source and are bound to the existing Manifest and A.
+The source's R/H0/H, chain, cursor and complete history audit must all agree.
+A new Joined history header must carry the Joined proposal pointer directly;
+casting it to NativeRegisteredRemoteProposalPointer would lose provenance.
+A distinct header/version/namespace can share bounded wire validation helpers
+while preserving the existing Registered header's bytes and validators.
+
+A pending row step retains the exact source step, original logical Transaction,
+mutation hash, original native intent xid and next protected progress before
+any relevant WAL. Every native transaction records its issued xid at closure
+entry before cancellation, framing or readback can fail, including history,
+intent, progress and final publication. An incomplete begin cannot become an
+unrecorded fresh transaction on the next call. Proven-abort retry, if supplied,
+requires a separate actual healthy-storage/abort proof and preserves attempts.
+
+`registered_remote_image/rows.rs::RowPending` supplies the retention pattern:
+its own actual NativeWalRetentionPin survives transaction consumption until
+committed protected progress. Joined must retain that same kind of actual pin
+before native intent publication and share it with the original Transaction.
+It cannot release it merely because logical apply returned or pending writes
+became empty.
+
+The restrictive pending-row index is DATA, not a Registered authority grant.
+Its present fields bind database-open/native birth, Manifest/A/range/history,
+step, logical TxID, exact mutations hash and native intent xid. Reusing this
+strict DATA schema is acceptable only with exact Joined context/provenance
+checks and the new reader fence. A different namespace/profile must update its
+key resolver explicitly; writing an unindexed Joined intent is forbidden.
+Insert debt in the SAME native transaction as the intent, and delete it in the
+SAME native transaction as committed row progress. Unknown/malformed debt is
+not empty, including at startup and logical-WAL cut paths.
+
+`NativeJoinedRemoteRowTransactionGrant` must have a private constructor in the
+actual Joined context. It binds the lexical weak scope lifetime, original
+request and source callback, actual native proposal/Installing/history/intent,
+range claim, original logical TxID and exact mutations hash. No boolean or
+imported_projection flag constructs this grant. The commit paths in
+`db.rs::Transaction`, `spatial_paged.rs::commit_transaction_inner`, and
+`certified_prefix.rs::require_native_transaction_mutation_scope` must validate
+it independently, retain WalDurablePendingApply immediately at actual logical
+WAL durability, and retain AppliedKnown at actual visibility before finalizers.
+A WalDurablePendingApply error is uncertainty requiring the original attempt;
+it is not rollback or permission to create another Transaction.
+
+Every imported write must hash into the selected range using the ordinary
+namespace/key routing function. It maps into existing target namespaces and
+uses normal record/index maintenance; it does not replace the database or
+clear unrelated records/indexes. Existing global uniqueness or schema conflicts
+must produce explicit errors, not be suppressed to make copying pass.
+
+`spatial_paged.rs` already suppresses new sync/audit side effects when a genuine
+import transaction has imported_projection, while maintaining actual records
+and indexes. Joined needs the same narrowly granted import behavior, memory-job
+suppression, and retained source audit data where the real image contract
+includes it. This does not establish transparent migration of queues, broker
+receipts, internal audit stores or FTS parity. Those need their actual data
+contracts and independent reconciliation.
+
+## Final image, physical base and selected catalogue
+
+Independent bounded target scanning must reconcile full selected payloads and
+count/byte/content hashes against the actual source Finished seal. It records
+an actual positive target database watermark after row application, with source
+and target B domains separate. Unrelated business B may advance. The selected
+native image generation, schema/namespace lineage and index definitions must
+remain valid. If existing unrelated writes invalidate the selected proof,
+retain the failure; do not relax the proof or call one-range evidence enough.
+Definition equality alone is not independent index/FTS contents parity.
+
+The resulting private `NativeJoinedRemoteFinalImageReceipt` binds actual
+history and committed row headers, source seal, Joined proposal, target scan,
+namespace/index definitions and original State/open/birth/A. Publication retains
+every original native xid/outcome before puts and proves CURRENT/archive and
+committed status. It remains physical evidence without a read or writer grant.
+
+`range_image_install.rs::NativeInstalledRangeImageReceipt` currently recognizes
+only local profile 1 and Registered profile 2. A Joined base must have a distinct
+profile with a Joined final-image pointer. Old profiles remain strict; no fake
+Registered pointer or local-source finalization. Its physical reader and
+history validator dispatch must explicitly recognize Joined provenance and
+refuse unknown/mixed profiles. The existing node-local reader fence must be
+durable before those bytes. This profile change is not implemented by the
+proposal/Installing source batch.
+
+`JoinedRemoteBaseBoundary` retains the exact original candidate/xid/bytes and
+actual publication request. A fresh genuine request may reconcile that same
+committed base after request expiry; it cannot renew the old request, substitute
+new native bytes, or ignore an unowned prefix/pending/genesis obligation.
+Only that actual result yields NativeInstalledRangeImageBase.
+
+`NativeJoinedRemoteCataloguePublication` derives its first catalogue candidate
+from current state after validating the selected Installing/base/final/native
+obligations. It retains exact bytes before I/O, preserves uncertainty, and never
+replays an old whole catalogue over unrelated progress. Once successful,
+`NativeJoinedRemoteCatalogueMaterialization` follows the selected actual base,
+log, refusal, intent and disk/current-memory equality. It does not supply
+ordinary writes or Strong reads. This extends the selected Installing rule to
+actual native floor adoption, not an exception to durability requirements.
+
+## Opaque materialized owner consumed by Root's next phase
+
+Only after complete actual history/rows, verified final, same physical base,
+and durable selected catalogue may the original host retain a
+`NativeJoinedRemoteMaterializedOwner`. Constructor and fields stay private.
+The host must retain it infallibly before any lease transfer or later fallible
+NEW work. It exposes only actual borrowed evidence:
+
+- exact original writer-State Arc, preflight, service/runtime identity;
+- original retained A/freeze and its actual runtime retention check;
+- source Manifest, capture/activation descriptors and intended member births;
+- protected Joined final/base/catalogue receipts and their checksums;
+- require_current under an actual Joined scope and fresh request.
+
+These are exact owner/evidence accessors, not a constructor for permission.
+No Installed-domain require_range for the new range is allowed before actual
+NEW, dual decision, metadata/Open and ALL release. Root's distinct
+NativeJointWriterDomain::Joined and phase owner must consume that genuine
+materialized owner, preserving the original dispatcher/hook/coordinator and
+per-request Strong barriers. The runtime keeps its existing strong A/preflight
+custody; a materialized owner containing a Runtime lease must not be added as a
+strong backedge into that same runtime.
+
+## Smallest actual acceptance controls
+
+Run the unchanged original fixed-gateway SDK and ordinary routing/hash function.
+Keep original budgets, assertions, and every ACK/uncertain/failed/retried call.
+Internal copy transactions and metadata commits are not application ACKs.
+
+1. Complete genuine first-range Serving, write and full-Strong-read R1, then
+   receive the genuinely populated second range into that SAME Joined DB.
+   Between bounded R2 history/row/scan/progress phases, require ordinary R1 APP
+   and full Strong reads through the same gateway; reconcile original IDs and
+   payload hashes plus selected range/epoch/current owner evidence.
+2. Advance unrelated R1 business/WAL/index state during R2 receive. Verify its
+   new ACK and full Strong payload and continue the SAME R2 A/cursor. Separately
+   advance actual unrelated metadata configuration, require stale request
+   refusal, then use fresh genuine paired Role/OWN/member evidence with the
+   unchanged selected plan and original retained attempt.
+3. Inject actual selected catalogue rename/directory-sync/readback failure.
+   Preserve exact pending candidate/bytes; a changed unrelated catalogue must
+   not be overwritten. Same-candidate real re-fsync can continue only after
+   actual proof. Native proposal xid and source/A must remain unchanged.
+4. Cancel the real request after native begin but before framing, and separately
+   fail abort cleanup. Preserve the issued native xid and exact outcome/health;
+   a fresh call cannot silently allocate another xid. Repeat at row-intent,
+   logical-WAL durability and protected progress boundaries as those producers
+   become available.
+5. SIGKILL an actual child after row AppliedKnown but before protected progress;
+   preserve stopped custody and exact WAL/index. Fresh open must refuse before
+   generic replay/outbox/cut if unresolved debt remains. This is preservation,
+   not cold self-healing, until a genuine original-outcome recovery producer is
+   implemented and independently tested.
+
+Actual stalled selected disk I/O, second Joined activation/replacement,
+Joined becoming a future donor, cold self-healing, and multi-host automatic
+scale-out/throughput remain separate acceptance gates. A source-defined test,
+passing primitive control, or complete physical copy cannot close them.

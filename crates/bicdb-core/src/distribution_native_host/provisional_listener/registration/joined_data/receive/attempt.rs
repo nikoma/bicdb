@@ -232,7 +232,7 @@ impl NativeJoinedRemoteImagePoint<'_> {
         self.require_live()?;
         Ok(NativeJoinedRemoteTransactionRequest {
             preflight: self.preflight.clone(),
-            role: self.request.role.role().retain_original(),
+            role: self.request.role.retain_original(),
             own: self.request.own.clone(),
             member: self.request.member.clone(),
             business: self.request.business,

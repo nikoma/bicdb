@@ -165,7 +165,7 @@ impl NativeJoinedRemoteCataloguePublication {
         if !std::ptr::eq(self.preflight.as_ref(), preflight)
             || store.open_id != self.store_open
             || db.incarnation_id() != self.database_open
-            || db.native_abort_catalogue_store_id() != Some(self.catalogue_id)
+            || db.native_abort_catalogue_store_id()? != Some(self.catalogue_id)
             || db.data_path().canonicalize()? != store.root.canonicalize()?
             || !store.fsync
             || !store.catalogue_loaded_at_open
@@ -464,7 +464,7 @@ impl NativeJoinedRemoteCatalogueMaterialization {
             .ok_or_else(|| range_write_error("Joined selected materialized floor absent"))?;
         if store.open_id != self.store_open
             || db.incarnation_id() != self.database_open
-            || db.native_abort_catalogue_store_id() != Some(self.catalogue_id)
+            || db.native_abort_catalogue_store_id()? != Some(self.catalogue_id)
             || store.catalog.native_image_bases.get(&self.base.range_id) != Some(&self.base)
             || log.last_index != self.base.range_index
             || log.resolved_through != self.base.range_index

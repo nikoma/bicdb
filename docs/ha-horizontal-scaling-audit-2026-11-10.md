@@ -18,8 +18,8 @@ records the assembled native range-recovery candidate, original failed cohorts,
 source defects and unexecuted successors. The delivered baseline at its cutoff
 is **1.0.506-beta**, `6c432f6aaf59ef88252a6a559d400b2946b1bc13`; all required
 checks passed for that documentation/evidence and CLI-prerequisite merge.
-The 508 candidate is not yet compiled, runtime-qualified, merged or deployed at
-this review cutoff. Historical evidence below must not be reused as a test of
+The first 508 required-CI head failed compilation; its corrections remain
+under validation. It is not runtime-qualified, merged or deployed at this cutoff. Historical evidence below must not be reused as a test of
 that changed runtime. The failed Azure qualification and the open SQL,
 controller, repeated-movement and physical scaling gates remain unchanged.
 

@@ -160,7 +160,16 @@ pub(crate) fn retain_record(bytes: &mut usize, record: &crate::Record) -> Result
     if !active() {
         return Ok(());
     }
-    let size = record
+    let size = materialized_record_bytes(record)?;
+    *bytes = bytes.saturating_add(size);
+    observe(*bytes);
+    check()
+}
+
+/// The existing cooperative record estimate, also usable by bounded caches.
+/// This estimates one materialized body; Arc references do not duplicate it.
+pub(crate) fn materialized_record_bytes(record: &crate::Record) -> Result<usize> {
+    Ok(record
         .id
         .len()
         .saturating_add(
@@ -175,10 +184,7 @@ pub(crate) fn retain_record(bytes: &mut usize, record: &crate::Record) -> Result
                 .as_ref()
                 .map_or(0, |v| v.len().saturating_mul(4)),
         )
-        .saturating_add(std::mem::size_of::<crate::Record>() + 128);
-    *bytes = bytes.saturating_add(size);
-    observe(*bytes);
-    check()
+        .saturating_add(std::mem::size_of::<crate::Record>() + 128))
 }
 
 pub fn parse_duration(value: &str) -> Option<std::time::Duration> {

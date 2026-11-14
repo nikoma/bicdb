@@ -1,0 +1,25 @@
+{
+  "schema": "bicdb-source-integration-receipt-v1",
+  "ha_parent": "d473805a23cda661aefb10ca8a597ebb8c91a6a0",
+  "memo_parent": "c2000839e7d47e69e29b3a9b3a527d1dd911323d",
+  "source_version": "1.0.510-beta",
+  "review": {
+    "path": "memo509-ha510-staged-merge-independent-source-review.json",
+    "bytes": 13504,
+    "sha256": "3547ff543328f839c12ca3f6a43383bdf15e975955e3d9828172ee29a09bf3e9"
+  },
+  "conflict_resolution": {
+    "version_only_files": 34,
+    "proof": "completeincomingfile normalized509to510 byte-equalours beforeselectingours; includescurrent-source compatibilitydoc",
+    "source": "PagedRecords field adjacency retains opened_directory/canonical initializer and raw_row_capability_issued/false initializer"
+  },
+  "version_validation": "official --check29packages510passed; candidate510versionwasalreadybumped byofficialscript; same-versionbump attempt correctlyrefusedwithoutchanges",
+  "classification": "preintegrated candidate source only; no runtime execution, product binary, source-main delivery or deployment",
+  "remaining_gates": [
+    "memo509 own required CI and original Node acceptance",
+    "verify and integrate actual delivered509main tree",
+    "HA510 corrected-head required CI/application tests",
+    "native controller/Joined pipeline/cold recovery",
+    "independent physical4to5 convergence+externalledger+stable throughput"
+  ]
+}

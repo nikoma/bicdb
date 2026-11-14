@@ -86,6 +86,9 @@ pub fn paged_live_count_walks_on_this_thread() -> u64 {
 pub struct PagedRecords {
     store: Arc<PagedStore>,
     opened_directory: PathBuf,
+    // Sticky per actual open. A raw capability can outlive its outer BicDb
+    // guard and clones cannot be revoked. Never reset when a handle is dropped.
+    raw_row_capability_issued: std::sync::atomic::AtomicBool,
     /// Opt-in zstd compression for newly written record values.
     value_compression: std::sync::atomic::AtomicBool,
     index_aliases: parking_lot::RwLock<BTreeMap<String, String>>,
@@ -268,6 +271,7 @@ impl PagedRecords {
             opened_directory: std::fs::canonicalize(dir)?,
             value_compression: std::sync::atomic::AtomicBool::new(false),
             store: Arc::new(store),
+            raw_row_capability_issued: std::sync::atomic::AtomicBool::new(false),
             index_aliases: parking_lot::RwLock::new(aliases),
             collection_aliases: parking_lot::RwLock::new(FxHashMap::default()),
             has_collection_aliases: std::sync::atomic::AtomicBool::new(false),
@@ -275,6 +279,16 @@ impl PagedRecords {
             fts_segments: parking_lot::RwLock::new(FxHashMap::default()),
             fts_segments_root: dir.join("fts-segments"),
         })
+    }
+
+    pub(crate) fn mark_raw_row_capability_issued(&self) {
+        self.raw_row_capability_issued
+            .store(true, std::sync::atomic::Ordering::Release);
+    }
+
+    pub(crate) fn raw_row_capability_issued(&self) -> bool {
+        self.raw_row_capability_issued
+            .load(std::sync::atomic::Ordering::Acquire)
     }
 
     pub fn store(&self) -> &Arc<PagedStore> {

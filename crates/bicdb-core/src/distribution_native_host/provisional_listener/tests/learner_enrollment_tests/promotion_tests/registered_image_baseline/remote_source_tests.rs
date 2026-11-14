@@ -111,6 +111,8 @@ pub(super) enum SourceCase {
     TargetPreparedCandidateExpiredOwn,
     TargetPreparedCandidateMissingArchive,
     TargetPreparedCandidateCanceledCaller,
+    TargetPublicationClosedArchiveAfterScope,
+    TargetPublicationMiddleHistoryAfterScope,
     TargetCollectionForeignArchive,
     TargetCollectionLocalArchive,
     TargetCollectionProducerCanceled,

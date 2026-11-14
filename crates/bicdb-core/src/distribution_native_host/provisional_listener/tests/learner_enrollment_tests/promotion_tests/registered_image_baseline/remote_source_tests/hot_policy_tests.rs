@@ -15,9 +15,11 @@ mod collection_binding_tests;
 mod fresh_collection_tests;
 mod new_decision_round_tests;
 mod prepared_candidate_tests;
+mod publication_scope_tests;
 
 pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
-    prepared_candidate_tests::is_case(case)
+    publication_scope_tests::is_case(case)
+        || prepared_candidate_tests::is_case(case)
         || collection_binding_tests::is_case(case)
         || fresh_collection_tests::is_case(case)
         || new_decision_round_tests::is_case(case)
@@ -840,6 +842,17 @@ pub(in super::super) fn exercise(
         let admission = phase
             .acquire_local_activation(&all_clients[i], &node(0))
             .unwrap();
+        if publication_scope_tests::is_case(case) {
+            publication_scope_tests::exercise(
+                case,
+                &admission,
+                &mut publication,
+                services,
+                process,
+                output,
+            );
+            return;
+        }
         if collection_binding_tests::is_case(case) {
             collection_binding_tests::exercise(
                 case,

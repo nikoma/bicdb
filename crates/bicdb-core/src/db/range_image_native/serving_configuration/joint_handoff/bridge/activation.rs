@@ -990,6 +990,8 @@ impl BicDb {
 
         let scope =
             prepared.publication_read_scope(self, store, original, catalogue, image, frozen)?;
+        #[cfg(all(test, feature = "tls-replication"))]
+        super::publication_scope::test_controls::after_scope(&scope, parent)?;
         admission.require_local_publication_scope(&scope, store)?;
         admission
             .committed()

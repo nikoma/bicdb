@@ -213,6 +213,38 @@ pub(crate) struct NativeClosedWriterDomain {
     survivor_frozen: Option<Weak<crate::distribution_range_mutation::FrozenRangeMutationPermit>>,
 }
 impl NativeClosedWriterDomain {
+    /// Test-owned corruption of the exact original protected archive, while
+    /// the caller holds this genuine scope/journal and Controlled admission.
+    #[cfg(test)]
+    pub(in crate::db::range_image_native) fn test_remove_archive_after_scope(
+        &self,
+        scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
+        controlled: &crate::distribution_range_mutation::ControlledFrozenMutationPermit,
+        parent: &CancellationToken,
+    ) -> Result<u64> {
+        let db = scope.database();
+        parent.check()?;
+        let archive_key = archive(self.writer.record.generation, self.record.sequence);
+        let original: ClosedDomainRecord = db
+            .read_native_range_image_record(&archive_key)?
+            .ok_or_else(|| invalid("test scope original CLOSED archive missing"))?;
+        if original != self.record {
+            return Err(invalid("test scope CLOSED archive differs from original"));
+        }
+        db.range_mutation_gate().validate(
+            self.data().old_range().id,
+            &crate::distribution_range_mutation::RangeMutationAuthority::Controlled(controlled),
+        )?;
+        db.in_paged_transaction(|paged, xid| {
+            parent.check()?;
+            paged
+                .store()
+                .delete(xid, &native_key(&archive_key))
+                .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
+            Ok(())
+        })?
+        .ok_or_else(|| invalid("test scope page store absent"))
+    }
     #[cfg(test)]
     pub(crate) fn test_closed_record_evidence(&self) -> Result<serde_json::Value> {
         Ok(serde_json::to_value(&self.record)?)

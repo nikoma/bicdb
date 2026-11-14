@@ -27,8 +27,9 @@ pub(in crate::db::range_image_native) use joint_handoff::{
 pub(crate) use joint_handoff::{
     NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
     NativeJointDecisionReceipt, NativeJointHistoricalCutScope, NativeJointOldCloseReceipt,
-    NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
-    NativeJointServingBridgeReceipt, NativeJointServingPreparation,
+    NativeJointOldCloseRecordData, NativeJointOldPhysicalProof,
+    NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
+    NativeJointServingPreparation,
 };
 
 #[cfg(test)]

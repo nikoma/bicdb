@@ -119,6 +119,12 @@ impl NativeRemoteOldRound {
             &closed.logical_history_sha256,
             &self.original_caller,
         )?;
+        let record = reply
+            .closed_native_record
+            .as_ref()
+            .ok_or_else(|| invalid("remote OLD closed frame lacks exact original native record"))?;
+        record.require_materialized_facts(closed)?;
+        record.require_plan(plan)?;
         let constraints = &reply.constraints;
         if constraints.scope_sha256 != plan.checksum_sha256()?
             || constraints.node_id != reply.node_id
@@ -170,6 +176,17 @@ impl NativeRemoteOldRound {
             || !self.peers.contains_key(self.source.node_id())
         {
             return Err(invalid("first remote OLD source requires ALL actual old closed responses; unavailable/minority-tail lane unsupported"));
+        }
+        let selected = self
+            .peers
+            .get(self.source.node_id())
+            .and_then(|frame| frame.reply().closed_native_record.as_ref())
+            .ok_or_else(|| invalid("remote OLD selected source exact record absent"))?;
+        let original_selected = self.source.actual_close_record_data()?;
+        if selected != &original_selected {
+            return Err(invalid(
+                "authenticated OLD source record differs from original donor native closure",
+            ));
         }
         let facts = self
             .peers
@@ -305,6 +322,25 @@ impl NativeRemoteOldCutCertificate {
     pub(crate) fn checksum_sha256(&self) -> Result<String> {
         self.require_current()?;
         Ok(self.digest.clone())
+    }
+    /// Historical bytes already authenticated and matched to the genuine
+    /// original donor. The current source owner is still independently checked.
+    pub(crate) fn selected_source_close_record(
+        &self,
+    ) -> Result<&crate::db::NativeJointOldCloseRecordData> {
+        self.require_current()?;
+        let frame = self
+            .peers
+            .get(self.selected_source_id())
+            .ok_or_else(|| invalid("remote OLD selected authenticated frame missing"))?;
+        let record = frame
+            .reply()
+            .closed_native_record
+            .as_ref()
+            .ok_or_else(|| invalid("remote OLD selected exact native record missing"))?;
+        record.require_materialized_facts(&self.facts[self.selected_source_id()])?;
+        record.require_plan(&self.plan)?;
+        Ok(record)
     }
     pub(crate) fn source_image_materialized_facts(
         &self,

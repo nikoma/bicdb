@@ -30,6 +30,27 @@ impl NativeJointOldObservation {
         self.require_current()?;
         Ok(self.materialized_facts())
     }
+    /// Exact native CURRENT/history bytes from this original retained owner.
+    /// The returned serializable DATA cannot recreate the owner or its pin.
+    pub(crate) fn actual_close_record_data(
+        &self,
+    ) -> Result<crate::db::NativeJointOldCloseRecordData> {
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("old exact-record pin busy"))?;
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("old exact-record service busy"))?;
+        service.native_joint_old_close_record_data(
+            &self.plan,
+            &self.native,
+            &self.promise,
+            &self.frozen,
+            pin.as_ref().map(|p| &**p),
+        )
+    }
     pub(super) fn require_remote_ancestor(
         &self,
         index: u64,

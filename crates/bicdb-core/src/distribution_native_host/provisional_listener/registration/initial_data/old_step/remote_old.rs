@@ -410,6 +410,16 @@ impl NativeInitialDataAdmission {
             .as_ref()
             .map(|actual| actual.actual_materialized_facts())
             .transpose()?;
+        let closed_native_record = actual
+            .as_ref()
+            .map(|actual| actual.actual_close_record_data())
+            .transpose()?;
+        if let (Some(data), Some(facts)) = (&closed_native_record, &facts) {
+            data.require_materialized_facts(facts)?;
+            data.require_plan(&plan)?;
+        } else if closed_native_record.is_some() != facts.is_some() {
+            return Err(invalid("OLD exact native record/facts presence differs"));
+        }
         let (birth, db_open) = {
             let s = service
                 .try_lock()
@@ -479,6 +489,7 @@ impl NativeInitialDataAdmission {
             metadata_read_index: own.read_index(),
             metadata_context_id: own.context_id(),
             closed: facts,
+            closed_native_record,
             constraints,
             checksum_sha256: String::new(),
         };

@@ -758,6 +758,22 @@ impl ClusterDataNodeService {
         parent.check()?;
         Ok((entry.commitment_sha256.clone(), command))
     }
+    pub(crate) fn native_joint_old_close_record_data(
+        &self,
+        plan: &NativeJointHandoffPlan,
+        native: &NativeJointOldCloseReceipt,
+        promise: &NativeJointOldPromiseReceipt,
+        frozen: &FrozenRangeMutationPermit,
+        pin: Option<&SourceCaptureReadPin>,
+    ) -> Result<crate::db::NativeJointOldCloseRecordData> {
+        self.require_native_joint_old_observation(plan, native, promise, frozen, pin)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
+        self.require_native_catalog_database(&database)?;
+        let data = native.actual_record_data(&database, plan, promise, &self.range_writes)?;
+        drop(database);
+        self.require_native_joint_old_observation(plan, native, promise, frozen, pin)?;
+        Ok(data)
+    }
     pub(crate) fn prepare_native_joint_capture_inputs(
         &self,
         plan: &NativeJointHandoffPlan,

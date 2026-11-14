@@ -168,16 +168,22 @@ fn actual_rpc_evidence_first_cause_survives_concurrent_fence_before_primary_work
             "peer":format!("{:?}",first_result),"after_peer":format!("{:?}",after_dispatched_peer),"records":records,
         })
     );
-    for result in [&primary, &before_dispatched_peer] {
+    for error in [
+        primary.as_ref().err(),
+        before_dispatched_peer.as_ref().err(),
+    ] {
         assert!(
-            matches!(result,Err(BicDbError::RpcEvidenceFailure{may_have_dispatched:false,detail}) if detail==FIRST_CAUSE),
-            "{result:?}"
+            matches!(error,Some(BicDbError::RpcEvidenceFailure{may_have_dispatched:false,detail}) if detail==FIRST_CAUSE),
+            "{error:?}"
         );
     }
-    for result in [&first_result, &after_dispatched_peer] {
+    for error in [
+        first_result.as_ref().err(),
+        after_dispatched_peer.as_ref().err(),
+    ] {
         assert!(
-            matches!(result,Err(BicDbError::RpcEvidenceFailure{may_have_dispatched:true,detail}) if detail==FIRST_CAUSE),
-            "{result:?}"
+            matches!(error,Some(BicDbError::RpcEvidenceFailure{may_have_dispatched:true,detail}) if detail==FIRST_CAUSE),
+            "{error:?}"
         );
     }
     assert!(records.iter().any(|r| r["request_id"] == 1

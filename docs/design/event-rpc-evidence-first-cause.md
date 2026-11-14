@@ -9,3 +9,12 @@ The observer also retains its first actual cause in a `OnceLock` before publishi
 The original34 test bodies, including the failed detail assertion, are unchanged. Three additional controls use the existing local legacy mTLS Ping fixture and actual journal callbacks: evidence failure plus original cancellation before/after dispatch; concurrent first-cause retention and uncertainty escalation while the primary worker's report is held; and callback-unwind cause publication. A successful reply canceled without an evidence error remains covered by its unchanged existing regression. These tests do not write a business transaction or qualify native distributed commits, HA, scale-out or production admission.
 
 This is a source successor, not a passing rerun. Compilation and runtime qualification remain pending. The fixed union is expected to select37 tests (the unchanged34 plus3 new controls); the hosted list must confirm it. No request timeout, retry policy, test budget, wire schema, source version, source acknowledgment rule or original evidence was changed.
+
+The first37-test qualifier, `521243e597c2d833be840773acac728a85161969`
+(run43542004108), exposed two E0308 test compilation errors: the new concurrent
+control combined `Result<ClusterDataResponse, _>` and `Result<(), _>` in the
+same reference array. Its successor compares their actual error references,
+including refusal of every successful result, while retaining exact error kind,
+dispatch uncertainty and cause assertions. This is a test-only type correction;
+the production fix and original34 tests are unchanged. Runtime execution remains
+unestablished until the corrected source is separately listed and exercised.

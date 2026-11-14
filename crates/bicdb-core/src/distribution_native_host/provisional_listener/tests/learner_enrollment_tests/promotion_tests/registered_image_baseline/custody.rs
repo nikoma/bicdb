@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 const MAX_FILES: usize = 4096;
 const MAX_FILE: u64 = 64 * 1024 * 1024;
 const MAX_TOTAL: u64 = 256 * 1024 * 1024;
+/// How long a refused all-owner cut is repeated before it is reported.
+const CUSTODY_CUT_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 fn error(message: impl Into<String>) -> io::Error {
     io::Error::other(message.into())
 }
@@ -142,27 +144,41 @@ pub(super) fn capture(
     }
     // All acquisitions are nonwaiting. A refusal drops every partial guard;
     // no MetaMutex→DB wait, network or producer runs while these are held.
-    let metadata = metadata
-        .iter()
-        .map(|m| {
-            m.try_lock()
-                .ok_or_else(|| error("actual metadata busy at custody cut"))
-        })
-        .collect::<io::Result<Vec<_>>>()?;
-    let _services = services
-        .iter()
-        .map(|s| {
-            s.try_lock()
-                .ok_or_else(|| error("actual service busy at custody cut"))
-        })
-        .collect::<io::Result<Vec<_>>>()?;
-    let db = databases
-        .iter()
-        .map(|d| {
-            d.try_write()
-                .ok_or_else(|| error("actual DB/callback busy at custody cut"))
-        })
-        .collect::<io::Result<Vec<_>>>()?;
+    // The owners stay alive, so their own workers hold these latches for
+    // short moments; a refused cut is repeated as a whole, for a bounded
+    // time, instead of failing on one such moment.
+    let cut_started = std::time::Instant::now();
+    let (metadata, _services, db) = loop {
+        let cut = (|| {
+            let metadata = metadata
+                .iter()
+                .map(|m| {
+                    m.try_lock()
+                        .ok_or_else(|| error("actual metadata busy at custody cut"))
+                })
+                .collect::<io::Result<Vec<_>>>()?;
+            let services = services
+                .iter()
+                .map(|s| {
+                    s.try_lock()
+                        .ok_or_else(|| error("actual service busy at custody cut"))
+                })
+                .collect::<io::Result<Vec<_>>>()?;
+            let db = databases
+                .iter()
+                .map(|d| {
+                    d.try_write()
+                        .ok_or_else(|| error("actual DB/callback busy at custody cut"))
+                })
+                .collect::<io::Result<Vec<_>>>()?;
+            Ok::<_, io::Error>((metadata, services, db))
+        })();
+        match cut {
+            Ok(guards) => break guards,
+            Err(refused) if cut_started.elapsed() >= CUSTODY_CUT_WAIT => return Err(refused),
+            Err(_) => std::thread::sleep(std::time::Duration::from_millis(5)),
+        }
+    };
     let _journals = db
         .iter()
         .map(|d| {

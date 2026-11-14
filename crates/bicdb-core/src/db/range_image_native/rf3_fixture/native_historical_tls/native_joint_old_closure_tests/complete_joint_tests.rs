@@ -671,10 +671,17 @@ fn run_complete_joint_with_controls(
                 &parent,
             )
             .unwrap();
+        // Capture the actual attached recipient MStore before the service/DB
+        // latch. Keep the SAME independently acquired OWN and caller budget;
+        // the protected native preparation cannot use a metadata-only wrapper.
+        let point = crate::ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &service, &mq, business, &parent,
+        )
+        .unwrap();
         let actual = {
             let actual = service.lock();
             let committed = actual
-                .observe_committed_native_joint_decision(mq, business, old.id)
+                .observe_committed_native_joint_decision_with_point(mq, business, old.id, point)
                 .unwrap();
             actual
                 .prepare_local_native_joint_serving(committed, lease, &parent)

@@ -597,6 +597,12 @@ runtime. The candidate's all-targets workspace/consumer compile check and
 Rails20-run/100-assertion check passed; native/runtime acceptance is still
 running at this checkpoint. This review executes no SDK or physical test.
 
+The separate main514 push run43636965492 completed successfully at21:38:07UTC,
+as did Rails43636965456. Its status-only terminal capture has manifest SHA256
+`185b0d28a3c456b54cb874237a5c4dc65b55cb47bc1e57800ee564c160ce84cc`;
+these main514 results do not test candidate1fc. Its earlier successful PR202
+raw logs remain a separate archive.
+
 The [scoped publication correction](design/native-publication-scoped-validation.md)
 and [same-round supervisor admission](design/native203-supervisor-bounded-store-admission.md)
 remain subject to that actual CI result. Passing compilation does not close

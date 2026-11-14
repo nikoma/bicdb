@@ -2,7 +2,8 @@
 
 This is functional test instrumentation. It adds no database principal, routing
 rule, quorum member, deployment, production qualification or throughput result.
-The source inherits 1.0.515-beta. Rust compilation and real BicDB execution must
+The original source freeze inherits 1.0.515-beta; the separate delivery candidate
+uses 1.0.516-beta. Rust compilation and real BicDB execution must
 be recorded separately from Python format, local persistence and loopback TLS
 controls.
 

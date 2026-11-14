@@ -1,6 +1,7 @@
 //! Example parser controls only, not a TLS/SDK/database or durability proof.
 //! Exercise the SAME decode_receipt used before the sink returns a receipt.
 use super::*;
+use serde_json::json;
 
 fn raw(action: &str) -> Value {
     let mut value = json!({
@@ -141,6 +142,16 @@ fn typed_integer_fields_refuse_boolean_fractional_or_null_values() {
         value[field] = Value::Null;
         assert!(decode_receipt(&serde_json::to_vec(&value).unwrap(), "row").is_err());
     }
+    let original = serde_json::to_string(&raw("start")).unwrap();
+    let overflow = original.replace(
+        "\"receipt_sequence\":6",
+        "\"receipt_sequence\":18446744073709551616",
+    );
+    assert_ne!(
+        original, overflow,
+        "oversized counter must actually be injected"
+    );
+    assert!(decode_receipt(overflow.as_bytes(), "start").is_err());
 }
 
 #[test]

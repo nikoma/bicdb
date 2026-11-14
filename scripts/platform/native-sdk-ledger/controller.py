@@ -22,6 +22,8 @@ import time
 import collector as C
 import verify as V
 
+U64_MAX = 2**64 - 1
+
 
 def require_witness_receipt(receipt, header, client_sha, server_sha, last_receipt, last_witness):
     expected = C.COMMON | {"collector_certificate_sha256", "client_certificate_sha256",
@@ -31,8 +33,8 @@ def require_witness_receipt(receipt, header, client_sha, server_sha, last_receip
               and receipt["client_certificate_sha256"] == client_sha
               and receipt["collector_certificate_sha256"] == server_sha,
               "exact controller receipt identity/hash binding")
-    V.require(type(receipt["receipt_sequence"]) is int and receipt["receipt_sequence"] > last_receipt
-              and type(receipt["witness_sequence"]) is int and receipt["witness_sequence"] > last_witness,
+    V.require(type(receipt["receipt_sequence"]) is int and last_receipt < receipt["receipt_sequence"] <= U64_MAX
+              and type(receipt["witness_sequence"]) is int and last_witness < receipt["witness_sequence"] <= U64_MAX,
               "typed monotonic witness receipt counters")
     return receipt["receipt_sequence"], receipt["witness_sequence"]
 

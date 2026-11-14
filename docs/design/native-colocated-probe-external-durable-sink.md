@@ -259,7 +259,7 @@ known/possible-ACK reconciliation corpus are unchanged. Rust examples remain
 uncompiled; no real SDK, database, VM, node expansion or physical fault was
 executed by these Python controls.
 
-## Receipt-schema successor: source-only controls
+## Receipt-schema successor controls
 
 The subsequent source review found an online fencing gap. Defaulted Rust
 `Option` fields accepted an omitted first-row `previous_record_sha256` as the
@@ -288,16 +288,34 @@ workflow or manifest change is needed. All-target compilation alone is not
 their execution result: these new Rust controls are source-listed, uncompiled
 and unexecuted until an actual target result is retained.
 
-Seven additional Python witness-schema/fencing controls are also source-only at
-this freeze. One uses a synthetic endpoint to exercise the actual controller
+Eight additional Python witness-schema/fencing controls cover this layer.
+One uses a synthetic endpoint to exercise the actual controller
 method's sticky refusal; another proves that framing consumes the original
 window and cannot be followed by a connection after expiry. The controller's
 window now begins before encoding/hash work, and never renews for partial IO.
-These are not TLS or database tests. The earlier bf3
-53-control pass remains evidence of that exact previous source, not a test of
-these new checks. The original 805 files/63-control result and all prior failed
-and passing receipts remain unchanged. No Rust build, SDK execution, VM,
-physical fault or CI action is performed by this source batch.
+These are not TLS or database tests. Both counters use the unsigned 64-bit
+wire domain, matching the Rust decoder; the collector's existing operational
+70,500-receipt and 256-witness quotas are unchanged. Oversized and upper-bound
+schema tests do not demonstrate that the collector can produce that many
+records.
+
+Frozen `9217354fab89b1e8065c7bbf59c57cee875c14f4` executed a coherent 60-control
+Python aggregate (the previous 53 plus its first seven witness controls): all
+60 passed, none skipped or failed, in 5.599 seconds with the same configured
+512 MiB cap. Its raw result is retained separately. Source review subsequently
+identified the missing explicit `serde_json::json` macro import in the shared
+Rust tests; that import is corrected without removing any of the seven Rust
+tests. This was a source-identified compile blocker, not an actual completed
+Rust compiler/test result. The descendant adds the eighth Python counter-bound
+control and independently executes the coherent 61-control Python aggregate:
+61 passed, none skipped or failed, in 5.764 seconds with the same configured
+512 MiB cap. Its log pins every actually tested Python source hash. These results
+do not compile or execute any Rust parser control or real SDK/database request.
+
+The earlier bf3 53-control pass belongs to that exact previous source. The
+original 805 files/63-control result and all prior failed and passing receipts
+remain unchanged. No Rust build, SDK execution, VM, physical fault or CI action
+is performed by these Python/source checks.
 
 ## Commands and evidence boundaries
 

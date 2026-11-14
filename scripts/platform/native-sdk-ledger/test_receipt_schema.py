@@ -50,6 +50,16 @@ class WitnessSchemaControls(unittest.TestCase):
         with self.assertRaises(ValueError): W.require_witness_receipt(r, h, CLIENT, SERVER, 8, 0)
         with self.assertRaises(ValueError): W.require_witness_receipt(r, h, CLIENT, SERVER, 0, 2)
 
+    def test_witness_and_global_counters_are_bounded_by_u64_wire_domain(self):
+        h, r = data()
+        for field in ("receipt_sequence", "witness_sequence"):
+            for oversized in (2**64, 2**100):
+                with self.assertRaises(ValueError):
+                    W.require_witness_receipt({**r, field: oversized}, h, CLIENT, SERVER, 0, 0)
+        boundary = {**r, "receipt_sequence": W.U64_MAX, "witness_sequence": W.U64_MAX}
+        self.assertEqual(W.require_witness_receipt(boundary, h, CLIENT, SERVER, 0, 0),
+                         (W.U64_MAX, W.U64_MAX))
+
     def test_wrong_session_hash_or_peer_is_refused(self):
         h, r = data()
         for field in ("session_id", "payload_sha256", "client_certificate_sha256", "collector_certificate_sha256"):

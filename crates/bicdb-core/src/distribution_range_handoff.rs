@@ -1310,7 +1310,7 @@ pub(crate) mod tests {
             servers: Vec<ClusterDataServerHandle>,
             client: TcpClusterRelocationTransport,
             topology: ClusterTopology,
-            observation_calls: std::cell::Cell<usize>,
+            observation_calls: std::sync::atomic::AtomicUsize,
         }
         impl Fixture {
             fn new() -> Self {
@@ -1436,7 +1436,7 @@ pub(crate) mod tests {
                     servers,
                     client,
                     topology,
-                    observation_calls: std::cell::Cell::new(0),
+                    observation_calls: std::sync::atomic::AtomicUsize::new(0),
                 }
             }
             fn observation(
@@ -1447,8 +1447,10 @@ pub(crate) mod tests {
                 // Memory-only until a real acquisition returns Err. Each
                 // fixture has its own counter; concurrent tests cannot retag it.
                 let entered = Instant::now();
-                let ordinal = self.observation_calls.get() + 1;
-                self.observation_calls.set(ordinal);
+                let ordinal = self
+                    .observation_calls
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    + 1;
                 let request = Uuid::now_v7();
                 let range = self.topology.range_by_id(range_id).unwrap();
                 let call_entered = Instant::now();

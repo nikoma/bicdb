@@ -66,7 +66,10 @@ or throughput experiment.
 
 ## Narrow diagnostic successor
 
-The actual fixture owns a private in-memory call counter. Each original
+The actual fixture owns a private in-memory `AtomicUsize` call counter, using
+`Relaxed` ordering solely for diagnostic numbering. This preserves the fixture's
+original auto-trait surface; it conveys no authority or synchronization proof.
+Each original
 acquisition still generates its real UUID, looks up the same range/epoch, uses
 the original client and metadata destination, and receives the unchanged
 1-second or 500-ms budget. It records helper-entry, call-entry and call-return

@@ -49,7 +49,13 @@ No other range is required to be empty or have B0.
 `NativeJoinedReceiveStorageScope` borrows the actual installed hook/admission
 and native journal. It validates the exact original native policy and birth,
 actual selected Frozen and member/version identity, and can inspect selected
-lower bounds or scan selected physical row absence. It cannot authorize a row
+lower bounds. The distinct retained `NativeJoinedRowAbsenceScan` scans at most
+1024 raw rows per advance, preserving its real collection/key cursor across
+fresh same-session requests. Its actual paged scan holds neither the global
+native journal nor commit-admission/hook read guard; selected runtime Frozen
+and schema/backing identity stabilize selected absence while unrelated B may
+advance. It checks the actual original writer before/after each chunk. This is
+not yet an actual I/O-stall availability result. Neither scope can authorize a row
 transaction, native installation, NEW vote or Open. Unknown lower bounds are
 not a certified zero. The scope is deliberately distinct from all FIRST scopes.
 Current-MStore checks occur outside engine locks; local version checks are not

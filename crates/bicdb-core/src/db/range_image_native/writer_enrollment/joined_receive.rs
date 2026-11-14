@@ -78,42 +78,15 @@ impl NativeJoinedReceiveStorageScope<'_> {
             &self.journal,
         )
     }
-    /// Necessary selected-row constraint while unrelated ranges may remain
-    /// populated and advance B. No row/native mutation is authorized here.
-    pub(crate) fn require_selected_rows_absent(
-        &self,
-        bindings: &RangeImageDbBindings,
-    ) -> Result<()> {
-        self.require_database(self.db)?;
-        self.db.validate_range_image_bindings(bindings)?;
-        let range = self.request.role().role().current_range();
-        for collection in bindings.collections() {
-            self.request.cancellation().check()?;
-            let progress = self.db.for_each_range_snapshot_batch_with_cancellation(
-                &collection.name,
-                range,
-                None,
-                &RangeSnapshotOptions {
-                    max_records_per_batch: 1,
-                    max_bytes_per_batch: 8 * 1024 * 1024,
-                    max_record_bytes: 8 * 1024 * 1024,
-                },
-                1024,
-                self.request.cancellation(),
-                |_batch| {
-                    Err(invalid(
-                        "additional Joined selected range already has physical rows",
-                    ))
-                },
-            )?;
-            if !progress.completed {
-                return Err(invalid(
-                    "Joined selected-row absence scan did not complete within bounds",
-                ));
-            }
-            self.db.validate_range_image_bindings(bindings)?;
-        }
-        self.require_database(self.db)
+}
+impl InstalledNativeWriterHostGuard {
+    /// Full same-State hook/native-policy check for each row-scan chunk. This
+    /// is outside any final version publication guard and holds no hook or
+    /// journal guard across the subsequent actual paged scan.
+    pub(crate) fn require_joined_receive_identity(&self, db: &BicDb) -> Result<()> {
+        db.require_joined_publication_storage_health()?;
+        self.state.require_original_identity_database(db)?;
+        self.state.require_verified_registry_database(db)
     }
 }
 impl BicDb {

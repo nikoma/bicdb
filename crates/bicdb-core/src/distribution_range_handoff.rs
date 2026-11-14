@@ -1310,6 +1310,7 @@ pub(crate) mod tests {
             servers: Vec<ClusterDataServerHandle>,
             client: TcpClusterRelocationTransport,
             topology: ClusterTopology,
+            observation_calls: std::cell::Cell<usize>,
         }
         impl Fixture {
             fn new() -> Self {
@@ -1435,6 +1436,7 @@ pub(crate) mod tests {
                     servers,
                     client,
                     topology,
+                    observation_calls: std::cell::Cell::new(0),
                 }
             }
             fn observation(
@@ -1442,19 +1444,49 @@ pub(crate) mod tests {
                 range_id: RangeId,
                 budget: Duration,
             ) -> (Uuid, MetadataReadObservation) {
+                // Memory-only until a real acquisition returns Err. Each
+                // fixture has its own counter; concurrent tests cannot retag it.
+                let entered = Instant::now();
+                let ordinal = self.observation_calls.get() + 1;
+                self.observation_calls.set(ordinal);
                 let request = Uuid::now_v7();
                 let range = self.topology.range_by_id(range_id).unwrap();
-                let observation = self
-                    .client
-                    .acquire_metadata_read_observation(
-                        &node("n1"),
-                        request,
-                        range_id,
-                        range.epoch,
-                        budget,
-                        &CancellationToken::uncancelable(),
-                    )
-                    .unwrap();
+                let call_entered = Instant::now();
+                let acquired = self.client.acquire_metadata_read_observation(
+                    &node("n1"),
+                    request,
+                    range_id,
+                    range.epoch,
+                    budget,
+                    &CancellationToken::uncancelable(),
+                );
+                let returned = Instant::now();
+                if let Err(primary) = &acquired {
+                    // Format only AFTER the original API failed. This is not
+                    // its internal deadline or a per-voter causal trace.
+                    let diagnostic = serde_json::json!({
+                        "test":std::thread::current().name().map(str::to_owned),
+                        "fixture_observation_ordinal":ordinal,
+                        "actual_read_request_uuid":request,
+                        "range_id":range_id,"range_epoch":range.epoch,
+                        "range_leader":range.leader,"metadata_destination":"n1",
+                        "actual_requester":self.client.local_metadata_read_participant().node_id(),
+                        "requested_budget_us":budget.as_micros(),
+                        "before_call_us":call_entered.duration_since(entered).as_micros(),
+                        "call_elapsed_us":returned.duration_since(call_entered).as_micros(),
+                        "helper_elapsed_us":returned.duration_since(entered).as_micros(),
+                        "actual_error":primary.to_string(),
+                        "actual_error_debug":format!("{primary:?}"),
+                        "helper_retries":0,
+                        "cause":"not attributed; per-voter errors/ACK outcomes not retained here",
+                    });
+                    // Preserve the original primary unwrap even if stderr fails.
+                    let _ = std::io::Write::write_fmt(
+                        &mut std::io::stderr().lock(),
+                        format_args!("HANDOFF_OBSERVATION_ACQUISITION_FAILURE {diagnostic}\n"),
+                    );
+                }
+                let observation = acquired.unwrap();
                 assert_eq!(observation.metadata_leader_id(), &node("n1"));
                 assert_eq!(observation.request().requester_node_id, node("n2"));
                 (request, observation)

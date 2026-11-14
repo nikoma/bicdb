@@ -29,8 +29,13 @@ fn call(
         "operation":if append {"ClusterEventClient.append"} else {"ClusterEventClient.get_strong"},
         "key":key,"namespace":"items","record_id":record_id,"expected_full_value":value,
         "payload_json_sha256":hex::encode(Sha256::digest(serde_json::to_vec(value)?)),
-        "range_id":range.id,"range_epoch":range.epoch,"leader":range.leader,
-        "topology_generation":pending.generation,"original_prejoin_gateway":true,
+        // Expected metadata is DATA for comparison, never an observation of
+        // the SDK's actual chosen route or permission to manually route it.
+        "expected_range_id":range.id,"expected_range_epoch":range.epoch,"expected_leader":range.leader,
+        "expected_topology_generation":pending.generation,
+        "expected_metadata_source":"fixture pending committed descriptor, not actual SDK dispatch",
+        "actual_dispatch_evidence":"existing original-sdk-rpc journal and index, separately retained",
+        "logical_id_is_wire_attempt_id":false,"original_prejoin_gateway":true,
         "configured_sdk_request_ms":2000,"manual_shard_hint":false,"manual_sdk_refresh":false,
         "intent_unix_ns":std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos(),
         "hold_at_invocation":hold.map(ActualRowsReplyHold::snapshot),"outcome":"not_started"}));

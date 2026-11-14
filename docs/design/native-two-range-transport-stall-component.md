@@ -32,9 +32,16 @@ remaining budget is recorded. If unrelated operations exhaust the response
 window, the overlap assertion fails rather than declaring progress after the
 hold expired.
 
-Intent, actual reply/error, payload hash, record key/ID, range/epoch/leader,
-topology generation, Strong presence and hold state at invocation/return are
-retained before assertions. The hold automatically ends at the original handler
+Intent, actual reply/error, payload hash, record key/ID, expected range/epoch/
+leader/topology generation, Strong presence and hold state at invocation/return
+are retained before assertions. The `expected_*` fields come from the fixture's
+pending committed descriptor; they are not observations of actual SDK dispatch.
+This case already selects the existing bounded original SDK observer before
+the first source APP. Its separate journal and index retain actual primary and
+refresh RPCs, frames and errors. A logical ledger ID is not a wire attempt ID;
+actual routes and retries require reconciliation against that raw journal.
+The observer does not supply responses, routing hints or serving authority.
+The hold automatically ends at the original handler
 deadline and an RAII guard releases it on unwind. The frame worker is joined
 before assertions. A subsequent Strong read reconciles the fresh write without
 turning visibility into a retroactive API acknowledgment. A successful Rows

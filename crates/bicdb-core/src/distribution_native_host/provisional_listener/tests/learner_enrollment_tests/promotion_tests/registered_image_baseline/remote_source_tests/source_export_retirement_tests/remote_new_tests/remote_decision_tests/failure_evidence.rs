@@ -58,7 +58,8 @@ impl Drop for OnPanic {
         }
         emit(serde_json::json!({"api_results":self.api_results,
             "omitted_api_results":self.omitted_api_results,
-            "api_observations_complete":self.omitted_api_results==0}));
+            "recorded_api_results_untruncated":self.omitted_api_results==0,
+            "scope":"returned API results recorded before panic; not complete RPC coverage"}));
         let result = (|| -> std::io::Result<()> {
             let mut paths = Vec::new();
             let mut enumeration_truncated = false;

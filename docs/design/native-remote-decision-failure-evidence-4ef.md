@@ -49,8 +49,10 @@ per error. An oversized error is explicitly omitted with its original byte count
 and SHA-256. Each exported file has its original byte count and SHA-256; UTF-8
 is preserved verbatim and other bytes are hex encoded. Enumeration errors,
 truncation, skipped files and diagnostic I/O errors report incomplete capture.
-API-observation completeness and file-export completeness are separate claims;
-both must be inspected. File-name labels use safe lossy display conversion;
+Recorded API-result truncation and file-export completeness are separate claims;
+both must be inspected. The API list covers returned calls recorded before the
+panic; a panic inside an exchange may leave no returned result. This list does
+not establish complete RPC coverage. File-name labels use safe lossy display conversion;
 their labels are not evidence of exact non-UTF-8 path identity.
 
 These are byte/count bounds, not an operating-system I/O deadline. Diagnostic

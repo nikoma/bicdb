@@ -4117,6 +4117,13 @@ impl TcpClusterRelocationTransport {
         }
     }
 
+    pub(crate) fn require_rpc_evidence_call_entry(&self) -> Result<()> {
+        match &self.evidence {
+            Some(observer) => observer.require_call_entry(),
+            None => Ok(()),
+        }
+    }
+
     pub fn install_topology(&self, topology: ClusterTopology) -> Result<bool> {
         topology.validate()?;
         if topology.cluster_id != self.cluster_id {
@@ -4211,6 +4218,38 @@ impl TcpClusterRelocationTransport {
             destination,
             ClusterDataRequest::ApplicationEvent(request),
         )? {
+            ClusterDataResponse::ApplicationEvent(result) => Ok(result),
+            response => Err(unexpected_response("application event", response)),
+        }
+    }
+
+    /// One application event exchange whose reply may be awaited for as long
+    /// as `cancellation` allows, while the TCP connect alone must finish by
+    /// `connect_by`. The event client keeps listening to a member that
+    /// accepted its request after that attempt's slice of the request budget
+    /// has ended; an unreachable address must still not hold the attempt
+    /// beyond the slice, because a blocking connect cannot be cancelled.
+    pub(crate) fn application_event_listening(
+        &self,
+        cancellation: &CancellationToken,
+        connect_by: Instant,
+        destination: &ClusterNodeId,
+        request: crate::ClusterEventRequest,
+    ) -> Result<crate::ClusterEventResponse> {
+        request.operation.validate()?;
+        if matches!(request.operation, crate::ClusterEventOperation::Get { .. }) {
+            return self.application_event_cancellable(cancellation, destination, request);
+        }
+        match self
+            .call_with_native_destination_connect_bound(
+                cancellation,
+                destination,
+                ClusterDataRequest::ApplicationEvent(request),
+                false,
+                Some(connect_by),
+            )?
+            .0
+        {
             ClusterDataResponse::ApplicationEvent(result) => Ok(result),
             response => Err(unexpected_response("application event", response)),
         }
@@ -5241,6 +5280,29 @@ impl TcpClusterRelocationTransport {
         MetadataReadParticipant,
         Option<crate::distribution::NativeStoreBirthV1>,
     )> {
+        self.call_with_native_destination_connect_bound(
+            cancellation,
+            destination_node_id,
+            request,
+            classify_peer_io,
+            None,
+        )
+    }
+
+    // `connect_by` can only shorten the TCP connect; the exchange itself
+    // keeps the caller's cancellation and the network deadline unchanged.
+    fn call_with_native_destination_connect_bound(
+        &self,
+        cancellation: &CancellationToken,
+        destination_node_id: &ClusterNodeId,
+        request: ClusterDataRequest,
+        classify_peer_io: bool,
+        connect_by: Option<Instant>,
+    ) -> Result<(
+        ClusterDataResponse,
+        MetadataReadParticipant,
+        Option<crate::distribution::NativeStoreBirthV1>,
+    )> {
         let Some(observer) = &self.evidence else {
             return self.call_with_native_destination_inner(
                 cancellation,
@@ -5249,6 +5311,7 @@ impl TcpClusterRelocationTransport {
                 None,
                 None,
                 classify_peer_io,
+                connect_by,
             );
         };
         // Diagnostic IO consumes the same network/caller window; it cannot
@@ -5272,6 +5335,7 @@ impl TcpClusterRelocationTransport {
             Some(&mut observed),
             Some(network_deadline),
             classify_peer_io,
+            connect_by,
         );
         if !matches!(&result, Err(BicDbError::RpcEvidenceFailure { .. })) {
             observed.finish(&result)?;
@@ -5311,6 +5375,7 @@ impl TcpClusterRelocationTransport {
         mut observed: Option<&mut evidence::Attempt>,
         observed_network_deadline: Option<Instant>,
         classify_peer_io: bool,
+        connect_by: Option<Instant>,
     ) -> Result<(
         ClusterDataResponse,
         MetadataReadParticipant,
@@ -5442,6 +5507,14 @@ impl TcpClusterRelocationTransport {
             .checked_duration_since(Instant::now())
             .filter(|remaining| !remaining.is_zero())
             .ok_or_else(|| transport_error("cluster RPC deadline expired before connect"))?;
+        let remaining = match connect_by {
+            Some(connect_by) => connect_by
+                .checked_duration_since(Instant::now())
+                .filter(|slice| !slice.is_zero())
+                .ok_or_else(|| transport_error("cluster RPC connect slice expired before connect"))?
+                .min(remaining),
+            None => remaining,
+        };
         let stream = TcpStream::connect_timeout(
             &address_resolved,
             Duration::from_millis(self.config.connect_timeout_ms).min(remaining),
@@ -7653,6 +7726,8 @@ mod tests {
 
 #[cfg(test)]
 mod event_client_retry_tests {
+    mod caller_query_budget_tests;
+    mod inflight_budget_tests;
     use super::*;
     mod error_preservation_tests;
     use std::time::Instant;
@@ -7887,6 +7962,154 @@ mod event_client_retry_tests {
         let (value, _) = request_after_route_change(true, 0, SilentFirst::Discovery);
         assert_eq!(value, Some(serde_json::json!({"kept": true})));
         assert!(started.elapsed() < Duration::from_millis(2500));
+    }
+
+    /// One member that always serves discovery promptly. Its FIRST
+    /// application request is answered only after `first_reply_after` (never
+    /// when `None`); every later one is refused at once, as a range leader
+    /// refuses a second command while the first is still being committed.
+    fn append_to_working_leader(
+        request_timeout: Duration,
+        first_reply_after: Option<Duration>,
+    ) -> (Result<bool>, Duration, usize) {
+        let root = tempfile::tempdir().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let config = crate::DistributionConfig {
+            enabled: true,
+            node_address: listener.local_addr().unwrap().to_string(),
+            initial_ranges: 1,
+            replication_factor: 1,
+            transport: ClusterNetworkTransportConfig {
+                connect_timeout_ms: 100,
+                io_timeout_ms: 10_000,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let store = DistributionStore::initialize_at(root.path(), config, false, 1000).unwrap();
+        let snapshot = ClusterBootstrapSnapshot {
+            topology: store.topology().clone(),
+            config_template: store.config().clone(),
+            metadata_leader_id: None,
+        };
+        snapshot.validate().unwrap();
+        let client = crate::ClusterEventClient::new(store.config(), snapshot.topology.clone())
+            .unwrap()
+            .with_request_timeout(request_timeout)
+            .unwrap();
+        let max_frame_bytes = store.config().transport.max_frame_bytes;
+        let applications = Arc::new(AtomicUsize::new(0));
+        let seen = Arc::clone(&applications);
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopping = Arc::clone(&stop);
+        let serving = thread::spawn(move || {
+            while !stopping.load(Ordering::SeqCst) {
+                let mut stream = match listener.accept() {
+                    Ok((stream, _)) => stream,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(2));
+                        continue;
+                    }
+                    Err(error) => panic!("RPC accept failed: {error}"),
+                };
+                let snapshot = snapshot.clone();
+                let seen = Arc::clone(&seen);
+                // The member keeps serving discovery and later requests
+                // while its first application request is still executing.
+                thread::spawn(move || {
+                    stream.set_nonblocking(false).unwrap();
+                    stream
+                        .set_read_timeout(Some(Duration::from_secs(2)))
+                        .unwrap();
+                    let Ok(request) =
+                        recv_json_frame::<ClusterDataRequestEnvelope>(&mut stream, max_frame_bytes)
+                    else {
+                        return;
+                    };
+                    let response = match request.request {
+                        ClusterDataRequest::ApplicationEvent(_) => {
+                            if seen.fetch_add(1, Ordering::SeqCst) == 0 {
+                                let Some(delay) = first_reply_after else {
+                                    // Accepted, never answered: wait for the
+                                    // client itself to end the exchange.
+                                    stream
+                                        .set_read_timeout(Some(Duration::from_secs(20)))
+                                        .unwrap();
+                                    let _ = stream.read(&mut [0u8; 1]);
+                                    return;
+                                };
+                                thread::sleep(delay);
+                                Ok(ClusterDataResponse::ApplicationEvent(
+                                    crate::ClusterEventResponse::Appended { inserted: true },
+                                ))
+                            } else {
+                                Err(ClusterDataRemoteError {
+                                    code: "cluster_data_operation_failed".into(),
+                                    message: "range is still applying a command; busy".into(),
+                                })
+                            }
+                        }
+                        ClusterDataRequest::FetchBootstrapSnapshot => {
+                            Ok(ClusterDataResponse::BootstrapSnapshot(snapshot))
+                        }
+                        request => panic!("unexpected request: {request:?}"),
+                    };
+                    // The client may already have returned.
+                    let _ = send_json_frame(
+                        &mut stream,
+                        &ClusterDataResponseEnvelope {
+                            actual_native_source: None,
+                            protocol_version: request.protocol_version,
+                            cluster_id: request.cluster_id,
+                            source_node_id: request.destination_node_id,
+                            request_id: request.request_id,
+                            response,
+                        },
+                        max_frame_bytes,
+                    );
+                });
+            }
+        });
+        let started = Instant::now();
+        let result = client.append("retry", "kept", serde_json::json!({"kept": true}));
+        let elapsed = started.elapsed();
+        stop.store(true, Ordering::SeqCst);
+        serving.join().unwrap();
+        (result, elapsed, applications.load(Ordering::SeqCst))
+    }
+
+    #[test]
+    fn a_leader_still_committing_past_the_attempt_slice_answers_the_same_request() {
+        // The first attempt's slice is half of the budget. The leader needs
+        // longer than that, and refuses the retries sent meanwhile. Hanging
+        // up at the slice would lose the only answer the leader ever gives.
+        let (result, elapsed, applications) =
+            append_to_working_leader(Duration::from_secs(3), Some(Duration::from_millis(1800)));
+        assert!(
+            result.unwrap(),
+            "the first attempt's own new ACK is returned"
+        );
+        assert!(elapsed >= Duration::from_millis(1800));
+        assert!(elapsed < Duration::from_secs(3));
+        assert!(
+            applications >= 2,
+            "the slice still releases the request to discovery and a retry"
+        );
+    }
+
+    #[test]
+    fn an_exhausted_request_budget_is_not_reported_as_unreachable_members() {
+        // Every member answered discovery throughout. The request ran out of
+        // budget waiting for its route; that is what the error must say.
+        let (result, elapsed, _) = append_to_working_leader(Duration::from_secs(1), None);
+        let error = result.unwrap_err().to_string();
+        assert!(
+            !error.contains("no event cluster member is reachable"),
+            "members that answered discovery were reported unreachable: {error}"
+        );
+        assert!(elapsed >= Duration::from_millis(900));
+        assert!(elapsed < Duration::from_millis(2500));
     }
 
     #[test]

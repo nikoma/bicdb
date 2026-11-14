@@ -152,6 +152,145 @@ mod client {
     use parking_lot::RwLock;
     use std::sync::Arc;
 
+    /// What one bounded discovery round established. Only `Unanswered` says
+    /// anything about the members: `Interrupted` means the caller's own
+    /// deadline ended the round before every member had been asked, which is
+    /// a statement about the remaining budget and never about reachability.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Discovery {
+        Observed,
+        Unanswered,
+        Interrupted,
+    }
+
+    /// Outcomes stay owned until every sibling has finished. They are local
+    /// diagnostics, not a distributed decision or permission to serve data.
+    enum CompletedOutcome {
+        Response(ClusterEventResponse),
+        RejectedResponse {
+            response: ClusterEventResponse,
+            error: usize,
+        },
+        Error(usize),
+    }
+    struct CompletedAttempt {
+        attempt: usize,
+        completed_at: std::time::Instant,
+        outcome: CompletedOutcome,
+    }
+    enum Waited {
+        Answered(usize),
+        Failed,
+        Pending,
+    }
+    type AttemptReply = (usize, std::time::Instant, Result<ClusterEventResponse>);
+    struct InFlight {
+        replies: std::sync::mpsc::Receiver<AttemptReply>,
+        attempts: Vec<(usize, crate::CancellationToken)>,
+        completed: Vec<CompletedAttempt>,
+    }
+    impl InFlight {
+        fn record(
+            &mut self,
+            (attempt, completed_at, reply): AttemptReply,
+            operation: &ClusterEventOperation,
+            errors: &mut EventOperationError,
+        ) -> Option<usize> {
+            self.attempts.retain(|(id, _)| *id != attempt);
+            // Keep the actual transport result even when its operation kind
+            // is wrong; that observation cannot resolve an uncertain append.
+            let index = self.completed.len();
+            let (outcome, answer) = match reply {
+                Ok(response) => {
+                    let matches_operation = matches!(
+                        (operation, &response),
+                        (
+                            ClusterEventOperation::Append { .. },
+                            ClusterEventResponse::Appended { .. }
+                        ) | (
+                            ClusterEventOperation::Scan { .. },
+                            ClusterEventResponse::Page { .. }
+                        )
+                    );
+                    if matches_operation {
+                        (CompletedOutcome::Response(response), Some(index))
+                    } else {
+                        let error =
+                            errors.write_failed(invalid("unexpected event operation response"));
+                        (CompletedOutcome::RejectedResponse { response, error }, None)
+                    }
+                }
+                Err(error) => (CompletedOutcome::Error(errors.write_failed(error)), None),
+            };
+            self.completed.push(CompletedAttempt {
+                attempt,
+                completed_at,
+                outcome,
+            });
+            answer
+        }
+        fn take_response(&mut self, index: usize) -> Result<ClusterEventResponse> {
+            match self.completed.swap_remove(index).outcome {
+                CompletedOutcome::Response(response) => Ok(response),
+                CompletedOutcome::Error(_) | CompletedOutcome::RejectedResponse { .. } => {
+                    Err(invalid("event ACK completion is not a response"))
+                }
+            }
+        }
+        fn wait(
+            &mut self,
+            awaited: Option<usize>,
+            until: std::time::Instant,
+            cancellation: &crate::CancellationToken,
+            operation: &ClusterEventOperation,
+            errors: &mut EventOperationError,
+        ) -> Result<Waited> {
+            loop {
+                // Includes the caller's thread-local memory/deadline envelope.
+                cancellation.check()?;
+                if self.attempts.is_empty() {
+                    return Ok(Waited::Pending);
+                }
+                let remaining = until.saturating_duration_since(std::time::Instant::now());
+                let reply = match self
+                    .replies
+                    .recv_timeout(remaining.min(std::time::Duration::from_millis(25)))
+                {
+                    Ok(reply) => reply,
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+                        if std::time::Instant::now() < until =>
+                    {
+                        continue
+                    }
+                    Err(_) => return Ok(Waited::Pending),
+                };
+                let attempt = reply.0;
+                if let Some(response) = self.record(reply, operation, errors) {
+                    cancellation.check()?;
+                    return Ok(Waited::Answered(response));
+                }
+                if awaited == Some(attempt) {
+                    return Ok(Waited::Failed);
+                }
+            }
+        }
+        fn hang_up(&mut self, operation: &ClusterEventOperation, errors: &mut EventOperationError) {
+            // Cancel all siblings, then retain EVERY returned outcome. DNS and
+            // user evidence callbacks retain their documented blocking limits.
+            for (_, token) in &self.attempts {
+                token.cancel();
+            }
+            while !self.attempts.is_empty() {
+                match self.replies.recv() {
+                    Ok(reply) => {
+                        self.record(reply, operation, errors);
+                    }
+                    Err(_) => break,
+                }
+            }
+        }
+    }
+
     /// Trusted host-side client. Membership certificates stay with this host;
     /// never provide them, this client, or arbitrary namespaces to guest code.
     pub struct ClusterEventClient {
@@ -169,29 +308,65 @@ mod client {
     /// A write whose outcome is unknown stays uncertain until a real success;
     /// a later refusal cannot prove that earlier attempt rolled back.
     #[derive(Default)]
-    struct EventOperationError(Option<crate::BicDbError>);
+    struct EventOperationError {
+        // APP has at most five workers; keep their actual typed errors until
+        // final cleanup. The sequential Get path retains only its last error.
+        errors: Vec<crate::BicDbError>,
+        selected: Option<usize>,
+    }
     impl EventOperationError {
-        fn write_failed(&mut self, error: crate::BicDbError) {
-            if !matches!(
-                self.0.as_ref(),
+        fn write_failed(&mut self, error: crate::BicDbError) -> usize {
+            let uncertain = matches!(
+                self.selected.map(|index| &self.errors[index]),
                 Some(crate::BicDbError::CommitOutcomeUnknown { .. })
                     | Some(crate::BicDbError::RpcEvidenceFailure {
                         may_have_dispatched: true,
                         ..
                     })
-            ) {
-                self.0 = Some(error);
+            );
+            let index = self.errors.len();
+            self.errors.push(error);
+            if !uncertain {
+                self.selected = Some(index);
             }
+            index
+        }
+        fn take_evidence_or(&mut self, fallback: crate::BicDbError) -> crate::BicDbError {
+            // An actual same-operation ACK has resolved prior commit uncertainty.
+            // Preserve the original sibling fence detail, with no downgrade of
+            // a globally known may-have-dispatched observation.
+            let needs_dispatched = matches!(
+                &fallback,
+                crate::BicDbError::RpcEvidenceFailure {
+                    may_have_dispatched: true,
+                    ..
+                }
+            );
+            let index = self.errors.iter().position(|error| {
+                matches!(error,
+                crate::BicDbError::RpcEvidenceFailure { may_have_dispatched, .. }
+                    if !needs_dispatched || *may_have_dispatched)
+            });
+            index
+                .map(|index| self.errors.remove(index))
+                .unwrap_or(fallback)
         }
         fn read_failed(&mut self, error: crate::BicDbError) {
-            self.0 = Some(error);
+            self.errors.clear();
+            self.errors.push(error);
+            self.selected = Some(0);
         }
         fn take_or(&mut self, fallback: crate::BicDbError) -> crate::BicDbError {
-            self.0.take().unwrap_or(fallback)
+            self.selected
+                .take()
+                .map(|index| self.errors.remove(index))
+                .unwrap_or(fallback)
         }
     }
     #[cfg(test)]
     mod error_retention_tests;
+    #[cfg(test)]
+    mod inflight_tests;
 
     impl ClusterEventClient {
         pub fn new(config: &DistributionConfig, topology: ClusterTopology) -> Result<Self> {
@@ -244,14 +419,16 @@ mod client {
         }
 
         fn refresh_until(&self, deadline: std::time::Instant) -> Result<()> {
-            if self.refresh_members_until(deadline)? {
-                Ok(())
-            } else {
-                Err(invalid("no event cluster member is reachable"))
+            match self.refresh_members_until(deadline)? {
+                Discovery::Observed => Ok(()),
+                Discovery::Unanswered => Err(invalid("no event cluster member is reachable")),
+                Discovery::Interrupted => Err(invalid(
+                    "event cluster discovery did not finish within the request budget",
+                )),
             }
         }
 
-        fn refresh_members_until(&self, deadline: std::time::Instant) -> Result<bool> {
+        fn refresh_members_until(&self, deadline: std::time::Instant) -> Result<Discovery> {
             self.transport.require_rpc_evidence_current()?;
             let cancellation =
                 crate::CancellationToken::uncancelable().child_with_deadline(deadline);
@@ -274,8 +451,12 @@ mod client {
             };
             members.sort_by_key(|member| silent.contains(member));
             let mut observed = false;
+            // True only while every member asked so far had its whole
+            // exchange inside the caller's deadline.
+            let mut complete = true;
             for member in members {
                 if std::time::Instant::now() >= deadline {
+                    complete = false;
                     break;
                 }
                 if observed && silent.contains(&member) {
@@ -310,15 +491,29 @@ mod client {
                     self.transport.install_topology(topology)?;
                     observed = true;
                     self.silent_members.lock().remove(&member);
-                } else if member_started.elapsed() >= std::time::Duration::from_millis(500) {
-                    self.silent_members.lock().insert(
-                        member.clone(),
-                        std::time::Instant::now() + std::time::Duration::from_secs(10),
-                    );
+                } else {
+                    if std::time::Instant::now() >= deadline {
+                        // This member's exchange was cut short by the
+                        // caller's deadline: that does not show the member
+                        // to be unreachable.
+                        complete = false;
+                    }
+                    if member_started.elapsed() >= std::time::Duration::from_millis(500) {
+                        self.silent_members.lock().insert(
+                            member.clone(),
+                            std::time::Instant::now() + std::time::Duration::from_secs(10),
+                        );
+                    }
                 }
             }
             self.transport.require_rpc_evidence_current()?;
-            Ok(observed)
+            Ok(if observed {
+                Discovery::Observed
+            } else if complete {
+                Discovery::Unanswered
+            } else {
+                Discovery::Interrupted
+            })
         }
 
         fn request(
@@ -334,39 +529,117 @@ mod client {
                     crate::distribution_native_read::NativeEventReadMode::DeploymentDefault,
                 );
             }
-            let deadline = std::time::Instant::now() + self.request_timeout;
+            // Must run on the caller thread before spawning: an observer
+            // callback cannot escape same-sink reentry fencing on a new worker.
+            self.transport.require_rpc_evidence_call_entry()?;
+            crate::query_budget::check()?;
+            let budget = crate::query_budget::QueryBudgetContext::capture();
+            let configured_deadline = std::time::Instant::now() + self.request_timeout;
+            let deadline = budget.deadline().map_or(configured_deadline, |caller| {
+                caller.min(configured_deadline)
+            });
             let cancellation =
                 crate::CancellationToken::uncancelable().child_with_deadline(deadline);
-            let mut last_error = invalid("event cluster request failed");
-            let mut operation_error = EventOperationError::default();
-            for attempt in 0..5 {
-                self.transport
-                    .require_rpc_evidence_current()
-                    .map_err(|error| operation_error.take_or(error))?;
-                if std::time::Instant::now() >= deadline {
-                    break;
+            std::thread::scope(|scope| {
+                let (reports, replies) = std::sync::mpsc::channel();
+                let mut in_flight = InFlight {
+                    replies,
+                    attempts: Vec::new(),
+                    completed: Vec::new(),
+                };
+                let mut operation_error = EventOperationError::default();
+                let result = self.request_attempts(
+                    scope,
+                    &cancellation,
+                    deadline,
+                    &budget,
+                    &operation,
+                    scan_range,
+                    &reports,
+                    &mut in_flight,
+                    &mut operation_error,
+                );
+                drop(reports);
+                in_flight.hang_up(&operation, &mut operation_error);
+                match result {
+                    Ok(response) => {
+                        // The actual same-operation ACK resolves earlier commit
+                        // uncertainty, but cannot hide a sibling evidence fence.
+                        if let Err(error) = self.transport.require_rpc_evidence_current() {
+                            return Err(operation_error.take_evidence_or(error));
+                        }
+                        cancellation.check()?;
+                        in_flight.take_response(response)
+                    }
+                    Err(fallback) => {
+                        // A later sibling may have returned the uncertainty
+                        // during cleanup; select only after every outcome.
+                        let fallback = self
+                            .transport
+                            .require_rpc_evidence_current()
+                            .err()
+                            .unwrap_or(fallback);
+                        Err(operation_error.take_or(fallback))
+                    }
                 }
+            })
+        }
+
+        #[allow(clippy::too_many_arguments)]
+        fn request_attempts<'scope, 'env>(
+            &'env self,
+            scope: &'scope std::thread::Scope<'scope, 'env>,
+            cancellation: &crate::CancellationToken,
+            deadline: std::time::Instant,
+            budget: &crate::query_budget::QueryBudgetContext,
+            operation: &ClusterEventOperation,
+            scan_range: Option<RangeId>,
+            reports: &std::sync::mpsc::Sender<AttemptReply>,
+            in_flight: &mut InFlight,
+            operation_error: &mut EventOperationError,
+        ) -> Result<usize> {
+            let mut last_error = invalid("event cluster request failed");
+            for attempt in 0..5 {
+                cancellation.check()?;
+                self.transport.require_rpc_evidence_current()?;
                 if attempt > 0 {
+                    let now = std::time::Instant::now();
+                    let pause = std::time::Duration::from_millis(100 << (attempt - 1))
+                        .min(deadline.saturating_duration_since(now));
+                    if let Waited::Answered(response) = in_flight.wait(
+                        None,
+                        now + pause,
+                        cancellation,
+                        operation,
+                        operation_error,
+                    )? {
+                        return Ok(response);
+                    }
                     std::thread::sleep(
-                        std::time::Duration::from_millis(100 << (attempt - 1))
-                            .min(deadline.saturating_duration_since(std::time::Instant::now())),
+                        (now + pause).saturating_duration_since(std::time::Instant::now()),
                     );
-                    // Discovery retains its stop/retry policy. Its RPC errors
-                    // remain in the opt-in transport journal; they do not replace
-                    // an actual operation error or downgrade an unknown write.
-                    match self.refresh_members_until(deadline) {
-                        Ok(true) => {}
-                        Ok(false) => {
+                    cancellation.check()?;
+                    let discovery = self.refresh_members_until(deadline)?;
+                    if let Waited::Answered(response) = in_flight.wait(
+                        None,
+                        std::time::Instant::now(),
+                        cancellation,
+                        operation,
+                        operation_error,
+                    )? {
+                        return Ok(response);
+                    }
+                    match discovery {
+                        Discovery::Observed => {}
+                        Discovery::Unanswered => {
                             last_error = invalid("no event cluster member is reachable");
                             continue;
                         }
-                        Err(error) => return Err(operation_error.take_or(error)),
+                        Discovery::Interrupted => break,
                     }
                 }
-                if std::time::Instant::now() >= deadline {
-                    break;
-                }
-                let (destination, request) = (|| -> Result<_> {
+                cancellation.check()?;
+                let (destination, request) = {
                     let topology = self.topology.read();
                     let range = if let Some(id) = scan_range {
                         topology
@@ -378,35 +651,62 @@ mod client {
                             .ok_or_else(|| invalid("missing event point key"))?;
                         topology.range_for_key(CLUSTER_EVENTS_COLLECTION, &id)?
                     };
-                    Ok((
+                    (
                         range.leader.clone(),
                         ClusterEventRequest {
                             range_id: range.id,
                             range_epoch: range.epoch,
                             operation: operation.clone(),
                         },
-                    ))
-                })()
-                .map_err(|error| operation_error.take_or(error))?;
-                // Reserve part of the remaining budget for route discovery
-                // after a silent old leader. Otherwise every new request can
-                // exhaust its whole budget on the same stale route forever.
+                    )
+                };
+                // Preserve the half-budget discovery/retry schedule. Only the
+                // listening worker may wait for the SAME absolute deadline.
                 let now = std::time::Instant::now();
-                let attempt_cancellation = cancellation
-                    .child_with_deadline(now + deadline.saturating_duration_since(now) / 2);
-                match self.transport.application_event_cancellable(
-                    &attempt_cancellation,
-                    &destination,
-                    request,
-                ) {
-                    Ok(response) => return Ok(response),
-                    Err(error) => operation_error.write_failed(error),
+                let slice_end = now + deadline.saturating_duration_since(now) / 2;
+                let token = cancellation.child();
+                let exchange = {
+                    let token = token.clone();
+                    let reports = reports.clone();
+                    let budget = budget.clone();
+                    move || {
+                        let _budget = budget.install();
+                        let reply = self.transport.application_event_listening(
+                            &token,
+                            slice_end,
+                            &destination,
+                            request,
+                        );
+                        let _ = reports.send((attempt, std::time::Instant::now(), reply));
+                    }
+                };
+                match std::thread::Builder::new()
+                    .name("event-request-attempt".into())
+                    .spawn_scoped(scope, exchange)
+                {
+                    Ok(_) => in_flight.attempts.push((attempt, token)),
+                    Err(error) => {
+                        operation_error.write_failed(error.into());
+                        continue;
+                    }
+                }
+                if let Waited::Answered(response) = in_flight.wait(
+                    Some(attempt),
+                    slice_end,
+                    cancellation,
+                    operation,
+                    operation_error,
+                )? {
+                    return Ok(response);
                 }
             }
-            self.transport
-                .require_rpc_evidence_current()
-                .map_err(|error| operation_error.take_or(error))?;
-            Err(operation_error.take_or(last_error))
+            if let Waited::Answered(response) =
+                in_flight.wait(None, deadline, cancellation, operation, operation_error)?
+            {
+                return Ok(response);
+            }
+            self.transport.require_rpc_evidence_current()?;
+            Err(last_error)
         }
 
         fn get_request(
@@ -448,11 +748,12 @@ mod client {
                         );
                     }
                     match self.refresh_members_until(deadline) {
-                        Ok(true) => {}
-                        Ok(false) => {
+                        Ok(Discovery::Observed) => {}
+                        Ok(Discovery::Unanswered) => {
                             last = invalid("no member reached during typed Get discovery");
                             continue;
                         }
+                        Ok(Discovery::Interrupted) => continue,
                         Err(error) => return Err(operation_error.take_or(error)),
                     }
                 }

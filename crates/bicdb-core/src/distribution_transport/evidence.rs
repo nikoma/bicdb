@@ -80,6 +80,18 @@ impl Observer {
         }
         Ok(())
     }
+    pub(super) fn require_call_entry(&self) -> Result<()> {
+        self.require_current()?;
+        let key = Arc::as_ptr(&self.sink) as *const () as usize;
+        let parent_dispatched = ACTIVE_SINKS.with(|active| active.borrow().get(&key).copied());
+        if let Some(dispatched) = parent_dispatched {
+            return Err(self.fail(
+                dispatched,
+                "same-thread evidence sink reentry before worker dispatch",
+            ));
+        }
+        Ok(())
+    }
     fn fail(&self, dispatched: bool, detail: impl std::fmt::Display) -> BicDbError {
         // An uncertainty discovered concurrently must never be downgraded.
         self.failed
@@ -98,7 +110,7 @@ impl Observer {
         self.require_current()
             .map_err(|error| self.fail(record.may_have_dispatched, error))?;
         let key = Arc::as_ptr(&self.sink) as *const () as usize;
-        let _callback = CallbackScope::enter(key).ok_or_else(|| {
+        let _callback = CallbackScope::enter(key, record.may_have_dispatched).ok_or_else(|| {
             self.fail(
                 record.may_have_dispatched,
                 "same-thread evidence sink reentry; observed dispatch is fenced",
@@ -180,15 +192,17 @@ impl Observer {
     }
 }
 std::thread_local! {
-    static ACTIVE_SINKS: std::cell::RefCell<BTreeSet<usize>> = std::cell::RefCell::new(BTreeSet::new());
+    static ACTIVE_SINKS: std::cell::RefCell<BTreeMap<usize, bool>> = std::cell::RefCell::new(BTreeMap::new());
 }
 struct CallbackScope {
     key: usize,
 }
 impl CallbackScope {
-    fn enter(key: usize) -> Option<Self> {
+    fn enter(key: usize, dispatched: bool) -> Option<Self> {
         ACTIVE_SINKS.with(|active| {
-            if active.borrow_mut().insert(key) {
+            let mut active = active.borrow_mut();
+            if let std::collections::btree_map::Entry::Vacant(entry) = active.entry(key) {
+                entry.insert(dispatched);
                 Some(Self { key })
             } else {
                 None

@@ -13,20 +13,24 @@ scaling and fault-safe rebalance of the current artifact remain unqualified.
 
 ## Latest delivered source — 2026-11-14 UTC
 
-Remote main is **1.0.504-beta**,
-`3dc753edf9be3865ab8376657f99b14daceaf534`. All required PR178 checks
-passed; the merged complete tree equals tested head `54b325f69693b34b00c3c92325ad11ecd7dbffeb`.
-The source versions are synchronized across 29 packages. This delivery adds
-documentation and retained evidence; it does not produce a release binary,
-verify a deployment or establish physical/production qualification.
+The runtime evidence baseline for this documentation update is remote main
+**1.0.505-beta**, `e25b3ba194c6f3ad73e2f393b68b175fbf1edd92`.
+[PR183](https://github.com/nikoma/bicdb/pull/183) merged client request-budget,
+uncertain-outcome and original error-evidence fixes. All required checks passed;
+the complete merge tree `6e1547a07a2749be2946ba50f2028b74ac080b90` equals
+tested head `99f1a05bce08ba0ad5f8a777a844317d6c7a6d2b`. The serial native
+suite passed212/0 with one ignored; this is hosted regression evidence, not
+physical qualification. Source versions are synchronized across29 packages.
+No release binary or verified deployment was produced by that merge.
 
 The [follow-up qualification checkpoint](ha-qualification-checkpoint-2026-11-13.md)
-separates the original failures, diagnostic passes, exact-source native repeat,
-corrected client controls and missing cross-process/multi-range producers. It
-records main503's exact tree match to c6 and retains the earlier four failures
-as inconclusive causes despite a passing repeat. The 505 client repair and native
-handoff prototypes have their own source/test identities and admission gates;
-their component results are not deployed main504 capabilities.
+separates original failures, diagnostic passes, the exact-source native repeat,
+corrected client controls and missing cross-process/multi-range producers.
+The newer native handoff prototypes remain separate source branches: the
+corrected82-case fixture still failed10 cases, and the first15-case export-reference
+protocol cohort failed one case with its post-timeout state inconclusive.
+Neither is delivered or production-qualified by505 or this506 documentation update.
+The original Azure scale-out qualification remains failed.
 
 ## Merged-source snapshot — 2026-11-13 UTC (502)
 

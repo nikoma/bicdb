@@ -124,3 +124,35 @@ Cold continuation, crash recovery of this new exact attempt, exhausted-custody
 retirement, real independent-machine failure, the 64-range/four-to-five-node
 scale-out gate, sustained throughput gain and production qualification remain
 open. No existing source API or test name establishes those results.
+
+## Current-reader negative component controls
+
+A source-only successor adds six **injected read-observation** faults inside the
+same actual current common/provenance reader. The positive pipeline first
+obtains a genuine committed target/native receipt and real CURRENT/archive
+records. Each scope calls `read_native_joint_decision`; it never constructs a
+receipt from fixture DTOs or returns a receipt/grant from its helper. It retains
+canonical hashes of the actual original body/provenance and each exact refusal,
+then revalidates the untouched original native bytes after the fault scope ends.
+
+The six observations are an erased profile-pointer observation with the actual
+sidecar still present, missing provenance CURRENT, missing archive, mismatched
+archive, mismatched sidecar xid, and omitted complete source obligations. Each
+must refuse through its intended reader branch. These are read-observation
+faults after actual reads, **not on-disk corruption, actual native transaction
+aborts, cold recovery or six additional runtime tests**. They run within the
+existing positive pipeline case; the four original pipeline cases and budgets
+remain unchanged. All these controls remain uncompiled/unexecuted here.
+
+A separate `not(feature = "tls-replication")` unit control uses the real native
+origin fixture and actual direct/current decision reader entrypoints. A
+refusal-only semantic format flag (no remote record or grant) must cause both
+readers to reject the unsupported profile before looking up a record, even
+without a provenance pointer. This control requires separate no-TLS execution;
+compilation of a workflow consumer is not evidence it ran. It is also
+**not tested** at this source-only stage.
+
+The no-TLS successor also rejects this semantic flag in ordinary format
+validation, before open/migration can silently accept its unsupported profile.
+The reader-only unit checks that real format validation refusal as well; it
+does not reopen a live database or construct a remote committed record.

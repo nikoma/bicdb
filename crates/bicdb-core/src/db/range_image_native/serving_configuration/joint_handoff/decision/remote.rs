@@ -1,6 +1,8 @@
 //! DISTINCT remote native DECISION attempt. A real participant admission plus
 //! original Registered exclusion owns writes; historical DATA grants nothing.
 use super::*;
+#[cfg(test)]
+mod reader_controls;
 use crate::distribution_range_handoff::NativeRemoteDecisionAdmission;
 
 #[derive(Debug)]
@@ -149,6 +151,10 @@ impl BicDb {
         &self,
         record: &NativeJointDecisionRecord,
     ) -> Result<()> {
+        #[cfg(test)]
+        let profile_observation = reader_controls::profile_record(record);
+        #[cfg(test)]
+        let record = profile_observation.as_ref().unwrap_or(record);
         if record.remote_provenance_sha256.is_some() {
             self.require_remote_native_decision_provenance(record)?;
         } else if format::native_remote_joint_decision_active(self.data_path())?
@@ -175,14 +181,19 @@ impl BicDb {
             .remote_provenance_sha256
             .as_ref()
             .ok_or_else(|| invalid("remote DECISION provenance pointer absent"))?;
-        let current: RemoteDecisionProvenance = self
-            .read_native_range_image_record(&remote_current(record.decision.old_range().id))?
+        let mut current = self.read_native_range_image_record::<RemoteDecisionProvenance>(
+            &remote_current(record.decision.old_range().id),
+        )?;
+        #[cfg(test)]
+        reader_controls::current_observation(&mut current)?;
+        let current = current
             .ok_or_else(|| invalid("remote DECISION protected provenance CURRENT absent"))?;
-        let archive: RemoteDecisionProvenance = self
-            .read_native_range_image_record(&remote_archive(
-                record.decision.old_range().id,
-                pointer,
-            ))?
+        let mut archive = self.read_native_range_image_record::<RemoteDecisionProvenance>(
+            &remote_archive(record.decision.old_range().id, pointer),
+        )?;
+        #[cfg(test)]
+        reader_controls::archive_observation(&mut archive);
+        let archive = archive
             .ok_or_else(|| invalid("remote DECISION immutable provenance archive absent"))?;
         current.validate(record)?;
         if current != archive {

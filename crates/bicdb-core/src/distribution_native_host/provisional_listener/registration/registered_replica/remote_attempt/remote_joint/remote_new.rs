@@ -280,6 +280,21 @@ impl NativeMetadataControlHost {
             .ok_or_else(|| invalid("remote DECISION original phase absent"))?;
         phase.test_arm_remote_decision_cut(code)
     }
+    pub(crate) fn test_remote_native_decision_current_reader_refusals(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        let owner = self.registered_remote_joint_owner(range)?;
+        let service = owner
+            .service()
+            .try_lock()
+            .ok_or_else(|| invalid("reader control original service busy"))?;
+        let database = service.database();
+        let db = database
+            .try_read()
+            .ok_or_else(|| invalid("reader control original DB busy"))?;
+        db.test_remote_native_decision_current_reader_refusals(owner.target().native(), range)
+    }
     pub(crate) fn test_remote_native_decision_evidence(
         &self,
         range: crate::RangeId,

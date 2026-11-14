@@ -135,6 +135,7 @@ impl NativeJointDecisionReceipt {
         self.record.actual_local_visibility_sequence
     }
     pub(crate) fn require_current(&self, database: &BicDb) -> Result<()> {
+        database.require_native_joint_decision_reader_profile()?;
         self.native.require_current(database)?;
         self.record.validate()?;
         self.record.decision.require_actual_native(&self.native)?;
@@ -175,12 +176,22 @@ impl NativeJointDecisionReceipt {
     }
 }
 impl BicDb {
+    fn require_native_joint_decision_reader_profile(&self) -> Result<()> {
+        #[cfg(not(feature = "tls-replication"))]
+        if format::native_remote_joint_decision_active(self.data_path())? {
+            return Err(invalid(
+                "remote decision semantic profile requires tls-replication reader",
+            ));
+        }
+        Ok(())
+    }
     /// Actual protected CURRENT read, not a checksum/DTO authority constructor.
     pub(in crate::db::range_image_native) fn read_current_native_joint_writer_decision(
         &self,
         native: &NativeRecoveryAdmission,
         range: RangeId,
     ) -> Result<NativeJointDecisionReceipt> {
+        self.require_native_joint_decision_reader_profile()?;
         native.require_current(self)?;
         let actual: NativeJointDecisionRecord = self
             .read_native_range_image_record(&key(range))?
@@ -368,6 +379,7 @@ impl BicDb {
         range: RangeId,
         expected: &str,
     ) -> Result<NativeJointDecisionReceipt> {
+        self.require_native_joint_decision_reader_profile()?;
         native.require_current(self)?;
         let record: NativeJointDecisionRecord =
             self.read_native_range_image_record(&key(range))?
@@ -390,5 +402,56 @@ impl BicDb {
         };
         result.require_current(self)?;
         Ok(result)
+    }
+}
+
+#[cfg(all(test, not(feature = "tls-replication")))]
+mod unsupported_remote_reader_tests {
+    use super::*;
+    #[test]
+    fn native_remote_decision_current_reader_without_tls_refuses_required_profile_before_lookup() {
+        let (_root, database, topology, spec) =
+            crate::distribution_range_consensus::native_origin_fixture();
+        let db = database.read();
+        let native = db
+            .native_recovery_admission(
+                &spec.cluster_id,
+                spec.bootstrap_id,
+                &spec.node_id,
+                spec.member_incarnation,
+            )
+            .unwrap();
+        let range = topology.ranges.values().next().unwrap().id;
+        let expected = "a".repeat(64);
+        let before = db
+            .read_native_joint_decision(&native, range, &expected)
+            .unwrap_err()
+            .to_string();
+        assert!(before.contains("protected joint decision unavailable"));
+        // Refusal-only format fixture: no remote DECISION/sidecar is minted.
+        crate::format::test_publish_remote_joint_decision_reader_refusal_only(db.data_path())
+            .unwrap();
+        let format_error = crate::format::plan_migration(db.data_path(), false)
+            .unwrap_err()
+            .to_string();
+        let direct = db
+            .read_native_joint_decision(&native, range, &expected)
+            .unwrap_err()
+            .to_string();
+        let current = db
+            .read_current_native_joint_writer_decision(&native, range)
+            .unwrap_err()
+            .to_string();
+        eprintln!(
+            "NON_TLS_REMOTE_DECISION_ACTUAL_READER_REFUSAL {}",
+            serde_json::json!({
+                "genuine_native_birth":native.birth_id(),"actual_before_flag_error":before,
+                "actual_direct_reader_error":direct,"actual_current_reader_error":current,"actual_format_validation_error":format_error,
+                "remote_committed_record_not_created":true,"format_refusal_only_not_remote_qualification":true,
+            })
+        );
+        assert!(format_error.contains("requires tls-replication reader"));
+        assert!(direct.contains("requires tls-replication reader"));
+        assert!(current.contains("requires tls-replication reader"));
     }
 }

@@ -107,6 +107,31 @@ pub(super) fn exercise(
     assert!(original_xid > 0);
     let outcome = actual["outcome"]["state"].as_str().unwrap();
     if code.is_none() {
+        let controls =
+            target.test_remote_native_decision_current_reader_refusals(mf.capture_range.id);
+        evidence(&output.join("remote-decision-actual-current-reader-refusals.json"),&serde_json::json!({
+            "actual_reader_observations":controls.as_ref().ok(),"diagnostic_error":controls.as_ref().err().map(ToString::to_string),
+            "original_native_xid":original_xid,"injected_read_observations_not_disk_corruption":true,
+        })).unwrap();
+        let controls = controls.unwrap();
+        assert_eq!(controls["actual_native_xid"], original_xid);
+        assert_eq!(controls["actual_native_status"], "Committed");
+        assert_eq!(controls["original_native_bytes_unchanged"], true);
+        let observations = controls["observations"].as_array().unwrap();
+        assert_eq!(observations.len(), 6);
+        for observed in observations {
+            assert_eq!(observed["receipt_returned"], false);
+            assert!(!observed["actual_current_reader_error"].is_null());
+            assert!(
+                observed["actual_current_reader_error"]
+                    .as_str()
+                    .unwrap()
+                    .contains(observed["expected_refusal"].as_str().unwrap()),
+                "intended current-reader branch actually refused: {observed}"
+            );
+        }
+    }
+    if code.is_none() {
         audit_source_data_rejections(
             &actual["provenance"]["correlation"]["source_proof"],
             mf,

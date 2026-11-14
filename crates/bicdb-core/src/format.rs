@@ -679,6 +679,15 @@ fn migrate_to_current(
 }
 
 fn validate_supported(metadata: &FormatMetadata) -> Result<()> {
+    #[cfg(not(feature = "tls-replication"))]
+    if metadata
+        .feature_flags
+        .contains(NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG)
+    {
+        return Err(BicDbError::FormatCompatibility(
+            "remote decision semantic profile requires tls-replication reader".into(),
+        ));
+    }
     validate_supported_with_flags(metadata, KNOWN_FEATURE_FLAGS)
 }
 fn validate_supported_with_flags(metadata: &FormatMetadata, known: &[&str]) -> Result<()> {
@@ -1976,6 +1985,7 @@ pub(crate) fn native_joined_remote_receive_active(root: &Path) -> Result<bool> {
 
 /// Re-fsync on every continuation; a visible flag after failed directory fsync
 /// does not prove the older-reader refusal is durable.
+#[cfg(feature = "tls-replication")]
 pub(crate) fn enable_native_remote_joint_decision(root: &Path) -> Result<()> {
     let lock = feature_flags_lock(root);
     let _guard = lock.lock();
@@ -2021,4 +2031,16 @@ pub(crate) fn test_old_reader_without_remote_joint_decision(root: &Path) -> Resu
         .filter(|f| *f != NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG)
         .collect();
     validate_supported_with_flags(&metadata, &old)
+}
+
+#[cfg(all(test, not(feature = "tls-replication")))]
+pub(crate) fn test_publish_remote_joint_decision_reader_refusal_only(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
 }

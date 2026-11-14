@@ -1413,6 +1413,30 @@ pub(super) fn exercise(
                 remote_fact.manifest().checksum_sha256,
                 manifest.checksum_sha256
             );
+            if matches!(case, SourceCase::RemoteOldFrames) {
+                let mf = remote_fact.manifest();
+                let report = mf
+                    .source_old_close_record
+                    .test_manifest_refusals(mf)
+                    .unwrap();
+                evidence(
+                    &output.join(format!(
+                        "source-old-native-record-provenance-{}.json",
+                        mf.capture_range.id.get()
+                    )),
+                    &report,
+                )
+                .unwrap();
+                assert!(report["original_validation_error"].is_null());
+                let controls = report["cases"].as_array().unwrap();
+                assert_eq!(controls.len(), 12);
+                assert!(
+                    controls
+                        .iter()
+                        .all(|control| control["actual_error"].is_string()),
+                    "{report}"
+                );
+            }
             if target_uses_remote_old_seed(case) {
                 let mf = remote_fact.manifest();
                 target_seed_boundary(

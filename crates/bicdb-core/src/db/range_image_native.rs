@@ -92,9 +92,9 @@ pub(crate) use serving_configuration::{
     NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,
     NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
     NativeJointDecisionReceipt, NativeJointHistoricalCutScope, NativeJointOldCloseReceipt,
-    NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
-    NativeJointServingBridgeReceipt, NativeJointServingPreparation, NativeReadyObserverReadScope,
-    NativeRecoveredServingReceipt,
+    NativeJointOldCloseRecordData, NativeJointOldPhysicalProof,
+    NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
+    NativeJointServingPreparation, NativeReadyObserverReadScope, NativeRecoveredServingReceipt,
 };
 use serving_configuration::{
     NativeClosedWriterFact, NativeClosedWriterPoint, NativeJointServingDomain,
@@ -776,6 +776,9 @@ impl SourceRangeImageLineage {
         &self,
     ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
         self.base.restore_activation.as_ref()
+    }
+    pub(crate) fn physical_base_receipt_sha256(&self) -> &str {
+        &self.base.checksum_sha256
     }
     pub(crate) fn native_receipt_sha256(&self) -> &str {
         self.prefix

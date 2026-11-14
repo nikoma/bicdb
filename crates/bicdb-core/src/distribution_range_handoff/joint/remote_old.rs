@@ -121,11 +121,15 @@ pub(crate) struct NativeRemoteOldReplyV1 {
     pub metadata_read_index: u64,
     pub metadata_context_id: Uuid,
     pub closed: Option<NativeJointMaterializedFacts>,
+    pub closed_native_record: Option<crate::db::NativeJointOldCloseRecordData>,
     pub constraints: NativeJointIrrevocableFacts,
     pub checksum_sha256: String,
 }
 impl NativeRemoteOldReplyV1 {
     pub(crate) fn checksum(&self) -> Result<String> {
+        if let Some(record) = &self.closed_native_record {
+            record.require_byte_bound()?;
+        }
         let mut value = self.clone();
         value.checksum_sha256.clear();
         Ok(hex::encode(sha2::Sha256::digest(

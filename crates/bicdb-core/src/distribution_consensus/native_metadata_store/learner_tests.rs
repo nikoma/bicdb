@@ -340,9 +340,12 @@ fn native_metadata_learner_cannot_vote_and_cached_legacy_store_cannot_adopt_enfo
             &MetadataReadParticipant::from_transport(node(3), 1, None, true),
         )
         .unwrap_err();
-    assert!(read_error
-        .to_string()
-        .contains("requires actual native owned store"));
+    assert!(
+        read_error
+            .to_string()
+            .contains("requires actual native owned store"),
+        "{read_error}"
+    );
     assert!(legacy.native_owner.is_none());
     assert!(legacy.state.native_store_id.is_none());
 

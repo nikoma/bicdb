@@ -1,0 +1,132 @@
+{
+  "source_revision": "d6908095e0d347e563ef68801f49e52dba35452d",
+  "requested_source": "d6908095e0d347e563ef68801f49e52dba35452d",
+  "authoritative_source_verified": true,
+  "run_id": 43486854857,
+  "job_id": 132097541321,
+  "job_name": "Focused Core library (native_registered_fifth_remote_native_base_actual_)",
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "captured_at_utc": "2026-11-13T19:04:48.035380+00:00",
+  "raw_bytes": 2911993,
+  "raw_sha256": "99b615210f611ec8d0a5a8acb9ce5ae644378157a4870429c78ad7d61d7d42b9",
+  "compressed_file": "d69-portable-native-base-four-core-job132097541321.log.gz",
+  "compressed_sha256": "129f2c2b4416a627f251b745c9dc047b3b82c0d3fe7107b647f1e6ed7afa9403",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-13T18:59:01.2484851Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 1055 filtered out; finished in 31.95s"
+  ],
+  "failure_context": [],
+  "test_observations": [
+    {
+      "line": 21758,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_refuses_without_live_final_image",
+      "result": "ok"
+    },
+    {
+      "line": 21761,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_integrity_survives_image_invalidation",
+      "result": "ok"
+    },
+    {
+      "line": 21764,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_preserves_verified_history_floor",
+      "result": "ok"
+    },
+    {
+      "line": 21767,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_post_wal_cancel_reconciles_same_xid",
+      "result": "ok"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T18:52:57Z",
+      "completed_at": "2026-11-13T18:52:59Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T18:52:59Z",
+      "completed_at": "2026-11-13T18:53:02Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T18:53:02Z",
+      "completed_at": "2026-11-13T18:53:11Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T18:53:11Z",
+      "completed_at": "2026-11-13T18:53:20Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T18:53:20Z",
+      "completed_at": "2026-11-13T18:57:00Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T18:57:00Z",
+      "completed_at": "2026-11-13T18:58:29Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-11-13T18:58:29Z",
+      "completed_at": "2026-11-13T18:59:01Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T18:59:01Z",
+      "completed_at": "2026-11-13T18:59:03Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 15,
+      "started_at": "2026-11-13T18:59:03Z",
+      "completed_at": "2026-11-13T18:59:13Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T18:59:13Z",
+      "completed_at": "2026-11-13T18:59:13Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T18:59:13Z",
+      "completed_at": "2026-11-13T18:59:13Z"
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "source_revision": "e1ecfeab71d3f1e104530e9d6aa3bf37971abd65",
+  "scope": "This exact three-run corpus only; source-only diagnosis of other revisions excluded",
+  "failed_cases": [
+    {
+      "case": "TargetCatalogueFloorDirSyncRetry",
+      "classification": "failed",
+      "stage": "PublishNativeBase prerequisite; catalogue_tests.rs:102; before the named adoption fault is armed",
+      "exact_error": "QueryTimedOut",
+      "named_fault_control": "not tested",
+      "native_base_outcome": "inconclusive",
+      "missing_observations": [
+        "post-error retained native-base owner/outcome",
+        "post-error native CURRENT/archive and xid status",
+        "post-error selected ACK read"
+      ],
+      "confirmed_cause": "Prerequisite timed out; precise mutation/WAL boundary and cause are not established",
+      "not_established": [
+        "native base absent",
+        "native base committed",
+        "rollback",
+        "durable-data loss",
+        "directory-sync fault behavior",
+        "adoption cancellation retry behavior"
+      ],
+      "next_smallest_deterministic_test": {
+        "change": "Diagnostic-only separate test/code revision: emit retained attempt/native xid/checksummed bytes and exact outcome, original request/OWN deadlines, stage timings, native CURRENT/archive and readback errors before any unwrap/assert. Preserve known/unknown custody if observations themselves fail.",
+        "execution": "Repeat original four-case cohort with the same assertions and deadlines, and exercise each named fault only after a reported successful native-base prerequisite. A singleton may isolate a boundary, but cannot replace the original failed cohort.",
+        "classify": "Distinguish pre-attempt refusal, proven abort, known committed reply timeout and unknown outcome using actual native evidence. Do not infer from timeout or reconstruct new attempt.",
+        "implementations": "Keep fixes and subsequent results separate from this immutable failed baseline."
+      }
+    },
+    {
+      "case": "TargetCatalogueFloorCanceled",
+      "classification": "failed",
+      "stage": "PublishNativeBase prerequisite; catalogue_tests.rs:102; before the named adoption fault is armed",
+      "exact_error": "QueryTimedOut",
+      "named_fault_control": "not tested",
+      "native_base_outcome": "inconclusive",
+      "missing_observations": [
+        "post-error retained native-base owner/outcome",
+        "post-error native CURRENT/archive and xid status",
+        "post-error selected ACK read"
+      ],
+      "confirmed_cause": "Prerequisite timed out; precise mutation/WAL boundary and cause are not established",
+      "not_established": [
+        "native base absent",
+        "native base committed",
+        "rollback",
+        "durable-data loss",
+        "directory-sync fault behavior",
+        "adoption cancellation retry behavior"
+      ],
+      "next_smallest_deterministic_test": {
+        "change": "Diagnostic-only separate test/code revision: emit retained attempt/native xid/checksummed bytes and exact outcome, original request/OWN deadlines, stage timings, native CURRENT/archive and readback errors before any unwrap/assert. Preserve known/unknown custody if observations themselves fail.",
+        "execution": "Repeat original four-case cohort with the same assertions and deadlines, and exercise each named fault only after a reported successful native-base prerequisite. A singleton may isolate a boundary, but cannot replace the original failed cohort.",
+        "classify": "Distinguish pre-attempt refusal, proven abort, known committed reply timeout and unknown outcome using actual native evidence. Do not infer from timeout or reconstruct new attempt.",
+        "implementations": "Keep fixes and subsequent results separate from this immutable failed baseline."
+      }
+    }
+  ],
+  "passed_components": [
+    "Seven cold preservation/index/readonly controls, including actual SIGKILL before progress and refusal before generic logical replay",
+    "Five row/history/index/same-open retention controls, including actual inner durable-WAL apply failure",
+    "Actual selected catalogue floor adoption with full selected event record retained",
+    "Missing-native-base adoption refusal without mutation"
+  ],
+  "open_gates": [
+    {
+      "classification": "not tested",
+      "area": "Cold self-healing",
+      "remaining": "Exact pending attempt recovery/materialization, progress reconciliation and authority re-admission; current control safely refuses normal open."
+    },
+    {
+      "classification": "not tested",
+      "area": "Serving and correct reads",
+      "remaining": "Actual joint activation/Open, fresh per-member and coordinator/read quorum, APP ACK and full Strong reads after movement; no false absence."
+    },
+    {
+      "classification": "not tested",
+      "area": "Populated second range",
+      "remaining": "Same original target after first range Serving, actual APP ACK and full Strong read; not two Closed images."
+    },
+    {
+      "classification": "not tested",
+      "area": "Independent IO progress",
+      "remaining": "Other ranges continue during deliberately stalled fsync. Service/journal locks can remain held across fsync; role deadlines do not bound kernel IO."
+    },
+    {
+      "classification": "not tested",
+      "area": "Full index/FTS/queue/audit parity",
+      "remaining": "Local spatial maintenance events may occur; imported business audit/broker suppression is not full asset/rebuild qualification."
+    },
+    {
+      "classification": "not tested",
+      "area": "Physical capacity/HA/general SQL",
+      "remaining": "Independent VM/machine faults; bounded controller convergence; sustained post-convergence throughput gain; ordinary transparent SQL and multi-range business transactions."
+    },
+    {
+      "classification": "inconclusive",
+      "area": "Corrupt oversized cursor allocation",
+      "remaining": "Index values are rejected at accepted byte/count limits, but an underlying cursor can allocate a value before that check. No strict allocation bound or 8GiB qualification established."
+    }
+  ]
+}

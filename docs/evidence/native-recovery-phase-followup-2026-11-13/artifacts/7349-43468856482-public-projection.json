@@ -1,0 +1,670 @@
+{
+  "format_version": 1,
+  "included_members": [
+    {
+      "bytes": 20574,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/ack-ledger.json",
+      "sha256": "776a1cb91b50592d34210d5fa4d347a973595d62b708757fecabe8fcee6e01b3"
+    },
+    {
+      "bytes": 90,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/cleanup.json",
+      "sha256": "85bb96c8b2e72c3b3aed5583ef302004b7ceed8beb41e641d1b241cea4d3775e"
+    },
+    {
+      "bytes": 18,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/evidence-errors.json",
+      "sha256": "861f18bcf433cba1e778ffc114e58f280b62a2f21198feeb33e135018efc7ce8"
+    },
+    {
+      "bytes": 524,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/execution-identity.json",
+      "sha256": "e74ffc2e2d23b600eb15e5d78ad987d300e9fcee5400a3d42801e7715c5a176b"
+    },
+    {
+      "bytes": 142280,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/fence-ledger.json",
+      "sha256": "438f5618a460d2d7a9ae00d10a2344be3825d3af5db8f0430510efd5a819a9a5"
+    },
+    {
+      "bytes": 76022,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/old-sink-control-intent.json",
+      "sha256": "24238947aed6f5518d7c4d114f9c8c30b9184e23960021fc5593e445620f5fa7"
+    },
+    {
+      "bytes": 162503,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/old-sink-control-result.json",
+      "sha256": "3b3831c160f68dd6c6676656bb0eff2b062aaa9d68a8d4c0beaf9395469e1a03"
+    },
+    {
+      "bytes": 123950,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/registered-proposal-reader-fence-retry-1.json",
+      "sha256": "abf89746a141495373add9bdf47b8234356c1cc2da1e432cf0ee3026783fe5f0"
+    },
+    {
+      "bytes": 4307,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/source-frame-ledger.json",
+      "sha256": "2dc9ac03c8a3e1b1dbcf7fd36b5250350cc1ddba4e31f773768904d3e1e63259"
+    },
+    {
+      "bytes": 210831,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/terminal.json",
+      "sha256": "1faae2726669c12f11deaa01dced7953f142bc10c11c5451502d6c087b8415d8"
+    },
+    {
+      "bytes": 196,
+      "path": "rustc.txt",
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    {
+      "bytes": 281661,
+      "path": "selected-tests.log",
+      "sha256": "61998642e8e7ea331abb6005340f03af6f5d6ec092da1833b419da2c331f2c45"
+    },
+    {
+      "bytes": 41,
+      "path": "source-revision.txt",
+      "sha256": "eea2a5d0e5845f7c70e677e273d9bb6affb667db19dc3876d75c3ab7382cced9"
+    },
+    {
+      "bytes": 515265,
+      "path": "tests.log",
+      "sha256": "c01ed82c21d582fa2f93a15e1fb469154954926859199dbd8023e5aa660d765c"
+    }
+  ],
+  "omitted_members": [
+    {
+      "bytes": 25251,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody-manifest.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "ca3fe6b03e14b14ca2ec98ba68823831048dac8f057a51816fde1e3b6d6358b1"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/.backup-write.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 6885,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/cluster-range-write-log.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "bfa53fb497a72fff6756fdfb2a280249c05c518a9de21d1a8ebd733e8b011e90"
+    },
+    {
+      "bytes": 418,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/collections.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "1fcd12026f9d1e9e0b726519ac73e8db72de2f6d4354d04e4080dd420d931f14"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/events/events.seg",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 466,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/format.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "2bced33183f2c7e6dfc2a920beb24ab017a151e8e385a9250030afb81950b62a"
+    },
+    {
+      "bytes": 238,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/incarnations.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "49f3858776f6b76f2d0390646ad42f426eb3428d01061405d9607dee4c105967"
+    },
+    {
+      "bytes": 127,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/mesh_signing_key.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "682a39a1d15b4fc4b407846558c79e63b71d099bac74f14893db545f682909c5"
+    },
+    {
+      "bytes": 366,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/native-bootstrap-seed.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "2d80d46dc2eefd2cd8bc6d97d332d750164dff3e79e86e5ec455c8f9ec61c83a"
+    },
+    {
+      "bytes": 11337,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/native-initial-metadata/cluster-metadata-consensus.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "f05a8464a5e2756679fb9d3e625cc5bf70f8cb23490db3640f8f191b5bdec17d"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/native-initial-metadata/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/native-range-catalogue-owner/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/paged/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 147456,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/paged/store.pages",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "326822a3c4af1e5b17ed43baf0e4d4593498f94d01b5312e2b9f75010720c489"
+    },
+    {
+      "bytes": 428784,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/paged/store.wal",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "48d0146b281b58c735d02f348a64342783f72c955f98a2debc77cb3bb277ca1c"
+    },
+    {
+      "bytes": 1943,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/range-image-factory.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "4536cc280f02af1385b2955b09256dc5c85fbbdc0577d6c2bd358a1e610e70ae"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/sync.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 340,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/sync_state.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "7cd980d778e08a5321c29b6fc7f99a3516d3900151feef76f0df9e0303b172b7"
+    },
+    {
+      "bytes": 565,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node0/transactions.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e09ba1dd0df29794a7507002ac905a821b3a477237dffacc17e948f1b482f07f"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/.backup-write.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 7874,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/cluster-range-write-log.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "cbb3017f2a0a478d2ef3e3bb9af6305a0fa651454cfa7b8005ffb7d5a923da65"
+    },
+    {
+      "bytes": 418,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/collections.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "57f455b6b7480069efb9612bb8bda628e172fb1dafd1d79dfd9f6831844f5bea"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/events/events.seg",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 502,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/format.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "d7c8375b77e895ec78667fd30b8a6405ec69190885cdbf06c0aff4205bf149b6"
+    },
+    {
+      "bytes": 238,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/incarnations.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "7116f139ac3c155a9ef6398444de1f243c5859b93c4044ce64c9aaad0c247c18"
+    },
+    {
+      "bytes": 127,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/mesh_signing_key.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "a13607151215954e32f9621590c923c4a570809224a7bde8897226f1894c1356"
+    },
+    {
+      "bytes": 366,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/native-bootstrap-seed.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "dd0a9c67336830120411de8386fac5e0e041554b997bb819ac1c753d6a83faee"
+    },
+    {
+      "bytes": 11339,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/native-initial-metadata/cluster-metadata-consensus.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "d45d540c14307297fbdd0af1e7595a8e188e1359749d2bed9bbb47bbcf27ec3e"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/native-initial-metadata/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/native-range-catalogue-owner/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/paged/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 147456,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/paged/store.pages",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "541db1359891ec798560f66993359bbe2b07d2a0d61f8f00d160079e2a18ccc6"
+    },
+    {
+      "bytes": 453520,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/paged/store.wal",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "dae730b64eca89143c452c09a7dfbf8654d669ffa201437ed59961df52e84728"
+    },
+    {
+      "bytes": 1925,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/range-image-factory.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "2e87cfd9924c94bf0536c6f0a29d36fa7b888973b33b4feb350f29490adf7ae9"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 283,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/sync.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "b275a3c41835b08a4ef31cbfda4123b2a129d5f33ac395778933d347ca4de1b1"
+    },
+    {
+      "bytes": 340,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/sync_state.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "08bcbc2099981abe9a440a9981e063c47616dad8b32914ddd3fc3bec0c9751a1"
+    },
+    {
+      "bytes": 868,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node1/transactions.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "b2dae5333e54c62e466aefb36aa45a75d84e709714209466d060d10d6a905465"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/.backup-write.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 14240,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/cluster-range-write-log.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "ce7d04c0b2c5a4d1bbf1bbf2013873f77a671835a6fbb073eb87ba14426c9c31"
+    },
+    {
+      "bytes": 418,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/collections.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e078014aec493a298204bfecb85509cfd6e41c3e0d9751f7caab5c902e9a6631"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/events/events.seg",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 502,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/format.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "d7c8375b77e895ec78667fd30b8a6405ec69190885cdbf06c0aff4205bf149b6"
+    },
+    {
+      "bytes": 238,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/incarnations.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "bc5a1544d55ef2271590fbd818f24d7d2a822b606d0a91e11f98ad06e4ccbf6e"
+    },
+    {
+      "bytes": 127,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/mesh_signing_key.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "d13de9ef4f499d88941d8f4cdacff3f4a7af4e3dfd332cc43df4127b8fd60bfb"
+    },
+    {
+      "bytes": 366,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/native-bootstrap-seed.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "8e3ec16775c520f2d4748016774520c0d73a3a7ec90923884bafbcfa7147ccbd"
+    },
+    {
+      "bytes": 11339,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/native-initial-metadata/cluster-metadata-consensus.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "eb9c94494f6f26322cf333a983bdcaaf21b01f551957a8da83e22efe6569b897"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/native-initial-metadata/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/native-range-catalogue-owner/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/paged/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 180224,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/paged/store.pages",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e77152a24f172a236998eefdff1e67ba941c3a1946bc3596038c9ed3a6f02fbf"
+    },
+    {
+      "bytes": 634904,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/paged/store.wal",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "53f0e80da13569c38e9a35b38b8676cc5fcf70bd32aa9235d009e4e8cf9ed52a"
+    },
+    {
+      "bytes": 1924,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/range-image-factory.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "7b97435cdb06308b8839a161dff71691242346be0fb2176f6ca7b37df8ce32f1"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 283,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/sync.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "4589b7043bf23d686c2edd104df2c13d9a109d0a22656e35e787f234ace7c5d5"
+    },
+    {
+      "bytes": 340,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/sync_state.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "1f85739e5a831628f2f7ef6ef2591b71c0f84467f640ee7b04be96587ef40946"
+    },
+    {
+      "bytes": 1433,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node2/transactions.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "8f3600370b82dc321e073c65a9a9b145e7f88a34b77dc8770a85a54fe19e26e8"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/.backup-write.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 14240,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/cluster-range-write-log.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "6d9ad5c156eb9ebf44d58eca6ebbd85740c358596c814e95b251d773c6946f48"
+    },
+    {
+      "bytes": 418,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/collections.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e0bf80bfb3c2ffa121e62eecc19c1635b8cdd0ad170d39e565d7c99ea3f05364"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/events/events.seg",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 502,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/format.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "d7c8375b77e895ec78667fd30b8a6405ec69190885cdbf06c0aff4205bf149b6"
+    },
+    {
+      "bytes": 238,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/incarnations.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "ecfd92402173a8f1559048f025e047771ebb6260f907962663a556719ffa2273"
+    },
+    {
+      "bytes": 127,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/mesh_signing_key.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "c7ea7751162d1c480941bcf944831cf71b17fb0fbc1d99b66762c9ebf3dffc66"
+    },
+    {
+      "bytes": 366,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/native-bootstrap-seed.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "703505bfaed1ed1bc4cd95d4079e69c51a58f27dc7c05b5f1b9fbbfed2444df1"
+    },
+    {
+      "bytes": 11339,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/native-initial-metadata/cluster-metadata-consensus.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "0cb6cdcc3104c10d9031af01c9f7624995c9463c5f209d5d113083bbe03b953b"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/native-initial-metadata/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/native-range-catalogue-owner/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/paged/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 180224,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/paged/store.pages",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "c7ce02b9e2f416e37b9290792dc147a63f9a31b839c6864d06aa926f31962d5e"
+    },
+    {
+      "bytes": 634904,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/paged/store.wal",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "3b15a6dc131482e18de8c18563f59f2f10dae43e40b498d7baf13b5784c63764"
+    },
+    {
+      "bytes": 1939,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/range-image-factory.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "28fb88d69a4bee163dbaeddbddcceae064016f5259850c2995df1b630ccd68d0"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/sync.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 340,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/sync_state.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "2812492345814dc8415cd5e23d7c31aa10718da4f4248bb86dce7c3e0137a8c6"
+    },
+    {
+      "bytes": 1130,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node3/transactions.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "b4499cdefd4bf5fed8a06e5c5e54413adf60f6dfa298411d1d5cd3959b211602"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/.backup-write.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 3492,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/cluster-range-write-log.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "da588a89e83b471466b0cdb8111b045b0fd1c3d22d030129d77dc36af764d32e"
+    },
+    {
+      "bytes": 418,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/collections.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "604495fb0d3e598f4b337256827659ba3cb377de113c20df83056dd4ea65e8ae"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/events/events.seg",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 473,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/format.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "4991227ce9215b5ea3a0c36bbcee23702c59d6c7c29ee5f311f9af0c2a0193d2"
+    },
+    {
+      "bytes": 238,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/incarnations.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "1861e74e636d4f3eb2f0c25b96cc8c5ff9eeaa56c948c0e3024812f45ce6d82f"
+    },
+    {
+      "bytes": 127,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/mesh_signing_key.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "f4795801190ee30057aa8d69fd33d4ce8af2144b2e6eb10191b9da83f88f87fe"
+    },
+    {
+      "bytes": 11339,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/native-learner-metadata/cluster-metadata-consensus.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "7d52cf357911c6f1f7b8a16fce6782182a8d55210c3eb0aca452f49e520402a5"
+    },
+    {
+      "bytes": 5247,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/native-learner-metadata/native-learner-metadata-original-c.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "1ef5a174b828748ceed810a3a06897f93f52df5b10aef7d626a6a077b555e6e4"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/native-learner-metadata/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/native-range-catalogue-owner/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 1831,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/native-unassigned-learner.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "3e96253cd31c8cf03215e41c907176311e04fe8a34c87a8c614595d20805eaef"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/paged/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 90112,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/paged/store.pages",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "84b7785085389f815fdd631b40525e33a68346810c7839e445313cc5337fe13d"
+    },
+    {
+      "bytes": 107136,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/paged/store.wal",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "2786a3297eb0db218a4ae61ec7371f05ec7aaa6108fc7aaef91f5a021dc16297"
+    },
+    {
+      "bytes": 1084,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/range-image-factory.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "d3261d440e200790ff9c99ae1c4deba5cb730be90c43f02714f86a1c75254ddd"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/store.lock",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/sync.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 340,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/sync_state.json",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "5a2a148e544e2c48299640c815e4a599a7b2d3397c3558fecf923df352a611bc"
+    },
+    {
+      "bytes": 0,
+      "path": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/custody/node4/transactions.log",
+      "reason": "entire fixture DB/custody/material subtree omitted",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "original_archive_unchanged": true,
+  "original_fixture_db_custody_present": true,
+  "original_zip_bytes": 297829,
+  "original_zip_sha256": "60da542bce80087f74af061ca120152e78cd35acd409746b06ec6b11aea5c618",
+  "projection_fixture_db_custody_present": false,
+  "projection_policy": "Only explicit logical JSON ledgers/reports and source/toolchain/test logs; entire DB/custody trees and custody manifests excluded",
+  "projection_zip_bytes": 137616,
+  "projection_zip_sha256": "fd10dc4b8b2a7d606e753257316bfbb9c1370628f255dd39feb696c594c1b14d",
+  "projector_sha256": "a3d88b7997155993db9719d622a9d41a0a2e0ad2ce7f67efa6c885fc61831b91",
+  "qualification": "No cold replay, physical HA, target installation, serving or production qualification is implied by retained custody or this projection",
+  "source_commit": "7349adaaa987042e164ca06bb7e9eb8522fdb851"
+}

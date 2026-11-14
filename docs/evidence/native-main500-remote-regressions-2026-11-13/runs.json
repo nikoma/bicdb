@@ -1,0 +1,60 @@
+{
+  "format_version": 1,
+  "runs": [
+    {
+      "key": "ten",
+      "source": "b6398fb075eed7c93a71ab25a52fad3f936421e5",
+      "source_version": "1.0.500-beta",
+      "run": 43517610071,
+      "url": "https://github.com/nikoma/bicdb/actions/runs/43517610071",
+      "core_job": 132203519345,
+      "selected": 10,
+      "passed": 10,
+      "failed": 0,
+      "seconds": 65.53,
+      "workflow_conclusion": "success",
+      "artifact": 14082820921,
+      "raw_sha256": "6c52a352b4850c704ed40254dfcccbdbd8076ea2a607609ada56dba615ac38a7",
+      "raw_bytes": 4978182,
+      "projection_sha256": "2f51b03e903b5297a31494e87db15ee870e5a27b27716f7e81a8acf0ee7c7b3d",
+      "projection_bytes": 3196441,
+      "app_returned_event_operations": 20,
+      "custody": {
+        "app_returned_event_operations": 20,
+        "custody_files_verified": 1012,
+        "custody_bytes_verified": 35634695
+      },
+      "production_qualified": false
+    },
+    {
+      "key": "remote51",
+      "source": "b6398fb075eed7c93a71ab25a52fad3f936421e5",
+      "source_version": "1.0.500-beta",
+      "run": 43519728051,
+      "url": "https://github.com/nikoma/bicdb/actions/runs/43519728051",
+      "core_job": 132210791914,
+      "selected": 51,
+      "passed": 44,
+      "failed": 7,
+      "seconds": 223.37,
+      "workflow_conclusion": "failure",
+      "artifact": 14082737655,
+      "raw_sha256": "badbb675c2dd6c28949be0bbee50a39a83d92b57632365a2ab142067704660aa",
+      "raw_bytes": 16401859,
+      "projection_sha256": "4a4f2f590c1c3277d9c3f2abb443a8e256239817fc928922ac0bc5544b3c13a2",
+      "projection_bytes": 7829370,
+      "app_returned_event_operations": 102,
+      "custody": {
+        "selected_executed": 51,
+        "passed": 44,
+        "failed": 7,
+        "app_returned_event_operations": 102,
+        "app_failed_or_uncertain_operations": 0,
+        "custody_files_verified": 5155,
+        "custody_bytes_verified": 166256025
+      },
+      "production_qualified": false
+    }
+  ],
+  "qualification": false
+}

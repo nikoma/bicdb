@@ -1,0 +1,109 @@
+{
+  "source": "34dded55efef6ed989cdf7d141d5751d4f2a2391",
+  "source_version": "1.0.494-beta",
+  "run": 43502925624,
+  "core_job": 132153142118,
+  "artifact_id": 14075351623,
+  "workflow_conclusion": "failure",
+  "zip_sha256": "a493a07ec6519949277d9813d105a7300025afc06059fcda8bf00ead074af573",
+  "zip_bytes": 740555,
+  "qualification": false,
+  "cases": [
+    {
+      "source_case": "TargetNativeBaseRoleExpiryAfterCommit",
+      "first_exact_error": "canceling statement due to query timeout",
+      "retry_exact_error": null,
+      "retry_progress": {
+        "NativeBase": {
+          "checksum_sha256": "792b5597a9de9b0a6343473002596400ca3e6689851b079fe2f6dce1403a83b3",
+          "native_page_xid": 21,
+          "range_index": 1
+        }
+      },
+      "issued_native_xid": 21,
+      "native_classification": "same_open_committed_base_and_archive",
+      "same_original_A": true,
+      "actual_role_expired": true,
+      "original_parent_stayed_live": true,
+      "real_wait_us": 957520,
+      "parent_remaining_us_after_wait": 3501802,
+      "role_remaining_us_after_wait": -98,
+      "app_returned_event_operations": 2,
+      "selected_ack_full_payload_before_after_retry": true,
+      "physical_record_collection": "__bic_cluster_events",
+      "ordinary_sql_or_strong_serving_claim": false,
+      "quorum_native_anchor_R_H0_H": [
+        1,
+        "b4d7cdaf59886a3557f79100e84f5d506e848f5bb03883483ecdd7326a3c7f0a",
+        "48df7240ea44a86fe0e22ea58d0863ba33d89c95670163aa2d5979fc7ba6798c"
+      ],
+      "old_native_records_unchanged": true,
+      "actual_source_frames": 18,
+      "source_frame_journal_entries": 23,
+      "custody_files_verified": 96,
+      "custody_bytes_verified": 3572211,
+      "custody_mode": "observed_stable_with_live_actual_owners",
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "classification": "passed",
+      "native_tx_status": "Committed",
+      "exact_committed_base_archive_and_owner_match": true,
+      "fresh_authority_same_xid_reconciled": true
+    },
+    {
+      "source_case": "TargetNativeBaseRoleExpiryBeforePut",
+      "first_exact_error": "canceling statement due to query timeout",
+      "retry_exact_error": "cluster error: native target image: Registered immutable native-base publication missing",
+      "retry_progress": null,
+      "issued_native_xid": 21,
+      "native_classification": "same_open_native_abort_with_no_visible_base_or_archive",
+      "same_original_A": true,
+      "actual_role_expired": true,
+      "original_parent_stayed_live": true,
+      "real_wait_us": 988115,
+      "parent_remaining_us_after_wait": 3501858,
+      "role_remaining_us_after_wait": -85,
+      "app_returned_event_operations": 2,
+      "selected_ack_full_payload_before_after_retry": true,
+      "physical_record_collection": "__bic_cluster_events",
+      "ordinary_sql_or_strong_serving_claim": false,
+      "quorum_native_anchor_R_H0_H": [
+        1,
+        "aead6df02b77be4169ffdbf5ec622cfb4fbe6d74153ee98f22ed46467d048183",
+        "0634831df878d8fb4a84a7a9d1cf0c32cdf7734da0cb474be1e6c777a9dd9c91"
+      ],
+      "old_native_records_unchanged": true,
+      "actual_source_frames": 18,
+      "source_frame_journal_entries": 23,
+      "custody_files_verified": 96,
+      "custody_bytes_verified": 3522899,
+      "custody_mode": "observed_stable_with_live_actual_owners",
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "classification": "failed",
+      "demonstrated_defect": "same-open proved-abort native metadata owner cannot resume under fresh authority",
+      "native_tx_status": "Aborted",
+      "base_or_archive_present": false,
+      "fresh_authority_recovery": "failed"
+    }
+  ],
+  "zip_entries": 224,
+  "test_result": [
+    "test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 1070 filtered out; finished in 18.06s"
+  ],
+  "public_projection": {
+    "projection_zip_sha256": "3c378baa1d877254de40b8bb9f25ec7f4d3b4df0922893bddafe0b80e8bd41f8",
+    "projection_zip_bytes": 391140,
+    "projection_fixture_db_custody_present": false,
+    "original_archive_unchanged": true
+  },
+  "limits": [
+    "1 passed/1 failed; abort-resume acceptance remains failed and runtime unfixed",
+    "actual-clock test cuts characterize these attempts; they do not establish original e1ec failure cause",
+    "same-open native status/API observations, no archived-engine open or cold/powerloss qualification",
+    "event-storage APP ledger, not ordinary PostgreSQL table-row or Serving proof",
+    "one selected-range event record/177bytes/R1, no index/FTS parity or large-data campaign",
+    "no catalogue adoption/NEW/decision/Open/Ready/Serving/source retirement or physical scale-out",
+    "private raw custody remains a guarded live-owner stable copy, not stopped/atomic/reopened snapshot"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "source_revision": "9434dcdb1f9bc53683dc3e2c433de337dcc3ff83",
+  "run_id": 43461532306,
+  "job_id": 132009482769,
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "raw_bytes": 2095832,
+  "raw_sha256": "27d167a5d67b6299a3317ba5334d27e12a113e282ccf90978aa1e1eea5f8e477",
+  "compressed_sha256": "fa62eb008a04956ce4ca83e7b19f3e7bc39300cbca86a926ae591da8848791a3",
+  "test_summaries": [
+    "2026-11-13T16:25:31.0805181Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1035 filtered out; finished in 9.22s"
+  ],
+  "test_observations": [
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_wal_current_archive_preserve_data",
+      "result": "ok"
+    }
+  ]
+}

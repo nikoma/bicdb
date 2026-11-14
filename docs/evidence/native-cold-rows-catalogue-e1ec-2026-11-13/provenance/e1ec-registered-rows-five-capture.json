@@ -1,0 +1,272 @@
+{
+  "source_revision": "e1ecfeab71d3f1e104530e9d6aa3bf37971abd65",
+  "source_package_version": "1.0.494-beta",
+  "run_id": 43493986492,
+  "run_conclusion": "success",
+  "classification": "PASSED_FIVE_FOCUSED_ROWS_INDEX_AND_SAME_OPEN_WAL_CONTROLS_ONLY",
+  "selector": "native_registered_fifth_remote_image_actual_",
+  "cargo_build_jobs": 1,
+  "cargo_incremental": 0,
+  "rust_test_threads": 4,
+  "test_result": {
+    "passed": 5,
+    "failed": 0,
+    "duration_seconds": 27.05,
+    "duration_is_not_RTO": true
+  },
+  "dispatch_checkpoint": "/tmp/bicdb-native-foundations-ci/e1ec-registered-rows-five-checkpoint.json",
+  "dispatch_gate": {
+    "run": 43492849838,
+    "Core": 132118360383,
+    "Record_source_and_list_selected_Core_library_tests": "success",
+    "gate_met_before_dispatch": true
+  },
+  "raw_job_indices": [
+    "/tmp/bicdb-native-foundations-ci/e1e-registered-rows-index-five-core-job132122207844-index.json",
+    "/tmp/bicdb-native-foundations-ci/e1e-registered-rows-index-five-alltargets-job132122153321-index.json"
+  ],
+  "run_metadata": "/tmp/bicdb-native-foundations-ci/e1ec-registered-rows-five-run43493986492-terminal-jobs.json",
+  "private_fixture": {
+    "artifact_id": 14070483721,
+    "path": "/tmp/bicdb-native-foundations-ci/e1ec-registered-rows-five-artifact14070483721.zip",
+    "private_copy": "/tmp/bicdb-native-foundations-ci/private-registered-custody/e1ec-registered-rows-five-artifact14070483721.zip",
+    "sha256": "0f843a5aea08edacd8dd6b27fb122095bd7ecbaf3e209aca78596fdaf692f45d",
+    "bytes": 1403603,
+    "original_mode": "0600",
+    "private_copy_mode": "0600",
+    "private_copy_directory_mode": "0700",
+    "opened_as_database": false
+  },
+  "safe_logical_projection": {
+    "path": "/tmp/bicdb-native-foundations-ci/e1ec-registered-rows-five-logical-projection.zip",
+    "sha256": "08a15185ddc6cba5fe6267e0e68b84f5702f95e77612f7483bd663a7c8865492",
+    "bytes": 569739,
+    "included_members": 60,
+    "omitted_members": 487,
+    "custody_present": false
+  },
+  "new_whitelist_entry_needed": false,
+  "actual_index_report_location": "existing registered-image-wal-retention.json and fault_outcomes nested index DATA",
+  "read_only_logical_verification": "/tmp/bicdb-native-foundations-ci/e1ec-registered-rows-five-logical-verification.json",
+  "verifier": "/tmp/bicdb-native-foundations-ci/verify-e1ec-rows-five-logical-evidence.py",
+  "verifier_sha256": "1127f48f8d53415972f8b2a786652cdb4addf56eb7d5a3a785adaced470efd36",
+  "source_APP_API_operations": {
+    "acknowledged": 10,
+    "failed": 0,
+    "uncertain": 0,
+    "separately_recorded_caller_retries": 0,
+    "internal_wire_retry_count": null
+  },
+  "target_control_outcomes": {
+    "canceled_requests_reconciled": 2,
+    "apply_commit_unknown_retained_fenced": 1,
+    "missing_audit_refusals": 1,
+    "fresh_target_retries": 3,
+    "retry_completed": 2,
+    "retry_remained_fenced": 1
+  },
+  "same_open_wal_retention_controls": {
+    "TargetImageRowsPreWalCanceled": {
+      "retained_original_logical_txid": 23,
+      "active_after_committed_progress": 0,
+      "active_before_retry": 1,
+      "checkpoint_exercised": false,
+      "index_after_committed_progress": {
+        "pending": [],
+        "reader_fenced": true,
+        "restrictive_data_only": true
+      },
+      "original_pending_index": {
+        "pending": [
+          {
+            "checksum_sha256": "ea27348a10868d1930e8416eaa3c81b95885c090632460ef4f603c3d47725aae",
+            "intent": {
+              "attempt": "01a1d66e-c070-7f62-925c-3d74882e1e48",
+              "checksum_sha256": "98e9353c0acd9c20d12b476733cfe3b53a6b49cf09ecbd00a3243dce25146651",
+              "history_generation": "01a1d66e-c4f1-7a20-a4f6-03edee4299d0",
+              "history_header_sha256": "3a2f8bfa73e1441f0b4fb56999886d33aefe170a9de7a05f184f8b629741c508",
+              "intent_sha256": "22d1438a099b631233cec6fcd5298988130990efc7197dac22fa24ed8245aeb7",
+              "logical_txid": 23,
+              "manifest_sha256": "df4f51ee7a31bd8d014c751afd6bd47978bb7e5e1f1a608159c6db2021568950",
+              "mutations_sha256": "b4d45fa34e764e58c89413ce768f360e1d9b2112e6bb60e5ca6ae2b2f28441f5",
+              "native_xid": 12,
+              "previous_progress_sha256": null,
+              "range": 1,
+              "step": 1,
+              "step_sha256": "a6a0200caef3d7f4875c42be1753711ed3b47089a328954f73d7c65096e12818",
+              "version": 1
+            },
+            "native_birth_sha256": "8c897d0c95d81c758f6868eae43dbcf20a79c3dc4747c73df58e78024d64eefc",
+            "original_database_open": "31e48cd8-f515-46d5-8576-8af192f8705b",
+            "version": 1
+          }
+        ],
+        "reader_fenced": true,
+        "restrictive_data_only": true
+      },
+      "raw_before_checkpoint_WAL_hash_independently_recomputed": false
+    },
+    "TargetImageRowsPostWalCanceled": {
+      "retained_original_logical_txid": 23,
+      "active_after_committed_progress": 0,
+      "active_before_retry": 1,
+      "after_release_cut_bytes": 0,
+      "checkpoint_exercised": true,
+      "index_after_committed_progress": {
+        "pending": [],
+        "reader_fenced": true,
+        "restrictive_data_only": true
+      },
+      "original_pending_index": {
+        "pending": [
+          {
+            "checksum_sha256": "220f0f3d8eb47380d32e0741c93146b967485716f85beab7de3f92d5003d2f79",
+            "intent": {
+              "attempt": "01a1d66e-c098-7653-a091-b7614d9c498e",
+              "checksum_sha256": "f56bc01b7134af3e782e24380269d2fc7a7e4e9e7cc4c38595ab73ce08989ba2",
+              "history_generation": "01a1d66e-c530-7fe1-b66a-06400ea18db0",
+              "history_header_sha256": "cc12224d09c9187c616476b6c5542b5c976c167280f23bc179447e7b9a9b27b7",
+              "intent_sha256": "daee5ea7a4e06b7cbaf28cbfac8c1efe09c7873087fb9f92818a98223ddcb902",
+              "logical_txid": 23,
+              "manifest_sha256": "ff651ea25549f64b672065f056212dbe3193a499c56041ac0a54f1c97cf064db",
+              "mutations_sha256": "b4d45fa34e764e58c89413ce768f360e1d9b2112e6bb60e5ca6ae2b2f28441f5",
+              "native_xid": 12,
+              "previous_progress_sha256": null,
+              "range": 1,
+              "step": 1,
+              "step_sha256": "1d973f27758dbc63103313cb61c7a7982b996b94a478066b7f8a7d207767db25",
+              "version": 1
+            },
+            "native_birth_sha256": "46e0047ad302dea0e98f920e9a4409fdeee0c5f258d59f78246af4ee82ca386f",
+            "original_database_open": "a43967e6-49a9-446a-a565-605c41eb6f8c",
+            "version": 1
+          }
+        ],
+        "reader_fenced": true,
+        "restrictive_data_only": true
+      },
+      "retained_bytes": 568,
+      "retained_sha256": "441590bf68d2d264691861893a95d81de87ea99bb9a2498b33f73e0b9aaf529f",
+      "raw_before_checkpoint_WAL_hash_independently_recomputed": false
+    },
+    "TargetImageRowsApplyFailed": {
+      "actual_pending_apply_retention_leases": 1,
+      "explicit_checkpoint_exercised": false,
+      "retained_original_logical_txid": 23,
+      "fenced_retry_keeps_same_owner": true
+    }
+  },
+  "durable_index_controls": {
+    "TargetImageRowsPreWalCanceled": {
+      "original_entries": 1,
+      "after_committed_progress_entries": 0,
+      "sticky_reader_fence_remains": true,
+      "logical_txid": 23,
+      "native_intent_xid": 12,
+      "same_runtime_intent_and_index": true,
+      "intent_and_wrapper_checksums_independently_recomputed": true,
+      "native_page_head_xmin_independently_read_from_private_custody": false
+    },
+    "TargetImageRowsPostWalCanceled": {
+      "original_entries": 1,
+      "after_committed_progress_entries": 0,
+      "sticky_reader_fence_remains": true,
+      "logical_txid": 23,
+      "native_intent_xid": 12,
+      "same_runtime_intent_and_index": true,
+      "intent_and_wrapper_checksums_independently_recomputed": true,
+      "native_page_head_xmin_independently_read_from_private_custody": false
+    }
+  },
+  "actual_remote_close_successes": 15,
+  "source_frame_calls_with_actual_replies": 45,
+  "cases": {
+    "TargetImageRowsPreWalCanceled": {
+      "classification": "PASSED_ACTUAL_COMPLETE_HISTORY_AND_ROWS",
+      "seam_reached": true,
+      "target_B": [
+        0,
+        1
+      ],
+      "records": 1,
+      "serialized_record_bytes": 177,
+      "full_source_ACK_record_matches_target": true,
+      "history_chain_independently_hashed": true,
+      "native_floor_fields_remain_unknown": true,
+      "empty_other_range_preserved": true,
+      "target_retry_completed_with_original_intent": true,
+      "retained_original_logical_txid": 23
+    },
+    "TargetImageRowsWithoutAudit": {
+      "classification": "PASSED_ACTUAL_MISSING_STORED_AUDIT_REFUSAL",
+      "exact_error": "cluster error: native range image: Registered full stored history not audited",
+      "target_row_wal_admitted": false,
+      "seam_reached": true
+    },
+    "TargetImageRowsPostWalCanceled": {
+      "classification": "PASSED_ACTUAL_COMPLETE_HISTORY_AND_ROWS",
+      "seam_reached": true,
+      "target_B": [
+        0,
+        1
+      ],
+      "records": 1,
+      "serialized_record_bytes": 177,
+      "full_source_ACK_record_matches_target": true,
+      "history_chain_independently_hashed": true,
+      "native_floor_fields_remain_unknown": true,
+      "empty_other_range_preserved": true,
+      "target_retry_completed_with_original_intent": true,
+      "retained_original_logical_txid": 23
+    },
+    "TargetImageRowsApplyFailed": {
+      "classification": "PASSED_ACTUAL_INNER_WAL_DURABLE_APPLY_FAILURE",
+      "seam_reached": true,
+      "exact_error": "commit outcome unknown: commit_seq=1 transaction_id=23 incarnation=c8994cd0-6db2-4dcb-b388-3a2121d83f93: paged storage error: injected post-decision materialization failure; the database is fenced by a failure at commit.materialize: paged storage error: injected post-decision materialization failure; do not assume it committed or rolled back. Reopen the database, then resolve it with SELECT bicdb_commit_outcome('c8994cd0-6db2-4dcb-b388-3a2121d83f93', 1)",
+      "fresh_retry_error": "database refuses writes after a failed durable write at commit.materialize: paged storage error: injected post-decision materialization failure; reopen the database to run recovery and verification",
+      "retained_logical_txid": 23,
+      "retained_native_intent_xid": 12,
+      "known_logical_sequence": 1,
+      "apply_complete": false,
+      "row_progress_records": 0,
+      "original_logical_transaction_consumed": true,
+      "no_replacement_transaction": true,
+      "commit_outcome_uncertain_to_caller": true
+    },
+    "TargetImageRows": {
+      "classification": "PASSED_ACTUAL_COMPLETE_HISTORY_AND_ROWS",
+      "seam_reached": true,
+      "target_B": [
+        0,
+        1
+      ],
+      "records": 1,
+      "serialized_record_bytes": 177,
+      "full_source_ACK_record_matches_target": true,
+      "history_chain_independently_hashed": true,
+      "native_floor_fields_remain_unknown": true,
+      "empty_other_range_preserved": true,
+      "target_retry_completed_with_original_intent": false,
+      "retained_original_logical_txid": null
+    }
+  },
+  "limitations": [
+    "Actual same-open ServerPaged checkpoint/retention and indexed intent/header controls; no cold replay claim",
+    "Two cancellation controls independently report index insertion/exact intent and clearing. Raw head xmin/native commit status are enforced by engine scan but not re-read from private custody here",
+    "Pre-checkpoint WAL SHA is cross-checked among actual API reports; original raw pre-cut bytes are not separately archived",
+    "Same-process/retained-owner fault controls on shared-host CI; no cold replay or independent physical failure test",
+    "Only first selected range copied; other target range remained empty/unknown",
+    "Three completed copies each reconciled one full acknowledged record/177 bytes and stored history; other source range ACK not claimed copied",
+    "Recorded stream digest/seal parity and actual target reports verified; independent target physical scan/final image belongs to separate tests",
+    "Native floor, catalogue adoption, Ready/Serving/Strong-read routing/controller/throughput/production qualification remain open",
+    "Native pre/post comparison is complete decoded records/xids/checksums, not raw page-value hashes"
+  ],
+  "prior_failed_7ac_cohort_preserved": 43478288480,
+  "prior_10d_rows_cohort_preserved": 43484879958,
+  "prior_d690_rows_cohort_preserved": 43487075852,
+  "physical_qualification": false,
+  "production_qualified": false,
+  "deployed": false,
+  "dispatch_attempts": 1,
+  "captured_at_utc": "2026-11-13T19:45:45.360622+00:00"
+}

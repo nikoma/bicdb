@@ -1,0 +1,19 @@
+{
+  "source_revision": "fd4d0595d70e82dff20889c19918e34dbd42575d",
+  "run_id": 43468368964,
+  "job_id": 132033549088,
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "raw_bytes": 2095286,
+  "raw_sha256": "87968c27fbf904b6915bfb5333ca1e2fb12a948823b5c3e97e60c7dda336ef38",
+  "compressed_sha256": "d10edc5fb385a7f6cbfb53f3b027b54b85da3879d5a057162691a6201ad5e363",
+  "test_summaries": [
+    "2026-11-13T17:07:04.7586529Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1039 filtered out; finished in 9.43s"
+  ],
+  "test_observations": [
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_catalogue_same_owner_preserves_rows",
+      "result": "ok"
+    }
+  ]
+}

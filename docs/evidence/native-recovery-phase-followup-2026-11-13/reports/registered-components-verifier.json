@@ -1,0 +1,369 @@
+[
+  {
+    "source": "9434dcdb1f9bc53683dc3e2c433de337dcc3ff83",
+    "projection_sha256": "8a246b1701251220ed17d58915a222eb74cca826de58f8014325e7b603e81578",
+    "actual_tests": {
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_wal_current_archive_preserve_data": "ok"
+    },
+    "observations": [
+      {
+        "member": "fault-state/native-registered-fifth-image-01a1d5ba-6116-78b1-bb27-9fb90da82974/registered-proposal-1.json",
+        "identity": {
+          "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_wal_current_archive_preserve_data",
+          "assignment_mode": "OriginalLeader",
+          "identity_is_correlation_not_authority": true,
+          "package_version": "1.0.494-beta",
+          "source_case": "TargetProposal",
+          "source_commit": "9434dcdb1f9bc53683dc3e2c433de337dcc3ff83"
+        },
+        "result": {
+          "kind": "protected_proposal",
+          "pointer": {
+            "attempt_id": "01a1d5ba-7156-7de3-a43f-6a9d7c85ec28",
+            "checksum_sha256": "e3de7efb93438cbc779533a3333e2d7e39a6a6b35442486203c8aa653d36a580",
+            "native_page_xid": 8
+          },
+          "first_outcome": "exact_current_archive_verified",
+          "exact_error": null,
+          "full_target_state_unchanged": true,
+          "native_existing_inventory_unchanged": true,
+          "only_matching_CURRENT_archive_added": true,
+          "native_WAL_commit_is_source_assertion_not_replay": true
+        }
+      }
+    ],
+    "qualification": false,
+    "limits": [
+      "No native WAL/DB replay, independent fsync/power-loss proof, old-binary validation, row copy, Ready, Serving, automatic rebalance, capacity or SQL qualification.",
+      "fd4 has no explicit native_after field; hidden inventory equality remains a source-pinned Rust assertion, never retrofilled."
+    ]
+  },
+  {
+    "source": "9434dcdb1f9bc53683dc3e2c433de337dcc3ff83",
+    "projection_sha256": "7d12b50ec6468d7b8a44867dde31550cbc46ef952362f77836decaf10c7ab19e",
+    "actual_tests": {
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_post_wal_cancel_fresh_retry_same_xid": "ok"
+    },
+    "observations": [
+      {
+        "member": "fault-state/native-registered-fifth-image-01a1d5c2-8c78-7ac2-90e0-99e3b91083e0/registered-proposal-1.json",
+        "identity": {
+          "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_post_wal_cancel_fresh_retry_same_xid",
+          "assignment_mode": "OriginalLeader",
+          "identity_is_correlation_not_authority": true,
+          "package_version": "1.0.494-beta",
+          "source_case": "TargetProposalPostCanceled",
+          "source_commit": "9434dcdb1f9bc53683dc3e2c433de337dcc3ff83"
+        },
+        "result": {
+          "kind": "protected_proposal",
+          "pointer": {
+            "attempt_id": "01a1d5c2-9eac-7300-8d14-44bad9f94aee",
+            "checksum_sha256": "031c0416b51bce16da68cc17479a728f2f1b3685ba9282cfc42d2cce0377f883",
+            "native_page_xid": 8
+          },
+          "first_outcome": "native_commit_returned_before_postchecks",
+          "exact_error": "canceling statement due to user request",
+          "full_target_state_unchanged": true,
+          "native_existing_inventory_unchanged": true,
+          "only_matching_CURRENT_archive_added": true,
+          "native_WAL_commit_is_source_assertion_not_replay": true
+        }
+      }
+    ],
+    "qualification": false,
+    "limits": [
+      "No native WAL/DB replay, independent fsync/power-loss proof, old-binary validation, row copy, Ready, Serving, automatic rebalance, capacity or SQL qualification.",
+      "fd4 has no explicit native_after field; hidden inventory equality remains a source-pinned Rust assertion, never retrofilled."
+    ]
+  },
+  {
+    "source": "7349adaaa987042e164ca06bb7e9eb8522fdb851",
+    "projection_sha256": "fd10dc4b8b2a7d606e753257316bfbb9c1370628f255dd39feb696c594c1b14d",
+    "actual_tests": {
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_reader_flag_dir_sync_failure_retry": "ok"
+    },
+    "observations": [
+      {
+        "member": "fault-state/native-registered-fifth-image-01a1d5e2-af8d-7a93-9b06-61c7e9853851/registered-proposal-reader-fence-retry-1.json",
+        "identity": {
+          "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_reader_flag_dir_sync_failure_retry",
+          "assignment_mode": "OriginalLeader",
+          "identity_is_correlation_not_authority": true,
+          "package_version": "1.0.494-beta",
+          "source_case": "TargetProposalReaderFenceRetry",
+          "source_commit": "7349adaaa987042e164ca06bb7e9eb8522fdb851"
+        },
+        "result": {
+          "kind": "reader_fence_EIO_retry",
+          "pointer": {
+            "attempt_id": "01a1d5e2-c0ac-7ef3-8154-4bb30b7946f6",
+            "checksum_sha256": "b1ba7dbfe25c6f3fcb65c573999263854152ffb0dd0441f2cba699d55f4805da",
+            "native_page_xid": 8
+          },
+          "injected_errors": [
+            "io error: Input/output error (os error 5)",
+            "io error: Input/output error (os error 5)",
+            "io error: Input/output error (os error 5)"
+          ],
+          "prepared_outcomes_not_committed": 2,
+          "full_target_state_unchanged": true,
+          "actual_reader_flag_durability_is_Rust_assertion": true,
+          "old_binary_and_physical_replay_not_tested": true
+        }
+      }
+    ],
+    "qualification": false,
+    "limits": [
+      "No native WAL/DB replay, independent fsync/power-loss proof, old-binary validation, row copy, Ready, Serving, automatic rebalance, capacity or SQL qualification.",
+      "fd4 has no explicit native_after field; hidden inventory equality remains a source-pinned Rust assertion, never retrofilled."
+    ]
+  },
+  {
+    "source": "fd4d0595d70e82dff20889c19918e34dbd42575d",
+    "projection_sha256": "748c77e823136434142c558b534b666994686de836ca8934c756163f7c4c5617",
+    "actual_tests": {
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_catalogue_same_owner_preserves_rows": "ok"
+    },
+    "observations": [
+      {
+        "member": "fault-state/native-registered-fifth-image-01a1d5e0-6d44-7752-bf96-ee3e966fc727/registered-installing-1.json",
+        "identity": {
+          "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_catalogue_same_owner_preserves_rows",
+          "assignment_mode": "OriginalLeader",
+          "identity_is_correlation_not_authority": true,
+          "package_version": "1.0.494-beta",
+          "source_case": "TargetInstalling",
+          "source_commit": "fd4d0595d70e82dff20889c19918e34dbd42575d"
+        },
+        "result": {
+          "kind": "catalogue_Installing",
+          "pointer": {
+            "attempt_id": "01a1d5e0-7cbc-7241-bfc5-db49ec4fb63d",
+            "checksum_sha256": "b93209ceb8415ea075cb1dc2621a8f9ac1a8505c384e85080abaa08b8507690b",
+            "native_page_xid": 8
+          },
+          "candidate_sha256": "4af089ce4fc2774d48573bef3d77d523183998634a29f24ba39adf8557edeece",
+          "intent_sha256": "a7ef88b90eb048d7307579da36fdede767734270be9a05a25f2d637cfb4a8301",
+          "failed_attempts": 0,
+          "exact_errors": [],
+          "same_exact_candidate_across_attempts": true,
+          "full_target_state_except_refusal_unchanged": true,
+          "native_after_inventory_not_recorded": true,
+          "hidden_native_inventory_equality_is_Rust_assertion_only": true,
+          "rows_Ready_Serving_cold_replay_not_tested": true
+        }
+      },
+      {
+        "member": "fault-state/native-registered-fifth-image-01a1d5e0-6d44-7752-bf96-ee3e966fc727/registered-proposal-1.json",
+        "identity": {
+          "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_catalogue_same_owner_preserves_rows",
+          "assignment_mode": "OriginalLeader",
+          "identity_is_correlation_not_authority": true,
+          "package_version": "1.0.494-beta",
+          "source_case": "TargetInstalling",
+          "source_commit": "fd4d0595d70e82dff20889c19918e34dbd42575d"
+        },
+        "result": {
+          "kind": "protected_proposal",
+          "pointer": {
+            "attempt_id": "01a1d5e0-7cbc-7241-bfc5-db49ec4fb63d",
+            "checksum_sha256": "b93209ceb8415ea075cb1dc2621a8f9ac1a8505c384e85080abaa08b8507690b",
+            "native_page_xid": 8
+          },
+          "first_outcome": "exact_current_archive_verified",
+          "exact_error": null,
+          "full_target_state_unchanged": true,
+          "native_existing_inventory_unchanged": true,
+          "only_matching_CURRENT_archive_added": true,
+          "native_WAL_commit_is_source_assertion_not_replay": true
+        }
+      }
+    ],
+    "qualification": false,
+    "limits": [
+      "No native WAL/DB replay, independent fsync/power-loss proof, old-binary validation, row copy, Ready, Serving, automatic rebalance, capacity or SQL qualification.",
+      "fd4 has no explicit native_after field; hidden inventory equality remains a source-pinned Rust assertion, never retrofilled."
+    ]
+  },
+  {
+    "source": "fd4d0595d70e82dff20889c19918e34dbd42575d",
+    "projection_sha256": "a3ee2510e6b08d31ca0b12e789767f406f1bec66bc3086c47aa39b132034abb2",
+    "actual_tests": {
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_catalogue_same_owner_preserves_rows": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_after_fsync_cancel_fresh_same_attempt": "ok",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_directory_sync_error_retries_exact_catalogue": "ok"
+    },
+    "observations": [
+      {
+        "member": "fault-state/native-registered-fifth-image-01a1d5e4-21ba-7143-8841-4a3c8f37114b/registered-installing-1.json",
+        "identity": {
+          "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_directory_sync_error_retries_exact_catalogue",
+          "assignment_mode": "OriginalLeader",
+          "identity_is_correlation_not_authority": true,
+          "package_version": "1.0.494-beta",
+          "source_case": "TargetInstallingDirSyncRetry",
+          "source_commit": "fd4d0595d70e82dff20889c19918e34dbd42575d"
+        },
+        "result": {
+          "kind": "catalogue_Installing",
+          "pointer": {
+            "attempt_id": "01a1d5e4-32b5-7962-92ed-5543002f5242",
+            "checksum_sha256": "5e186acdd62f3724b3409ef1a06cc46f8c31aa0cf1ad431cf46764b68b72b6e7",
+            "native_page_xid": 8
+          },
+          "candidate_sha256": "b69bcb0b410ca69b171a468028ee5894b13f92a96ceaf0ca5b1404d91a7ef6c1",
+          "intent_sha256": "74431d6f8c3efb7147868b09aa3900a67070df5910c3f33f7a4bf835251aea3c",
+          "failed_attempts": 2,
+          "exact_errors": [
+            "io error: Input/output error (os error 5)",
+            "io error: Input/output error (os error 5)"
+          ],
+          "same_exact_candidate_across_attempts": true,
+          "full_target_state_except_refusal_unchanged": true,
+          "native_after_inventory_not_recorded": true,
+          "hidden_native_inventory_equality_is_Rust_assertion_only": true,
+          "rows_Ready_Serving_cold_replay_not_tested": true
+        }
+      },
+      {
+        "member": "fault-state/native-registered-fifth-image-01a1d5e4-21ba-7143-8841-4a3c8f37114b/registered-proposal-1.json",
+        "identity": {
+          "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_directory_sync_error_retries_exact_catalogue",
+          "assignment_mode": "OriginalLeader",
+          "identity_is_correlation_not_authority": true,
+          "package_version": "1.0.494-beta",
+          "source_case": "TargetInstallingDirSyncRetry",
+          "source_commit": "fd4d0595d70e82dff20889c19918e34dbd42575d"
+        },
+        "result": {
+          "kind": "protected_proposal",
+          "pointer": {
+            "attempt_id": "01a1d5e4-32b5-7962-92ed-5543002f5242",
+            "checksum_sha256": "5e186acdd62f3724b3409ef1a06cc46f8c31aa0cf1ad431cf46764b68b72b6e7",
+            "native_page_xid": 8
+          },
+          "first_outcome": "exact_current_archive_verified",
+          "exact_error": null,
+          "full_target_state_unchanged": true,
+          "native_existing_inventory_unchanged": true,
+          "only_matching_CURRENT_archive_added": true,
+          "native_WAL_commit_is_source_assertion_not_replay": true
+        }
+      },
+      {
+        "member": "fault-state/native-registered-fifth-image-01a1d5e4-21be-7d11-ad73-8e92a2e65552/registered-installing-1.json",
+        "identity": {
+          "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_catalogue_same_owner_preserves_rows",
+          "assignment_mode": "OriginalLeader",
+          "identity_is_correlation_not_authority": true,
+          "package_version": "1.0.494-beta",
+          "source_case": "TargetInstalling",
+          "source_commit": "fd4d0595d70e82dff20889c19918e34dbd42575d"
+        },
+        "result": {
+          "kind": "catalogue_Installing",
+          "pointer": {
+            "attempt_id": "01a1d5e4-325d-77b3-b14f-40d38f2e005c",
+            "checksum_sha256": "24a7ae7908d829f9c7d9c8376115964aba0c8f0bd90d3ae4e7b09b5a1c1dcba9",
+            "native_page_xid": 8
+          },
+          "candidate_sha256": "775e7d91f7e626b9ee30887d0bed480119438ce168c11208ca79f1d3179f899c",
+          "intent_sha256": "92d05b3f306434f46884f66d66cf86084a7c4ef8ad9ec2a656b0912bb0295137",
+          "failed_attempts": 0,
+          "exact_errors": [],
+          "same_exact_candidate_across_attempts": true,
+          "full_target_state_except_refusal_unchanged": true,
+          "native_after_inventory_not_recorded": true,
+          "hidden_native_inventory_equality_is_Rust_assertion_only": true,
+          "rows_Ready_Serving_cold_replay_not_tested": true
+        }
+      },
+      {
+        "member": "fault-state/native-registered-fifth-image-01a1d5e4-21be-7d11-ad73-8e92a2e65552/registered-proposal-1.json",
+        "identity": {
+          "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_catalogue_same_owner_preserves_rows",
+          "assignment_mode": "OriginalLeader",
+          "identity_is_correlation_not_authority": true,
+          "package_version": "1.0.494-beta",
+          "source_case": "TargetInstalling",
+          "source_commit": "fd4d0595d70e82dff20889c19918e34dbd42575d"
+        },
+        "result": {
+          "kind": "protected_proposal",
+          "pointer": {
+            "attempt_id": "01a1d5e4-325d-77b3-b14f-40d38f2e005c",
+            "checksum_sha256": "24a7ae7908d829f9c7d9c8376115964aba0c8f0bd90d3ae4e7b09b5a1c1dcba9",
+            "native_page_xid": 8
+          },
+          "first_outcome": "exact_current_archive_verified",
+          "exact_error": null,
+          "full_target_state_unchanged": true,
+          "native_existing_inventory_unchanged": true,
+          "only_matching_CURRENT_archive_added": true,
+          "native_WAL_commit_is_source_assertion_not_replay": true
+        }
+      },
+      {
+        "member": "fault-state/native-registered-fifth-image-01a1d5e4-21cb-7673-bf47-35e893189e77/registered-installing-1.json",
+        "identity": {
+          "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_after_fsync_cancel_fresh_same_attempt",
+          "assignment_mode": "OriginalLeader",
+          "identity_is_correlation_not_authority": true,
+          "package_version": "1.0.494-beta",
+          "source_case": "TargetInstallingPostCanceled",
+          "source_commit": "fd4d0595d70e82dff20889c19918e34dbd42575d"
+        },
+        "result": {
+          "kind": "catalogue_Installing",
+          "pointer": {
+            "attempt_id": "01a1d5e4-31fe-7143-94d1-e447d535b41f",
+            "checksum_sha256": "f9481e8b65ab029e9cd8b105ca19dbb75be879b7775ab5a1c9e12d3b8ce7bd08",
+            "native_page_xid": 8
+          },
+          "candidate_sha256": "13fb008ad85cddcdb1444ba5d655c06010dc82e1ffaff9fb5d8bb76ad773b821",
+          "intent_sha256": "b160d3e4ffd387567af6fec5fc58dd5de87683aaca15bdcc5a744061fabf7afc",
+          "failed_attempts": 1,
+          "exact_errors": [
+            "canceling statement due to user request"
+          ],
+          "same_exact_candidate_across_attempts": true,
+          "full_target_state_except_refusal_unchanged": true,
+          "native_after_inventory_not_recorded": true,
+          "hidden_native_inventory_equality_is_Rust_assertion_only": true,
+          "rows_Ready_Serving_cold_replay_not_tested": true
+        }
+      },
+      {
+        "member": "fault-state/native-registered-fifth-image-01a1d5e4-21cb-7673-bf47-35e893189e77/registered-proposal-1.json",
+        "identity": {
+          "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_after_fsync_cancel_fresh_same_attempt",
+          "assignment_mode": "OriginalLeader",
+          "identity_is_correlation_not_authority": true,
+          "package_version": "1.0.494-beta",
+          "source_case": "TargetInstallingPostCanceled",
+          "source_commit": "fd4d0595d70e82dff20889c19918e34dbd42575d"
+        },
+        "result": {
+          "kind": "protected_proposal",
+          "pointer": {
+            "attempt_id": "01a1d5e4-31fe-7143-94d1-e447d535b41f",
+            "checksum_sha256": "f9481e8b65ab029e9cd8b105ca19dbb75be879b7775ab5a1c9e12d3b8ce7bd08",
+            "native_page_xid": 8
+          },
+          "first_outcome": "exact_current_archive_verified",
+          "exact_error": null,
+          "full_target_state_unchanged": true,
+          "native_existing_inventory_unchanged": true,
+          "only_matching_CURRENT_archive_added": true,
+          "native_WAL_commit_is_source_assertion_not_replay": true
+        }
+      }
+    ],
+    "qualification": false,
+    "limits": [
+      "No native WAL/DB replay, independent fsync/power-loss proof, old-binary validation, row copy, Ready, Serving, automatic rebalance, capacity or SQL qualification.",
+      "fd4 has no explicit native_after field; hidden inventory equality remains a source-pinned Rust assertion, never retrofilled."
+    ]
+  }
+]

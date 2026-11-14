@@ -1,0 +1,109 @@
+{
+  "recorded_utc": "2026-11-13T22:09:29.341040+00:00",
+  "source": "81733c1fa601fea3bcac1ad5efac8435dd02b090",
+  "run": 43514812736,
+  "core_job": 132193990208,
+  "raw_sha256": "1e4e0f96ba36a3f075ad316a82cdf4d690aec1e7c789379e3896e9924c95dc87",
+  "inspection": "Root independent read-only raw ZIP, no database engine open",
+  "qualification": false,
+  "cases": [
+    {
+      "case": "TargetNativeBaseAbortSyncFailed",
+      "app_returned_operations": 2,
+      "critical_calls": 2,
+      "actual_io_fault_fired": 1,
+      "actual_native_status": "Aborted",
+      "sticky_write_failure": true,
+      "memory_custody_unchanged": true,
+      "no_replacement": true
+    },
+    {
+      "case": "TargetNativeBaseInvalidated",
+      "app_returned_operations": 2,
+      "critical_calls": 3,
+      "actual_native_xid": 21,
+      "actual_native_status": "Committed",
+      "base_archive_retained_receipt_equal": true,
+      "verified": false,
+      "host_elapsed_us": 1294785,
+      "role_remaining_before_us": 1282177,
+      "role_remaining_after_us": -12713,
+      "other_windows_live": true,
+      "exact_refusal_check": "not instrumented; cannot retroactively explain earlier runs"
+    },
+    {
+      "case": "TargetNativeBaseCommitSyncUnknown",
+      "app_returned_operations": 2,
+      "critical_calls": 2,
+      "actual_io_fault_fired": 1,
+      "actual_native_status": "InProgress",
+      "sticky_write_failure": true,
+      "memory_custody_unchanged": true,
+      "no_replacement": true
+    },
+    {
+      "case": "TargetNativeBaseAbortBudget",
+      "app_returned_operations": 2,
+      "critical_calls": 2
+    },
+    {
+      "case": "TargetNativeBaseCanceled",
+      "app_returned_operations": 2,
+      "critical_calls": 5
+    },
+    {
+      "case": "TargetNativeBase",
+      "app_returned_operations": 2,
+      "critical_calls": 3,
+      "actual_native_xid": 21,
+      "actual_native_status": "Committed",
+      "base_archive_retained_receipt_equal": true,
+      "verified": false,
+      "host_elapsed_us": 1248812,
+      "role_remaining_before_us": 1246313,
+      "role_remaining_after_us": -2605,
+      "other_windows_live": true,
+      "exact_refusal_check": "not instrumented; cannot retroactively explain earlier runs"
+    },
+    {
+      "case": "TargetNativeBaseWithoutFinal",
+      "app_returned_operations": 2
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryAfterCommit",
+      "app_returned_operations": 2,
+      "critical_calls": 2
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryAfterPut",
+      "app_returned_operations": 2,
+      "critical_calls": 2
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryBeforePut",
+      "app_returned_operations": 2,
+      "critical_calls": 2
+    }
+  ],
+  "runtime_result": "8 passed; 2 failed",
+  "selected_tests": [
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_abort_sync_failure_never_replaces_poisoned_owner",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_commit_sync_unknown_never_replaces_owner",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_proven_abort_budget_exhaustion_retains_every_owner",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_integrity_survives_image_invalidation",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_post_wal_cancel_reconciles_same_xid",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_preserves_verified_history_floor",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_refuses_without_live_final_image",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_commit_same_xid_resumes",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_successful_put_proven_abort_same_a_resumes",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_before_put_proven_abort_same_a_resumes"
+  ],
+  "app_returned_operations": 20,
+  "scope_exclusions": [
+    "no physical power loss",
+    "no current-main integration qualification",
+    "no complete remote Serving/controller",
+    "no RPO/RTO/throughput proof",
+    "APP returned operations are not internal native transaction counts"
+  ]
+}

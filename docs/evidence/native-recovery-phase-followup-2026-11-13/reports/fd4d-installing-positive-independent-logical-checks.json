@@ -1,0 +1,30 @@
+{
+  "source": "fd4d0595d70e82dff20889c19918e34dbd42575d",
+  "run": 43468368964,
+  "job": 132033549088,
+  "artifact": 14059743247,
+  "pointer": {
+    "attempt_id": "01a1d5e0-7cbc-7241-bfc5-db49ec4fb63d",
+    "native_page_xid": 8,
+    "checksum_sha256": "b93209ceb8415ea075cb1dc2621a8f9ac1a8505c384e85080abaa08b8507690b"
+  },
+  "before_format": 15,
+  "after_format": 17,
+  "actual_A": "01a1d5e0-7cbc-7241-bfc5-db49ec4fb63d",
+  "intent_sha256": "a7ef88b90eb048d7307579da36fdede767734270be9a05a25f2d637cfb4a8301",
+  "checks": [
+    "exact source",
+    "full target state unchanged except raw catalogue",
+    "all original catalogue fields unchanged except format and one new refusal intent",
+    "registered pointer equals protected actual proposal",
+    "canonical intent bytes SHA verified and semantically equal pre-pointer intent",
+    "same actual A and protected native proposal retained",
+    "verified sink returned, no errors"
+  ],
+  "checker_correction": "First ad hoc checker assumed empty image_install_intents serialized explicitly; actual original serde omits empty field. Corrected checker preserves its actual absence; no engine failure inferred.",
+  "limits": [
+    "happy component only; EIO/cancellation controls pending separate run",
+    "JSON reconciliation does not replay WAL or establish physical crash safety",
+    "no history or row copy, Ready, Serving, automatic rebalance or capacity qualification"
+  ]
+}

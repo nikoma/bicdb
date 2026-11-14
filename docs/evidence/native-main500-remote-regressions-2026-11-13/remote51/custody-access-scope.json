@@ -1,0 +1,14 @@
+{
+  "repository": {
+    "full_name": "nikoma/bicdb",
+    "id": 1378458626,
+    "private": false,
+    "visibility": "public"
+  },
+  "github_artifact_scope": "Raw focused evidence is uploaded as a public-repository GitHub Actions artifact, governed by GitHub artifact access and retention. Local file permissions do not establish owner-only GitHub confidentiality.",
+  "local_custody_scope": "Downloaded whole raw archives are locally restricted with mode0600, with a mode0700 custody directory.",
+  "raw_contains_generated_fixture_mesh_keys": true,
+  "production_credentials_claimed": false,
+  "safe_projection_omits_all_raw_custody_subtrees_and_key_bytes": true,
+  "existing_frozen_evidence_preserved": true
+}

@@ -1,0 +1,29 @@
+{
+  "main": "a06e09336c70fecbc38232d677c330984959388f",
+  "prototype": "81733c1fa601fea3bcac1ad5efac8435dd02b090",
+  "integration": "981b7eef7447783270a1db4b8c967aa596cc132e",
+  "candidate": "b6398fb075eed7c93a71ab25a52fad3f936421e5",
+  "common_base": "a1936a6e34f71dd2c7866425017ab1b5147695de",
+  "main_only_paths_byte_identical": 1690,
+  "overlapping_paths": [
+    "crates/bicdb-core/src/db.rs",
+    "crates/bicdb-core/src/db/access_mutation.rs",
+    "crates/bicdb-core/src/db/range_image_native.rs",
+    "crates/bicdb-core/src/db/range_image_native/certified_prefix.rs",
+    "crates/bicdb-core/src/db/range_image_native/writer_enrollment.rs",
+    "crates/bicdb-core/src/db/replication_live.rs",
+    "crates/bicdb-core/src/db/spatial_paged.rs",
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener.rs",
+    "crates/bicdb-core/src/distribution_range_consensus.rs",
+    "crates/bicdb-core/src/distribution_range_image_install.rs",
+    "crates/bicdb-core/src/distribution_transport.rs",
+    "crates/bicdb-core/src/format.rs"
+  ],
+  "prototype_only_semantic_exception": [
+    "crates/bicdb-core/src/db/range_image_native/registered_remote_image/rows.rs"
+  ],
+  "diagnostic_only_successor": true,
+  "source_version": "1.0.500-beta",
+  "build_or_runtime_proof": false,
+  "qualification": false
+}

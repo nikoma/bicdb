@@ -1,0 +1,66 @@
+[
+  {
+    "run": 43461532306,
+    "member": "fault-state/native-registered-fifth-image-01a1d5ba-6116-78b1-bb27-9fb90da82974/registered-proposal-1.json",
+    "pointer": {
+      "attempt_id": "01a1d5ba-7156-7de3-a43f-6a9d7c85ec28",
+      "checksum_sha256": "e3de7efb93438cbc779533a3333e2d7e39a6a6b35442486203c8aa653d36a580",
+      "native_page_xid": 8
+    },
+    "first_outcome": "exact_current_archive_verified",
+    "exact_error": null,
+    "checks_passed": [
+      "actual source revision",
+      "actual test execution identity retained",
+      "native commit return xid equals exact protected pointer",
+      "original four native record hashes unchanged",
+      "only matching CURRENT/archive added",
+      "full target state before/after equal",
+      "native range state absence preserved, not converted to R0"
+    ],
+    "execution_identity": {
+      "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_wal_current_archive_preserve_data",
+      "assignment_mode": "OriginalLeader",
+      "identity_is_correlation_not_authority": true,
+      "package_version": "1.0.494-beta",
+      "source_case": "TargetProposal",
+      "source_commit": "9434dcdb1f9bc53683dc3e2c433de337dcc3ff83"
+    },
+    "limits": [
+      "Existing Rust test asserts real TxStatus::Committed; this independent JSON checker does not replay native WAL or prove fsync",
+      "Source release and catalogue Installing, row copy, Serving, cold recovery and physical qualification not established"
+    ]
+  },
+  {
+    "run": 43463319835,
+    "member": "fault-state/native-registered-fifth-image-01a1d5c2-8c78-7ac2-90e0-99e3b91083e0/registered-proposal-1.json",
+    "pointer": {
+      "attempt_id": "01a1d5c2-9eac-7300-8d14-44bad9f94aee",
+      "checksum_sha256": "031c0416b51bce16da68cc17479a728f2f1b3685ba9282cfc42d2cce0377f883",
+      "native_page_xid": 8
+    },
+    "first_outcome": "native_commit_returned_before_postchecks",
+    "exact_error": "canceling statement due to user request",
+    "checks_passed": [
+      "actual source revision",
+      "actual test execution identity retained",
+      "native commit return xid equals exact protected pointer",
+      "original four native record hashes unchanged",
+      "only matching CURRENT/archive added",
+      "full target state before/after equal",
+      "native range state absence preserved, not converted to R0"
+    ],
+    "execution_identity": {
+      "actual_rust_test_thread": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_post_wal_cancel_fresh_retry_same_xid",
+      "assignment_mode": "OriginalLeader",
+      "identity_is_correlation_not_authority": true,
+      "package_version": "1.0.494-beta",
+      "source_case": "TargetProposalPostCanceled",
+      "source_commit": "9434dcdb1f9bc53683dc3e2c433de337dcc3ff83"
+    },
+    "limits": [
+      "Existing Rust test asserts real TxStatus::Committed; this independent JSON checker does not replay native WAL or prove fsync",
+      "Source release and catalogue Installing, row copy, Serving, cold recovery and physical qualification not established"
+    ]
+  }
+]

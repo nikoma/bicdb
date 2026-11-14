@@ -1,0 +1,61 @@
+{
+  "source_revision": "34dded55efef6ed989cdf7d141d5751d4f2a2391",
+  "source_package_version": "1.0.494-beta",
+  "source_pins": {
+    "Cargo.toml": {
+      "git_blob": "9417817c48ec70a66ea2f60b7e547d13dc67b9d1",
+      "sha256": "7c756098550cdd9c86d781044c6427a369dc9983ce9296df07ed4d720ae7a3ad"
+    },
+    ".github/workflows/tests.yml": {
+      "git_blob": "681ecb80e5d415ba130759dade36939c92c84604",
+      "sha256": "8a3ffcb78e8cc4d2dd1ccd3c5e063d33c922e66fd604ea7dd0a21f830e51ccf8"
+    },
+    "crates/bicdb-core/src/db/range_image_install/registered_remote.rs": {
+      "git_blob": "0e7d3873524e24a897c4bfcdb4cf1e83a9ca4fb9",
+      "sha256": "72dee7cd7a567f9ea876f850e3c391a0fe848676bb9ca5c53093212db6caefa8"
+    },
+    "crates/bicdb-core/src/db/spatial_paged.rs": {
+      "git_blob": "7704abdd42b9b19ca2667b666cef128d554a36d7",
+      "sha256": "b52edc8ceb0ea2ca2f85a71f1db99ef6a77eeaac8bc150e47413d9162c6b544c"
+    },
+    "crates/bicdb-page/src/paged.rs": {
+      "git_blob": "7d7f660144c7c20a118e1dfe5274ca83feca08b6",
+      "sha256": "c9f06d19b35187a18b80bf349f81b2d902f20b0b50f490386903231a1bc2d6f2"
+    },
+    "crates/bicdb-page/src/mvcc.rs": {
+      "git_blob": "0e93fe28dd211b3a70d5d5204fd8633b2e61c569",
+      "sha256": "7b07836195ac6909161090ab10668fe899a6d9b93b4677fdd3e6d1d8473e0276"
+    },
+    "crates/bicdb-page/src/wal.rs": {
+      "git_blob": "6d8a9fedc44331b36a245f03df222d5540ec4a11",
+      "sha256": "d6b9abef139b95974e935235532301da9d67d4c99faa5d8edd02633f195b6cd2"
+    },
+    "crates/bicdb-core/src/db/range_image_native/registered_remote_image.rs": {
+      "git_blob": "b700e8bece0a1841593abbc798819648ea0e66e5",
+      "sha256": "8657efede89b758cfe427030a1da6994559ae9adc9214a3a44b579842b6f7e80"
+    },
+    "crates/bicdb-core/src/db/range_image_native/registered_remote_image/final_publication.rs": {
+      "git_blob": "c73a0ddecb890b74dfe27d321b1903cc8960cff7",
+      "sha256": "e53a558a4898a4336bdcbf3c2c6f5380be3ebfee27b4e7409752b8824ae3158a"
+    },
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_attempt/remote_mutation.rs": {
+      "git_blob": "eabec5956472454b46c9c756caf7b1db89af2aac",
+      "sha256": "4ebd5665cafa582fc491f13355ddc248e36118998d557747647097ff36d622b8"
+    },
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_final_image_tests/native_expiry_tests.rs": {
+      "git_blob": "b7f9bba8e8ef58182f16482e2cb37d421d48b4f9",
+      "sha256": "cf16d2acd2bb8504c443a2554296300884c3f0eda7587884547023f96c9b5587"
+    }
+  },
+  "failed_acceptance": {
+    "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_final_image_tests/native_expiry_tests.rs",
+    "line": 301,
+    "assertion": "same original A must resume after the characterized native outcome",
+    "classification": "failed actual proven-abort resumption; assertion unchanged"
+  },
+  "excluded": [
+    "Future bounded retry fixes or their tests",
+    "Earlier e1ec attempts and their raw-WAL interpretation",
+    "Any unexecuted fault controls or physical qualification"
+  ]
+}

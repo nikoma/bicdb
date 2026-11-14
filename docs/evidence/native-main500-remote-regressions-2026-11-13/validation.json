@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-13",
+  "default_offline_verifier": "passed",
+  "optional_complete_raw_archive_verifier": "passed",
+  "tampered_safe_projection_negative": "refused",
+  "network_used_by_verifiers": false,
+  "engine_opened": false,
+  "Rust_tests_rerun": false,
+  "whole_results_preserved": {
+    "43517610071": "10 passed / 0 failed",
+    "43519728051": "FAILED 44 passed / 7 failed"
+  },
+  "unforced_continuation": "not tested",
+  "qualification": false
+}

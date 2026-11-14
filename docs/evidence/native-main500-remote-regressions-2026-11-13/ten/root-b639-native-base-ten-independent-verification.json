@@ -1,0 +1,80 @@
+{
+  "checked_utc": "2026-11-13T22:28:19.974749+00:00",
+  "source": "b6398fb075eed7c93a71ab25a52fad3f936421e5",
+  "source_version": "1.0.500-beta",
+  "run": 43517610071,
+  "raw_sha256": "6c52a352b4850c704ed40254dfcccbdbd8076ea2a607609ada56dba615ac38a7",
+  "runtime_result": "10 passed; 0 failed",
+  "cases": [
+    {
+      "case": "TargetNativeBaseAbortBudget",
+      "source_app_returned_operations": 2,
+      "test_result": "passed"
+    },
+    {
+      "case": "TargetNativeBaseAbortSyncFailed",
+      "source_app_returned_operations": 2,
+      "test_result": "passed",
+      "no_replacement": true,
+      "sticky_write_failure": true,
+      "actual_native_status": "Aborted"
+    },
+    {
+      "case": "TargetNativeBaseCommitSyncUnknown",
+      "source_app_returned_operations": 2,
+      "test_result": "passed",
+      "no_replacement": true,
+      "sticky_write_failure": true,
+      "actual_native_status": "InProgress"
+    },
+    {
+      "case": "TargetNativeBaseInvalidated",
+      "source_app_returned_operations": 2,
+      "test_result": "passed"
+    },
+    {
+      "case": "TargetNativeBase",
+      "source_app_returned_operations": 2,
+      "test_result": "passed"
+    },
+    {
+      "case": "TargetNativeBaseCanceled",
+      "source_app_returned_operations": 2,
+      "test_result": "passed"
+    },
+    {
+      "case": "TargetNativeBaseWithoutFinal",
+      "source_app_returned_operations": 2,
+      "test_result": "passed"
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryAfterCommit",
+      "source_app_returned_operations": 2,
+      "test_result": "passed",
+      "issued_native_xid": 21,
+      "final_native_xid": 21,
+      "retired": 0
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryAfterPut",
+      "source_app_returned_operations": 2,
+      "test_result": "passed",
+      "issued_native_xid": 21,
+      "final_native_xid": 23,
+      "retired": 1
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryBeforePut",
+      "source_app_returned_operations": 2,
+      "test_result": "passed",
+      "issued_native_xid": 21,
+      "final_native_xid": 22,
+      "retired": 1
+    }
+  ],
+  "source_app_returned_operations": 20,
+  "unforced_late_commit_continuation": "NOT TESTED: no natural prerequisite/report",
+  "environment_difference": "main500 workflow dependency opt-level2; cannot retrospectively establish old timeout causes",
+  "database_engine_opened": false,
+  "physical_or_production_qualification": false
+}

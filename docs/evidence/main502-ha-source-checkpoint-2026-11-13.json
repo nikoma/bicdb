@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-11-13T23:51:22.576956+00:00",
+  "classification": "source_inspection_and_retained_CI_evidence_only",
+  "remote_main": {
+    "version": "1.0.502-beta",
+    "sha": "629857f5eaaeee5f5a9124d505406d8cd6a29535",
+    "tree": "33480d5ab92f676ded81906093f1d648cf96e860",
+    "contains_501_merge": true
+  },
+  "tested_head": {
+    "version": "1.0.502-beta",
+    "sha": "4f1d61b837894217bb3c2b7e2461985382ce6cef",
+    "tree": "33480d5ab92f676ded81906093f1d648cf96e860",
+    "whole_tree_equals_main": true,
+    "run": 43513977284,
+    "jobs": [
+      {
+        "id": 132191204796,
+        "name": "Licensing invariants",
+        "conclusion": "success"
+      },
+      {
+        "id": 132191205084,
+        "name": "Public repository has no private dependencies",
+        "conclusion": "success"
+      },
+      {
+        "id": 132191205184,
+        "name": "Community-only workspace compiles, tests included",
+        "conclusion": "success"
+      },
+      {
+        "id": 132191205209,
+        "name": "Formatting",
+        "conclusion": "success"
+      },
+      {
+        "id": 132191205237,
+        "name": "Validate focused test selectors",
+        "conclusion": "success"
+      },
+      {
+        "id": 132191245216,
+        "name": "bicdb-core native multi-node (serial)",
+        "conclusion": "success"
+      },
+      {
+        "id": 132191245291,
+        "name": "bicdb-core",
+        "conclusion": "success"
+      },
+      {
+        "id": 132191245327,
+        "name": "bicdb-sql",
+        "conclusion": "success"
+      },
+      {
+        "id": 132191245369,
+        "name": "bicdb-pgwire",
+        "conclusion": "success"
+      },
+      {
+        "id": 132191245377,
+        "name": "rest of workspace",
+        "conclusion": "success"
+      },
+      {
+        "id": 132191246966,
+        "name": "Focused CLI integration (${{ inputs.cli_target }})",
+        "conclusion": "skipped"
+      },
+      {
+        "id": 132191247517,
+        "name": "Focused Core library (${{ inputs.core_filter }})",
+        "conclusion": "skipped"
+      },
+      {
+        "id": 132191248043,
+        "name": "Focused PGwire library (${{ inputs.pgwire_filter }})",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  "source_pins": [
+    {
+      "path": "docs/releases/1.0.502-beta.md",
+      "sha256": "d6e0e7924f786eebf2d0e284bb625abda4c73faed021c8675562b77f9bbfebaa",
+      "git_blob": "42d4432d2eb60fec7bf9c15e8fce69b3efab2fa3",
+      "same_as_tested_head": true
+    },
+    {
+      "path": "docs/design/native-fifth-data-path.md",
+      "sha256": "b00b25b06097ea6c08c38267fdf968397cd86d9308a09caec4f0f32cbd989c21",
+      "git_blob": "53a31365ec3cf112480f286f1462009e6975f958",
+      "same_as_tested_head": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data.rs",
+      "sha256": "26ddfafe200d7fbf42902d99c0685e4353759d21634f5215e79ae5f8bc597456",
+      "git_blob": "5ff9a9a28e9c1d24aaa2010d02d48af66e4c5651",
+      "same_as_tested_head": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data.rs",
+      "sha256": "2263d71abc5c11511fb952a68d3b60b539ace73a3835b96739aa8fe97c916e1c",
+      "git_blob": "2011421f23d1b6c2878c88bf7890fb29e3fc6c6c",
+      "same_as_tested_head": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/fifth_data_path_tests.rs",
+      "sha256": "93de28c66bcfe0f236f709fdd857c574828ae106202216b6d5a704291fb7fa0c",
+      "git_blob": "407ac0ffe2d1e685b256da49fda1b859167b0997",
+      "same_as_tested_head": true
+    },
+    {
+      "path": "crates/bicdb-cli/tests/native_metadata_operator_cli/initial_data_tests.rs",
+      "sha256": "4ce4779afcb43583010f37a9c9c1abb2b5a09faca9c11d6c9a00d9df0903d24e",
+      "git_blob": "68d3f98943a2e666c1c68089f30b70158aa12dc0",
+      "same_as_tested_head": true
+    }
+  ],
+  "native_serial_log": {
+    "job": 132191245216,
+    "run": 43513977284,
+    "source": "4f1d61b837894217bb3c2b7e2461985382ce6cef",
+    "sha256": "3b063d2a2672fdbed8d77b69a2d52d26b5edc91f2f3701ec87ec414c966b0c20",
+    "gzip_sha256": "7d8d135491ffec8bf81b6d53a5d1f1410a42a18a6e108c868910cdf75775fc02",
+    "bytes": 3381310,
+    "matches": [
+      "2026-11-13T22:21:45.8181520Z test distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_receives_image_becomes_voter_and_serves_after_one_original_stops ... ok",
+      "2026-11-13T22:21:53.7513184Z test distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_transfer_failure_after_source_cut_characterization ... ok",
+      "2026-11-13T22:21:59.6979678Z test distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_unavailable_target_leaves_range_writable_on_original_four ... ok",
+      "2026-11-13T22:23:21.2031514Z test result: ok. 212 passed; 0 failed; 1 ignored; 0 measured; 877 filtered out; finished in 1257.28s"
+    ]
+  },
+  "delivery_base": {
+    "version": "1.0.503-beta",
+    "sha": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+    "pr": 181,
+    "status_at_capture": "open; CI pending; not yet verified remote main",
+    "scope": "separate ERP principal/snapshot fixes; not an HA qualification result"
+  },
+  "findings": [
+    {
+      "id": "F502-1",
+      "status": "passed",
+      "claim": "Three named fifth-data-path tests passed within the 212-pass serial native cohort. One process, real mutually authenticated sockets, one selected range; local test orchestration.",
+      "evidence": [
+        "2026-11-13T22:21:45.8181520Z test distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_receives_image_becomes_voter_and_serves_after_one_original_stops ... ok",
+        "2026-11-13T22:21:53.7513184Z test distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_transfer_failure_after_source_cut_characterization ... ok",
+        "2026-11-13T22:21:59.6979678Z test distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_unavailable_target_leaves_range_writable_on_original_four ... ok",
+        "2026-11-13T22:23:21.2031514Z test result: ok. 212 passed; 0 failed; 1 ignored; 0 measured; 877 filtered out; finished in 1257.28s"
+      ]
+    },
+    {
+      "id": "F502-2",
+      "status": "failed",
+      "claim": "Interrupted transfer after learner allocation lacks automatic resume/abort and can leave the range safe but unavailable. Passing characterization asserts safety, not availability.",
+      "reproduce": "native_fifth_data_path_transfer_failure_after_source_cut_characterization",
+      "next_smallest_test": "Persist one exact handoff, stop after the first copied step, restart the target/controller and require same-handoff bounded continuation, all original ACK values, and fresh Strong service without manual state edits."
+    },
+    {
+      "id": "F502-3",
+      "status": "not tested",
+      "claim": "Automatic production controller, remote collector integration, populated second range, cold restart, source cleanup, physical four-to-five expansion and sustained throughput gain are not supplied by this path.",
+      "next_smallest_test": "One range, separate processes, fixed client endpoint and complete external attempt ledger; cut target/controller at one durable relocation boundary and require convergence before the physical experiment."
+    },
+    {
+      "id": "F501-1",
+      "status": "failed",
+      "claim": "Original 501 four-process first-ACK test failed before any successful returned ACK; write effect remains uncertain. Generic no-member error and missing retained RPC journal prevent causal attribution.",
+      "run": 43513943520,
+      "job": 132191138917,
+      "source": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+      "cancelled_later_job": 132226300840,
+      "cancelled_job_not_success": true,
+      "next_smallest_test": "Retain every actual APP/Get/refresh wire attempt with exact typed errors under the unchanged four-thread workload and deadlines. A later passing case does not identify the original cause."
+    }
+  ],
+  "production_gate": {
+    "status": "not qualified",
+    "original_Azure_scale_out": "failed; unchanged",
+    "new_physical_run": false,
+    "new_RPO_RTO_or_latency_results": false,
+    "stable_five_node_capacity_gain": false,
+    "transparent_general_PostgreSQL_distributed_SQL": false
+  }
+}

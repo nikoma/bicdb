@@ -1,0 +1,42 @@
+{
+  "source_revision": "a5ffc9d15ce75b2b6b0d987c7ea61f184cfe8988",
+  "run_id": 43473382435,
+  "run_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T17:36:36.155457+00:00",
+  "selector": "native_registered_fifth_remote_image_actual_stored_history_rows_beyond_b0_preserve_other_range",
+  "passed": [
+    "formatting",
+    "licensing",
+    "public dependency boundary",
+    "focused selector validation",
+    "Core projection chaos helper binary compilation"
+  ],
+  "failed": {
+    "workspace_alltargets_compile": "E0382 in target_image_tests.rs: record Arc moved into to_value then reused by evidence JSON",
+    "core_test_compile_and_listing": "same E0382"
+  },
+  "not_tested": [
+    "focused Rust history/row test execution",
+    "workflow consumer compilation",
+    "actual target history/row apply",
+    "readiness/Serving",
+    "physical failure/rebalance/scale-out"
+  ],
+  "focused_rust_tests_executed": 0,
+  "actual_row_fixture_available": false,
+  "safe_fixture_projection_created": false,
+  "raw_job_indices": [
+    "/tmp/bicdb-native-foundations-ci/a5f-registered-history-rows-alltargets-job132050841240-index.json",
+    "/tmp/bicdb-native-foundations-ci/a5f-registered-history-rows-core-job132050903126-index.json"
+  ],
+  "run_metadata": "/tmp/bicdb-native-foundations-ci/a5f-registered-history-rows-run43473382435-terminal.json",
+  "prepared_fix_commit": "22c8d2e62e45b827a4295af570b8fac04daf5737",
+  "fix_scope": "test-only one-line borrowed serialization; no assertion/deadline/runtime change",
+  "fix_local_checks": [
+    "rustfmt",
+    "git diff --check",
+    "bump-version --check: 29 packages 1.0.494-beta, no tracked version changes"
+  ],
+  "successor_dispatched": false,
+  "original_failed_run_unchanged": true
+}

@@ -1,0 +1,145 @@
+{
+  "source_revision": "34dded55efef6ed989cdf7d141d5751d4f2a2391",
+  "requested_source": "34dded55efef6ed989cdf7d141d5751d4f2a2391",
+  "authoritative_source_verified": true,
+  "run_id": 43502925624,
+  "job_id": 132153142118,
+  "job_name": "Focused Core library (native_registered_fifth_remote_native_base_actual_expiry_)",
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "captured_at_utc": "2026-11-13T20:45:15.696198+00:00",
+  "raw_bytes": 2449093,
+  "raw_sha256": "450472974a099b4688e24ca5479b81c4bfd6443f2ac581ce70c7dbb6ed723f73",
+  "compressed_file": "34d-portable-real-expiry-core-job132153142118.log.gz",
+  "compressed_sha256": "9bf18bb3409fd6c629dd4dd7a8f225307aeede2d91493a768cf53d5fbb75dcd1",
+  "capture_exit_code": 0,
+  "test_summaries": [
+    "2026-11-13T20:40:30.2196764Z test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 1070 filtered out; finished in 18.06s"
+  ],
+  "failure_context": [
+    {
+      "line": 21295,
+      "remaining": 0,
+      "lines": [
+        "2026-11-13T20:40:30.2192233Z bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-13T20:40:30.2192372Z",
+        "2026-11-13T20:40:30.2193304Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_before_put_proven_abort_same_a_resumes' (7497) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_final_image_tests/native_expiry_tests.rs:301:5:",
+        "2026-11-13T20:40:30.2194526Z same original A must resume after the characterized native outcome; got Err(Cluster(\"native target image: Registered immutable native-base publication missing\"))",
+        "2026-11-13T20:40:30.2195111Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "2026-11-13T20:40:30.2195284Z",
+        "2026-11-13T20:40:30.2195287Z",
+        "2026-11-13T20:40:30.2195336Z failures:",
+        "2026-11-13T20:40:30.2195899Z     distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_before_put_proven_abort_same_a_resumes",
+        "2026-11-13T20:40:30.2196608Z",
+        "2026-11-13T20:40:30.2196764Z test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 1070 filtered out; finished in 18.06s",
+        "2026-11-13T20:40:30.2196961Z",
+        "2026-11-13T20:40:30.2197553Z error: test failed, to rerun pass `-p bicdb-core --lib`",
+        "2026-11-13T20:40:30.2306354Z ##[error]Process completed with exit code 101.",
+        "2026-11-13T20:40:30.2357246Z ##[group]Run actions/upload-artifact@v4",
+        "2026-11-13T20:40:30.2357420Z with:"
+      ]
+    }
+  ],
+  "test_observations": [
+    {
+      "line": 21027,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_before_put_proven_abort_same_a_resumes",
+      "result": "FAILED"
+    },
+    {
+      "line": 21030,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_commit_same_xid_resumes",
+      "result": "ok"
+    }
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T20:35:26Z",
+      "completed_at": "2026-11-13T20:35:28Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T20:35:28Z",
+      "completed_at": "2026-11-13T20:35:31Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T20:35:31Z",
+      "completed_at": "2026-11-13T20:35:40Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T20:35:40Z",
+      "completed_at": "2026-11-13T20:35:47Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T20:35:47Z",
+      "completed_at": "2026-11-13T20:38:49Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T20:38:49Z",
+      "completed_at": "2026-11-13T20:40:11Z"
+    },
+    {
+      "name": "Execute selected Core library tests",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 7,
+      "started_at": "2026-11-13T20:40:11Z",
+      "completed_at": "2026-11-13T20:40:30Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-13T20:40:30Z",
+      "completed_at": "2026-11-13T20:40:31Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-13T20:40:31Z",
+      "completed_at": "2026-11-13T20:40:31Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-13T20:40:31Z",
+      "completed_at": "2026-11-13T20:40:32Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-13T20:40:32Z",
+      "completed_at": "2026-11-13T20:40:32Z"
+    }
+  ]
+}

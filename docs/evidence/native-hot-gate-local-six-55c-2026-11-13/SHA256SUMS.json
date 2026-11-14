@@ -1,0 +1,14 @@
+{
+  "README.md": "f6486e7cc58de4e3f6d2de9aa1a4a76271e4e50e0bfce4bb7a78ccddd47ab1c4",
+  "core-job.log.gz": "4f7fdcfcd20207f49b9af38850ca87964015df6751008c827646ce37deed7be7",
+  "core-log-direct-fetch.json": "a6022e3c28b7e7cd50f825f29cfd3c52c7af1d150d03b6e4c3fbbfe0841a1018",
+  "core-log-initial-fetch.json": "342f1b8d0d80e9fec2ff72e788307065f263d8a06675de8495ee72abfdd27359",
+  "evidence.json": "b6e92c9e38534b815716e53468bfb8aa2731fc1d0465bec68da50e1e3e6974ee",
+  "focused-core-evidence.zip": "aa14896868d770919d5eb27aaffefa12b51e42d933677859107b39f962d7f38d",
+  "github-artifacts.json": "feb425b6e207e94b6d6495e307b55786edc58508fca0f5a51ed9a07b0a948e0c",
+  "github-run.json": "fc8d39150b72ac39de915626613e8de713da5abd5ece105c2b690b2d8d84b7b6",
+  "publication_version.rs.txt": "522ea571fc2e282c65ea2921a0279a1db2bf992a05f1696ad8b483f168f692c5",
+  "validation.json": "8ded4d09bf312c4670a2b92257b446dde734aad9c50fd581d72fce9687a74e66",
+  "verify.py": "eb99c212efdae5748d79d29e8a292f6238fd34b5e296a924c57b775f04c55010",
+  "workspace-job.log.gz": "0ef500e7654019b8dce25ebdcfea6b20a9e062b0cd97157c2af43c7d492e79f5"
+}

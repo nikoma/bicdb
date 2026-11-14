@@ -1,0 +1,107 @@
+{
+  "issue_reports_are_local_not_GitHub_issue_numbers": true,
+  "findings": [
+    {
+      "local_finding_id": "HA-PHASE-01",
+      "title": "Historical first-APP no-member failures remain unexplained",
+      "status": "inconclusive",
+      "retained_failure_source": "6d795aac644a71b36ffef395a649ffc21b62206d",
+      "reproduction": "Existing original four transfer selectors; preserve two-second APP and original assertions",
+      "observed": "Three first-APP prerequisites failed in historical6d;7f fails at different later boundaries",
+      "next_smallest_test": "Passive actual first-APP wire/readiness evidence at the original boundary without warmup or deadline changes"
+    },
+    {
+      "local_finding_id": "HA-PHASE-02",
+      "title": "Original OLD collector expires after actual native close progress",
+      "status": "failed",
+      "source": "7f2c5f0abc4b2a65700971e41ec362c5da0fbb03",
+      "selector": "first_app_observed_cohort",
+      "actual_failure_location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs:862",
+      "individual_close_already_returned": true,
+      "source_predicate_confirms_original_MQ_expiry": true,
+      "original_context_and_deadline_samples_retained": false,
+      "separate_component_control": {
+        "source": "6d5fe913fb6bdb032c53801b52ad6161fe6d0d95",
+        "status": "passed",
+        "selector": "native_registered_fifth_old_round_expiry_then_fresh_mq_counts_same_live_closes",
+        "limits": "Same still-live actual facts only; no partial-debt/unclosable peer or automatic-worker repair"
+      },
+      "next_smallest_test": "Actual scoped continuation carries every original native/closed/constraint/pending obligation; expired close issuance needs a real native reread producer"
+    },
+    {
+      "local_finding_id": "HA-PHASE-03",
+      "title": "Externally uncertain range2 write has incomplete payload reconciliation",
+      "status": "inconclusive",
+      "source": "7f2c5f0abc4b2a65700971e41ec362c5da0fbb03",
+      "record_id": "items/registered-fifth-ack-r2-0",
+      "expected_payload": {
+        "nested": [
+          null,
+          17,
+          {
+            "full": "payload"
+          }
+        ],
+        "object": {},
+        "registered_fifth_source": 2
+      },
+      "expected_payload_sha256": "392cbf7c149065bb0e1c9d2cc7684c0c45b9ed228b5649e51e265629fe05b6a7",
+      "range": 2,
+      "epoch": 1,
+      "topology_generation": 4,
+      "actual_api_error": "canceling statement due to query timeout",
+      "all_attempts_in": "reports/7f2c-first-app-cohort-verifier-report.json.gz",
+      "replica_rows": {
+        "n0": "unavailable DB read guard; no retained row/body",
+        "n2": "nativeApplied1 observed; row/body not retained",
+        "n3": "nativeApplied1 observed; row/body not retained"
+      },
+      "actual_DB_custody": false,
+      "actual_live_Strong_observation": false,
+      "loss_or_rollback_established": false,
+      "next_smallest_test": "Separate bounded forensic Strong/full-row/native-command capture on all three original replicas after preserving the failed original API outcome"
+    },
+    {
+      "local_finding_id": "HA-PHASE-04",
+      "title": "Requested metadata budget differs from actual witnessed lifetime",
+      "status": "passed",
+      "scope": "Measured actual6d5 context clamp only; not availability qualification",
+      "requested_ms": {
+        "original_MQ": 1000,
+        "fresh_MQ_Role_OWN": 5000
+      },
+      "fixture_io_timeout_ms": 1500,
+      "historical7f_exact_deadline_recorded": false,
+      "next_smallest_test": "Actual controller phases use observed deadlines and fresh proof, keeping every retained obligation and original per-request budgets"
+    },
+    {
+      "local_finding_id": "HA-PHASE-05",
+      "title": "Row/history candidates did not reach runtime execution",
+      "status": "not_tested",
+      "compilation": "failed",
+      "sources": [
+        "ea7d8e3494d788fc9b1c88bb87101df2ba1d0d45",
+        "a5ffc9d15ce75b2b6b0d987c7ea61f184cfe8988"
+      ],
+      "focused_Rust_tests_executed": 0,
+      "next_smallest_test": "Complete immutable successor compilation, then execute exact actual stored-history/rows selector; later run43474702124 excluded from this corpus"
+    },
+    {
+      "local_finding_id": "HA-PHASE-06",
+      "title": "fd4 hidden native after-inventory was not serialized",
+      "status": "not_tested",
+      "CI_assertion": "passed",
+      "source": "fd4d0595d70e82dff20889c19918e34dbd42575d",
+      "independent_after_inventory_reconciliation": false,
+      "next_smallest_test": "Future explicit fresh native_after field; preserve original artifacts rather than retrofilling"
+    },
+    {
+      "local_finding_id": "HA-PHASE-07",
+      "title": "Physical scale-out and application-transparent SQL remain unqualified",
+      "status": "not_tested",
+      "original_Azure_qualification": "failed",
+      "production_gate_changed": false,
+      "next_smallest_test": "Independent isolated four-to-five expansion/fault/reconciliation and stable post-convergence capacity comparison; separately prove ordinary PostgreSQL cross-range SQL/atomic recovery"
+    }
+  ]
+}

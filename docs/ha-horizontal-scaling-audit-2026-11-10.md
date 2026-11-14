@@ -11,6 +11,113 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
+## Latest merged-source update — 2026-11-13 UTC
+
+The later inspected remote `main` is **1.0.502-beta**,
+`629857f5eaaeee5f5a9124d505406d8cd6a29535`. It includes the 501 merge.
+The [separate source/CI checkpoint](evidence/main502-ha-source-checkpoint-2026-11-13.json)
+pins the exact files, tested PR177 head `4f1d61b837894217bb3c2b7e2461985382ce6cef`,
+individual check results and the retained complete serial-native log. The merged
+whole tree is identical to that tested head (`33480d5ab92f676ded81906093f1d648cf96e860`).
+Those passing CI checks cover the same source tree; they do not establish
+physical or production qualification.
+
+There is now a **positive fifth-member DATA path**. Three named tests pass in
+[serial native job 132191245216](https://github.com/nikoma/bicdb/actions/runs/43513977284/job/132191245216)
+(212 passed, 0 failed, 1 ignored). In one process with real mutually authenticated
+sockets, test orchestration registers the fifth member, copies one range,
+commits its new membership, makes the fifth leader, and verifies earlier rows,
+new writes and Strong reads, including with one original member stopped.
+The [exact 502 contract](https://github.com/nikoma/bicdb/blob/629857f5eaaeee5f5a9124d505406d8cd6a29535/docs/design/native-fifth-data-path.md)
+is essential: these are local objects driven by the test, not an automatic
+production relocation controller or a cross-process expansion.
+
+| Finding | Classification | Remaining boundary |
+| --- | --- | --- |
+| One-range fifth-member handoff and post-handoff reads/writes | **Passed**, narrow CI fixture | One process, explicit test orchestration; no physical qualification |
+| Unavailable target before allocation leaves original range usable | **Passed**, narrow CI fixture | Does not cover interrupted movement |
+| Interrupted transfer after learner allocation | **Failed availability requirement**; safety characterization passes | Range can remain safe but unwritable; automatic resume/abort is absent |
+| Automatic driver, remote collector integration, second populated range, cold restart and retired-source cleanup | **Not tested** by this path | No operator-level convergence or restart qualification |
+| Independent-machine steady-state throughput gain after convergence | **Not tested** | Original Azure scale-out qualification remains failed |
+
+Separately, source 501's original four-process first-ACK case failed with
+`Cluster(no event cluster member is reachable)` in job `132191138917`.
+It returned no successful ACK; the attempted write's effect remains uncertain.
+The original RPC journal was not retained, so that error does not prove that all
+members died, nor establish a routing, authority or storage root cause. The
+later rest-workspace attempt `132226300840` was cancelled, not passed. These
+results must remain visible alongside the passing 502 checks. Later diagnostics
+and client-error fixes have their own exact source/test scopes; a passing
+successor does not explain or replace the original failure.
+
+The documentation delivery is prepared on the separate ERP **1.0.503-beta**
+candidate `c6a081a6026f4efd00d80f392c94b67f2f2f4e12` (PR181), whose release
+checks were pending at this inspection. That dependency and this documentation
+version do not add an HA qualification result. The main-500 checkpoint below
+is retained as historical evidence; its source and limitations are not silently
+relabelled as 502/503 evidence. The earlier prototype packets remain immutable.
+There is still no physical 4-to-5 success, stable five-node capacity gain,
+general distributed SQL contract or changed production admission.
+
+## Historical main-500 composition checkpoint — 2026-11-13 UTC
+
+Remote main inspected at this checkpoint is **1.0.500-beta**,
+`a06e09336c70fecbc38232d677c330984959388f`; the
+[source/check-run checkpoint](evidence/main500-ha-source-checkpoint-2026-11-13.json)
+retains exact source-file hashes and individual check results. Its tree
+`768cf994f45089723cab3a66fd85b87a85e12a20` is identical to tested PR171 head
+`fd1e2d90d351b3dafd47d17e4486582da6bd4e51`. The
+[retained GitHub run](https://github.com/nikoma/bicdb/actions/runs/43502431794)
+reports passing Core, serial native multi-node, SQL, PGwire, remaining-workspace,
+compile and repository checks; the separate Rails check also passes. These are
+CI results, not independently rerun hardware or deployment qualification.
+
+The native foundation is now merged through PR169 as source 1.0.499-beta,
+including the separate `cluster native-metadata` process lifecycle and hot
+recovery work. Its earlier serial native job at head `0cd1756b5489` failed one
+one-peer-loss control; the later passing 500 cohort does not identify that
+failure's cause. Normal `serve` still attaches the older balanced supervisor
+path. The registered fifth-node production controller, complete remote
+handoff/Serving path, populated second-range extension and restart qualification
+remain separate gates. A passing in-process handoff cannot establish those gates.
+
+Source 500 also orders receiver recovery WAL sync before publishing its completed
+origin mapping and adds authorized `backup adopt-copy` / restore-copy handling;
+plain copied native directories refuse open. Its
+[release contract](https://github.com/nikoma/bicdb/blob/a06e09336c70fecbc38232d677c330984959388f/docs/releases/1.0.500-beta.md) explicitly limits receiver-origin
+provenance to in-process carriage and copy custody to unkeyed checksums. Those
+limits do not establish authenticated wire-origin carriage or source retirement.
+
+The exact later experimental commits in the packets below remain distinct from
+this merged baseline. Earlier candidates retain inherited 494 package versions;
+the later unmerged main-500 composition retains version 500. Their failed and
+passing cohorts are preserved separately and do not qualify main 500. Current source still
+has only the test `RecordingCommitProtocol` implementation of the distributed
+transaction interface. No transparent PostgreSQL distributed SQL, current
+physical four-to-five convergence, RPO/RTO or sustained capacity gain follows
+from this composition. The original Azure qualification remains failed.
+
+The [native operator closure review](design/native-operator-scale-out-closure-2026-11-13.json)
+pins 49 source paths at main 500 and its separately unmerged prototype
+composition `981b7eef7447783270a1db4b8c967aa596cc132e`. It identifies concrete
+operator integration gaps rather than treating the CLI or internal APIs as
+automatic scale-out proof:
+
+| Stage | Existing source | Missing operator attachment at those revisions |
+| --- | --- | --- |
+| Planning | Generic balanced placement and native metadata consensus | Native-owned planning from authenticated capacity/liveness and typed committed proposals |
+| Image source | Authenticated OLD observations and source-frame fetch | Source Start/Describe discovery and retained same-session retry; fetching currently requires an already known manifest |
+| Target import | Original-A proposal/history/rows/final/base/catalogue producers | Target-process bounded pull worker; producers are currently driven by internal fixtures |
+| Joint handoff | Local typed joint primitives | Registered remote-image first-Serving bridge and actual authenticated NEW/decision/prepare/Open/release RPC collectors |
+| Completion | Stage validators and existing APP/Strong surfaces | Actual Serving publication, proof-driven source retirement/cleanup and truthful convergence |
+
+The source registry retains at most eight image sessions without a retirement
+producer. Native listeners refuse generic legacy cleanup, so attaching the old
+balanced driver cannot bypass that obligation. A populated second-range move,
+assigned/data-owner restart and pending-row cold repair remain separate gates.
+The review proposes independent implementation slices; it ran no process or
+hardware experiment and establishes no additional qualification.
+
 ## Recovery continuation evidence — 2026-11-13 UTC
 
 The [source-pinned continuation packet](evidence/native-recovery-continuation-2026-11-13/README.md)
@@ -31,6 +138,231 @@ logical ledgers and omission hashes with explicit capture limits.
 No new physical experiment, stable five-node capacity gain, general SQL contract
 or production admission is established. The original Azure failure remains failed.
 
+## Native phase evidence follow-up — 2026-11-13 UTC
+
+The [bounded follow-up packet](evidence/native-recovery-phase-followup-2026-11-13/README.md)
+adds source-pinned serial, four-case, expiry, proposal and catalogue-Installing
+results. The four-case cohort **fails all four tests** with seven ACKs and one
+unreconciled uncertain write; three failures occur while recording actual close
+observations into an expired original metadata round. A separate genuine-expiry
+control passes by counting the same still-live close facts under a distinct fresh
+MQ. Requested five-second budgets can yield actual authority windows bounded by
+the fixture's 1500ms ingress timeout. Proposal/Installing component passes do
+not install target rows, publish Serving, qualify physical recovery or prove
+capacity gain. Two later row candidates fail compilation and supply no runtime
+row result in that fixed corpus. The earlier seventeen-job packet is unchanged.
+The original Azure scale-out qualification remains failed and production gates
+remain unchanged.
+
+## Native base and row-WAL evidence — 2026-11-13 UTC
+
+The [separate nine-control packet](evidence/native-registered-base-rows-d690-2026-11-13/README.md)
+pins unmerged runtime candidate **1.0.494-beta**,
+`d6908095e0d347e563ef68801f49e52dba35452d`: four native-base controls and five
+row-import controls pass, alongside workspace all-target and independent
+consumer compile checks. The actual native base is published with an immutable
+archive; same-transaction retry and preservation of the historical floor after
+image invalidation are exercised. Same-open pending-row WAL survives an explicit
+ServerPaged checkpoint until committed protected progress releases its lease.
+These results do not validate later code, public main **1.0.498-beta**
+(`ea74be38dce1ff16cc3058d0c2d13411aea35e09`), or this documentation version.
+
+The fixtures recorded eighteen successful source application API calls and
+zero source failures/uncertainties. One internal target-copy operation instead
+returned an uncertain outcome and correctly remained retained/fenced. Seven
+fixtures checked one selected-range acknowledged record on the target; the
+other source range's ACKs were not claimed copied. This is not an eighteen-commit
+failover RPO result. Caller retries and internal wire attempts are distinguished.
+
+The packet retains four complete hashed CI jobs, explicit public projections,
+private-custody omission hashes and portable logical checks. Failed earlier
+cohorts remain unchanged. Catalogue adoption, NEW/decision/Open completion,
+Ready/Serving, strong-read routing, cold continuation, independent index/FTS/
+queue/audit parity and physical automatic four-to-five-node convergence remain
+untested by this packet. There is no stable five-node capacity comparison or
+physical RPO/RTO/latency qualification. The original Azure failure remains failed.
+No HA runtime candidate is merged or deployed by this documentation update.
+
+## Cold preservation and catalogue adoption — 2026-11-13 UTC
+
+The [separate three-run packet](evidence/native-cold-rows-catalogue-e1ec-2026-11-13/README.md)
+pins later unmerged **1.0.494-beta** candidate
+`e1ecfeab71d3f1e104530e9d6aa3bf37971abd65`. Its component results are:
+
+| Run | Result | Evidence boundary |
+| --- | --- | --- |
+| Cold preservation, 43492849838 | 7 passed, 0 failed | Restrictive pending-intent admission, strict WAL inspection and an actual SIGKILL; normal reopening refuses unresolved debt. |
+| Row transfer, 43493986492 | 5 passed, 0 failed | Original intent/transaction retention, cancellation and uncertain-apply fencing, including same-open WAL retention. |
+| Catalogue adoption, 43493938281 | 2 passed, 2 failed | Native/catalogue agreement and missing-base refusal pass. Two `PublishNativeBase` prerequisites time out before the planned cancellation and directory-I/O faults are armed. Those fault guarantees are **not tested** in this run. |
+
+The killed fixture loses all five in-process services together, not five
+independent hosts. Before the first native reopening, its stopped target root
+was copied and twenty files were independently reconciled, including the exact
+568-byte logical WAL. The original logical transaction, native intent and applied
+position remain identifiable. Normal database open refuses before logical
+replay/cut; this establishes preservation and safe refusal, **not automatic cold
+repair, serving readiness or a measured RTO**. The copy is never engine-opened.
+
+The catalogue failures are retained with exact errors and original custody.
+The frozen packet initially classifies their native publication outcomes as
+**inconclusive** because post-error native API diagnostics were missing. A
+[separate read-only inspection of those same original WAL files](evidence/native-original-catalogue-wal-e1ec-2026-11-13/README.md)
+now identifies both exact base/archive receipts in generation-checked heap and
+overflow records under native transaction 21, with its CRC-valid Commit record.
+The receipts match the original source, target birth and final-image records;
+the latter also match native transaction 20 and its Commit record. These are
+observed publication bytes and decisions, not guessed transaction numbers.
+
+This narrows the original unknown outcome without establishing a successful API
+return, fsync completion, committed-root reachability, current read visibility or
+power-loss survival. The exact timeout check remains unidentified. Both original
+tests remain failed and their intended faults remain not tested. Later passing
+candidates or isolated tests do not replace that evidence. Deterministic expiry
+tests must retain the actual owner/native outcome and original authority windows,
+then check continuation with genuinely fresh authority without relaxing deadlines.
+
+Twenty source application API calls returned successfully across these fixtures;
+internal target cancellations, an uncertain apply, a cold projection killed
+before replying and the two failed prerequisites are accounted separately.
+Logical event collection `items` is stored physically
+in `__bic_cluster_events`; an empty physical `items` collection is not evidence
+of a missing event or an ordinary SQL-table guarantee. This is not a twenty-commit
+failover RPO result. NEW/decision/Open, Ready/Serving, complete rebalance,
+independent index/FTS/queue/audit parity, stable five-node throughput gain and
+physical qualification remain open. The original Azure qualification stays failed.
+
+## Proven-abort continuation defect — 2026-11-13 UTC
+
+The [separate real-expiry baseline](evidence/native-base-real-expiry-34dd-2026-11-13/README.md)
+pins unmerged **1.0.494-beta** candidate
+`34dded55efef6ed989cdf7d141d5751d4f2a2391`, run **43502925624**:
+**one test passes and one fails**. Both controls wait for their actual original
+Role deadline while the five-second parent remains live. They do not manufacture
+expiry through cancellation, renew the Role or increase its deadline.
+
+After an actual native commit, timeout returns `QueryTimedOut`; a genuinely
+fresh request reconciles the same native transaction 21 and exact base/archive.
+Before either native put, timeout instead leaves that actual transaction
+**Aborted**, with no visible base or archive. The fresh request retains the same
+original installation attempt but fails with `Registered immutable native-base
+publication missing`. This is a demonstrated same-open metadata-publication
+**liveness defect**. It is separate from the older failures whose retained WAL
+contains Commit records; it does not establish their precise timeout cause.
+
+The failed recovery assertion, both native outcomes and complete CI logs are
+retained. Four successful source application API calls remain separate from the
+two internal timeouts and their one successful/one failed continuations. The
+18.06-second suite time is not RTO. The separate repair must retain exact aborted
+attempts, prove same-open abort and healthy durability/current authority, and
+bound replacement native transactions. Committed or uncertain outcomes must
+never reset. That repair and its additional failure controls are not delivered
+by this documentation update; automatic recovery and physical qualification
+remain open.
+
+## Native-base repair and remaining late-commit failures — 2026-11-13 UTC
+
+The [two-cohort repair packet](evidence/native-base-abort-custody-2026-11-13/README.md)
+retains unmerged source `c1e4b3a4e8e7ad33c688436830f9af10a4203cc5`
+(run **43510565054**, **5 passed / 5 failed**) and test-observer successor
+`81733c1fa601fea3bcac1ad5efac8435dd02b090`
+(run **43514812736**, **8 passed / 2 failed**). Both whole runs failed;
+workspace/all-target and consumer compilation passed. Both retain inherited
+source version 1.0.494-beta and do not qualify newer main.
+
+The unchanged repair now passes focused before-put and after-first-put healthy
+abort continuation, committed same-transaction reconciliation and bounded
+retirement-history controls. The two storage-fault controls in `c1e` failed a
+fixture assertion requiring a health-gated observer to remain readable after
+intentional poisoning. `817` keeps that observer's refusal and separately checks
+actual memory custody. Both controls then pass their sticky-health, native-status
+and no-replacement assertions; the earlier failed run remains failed.
+
+The two remaining `817` failures return `QueryTimedOut` from base publication.
+Post-error observations establish actual native transaction 21 Committed,
+commit-returned 21, current base = immutable archive = exact retained receipt,
+one attempt, no retirement and verified false. Their actual Role windows cross
+expiry during host calls of 1,248,812 and 1,294,785 microseconds; OWN, source and
+parent windows remain live. This establishes late committed outcomes and
+contemporaneous Role expiry. The exact internal refusal check remains
+uninstrumented and does not identify older failures' causes. Later floor and
+invalidation acceptance checks were not reached in these two fixtures.
+
+Each cohort separately records twenty returned source application operations,
+not twenty internal native commits or a failover RPO result. Complete hashes,
+safe projections, failure classifications, source/custody accounting and
+portable verification commands are retained. The next smallest experiment is
+one fresh-authority same-A continuation after an actual unforced late commit,
+preserving its original failed result and exact native xid; profile publication
+costs before changing authority lifetimes. Complete Serving, operator-driven
+four-to-five convergence, physical RPO/RTO, sustained throughput gain and the
+original production gate remain open.
+
+## Combined main-500 prerequisite validation — 2026-11-13 UTC
+
+The [separate combined-source packet](evidence/native-main500-remote-regressions-2026-11-13/README.md)
+pins `b6398fb075eed7c93a71ab25a52fad3f936421e5`, inherited **1.0.500-beta**,
+which composes the earlier Registered prototype with main 500's SQL, native
+origin, receiver-WAL and custody repairs. It is an unmerged candidate, not
+`a06e09336c70fecbc38232d677c330984959388f` main or a deployed binary.
+
+| Run | Whole result | Measured boundary |
+| --- | --- | --- |
+| Native-base ten, 43517610071 | Passed: 10 passed, 0 failed | Healthy abort continuation, committed reconciliation, sticky storage-fault refusal and existing base controls; workspace/consumer compilation passed. |
+| Broader remote prerequisites, 43519728051 | Failed: 44 passed, 7 failed | All 51 selected/executed; seven cases stop at the local OLD round's combined `metadata observation request changed or expired` refusal. Six named target controls were not reached; NoDomain had completed range 1 before range 2 setup failed. |
+
+The broader run separately passes the ten base, four catalogue, five row and
+five final-image controls, including actual catalogue directory-I/O faults.
+Those component results do not make the whole cohort green. The local OLD lane
+did not capture before/after deadline or cancellation diagnostics, so the exact
+refusal cause remains unproven beyond the combined predicate. A separate
+test-only successor moves the twelve related target cases to the actual remote
+OLD collector, preserving dedicated local/source/transfer controls and every
+target assertion. It is not an engine repair or retroactive success.
+
+Main 500's focused workflow optimizes dependencies at level 2, unlike the older
+817 run. That environment difference and the intervening source changes prevent
+attributing earlier timeouts to one cause. No ordinary request naturally timed
+out in these two new runs, so the new one-call unforced late-commit continuation
+diagnostic was **not tested**. The dedicated cold-preservation selector was not
+selected by the broader filter either.
+
+The two runs separately reconcile twenty and 102 returned source application
+operations and 1,012 and 5,155 custody files. All raw/safe hashes, complete logs,
+per-case outcomes and offline verification commands are retained. These are
+shared-runner component tests; they establish no completed Serving path,
+operator scale-out, physical RPO/RTO or sustained throughput gain. The original
+Azure qualification remains failed.
+
+The later [first hot-publication compile check](evidence/native-hot-gate-compile-d5f-2026-11-13/README.md)
+at `d5fead60a42348edeaaab59bf28e603d685a9303`, run **43521850216**, failed
+both compilers with the same six Rust errors. No local metadata-version unit
+test or full hot fixture ran, and the independent consumer check was not
+reached. The separate correction `55c50e07c0f36ee7314342b4c8653988f444a835`
+uses actual retained ownership and sealed fact accessors; its result must be
+reported separately. Source review or formatting does not replace compilation.
+
+The [separate correction packet](evidence/native-hot-gate-local-six-55c-2026-11-13/README.md)
+records run **43523702442** at that exact correction: workspace all-target and
+consumer compilation pass, and exactly six selected local version-gate unit
+tests pass. They exercise the private in-memory gate, manually marking
+persistence completion and checking owner drop; they do not execute an actual
+metadata consensus Store, native phase publication, full handoff, APP or Strong
+read. The complete original artifact has only four text files and no runtime
+custody. These local passes neither change the failed predecessor nor qualify
+the later Joined/source-discovery adapters, controller or physical scale-out.
+
+### Custody wording clarification
+
+Historical packets use “private” for omitted raw bytes and restricted local
+custody copies. A [separate visibility check](evidence/native-artifact-custody-visibility-2026-11-13.json)
+confirms that the two original repair-run archives were also hosted as GitHub
+Actions artifacts on the public `nikoma/bicdb` repository, with access and
+retention governed by GitHub. They include generated fixture signing material;
+no production credential presence is asserted. Local `0600`/`0700` modes and
+exclusion from committed safe projections do not establish owner-only
+confidentiality for those hosted artifacts. The frozen packets and originals
+remain unchanged; their custody wording should be read with this clarification.
+
 ## Current PostgreSQL integration check — 2026-11-13 UTC
 
 Read-only inspection at **1.0.495-beta**, `462e0c1d6485`, still finds ordinary
@@ -43,6 +375,12 @@ is established. Ordinary mutation admission in
 `crates/bicdb-core/src/distribution_range_consensus.rs::resolve_range` still rejects
 multiple ranges and a nonlocal leader. Local joins and repaired table-name
 resolution do not change that contract.
+
+A [separately pinned read-only review at main 498](evidence/native-registered-base-rows-d690-2026-11-13/findings/distributed-sql-source-main498.json)
+confirms those attachment gaps. Optional locality remains an optimization in the
+design; an accounting transaction must stay atomic across arbitrary ranges.
+Neither an abstract protocol nor local SQL/table-name repairs establish that
+ordinary PostgreSQL applications can execute those distributed transactions.
 
 The [minimum execution contract](design/distributed-sql-minimum-execution-contract.md)
 remains design-only. Integration must happen before local SQL/DB guards, preserve
@@ -104,6 +442,22 @@ standby requirement. This is configuration validation and source/CI maturity,
 not physical zero-loss qualification. Timeout degradation and asynchronous mode
 retain their positive-loss-window contracts. The original 455 baseline below
 must not be read as a claim that this configuration guard is still missing.
+
+The [main-500 deployment-mode comparison](evidence/main500-deployment-mode-source-comparison-2026-11-13.json)
+rechecks that repair at `a06e09336c70fecbc38232d677c330984959388f` and retains
+six exact passing embedded-HA test lines from main-500's PGwire job
+`132151626229`. They cover future-primary quorum validation, observer exclusion,
+configuration refusal before initialization, callback lease expiry and returning
+writer fencing. The HA handshake is version 4; the checksummed reader-feature
+commit-frame protocol is separately version 3. These protocol numbers are not
+interchangeable and do not establish mixed-version upgrade qualification.
+
+The compared legacy shipping source/tests and fleet modules are unchanged from
+the original audit. Cell HA/admission/device/grant source is unchanged; the only
+compared Cell runtime diff adds three fields to a test manifest initializer.
+This source identity does not rerun physical qualification: shared storage and
+other dependencies have changed outside those scopes. No new Cell synchronous
+zero-RPO, application capacity gain or deployment claim follows.
 
 ## Original metadata correlation — 2026-11-12 UTC
 
@@ -267,7 +621,7 @@ that head; that report does not prove all HA suites passed on the merged head.
 | Mode | Actual configuration and implementation | Tests and measured scope | Physical qualification, deployment and blockers |
 |---|---|---|---|
 | 1a. Legacy file shipping | `bicdb ha ship/status/promote`; whole-database copy, `role=standby`, explicit fencing and client repointing. Async bootstrap/repair fallback. See [HA](high-availability.md), core `src/db/ha_node.rs`, `src/db/ha_bootstrap.rs`. | `crates/bicdb-core/tests/ha_state_durability.rs`, `ha_state_crash.rs`: promotion/apply failure ordering, persisted votes/fences, interrupted ship refuses ordinary promotion. | RPO is changes since last successful ship, not zero; RTO operator-dependent. No current-artifact independent-host RPO/RTO/latency bundle found. Adding replicas does not distribute primary writes. |
-| 1b. Native single-primary streaming | `bicdb serve --replication-cluster-id/--replication-node-id`, pinned mTLS, `--allow-standby`, `--standby-of`; `--synchronous-standbys K` (0 async), timeout `fail` or `degrade`; `--ha-peer` and timeout enable majority elections/primary lease. `crates/bicdb-pgwire/src/embedded_ha.rs`, core `src/db/replication_live.rs`, `src/db/ha_node.rs`. | `crates/bicdb-cli/tests/ha_failover_cli.rs`: acknowledged-write kill and planned switchover; `crates/bicdb-pgwire/tests/embedded_ha.rs`: quorum loss, returning-writer fencing, journal identity. [HA](high-availability.md) reports three kills, 5–7 s recovery with 4 s timeout; no independent-host raw measurement bundle accompanies that statement. | Conditional zero-loss synchronous acknowledgment contract; async/degrade can lose acknowledged suffix. Configure enough synchronous copies for election-quorum intersection (majority total durable copies); arbitrary K in a larger group is not a universal zero-loss election guarantee. No current production qualification established. SQL compatibility/application deployments elsewhere do not establish topology-specific HA qualification. |
+| 1b. Native single-primary streaming | `bicdb serve --replication-cluster-id/--replication-node-id`, pinned mTLS, `--allow-standby`, `--standby-of`; `--synchronous-standbys K` (0 async), timeout `fail` or `degrade`; `--ha-peer` and timeout enable majority elections/primary lease. `crates/bicdb-pgwire/src/embedded_ha.rs`, core `src/db/replication_live.rs`, `src/db/ha_node.rs`. | `crates/bicdb-cli/tests/ha_failover_cli.rs`: acknowledged-write kill and planned switchover; `crates/bicdb-pgwire/tests/embedded_ha.rs`: quorum loss, returning-writer fencing, journal identity. [HA](high-availability.md) reports three kills, 5–7 s recovery with 4 s timeout; no independent-host raw measurement bundle accompanies that statement. | Conditional zero-loss synchronous acknowledgment contract. Automatic failover validates nonzero K at or above floor(group size/2) voting standbys and excludes observers; K=0 async or timeout degradation can lose an acknowledged suffix. Static voting membership must match across nodes. No current physical or production qualification established. SQL compatibility/application deployments elsewhere do not establish topology-specific HA qualification. |
 | 2. Distributed virtual ranges | `cluster init/join`, `cluster-topology.json`, `bicdb-distribution.json`; RF3, failure-domain labels, mTLS; default balanced `serve` controller, manual opt-out. Separate durable metadata quorum and range write quorum; bounded snapshot/catch-up/promotion/cleanup. Core `distribution*.rs`, pgwire `distribution_controller.rs`, `checkpoint_driver.rs`. | Metadata joint-quorum/restart/partition tests, range decision/recovery tests and relocation restart tests detailed below. Completed event-binding 3→5→9 **shared-host debug** run at `69866e48c02f28affe2e763da8bec5f756384dea`: all 353 acknowledged writes retained. | Automatic movement implemented and functionally exercised, including the subsequent five-Azure-VM trial at 1.0.461-beta linked above. Separate physical-host placement was not established; no sustained throughput gain demonstrated. Ordinary SQL forwarding, distributed joins and concrete durable cross-range SQL commit service absent. All hardware Phase-9 certification items remain open. The frozen 1.0.461 binary was observed running on the five disposable VMs; no production cluster deployment is verified. |
 | 3. Cell-scoped HA/encryption | `bicdb-cell serve` / `BICDB_RUNTIME_MODE=cell`, signed manifest, one-shot key lease, HA trust/epoch/replica documents. `bicdb-cell-ha/src/lib.rs`, `bicdb-cell/src/lib.rs`; `CellHaCommitFence`, `CellFailoverSupervisor`. Distinct lease/recovery/auditor authority; encrypted signed per-destination async commit objects. | Unit tests check insufficient authority, expiry/fence promotion, rollback refusal, object scope, signed drill validation and route publication order. Synthetic signed drill fixtures test validation, not real measured RPO/RTO. | `SynchronousQuorum` explicitly refused; positive declared commit RPO is not continuously enforced by admission. Encrypted Cell refuses unencrypted `server_paged`. No archived current-artifact operational drill/independent audit/deployment proved here. Phase8 can admit only an exact valid evidence/attestation bundle; Phase5's denied-admission statement is phase-scoped. |
 | 4. Application fleets/state groups | `bic serve --fleet-config` with operator workers, region/isolation/capacity; optional `--state-config` pins per-application 3/5/7/9-node HA groups. Worker leases, execution capability rotation and state receipts. `bicdb-app-host/src/fleet.rs`, `bicdb-fleet/src/lib.rs` (signed rollout authority, not SQL allocator). | `bicdb-app-host/tests/fleet.rs`: loopback separate processes, worker crash, reassignment, capacity, dedup, suspended-state lease expiry. Optional external-assets microVM test is ignored unless explicitly enabled. [State groups](platform-state-groups.md), [worker fleets](platform-worker-fleet.md). | Adds compute placement, not automatic sharding of an application's database. State groups remain one writer per application, not active/active SQL. Capacity counts applications, not RPS/memory. No measured independent-machine fleet scaling or current qualified deployment established. Cell fleet rollout authorizes immutable releases without database/key authority. |

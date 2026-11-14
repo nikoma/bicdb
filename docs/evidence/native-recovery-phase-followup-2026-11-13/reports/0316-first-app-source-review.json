@@ -1,0 +1,21 @@
+{
+  "source_commit": "031681576891112929f65f77b09787e56120b41c",
+  "runtime_parent": "7349adaaa987042e164ca06bb7e9eb8522fdb851",
+  "old_four_test_bodies_byte_identical": true,
+  "root277_execution_identity_byte_identical": true,
+  "root_source_result_target_after_unchanged": true,
+  "proposal_variants_preserved": true,
+  "new_diagnostic_only_files": [
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs",
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/first-app-diagnostic.md",
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/first_app_diagnostic.rs",
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs",
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_transfer_tests.rs"
+  ],
+  "local_checks": [
+    "cargo fmt --all -- --check",
+    "git diff --check",
+    "python3 scripts/bump-version.py --check"
+  ],
+  "no_local_compile": true
+}

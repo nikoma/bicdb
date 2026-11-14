@@ -1,0 +1,165 @@
+{
+  "checked_at_utc": "2026-11-13T22:02:03.280000+00:00",
+  "source": "a06e09336c70fecbc38232d677c330984959388f",
+  "version": "1.0.500-beta",
+  "tested_head": "fd1e2d90d351b3dafd47d17e4486582da6bd4e51",
+  "identical_tree": "768cf994f45089723cab3a66fd85b87a85e12a20",
+  "check_runs": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-13T20:52:59Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/nikoma/bicdb/actions/runs/43502431726/job/132151608596",
+      "name": "Rails 8.1.4 with stock PostgreSQL adapter",
+      "startedAt": "2026-11-13T20:32:32Z",
+      "status": "COMPLETED",
+      "workflowName": "Rails application"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-13T20:32:31Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/nikoma/bicdb/actions/runs/43502431794/job/132151548765",
+      "name": "Validate focused test selectors",
+      "startedAt": "2026-11-13T20:32:28Z",
+      "status": "COMPLETED",
+      "workflowName": "tests"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-13T20:33:29Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/nikoma/bicdb/actions/runs/43502431794/job/132151549252",
+      "name": "Public repository has no private dependencies",
+      "startedAt": "2026-11-13T20:32:25Z",
+      "status": "COMPLETED",
+      "workflowName": "tests"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-13T20:38:58Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/nikoma/bicdb/actions/runs/43502431794/job/132151549364",
+      "name": "Community-only workspace compiles, tests included",
+      "startedAt": "2026-11-13T20:32:26Z",
+      "status": "COMPLETED",
+      "workflowName": "tests"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-13T20:32:56Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/nikoma/bicdb/actions/runs/43502431794/job/132151549529",
+      "name": "Formatting",
+      "startedAt": "2026-11-13T20:32:25Z",
+      "status": "COMPLETED",
+      "workflowName": "tests"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-13T20:32:34Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/nikoma/bicdb/actions/runs/43502431794/job/132151549606",
+      "name": "Licensing invariants",
+      "startedAt": "2026-11-13T20:32:24Z",
+      "status": "COMPLETED",
+      "workflowName": "tests"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-13T20:55:37Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/nikoma/bicdb/actions/runs/43502431794/job/132151626310",
+      "name": "bicdb-core",
+      "startedAt": "2026-11-13T20:32:34Z",
+      "status": "COMPLETED",
+      "workflowName": "tests"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-13T20:56:55Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/nikoma/bicdb/actions/runs/43502431794/job/132151626172",
+      "name": "bicdb-core native multi-node (serial)",
+      "startedAt": "2026-11-13T20:32:33Z",
+      "status": "COMPLETED",
+      "workflowName": "tests"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-13T21:23:57Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/nikoma/bicdb/actions/runs/43502431794/job/132151626119",
+      "name": "bicdb-sql",
+      "startedAt": "2026-11-13T20:32:34Z",
+      "status": "COMPLETED",
+      "workflowName": "tests"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-13T20:53:51Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/nikoma/bicdb/actions/runs/43502431794/job/132151626229",
+      "name": "bicdb-pgwire",
+      "startedAt": "2026-11-13T20:32:33Z",
+      "status": "COMPLETED",
+      "workflowName": "tests"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-13T21:47:35Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/nikoma/bicdb/actions/runs/43502431794/job/132151626162",
+      "name": "rest of workspace",
+      "startedAt": "2026-11-13T20:32:33Z",
+      "status": "COMPLETED",
+      "workflowName": "tests"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-13T20:32:31Z",
+      "conclusion": "SKIPPED",
+      "detailsUrl": "https://github.com/nikoma/bicdb/actions/runs/43502431794/job/132151629538",
+      "name": "Focused Core library (${{ inputs.core_filter }})",
+      "startedAt": "2026-11-13T20:32:32Z",
+      "status": "COMPLETED",
+      "workflowName": "tests"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-13T20:32:31Z",
+      "conclusion": "SKIPPED",
+      "detailsUrl": "https://github.com/nikoma/bicdb/actions/runs/43502431794/job/132151629096",
+      "name": "Focused CLI integration (${{ inputs.cli_target }})",
+      "startedAt": "2026-11-13T20:32:32Z",
+      "status": "COMPLETED",
+      "workflowName": "tests"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-11-13T20:32:31Z",
+      "conclusion": "SKIPPED",
+      "detailsUrl": "https://github.com/nikoma/bicdb/actions/runs/43502431794/job/132151629670",
+      "name": "Focused PGwire library (${{ inputs.pgwire_filter }})",
+      "startedAt": "2026-11-13T20:32:32Z",
+      "status": "COMPLETED",
+      "workflowName": "tests"
+    }
+  ],
+  "source_paths_sha256": {
+    "crates/bicdb-core/Cargo.toml": "213611ce904da110322f20c46e63674c6ff2b1daf5808559a613a2cbe75f2a62",
+    "crates/bicdb-cli/src/native_metadata_command.rs": "9c36f303dd7f3d6bb94ef2d895773e2e5168995dd411354dcf92f50eb0b8a8bb",
+    "crates/bicdb-pgwire/src/distribution_controller.rs": "5b7b37a7262a653ef95724152df89e1bdf5bd005e62d79e63105d6b2094c78ac",
+    "crates/bicdb-core/src/distribution_query.rs": "3f4ba08a2694662a163f7ddb7cd41b2ac88f5c1539ac18483d4eb69caedbaa44",
+    "docs/releases/1.0.499-beta.md": "08268f586b73470c1d42c0499f051d054105d5d85e98142e326d1838590a3a90",
+    "docs/releases/1.0.500-beta.md": "aa9e4aaead1bdb169c42a6c1a0a03d4dd2dc724552387fa5082f531035da5eb9"
+  },
+  "Main499_prior_native_failure_preserved": {
+    "head": "0cd1756b54894e481c8f670803ac6ed0efbe1825",
+    "job": 132149644148,
+    "observed_failed_test": "native_hot_peer_lost_actual_follower_prepare_reply_requires_automatic_R4_convergence",
+    "later500green_does_not_identify_oldcause": true
+  },
+  "new_binary_or_deployment_verified_by_Root": false,
+  "physical_qualification": false
+}

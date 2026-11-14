@@ -1,0 +1,155 @@
+{
+  "source_revision": "e1ecfeab71d3f1e104530e9d6aa3bf37971abd65",
+  "source_package_version": "1.0.494-beta",
+  "run_id": 43492849838,
+  "run_url": "https://github.com/nikoma/bicdb/actions/runs/43492849838",
+  "run_conclusion": "success",
+  "selector": "registered_row_",
+  "classification": "PASSED_SEVEN_FOCUSED_COLD_EVIDENCE_PRESERVATION_AND_READONLY_CONTROLS_ONLY",
+  "test_result": {
+    "passed": 7,
+    "failed": 0,
+    "duration_seconds": 16.22,
+    "duration_is_RTO": false
+  },
+  "core_job": 132118360383,
+  "all_targets_job": 132118274703,
+  "all_targets_and_workflow_consumer": "passed",
+  "raw_job_indices": [
+    "/tmp/bicdb-native-foundations-ci/e1ec-cold-seven-job132118274703-index.json",
+    "/tmp/bicdb-native-foundations-ci/e1ec-cold-seven-job132118360383-index.json"
+  ],
+  "source_index": "/tmp/bicdb-native-foundations-ci/e1ec-cold-seven-source-index.json",
+  "run_metadata": "/tmp/bicdb-native-foundations-ci/e1ec-cold-seven-run43492849838-terminal.json",
+  "jobs_metadata": "/tmp/bicdb-native-foundations-ci/e1ec-cold-seven-run43492849838-jobs-terminal.json",
+  "private_fixture": {
+    "artifact_id": 14071400932,
+    "path": "/tmp/bicdb-native-foundations-ci/e1ec-cold-seven-artifact14071400932.zip",
+    "private_copy": "/tmp/bicdb-native-foundations-ci/private-registered-custody/e1ec-cold-seven-artifact14071400932.zip",
+    "bytes": 140874,
+    "sha256": "72bc86052384d59c1c2bdf1c590a7b29301caacb7b534b54438c12c830c0506b",
+    "original_mode": "0o600",
+    "private_copy_mode": "0o600",
+    "private_directory_mode": "0o700",
+    "any_database_engine_opened_by_capture_or_verifier": false
+  },
+  "safe_logical_projection": {
+    "path": "/tmp/bicdb-native-foundations-ci/e1ec-cold-seven-logical-projection.zip",
+    "sha256": "a1b5a04be33f724181be4665fcbedcd116f033657c9ba35904550db5a0ed1bd5",
+    "bytes": 112294,
+    "included_members": 17,
+    "omitted_members": 21,
+    "manifest": "/tmp/bicdb-native-foundations-ci/e1ec-cold-seven-projection-manifest.json",
+    "manifest_sha256": "d43c2084a53dced6496937808729619b330a113388550bcecf1d939deb93e93e",
+    "custody_present": false,
+    "raw_WAL_present": false
+  },
+  "portable_verifier": {
+    "path": "/tmp/bicdb-native-foundations-ci/verify-e1ec-cold-seven-evidence.py",
+    "sha256": "c1f9e8450aa396f1c4ecbc94a0ab0f432df86e32b9539664a6ec5d1a3ab3155c",
+    "report": "/tmp/bicdb-native-foundations-ci/e1ec-cold-seven-verification.json",
+    "report_sha256": "b8880f3f05f7b138fa47095d5faddc4526b74fbdef52d552919fa545af717d7a",
+    "logical_only_supported": true,
+    "private_custody_and_WAL_hash_checks_optional": true,
+    "never_engine_opens_DB": true
+  },
+  "projector": {
+    "path": "/tmp/bicdb-native-foundations-ci/project-e1ec-cold-seven-evidence.py",
+    "sha256": "e88fe0977435e9796d84b2e45e901bb07db6983f66486aa0e8cb8275a1e97c15",
+    "explicit_whitelist_only": true
+  },
+  "selected_tests": [
+    "db::registered_row_retention::tests::registered_row_pending_aborted_data_is_not_published",
+    "db::registered_row_retention::tests::registered_row_pending_foreign_empty_store_cannot_supply_absence",
+    "db::registered_row_retention::tests::registered_row_pending_malformed_index_is_not_empty",
+    "db::registered_row_retention::tests::registered_row_pending_oversize_index_is_not_empty",
+    "db::registered_row_retention::tests::registered_row_unindexed_prototype_is_refused_without_upgrade",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_image_tests::cold_preservation_tests::native_registered_row_cold_sigkill_preserves_pending_before_generic_open",
+    "storage::tests::registered_row_readonly_complete_descriptor_refuses_damaged_tail_without_repair"
+  ],
+  "actual_seam": "AppliedKnown before protected RowsHeader",
+  "source_APP_operations": {
+    "acknowledged": 2,
+    "failed": 0,
+    "uncertain": 0,
+    "retried": 0,
+    "record_ids": [
+      "items/registered-fifth-ack-r1-8",
+      "items/registered-fifth-ack-r2-0"
+    ]
+  },
+  "target_projection": {
+    "attempted": 1,
+    "acknowledged": 0,
+    "returned": 0,
+    "killed_before_return": 1,
+    "client_outcome": "uncertain/no reply; actual committed WAL observed afterward",
+    "attempt": "01a1d669-c523-78e2-83bc-5710b2b9c944",
+    "logical_txid": 23,
+    "native_intent_xid": 12,
+    "logical_sequence": 1,
+    "record_id": "items/registered-fifth-ack-r1-8",
+    "mutations_sha256": "b4d45fa34e764e58c89413ce768f360e1d9b2112e6bb60e5ca6ae2b2f28441f5"
+  },
+  "actual_old_closes": 3,
+  "private_original_verification": {
+    "files_independently_hashed": 20,
+    "custody_bytes": 376037,
+    "wal_frames_crc_checked": 3,
+    "original_txid_payload_hash_independently_recomputed": "b4d45fa34e764e58c89413ce768f360e1d9b2112e6bb60e5ca6ae2b2f28441f5",
+    "copied_wal_equal_original": true,
+    "private_native_keys_or_pages_decoded": false,
+    "database_opened": false
+  },
+  "exact_open_refusal": "high availability error: Registered row WAL preservation: cold repair required before logical replay/cut: 1 outstanding; original attempt 01a1d669-c523-78e2-83bc-5710b2b9c944 step 1 Tx Some(23)",
+  "business_files_unchanged": [
+    {
+      "bytes": 0,
+      "path": "events/events.seg",
+      "present": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "unchanged": true
+    },
+    {
+      "bytes": 238,
+      "path": "incarnations.log",
+      "present": true,
+      "sha256": "bd61d2a3a6dbe481e39af2204da2e31122570e002ef953d09d6270f765747cd5",
+      "unchanged": true
+    },
+    {
+      "bytes": 0,
+      "path": "sync.log",
+      "present": true,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "unchanged": true
+    },
+    {
+      "bytes": 568,
+      "path": "transactions.log",
+      "present": true,
+      "sha256": "e22ef4c4acc0545072527146176d2391ffadcac1d6452858eb5dd30535b89693",
+      "unchanged": true
+    }
+  ],
+  "limits": [
+    "Only target stopped-root file custody; other four node roots not archived by this control.",
+    "All five services died in one process, not independent machines.",
+    "Precrash post-apply marker and raw commit bytes establish observed outcome, not a new durable-sync receipt or recovery grant.",
+    "Before/after runtime inventories and unchanged-file observations are CI assertions; retained copied-file bytes are independently hashed when original ZIP supplied.",
+    "No cold repair/materialization/authority re-admission or client Strong read after recovery was executed."
+  ],
+  "cold_self_healing": false,
+  "serving_or_production_qualification": false,
+  "independent_hardware_or_scale_out": false,
+  "next_smallest_tests": [
+    "Exact CLOSED recovery producer preserving original A/intent/TxID and fresh actual open/Slot/OWN/native authority; this batch refuses but does not resume.",
+    "Real process crash before/after index+intent commit and RowsHeader+delete commit across repeated opens/cuts, with exact Tx/payload preserved.",
+    "Compose and rerun original Base4/Rows5 changed-code controls before integration; earlier d690 results remain pinned to d690.",
+    "Independent-machine recovery/4-to-5 convergence and sustained capacity remain separate gates; original failed Azure result is unchanged."
+  ],
+  "toolchain": "rustc1.96.0 ac68faa20c58cbccd01ee7208bf3b6e93a7d7f96 x86_64-unknown-linux-gnu LLVM22.1.2",
+  "test_binary_sha256": "not retained by this focused workflow; no release binary or deployment claim",
+  "raw_log_literal_private_PEM_scan": "passed both complete raw CI job logs; custody and raw WAL remain private independently",
+  "logical_only_verification": "/tmp/bicdb-native-foundations-ci/e1ec-cold-seven-logical-only-verification.json"
+}

@@ -1,0 +1,111 @@
+// Private native locking diagnostic. The only provider is a loopback Node
+// barrier; no ERP stores, external services or customer identities are involved.
+service RowLockSnapshotProbe {}
+auth jwt ProbeAuth {
+  issuer: "https://issuer.invalid/row-lock"
+  audience: "row-lock-probe"
+  algorithm: "RS256"
+}
+role probe_operator { title: "Private row-lock diagnostic" }
+client LockBarrier {
+  base_url: env("LOCK_BARRIER_URL", "https://barrier.invalid")
+  timeout_ms: 2000
+}
+model ProbeCounter {
+  id: UUID
+  organization_id: String
+  value: Int
+  version: Int @version = 1
+}
+policy ProbeCounter {
+  tenant: auth.tenant_id != null && organization_id == auth.tenant_id
+}
+type CounterInput { id: UUID }
+type BarrierReply { release: Bool }
+type CounterRead { before: Int locked: Int }
+action hold_then_write(input: CounterInput) -> ProbeCounter {
+  transaction {
+    let row = ProbeCounter.get_for_update(id: input.id, scope: "all")
+    let reply: BarrierReply = LockBarrier.post(path: "/hold", body: { id: row.id value: row.value })
+    if !reply.release { fail("bad_input", "The private barrier must explicitly release this request.") }
+    return ProbeCounter.patch(id: row.id, changes: { value: row.value + 1 }, expected_version: row.version)
+  }
+}
+action read_then_lock(input: CounterInput) -> CounterRead {
+  transaction {
+    let before = ProbeCounter.get(id: input.id, scope: "all")
+    let reply: BarrierReply = LockBarrier.post(path: "/waiter", body: { id: before.id value: before.value })
+    if !reply.release { fail("bad_input", "The private barrier must explicitly release this request.") }
+    let locked = ProbeCounter.get_for_update(id: input.id, scope: "all")
+    let observed: BarrierReply = LockBarrier.post(path: "/after-lock", body: { id: before.id before: before.value locked: locked.value isolation: "read_committed" })
+    return CounterRead { before: before.value locked: locked.value }
+  }
+}
+action read_then_lock_serializable(input: CounterInput) -> CounterRead {
+  transaction(isolation: serializable) {
+    let before = ProbeCounter.get(id: input.id, scope: "all")
+    let reply: BarrierReply = LockBarrier.post(path: "/waiter", body: { id: before.id value: before.value })
+    if !reply.release { fail("bad_input", "The private barrier must explicitly release this request.") }
+    let locked = ProbeCounter.get_for_update(id: input.id, scope: "all")
+    let observed: BarrierReply = LockBarrier.post(path: "/after-lock", body: { id: before.id before: before.value locked: locked.value isolation: "serializable" })
+    return CounterRead { before: before.value locked: locked.value }
+  }
+}
+action read_then_lock_repeatable_read(input: CounterInput) -> CounterRead {
+  transaction(isolation: repeatable_read) {
+    let before = ProbeCounter.get(id: input.id, scope: "all")
+    let reply: BarrierReply = LockBarrier.post(path: "/waiter", body: { id: before.id value: before.value })
+    if !reply.release { fail("bad_input", "The private barrier must explicitly release this request.") }
+    let locked = ProbeCounter.get_for_update(id: input.id, scope: "all")
+    let observed: BarrierReply = LockBarrier.post(path: "/after-lock", body: { id: before.id before: before.value locked: locked.value isolation: "repeatable_read" })
+    return CounterRead { before: before.value locked: locked.value }
+  }
+}
+crud ProbeCounter at "/probe/counters" {
+  create: protect ProbeAuth roles [probe_operator]
+  get: protect ProbeAuth roles [probe_operator]
+  list: protect ProbeAuth roles [probe_operator]
+  update: protect ProbeAuth roles [probe_operator]
+}
+route POST "/probe/holder" protect ProbeAuth roles [probe_operator] -> ProbeCounter {
+  input: CounterInput
+  handler { return hold_then_write(input) }
+}
+route POST "/probe/waiter" protect ProbeAuth roles [probe_operator] -> CounterRead {
+  input: CounterInput
+  handler { return read_then_lock(input) }
+}
+route POST "/probe/waiter-serializable" protect ProbeAuth roles [probe_operator] -> CounterRead {
+  input: CounterInput
+  handler { return read_then_lock_serializable(input) }
+}
+
+route POST "/probe/waiter-repeatable-read" protect ProbeAuth roles [probe_operator] -> CounterRead {
+  input: CounterInput handler { return read_then_lock_repeatable_read(input) }
+}
+action own_write_then_lock(input: CounterInput) -> CounterRead {
+  transaction(isolation: serializable) {
+    let before = ProbeCounter.get(id: input.id, scope: "all")
+    let changed = ProbeCounter.patch(id: before.id, changes: { value: before.value + 10 }, expected_version: before.version)
+    let locked = ProbeCounter.get_for_update(id: input.id, scope: "all")
+    let observed: BarrierReply = LockBarrier.post(path: "/after-lock", body: { id: before.id before: before.value locked: locked.value isolation: "own_write" })
+    return CounterRead { before: before.value locked: locked.value }
+  }
+}
+action own_insert_then_lock(input: CounterInput) -> CounterRead {
+  let actor = auth.current_user()
+  let verified_tenant = actor.tenant_id
+  if verified_tenant == null { fail("forbidden", "An authenticated tenant is required.") }
+  transaction(isolation: serializable) {
+    let inserted = ProbeCounter.bulk_insert([{ id: input.id organization_id: verified_tenant value: 7 }])
+    let locked = ProbeCounter.get_for_update(id: input.id, scope: "all")
+    let observed: BarrierReply = LockBarrier.post(path: "/after-lock", body: { id: input.id before: 7 locked: locked.value isolation: "own_insert" })
+    return CounterRead { before: 7 locked: locked.value }
+  }
+}
+route POST "/probe/own-write" protect ProbeAuth roles [probe_operator] -> CounterRead {
+  input: CounterInput handler { return own_write_then_lock(input) }
+}
+route POST "/probe/own-insert" protect ProbeAuth roles [probe_operator] -> CounterRead {
+  input: CounterInput handler { return own_insert_then_lock(input) }
+}

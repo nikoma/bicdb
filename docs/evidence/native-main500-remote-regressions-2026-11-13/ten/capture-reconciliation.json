@@ -1,0 +1,2253 @@
+{
+  "source": "b6398fb075eed7c93a71ab25a52fad3f936421e5",
+  "version": "1.0.500-beta",
+  "run": 43517610071,
+  "core_job": 132203519345,
+  "artifact": 14082820921,
+  "workflow": "success",
+  "qualification": false,
+  "raw_sha256": "6c52a352b4850c704ed40254dfcccbdbd8076ea2a607609ada56dba615ac38a7",
+  "cases": [
+    {
+      "case": "TargetNativeBaseAbortBudget",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 26,
+      "whole_source_journal_entries": 31,
+      "native_R_H0_H": [
+        1,
+        "e66b6d79652681266d7d6f7224d801d15c499d6694aed16958a6166087eaa322",
+        "26b4dbdd0ca4e21b41e559fd6679f6e456610c2e251cac388c05ffa62eeaa885"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 101,
+      "custody_bytes": 3529183,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "finite retained attempt history",
+      "actual_aborted_requests": 9,
+      "retired": 8,
+      "no_tenth_native_attempt": true,
+      "exact_budget_error": "cluster error: native target image: Registered native base proven-abort retry budget exhausted; original attempt retained",
+      "byte_budget_exhaustion_tested": false,
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1059430,
+          "before_host": {
+            "actual_target_attempt": "01a1d703-b30a-7c03-80f5-f4037af01717",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1385481,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1385476,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4866659,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1363739,
+              "renews_request": false
+            },
+            "same_manifest": "ef32fea88441e1fff8231127dd08307aee25ca0db33f6b4502bb97c584a0f19f",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3930536,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 925933,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 459468,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3940651,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d703-b30a-7c03-80f5-f4037af01717",
+                "checksum_sha256": "35338e3acb34f055575bff9adfe213c856adda40cd4699a755da36be801b2481",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 437724,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3004527,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 816232,
+          "before_host": {
+            "actual_target_attempt": "01a1d703-b30a-7c03-80f5-f4037af01717",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1173487,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1173481,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4661961,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1160059,
+              "renews_request": false
+            },
+            "same_manifest": "ef32fea88441e1fff8231127dd08307aee25ca0db33f6b4502bb97c584a0f19f",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3819075,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 478033,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 695375,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4183854,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d703-b30a-7c03-80f5-f4037af01717",
+                "checksum_sha256": "35338e3acb34f055575bff9adfe213c856adda40cd4699a755da36be801b2481",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 681946,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3340967,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBaseAbortSyncFailed",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "613f47e8ac844036ef9cbd2edee7b6c52ea1c36051e52ef55f875c8c0b9fc336",
+        "f79d5531fbda7b7da99265a2c19db6f22502376b06ae18ce13cabb28fd75a770"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 102,
+      "custody_bytes": 3561971,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "sticky native durability failure refusal",
+      "fault_fired": 1,
+      "actual_native_status": "Aborted",
+      "issued_xid": 21,
+      "exact_retained_publisher_unchanged": true,
+      "native_attempts": 1,
+      "retired": 0,
+      "fresh_exact_error": "database refuses writes after a failed durable write at page_log.sync: /tmp/.tmp6hKd5N/actual-registered-fifth-image-target/paged/store.wal: Input/output error (os error 5); reopen the database to run recovery and verification",
+      "first_exact_error": "canceling statement due to query timeout",
+      "actual_memory_custody_retained": true,
+      "post_failure_payload_visibility": "not asserted on fenced handle",
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1048665,
+          "before_host": {
+            "actual_target_attempt": "01a1d703-b26a-7b93-8fc4-a91bb4b4b4e2",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1357621,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1357616,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4831769,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1329840,
+              "renews_request": false
+            },
+            "same_manifest": "effbeda731efc2ec4a85eb1586a7053c7d5e83ac4b328ab5701382d70eafb7e1",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3916816,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 880301,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 477253,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3951407,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d703-b26a-7b93-8fc4-a91bb4b4b4e2",
+                "checksum_sha256": "2027a1710b3aad212d9be174f75fd7352e960653ef1a04268beb7998aba4b00f",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 449464,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3036452,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 858076,
+          "before_host": {
+            "actual_target_attempt": "01a1d703-b26a-7b93-8fc4-a91bb4b4b4e2",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1288099,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1288094,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4664780,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1162858,
+              "renews_request": false
+            },
+            "same_manifest": "effbeda731efc2ec4a85eb1586a7053c7d5e83ac4b328ab5701382d70eafb7e1",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3933158,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 522677,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 765335,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4142022,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d703-b26a-7b93-8fc4-a91bb4b4b4e2",
+                "checksum_sha256": "2027a1710b3aad212d9be174f75fd7352e960653ef1a04268beb7998aba4b00f",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 640089,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3410400,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBaseCommitSyncUnknown",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "31aa08dc2f08ac6e68a7eefa4daabdcc9087a693e742a5fc2b1a2a473e84ece5",
+        "0d669b8a483a18ad467d3d297174951a8cd7e82d958ce813f01f765c918ae8b5"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 102,
+      "custody_bytes": 3578355,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "sticky native durability failure refusal",
+      "fault_fired": 1,
+      "actual_native_status": "InProgress",
+      "issued_xid": 21,
+      "exact_retained_publisher_unchanged": true,
+      "native_attempts": 1,
+      "retired": 0,
+      "fresh_exact_error": "database refuses writes after a failed durable write at page_log.sync: /tmp/.tmpKDGMss/actual-registered-fifth-image-target/paged/store.wal: Input/output error (os error 5); reopen the database to run recovery and verification",
+      "first_exact_error": "commit outcome unknown: commit_seq=none transaction_id=none incarnation=75ce2a1e-2b76-43e4-a7b6-c1ec7b4ce615: page transaction 21 did not commit cleanly: database refuses writes after a failed durable write at page_log.sync: /tmp/.tmpKDGMss/actual-registered-fifth-image-target/paged/store.wal: Input/output error (os error 5); reopen the database to run recovery and verification; do not assume it committed or rolled back. Reopen the database, then re-read the operation's result: it has no commit sequence, and the page store's recovery kept it only if its commit record reached the disk",
+      "actual_memory_custody_retained": true,
+      "post_failure_payload_visibility": "not asserted on fenced handle",
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1157936,
+          "before_host": {
+            "actual_target_attempt": "01a1d703-b388-7e00-82d1-fc72863e55a0",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1119363,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1119358,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4590047,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1087136,
+              "renews_request": false
+            },
+            "same_manifest": "1d2c3fa0178cfda86c302d27226856d0f738994be649c53a1e002e611c9037c2",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3922839,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 747820,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 371461,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3842150,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d703-b388-7e00-82d1-fc72863e55a0",
+                "checksum_sha256": "b6324ce45b02f283d8f6c8686660182290331498dabf49d252811bd81c9b544f",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 339235,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3174942,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 629898,
+          "before_host": {
+            "actual_target_attempt": "01a1d703-b388-7e00-82d1-fc72863e55a0",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1355234,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1355228,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4828633,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1325691,
+              "renews_request": false
+            },
+            "same_manifest": "1d2c3fa0178cfda86c302d27226856d0f738994be649c53a1e002e611c9037c2",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3916388,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 458400,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 896769,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4370175,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d703-b388-7e00-82d1-fc72863e55a0",
+                "checksum_sha256": "b6324ce45b02f283d8f6c8686660182290331498dabf49d252811bd81c9b544f",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 867222,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3457930,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBaseInvalidated",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "969b0aa91eccf537338670712384230ba851a381feba6d86fce65acb9602b510",
+        "4b18c3f0b9547f4a6161ee7969849d0853ad1291eaf9f21ab28449dff35d2828"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 101,
+      "custody_bytes": 3594679,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "actual native base publication and same-xid repetition",
+      "native_xid": 21,
+      "same_xid_reconciled": true,
+      "post_wal_cancellation_exercised": false,
+      "actual_image_invalidation_refused_current_image_preserved_historical_floor": true,
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1135674,
+          "before_host": {
+            "actual_target_attempt": "01a1d703-b388-7e00-82d1-fc8b6ad3d802",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1383131,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1383124,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4616682,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1114797,
+              "renews_request": false
+            },
+            "same_manifest": "fb084a21a33cfb6e4334281fe95cf6f013d4376e002778ae8d714bdb9528f2c7",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3925762,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 752230,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 630837,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3864395,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d703-b388-7e00-82d1-fc8b6ad3d802",
+                "checksum_sha256": "e8ef068191e9fffdcf0f65bf5337429f173440b5a09d8042c64a0dea6a2ffe72",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 362464,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3173474,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 627063,
+          "before_host": {
+            "actual_target_attempt": "01a1d703-b388-7e00-82d1-fc8b6ad3d802",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1363644,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1363638,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4845104,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1343201,
+              "renews_request": false
+            },
+            "same_manifest": "fb084a21a33cfb6e4334281fe95cf6f013d4376e002778ae8d714bdb9528f2c7",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3922936,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 472013,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 891552,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4373018,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d703-b388-7e00-82d1-fc8b6ad3d802",
+                "checksum_sha256": "e8ef068191e9fffdcf0f65bf5337429f173440b5a09d8042c64a0dea6a2ffe72",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 871110,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3450850,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishNativeBase",
+          "call_index": 2,
+          "exact_primary_error": null,
+          "request_elapsed_us": 888891,
+          "before_host": {
+            "actual_target_attempt": "01a1d703-b388-7e00-82d1-fc8b6ad3d802",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1369511,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1369506,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4827478,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1317562,
+              "renews_request": false
+            },
+            "same_manifest": "fb084a21a33cfb6e4334281fe95cf6f013d4376e002778ae8d714bdb9528f2c7",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3926022,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 716227,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 653218,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4111193,
+              "renews_request": false
+            },
+            "progress": {
+              "NativeBase": {
+                "checksum_sha256": "8b4ef6f526af593283b895f2da6c0ae53e340b6d00c0995847994102f7b70658",
+                "native_page_xid": 21,
+                "range_index": 1
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 601262,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3209736,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishNativeBase",
+          "call_index": 3,
+          "exact_primary_error": null,
+          "request_elapsed_us": 599102,
+          "before_host": {
+            "actual_target_attempt": "01a1d703-b388-7e00-82d1-fc8b6ad3d802",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1349618,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1349612,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4831006,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1327084,
+              "renews_request": false
+            },
+            "same_manifest": "fb084a21a33cfb6e4334281fe95cf6f013d4376e002778ae8d714bdb9528f2c7",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3900492,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 429949,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 919589,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4400984,
+              "renews_request": false
+            },
+            "progress": {
+              "NativeBase": {
+                "checksum_sha256": "8b4ef6f526af593283b895f2da6c0ae53e340b6d00c0995847994102f7b70658",
+                "native_page_xid": 21,
+                "range_index": 1
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 897057,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3470470,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBase",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "601404c59dab23282e549267cdad1a3e59c67b723d42dcbeb0a4ade9aa9d0d28",
+        "83670e78af96926f13aff50c58287b2eae145f6d52c428efcb6baf477018a0fd"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 101,
+      "custody_bytes": 3578176,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "actual native base publication and same-xid repetition",
+      "native_xid": 21,
+      "same_xid_reconciled": true,
+      "post_wal_cancellation_exercised": false,
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 922565,
+          "before_host": {
+            "actual_target_attempt": "01a1d704-0e03-7842-8a5a-106e916ce26f",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1367311,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1367305,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4832514,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1330603,
+              "renews_request": false
+            },
+            "same_manifest": "9f619e0d7b4db30052c98515b00f0aff08339967bac6cb47f641e411eefdbfe9",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3928870,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 754929,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 612304,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4077514,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d704-0e03-7842-8a5a-106e916ce26f",
+                "checksum_sha256": "4adb34807d62f47b764f6634f37ba586923c8eb95638b24dddb5d3f59326041e",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 575594,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3173869,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 581314,
+          "before_host": {
+            "actual_target_attempt": "01a1d704-0e03-7842-8a5a-106e916ce26f",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1363657,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1363652,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4841764,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1339857,
+              "renews_request": false
+            },
+            "same_manifest": "9f619e0d7b4db30052c98515b00f0aff08339967bac6cb47f641e411eefdbfe9",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3912414,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 422927,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 940662,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4418773,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d704-0e03-7842-8a5a-106e916ce26f",
+                "checksum_sha256": "4adb34807d62f47b764f6634f37ba586923c8eb95638b24dddb5d3f59326041e",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 916855,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3489424,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishNativeBase",
+          "call_index": 2,
+          "exact_primary_error": null,
+          "request_elapsed_us": 945664,
+          "before_host": {
+            "actual_target_attempt": "01a1d704-0e03-7842-8a5a-106e916ce26f",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1261325,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1261319,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4741477,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1239572,
+              "renews_request": false
+            },
+            "same_manifest": "9f619e0d7b4db30052c98515b00f0aff08339967bac6cb47f641e411eefdbfe9",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3932470,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 686997,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 574257,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4054415,
+              "renews_request": false
+            },
+            "progress": {
+              "NativeBase": {
+                "checksum_sha256": "c01aefd301e51c479f09388f524e16c48c8b0514ae92e0bfe3a0181038a12101",
+                "native_page_xid": 21,
+                "range_index": 1
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 552503,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3245407,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishNativeBase",
+          "call_index": 3,
+          "exact_primary_error": null,
+          "request_elapsed_us": 618279,
+          "before_host": {
+            "actual_target_attempt": "01a1d704-0e03-7842-8a5a-106e916ce26f",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1297241,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1297236,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4783271,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1281344,
+              "renews_request": false
+            },
+            "same_manifest": "9f619e0d7b4db30052c98515b00f0aff08339967bac6cb47f641e411eefdbfe9",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3916293,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 401408,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 895761,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4381797,
+              "renews_request": false
+            },
+            "progress": {
+              "NativeBase": {
+                "checksum_sha256": "c01aefd301e51c479f09388f524e16c48c8b0514ae92e0bfe3a0181038a12101",
+                "native_page_xid": 21,
+                "range_index": 1
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 879862,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3514818,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBaseCanceled",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 19,
+      "whole_source_journal_entries": 24,
+      "native_R_H0_H": [
+        1,
+        "92b576a00e31daeb2760784b88616442482a1b951e18aa0f1197a62f1bf2b1c1",
+        "bd08b453759208d43ae91de1fbd5c26b83f7d40d1b7cee4507c6f275cd4bbbd6"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 101,
+      "custody_bytes": 3578175,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "actual native base publication and same-xid repetition",
+      "native_xid": 21,
+      "same_xid_reconciled": true,
+      "post_wal_cancellation_exercised": true,
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 752373,
+          "before_host": {
+            "actual_target_attempt": "01a1d704-0e06-7192-b409-d3d0e5a9c9b9",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1360482,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1360477,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4839802,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1337886,
+              "renews_request": false
+            },
+            "same_manifest": "b201836b4c029bfd841c28abdfae96556a25dc850344c667c313b958f1c7ea82",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3911172,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 592026,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 768380,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4247705,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d704-0e06-7192-b409-d3d0e5a9c9b9",
+                "checksum_sha256": "cb711399daeb41fd95e833a147015b952f8ceaadfe43f3124f6efa08f26b74f2",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 745782,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3319075,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 599180,
+          "before_host": {
+            "actual_target_attempt": "01a1d704-0e06-7192-b409-d3d0e5a9c9b9",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1377856,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1377850,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4855009,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1352121,
+              "renews_request": false
+            },
+            "same_manifest": "b201836b4c029bfd841c28abdfae96556a25dc850344c667c313b958f1c7ea82",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3922857,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 454021,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 923743,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4400902,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d704-0e06-7192-b409-d3d0e5a9c9b9",
+                "checksum_sha256": "cb711399daeb41fd95e833a147015b952f8ceaadfe43f3124f6efa08f26b74f2",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 898006,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3468750,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishNativeBase",
+          "call_index": 2,
+          "exact_primary_error": "canceling statement due to user request",
+          "request_elapsed_us": 722070,
+          "before_host": {
+            "actual_target_attempt": "01a1d704-0e06-7192-b409-d3d0e5a9c9b9",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1337122,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1337116,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4813911,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1311018,
+              "renews_request": false
+            },
+            "same_manifest": "b201836b4c029bfd841c28abdfae96556a25dc850344c667c313b958f1c7ea82",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3882696,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": "canceling statement due to user request",
+            "host_elapsed_us": 535796,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": "canceling statement due to user request",
+              "remaining_us": 801247,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": "canceling statement due to user request",
+              "remaining_us": 4278040,
+              "renews_request": false
+            },
+            "progress": null,
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": "canceling statement due to user request",
+              "remaining_us": 775134,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3346825,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishNativeBase",
+          "call_index": 3,
+          "exact_primary_error": null,
+          "request_elapsed_us": 622444,
+          "before_host": {
+            "actual_target_attempt": "01a1d704-0e06-7192-b409-d3d0e5a9c9b9",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1368053,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1368047,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4853320,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1351409,
+              "renews_request": false
+            },
+            "same_manifest": "b201836b4c029bfd841c28abdfae96556a25dc850344c667c313b958f1c7ea82",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3919717,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 475621,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 892356,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4377630,
+              "renews_request": false
+            },
+            "progress": {
+              "NativeBase": {
+                "checksum_sha256": "8a7c389203b5845521be75a721ae1c511e9abbe6dac0b85d001882940decabc6",
+                "native_page_xid": 21,
+                "range_index": 1
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 875709,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3444027,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishNativeBase",
+          "call_index": 4,
+          "exact_primary_error": null,
+          "request_elapsed_us": 803636,
+          "before_host": {
+            "actual_target_attempt": "01a1d704-0e06-7192-b409-d3d0e5a9c9b9",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1369643,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1369637,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4705980,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1204071,
+              "renews_request": false
+            },
+            "same_manifest": "b201836b4c029bfd841c28abdfae96556a25dc850344c667c313b958f1c7ea82",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3924327,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 509483,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 860090,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4196435,
+              "renews_request": false
+            },
+            "progress": {
+              "NativeBase": {
+                "checksum_sha256": "8a7c389203b5845521be75a721ae1c511e9abbe6dac0b85d001882940decabc6",
+                "native_page_xid": 21,
+                "range_index": 1
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 694517,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3414782,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBaseWithoutFinal",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 11,
+      "whole_source_journal_entries": 16,
+      "native_R_H0_H": [
+        1,
+        "ed998287dc221bc51307b795deeeb3e863d894477d50f155fcd04d960f5a296c",
+        "c2c3a48b37abc3fcd5a6f341814bfc24bfd01c663ba98f28f17450d7319d0662"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 101,
+      "custody_bytes": 3446623,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "missing actual final image refusal",
+      "exact_error": "cluster error: native range image: Registered native base requires actual final image receipt"
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryAfterCommit",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "23f8863483f99b4fc7d503652688b44b6ddfbf8db42e64b2db58258a9a568ae3",
+        "7912560cfbff51c91612ee96a6cf9e0f2c2d28d7321370476ddaccab1b1eba73"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 101,
+      "custody_bytes": 3578175,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "same-open actual Role expiry",
+      "issued_xid": 21,
+      "final_xid": 21,
+      "retired": 0,
+      "actual_attempts": 1,
+      "selected_ack_full_payload_before_after": true,
+      "real_expiry_and_live_parent": true,
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 628570,
+          "before_host": {
+            "actual_target_attempt": "01a1d704-24eb-7913-8744-40ffe33f0923",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1390822,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1390816,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4867068,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1365159,
+              "renews_request": false
+            },
+            "same_manifest": "19416ce8c14405da779443b594383504847f17f190b848108cfaf3d6b9b650f3",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3936519,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 495505,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 895239,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4371495,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d704-24eb-7913-8744-40ffe33f0923",
+                "checksum_sha256": "0bad693e40b08afa01ffc786de8598f81e91f33eedc069e713495e6e7008f4c2",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 869574,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3440944,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 476762,
+          "before_host": {
+            "actual_target_attempt": "01a1d704-24eb-7913-8744-40ffe33f0923",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1396355,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1396349,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4879913,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1378003,
+              "renews_request": false
+            },
+            "same_manifest": "19416ce8c14405da779443b594383504847f17f190b848108cfaf3d6b9b650f3",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3946365,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 356545,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1039730,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4523299,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d704-24eb-7913-8744-40ffe33f0923",
+                "checksum_sha256": "0bad693e40b08afa01ffc786de8598f81e91f33eedc069e713495e6e7008f4c2",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1021374,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3589748,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryAfterPut",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "0ae25d927aa2e0d9077babfa13cf79a22010f1a4d2ce166af2e9f60a42b54c2e",
+        "b2488d5438387a28c53a9ad31b06d4b3a931a0519f19754631254fe7e8c9f133"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 101,
+      "custody_bytes": 3611143,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "same-open actual Role expiry",
+      "issued_xid": 21,
+      "final_xid": 23,
+      "retired": 1,
+      "actual_attempts": 2,
+      "selected_ack_full_payload_before_after": true,
+      "real_expiry_and_live_parent": true,
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 551141,
+          "before_host": {
+            "actual_target_attempt": "01a1d704-543b-76e2-b8fb-31acfc1f1881",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1397939,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1397933,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4878522,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1376600,
+              "renews_request": false
+            },
+            "same_manifest": "743e9e848772754c219198f91c4fc5565d30bd961fbd54fcb7be0705fb58608e",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3943612,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 429545,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 968325,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4448917,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d704-543b-76e2-b8fb-31acfc1f1881",
+                "checksum_sha256": "344355cf1295c923f93e9a1ecdeaa24b3267d275eeb6b2e3ec9c5d7fddac1bca",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 946981,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3514005,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 422773,
+          "before_host": {
+            "actual_target_attempt": "01a1d704-543b-76e2-b8fb-31acfc1f1881",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1395413,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1395408,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4878015,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1376093,
+              "renews_request": false
+            },
+            "same_manifest": "743e9e848772754c219198f91c4fc5565d30bd961fbd54fcb7be0705fb58608e",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3941558,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 300645,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1094699,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4577306,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d704-543b-76e2-b8fb-31acfc1f1881",
+                "checksum_sha256": "344355cf1295c923f93e9a1ecdeaa24b3267d275eeb6b2e3ec9c5d7fddac1bca",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1075378,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3640849,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryBeforePut",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "264b307af73d995de16e4ff1a8d14c8b9338b110c9afbe40538db4b34db38c8f",
+        "b7417c6a417e177ac3f86873f916ffc41be151df14cddac8266fd048e381822c"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 101,
+      "custody_bytes": 3578215,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "same-open actual Role expiry",
+      "issued_xid": 21,
+      "final_xid": 22,
+      "retired": 1,
+      "actual_attempts": 2,
+      "selected_ack_full_payload_before_after": true,
+      "real_expiry_and_live_parent": true,
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 523703,
+          "before_host": {
+            "actual_target_attempt": "01a1d704-6078-7700-96a6-13b9dfd908ad",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1425750,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1425746,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4902585,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1400656,
+              "renews_request": false
+            },
+            "same_manifest": "f1bec1fd12f870454bb7560dafd188edebbf442cd7f60469ba9b35bd51ae5e9e",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3953604,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 426171,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 999512,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4476354,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d704-6078-7700-96a6-13b9dfd908ad",
+                "checksum_sha256": "7227e92b49151e53d390f82b4419366e20b2a654785c0d1aee85423e6dd954c7",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 974422,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3527371,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 396930,
+          "before_host": {
+            "actual_target_attempt": "01a1d704-6078-7700-96a6-13b9dfd908ad",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1401948,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1401944,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4891588,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1389679,
+              "renews_request": false
+            },
+            "same_manifest": "f1bec1fd12f870454bb7560dafd188edebbf442cd7f60469ba9b35bd51ae5e9e",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3935943,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 288381,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1113485,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4603129,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d704-6078-7700-96a6-13b9dfd908ad",
+                "checksum_sha256": "7227e92b49151e53d390f82b4419366e20b2a654785c0d1aee85423e6dd954c7",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1101215,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3647484,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "test_result": [
+    "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 1134 filtered out; finished in 65.53s"
+  ],
+  "selected_tests": [
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_abort_sync_failure_never_replaces_poisoned_owner",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_commit_sync_unknown_never_replaces_owner",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_proven_abort_budget_exhaustion_retains_every_owner",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_integrity_survives_image_invalidation",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_post_wal_cancel_reconciles_same_xid",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_preserves_verified_history_floor",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_refuses_without_live_final_image",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_commit_same_xid_resumes",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_successful_put_proven_abort_same_a_resumes",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_before_put_proven_abort_same_a_resumes"
+  ],
+  "executed_tests": [
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_commit_sync_unknown_never_replaces_owner",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_abort_sync_failure_never_replaces_poisoned_owner",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_integrity_survives_image_invalidation",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_proven_abort_budget_exhaustion_retains_every_owner",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_refuses_without_live_final_image",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_preserves_verified_history_floor",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_post_wal_cancel_reconciles_same_xid",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_commit_same_xid_resumes",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_successful_put_proven_abort_same_a_resumes",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_before_put_proven_abort_same_a_resumes",
+      "result": "ok"
+    }
+  ],
+  "public_projection": {
+    "projection_zip_sha256": "2f51b03e903b5297a31494e87db15ee870e5a27b27716f7e81a8acf0ee7c7b3d",
+    "projection_zip_bytes": 3196441,
+    "projection_fixture_db_custody_present": false,
+    "original_archive_unchanged": true
+  },
+  "totals": {
+    "app_returned_event_operations": 20,
+    "custody_files_verified": 1012,
+    "custody_bytes_verified": 35634695
+  },
+  "environment": {
+    "old_source": "81733c1fa601fea3bcac1ad5efac8435dd02b090",
+    "new_source": "b6398fb075eed7c93a71ab25a52fad3f936421e5",
+    "focused_dependencies_opt_level": 2,
+    "previous_focused_dependencies_opt_level": "Cargo default (no workflow override)",
+    "workspace_runtime_integration": "actual main500 plus preserved native pipeline and diagnostic continuation",
+    "same_environment_claim": false,
+    "no_old_failure_cause_inference": true,
+    "unchanged_focus_threads": 4,
+    "unchanged_jobs": 1,
+    "unchanged_incremental": 0,
+    "unchanged_parent_ms": 5000,
+    "unchanged_actual_metadata_window": true
+  },
+  "github_and_local_custody_access": {
+    "repository": {
+      "full_name": "nikoma/bicdb",
+      "id": 1378458626,
+      "private": false,
+      "visibility": "public"
+    },
+    "github_artifact_scope": "Raw focused evidence is uploaded as a public-repository GitHub Actions artifact, governed by GitHub artifact access and retention. Local file permissions do not establish owner-only GitHub confidentiality.",
+    "local_custody_scope": "Downloaded whole raw archives are locally restricted with mode0600, with a mode0700 custody directory.",
+    "raw_contains_generated_fixture_mesh_keys": true,
+    "production_credentials_claimed": false,
+    "safe_projection_omits_all_raw_custody_subtrees_and_key_bytes": true,
+    "existing_frozen_evidence_preserved": true
+  },
+  "unforced_late_commit_continuation": {
+    "report_count": 0,
+    "classification": "not tested: no natural late commit in this run"
+  },
+  "limitations": [
+    "10/0 focused components on main500 integration plus dependencyopt2; not same environment as old817",
+    "no natural late commit occurred, so new one-fresh-request diagnostic continuation NOT TESTED",
+    "green result does not establish old c1/e1ec/817 timeout causes or qualification",
+    "same-open actual native metadata components, not cold replay, general SQL, Serving, source retirement or physical scale-out",
+    "event-storage APP ledger distinct from native metadata xids; post-fault payload visibility not asserted on fenced handles",
+    "guarded live-owner stable file copy, not stopped/atomic/powerloss snapshot",
+    "raw artifact GitHub-hosted on public repository under GitHub access/retention; only downloaded copies locally restricted",
+    "8-entry exhaustion exercised; 8MiB exhaustion not exercised"
+  ]
+}

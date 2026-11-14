@@ -1,0 +1,67 @@
+{
+  "format_version": 1,
+  "captured_at_date": "2026-11-13",
+  "runs": [
+    {
+      "key": "c1e",
+      "run": 43510565054,
+      "url": "https://github.com/nikoma/bicdb/actions/runs/43510565054",
+      "core_job": 132179457808,
+      "source": "c1e4b3a4e8e7ad33c688436830f9af10a4203cc5",
+      "source_version": "1.0.494-beta",
+      "workflow_conclusion": "failure",
+      "selected": 10,
+      "passed": 5,
+      "failed": 5,
+      "test_seconds": 88.92,
+      "workspace_alltargets_and_consumer": "passed",
+      "artifact": 14078871155,
+      "raw_sha256": "587683f6ec471634e1f59baaab8c554504480b745d19b5af2e85e7660ef3ea1c",
+      "raw_bytes": 3863754,
+      "raw_included": false,
+      "projection_sha256": "139d46a83da37bddb891106115f967207ce1d6b33c84f7059857d0ad14dda9bb",
+      "projection_bytes": 2116252,
+      "projection_members": 129,
+      "omitted_members": 972,
+      "app_returned_event_operations": 20,
+      "native_metadata_xids_are_not_app_commit_counts": true,
+      "custody": {
+        "app_returned_event_operations": 20,
+        "custody_files_verified": 962,
+        "custody_bytes_verified": 35509198
+      },
+      "production_qualified": false
+    },
+    {
+      "key": "817",
+      "run": 43514812736,
+      "url": "https://github.com/nikoma/bicdb/actions/runs/43514812736",
+      "core_job": 132193990208,
+      "source": "81733c1fa601fea3bcac1ad5efac8435dd02b090",
+      "source_version": "1.0.494-beta",
+      "workflow_conclusion": "failure",
+      "selected": 10,
+      "passed": 8,
+      "failed": 2,
+      "test_seconds": 90.09,
+      "workspace_alltargets_and_consumer": "passed",
+      "artifact": 14080168310,
+      "raw_sha256": "1e4e0f96ba36a3f075ad316a82cdf4d690aec1e7c789379e3896e9924c95dc87",
+      "raw_bytes": 4783167,
+      "raw_included": false,
+      "projection_sha256": "2c8d349f1090c1f286bc9294b0e20884c18f21cf00ff8ddca37c1605c5c5583d",
+      "projection_bytes": 3047354,
+      "projection_members": 141,
+      "omitted_members": 972,
+      "app_returned_event_operations": 20,
+      "native_metadata_xids_are_not_app_commit_counts": true,
+      "custody": {
+        "app_returned_event_operations": 20,
+        "custody_files_verified": 962,
+        "custody_bytes_verified": 35558550
+      },
+      "production_qualified": false
+    }
+  ],
+  "qualification": false
+}

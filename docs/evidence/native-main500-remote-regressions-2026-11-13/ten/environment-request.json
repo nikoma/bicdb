@@ -1,0 +1,54 @@
+{
+  "workflow": "tests.yml",
+  "ref": "qual/native817-main500-late-commit",
+  "source_revision": "b6398fb075eed7c93a71ab25a52fad3f936421e5",
+  "inputs": {
+    "core_filter": "native_registered_fifth_remote_native_base_actual_"
+  },
+  "static_selectors": [
+    "native_registered_fifth_remote_native_base_actual_refuses_without_live_final_image",
+    "native_registered_fifth_remote_native_base_actual_preserves_verified_history_floor",
+    "native_registered_fifth_remote_native_base_actual_post_wal_cancel_reconciles_same_xid",
+    "native_registered_fifth_remote_native_base_actual_integrity_survives_image_invalidation",
+    "native_registered_fifth_remote_native_base_actual_expiry_before_put_proven_abort_same_a_resumes",
+    "native_registered_fifth_remote_native_base_actual_expiry_after_commit_same_xid_resumes",
+    "native_registered_fifth_remote_native_base_actual_expiry_after_successful_put_proven_abort_same_a_resumes",
+    "native_registered_fifth_remote_native_base_actual_abort_sync_failure_never_replaces_poisoned_owner",
+    "native_registered_fifth_remote_native_base_actual_commit_sync_unknown_never_replaces_owner",
+    "native_registered_fifth_remote_native_base_actual_proven_abort_budget_exhaustion_retains_every_owner"
+  ],
+  "static_count": 10,
+  "hosted_list_count_must_confirm": 10,
+  "parent_budget_ms_unchanged": 5000,
+  "actual_metadata_authority_budget_unchanged": true,
+  "rust_test_threads_unchanged": 4,
+  "cargo_jobs_unchanged": 1,
+  "incremental_unchanged": 0,
+  "request_order_unchanged": [
+    "Role",
+    "OWN",
+    "Finished",
+    "actual_host"
+  ],
+  "authorization": "Root: one main500 integration ten cohort; no retry/cancel/Catalogue4/deadline/source change",
+  "original_c1e_run_preserved": 43510565054,
+  "source_version": "1.0.500-beta",
+  "compared_environment": {
+    "old_source": "81733c1fa601fea3bcac1ad5efac8435dd02b090",
+    "new_source": "b6398fb075eed7c93a71ab25a52fad3f936421e5",
+    "focused_dependencies_opt_level": 2,
+    "previous_focused_dependencies_opt_level": "Cargo default (no workflow override)",
+    "workspace_runtime_integration": "actual main500 plus preserved native pipeline and diagnostic continuation",
+    "same_environment_claim": false,
+    "no_old_failure_cause_inference": true,
+    "unchanged_focus_threads": 4,
+    "unchanged_jobs": 1,
+    "unchanged_incremental": 0,
+    "unchanged_parent_ms": 5000,
+    "unchanged_actual_metadata_window": true
+  },
+  "earlier_failed_runs_preserved": [
+    43510565054,
+    43514812736
+  ]
+}

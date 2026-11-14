@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-13",
+  "offline_portable_verification": "passed",
+  "tampered_artifact_negative_control": "correctly refused",
+  "CI_unit_tests_executed": 6,
+  "CI_unit_tests_passed": 6,
+  "CI_unit_tests_failed": 0,
+  "alltargets_consumer_step_identity": "verified successful",
+  "database_opened_by_verifier": false,
+  "network_used_by_verifier": false,
+  "Rust_rerun_by_capture": false,
+  "runtime_custody_present": false,
+  "qualified": false
+}

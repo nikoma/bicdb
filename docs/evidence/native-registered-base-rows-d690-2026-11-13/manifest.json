@@ -1,0 +1,146 @@
+{
+  "format_version": 1,
+  "source_revision": "d6908095e0d347e563ef68801f49e52dba35452d",
+  "candidate_source_version": "1.0.494-beta",
+  "runtime_corpus": "Two exact-source terminal component runs only",
+  "runs": [
+    {
+      "kind": "base4",
+      "run_id": 43486854857,
+      "core_job": 132097541321,
+      "alltargets_job": 132097483301,
+      "passed": 4,
+      "failed": 0,
+      "duration_seconds": 31.95,
+      "metadata": "provenance/base4-run-terminal.json",
+      "job_indices": [
+        "jobs/d69-portable-native-base-four-core-job132097541321-index.json",
+        "jobs/d69-portable-native-base-four-alltargets-job132097483301-index.json"
+      ],
+      "artifact_id": 14067424302,
+      "original_zip_sha256": "4f47eadde974e2364406fa43acf820c0b363e4a8541e469107466dd56da26ddb"
+    },
+    {
+      "kind": "rows5",
+      "run_id": 43487075852,
+      "core_job": 132098295025,
+      "alltargets_job": 132098251107,
+      "passed": 5,
+      "failed": 0,
+      "duration_seconds": 35.33,
+      "metadata": "provenance/rows5-run-terminal.json",
+      "job_indices": [
+        "jobs/d69-registered-rows-wal-five-core-job132098295025-index.json",
+        "jobs/d69-registered-rows-wal-five-alltargets-job132098251107-index.json"
+      ],
+      "artifact_id": 14068515933,
+      "original_zip_sha256": "e3632b5d6b4aaab45dd9e847a138e8e9a1f551f9f6cfeb50be09ddb00afe1709"
+    }
+  ],
+  "files": {
+    "README.md": {
+      "bytes": 8186,
+      "sha256": "fb58e2a497ef9b8f76bdbeb670e56009232c06d2cd767c7723c6b133fa993e50"
+    },
+    "artifacts/base4-projection-manifest.json": {
+      "bytes": 137901,
+      "sha256": "2afb59d6c5e9496f34d890154d50c63ea4cc58f8fb4a13a7a7e8120529678aea"
+    },
+    "artifacts/base4-public.zip": {
+      "bytes": 605678,
+      "sha256": "21471432131a2bdbead629e73378f2b29d145129b1b883157a61317a6c1ce492"
+    },
+    "artifacts/rows5-projection-manifest.json": {
+      "bytes": 169898,
+      "sha256": "4f29d39426eb168ed94b6607b4231994d6f15318def0d0b31f89f24c5c834075"
+    },
+    "artifacts/rows5-public.zip": {
+      "bytes": 569857,
+      "sha256": "c619403d673014598039e968723c63d058e2165d0f56e718ca93b11ebc3684f5"
+    },
+    "findings/cold-source-10d.json": {
+      "bytes": 10744,
+      "sha256": "1e7e994afa4c1c5ef84d438c0902b1098d891cbcfcb81218edf2e0b36ae1f4d8"
+    },
+    "findings/distributed-sql-source-main498.json": {
+      "bytes": 13016,
+      "sha256": "0b4aa2496b566d6a66075c23c8f59644147da209d69dc32eecd63472f80a484d"
+    },
+    "issues.json": {
+      "bytes": 3524,
+      "sha256": "2cf80d087c3fa3959ff6d7e66f9d99e057fcf1cb0c0b13a82491c6015aeb90d5"
+    },
+    "jobs/d69-portable-native-base-four-alltargets-job132097483301-index.json": {
+      "bytes": 2858,
+      "sha256": "b905477d3bfd99f153572b5af566e46bd5acd4333cfd505d428514578529d91b"
+    },
+    "jobs/d69-portable-native-base-four-alltargets-job132097483301.log.gz": {
+      "bytes": 332354,
+      "sha256": "66ea5e4306c21c19c65ff064aa41fe29e05f0ad6b88abd0ff56b501ace5f898c"
+    },
+    "jobs/d69-portable-native-base-four-core-job132097541321-index.json": {
+      "bytes": 4893,
+      "sha256": "805e4d30198041c55d0aac15b85343b0fd98306ab05272eb960760347935cc1d"
+    },
+    "jobs/d69-portable-native-base-four-core-job132097541321.log.gz": {
+      "bytes": 332684,
+      "sha256": "129f2c2b4416a627f251b745c9dc047b3b82c0d3fe7107b647f1e6ed7afa9403"
+    },
+    "jobs/d69-registered-rows-wal-five-alltargets-job132098251107-index.json": {
+      "bytes": 2857,
+      "sha256": "8b252eff3db41aa826379d4e9687a8cafbf82be469dd0deed6ec716e5eb65abb"
+    },
+    "jobs/d69-registered-rows-wal-five-alltargets-job132098251107.log.gz": {
+      "bytes": 330349,
+      "sha256": "1c1e5a2dfa50f9d07417ef975d6b05f23a8552c23c49310802a57120e3bdf376"
+    },
+    "jobs/d69-registered-rows-wal-five-core-job132098295025-index.json": {
+      "bytes": 5119,
+      "sha256": "19068968170a8d39136e51056711beb4b9dc1a86034cd93e50d79c4006b0d057"
+    },
+    "jobs/d69-registered-rows-wal-five-core-job132098295025.log.gz": {
+      "bytes": 362575,
+      "sha256": "9c1dcccecc7ac6ad35dfb3350e1e14ea9517bc8dc59c132dc9c41698bdf51016"
+    },
+    "project-evidence.py": {
+      "bytes": 6747,
+      "sha256": "2e2df0736b5a0b247b60a3dec760f682c487830aed5ce2cb0479749a55b3e2f1"
+    },
+    "provenance/base4-run-terminal.json": {
+      "bytes": 12823,
+      "sha256": "dedc4e4d208a04c9ce1b0d0503180fdc3f382121f3f878645945740eb724bac5"
+    },
+    "provenance/rows5-run-terminal.json": {
+      "bytes": 12823,
+      "sha256": "ca4c2834222ae98e2b6f57eae7c7c8f4a3e01901121f11fae35784a7588b0e11"
+    },
+    "source-index.json": {
+      "bytes": 5649,
+      "sha256": "539fca2ebaf4408bf367883725c0b0aed9c3475c1f132d4094a296e74a4f089f"
+    },
+    "verify.py": {
+      "bytes": 10278,
+      "sha256": "681753456e1b173cf9ca07cdb5a8f9e9a0a194e78ac1d0839059f390b1842bac"
+    },
+    "verify_rows.py": {
+      "bytes": 14401,
+      "sha256": "1754b3951802a0e74daca063338ccfde23d9ad804616c70a2ffbc5de72e52b8c"
+    }
+  },
+  "source_APP_API_ledger": {
+    "successful_acknowledgments": 18,
+    "failed_API_calls": 0,
+    "uncertain_API_calls": 0,
+    "separately_recorded_caller_retries": 0,
+    "internal_wire_retry_count": null
+  },
+  "internal_target_unknown_outcomes": 1,
+  "cold_replay_verified": false,
+  "native_grants_reconstructed": false,
+  "production_qualified": false,
+  "deployed": false,
+  "physical_scale_qualified": false,
+  "release_binary_produced": false,
+  "durations_are_RTO_or_latency": false,
+  "private_original_DB_contents_in_packet": false
+}

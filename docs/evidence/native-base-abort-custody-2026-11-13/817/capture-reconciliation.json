@@ -1,0 +1,2220 @@
+{
+  "source": "81733c1fa601fea3bcac1ad5efac8435dd02b090",
+  "version": "1.0.494-beta",
+  "run": 43514812736,
+  "core_job": 132193990208,
+  "artifact": 14080168310,
+  "workflow": "failure",
+  "qualification": false,
+  "raw_sha256": "1e4e0f96ba36a3f075ad316a82cdf4d690aec1e7c789379e3896e9924c95dc87",
+  "cases": [
+    {
+      "case": "TargetNativeBaseAbortSyncFailed",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "8ac6939541cb60e4c88f56fa831a718b1f94e5fa7c7affa090a2526651e00f02",
+        "aa449b17e52f37a32e324e5b3ca090415a919db97e2772f590a429ad7b9f210b"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 97,
+      "custody_bytes": 3556007,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "sticky native durability failure refusal",
+      "fault_fired": 1,
+      "actual_native_status": "Aborted",
+      "issued_xid": 21,
+      "exact_retained_publisher_unchanged": true,
+      "native_attempts": 1,
+      "retired": 0,
+      "fresh_exact_error": "database refuses writes after a failed durable write at page_log.sync: /tmp/.tmpTtUeMK/actual-registered-fifth-image-target/paged/store.wal: Input/output error (os error 5); reopen the database to run recovery and verification",
+      "first_exact_error": "canceling statement due to query timeout",
+      "actual_memory_custody_retained": true,
+      "post_failure_payload_visibility": "not asserted on fenced handle",
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1386106,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-3104-78b3-b52c-71a3e88533c4",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1307500,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1307491,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4765195,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1261310,
+              "renews_request": false
+            },
+            "same_manifest": "c6027eddde89e6b85e6bb75891bee724f57cd7a1bc12bed404c0491f508cfd34",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3882781,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 1151113,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 156288,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3613991,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ee-3104-78b3-b52c-71a3e88533c4",
+                "checksum_sha256": "46c0e3f6818a299a84bafc9d5962b7c85a7d36a633897bf2d1d7560ae654e9da",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 110091,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 2731577,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1073515,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-3104-78b3-b52c-71a3e88533c4",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1283078,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1283073,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4737427,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1232533,
+              "renews_request": false
+            },
+            "same_manifest": "c6027eddde89e6b85e6bb75891bee724f57cd7a1bc12bed404c0491f508cfd34",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3874103,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 810773,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 472229,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3926579,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ee-3104-78b3-b52c-71a3e88533c4",
+                "checksum_sha256": "46c0e3f6818a299a84bafc9d5962b7c85a7d36a633897bf2d1d7560ae654e9da",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 421674,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3063257,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBaseInvalidated",
+      "test_classification": "failed",
+      "test_primary_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 17,
+      "whole_source_journal_entries": 22,
+      "native_R_H0_H": [
+        1,
+        "e63b2ce1d007354e315f7795b3f50632b060f646f3fefa031bb9befe84dad431",
+        "1eed1ae2f7d10332014c24097eb3217fff66df2305a2e81e9158a1ab4d2e7065"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3572211,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "native commit returned then actual Role expired before final publication acceptance",
+      "named_control": "failed; later floor or invalidation assertions not tested",
+      "internal_refusal_check": "not instrumented; no earlier-run cause inference",
+      "native_committed_timeout_observation": {
+        "operation": "PublishNativeBase",
+        "call_index": 2,
+        "exact_primary_error": "canceling statement due to query timeout",
+        "request_elapsed_us": 1508931,
+        "before_host": {
+          "actual_target_attempt": "01a1d6ee-3158-7f92-8607-28780fbc7676",
+          "own": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 1319829,
+            "renews_request": false
+          },
+          "own_original_token": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 1319820,
+            "renews_request": false
+          },
+          "parent": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 4786051,
+            "renews_request": false
+          },
+          "role": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 1282177,
+            "renews_request": false
+          },
+          "same_manifest": "8caa4d3ff447b09de09fac7955f1abe0a53a83951f7cb0bf0b5e576bfbc62874",
+          "source_original_token": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 3892439,
+            "renews_request": false
+          }
+        },
+        "after_host": {
+          "exact_error": "canceling statement due to query timeout",
+          "host_elapsed_us": 1294785,
+          "own_original_token": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 24945,
+            "renews_request": false
+          },
+          "parent": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 3491175,
+            "renews_request": false
+          },
+          "progress": null,
+          "role": {
+            "expired_by_clock": true,
+            "original_check_error": "cluster error: metadata consensus: recovery-role witness scope changed or expired",
+            "remaining_us": -12713,
+            "renews_request": false
+          },
+          "source_original_token": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 2597563,
+            "renews_request": false
+          }
+        },
+        "actual_committed_native_xid": 21,
+        "exact_base_archive_owner": true,
+        "commit_returned_before_postchecks": true,
+        "verified": false,
+        "actual_role_expired": true,
+        "own_source_parent_stayed_live": true,
+        "actual_A_retained": true
+      },
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1415843,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-3158-7f92-8607-28780fbc7676",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1300558,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1300549,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4767450,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1263577,
+              "renews_request": false
+            },
+            "same_manifest": "8caa4d3ff447b09de09fac7955f1abe0a53a83951f7cb0bf0b5e576bfbc62874",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3880525,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 1183091,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 117363,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3584263,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ee-3158-7f92-8607-28780fbc7676",
+                "checksum_sha256": "35dea33d0583c487aa8a25749cd81ce7b373ec4d877114a504ede3b3b7fe024d",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 80368,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 2697338,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1055569,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-3158-7f92-8607-28780fbc7676",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1276643,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1276635,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4743637,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1238776,
+              "renews_request": false
+            },
+            "same_manifest": "8caa4d3ff447b09de09fac7955f1abe0a53a83951f7cb0bf0b5e576bfbc62874",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3870511,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 799001,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 477541,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3944544,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ee-3158-7f92-8607-28780fbc7676",
+                "checksum_sha256": "35dea33d0583c487aa8a25749cd81ce7b373ec4d877114a504ede3b3b7fe024d",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 439663,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3071417,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishNativeBase",
+          "call_index": 2,
+          "exact_primary_error": "canceling statement due to query timeout",
+          "request_elapsed_us": 1508931,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-3158-7f92-8607-28780fbc7676",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1319829,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1319820,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4786051,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1282177,
+              "renews_request": false
+            },
+            "same_manifest": "8caa4d3ff447b09de09fac7955f1abe0a53a83951f7cb0bf0b5e576bfbc62874",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3892439,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": "canceling statement due to query timeout",
+            "host_elapsed_us": 1294785,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 24945,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3491175,
+              "renews_request": false
+            },
+            "progress": null,
+            "role": {
+              "expired_by_clock": true,
+              "original_check_error": "cluster error: metadata consensus: recovery-role witness scope changed or expired",
+              "remaining_us": -12713,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 2597563,
+              "renews_request": false
+            }
+          },
+          "actual_committed_native_xid": 21,
+          "exact_base_archive_owner": true,
+          "commit_returned_before_postchecks": true,
+          "verified": false,
+          "actual_role_expired": true,
+          "own_source_parent_stayed_live": true,
+          "actual_A_retained": true
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBaseCommitSyncUnknown",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "1e4843c599220850e06e0bc39dffe137b4f66bdaf1789aded52ceb4a4f62ce6b",
+        "822d9fd124f406a3449ef7efe1f91594cc5e6fa62ffaabf06373b235126b44fe"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 97,
+      "custody_bytes": 3572391,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "sticky native durability failure refusal",
+      "fault_fired": 1,
+      "actual_native_status": "InProgress",
+      "issued_xid": 21,
+      "exact_retained_publisher_unchanged": true,
+      "native_attempts": 1,
+      "retired": 0,
+      "fresh_exact_error": "database refuses writes after a failed durable write at page_log.sync: /tmp/.tmp18rEMf/actual-registered-fifth-image-target/paged/store.wal: Input/output error (os error 5); reopen the database to run recovery and verification",
+      "first_exact_error": "commit outcome unknown: commit_seq=none transaction_id=none incarnation=ff6fce25-12e2-4b4b-b516-4ab1f32f5188: page transaction 21 did not commit cleanly: database refuses writes after a failed durable write at page_log.sync: /tmp/.tmp18rEMf/actual-registered-fifth-image-target/paged/store.wal: Input/output error (os error 5); reopen the database to run recovery and verification; do not assume it committed or rolled back. Reopen the database, then re-read the operation's result: it has no commit sequence, and the page store's recovery kept it only if its commit record reached the disk",
+      "actual_memory_custody_retained": true,
+      "post_failure_payload_visibility": "not asserted on fenced handle",
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1364407,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-30c9-71d1-a543-47e6f4e896a5",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1313165,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1313157,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4778884,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1275002,
+              "renews_request": false
+            },
+            "same_manifest": "dcc833ee020bf3e763e4f800e76ced25f3fc00269585cd203acd297549c6e101",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3893089,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 1143103,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 169964,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3635692,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ee-30c9-71d1-a543-47e6f4e896a5",
+                "checksum_sha256": "e32479b9daed2c303b9344cf022803547e44917fc628325a058c0abc11cfb85f",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 131789,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 2749897,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1058480,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-30c9-71d1-a543-47e6f4e896a5",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1274107,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1274101,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4750948,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1248054,
+              "renews_request": false
+            },
+            "same_manifest": "dcc833ee020bf3e763e4f800e76ced25f3fc00269585cd203acd297549c6e101",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3857114,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 809220,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 464799,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3941641,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ee-30c9-71d1-a543-47e6f4e896a5",
+                "checksum_sha256": "e32479b9daed2c303b9344cf022803547e44917fc628325a058c0abc11cfb85f",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 438746,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3047810,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBaseAbortBudget",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 26,
+      "whole_source_journal_entries": 31,
+      "native_R_H0_H": [
+        1,
+        "b03fdfdbaa716191872b48f489871b49152b23727a1a2ded3eabc32d15fc7a6f",
+        "bd34888e04c763ad9f53943643235a6430ca2d2cdf6de00ea4b5ae9eea011ac8"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3523219,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "finite retained attempt history",
+      "actual_aborted_requests": 9,
+      "retired": 8,
+      "no_tenth_native_attempt": true,
+      "exact_budget_error": "cluster error: native target image: Registered native base proven-abort retry budget exhausted; original attempt retained",
+      "byte_budget_exhaustion_tested": false,
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1426464,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-30b8-77c3-a7a4-1b66dcea2a21",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1305504,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1305498,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4765870,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1259984,
+              "renews_request": false
+            },
+            "same_manifest": "3a7a5f305a65daf323f6d9b0e6f8311a4dffcdd8535134a37a39d8a63a781a0d",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3880579,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 1192144,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 113271,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3573637,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ee-30b8-77c3-a7a4-1b66dcea2a21",
+                "checksum_sha256": "eab79d43319e56186fe5fc4002e193a3dacfc214f4c249f6ea59de02462ec4fe",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 67754,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 2688349,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1062901,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-30b8-77c3-a7a4-1b66dcea2a21",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1302478,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1302471,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4770363,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1266495,
+              "renews_request": false
+            },
+            "same_manifest": "3a7a5f305a65daf323f6d9b0e6f8311a4dffcdd8535134a37a39d8a63a781a0d",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3876911,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 833028,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 469339,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3937230,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ee-30b8-77c3-a7a4-1b66dcea2a21",
+                "checksum_sha256": "eab79d43319e56186fe5fc4002e193a3dacfc214f4c249f6ea59de02462ec4fe",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 433347,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3043779,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBaseCanceled",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 19,
+      "whole_source_journal_entries": 24,
+      "native_R_H0_H": [
+        1,
+        "541e55f14d92594b37fae0d7bfd9a9d023c11d4027e0a4c07f0e05308be4850e",
+        "3ab46a5cbdbce3fd6d9192e8be826de06915ca164b2b2f1db9b72b3fd12a68dd"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3572211,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "actual post-WAL cancellation same-xid reconciliation",
+      "native_xid": 21,
+      "same_xid_reconciled": true,
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1254028,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-abda-72b0-af00-29d2d0013ed1",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1321345,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1321337,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4793783,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1290899,
+              "renews_request": false
+            },
+            "same_manifest": "4a0d71518c19bbd37771842082f9ab9f6be73a3955a33cc54f07507527b31af0",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3891470,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 1047645,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 273593,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3746046,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ee-abda-72b0-af00-29d2d0013ed1",
+                "checksum_sha256": "2e88f54f1805ef2d06cb62a8804f24c271fedfcf446ece242333f7f61c0fbd40",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 243141,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 2843729,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1060125,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-abda-72b0-af00-29d2d0013ed1",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1340848,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1340840,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4815259,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1312378,
+              "renews_request": false
+            },
+            "same_manifest": "4a0d71518c19bbd37771842082f9ab9f6be73a3955a33cc54f07507527b31af0",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3888683,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 875158,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 465577,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3939997,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ee-abda-72b0-af00-29d2d0013ed1",
+                "checksum_sha256": "2e88f54f1805ef2d06cb62a8804f24c271fedfcf446ece242333f7f61c0fbd40",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 437105,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3013420,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishNativeBase",
+          "call_index": 2,
+          "exact_primary_error": "canceling statement due to user request",
+          "request_elapsed_us": 1359874,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-abda-72b0-af00-29d2d0013ed1",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1262607,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1262599,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4726614,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1222727,
+              "renews_request": false
+            },
+            "same_manifest": "4a0d71518c19bbd37771842082f9ab9f6be73a3955a33cc54f07507527b31af0",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3842876,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": "canceling statement due to user request",
+            "host_elapsed_us": 1086297,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": "canceling statement due to user request",
+              "remaining_us": 176210,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": "canceling statement due to user request",
+              "remaining_us": 3640223,
+              "renews_request": false
+            },
+            "progress": null,
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": "canceling statement due to user request",
+              "remaining_us": 136331,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 2756485,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishNativeBase",
+          "call_index": 3,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1104956,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-abda-72b0-af00-29d2d0013ed1",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1304452,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1304444,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4770971,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1267091,
+              "renews_request": false
+            },
+            "same_manifest": "4a0d71518c19bbd37771842082f9ab9f6be73a3955a33cc54f07507527b31af0",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3876411,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 875734,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 428616,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3895143,
+              "renews_request": false
+            },
+            "progress": {
+              "NativeBase": {
+                "checksum_sha256": "fbe96f9633f909a86094b99e2eadc076c4e700da15dc91525c1fdf76c0f523c3",
+                "native_page_xid": 21,
+                "range_index": 1
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 391251,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3000582,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishNativeBase",
+          "call_index": 4,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1063649,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-abda-72b0-af00-29d2d0013ed1",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1293350,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1293341,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4769618,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1265733,
+              "renews_request": false
+            },
+            "same_manifest": "4a0d71518c19bbd37771842082f9ab9f6be73a3955a33cc54f07507527b31af0",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3876390,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 833059,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 460179,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3936456,
+              "renews_request": false
+            },
+            "progress": {
+              "NativeBase": {
+                "checksum_sha256": "fbe96f9633f909a86094b99e2eadc076c4e700da15dc91525c1fdf76c0f523c3",
+                "native_page_xid": 21,
+                "range_index": 1
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 432561,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3043229,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBase",
+      "test_classification": "failed",
+      "test_primary_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 17,
+      "whole_source_journal_entries": 22,
+      "native_R_H0_H": [
+        1,
+        "7ed9254f3329731071b98f52ddd7e2b9260f4063148bd82dba45024eb1192983",
+        "db74cbe572c6b14110031cee5ebabedd66608afb48014e1f42c1f7148898614d"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3572211,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "native commit returned then actual Role expired before final publication acceptance",
+      "named_control": "failed; later floor or invalidation assertions not tested",
+      "internal_refusal_check": "not instrumented; no earlier-run cause inference",
+      "native_committed_timeout_observation": {
+        "operation": "PublishNativeBase",
+        "call_index": 2,
+        "exact_primary_error": "canceling statement due to query timeout",
+        "request_elapsed_us": 1498788,
+        "before_host": {
+          "actual_target_attempt": "01a1d6ee-ae09-7471-bc8b-ffe01256564e",
+          "own": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 1275984,
+            "renews_request": false
+          },
+          "own_original_token": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 1275976,
+            "renews_request": false
+          },
+          "parent": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 4750187,
+            "renews_request": false
+          },
+          "role": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 1246313,
+            "renews_request": false
+          },
+          "same_manifest": "510583bbfa28c7d48f82a27aa567a77cb4c762308593ed62eb3213b78e6ce10f",
+          "source_original_token": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 3871406,
+            "renews_request": false
+          }
+        },
+        "after_host": {
+          "exact_error": "canceling statement due to query timeout",
+          "host_elapsed_us": 1248812,
+          "own_original_token": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 27070,
+            "renews_request": false
+          },
+          "parent": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 3501285,
+            "renews_request": false
+          },
+          "progress": null,
+          "role": {
+            "expired_by_clock": true,
+            "original_check_error": "cluster error: metadata consensus: recovery-role witness scope changed or expired",
+            "remaining_us": -2605,
+            "renews_request": false
+          },
+          "source_original_token": {
+            "expired_by_clock": false,
+            "original_check_error": null,
+            "remaining_us": 2622501,
+            "renews_request": false
+          }
+        },
+        "actual_committed_native_xid": 21,
+        "exact_base_archive_owner": true,
+        "commit_returned_before_postchecks": true,
+        "verified": false,
+        "actual_role_expired": true,
+        "own_source_parent_stayed_live": true,
+        "actual_A_retained": true
+      },
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1341291,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-ae09-7471-bc8b-ffe01256564e",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1348522,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1348514,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4827607,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1324738,
+              "renews_request": false
+            },
+            "same_manifest": "510583bbfa28c7d48f82a27aa567a77cb4c762308593ed62eb3213b78e6ce10f",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3894186,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 1168686,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 179732,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3658823,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ee-ae09-7471-bc8b-ffe01256564e",
+                "checksum_sha256": "5395fd91b193ad1223a84fc8e7fe9b678ec685dfc1874984e1ce1d464704b29b",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 155934,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 2725402,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1142806,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-ae09-7471-bc8b-ffe01256564e",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1270423,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1270415,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4746598,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1242714,
+              "renews_request": false
+            },
+            "same_manifest": "510583bbfa28c7d48f82a27aa567a77cb4c762308593ed62eb3213b78e6ce10f",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3838457,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 889113,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 381181,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3857363,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ee-ae09-7471-bc8b-ffe01256564e",
+                "checksum_sha256": "5395fd91b193ad1223a84fc8e7fe9b678ec685dfc1874984e1ce1d464704b29b",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 353466,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 2949222,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishNativeBase",
+          "call_index": 2,
+          "exact_primary_error": "canceling statement due to query timeout",
+          "request_elapsed_us": 1498788,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-ae09-7471-bc8b-ffe01256564e",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1275984,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1275976,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4750187,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1246313,
+              "renews_request": false
+            },
+            "same_manifest": "510583bbfa28c7d48f82a27aa567a77cb4c762308593ed62eb3213b78e6ce10f",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3871406,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": "canceling statement due to query timeout",
+            "host_elapsed_us": 1248812,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 27070,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3501285,
+              "renews_request": false
+            },
+            "progress": null,
+            "role": {
+              "expired_by_clock": true,
+              "original_check_error": "cluster error: metadata consensus: recovery-role witness scope changed or expired",
+              "remaining_us": -2605,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 2622501,
+              "renews_request": false
+            }
+          },
+          "actual_committed_native_xid": 21,
+          "exact_base_archive_owner": true,
+          "commit_returned_before_postchecks": true,
+          "verified": false,
+          "actual_role_expired": true,
+          "own_source_parent_stayed_live": true,
+          "actual_A_retained": true
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBaseWithoutFinal",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 11,
+      "whole_source_journal_entries": 16,
+      "native_R_H0_H": [
+        1,
+        "b73848bc50fcdafb7758635fbac3f7d43acae54537aa50d895b635b2be04de4d",
+        "daa2aa6d09e7248807a56d43148e5bdf955ab780d342ca6a4769a6bfdf675553"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3440659,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "missing actual final image refusal",
+      "exact_error": "cluster error: native range image: Registered native base requires actual final image receipt"
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryAfterCommit",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "78f7affe9e9f060cc13066f21e0ee844568975cfa6327e14033541b2294fca52",
+        "7f0d650aa46d1d3bd066c4d4f602c6ddb51cb4d0ab0c5d2748b398b5266e900b"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3572211,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "same-open actual Role expiry",
+      "issued_xid": 21,
+      "final_xid": 21,
+      "retired": 0,
+      "actual_attempts": 1,
+      "selected_ack_full_payload_before_after": true,
+      "real_expiry_and_live_parent": true,
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 1050878,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-d8a7-76d3-a60d-ff1dae0c39e8",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1348092,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1348084,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4822660,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1319768,
+              "renews_request": false
+            },
+            "same_manifest": "45d042ea9dd8a1988849cc131509f13d7b3e9e3e5d6f32db1fa8b2f48ea461a6",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3912665,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 873339,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 474644,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3949225,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ee-d8a7-76d3-a60d-ff1dae0c39e8",
+                "checksum_sha256": "d301e0b38b42200401c675307d8b60c9e79cecca664ecae390913de19b744ec4",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 446311,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3039228,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 747086,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ee-d8a7-76d3-a60d-ff1dae0c39e8",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1364875,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1364867,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4838944,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1336072,
+              "renews_request": false
+            },
+            "same_manifest": "45d042ea9dd8a1988849cc131509f13d7b3e9e3e5d6f32db1fa8b2f48ea461a6",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3910128,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 585846,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 778918,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4253000,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ee-d8a7-76d3-a60d-ff1dae0c39e8",
+                "checksum_sha256": "d301e0b38b42200401c675307d8b60c9e79cecca664ecae390913de19b744ec4",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 750107,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3324181,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryAfterPut",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "4698c52b7d414feda1c3c926ddec47e424ce69034063d65d2aa13119568d33f3",
+        "53273f4cf6e596d252ffb2c0c7e5820a82d89deb7de8e26747ca5aa907fff482"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3605179,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "same-open actual Role expiry",
+      "issued_xid": 21,
+      "final_xid": 23,
+      "retired": 1,
+      "actual_attempts": 2,
+      "selected_ack_full_payload_before_after": true,
+      "real_expiry_and_live_parent": true,
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 973155,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ef-07e5-7182-9b55-7cba7b0a0f7b",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1375160,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1375154,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4857520,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1354622,
+              "renews_request": false
+            },
+            "same_manifest": "76af0c4bd5b370071c70e12d1c1d38fcde655f91f8bfdc61084508b781d8f4c7",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3921199,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 830517,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 544559,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4026925,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ef-07e5-7182-9b55-7cba7b0a0f7b",
+                "checksum_sha256": "bbf7892b030ff4cb2c757540b5e5cbd953c2909d997633f2f1df74a4b211fa1d",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 524016,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3090604,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 746418,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ef-07e5-7182-9b55-7cba7b0a0f7b",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1346692,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1346686,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4816537,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1313644,
+              "renews_request": false
+            },
+            "same_manifest": "76af0c4bd5b370071c70e12d1c1d38fcde655f91f8bfdc61084508b781d8f4c7",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3911935,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 562802,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 783805,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4253657,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ef-07e5-7182-9b55-7cba7b0a0f7b",
+                "checksum_sha256": "bbf7892b030ff4cb2c757540b5e5cbd953c2909d997633f2f1df74a4b211fa1d",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 750752,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3349055,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "TargetNativeBaseRoleExpiryBeforePut",
+      "test_classification": "passed",
+      "test_primary_error": null,
+      "app_returned_event_operations": 2,
+      "actual_source_frames": 18,
+      "whole_source_journal_entries": 23,
+      "native_R_H0_H": [
+        1,
+        "4ec6c867802bcb7cbe106b0b6bd9f5bc965f951dfac19c3db9b3b8b13127b671",
+        "af26d6be8a59236b12d4bbf4861ed8e55e02ed08d8411217134c6d1adc78b4a6"
+      ],
+      "old_native_unchanged": true,
+      "custody_files": 96,
+      "custody_bytes": 3572251,
+      "cleanup_errors": [],
+      "evidence_errors": [],
+      "component": "same-open actual Role expiry",
+      "issued_xid": 21,
+      "final_xid": 22,
+      "retired": 1,
+      "actual_attempts": 2,
+      "selected_ack_full_payload_before_after": true,
+      "real_expiry_and_live_parent": true,
+      "critical_publication_calls": [
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 0,
+          "exact_primary_error": null,
+          "request_elapsed_us": 918798,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ef-1e3c-7a31-aba5-a73557e0a29e",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1375474,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1375468,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4856996,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1354107,
+              "renews_request": false
+            },
+            "same_manifest": "04081895f4655127e8e7772d5086f23d7ec9fbaf9a1d9128b57d0fb9b4b85b61",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3923365,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 775615,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 599773,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4081301,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ef-1e3c-7a31-aba5-a73557e0a29e",
+                "checksum_sha256": "8d2efe71453d16e51a0ca356adcd158d139a9d3f1f99f5793d4442705483b511",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 578403,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3147669,
+              "renews_request": false
+            }
+          }
+        },
+        {
+          "operation": "PublishFinalImage",
+          "call_index": 1,
+          "exact_primary_error": null,
+          "request_elapsed_us": 681055,
+          "before_host": {
+            "actual_target_attempt": "01a1d6ef-1e3c-7a31-aba5-a73557e0a29e",
+            "own": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1376811,
+              "renews_request": false
+            },
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1376805,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4858620,
+              "renews_request": false
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 1355743,
+              "renews_request": false
+            },
+            "same_manifest": "04081895f4655127e8e7772d5086f23d7ec9fbaf9a1d9128b57d0fb9b4b85b61",
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3923038,
+              "renews_request": false
+            }
+          },
+          "after_host": {
+            "exact_error": null,
+            "host_elapsed_us": 539520,
+            "own_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 837202,
+              "renews_request": false
+            },
+            "parent": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 4319017,
+              "renews_request": false
+            },
+            "progress": {
+              "FinalImage": {
+                "attempt_id": "01a1d6ef-1e3c-7a31-aba5-a73557e0a29e",
+                "checksum_sha256": "8d2efe71453d16e51a0ca356adcd158d139a9d3f1f99f5793d4442705483b511",
+                "native_page_xid": 20
+              }
+            },
+            "role": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 816130,
+              "renews_request": false
+            },
+            "source_original_token": {
+              "expired_by_clock": false,
+              "original_check_error": null,
+              "remaining_us": 3383436,
+              "renews_request": false
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "test_result": [
+    "test result: FAILED. 8 passed; 2 failed; 0 ignored; 0 measured; 1066 filtered out; finished in 90.09s"
+  ],
+  "selected_tests": [
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_abort_sync_failure_never_replaces_poisoned_owner",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_commit_sync_unknown_never_replaces_owner",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_proven_abort_budget_exhaustion_retains_every_owner",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_integrity_survives_image_invalidation",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_post_wal_cancel_reconciles_same_xid",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_preserves_verified_history_floor",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_refuses_without_live_final_image",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_commit_same_xid_resumes",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_successful_put_proven_abort_same_a_resumes",
+    "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_before_put_proven_abort_same_a_resumes"
+  ],
+  "executed_tests": [
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_commit_sync_unknown_never_replaces_owner",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_abort_sync_failure_never_replaces_poisoned_owner",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_integrity_survives_image_invalidation",
+      "result": "FAILED"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_proven_abort_budget_exhaustion_retains_every_owner",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_refuses_without_live_final_image",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_preserves_verified_history_floor",
+      "result": "FAILED"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_post_wal_cancel_reconciles_same_xid",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_commit_same_xid_resumes",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_successful_put_proven_abort_same_a_resumes",
+      "result": "ok"
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_before_put_proven_abort_same_a_resumes",
+      "result": "ok"
+    }
+  ],
+  "public_projection": {
+    "projection_zip_sha256": "2c8d349f1090c1f286bc9294b0e20884c18f21cf00ff8ddca37c1605c5c5583d",
+    "projection_zip_bytes": 3047354,
+    "projection_fixture_db_custody_present": false,
+    "original_archive_unchanged": true
+  },
+  "totals": {
+    "app_returned_event_operations": 20,
+    "custody_files_verified": 962,
+    "custody_bytes_verified": 35558550
+  },
+  "limitations": [
+    "8 passed/2 failed; runtime repair not a fully green gate",
+    "both actual sync-failure controls passed corrected memory-custody and sticky health assertions",
+    "two existing controls committed native metadata then observed actual Role expiry before acceptance; exact internal refusal check and earlier-run causes remain unproven",
+    "same-open actual native metadata components, not cold replay, general SQL, Serving, source retirement or physical scale-out",
+    "event-storage APP ledger distinct from native metadata xids; post-fault payload visibility not asserted on fenced handles",
+    "guarded live-owner stable file copy, not stopped/atomic/powerloss snapshot",
+    "8-entry exhaustion exercised; 8MiB exhaustion not exercised"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "source_revision": "7f2c5f0abc4b2a65700971e41ec362c5da0fbb03",
+  "run_id": 43469307523,
+  "job_id": 132036734162,
+  "job_status": "completed",
+  "job_conclusion": "failure",
+  "raw_bytes": 2741105,
+  "raw_sha256": "376c6de2fa554e087ba99a9bb66ea1ec1a0f4b683622ed56b1cd740df1c93870",
+  "compressed_sha256": "1a49865ca22c5c6e1bcefdc45b5160f17f2762eff01f83e0a85ca708ac4ccacc",
+  "test_summaries": [
+    "2026-11-13T17:12:31.5967306Z test result: FAILED. 0 passed; 4 failed; 0 ignored; 0 measured; 1039 filtered out; finished in 12.25s"
+  ],
+  "test_observations": [
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::first_app_observed_cohort::native_registered_fifth_remote_transfer_unique_runtime_owner_preserves_data",
+      "result": "FAILED"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::first_app_observed_cohort::native_registered_fifth_remote_transfer_actual_hook_aba_before_rotation_preserves_n",
+      "result": "FAILED"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::first_app_observed_cohort::native_registered_fifth_remote_transfer_actual_cancellation_before_rotation_preserves_n",
+      "result": "FAILED"
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::first_app_observed_cohort::native_registered_fifth_remote_transfer_actual_callback_arc_blocks_then_fresh_retry",
+      "result": "FAILED"
+    }
+  ]
+}

@@ -1,0 +1,560 @@
+{
+  "source_revision": "e1ecfeab71d3f1e104530e9d6aa3bf37971abd65",
+  "source_package_version": "1.0.494-beta",
+  "original_run": 43493938281,
+  "original_artifact": 14070838685,
+  "original_zip_sha256": "5445c509695372da8f5038c5e8073e9e8ce9619349c311221dbed743d97ab026",
+  "original_zip_bytes": 1293365,
+  "inspector_sha256": "bd166f1461ca3a638790cabd0a414a224037fecbb0e63628101c37098029db49",
+  "source_pins": {
+    "crates/bicdb-page/src/wal.rs": {
+      "git_blob": "6d8a9fedc44331b36a245f03df222d5540ec4a11",
+      "sha256": "d6b9abef139b95974e935235532301da9d67d4c99faa5d8edd02633f195b6cd2"
+    },
+    "crates/bicdb-page/src/page.rs": {
+      "git_blob": "bdd755db56acdef01c2c4adf17d55471dc43399c",
+      "sha256": "162123ccbdd2a409a37b537f2582ba56492f6615a9a6ac5690bacf1fffb4e321"
+    },
+    "crates/bicdb-page/src/btree.rs": {
+      "git_blob": "95b7c65c2f1c5a585f5088c10ab544b63dc57997",
+      "sha256": "643d86f9a3c8178fa7b901694f8aa1b9082ffab92a57dc2f17e625a415693ae9"
+    },
+    "crates/bicdb-page/src/slotted.rs": {
+      "git_blob": "461c235b61fe1c9b873865e36b4d477519eccd8d",
+      "sha256": "11bc91a8e5a60621dc6d403d66ebf551f78762884eac8e0d91c204843c165cc9"
+    },
+    "crates/bicdb-page/src/heap.rs": {
+      "git_blob": "2185452a7050824e8a961d8a5a62b6376bba538d",
+      "sha256": "afeec3d4729274dcb60e1940e5b3a6d15c10c6cbae0bc6ace30425aed9ba7c2b"
+    },
+    "crates/bicdb-page/src/overflow.rs": {
+      "git_blob": "98ce50307ac4cc4b8ce697a31d3644d53f6cc6d3",
+      "sha256": "8bfb4559aea6b07830f3c7ef59e118bb26934c9c52201db285401524e70c5542"
+    },
+    "crates/bicdb-page/src/mvcc.rs": {
+      "git_blob": "0e93fe28dd211b3a70d5d5204fd8633b2e61c569",
+      "sha256": "7b07836195ac6909161090ab10668fe899a6d9b93b4677fdd3e6d1d8473e0276"
+    },
+    "crates/bicdb-page/src/paged.rs": {
+      "git_blob": "7d7f660144c7c20a118e1dfe5274ca83feca08b6",
+      "sha256": "c9f06d19b35187a18b80bf349f81b2d902f20b0b50f490386903231a1bc2d6f2"
+    },
+    "crates/bicdb-core/src/paged_collection.rs": {
+      "git_blob": "e00a0ea91f8d64a254c96994fd4b3345dc78a68e",
+      "sha256": "55371fa3cc72ba0db0f4329650eead2232a2180c0247ae68493ad6ac34b226d1"
+    },
+    "crates/bicdb-core/src/db/spatial_paged.rs": {
+      "git_blob": "7704abdd42b9b19ca2667b666cef128d554a36d7",
+      "sha256": "b52edc8ceb0ea2ca2f85a71f1db99ef6a77eeaac8bc150e47413d9162c6b544c"
+    },
+    "crates/bicdb-core/src/db/range_image_native.rs": {
+      "git_blob": "07f900973483b73518306ee8b400fd666f9dd9e5",
+      "sha256": "0a8c53e4edba5d83c20ac78bbc75a10dcaccccff3dd55678fa4dfd8ce4315cfb"
+    },
+    "crates/bicdb-core/src/db/range_image_install.rs": {
+      "git_blob": "09255f5cc1badf37fb82e2aca0580e0f00e8fe72",
+      "sha256": "85a87db6e582e271f855ebbd025df2a2a3bd49af40654292e505ce3846e24cab"
+    },
+    "crates/bicdb-core/src/db/range_image_install/registered_remote.rs": {
+      "git_blob": "e65389f39316d620728a066bb209a3805a5055d4",
+      "sha256": "9acf433cf04ed1e01769558fc09429fb611efa281c7139fb390dc20f1e7e1f05"
+    },
+    "crates/bicdb-core/src/distribution_range_image.rs": {
+      "git_blob": "5f804689517697ebeefb80a52fbe620fcb6abfe4",
+      "sha256": "de9c5cfb62ab15f373a25f75ed7f5319ad1c8566f77153511e4b0169bff97955"
+    },
+    "crates/bicdb-core/src/distribution_range_image/remote_source.rs": {
+      "git_blob": "5d434b85decabeae883b772e751533644594d3f4",
+      "sha256": "d056b3597b3980dfba844fdc8b36877b5b3645c603da42495ecb9dd2f84eb8e3"
+    },
+    "crates/bicdb-core/src/db/range_image_native/registered_remote_image/final_publication.rs": {
+      "git_blob": "c73a0ddecb890b74dfe27d321b1903cc8960cff7",
+      "sha256": "e53a558a4898a4336bdcbf3c2c6f5380be3ebfee27b4e7409752b8824ae3158a"
+    },
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_final_image_tests/catalogue_tests.rs": {
+      "git_blob": "f255825847d7a00ef31905091d0be49e22e1f7d1",
+      "sha256": "749bdadf09f20014772b96ef5ec55931efc0ec71ac767a1c3af60f9a450b4ff2"
+    }
+  },
+  "limits": {
+    "zip_bytes": 67108864,
+    "zip_members": 4096,
+    "uncompressed_total_bytes": 134217728,
+    "WAL_bytes_per_member": 67108864,
+    "frames_per_case": 100000,
+    "page_payload_bytes": 1048576,
+    "receipt_value_bytes": 131072,
+    "overflow_chain_pages": 32,
+    "selected_xid_page_images": 4096
+  },
+  "cases": [
+    {
+      "source_case": "TargetCatalogueFloorDirSyncRetry",
+      "fixture_prefix": "fault-state/native-registered-fifth-image-01a1d670-5ae8-75c2-aae8-243bcb015711/",
+      "initial_frozen_classification": "inconclusive; post-error runtime diagnostics missing",
+      "new_observation": "exact selected base/archive publication bytes logged in leaf/heap/overflow after-images under MVCC xmin matching the unique native WAL Commit record; no current root reachability claim",
+      "native_xid_identified_from_exact_key_and_receipt": 21,
+      "commit_record": {
+        "lsn": 97,
+        "kind": 2,
+        "page": 0,
+        "xid": 21,
+        "offset": 469824,
+        "bytes": 40,
+        "frame_sha256": "698abaa7968bac7a15b13720c26dfd8fa5af7f6656024fdbf71530026e683e17"
+      },
+      "receipt": {
+        "attempt_id": "01a1d670-8f70-7123-8133-17aaf606bbf3",
+        "target_node_id": "n4",
+        "birth_id": "01a1d670-584b-7fd2-b6bb-54b06932cb38",
+        "birth_sha256": "645519a9be7a2fe4d39320a6ea1ab885fd7be63eae1e94e76387bfa8b9e1d409",
+        "source_manifest_sha256": "5e77972752a266c484528f72a44cdf66e2e3129601ca1c84b8eb053412cab3b6",
+        "range_id": 1,
+        "range_index": 1,
+        "logical_genesis_sha256": "f83d9c4ee1b9500097e409723e4acb4209c8e7d882ffea53e08113004e315088",
+        "logical_history_sha256": "26497d62ec88bc50b7d9164d9b4458fb2eb75cbf79165869357b88683dc23291",
+        "native_receipt_checksum_sha256": "c0a04203b4c50f3e4788d06e3ddf1043eb761a2beea4598816b2651ab6e9b87b",
+        "registered_final_pointer": {
+          "attempt_id": "01a1d670-8f70-7123-8133-17aaf606bbf3",
+          "native_page_xid": 20,
+          "checksum_sha256": "6e347fb97f50b08262d7dd6f265ab4ac0bb6f4f6f4313ce87326a7fd5ebd0d64"
+        },
+        "record_count": 1,
+        "serialized_record_bytes": 177,
+        "full_manifest_and_final_report_binding_checked": true
+      },
+      "base_and_archive": [
+        {
+          "native_key": "install:base:1",
+          "receipt_bytes": 3914,
+          "receipt_sha256": "3ea43d57fb4d18530ff2fba068c8e37a14531e9b91bea232b86306e5399ea4e2",
+          "mvcc": {
+            "locator": {
+              "page_id": 4,
+              "slot": 16,
+              "generation": 1
+            },
+            "xmin": 21,
+            "xmax": 0,
+            "previous_is_none": true,
+            "heap_and_overflow_pages": [
+              4,
+              17
+            ],
+            "overflow_pages": [
+              17
+            ]
+          }
+        },
+        {
+          "native_key": "registered-remote-base/01a1d670-8f70-7123-8133-17aaf606bbf3/archive/21",
+          "receipt_bytes": 3914,
+          "receipt_sha256": "3ea43d57fb4d18530ff2fba068c8e37a14531e9b91bea232b86306e5399ea4e2",
+          "mvcc": {
+            "locator": {
+              "page_id": 4,
+              "slot": 17,
+              "generation": 1
+            },
+            "xmin": 21,
+            "xmax": 0,
+            "previous_is_none": true,
+            "heap_and_overflow_pages": [
+              4,
+              18
+            ],
+            "overflow_pages": [
+              18
+            ]
+          }
+        }
+      ],
+      "native_final_image_WAL_correlation": {
+        "pointer_from_exact_base_receipt": {
+          "attempt_id": "01a1d670-8f70-7123-8133-17aaf606bbf3",
+          "native_page_xid": 20,
+          "checksum_sha256": "6e347fb97f50b08262d7dd6f265ab4ac0bb6f4f6f4313ce87326a7fd5ebd0d64"
+        },
+        "actual_current_and_archive_bytes_equal": true,
+        "checksummed_native_final_record_matches_report": true,
+        "native_source_manifest_checksum_independently_recomputed": true,
+        "current_root_visibility_proven": false,
+        "key_and_tuple_bindings": [
+          {
+            "native_key": "registered-remote-image/01a1d670-8f70-7123-8133-17aaf606bbf3/final/current",
+            "record_bytes": 12995,
+            "record_sha256": "28bb01b954ffe9df5f93ec8bfc8db5f589f58f2fbca6e70859d2f5160d7cce36",
+            "mvcc": {
+              "locator": {
+                "page_id": 4,
+                "slot": 15,
+                "generation": 1
+              },
+              "xmin": 20,
+              "xmax": 0,
+              "previous_is_none": true,
+              "heap_and_overflow_pages": [
+                4,
+                16,
+                15
+              ],
+              "overflow_pages": [
+                16,
+                15
+              ]
+            }
+          },
+          {
+            "native_key": "registered-remote-image/01a1d670-8f70-7123-8133-17aaf606bbf3/final/archive/00000000000000000020",
+            "record_bytes": 12995,
+            "record_sha256": "28bb01b954ffe9df5f93ec8bfc8db5f589f58f2fbca6e70859d2f5160d7cce36",
+            "mvcc": {
+              "locator": {
+                "page_id": 4,
+                "slot": 14,
+                "generation": 1
+              },
+              "xmin": 20,
+              "xmax": 0,
+              "previous_is_none": true,
+              "heap_and_overflow_pages": [
+                4,
+                14,
+                13
+              ],
+              "overflow_pages": [
+                14,
+                13
+              ]
+            }
+          }
+        ],
+        "commit_record": {
+          "lsn": 92,
+          "kind": 2,
+          "page": 0,
+          "xid": 20,
+          "offset": 436856,
+          "bytes": 40,
+          "frame_sha256": "aac8ef94cbc65475378bdee487a75f8717d935ea9a9c9b3d4504c01351fdabfd"
+        }
+      },
+      "relevant_page_image_frames": [
+        {
+          "lsn": 93,
+          "kind": 1,
+          "page": 2,
+          "xid": 21,
+          "offset": 436896,
+          "bytes": 8232,
+          "frame_sha256": "7711a65b8fcb4b7254d16a879edfbb7f273396c5cd885d4170bcb8e87dbdb246"
+        },
+        {
+          "lsn": 94,
+          "kind": 1,
+          "page": 4,
+          "xid": 21,
+          "offset": 445128,
+          "bytes": 8232,
+          "frame_sha256": "13af85673c5b38d84449cb4a201c54c6736a7961808184a1a1386bc22121eff2"
+        },
+        {
+          "lsn": 95,
+          "kind": 1,
+          "page": 17,
+          "xid": 21,
+          "offset": 453360,
+          "bytes": 8232,
+          "frame_sha256": "9d37ffd7c593aea1e3044ef94394bba9bb4926ac8eea1e6c154ee2a31149aabf"
+        },
+        {
+          "lsn": 96,
+          "kind": 1,
+          "page": 18,
+          "xid": 21,
+          "offset": 461592,
+          "bytes": 8232,
+          "frame_sha256": "d8628a225cfea69d7775c783176b4ce99a457abc34357e7d26e4ff8111a7152c"
+        }
+      ],
+      "WAL_members": [
+        {
+          "path": "fault-state/native-registered-fifth-image-01a1d670-5ae8-75c2-aae8-243bcb015711/custody/node4/paged/store.wal",
+          "bytes": 469864,
+          "sha256": "8fafb95811e5ce9979e58e56f00141e29232cbe650fa6ee53226e9f3ae9d0765",
+          "records": 73,
+          "first_lsn": 25,
+          "last_lsn": 97
+        }
+      ],
+      "page_validation_boundary": "WAL-frame CRC plus page identity/type/plaintext/slot/locator/overflow bounds; not disk-page finalization CRC or committed Btree root reachability",
+      "full_retained_chain_CRC_checked": true,
+      "retained_chain_records": 73,
+      "first_lsn": 25,
+      "last_lsn": 97,
+      "retained_prefix_before_first_lsn_available": false,
+      "native_store_pages_not_decoded": {
+        "path": "node4/paged/store.pages",
+        "bytes": 155648,
+        "sha256": "dec0c5f7be9706b4419a967cc1e5624251c7028ec0b31db3e3501620d7f4c6c9"
+      },
+      "custody_manifest_sha256": "b9f3c010780b03e66c3104c367055972f2f30c18d74d5272554ae6e0a5c22d13",
+      "target_root_file_count": 20,
+      "custody_mode": "observed_stable_with_live_actual_owners",
+      "original_post_error_API_owner_state_available": false,
+      "native_commit_API_return_or_fsync_receipt_observed": false,
+      "actual_root_reachability_or_current_native_key_visibility_proven": false,
+      "powerloss_durability_proven": false,
+      "serving_or_read_consistency_proven": false,
+      "named_catalogue_fault_seam_reached": false
+    },
+    {
+      "source_case": "TargetCatalogueFloorCanceled",
+      "fixture_prefix": "fault-state/native-registered-fifth-image-01a1d670-5b2b-7ac2-901f-06f07358fa1d/",
+      "initial_frozen_classification": "inconclusive; post-error runtime diagnostics missing",
+      "new_observation": "exact selected base/archive publication bytes logged in leaf/heap/overflow after-images under MVCC xmin matching the unique native WAL Commit record; no current root reachability claim",
+      "native_xid_identified_from_exact_key_and_receipt": 21,
+      "commit_record": {
+        "lsn": 97,
+        "kind": 2,
+        "page": 0,
+        "xid": 21,
+        "offset": 469824,
+        "bytes": 40,
+        "frame_sha256": "698abaa7968bac7a15b13720c26dfd8fa5af7f6656024fdbf71530026e683e17"
+      },
+      "receipt": {
+        "attempt_id": "01a1d670-8e3e-7f81-b7df-2357de618e2f",
+        "target_node_id": "n4",
+        "birth_id": "01a1d670-58a2-71e3-a2b4-32ff1734a1fb",
+        "birth_sha256": "30d2a4c176bc148960a7e3608ddb329663eacaed1a524c2b0b9b40f6ed618413",
+        "source_manifest_sha256": "17321ccae4c894ee81ad88d4930343ef6161877071e95b50d1be46dae4d0b7ee",
+        "range_id": 1,
+        "range_index": 1,
+        "logical_genesis_sha256": "96529c5309f77e333601557e984bf7fd3208069556c823ba124a266da4db60b8",
+        "logical_history_sha256": "5e031b1590531093728071690ca1ada3151549800467f780c0e7a2ac5d7b1675",
+        "native_receipt_checksum_sha256": "ade602975489f99251d0612d69ed0885d6787d26c94f3ac6c2830a4238d2ed4e",
+        "registered_final_pointer": {
+          "attempt_id": "01a1d670-8e3e-7f81-b7df-2357de618e2f",
+          "native_page_xid": 20,
+          "checksum_sha256": "8d58379d033006829f8f3d4d75e3dbf728536bc7b99ca88b5663739bffb3d1a0"
+        },
+        "record_count": 1,
+        "serialized_record_bytes": 177,
+        "full_manifest_and_final_report_binding_checked": true
+      },
+      "base_and_archive": [
+        {
+          "native_key": "install:base:1",
+          "receipt_bytes": 3914,
+          "receipt_sha256": "cc99a80292883bcad258772690e53ce8c845e40a7e1355728cb8e6e1beb46148",
+          "mvcc": {
+            "locator": {
+              "page_id": 4,
+              "slot": 16,
+              "generation": 1
+            },
+            "xmin": 21,
+            "xmax": 0,
+            "previous_is_none": true,
+            "heap_and_overflow_pages": [
+              4,
+              17
+            ],
+            "overflow_pages": [
+              17
+            ]
+          }
+        },
+        {
+          "native_key": "registered-remote-base/01a1d670-8e3e-7f81-b7df-2357de618e2f/archive/21",
+          "receipt_bytes": 3914,
+          "receipt_sha256": "cc99a80292883bcad258772690e53ce8c845e40a7e1355728cb8e6e1beb46148",
+          "mvcc": {
+            "locator": {
+              "page_id": 4,
+              "slot": 17,
+              "generation": 1
+            },
+            "xmin": 21,
+            "xmax": 0,
+            "previous_is_none": true,
+            "heap_and_overflow_pages": [
+              4,
+              18
+            ],
+            "overflow_pages": [
+              18
+            ]
+          }
+        }
+      ],
+      "native_final_image_WAL_correlation": {
+        "pointer_from_exact_base_receipt": {
+          "attempt_id": "01a1d670-8e3e-7f81-b7df-2357de618e2f",
+          "native_page_xid": 20,
+          "checksum_sha256": "8d58379d033006829f8f3d4d75e3dbf728536bc7b99ca88b5663739bffb3d1a0"
+        },
+        "actual_current_and_archive_bytes_equal": true,
+        "checksummed_native_final_record_matches_report": true,
+        "native_source_manifest_checksum_independently_recomputed": true,
+        "current_root_visibility_proven": false,
+        "key_and_tuple_bindings": [
+          {
+            "native_key": "registered-remote-image/01a1d670-8e3e-7f81-b7df-2357de618e2f/final/current",
+            "record_bytes": 12995,
+            "record_sha256": "2c4bd5a6136ed0aa4049a29fd6f8facc883f35cb3d03434f6e3bd9ad5214b8d0",
+            "mvcc": {
+              "locator": {
+                "page_id": 4,
+                "slot": 15,
+                "generation": 1
+              },
+              "xmin": 20,
+              "xmax": 0,
+              "previous_is_none": true,
+              "heap_and_overflow_pages": [
+                4,
+                16,
+                15
+              ],
+              "overflow_pages": [
+                16,
+                15
+              ]
+            }
+          },
+          {
+            "native_key": "registered-remote-image/01a1d670-8e3e-7f81-b7df-2357de618e2f/final/archive/00000000000000000020",
+            "record_bytes": 12995,
+            "record_sha256": "2c4bd5a6136ed0aa4049a29fd6f8facc883f35cb3d03434f6e3bd9ad5214b8d0",
+            "mvcc": {
+              "locator": {
+                "page_id": 4,
+                "slot": 14,
+                "generation": 1
+              },
+              "xmin": 20,
+              "xmax": 0,
+              "previous_is_none": true,
+              "heap_and_overflow_pages": [
+                4,
+                14,
+                13
+              ],
+              "overflow_pages": [
+                14,
+                13
+              ]
+            }
+          }
+        ],
+        "commit_record": {
+          "lsn": 92,
+          "kind": 2,
+          "page": 0,
+          "xid": 20,
+          "offset": 436856,
+          "bytes": 40,
+          "frame_sha256": "aac8ef94cbc65475378bdee487a75f8717d935ea9a9c9b3d4504c01351fdabfd"
+        }
+      },
+      "relevant_page_image_frames": [
+        {
+          "lsn": 93,
+          "kind": 1,
+          "page": 2,
+          "xid": 21,
+          "offset": 436896,
+          "bytes": 8232,
+          "frame_sha256": "805b933b6336d1abd6ee3e4ed0e0ea339c68257282809a8ae91fcdb01f5fa562"
+        },
+        {
+          "lsn": 94,
+          "kind": 1,
+          "page": 4,
+          "xid": 21,
+          "offset": 445128,
+          "bytes": 8232,
+          "frame_sha256": "339eabe4d965f255f62360a0253229a743321b2521ed82ddc992072a3c1bf17e"
+        },
+        {
+          "lsn": 95,
+          "kind": 1,
+          "page": 17,
+          "xid": 21,
+          "offset": 453360,
+          "bytes": 8232,
+          "frame_sha256": "4bae04153df183d4312e829e2e5eb01db7a4eb5d365171fe6bb95457ddc2b2b0"
+        },
+        {
+          "lsn": 96,
+          "kind": 1,
+          "page": 18,
+          "xid": 21,
+          "offset": 461592,
+          "bytes": 8232,
+          "frame_sha256": "5c943a91f92f389c67aa4f03cb6024f5bc51867bdf7d143b4360e7526e6ab351"
+        }
+      ],
+      "WAL_members": [
+        {
+          "path": "fault-state/native-registered-fifth-image-01a1d670-5b2b-7ac2-901f-06f07358fa1d/custody/node4/paged/store.wal",
+          "bytes": 469864,
+          "sha256": "a6c499636b3fc9a6c108184aa09d52e5dd04d0424aac04a0aece1c90912ff258",
+          "records": 73,
+          "first_lsn": 25,
+          "last_lsn": 97
+        }
+      ],
+      "page_validation_boundary": "WAL-frame CRC plus page identity/type/plaintext/slot/locator/overflow bounds; not disk-page finalization CRC or committed Btree root reachability",
+      "full_retained_chain_CRC_checked": true,
+      "retained_chain_records": 73,
+      "first_lsn": 25,
+      "last_lsn": 97,
+      "retained_prefix_before_first_lsn_available": false,
+      "native_store_pages_not_decoded": {
+        "path": "node4/paged/store.pages",
+        "bytes": 155648,
+        "sha256": "576783d51ade08dabe384e1637e9ea9edafcae64e6fc9affbcda0a5954f97ac1"
+      },
+      "custody_manifest_sha256": "2d8619a562ef3bdc3dd36f3dbc2babced226650345c0884536f1ee70c4f8a22e",
+      "target_root_file_count": 20,
+      "custody_mode": "observed_stable_with_live_actual_owners",
+      "original_post_error_API_owner_state_available": false,
+      "native_commit_API_return_or_fsync_receipt_observed": false,
+      "actual_root_reachability_or_current_native_key_visibility_proven": false,
+      "powerloss_durability_proven": false,
+      "serving_or_read_consistency_proven": false,
+      "named_catalogue_fault_seam_reached": false
+    }
+  ],
+  "self_test_controls": [
+    "TargetCatalogueFloorDirSyncRetry:native_CRC_corruption_refused",
+    "TargetCatalogueFloorDirSyncRetry:wrong_locator_generation_refused",
+    "TargetCatalogueFloorDirSyncRetry:bad_receipt_checksum_refused",
+    "TargetCatalogueFloorCanceled:native_CRC_corruption_refused",
+    "TargetCatalogueFloorCanceled:wrong_locator_generation_refused",
+    "TargetCatalogueFloorCanceled:bad_receipt_checksum_refused"
+  ],
+  "source_inference": {
+    "observation": "Both original attempts have exact native Commit decisions and matching base/archive receipt images in the retained WAL. This resolves the existence/decision question for these retained bytes.",
+    "inference": "Under pinned single-publication control flow, the observed QueryTimedOut accompanies an operation that reached its native Commit decision; closure refusal before commit would take abort, not produce this identified Commit. The exact later check or deadline cause is not identified.",
+    "not_inferred": [
+      "successful native commit API return",
+      "successful fsync",
+      "power-loss survival",
+      "actual committed root reachability/current native key visibility",
+      "catalogue adoption or fault retry",
+      "the original failed tests now passed"
+    ],
+    "fsync_boundary": "in_paged_transaction uses ordinary paged.commit, whose Wal commit appends then syncs. The raw Commit frame records the decision bytes, not the subsequent sync result; live-copy custody may include page-cache contents. A copied frame cannot certify completed fsync."
+  },
+  "database_opened": false,
+  "engine_recovery_or_checkpoint_invoked": false,
+  "raw_or_secret_bytes_published": false,
+  "frozen_packet_modified": false,
+  "original_two_tests_remain_failed": true,
+  "original_named_fault_controls_remain_not_tested": true,
+  "production_qualified": false
+}

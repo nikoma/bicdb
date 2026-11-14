@@ -1,0 +1,116 @@
+{
+  "baseline": "2f36fe6900d1dd92aad5cb2b587757b1a670cbd3",
+  "current_main": "a06e09336c70fecbc38232d677c330984959388f",
+  "current_version": "1.0.500-beta",
+  "scopes": {
+    "legacy_shipping": {
+      "scope_paths": [
+        "crates/bicdb-core/src/db/ha_node.rs",
+        "crates/bicdb-core/src/db/ha_bootstrap.rs",
+        "crates/bicdb-core/tests/ha_state_durability.rs",
+        "crates/bicdb-core/tests/ha_state_crash.rs"
+      ],
+      "files_compared": 4,
+      "changed_files": [],
+      "source_unchanged_in_this_scope": true,
+      "main_source_sha256": {
+        "crates/bicdb-core/src/db/ha_bootstrap.rs": "c2c3e5241c625698a099dd94410740abed4490f8da6d65efedcffe9e2544ae94",
+        "crates/bicdb-core/src/db/ha_node.rs": "364b818892ce6ae0d2ff404d8bfd6b57fcf65491ab338c507af3f2b6bee685a9",
+        "crates/bicdb-core/tests/ha_state_crash.rs": "78681bbc9b8dcbf376dbbaf5875a79902b0c9e682701870b8da48040e13b6f1a",
+        "crates/bicdb-core/tests/ha_state_durability.rs": "192c423ae5b6ccbe9d2d628710b0896d4270cb4f96bb905cb9672bb2ecf04d91"
+      }
+    },
+    "cell_ha_encryption_admission": {
+      "scope_paths": [
+        "crates/bicdb-cell-ha/src",
+        "crates/bicdb-cell/src",
+        "crates/bicdb-cell-admission/src",
+        "crates/bicdb-cell-device/src",
+        "crates/bicdb-cell-grant/src"
+      ],
+      "files_compared": 7,
+      "changed_files": [
+        "crates/bicdb-cell/src/lib.rs"
+      ],
+      "source_unchanged_in_this_scope": false,
+      "main_source_sha256": {
+        "crates/bicdb-cell-admission/src/lib.rs": "cd60310d7b1d7e998106e376376a5e83b0ed49eee2592811f6b2855821af1705",
+        "crates/bicdb-cell-device/src/lib.rs": "66201feb3157e580eb33eed0354f1e707141b0889e68bb017a441199e9359aa8",
+        "crates/bicdb-cell-grant/src/lib.rs": "4956efe7505ad3a92f3245dd8ca4d127a8ee7e01c9703c3edb17de212fe7b699",
+        "crates/bicdb-cell-ha/src/lib.rs": "28ba1974f6d8c0b05dcf7fa245e55e7b02857e139919f1683c8d09530aa32c44",
+        "crates/bicdb-cell/src/admission.rs": "035ec732e146b14be073858cfced123006f8712148956c1adb23e1ffa200b2d2",
+        "crates/bicdb-cell/src/lib.rs": "1737dedfd6b075f167a7d49b636bf92890e6d793c02e8d608d1be1b67d93a858",
+        "crates/bicdb-cell/src/main.rs": "269c0393c6a9baf8673b071955c6782966ead7c6b3da5263e00881d1f67169c7"
+      },
+      "change_scope": "Four lines added inside a test ExtensionManifest initializer for native fact fields; HA runtime/admission contract unchanged in these compared scopes."
+    },
+    "application_fleet": {
+      "scope_paths": [
+        "crates/bicdb-fleet/src",
+        "crates/bicdb-app-host/src/fleet.rs"
+      ],
+      "files_compared": 2,
+      "changed_files": [],
+      "source_unchanged_in_this_scope": true,
+      "main_source_sha256": {
+        "crates/bicdb-app-host/src/fleet.rs": "b42896737f4119156bfb92eb1b5c74dac9fd684c5aa73b69c971e0a5d9b7ed9b",
+        "crates/bicdb-fleet/src/lib.rs": "be06f608ec742d09e863dcbf363ae8940f994d4cc6f91ed6bbe6d9a6a27d6639"
+      }
+    },
+    "streaming_ha": {
+      "scope_paths": [
+        "crates/bicdb-pgwire/src/high_availability.rs",
+        "crates/bicdb-pgwire/src/embedded_ha.rs",
+        "crates/bicdb-pgwire/tests/embedded_ha.rs",
+        "crates/bicdb-cli/tests/ha_failover_cli.rs",
+        "crates/bicdb-core/src/replication.rs",
+        "crates/bicdb-core/src/replication_transport.rs",
+        "crates/bicdb-core/src/db/replication_live.rs"
+      ],
+      "files_compared": 7,
+      "changed_files": [
+        "crates/bicdb-core/src/db/replication_live.rs",
+        "crates/bicdb-core/src/replication.rs",
+        "crates/bicdb-pgwire/src/embedded_ha.rs",
+        "crates/bicdb-pgwire/src/high_availability.rs",
+        "crates/bicdb-pgwire/tests/embedded_ha.rs"
+      ],
+      "source_unchanged_in_this_scope": false,
+      "main_source_sha256": {
+        "crates/bicdb-cli/tests/ha_failover_cli.rs": "4da3dc723b30d21f61f3fec2b320843acbc5d042556b6ed086bbb804651c9de5",
+        "crates/bicdb-core/src/db/replication_live.rs": "a6c0cc1ff5662f645f3ce44c6be9a340ac41ea09ae249b9a000a7c0a1eb9d8c4",
+        "crates/bicdb-core/src/replication.rs": "f610b15655aa5b1b3db5bed241f6dbf6d0bb3de51e16d2b3f0406c7642a0e4f1",
+        "crates/bicdb-core/src/replication_transport.rs": "90e1fb4ef9b6a428c027940e0dc6883a2f02b02537a67d4575f0faa0e7caa48b",
+        "crates/bicdb-pgwire/src/embedded_ha.rs": "a5cbd31f57c42e6017761e4a25892ebf0de33a817ee3707ba6c9e8c810178a63",
+        "crates/bicdb-pgwire/src/high_availability.rs": "b5cf5357be4770c99e08168a506b386294aa860ad340096878317e7e3ee7f697",
+        "crates/bicdb-pgwire/tests/embedded_ha.rs": "0acfbd331ef9d6e84fd28d9cc6d40646940452dda4227cbbc0e3e537c851518b"
+      }
+    }
+  },
+  "streaming_findings": {
+    "automatic_failover_nonzero_k_minimum": "floor(group_size/2) voting standbys",
+    "async_k0_allowed": true,
+    "observers_do_not_supply_commit_or_lease_majority": true,
+    "ha_handshake_protocol": 4,
+    "replication_reader_features_frame_protocol": 3,
+    "static_membership_must_match_all_nodes": true,
+    "timeout_degrade_is_not_zero_loss": true
+  },
+  "main500_ci": {
+    "run": 43502431794,
+    "pgwire_job": 132151626229,
+    "tested_head": "fd1e2d90d351b3dafd47d17e4486582da6bd4e51",
+    "main_tree_identical_to_tested_head": true,
+    "raw_job_log_sha256": "abe4241bcf90037e31660730b7bbfcd20ddc7bd70f1505b24ed2a564756e77da",
+    "retained_log_gzip_sha256": "d7eb12cce527b2739f0b898d312b669210e7cd15ccca7f414b8a5342b3e14722",
+    "exact_passing_test_lines": {
+      "failover_validates_every_future_primary_and_unique_voters": "2026-11-13T20:51:07.4643373Z test failover_validates_every_future_primary_and_unique_voters ... ok",
+      "allowed_observer_cannot_fence_a_primary_or_request_election_votes": "2026-11-13T20:51:08.5568813Z test allowed_observer_cannot_fence_a_primary_or_request_election_votes ... ok",
+      "streaming_observer_does_not_replace_an_absent_voting_majority": "2026-11-13T20:51:11.2764370Z test streaming_observer_does_not_replace_an_absent_voting_majority ... ok",
+      "invalid_failover_configuration_is_rejected_before_host_initialization": "2026-11-13T20:51:07.4653184Z test invalid_failover_configuration_is_rejected_before_host_initialization ... ok",
+      "an_embedded_callback_cannot_write_after_its_live_peer_lease_expires": "2026-11-13T20:51:10.2295463Z test an_embedded_callback_cannot_write_after_its_live_peer_lease_expires ... ok",
+      "embedded_quorum_survives_primary_loss_and_fences_a_returning_writer": "2026-11-13T20:51:16.2082159Z test embedded_quorum_survives_primary_loss_and_fences_a_returning_writer ... ok"
+    }
+  },
+  "qualification_boundary": "Source identity is not new physical qualification. Shared storage/runtime dependencies have changed outside the compared scopes. No RPO/RTO/latency, production admission or deployment inference follows."
+}

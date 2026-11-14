@@ -1,0 +1,93 @@
+{
+  "source_revision": "e1ecfeab71d3f1e104530e9d6aa3bf37971abd65",
+  "requested_source": "e1ecfeab71d3f1e104530e9d6aa3bf37971abd65",
+  "authoritative_source_verified": true,
+  "run_id": 43493938281,
+  "job_id": 132121981221,
+  "job_name": "Community-only workspace compiles, tests included",
+  "job_status": "completed",
+  "job_conclusion": "success",
+  "captured_at_utc": "2026-11-13T20:09:19.699818+00:00",
+  "raw_bytes": 2684618,
+  "raw_sha256": "5b11c08cbef33e772366185e17b0c3d338245a77656a809e623fac16ee54666d",
+  "compressed_file": "e1e-portable-catalogue-four-alltargets-job132121981221.log.gz",
+  "compressed_sha256": "50568c8779e1d2a555bd75a5da1349b1f0bf0fb485f81e570fedef90f764b192",
+  "capture_exit_code": 0,
+  "test_summaries": [],
+  "failure_context": [],
+  "test_observations": [],
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-13T19:37:22Z",
+      "completed_at": "2026-11-13T19:37:24Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-13T19:37:24Z",
+      "completed_at": "2026-11-13T19:37:29Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-13T19:37:29Z",
+      "completed_at": "2026-11-13T19:37:38Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-13T19:37:38Z",
+      "completed_at": "2026-11-13T19:37:56Z"
+    },
+    {
+      "name": "cargo check --workspace --all-targets",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-13T19:37:56Z",
+      "completed_at": "2026-11-13T19:42:37Z"
+    },
+    {
+      "name": "Workflow consumer compiles without Core defaults",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-13T19:42:37Z",
+      "completed_at": "2026-11-13T19:43:13Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 11,
+      "started_at": "2026-11-13T19:43:13Z",
+      "completed_at": "2026-11-13T19:43:25Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 12,
+      "started_at": "2026-11-13T19:43:25Z",
+      "completed_at": "2026-11-13T19:43:26Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 13,
+      "started_at": "2026-11-13T19:43:26Z",
+      "completed_at": "2026-11-13T19:43:26Z"
+    }
+  ]
+}

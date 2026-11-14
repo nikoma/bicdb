@@ -85,6 +85,8 @@ pub(crate) use writer_enrollment::NativeJoinedRemoteRotationPoint;
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeJoinedRowAbsenceScan;
 #[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeOriginalWriterIdentityBorrow;
+#[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredClosedPersistScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredNoDomainScope;

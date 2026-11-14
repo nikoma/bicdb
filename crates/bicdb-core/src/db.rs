@@ -36302,6 +36302,8 @@ mod analyze_sampling_tests {
 #[path = "db/distribution_event_retry_tests.rs"]
 mod distribution_event_retry_tests;
 
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeOriginalWriterIdentityBorrow;
 pub(crate) use range_image_native::{NativeJointPhaseOwner, NativeJointWriterDomain};
 
 #[cfg(all(test, feature = "tls-replication"))]

@@ -28,6 +28,23 @@ impl NativeJoinedRemoteInstallPreflight {
         self.selected.origin().require_database_store(db, store)?;
         store.native_writer_host_state()
     }
+    pub(crate) fn require_original_writer_borrowed(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        identity: &crate::db::NativeOriginalWriterIdentityBorrow<'_>,
+    ) -> Result<Arc<crate::db::NativeWriterHostState>> {
+        self.selected
+            .origin()
+            .require_database_store_borrowed(db, store, identity)?;
+        let actual = store.native_writer_host_state()?;
+        if !Arc::ptr_eq(&actual, identity.writer()) {
+            return Err(invalid(
+                "Joined borrowed original writer changed actual Store State",
+            ));
+        }
+        Ok(actual)
+    }
     pub(crate) fn selected(&self) -> &Arc<NativeJoinedRangeReceivePreflight> {
         &self.selected
     }

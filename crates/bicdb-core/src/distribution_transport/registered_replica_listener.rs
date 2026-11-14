@@ -56,6 +56,7 @@ pub(super) fn require_request(request: &ClusterDataRequest) -> Result<()> {
         | ClusterDataRequest::RangeWriteProgress {..} | ClusterDataRequest::ProbeRangeWrite {..}
         // Returns typed unavailable BEFORE latches, never a bare DB None.
         | ClusterDataRequest::NativeObserveRegisteredExportNew { .. }
+        | ClusterDataRequest::NativeRemoteNew { .. }
         | ClusterDataRequest::NativeEventGet(_) => Ok(()),
         _ => Err(transport_error("registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required")),
     }

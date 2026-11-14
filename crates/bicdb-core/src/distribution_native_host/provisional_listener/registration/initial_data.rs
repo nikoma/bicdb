@@ -70,6 +70,31 @@ pub(crate) struct NativeInitialDataAdmission {
     old_transport: Weak<TcpClusterRelocationTransport>,
 }
 impl NativeInitialDataAdmission {
+    /// Necessary original INITIAL process/slot/writer identity only. All
+    /// metadata/native proof is independent; this memory check creates none.
+    pub(crate) fn require_remote_new_original_memory(
+        &self,
+        original: &Arc<NativeWriterHostState>,
+    ) -> Result<()> {
+        if !self
+            .life
+            .upgrade()
+            .is_some_and(|life| life.load(Ordering::Acquire))
+            || !self.published.load(Ordering::Acquire)
+        {
+            return Err(invalid("remote NEW original INITIAL owner ended"));
+        }
+        self.database.require_live()?;
+        self.store_slot.require_live()?;
+        let writer = self
+            .writer
+            .try_read()
+            .ok_or_else(|| invalid("remote NEW original writer identity busy"))?;
+        if !Arc::ptr_eq(&writer, original) {
+            return Err(invalid("remote NEW original writer replaced"));
+        }
+        original.require_remote_new_registration_memory()
+    }
     /// The currently installed writer policy of this same retained owner.
     pub(super) fn writer(&self) -> Arc<NativeWriterHostState> {
         Arc::clone(&self.writer.read())

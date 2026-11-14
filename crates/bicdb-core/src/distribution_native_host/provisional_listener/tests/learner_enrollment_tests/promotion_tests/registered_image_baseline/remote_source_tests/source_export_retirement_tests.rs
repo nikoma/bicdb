@@ -3,30 +3,32 @@
 use super::*;
 mod callback_liveness_tests;
 mod original_work_tests;
+mod remote_new_tests;
 use crate::distribution_range_image::{
     NativeSourceDiscoveryOperationV1 as DiscoveryOp, NativeSourceDiscoveryRequestV1,
     NativeSourceExportOperationV1 as ExportOp, NativeSourceExportRequestV1,
 };
 
 pub(super) fn is_case(case: SourceCase) -> bool {
-    matches!(
-        case,
-        SourceCase::TargetSourceExportRetire
-            | SourceCase::TargetSourceExportReplyLost
-            | SourceCase::TargetSourceExportStartReplyLost
-            | SourceCase::TargetSourceExportWrongActor
-            | SourceCase::TargetSourceExportWrongManifest
-            | SourceCase::TargetSourceExportWrongAttempt
-            | SourceCase::TargetSourceExportWrongBirth
-            | SourceCase::TargetSourceExportTargetStoreABA
-            | SourceCase::TargetSourceExportOriginalSourceCanceled
-            | SourceCase::TargetSourceExportNativeUnknown
-            | SourceCase::TargetSourceExportTermAtDetach
-            | SourceCase::TargetSourceExportExpiryAtDetach
-            | SourceCase::TargetSourceExportProcessCancelAtDetach
-            | SourceCase::TargetSourceExportCallbackCancelAtDetach
-            | SourceCase::TargetSourceExportCallbackExpiryAtDetach
-    )
+    remote_new_tests::is_case(case)
+        || matches!(
+            case,
+            SourceCase::TargetSourceExportRetire
+                | SourceCase::TargetSourceExportReplyLost
+                | SourceCase::TargetSourceExportStartReplyLost
+                | SourceCase::TargetSourceExportWrongActor
+                | SourceCase::TargetSourceExportWrongManifest
+                | SourceCase::TargetSourceExportWrongAttempt
+                | SourceCase::TargetSourceExportWrongBirth
+                | SourceCase::TargetSourceExportTargetStoreABA
+                | SourceCase::TargetSourceExportOriginalSourceCanceled
+                | SourceCase::TargetSourceExportNativeUnknown
+                | SourceCase::TargetSourceExportTermAtDetach
+                | SourceCase::TargetSourceExportExpiryAtDetach
+                | SourceCase::TargetSourceExportProcessCancelAtDetach
+                | SourceCase::TargetSourceExportCallbackCancelAtDetach
+                | SourceCase::TargetSourceExportCallbackExpiryAtDetach
+        )
 }
 macro_rules! actual_case {
     ($name:ident, $case:ident) => {
@@ -796,4 +798,20 @@ pub(super) fn exercise(
         .try_as_frozen()
         .unwrap();
     assert!(!factory.database.read().commit_admission_ready());
+    if remote_new_tests::is_case(case) {
+        remote_new_tests::exercise(
+            case,
+            controls,
+            clients,
+            services,
+            target_control,
+            factory,
+            pending,
+            ranges,
+            &manifest,
+            acknowledged,
+            output,
+            &journal,
+        );
+    }
 }

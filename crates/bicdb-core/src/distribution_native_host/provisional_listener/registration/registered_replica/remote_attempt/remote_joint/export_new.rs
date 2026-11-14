@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 pub(super) struct RegisteredExportNewPin {
     binding: NativeSourceExportBindingV1,
     frozen: Arc<crate::distribution_range_image_install::NativeImageInstallFreeze>,
-    pin: SourceCaptureReadPin,
+    pin: Option<Arc<SourceCaptureReadPin>>,
     requests: std::collections::BTreeMap<Uuid, Vec<u8>>,
 }
 impl NativeRegisteredReplicaAdmission {
@@ -146,6 +146,12 @@ impl NativeRegisteredReplicaAdmission {
                 }
                 let exact_bytes =
                     crate::distribution_range_image::bounded_json(request, 64 * 1024)?;
+                if owner.remote_new.try_lock()
+                    .ok_or_else(|| invalid("Registered export NEW handoff custody busy"))?
+                    .as_ref().is_some_and(|phase| phase.handoff_started())
+                {
+                    return Err(invalid("Registered export NEW cannot reintroduce a pin after original decision handoff"));
+                }
                 let mut retained = owner
                     .export_new
                     .try_lock()
@@ -165,7 +171,7 @@ impl NativeRegisteredReplicaAdmission {
                     *retained = Some(RegisteredExportNewPin {
                         binding: request.binding.clone(),
                         frozen: frozen.clone(),
-                        pin,
+                        pin: Some(Arc::new(pin)),
                         requests: Default::default(),
                     });
                 }
@@ -184,8 +190,10 @@ impl NativeRegisteredReplicaAdmission {
                     }
                     retained.requests.insert(request.challenge, exact_bytes);
                 }
-                db.range_mutation_gate()
-                    .validate_source_capture_read_pin(request.binding.range_id, &retained.pin)?;
+                db.range_mutation_gate().validate_source_capture_read_pin(
+                    request.binding.range_id,
+                    retained.pin.as_ref().ok_or_else(|| invalid("Registered export NEW original pin handed off"))?,
+                )?;
                 let base = target.base();
                 let image = &target.image;
                 let seal = target.source_seal();
@@ -236,5 +244,72 @@ impl NativeRegisteredReplicaAdmission {
         reply.checksum_sha256 = reply.checksum()?;
         reply.require_manifest(target.manifest())?;
         Ok(reply)
+    }
+}
+
+impl NativeRegisteredRemoteJointOwner {
+    /// Share the SAME exclusive native pin between its two genuine owned
+    /// obligations. The gate never permits a second independently minted pin.
+    pub(crate) fn retain_remote_new_materialization_pin(
+        &self,
+        issuance: &crate::distribution_range_handoff::NativeRemoteNewTargetPinIssuance<'_>,
+    ) -> Result<Arc<SourceCaptureReadPin>> {
+        let (database, binding, frozen) = issuance.require_owner(self)?;
+        self.require_first_policy_attempt_lifetime()?;
+        binding.require_manifest(self.target.manifest())?;
+        database
+            .range_mutation_gate()
+            .validate_frozen(binding.range_id, frozen.try_as_frozen()?)?;
+        let mut retained = self
+            .export_new
+            .try_lock()
+            .ok_or_else(|| invalid("Registered actual shared materialization pin custody busy"))?;
+        if let Some(entry) = retained.as_ref() {
+            if entry.binding != *binding || !Arc::ptr_eq(&entry.frozen, frozen) {
+                return Err(invalid(
+                    "Registered NEW cannot replace original shared pin/freeze binding",
+                ));
+            }
+        } else {
+            let pin = database
+                .range_mutation_gate()
+                .try_source_capture_read_pin(binding.range_id, frozen.try_as_frozen()?)?;
+            *retained = Some(RegisteredExportNewPin {
+                binding: binding.clone(),
+                frozen: frozen.clone(),
+                pin: Some(Arc::new(pin)),
+                requests: Default::default(),
+            });
+        }
+        let actual = retained.as_ref().unwrap().pin.as_ref().ok_or_else(|| {
+            invalid("Registered original shared pin was already handed off; no recreation")
+        })?;
+        database
+            .range_mutation_gate()
+            .validate_source_capture_read_pin(binding.range_id, actual)?;
+        Ok(actual.clone())
+    }
+    pub(crate) fn handoff_remote_new_export_pin(
+        &self,
+        permit: &crate::distribution_range_handoff::NativeRemoteNewPinHandoffPermit<'_>,
+    ) -> Result<()> {
+        permit.require_registered(self)?;
+        self.require_first_policy_attempt_lifetime()?;
+        let mut retained = self
+            .export_new
+            .try_lock()
+            .ok_or_else(|| invalid("Registered original export pin handoff busy"))?;
+        let dropped = {
+            let _version = permit.publication_guard()?;
+            permit.require_memory_current()?;
+            let dropped = retained.as_mut().and_then(|entry| entry.pin.take());
+            // Keep the exact original binding, request evidence and freeze in
+            // its original owner. This flag precedes every postcheck/reply.
+            permit.record_target_export_detached();
+            dropped
+        };
+        drop(retained);
+        drop(dropped); // actual gate Drop never under publication guard
+        Ok(())
     }
 }

@@ -2,6 +2,7 @@
 //! DATA alone is insufficient. No APP/Strong/image-row/Serving grant.
 use super::*;
 mod constraint_step;
+mod remote_new;
 mod remote_old;
 pub(crate) use constraint_step::NativeInitialOldConstraintStep;
 #[cfg(test)]
@@ -241,6 +242,7 @@ impl NativeInitialOldStep<'_> {
 /// Retained BEFORE any real freeze/write and kept in the actual DATA host.
 /// An uncertain producer never removes this owner or invents an observation.
 pub(super) struct RetainedInitialOld {
+    remote_new: Option<Arc<crate::distribution_range_handoff::NativeRemoteNewParticipant>>,
     writer: Arc<crate::db::NativeWriterHostState>,
     plan_sha256: String,
     plan: Arc<NativeJointHandoffPlan>,
@@ -320,6 +322,7 @@ impl NativeInitialDataHost {
                     ));
                 }
                 let owner = Arc::new(Mutex::new(RetainedInitialOld {
+                    remote_new: None,
                     writer: step.writer.clone(),
                     plan_sha256: digest.clone(),
                     plan: step.plan().clone(),

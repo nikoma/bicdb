@@ -68,7 +68,7 @@ impl AuthenticatedRegisteredExportNew {
     }
 }
 
-fn require_client_point(
+pub(super) fn require_client_point(
     transport: &TcpClusterRelocationTransport,
     mf: &NativeRemoteImageManifestV1,
     own: &HostMetadataReadObservation,

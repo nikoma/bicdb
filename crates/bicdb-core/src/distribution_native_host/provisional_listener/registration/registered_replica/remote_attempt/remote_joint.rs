@@ -3,6 +3,7 @@
 use super::*;
 mod export_new;
 mod first_data_policy;
+mod remote_new;
 pub(crate) use first_data_policy::NativeRegisteredServingDataPolicyOrigin;
 mod release;
 use crate::db::{
@@ -26,6 +27,9 @@ pub(crate) struct NativeRegisteredRemoteJointTarget {
 /// before an API can return or later NEW/decision/phase work can fail.
 /// The real runtime also retains A; no drop creates N or Serving.
 pub(crate) struct NativeRegisteredRemoteJointOwner {
+    remote_new: parking_lot::Mutex<
+        Option<Arc<crate::distribution_range_handoff::NativeRemoteNewParticipant>>,
+    >,
     export_new: parking_lot::Mutex<Option<export_new::RegisteredExportNewPin>>,
     decision_attempt: parking_lot::Mutex<
         Option<Arc<parking_lot::Mutex<crate::db::NativeRegisteredJointDecisionAttempt>>>,
@@ -438,6 +442,7 @@ impl NativeMetadataControlHost {
             .take()
             .expect("same original lease borrowed above");
         let owner = Arc::new(NativeRegisteredRemoteJointOwner {
+            remote_new: parking_lot::Mutex::new(None),
             export_new: parking_lot::Mutex::new(None),
             decision_attempt: parking_lot::Mutex::new(None),
             terminal_writer: std::sync::OnceLock::new(),

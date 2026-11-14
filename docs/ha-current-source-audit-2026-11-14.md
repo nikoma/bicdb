@@ -306,6 +306,12 @@ multi-range transaction coordinator. The stable namespace/record-key hash is not
 a tenant-locality declaration. Locality must remain an optional optimization;
 it cannot substitute for correct cross-range transactions. Stock Rails/local
 SQL passes do not qualify distributed SQL.
+The [locking consistency alternative](design/distributed-sql-locking-consistency-alternative.md)
+is an unimplemented design amendment. It separates rigorous locking from fixed
+PostgreSQL MVCC snapshots and preserves the requirement for ordinary clients,
+atomic cross-range writes and joins, crash recovery and optional locality. It
+changes no capability or qualification status.
+
 
 The original Azure run, local component controls, simulated/synthetic fixtures,
 CI compilation and existing APIs are not production qualification. Current

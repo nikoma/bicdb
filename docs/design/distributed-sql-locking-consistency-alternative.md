@@ -17,7 +17,7 @@ objective, silently substitute a narrower product requirement, or establish HA.
 
 Source inspection pins main **1.0.511-beta**,
 `74f17b912cec7f2fe093d10dcf1618a43b35f454`, and the separate native candidate
-`503964ae93aa22f4c76b698a549b6ef857c834be`. No SQL build or test ran.
+`503964ae93aa22f4c76b698a549b6ef857c834be`. This design review ran no SQL build or test.
 
 - PGwire [`lib.rs`](../../crates/bicdb-pgwire/src/lib.rs),
   `acquire_postgres_statement_snapshot`, still acquires the local SQL view.
@@ -52,6 +52,11 @@ created after that barrier, plus the transaction's own intents. Reusing an older
 MVCC snapshot after acquiring a new lock is unsound. Recipients independently
 validate authority, schema/object identity and lock generation. Local `B_r`
 values may differ: the conflict order, not equal numbers, provides serialization.
+Losing a participant epoch or lock generation invalidates the active attempt's
+prior read claims. Recreating locks cannot validate its earlier reads: the whole
+affected attempt must abort or complete a defined revalidation protocol before
+preparing. This also applies when a leader fails before locks become durable.
+
 For a completed read, all relevant values/predicates remain protected until the
 read has finished. Failures never become successful partial join results.
 

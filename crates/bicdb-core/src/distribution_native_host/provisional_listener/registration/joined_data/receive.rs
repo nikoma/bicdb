@@ -284,6 +284,12 @@ impl NativeJoinedRangeReceiveRequest {
         self.require_metadata_current()?;
         self.require_original_frozen(frozen)
     }
+    pub(crate) fn own(&self) -> &HostMetadataReadObservation {
+        &self.own
+    }
+    pub(crate) fn business(&self) -> Uuid {
+        self.business
+    }
     pub(crate) fn member(&self) -> &NativeOwnedMetadataMemberObservation {
         &self.member
     }

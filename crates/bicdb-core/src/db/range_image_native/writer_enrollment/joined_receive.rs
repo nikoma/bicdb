@@ -224,7 +224,7 @@ impl InstalledNativeWriterHostGuard {
         self.require_new_joined_data_range_point(range)
     }
     // Caller already holds/validates the actual hook/native-policy scope.
-    fn require_new_joined_data_range_point(&self, range: RangeId) -> Result<()> {
+    pub(super) fn require_new_joined_data_range_point(&self, range: RangeId) -> Result<()> {
         let original = self.state.record.facts.ranges.get(&range).ok_or_else(|| {
             invalid("Joined receive range absent from original configured virtual ranges")
         })?;

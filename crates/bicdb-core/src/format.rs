@@ -78,7 +78,11 @@ pub const NATIVE_REGISTERED_REMOTE_PROPOSAL_FEATURE_FLAG: &str =
 pub const NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG: &str = "native_registered_remote_image_v1";
 /// Durable restrictive row-WAL index; old unindexed prototypes are unsupported.
 pub const NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG: &str = "native_registered_row_wal_index_v1";
+/// Existing-Joined selected native proposal/import semantics. Old readers
+/// must refuse even though Registered FIRST v1 remains independently valid.
+pub const NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG: &str = "native_joined_remote_receive_v2";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG,
     SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG,
     NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG,
     EXACT_DECIMAL_UNITS_FEATURE_FLAG,
@@ -1925,4 +1929,44 @@ mod mutation_reader_contract_tests {
             }
         }
     }
+}
+
+/// Repeat durable publication on every continuation: visible rename after a
+/// failed directory sync does not establish the format fence's durability.
+pub(crate) fn enable_native_joined_remote_receive(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    for required in [
+        RANGE_IMAGE_INSTALL_FEATURE_FLAG,
+        NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
+        NATIVE_METADATA_STORE_FEATURE_FLAG,
+        NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG,
+    ] {
+        if !metadata.feature_flags.contains(required) {
+            return Err(BicDbError::InvalidConfig(
+                "Joined receive needs actual image/writer/metadata/custody reader fences".into(),
+            ));
+        }
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG.into());
+    persist_metadata_with(root, &metadata, true, |path, bytes, sync| {
+        storage::replace_durably(
+            path,
+            storage::ReplaceContents::Plain(bytes),
+            sync,
+            "joined_remote_receive.format",
+            storage::FailClosed::No,
+        )
+    })
+}
+pub(crate) fn native_joined_remote_receive_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG))
 }

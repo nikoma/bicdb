@@ -149,6 +149,65 @@ impl NativeJoinedRemoteInstallPreflight {
         // The callback may have consumed N into the original retained A. No
         // later check is allowed to require old N or discard that exact owner.
     }
+    /// Runtime custody is checked outside engine/service locks. The lexical
+    /// engine scope accepts only this exact opaque A lease and fresh source
+    /// request, never a caller-selected Frozen or a persisted DTO.
+    pub(crate) fn with_attempt_scope<R>(
+        self: &Arc<Self>,
+        request: &NativeJoinedRangeReceiveRequest,
+        frame: &NativeRemoteImageStep<'_>,
+        lease: &crate::distribution_range_recovery::JoinedRemoteImageInstallFreeze,
+        operation: impl for<'scope, 'physical> FnOnce(
+            &BicDb,
+            &RangeWriteStore,
+            &'scope crate::db::NativeJoinedRemoteAttemptScope<'physical>,
+        ) -> Result<R>,
+    ) -> Result<R> {
+        self.require_metadata_current(request)?;
+        self.require_request(request, frame)?;
+        lease.require_retained()?;
+        if !Arc::ptr_eq(self, lease.preflight()) {
+            return Err(invalid("Joined attempt scope changed original retained A"));
+        }
+        let result = {
+            let origin = self.selected.origin();
+            let _original = origin.original()?;
+            let _admission = origin.admission()?;
+            let backend = origin.backend()?;
+            let factory = origin.factory()?;
+            let service = backend
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("Joined attempt actual service busy"))?;
+            let database = service.database();
+            if !Arc::ptr_eq(&database, &factory.database) {
+                return Err(invalid("Joined attempt changed original actual DB"));
+            }
+            let db = database
+                .try_read()
+                .ok_or_else(|| invalid("Joined attempt actual DB busy"))?;
+            service.with_writer_data_domain_store(&db, |store| {
+                db.with_joined_remote_attempt_scope(store, self, request, frame, lease, |scope| {
+                    operation(&db, store, scope)
+                })
+            })
+        };
+        let post = self
+            .require_metadata_current(request)
+            .and_then(|()| lease.require_retained())
+            .and_then(|()| self.require_request(request, frame));
+        match result {
+            Err(primary) => {
+                let _ = post;
+                Err(primary)
+            }
+            Ok(value) => {
+                post?;
+                Ok(value)
+            }
+        }
+    }
+
     /// Necessary actual PRE-rotation point. No Runtime/MStore lock is acquired
     /// here; the full physical precheck MUST occur before Runtime.sessions,
     /// then the final separately prepared memory-only point is used under

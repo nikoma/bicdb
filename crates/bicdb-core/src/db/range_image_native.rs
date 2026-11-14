@@ -27,8 +27,15 @@ pub(crate) use initial_data::NativeInitialDataGenesis;
 mod history_stage;
 pub(crate) use history_stage::ClosedImageOriginalWriter;
 mod installed_anchor;
+#[cfg(feature = "tls-replication")]
+mod joined_remote_proposal;
 mod native_read;
 mod registered_receiver_domain;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_remote_proposal::{
+    NativeJoinedRemoteProposalPointer, NativeJoinedRemoteProposalPublication,
+    NativeJoinedRemoteProposalReceipt,
+};
 #[cfg(feature = "tls-replication")]
 mod registered_remote_proposal;
 #[cfg(all(test, feature = "tls-replication"))]
@@ -64,6 +71,8 @@ pub(crate) use writer_enrollment::NativeFirstPolicyPublicationCandidate;
 pub(crate) use writer_enrollment::NativeJoinedPublicationScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeJoinedReceiveStorageScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeJoinedRemoteAttemptScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeJoinedRemoteRotationPoint;
 #[cfg(feature = "tls-replication")]

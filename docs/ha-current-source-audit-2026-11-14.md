@@ -6,6 +6,8 @@ recorded in [issue190](https://github.com/nikoma/bicdb/issues/190); snapshot bal
 rollback is recorded separately in [issue191](https://github.com/nikoma/bicdb/issues/191).
 Post-vote old-primary acknowledgments are recorded in
 [issue192](https://github.com/nikoma/bicdb/issues/192).
+The separate snapshot target-data-head gate is tracked in
+[issue193](https://github.com/nikoma/bicdb/issues/193).
 
 Inspected delivered main is **1.0.511-beta**,
 `74f17b912cec7f2fe093d10dcf1618a43b35f454`, tree
@@ -111,6 +113,13 @@ can promote using earlier votes after the old primary has obtained newer ACKs.
 The initial silence check does not exclude reconnection after voting. Both early
 and final apply/ACK term checks are necessary; a vote can occur between them.
 This is another confirmed source schedule, not an executed loss experiment.
+
+Issue193 records that HA-file equality does not bind the target's current applied
+data: same-lineage frame progress can update WAL and replication state without
+changing that file. A stage→later durable apply→install control is still required.
+Whether the ordinary CLI permits that interleaving needs a separate exclusion
+proof; the public Core/embedding API has no demonstrated data-head binding.
+This is an open API/qualification gap, not a reproduced CLI data-loss incident.
 
 ## Native range components and the missing automatic operator
 

@@ -29,6 +29,7 @@ impl BicDb {
                 "planned switchover requires a durable replication primary",
             ));
         }
+        self.require_replication_primary_epoch(self.replication_epoch())?;
         if target.trim().is_empty() || target == self.config.replication.node_id {
             return Err(replication_error(
                 "switchover needs a different target node",
@@ -42,6 +43,7 @@ impl BicDb {
                 "primary is already drained for another target",
             ));
         }
+        self.replication_election_position()?;
         self.ensure_writable("planned switchover")?;
         let seq = self.last_committed_tx.load(AtomicOrdering::SeqCst);
         if seq != self.current_commit_seq() {
@@ -78,6 +80,8 @@ impl BicDb {
         sql_address: Option<String>,
     ) -> Result<()> {
         let _admission = self.serializable_commit_admission.write();
+        self.require_replication_primary_epoch(offer.source_epoch)?;
+        self.replication_election_position()?;
         let status = self.ha_node_status();
         if !self.replication_verification_healthy()
             || !self.config.fsync
@@ -100,7 +104,7 @@ impl BicDb {
             file.role = Some(NodeRole::Primary);
             file.epoch = offer.target_epoch;
             file.election_term = offer.target_epoch;
-            file.data_epoch = offer.target_epoch;
+            file.qualify_data_epoch(offer.target_epoch, offer.commit_seq);
             file.voted = Some((offer.target_epoch, offer.target_node_id.clone()));
             file.epoch_starts
                 .insert(offer.target_epoch, offer.commit_seq);

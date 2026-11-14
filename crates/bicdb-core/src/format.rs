@@ -70,7 +70,10 @@ pub const NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG: &str =
 /// Sticky node-local receipt semantics. Never a portable schema capability.
 pub const NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG: &str =
     "native_completed_decision_materialization_v1";
+/// Node-local election lineage semantics; never a portable SQL/schema feature.
+pub const HA_QUALIFIED_DATA_EPOCH_FEATURE_FLAG: &str = "ha_qualified_data_epoch_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    HA_QUALIFIED_DATA_EPOCH_FEATURE_FLAG,
     SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG,
     EXACT_DECIMAL_UNITS_FEATURE_FLAG,
     NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG,
@@ -704,6 +707,9 @@ fn persist_metadata_with(
     let fsync = fsync
         || metadata
             .feature_flags
+            .contains(HA_QUALIFIED_DATA_EPOCH_FEATURE_FLAG)
+        || metadata
+            .feature_flags
             .contains(LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG)
         || metadata
             .feature_flags
@@ -1009,6 +1015,19 @@ pub(crate) fn native_writer_enrollment_active(root: &Path) -> Result<bool> {
         .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG))
 }
 
+/// Fence old HA readers before any qualified-lineage state publication.
+/// Unconditional fsync repairs an earlier unknown reader-flag replacement.
+pub(crate) fn enable_ha_qualified_data_epoch(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(HA_QUALIFIED_DATA_EPOCH_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
 /// Fence older native hosts BEFORE publishing protected metadata identity.
 pub(crate) fn enable_native_metadata_store(root: &Path) -> Result<()> {
     let lock = feature_flags_lock(root);
@@ -1247,6 +1266,7 @@ mod replicated_reader_tests {
         let root = tempfile::tempdir().unwrap();
         persist_current_with_mode(root.path(), StorageMode::ServerPaged, true).unwrap();
         enable_online_backup_extent_tracking(root.path()).unwrap();
+        enable_ha_qualified_data_epoch(root.path()).unwrap();
         install_replicated_reader_features(root.path(), &[SQL_RENAME_INTENTS_FEATURE_FLAG.into()])
             .unwrap();
         install_replicated_reader_features(
@@ -1260,6 +1280,9 @@ mod replicated_reader_tests {
         assert!(metadata
             .feature_flags
             .contains(ONLINE_BACKUP_EXTENT_FEATURE_FLAG));
+        assert!(metadata
+            .feature_flags
+            .contains(HA_QUALIFIED_DATA_EPOCH_FEATURE_FLAG));
         assert_eq!(
             required_reader_features(root.path()).unwrap(),
             vec![
@@ -1362,6 +1385,7 @@ mod local_identity_format_tests {
         for flag in [
             LOCAL_NAMESPACE_IDENTITY_FEATURE_FLAG,
             RANGE_IMAGE_INSTALL_FEATURE_FLAG,
+            HA_QUALIFIED_DATA_EPOCH_FEATURE_FLAG,
         ] {
             let mut metadata = legacy.clone();
             metadata.feature_flags.insert(flag.into());

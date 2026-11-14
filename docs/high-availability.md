@@ -56,16 +56,20 @@ range quorum with the legacy whole-database streaming/HA commands below.
 
 ## Synchronous streaming replication (`bicdb serve`)
 
-The native HA handshake uses protocol version **4**. All peers in a native HA
+The native HA handshake uses protocol version **5**. All peers in a native HA
 group must support this version; earlier connections are refused. Plan a
 coordinated upgrade with the application writers stopped rather than mixing
 protocol versions. Ordinary row-only commit frames and the standalone manual
 transport retain version 1 encoding; journal-enabled commit frames use version 2.
 
 The handshake distinguishes the highest authority epoch a node has observed
-(`Hello`) from the epoch of the commits it actually stores (`Resume`). A
-returning former primary cannot claim the new primary's data history merely
-because it learned about that primary. Snapshot bootstrap preserves the local
+(`Hello`) from its qualified durable data history (`Resume`). A heartbeat may
+advance fencing immediately, but voting data history advances only after the
+accepted stream has durably applied the exact heartbeat prefix and reached that
+primary epoch's starting boundary. A partial batch below the boundary retains
+the old data epoch. See [the issue-190 source correction](design/ha-qualified-data-epoch.md)
+for qualification and legacy-upgrade limits. A returning former primary cannot
+claim the new primary's data history merely because it learned about it. Snapshot bootstrap preserves the local
 node's voting state while adopting the source snapshot's data epoch and history,
 so subsequent commits can stream continuously after recovery. Replicated empty
 commits also retain a WAL marker: a restart or promotion preserves their
@@ -200,9 +204,11 @@ least `floor(N / 2)` for a group of `N` voting nodes: one voting standby in a
 three-node group, two in a five-node group. Only `--ha-peer` members count
 for commit acknowledgements and the primary's write lease. Additional allowed
 standbys can replicate and serve reads, but cannot vote, supply a write lease,
-or advance the group's election epoch. The native HA handshake is version 4: upgrade the entire group together.
-Older peers are refused because an older primary can restore unsafe observer
-acknowledgement and lease counting. This is independent of PostgreSQL's client
+or advance the group's election epoch. The native HA handshake is version 5: upgrade the entire group together.
+Older peers are refused because they can restore unsafe observer acknowledgement
+counting or advertise an unqualified catch-up epoch. Existing protocol-4 stores
+without qualified lineage require a trusted recovery source; an all-legacy
+group has no automatic upgrade path in this change. This is independent of PostgreSQL's client
 protocol. Every node must use the same static
 voting membership. Changing that membership requires a coordinated stop and
 reconfiguration; adding an allowed read replica does not change it.

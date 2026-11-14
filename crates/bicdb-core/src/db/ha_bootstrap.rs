@@ -12,7 +12,40 @@
 //! so a crash at any point leaves either the old or the new database whole.
 use super::*;
 
-const BOOTSTRAP_READY: &str = "BOOTSTRAP_READY";
+// Old installers must NOT recognize new ready stages before checking format.
+const BOOTSTRAP_READY: &str = "BOOTSTRAP_READY_V2";
+const LEGACY_BOOTSTRAP_READY: &str = "BOOTSTRAP_READY";
+
+#[derive(Serialize, Deserialize)]
+struct BootstrapReady {
+    version: u32,
+    target_ha_sha256: String,
+}
+
+fn bounded_bootstrap_bytes(path: &Path, limit: u64) -> Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    fs::File::open(path)?
+        .take(limit + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > limit {
+        return Err(replication_error("bootstrap state size bound exceeded"));
+    }
+    Ok(bytes)
+}
+
+// Caller holds BOTH original and staged/installed directory exclusions.
+fn require_original_bootstrap_target(ready_root: &Path, original_root: &Path) -> Result<()> {
+    let ready: BootstrapReady = serde_json::from_slice(&bounded_bootstrap_bytes(
+        &ready_root.join(BOOTSTRAP_READY),
+        4096,
+    )?)?;
+    let actual =
+        bounded_bootstrap_bytes(&original_root.join(ha_node::HA_NODE_FILE), 8 * 1024 * 1024)?;
+    if ready.version != 2 || ready.target_ha_sha256 != hex::encode(sha2::Sha256::digest(&actual)) {
+        return Err(replication_error("target HA state changed after snapshot staging; original target and stage retained, fresh staging required"));
+    }
+    Ok(())
+}
 
 /// Staging directory used while a standby bootstrap is installed.
 pub fn standby_bootstrap_staging(path: &Path) -> PathBuf {
@@ -75,14 +108,19 @@ impl BicDb {
     /// encrypted with `key`. Returns the commit sequence number it contains.
     /// Commits pause while the archive is written locally.
     pub fn create_standby_snapshot(&self, archive: &Path, key: &str) -> Result<u64> {
-        let (_, commit_seq) = self.create_consistent_backup(
+        let _quiesced = self.serializable_commit_admission.write();
+        let applied = self.last_applied_commit_seq();
+        self.tx_log.write_durable(applied)?;
+        self.replication_election_position()?;
+        crate::backup::create_backup_from_open_database(
+            self,
             archive,
             crate::backup::BackupCreateOptions {
                 passphrase: key.to_string(),
                 base_backup: None,
             },
         )?;
-        Ok(commit_seq)
+        Ok(applied)
     }
 }
 
@@ -91,6 +129,22 @@ impl BicDb {
 /// standby keeps its own voting identity and highest observed epoch, while
 /// adopting the snapshot's data epoch and accepted history.
 pub fn stage_standby_bootstrap(path: &Path, archive: &Path, key: &str, fsync: bool) -> Result<()> {
+    // Capture before long restore IO. A live peer may vote meanwhile; the
+    // installer must compare this exact preimage again under both locks.
+    let target_bytes = bounded_bootstrap_bytes(&path.join(ha_node::HA_NODE_FILE), 8 * 1024 * 1024)
+        .map_err(|error| {
+            replication_error(format!(
+                "bootstrap requires original target voting state: {error}"
+            ))
+        })?;
+    let mut node: ha_node::HaNodeFile = serde_json::from_slice(&target_bytes)?;
+    let ready = BootstrapReady {
+        version: 2,
+        target_ha_sha256: hex::encode(sha2::Sha256::digest(&target_bytes)),
+    };
+    // Old code performs staging cleanup before its format check. It may lose
+    // this work, but it must not install a V2 stage or open the target normally.
+    format::enable_ha_qualified_data_epoch(path)?;
     let staging = standby_bootstrap_staging(path);
     if staging.exists() {
         fs::remove_dir_all(&staging)?;
@@ -106,7 +160,9 @@ pub fn stage_standby_bootstrap(path: &Path, archive: &Path, key: &str, fsync: bo
     let source = match fs::read(staging.join(ha_node::HA_NODE_FILE)) {
         Ok(bytes) => serde_json::from_slice::<ha_node::HaNodeFile>(&bytes)?,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            ha_node::HaNodeFile::default()
+            return Err(replication_error(
+                "bootstrap source lacks qualified HA lineage state",
+            ));
         }
         Err(error) => return Err(error.into()),
     };
@@ -119,28 +175,31 @@ pub fn stage_standby_bootstrap(path: &Path, archive: &Path, key: &str, fsync: bo
             Err(error) => return Err(error.into()),
         }
     }
-    let mut node = match fs::read(path.join(ha_node::HA_NODE_FILE)) {
-        Ok(bytes) => serde_json::from_slice::<ha_node::HaNodeFile>(&bytes)?,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            ha_node::HaNodeFile::default()
-        }
-        Err(error) => return Err(error.into()),
-    };
     node.role = Some(ha_node::NodeRole::Standby);
     node.slots.clear();
     node.switchover = None;
     node.verification_error = None;
     node.epoch = node.epoch.max(source.epoch);
+    // Structural qualification only here. The snapshot producer checked the
+    // actual durable applied point under commit exclusion; the restored open
+    // must check that point again before election/Resume/primary startup.
+    source.qualified_epoch_start()?;
     node.data_epoch = source.data_epoch;
+    node.data_lineage = source.data_lineage;
     node.epoch_starts = source.epoch_starts;
     node.primary_id = source.primary_id.or(node.primary_id);
     node.primary_sql_address = source.primary_sql_address.or(node.primary_sql_address);
+    format::enable_ha_qualified_data_epoch(&staging)?;
     storage::write_atomic(
         &staging.join(ha_node::HA_NODE_FILE),
         &serde_json::to_vec_pretty(&node)?,
         fsync,
     )?;
-    storage::write_atomic(&staging.join(BOOTSTRAP_READY), b"ready\n", fsync)?;
+    storage::write_atomic(
+        &staging.join(BOOTSTRAP_READY),
+        &serde_json::to_vec(&ready)?,
+        fsync,
+    )?;
     Ok(())
 }
 
@@ -154,7 +213,7 @@ pub const BOOTSTRAP_SITE: &str = "bootstrap";
 /// The install renames the old directory aside, renames the staging
 /// directory into place, and `fsync`s the parent before anything is
 /// deleted, so a power loss leaves either the old database or the complete
-/// new one. `BOOTSTRAP_READY` stays inside the installed directory until
+/// new one. `BOOTSTRAP_READY_V2` stays inside the installed directory until
 /// that `fsync` succeeded: an install whose directory sync failed (the open
 /// fails with `WriteFailed`, site `bootstrap.dir_sync`) is completed by the
 /// next open, which syncs again before it removes the marker and the old
@@ -170,32 +229,56 @@ pub fn finish_standby_bootstrap(path: &Path) -> Result<bool> {
                     "cannot complete a bootstrap install over an open database: {error}"
                 ))
             })?;
+            let replaced = sibling_path(path, "replaced");
+            let _original_lock =
+                bicdb_page::DirectoryLock::acquire(&replaced).map_err(|error| {
+                    replication_error(format!(
+                        "cannot validate original bootstrap target: {error}"
+                    ))
+                })?;
+            require_original_bootstrap_target(path, &replaced)?;
             complete_bootstrap_install(path)?;
             return Ok(true);
+        }
+        if path.join(LEGACY_BOOTSTRAP_READY).exists() {
+            return Err(replication_error("legacy installed bootstrap marker requires explicit recovery; no ballot qualification"));
         }
         return Ok(false);
     }
     if !staging.join(BOOTSTRAP_READY).exists() {
+        if staging.join(LEGACY_BOOTSTRAP_READY).exists() {
+            return Err(replication_error(
+                "legacy bootstrap ready state is unqualified; original target and stage retained",
+            ));
+        }
         // Interrupted while staging: the old directory is still whole.
         fs::remove_dir_all(&staging)?;
         return Ok(false);
     }
     // Claim both inodes before renaming either. Installing before the normal
     // open lock used to replace a running server's directory underneath it.
-    let _old_lock = if path.exists() {
-        Some(bicdb_page::DirectoryLock::acquire(path).map_err(|error| {
-            BicDbError::Replication(format!(
-                "cannot install bootstrap over an open database: {error}"
-            ))
-        })?)
+    let replaced = sibling_path(path, "replaced");
+    // Recover a crash between renames from the actual original inode, not an
+    // invented empty target or the stale ballot copied into the snapshot.
+    let original = if path.exists() {
+        path
+    } else if replaced.exists() {
+        replaced.as_path()
     } else {
-        None
+        return Err(replication_error(
+            "bootstrap original target is missing; stage retained",
+        ));
     };
+    let _old_lock = bicdb_page::DirectoryLock::acquire(original).map_err(|error| {
+        BicDbError::Replication(format!(
+            "cannot install bootstrap over an open database: {error}"
+        ))
+    })?;
     let _new_lock = bicdb_page::DirectoryLock::acquire(&staging).map_err(|error| {
         BicDbError::Replication(format!("bootstrap is already being installed: {error}"))
     })?;
-    let replaced = sibling_path(path, "replaced");
-    if replaced.exists() {
+    require_original_bootstrap_target(&staging, original)?;
+    if original == path && replaced.exists() {
         // Left by an earlier install that completed (its marker is gone),
         // or by one interrupted between its two renames, in which case the
         // staging directory is the complete database to install.

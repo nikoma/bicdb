@@ -132,6 +132,75 @@ pub(crate) struct HaNodeFile {
     /// Epoch of the primary whose commits this node holds last.
     #[serde(default)]
     pub(crate) data_epoch: u64,
+    /// Absent in protocol-4 state: its data epoch may have been learned before
+    /// catch-up, so it is not election or stream-resume evidence.
+    #[serde(default)]
+    pub(crate) data_lineage: Option<QualifiedDataLineage>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct QualifiedDataLineage {
+    version: u32,
+    epoch: u64,
+    start: u64,
+}
+
+impl HaNodeFile {
+    pub(crate) fn genesis() -> Self {
+        let mut file = Self::default();
+        file.qualify_data_epoch(0, 0);
+        file
+    }
+
+    pub(crate) fn qualify_data_epoch(&mut self, epoch: u64, start: u64) {
+        self.data_epoch = epoch;
+        self.data_lineage = Some(QualifiedDataLineage {
+            version: 1,
+            epoch,
+            start,
+        });
+    }
+
+    fn require_primary_epoch(&self, epoch: u64) -> Result<()> {
+        let minimum = self
+            .epoch
+            .max(self.election_term)
+            .max(self.voted.as_ref().map_or(0, |(term, _)| *term));
+        if epoch < minimum {
+            return Err(replication_error(
+                "primary epoch is behind this node's durable election term",
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn qualified_epoch_start(&self) -> Result<u64> {
+        let proof = self.data_lineage.as_ref().ok_or_else(|| {
+            replication_error(
+                "unqualified legacy HA data epoch; validated snapshot bootstrap required",
+            )
+        })?;
+        let start = self
+            .epoch_starts
+            .get(&self.data_epoch)
+            .copied()
+            .or_else(|| (self.data_epoch == 0).then_some(0));
+        if proof.version != 1 || proof.epoch != self.data_epoch || start != Some(proof.start) {
+            return Err(replication_error(
+                "HA data epoch lacks its exact durable applied lineage boundary",
+            ));
+        }
+        Ok(proof.start)
+    }
+
+    pub(crate) fn require_data_lineage(&self, applied: u64, durable: u64) -> Result<()> {
+        if self.qualified_epoch_start()? > applied || applied > durable {
+            return Err(replication_error(
+                "HA data epoch exceeds its durable applied prefix",
+            ));
+        }
+        Ok(())
+    }
 }
 
 /// Role and primary recorded in a database directory, read without opening
@@ -164,11 +233,18 @@ impl HaNode {
         configured: NodeRole,
         fsync: bool,
         health: Arc<bicdb_page::DurabilityHealth>,
+        fresh_ha_birth: bool,
     ) -> Result<Self> {
         let path = root.join(HA_NODE_FILE);
         let file = match fs::read(&path) {
             Ok(bytes) => serde_json::from_slice::<HaNodeFile>(&bytes)?,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => HaNodeFile::default(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if fresh_ha_birth {
+                    HaNodeFile::genesis()
+                } else {
+                    HaNodeFile::default()
+                }
+            }
             Err(error) => return Err(error.into()),
         };
         if fsync && path.exists() {
@@ -182,7 +258,7 @@ impl HaNode {
             })?;
         }
         let role = file.role.unwrap_or(configured);
-        Ok(Self {
+        let node = Self {
             role: AtomicU8::new(role.code()),
             draining: AtomicBool::new(file.switchover.is_some()),
             epoch: AtomicU64::new(file.epoch),
@@ -190,7 +266,11 @@ impl HaNode {
             path,
             fsync,
             health,
-        })
+        };
+        if fresh_ha_birth {
+            node.with_file(|_| ())?;
+        }
+        Ok(node)
     }
 
     /// Rewrite the current state through the durable protocol. Used by the
@@ -228,6 +308,13 @@ impl HaNode {
     /// fences the database (`WriteFailed`, site `ha_node.dir_sync`), and a
     /// fenced database changes no HA state until it is reopened.
     pub(crate) fn with_file<T>(&self, change: impl FnOnce(&mut HaNodeFile) -> T) -> Result<T> {
+        // Always repeat the format barrier, including after a visible rename
+        // whose directory sync failed. Presence alone is not durable proof.
+        format::enable_ha_qualified_data_epoch(
+            self.path
+                .parent()
+                .ok_or_else(|| replication_error("HA state has no database parent"))?,
+        )?;
         let mut file = self.file.lock();
         let mut next = file.clone();
         let value = change(&mut next);
@@ -343,7 +430,8 @@ impl BicDb {
     }
 
     /// Records what a primary announced in a heartbeat this node applies:
-    /// who it is, where clients reach it, and the epoch history.
+    /// who it is, where clients reach it, and the announced epoch history.
+    /// This does not qualify the epoch of our durable data.
     pub fn record_primary(
         &self,
         node_id: &str,
@@ -351,9 +439,31 @@ impl BicDb {
         sql_address: Option<String>,
         epoch_starts: &BTreeMap<u64, u64>,
     ) -> Result<()> {
+        let _quiesced = self.serializable_commit_admission.write();
+        self.ha_node.read(|file| {
+            file.require_primary_epoch(epoch)?;
+            // An announcement may describe an abandoned branch, but cannot
+            // replace the boundary already proven for our accepted history.
+            if let Some(proof) = &file.data_lineage {
+                if epoch_starts
+                    .get(&proof.epoch)
+                    .is_some_and(|start| *start != proof.start)
+                {
+                    return Err(replication_error(
+                        "primary announcement conflicts with qualified data lineage",
+                    ));
+                }
+            }
+            if epoch != 0 && !epoch_starts.contains_key(&epoch) {
+                return Err(replication_error(
+                    "primary announcement lacks its epoch-start boundary",
+                ));
+            }
+            Ok(())
+        })?;
         let unchanged = self.ha_node.read(|file| {
             file.primary_id.as_deref() == Some(node_id)
-                && file.data_epoch == epoch
+                && file.epoch == epoch
                 && file.primary_sql_address == sql_address
                 && epoch_starts
                     .iter()
@@ -364,7 +474,6 @@ impl BicDb {
         }
         self.ha_node.with_file(|file| {
             file.primary_id = Some(node_id.to_string());
-            file.data_epoch = file.data_epoch.max(epoch);
             file.epoch = file.epoch.max(epoch);
             file.primary_sql_address = sql_address;
             for (epoch, start) in epoch_starts {
@@ -373,9 +482,99 @@ impl BicDb {
         })
     }
 
+    /// Necessary fencing check only, not a primary/data-authority grant. A
+    /// durable higher ballot rejects old streams and contact renewals without
+    /// pretending that the election produced a committed primary/data epoch.
+    pub fn require_replication_primary_epoch(&self, epoch: u64) -> Result<()> {
+        self.ha_node.read(|file| file.require_primary_epoch(epoch))
+    }
+
+    /// The election/Resume tuple, checked against the actual applied prefix
+    /// and transaction log durability watermark, never a learned authority tag.
+    pub fn replication_election_position(&self) -> Result<(u64, u64)> {
+        self.replication_resume_position()?.ok_or_else(|| {
+            replication_error(
+                "unqualified legacy HA data epoch; validated snapshot bootstrap required",
+            )
+        })
+    }
+
+    /// `None` explicitly identifies legacy/missing qualification, allowing a
+    /// standby to request bootstrap without advertising an eligible tuple.
+    /// Health, malformed proof and durability errors remain errors, not None.
+    pub fn replication_resume_position(&self) -> Result<Option<(u64, u64)>> {
+        self.durability
+            .check()
+            .map_err(crate::error::durability_error)?;
+        if !self.replication_verification_healthy() {
+            return Err(replication_error(
+                "replica verification failed; snapshot bootstrap required",
+            ));
+        }
+        let applied = self.last_applied_commit_seq();
+        let durable = self.replication_shippable_seq();
+        self.ha_node.read(|file| {
+            if file.data_lineage.is_none() {
+                return Ok(None);
+            }
+            file.require_data_lineage(applied, durable)?;
+            Ok(Some((file.data_epoch, applied)))
+        })
+    }
+
+    /// Qualify an authenticated protocol-5 stream only AFTER its exact batch
+    /// was applied durably. The sender must have accepted our qualified Resume
+    /// on this connection. Partial catch-up below this epoch's starting prefix
+    /// keeps the previous data epoch, even though fencing already advanced.
+    pub fn qualify_replication_data_epoch(
+        &self,
+        node_id: &str,
+        epoch: u64,
+        sent_tip: u64,
+    ) -> Result<bool> {
+        let _quiesced = self.serializable_commit_admission.write();
+        let (_, applied) = self.replication_election_position()?;
+        if applied != sent_tip {
+            return Err(replication_error(
+                "data epoch qualification does not match the applied heartbeat",
+            ));
+        }
+        let start = self.ha_node.read(|file| {
+            // A vote can race after record_primary and before batch apply.
+            // Refuse its old source before returning any ACK eligibility.
+            file.require_primary_epoch(epoch)?;
+            if file.epoch != epoch
+                || file.primary_id.as_deref() != Some(node_id)
+                || epoch < file.data_epoch
+            {
+                return Err(replication_error(
+                    "data epoch qualification no longer follows the announced primary",
+                ));
+            }
+            file.epoch_starts
+                .get(&epoch)
+                .copied()
+                .or_else(|| (epoch == 0).then_some(0))
+                .ok_or_else(|| {
+                    replication_error("data epoch qualification lacks its epoch-start boundary")
+                })
+        })?;
+        if applied < start {
+            return Ok(false);
+        }
+        if self.ha_node.read(|file| file.data_epoch == epoch) {
+            return Ok(true);
+        }
+        self.ha_node
+            .with_file(|file| file.qualify_data_epoch(epoch, start))?;
+        Ok(true)
+    }
+
     /// Starts an election: the next term after every epoch and vote this node
     /// knows, with this node's own vote. Returns the term.
     pub fn begin_candidacy(&self, node_id: &str) -> Result<u64> {
+        let _quiesced = self.serializable_commit_admission.write();
+        self.replication_election_position()?;
         if !self.replication_verification_healthy() {
             return Err(replication_error(
                 "replica verification failed; snapshot bootstrap required before candidacy",
@@ -426,7 +625,7 @@ impl BicDb {
         candidate_seq: u64,
     ) -> Result<bool> {
         let _quiesced = self.serializable_commit_admission.write();
-        let own_seq = self.last_applied_commit_seq();
+        let (_, own_seq) = self.replication_election_position()?;
         // Eligibility and the durable ballot must share one lock; two
         // concurrent requests cannot both win the same node's term.
         let (granted, fenced) = self.ha_node.with_file(|file| {
@@ -465,7 +664,7 @@ impl BicDb {
         sql_address: Option<String>,
     ) -> Result<()> {
         let _quiesced = self.serializable_commit_admission.write();
-        let applied = self.last_applied_commit_seq();
+        let (_, applied) = self.replication_election_position()?;
         let promoted = self.ha_node.with_file(|file| {
             if file.verification_error.is_some()
                 || term <= file.epoch
@@ -480,7 +679,7 @@ impl BicDb {
             file.role = Some(NodeRole::Primary);
             file.epoch = file.epoch.max(term);
             file.election_term = term;
-            file.data_epoch = term;
+            file.qualify_data_epoch(term, applied);
             file.epoch_starts.insert(term, applied);
             file.primary_id = Some(node_id.to_string());
             file.primary_sql_address = sql_address;

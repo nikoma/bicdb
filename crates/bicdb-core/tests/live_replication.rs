@@ -651,9 +651,9 @@ fn votes_go_to_one_up_to_date_candidate_per_term() {
         assert_eq!(voter.begin_candidacy("me").unwrap(), 3, "{mode}");
         assert!(!voter.consider_vote(3, "c3", 0, own).unwrap(), "{mode}");
         // Terms at or below a known primary epoch are over.
-        voter
-            .record_primary("p", 5, None, &Default::default())
-            .unwrap();
+        // A genuine promotion establishes the epoch at this durable prefix;
+        // a heartbeat announcement alone is no longer data-history evidence.
+        voter.promote_by_election(5, "p", None).unwrap();
         assert!(!voter.consider_vote(5, "c5", 9, own).unwrap(), "{mode}");
         // Commits from an older primary lose against a newer primary's.
         assert!(
@@ -1083,7 +1083,7 @@ fn a_staged_bootstrap_cannot_replace_a_live_database() {
         )
         .is_err());
         assert!(standby_bootstrap_staging(&target)
-            .join("BOOTSTRAP_READY")
+            .join("BOOTSTRAP_READY_V2")
             .exists());
         assert!(incumbent.collections().is_empty());
         drop(incumbent);
@@ -1101,6 +1101,7 @@ fn failed_ha_metadata_write_does_not_publish_a_ballot_in_memory() {
         ReplicationMode::Standby,
     );
     let term = db.replication_election_term();
+    std::fs::remove_file(root.path().join(bicdb_core::HA_NODE_FILE)).unwrap();
     std::fs::create_dir(root.path().join(bicdb_core::HA_NODE_FILE)).unwrap();
     assert!(db.begin_candidacy("candidate").is_err());
     assert_eq!(db.replication_election_term(), term);
@@ -1339,6 +1340,7 @@ fn a_failed_fence_write_still_revokes_live_writer_authority() {
         );
         let authority = db.replication_writer_authority();
         assert!(authority.active());
+        std::fs::remove_file(root.path().join(bicdb_core::HA_NODE_FILE)).unwrap();
         std::fs::create_dir(root.path().join(bicdb_core::HA_NODE_FILE)).unwrap();
         let result = if explicit {
             db.fence_replication()

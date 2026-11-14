@@ -217,7 +217,7 @@ fn native_handshake_refuses_old_versions_and_mismatched_resume_identity() {
             .unwrap();
         stream
     };
-    for version in [1, 3] {
+    for version in [1, 3, 4] {
         let mut peer = connect();
         send_frame(&mut peer, &hello(version), 65536).unwrap();
         assert!(
@@ -238,6 +238,7 @@ fn native_handshake_refuses_old_versions_and_mismatched_resume_identity() {
             node_id: "other-node".into(),
             commit_seq: 0,
             data_epoch: 0,
+            data_epoch_qualified: true,
             journal_identity: None,
         },
         65536,

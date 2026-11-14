@@ -42,10 +42,10 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
-/// Native HA handshake version. Version 4 requires voter-scoped commit and
-/// lease authority as well as journal-carrying frames. Older voters must not
-/// rejoin and restore observer-derived authority. Upgrade the entire group.
-pub const HA_REPLICATION_PROTOCOL_VERSION: u32 = 4;
+/// Native HA handshake version. Version 5 additionally requires durable,
+/// applied epoch-boundary qualification for election/Resume tuples. Version-4
+/// peers can mislabel partial catch-up, so upgrade the entire group together.
+pub const HA_REPLICATION_PROTOCOL_VERSION: u32 = 5;
 
 /// Frames per round sent to one standby.
 const BATCH_COMMITS: usize = 512;
@@ -352,6 +352,9 @@ pub(crate) fn start(server: Arc<PgWireServer>, config: HaServerConfig) -> Result
     };
     let config = config.resolved(recorded);
     config.validate()?;
+    if server.read_db()?.replication_role() == NodeRole::Primary {
+        server.read_db()?.replication_election_position()?;
+    }
     config
         .database_replication()
         .validate()
@@ -664,6 +667,7 @@ fn serve_peer(
             node_id,
             commit_seq,
             data_epoch,
+            data_epoch_qualified,
             journal_identity,
         } => {
             if cluster_id != config.replication.cluster_id || node_id != peer {
@@ -675,11 +679,15 @@ fn serve_peer(
             if server.read_db()?.replication_role() != NodeRole::Primary {
                 return Err(refuse(stream, NOT_PRIMARY));
             }
+            server.read_db()?.replication_election_position()?;
             if config.replication.record_journal != journal_identity.is_some() {
                 return Err(refuse(
                     stream,
                     "record journal mode differs between replicas",
                 ));
+            }
+            if !data_epoch_qualified {
+                return send_snapshot(server, config, stream, &peer);
             }
             if let Some(identity) = journal_identity {
                 let db = server.read_db()?;
@@ -758,6 +766,7 @@ fn serve_peer(
                 ));
             }
             let db = server.read_db()?;
+            db.require_replication_primary_epoch(epoch)?;
             if epoch >= db.replication_epoch() && db.replication_role() != NodeRole::Primary {
                 // The current primary is alive even if its stream is not.
                 runtime.heard_now();
@@ -787,6 +796,7 @@ fn stream_to_standby(
     if server.read_db()?.replication_role() != NodeRole::Primary {
         return Err(refuse(stream, NOT_PRIMARY));
     }
+    server.read_db()?.replication_election_position()?;
     let resume = server
         .read_db()?
         .standby_resume(standby_epoch, applied)
@@ -1251,12 +1261,21 @@ fn follow_once(
         .map(|failover| failover.timeout / 2);
     let mut stream = connect_peer(config, primary, server_name, connect_timeout, runtime)?;
     let stream = stream.as_mut();
-    let (applied, epoch, data_epoch, journal_identity) = {
+    let (applied, epoch, data_epoch, data_epoch_qualified, journal_identity) = {
         let db = server.read_db()?;
+        let (data_epoch, applied, qualified) = match db.replication_resume_position()? {
+            Some((epoch, applied)) => (epoch, applied, true),
+            None => (
+                db.ha_node_status().data_epoch,
+                db.last_applied_commit_seq(),
+                false,
+            ),
+        };
         (
-            db.last_applied_commit_seq(),
+            applied,
             db.replication_epoch(),
-            db.ha_node_status().data_epoch,
+            data_epoch,
+            qualified,
             if config.replication.record_journal {
                 Some((
                     db.node_id().to_string(),
@@ -1278,6 +1297,7 @@ fn follow_once(
             node_id: config.replication.node_id.clone(),
             commit_seq: applied,
             data_epoch,
+            data_epoch_qualified,
             journal_identity,
         },
     )?;
@@ -1437,6 +1457,12 @@ fn follow_once(
                         "heartbeat does not match the applied prefix",
                     ));
                 }
+                // This connection's authenticated primary accepted our Resume.
+                // Qualify only its now durable, exactly applied prefix, never
+                // merely its learned authority epoch or a partial lower batch.
+                server
+                    .read_db()?
+                    .qualify_replication_data_epoch(&node_id, epoch, applied)?;
                 *server.replica_read_watermark.lock().unwrap() =
                     if source_commit_seq == Some(applied) {
                         Some(round_started)
@@ -1492,13 +1518,8 @@ fn run_election(
     let (term, epoch, data_epoch, last_commit_seq) = {
         let db = server.read_db()?;
         let term = db.begin_candidacy(node_id).map_err(PgWireError::from)?;
-        let status = db.ha_node_status();
-        (
-            term,
-            status.epoch,
-            status.data_epoch,
-            db.last_applied_commit_seq(),
-        )
+        let (data_epoch, applied) = db.replication_election_position()?;
+        (term, db.replication_epoch(), data_epoch, applied)
     };
     eprintln!(
         "bicdb replication: no primary for {:?}; standing for election in term {term} at commit {last_commit_seq}",

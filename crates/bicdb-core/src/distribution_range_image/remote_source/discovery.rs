@@ -7,6 +7,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub(crate) enum NativeSourceDiscoveryOperationV1 {
     Start,
     Describe,
+    /// Read the original retained certificate after export retirement; never starts a capture.
+    DecisionProvenance,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -142,6 +144,9 @@ impl NativeSourceDiscoveryRequestV1 {
 pub(crate) struct NativeSourceDiscoveryReplyV1 {
     pub request: NativeSourceDiscoveryRequestV1,
     pub manifest: NativeRemoteImageManifestV1,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decision_provenance:
+        Option<crate::distribution_range_handoff::NativeRemoteDecisionSourceData>,
     pub source_metadata_context: Uuid,
     pub source_metadata_term: u64,
     pub source_metadata_read_index: u64,
@@ -153,7 +158,11 @@ impl NativeSourceDiscoveryReplyV1 {
         v.checksum_sha256.clear();
         Ok(hex::encode(Sha256::digest(bounded_json(
             &("native-source-discovery-v1", v),
-            2 * 1024 * 1024 + 32 * 1024,
+            if self.decision_provenance.is_some() {
+                4 * 1024 * 1024
+            } else {
+                2 * 1024 * 1024 + 32 * 1024
+            },
         )?)))
     }
 }
@@ -183,12 +192,22 @@ impl ActualNativeSourceDiscovery {
                 ));
             }
         }
-        let manifest = source.discover_current(
-            request.operation == NativeSourceDiscoveryOperationV1::Start,
-            own,
-            business,
-            parent,
-        )?;
+        let (manifest, decision_provenance) =
+            if request.operation == NativeSourceDiscoveryOperationV1::DecisionProvenance {
+                let manifest = source.export_retirement_manifest()?;
+                let proof = source.original_decision_provenance(&manifest, parent)?;
+                (manifest, Some(proof))
+            } else {
+                (
+                    source.discover_current(
+                        request.operation == NativeSourceDiscoveryOperationV1::Start,
+                        own,
+                        business,
+                        parent,
+                    )?,
+                    None,
+                )
+            };
         manifest.require_shape()?;
         if manifest.cluster_id != request.cluster_id
             || manifest.bootstrap_id != request.bootstrap_id
@@ -205,6 +224,7 @@ impl ActualNativeSourceDiscovery {
         let mut reply = NativeSourceDiscoveryReplyV1 {
             request,
             manifest,
+            decision_provenance,
             source_metadata_context: own.context_id(),
             source_metadata_term: own.term(),
             source_metadata_read_index: own.read_index(),

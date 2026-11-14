@@ -935,6 +935,44 @@ impl NativeRetainedRemoteImageSource {
             cancellation,
         }
     }
+    /// The original S2 capture has retired, but its actual certificate/freezes
+    /// remain owned. This read cannot revive its canceled exporter session.
+    pub(crate) fn original_decision_provenance(
+        &self,
+        manifest: &NativeRemoteImageManifestV1,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteDecisionSourceData> {
+        parent.check()?;
+        self.registry.require_original_process()?;
+        let old = {
+            let source = self
+                .session
+                .try_lock()
+                .ok_or_else(|| invalid("remote decision original source busy"))?;
+            let actual = source.manifest()?;
+            if !source.published
+                || source.capture.is_some()
+                || actual.checksum_sha256 != manifest.checksum_sha256
+            {
+                return Err(invalid(
+                    "remote decision source needs same retired export/manifest",
+                ));
+            }
+            self.require_completed_export_manifest(actual)?;
+            match &source.old {
+                ActualSourceOld::Remote(old) => old.clone(),
+                _ => {
+                    return Err(invalid(
+                        "remote decision original certificate no longer retained",
+                    ))
+                }
+            }
+        };
+        let result = crate::distribution_range_handoff::NativeRemoteDecisionSourceData::from_actual_certificate(&old, manifest)?;
+        self.registry.require_original_process()?;
+        parent.check()?;
+        Ok(result)
+    }
     pub(crate) fn actual_remote_old_certificate(
         &self,
     ) -> Result<Arc<NativeRemoteOldCutCertificate>> {

@@ -144,7 +144,7 @@ impl DecisionPublicationPoint<'_, '_> {
     }
 }
 impl BicDb {
-    fn require_registered_joint_decision_storage_healthy(&self) -> Result<()> {
+    pub(super) fn require_registered_joint_decision_storage_healthy(&self) -> Result<()> {
         self.check_recovery_state()?;
         let paged = self
             .paged_records
@@ -320,6 +320,7 @@ impl BicDb {
             post_quorum_metadata_term: role.metadata_term(),
             post_quorum_metadata_read_index: role.metadata_read_index(),
             native_page_xid: 0,
+            remote_provenance_sha256: None,
             checksum_sha256: String::new(),
         };
         if let Some(existing) =

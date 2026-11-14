@@ -348,6 +348,22 @@ impl NativeRemoteOldCutCertificate {
         self.require_current()?;
         Ok(self.facts.clone())
     }
+    pub(crate) fn decision_close_records(
+        &self,
+    ) -> Result<BTreeMap<ClusterNodeId, crate::db::NativeJointOldCloseRecordData>> {
+        self.require_current()?;
+        self.peers
+            .iter()
+            .map(|(id, frame)| {
+                let record = frame.reply().closed_native_record.as_ref().ok_or_else(|| {
+                    invalid("remote decision missing authenticated original OLD record")
+                })?;
+                record.require_materialized_facts(&self.facts[id])?;
+                record.require_plan(&self.plan)?;
+                Ok((id.clone(), record.clone()))
+            })
+            .collect()
+    }
     /// Historical DATA is checked against separately retained ACTUAL recipients
     /// by decision_owners. This getter alone grants no local OLD quorum.
     pub(super) fn decision_constraints(&self) -> Vec<NativeJointIrrevocableFacts> {

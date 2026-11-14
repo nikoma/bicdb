@@ -1,6 +1,7 @@
 //! Genuine mTLS participant creation/callback/handoff, following the actual
 //! S2 export retirement. No local OLD/NEW owner is passed to an RPC caller.
 use super::*;
+mod remote_decision_tests;
 use crate::distribution_range_handoff::{
     NativeRemoteNewFactSetV1, NativeRemoteNewOperationV1 as NewOp, NativeRemoteNewRequestV1,
     NativeRemoteNewRound,
@@ -8,14 +9,15 @@ use crate::distribution_range_handoff::{
 use crate::distribution_transport::AuthenticatedNativeRemoteNewFrame;
 
 pub(super) fn is_case(case: SourceCase) -> bool {
-    matches!(
-        case,
-        SourceCase::TargetRemoteNewPins
-            | SourceCase::TargetRemoteNewWrongFact
-            | SourceCase::TargetRemoteNewBeforeCancel
-            | SourceCase::TargetRemoteNewAfterCancel
-            | SourceCase::TargetRemoteNewChangedIntent
-    )
+    remote_decision_tests::is_case(case)
+        || matches!(
+            case,
+            SourceCase::TargetRemoteNewPins
+                | SourceCase::TargetRemoteNewWrongFact
+                | SourceCase::TargetRemoteNewBeforeCancel
+                | SourceCase::TargetRemoteNewAfterCancel
+                | SourceCase::TargetRemoteNewChangedIntent
+        )
 }
 #[test]
 fn native_registered_fifth_remote_new_actual_materialization_independent_fetch_all_pin_owners() {
@@ -353,4 +355,22 @@ pub(super) fn exercise(
     assert_eq!(native_before, native_after);
     assert_eq!(target_before, target_after);
     assert!(!factory.database.read().commit_admission_ready());
+    if remote_decision_tests::is_case(case) {
+        remote_decision_tests::exercise(
+            case,
+            clients,
+            services,
+            target_control,
+            factory,
+            pending,
+            ranges,
+            mf,
+            phase_id,
+            &facts,
+            acknowledged,
+            output,
+            journal,
+            &mut ledger,
+        );
+    }
 }

@@ -16,6 +16,12 @@ impl NativeInitialDataAdmission {
         parent: &CancellationToken,
     ) -> Result<NativeRemoteNewReplyV1> {
         let token = request.cancellation(parent)?;
+        if matches!(
+            &request.operation,
+            NativeRemoteNewOperationV1::PublishDecision { .. }
+        ) {
+            return Err(invalid("OLD-only remote native DECISION publication not implemented; original custody retained"));
+        }
         self.require_initial_source_hosting()?;
         let process = self
             .image_sources
@@ -154,6 +160,7 @@ impl NativeInitialDataAdmission {
             request: request.clone(),
             snapshot: state.snapshot().clone(),
             handoff: state.handoff_outcome()?,
+            native_decision: None,
             metadata_term: current.own.term(),
             metadata_read_index: current.own.read_index(),
             metadata_context_id: current.own.context_id(),

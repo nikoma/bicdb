@@ -114,6 +114,11 @@ impl TcpClusterRelocationTransport {
             other => return Err(unexpected_response("source discovery", other)),
         };
         let mf = &reply.manifest;
+        match (&reply.decision_provenance, request.operation) {
+            (Some(proof), crate::distribution_range_image::NativeSourceDiscoveryOperationV1::DecisionProvenance) => proof.require_manifest(mf)?,
+            (None, crate::distribution_range_image::NativeSourceDiscoveryOperationV1::Start | crate::distribution_range_image::NativeSourceDiscoveryOperationV1::Describe) => {},
+            _ => return Err(transport_error("source decision provenance absent/unrequested")),
+        }
         mf.require_shape()?;
         if reply.request != *request
             || reply.source_metadata_context.is_nil()

@@ -370,6 +370,21 @@ impl NativeSourceExportReplyV1 {
 }
 
 impl NativeRetainedRemoteImageSource {
+    pub(super) fn require_completed_export_manifest(
+        &self,
+        manifest: &NativeRemoteImageManifestV1,
+    ) -> Result<()> {
+        let retired = self
+            .export_retirement
+            .try_lock()
+            .ok_or_else(|| invalid("remote decision terminal custody busy"))?;
+        retired
+            .completed
+            .as_ref()
+            .ok_or_else(|| invalid("remote decision source terminal outcome absent"))?
+            .binding
+            .require_manifest(manifest)
+    }
     #[cfg(test)]
     pub(super) fn test_export_retirement_state(&self) -> Result<serde_json::Value> {
         let state = self

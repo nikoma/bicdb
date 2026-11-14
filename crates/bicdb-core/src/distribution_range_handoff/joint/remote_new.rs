@@ -7,7 +7,12 @@ use crate::distribution_range_image::{NativeRemoteImageManifestV1, NativeSourceE
 use crate::CancellationToken;
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
+mod decision;
 mod participant;
+pub(crate) use decision::{
+    NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,
+    NativeRemoteDecisionSourceData,
+};
 pub(crate) use participant::{
     NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit, NativeRemoteNewTargetPinIssuance,
 };
@@ -57,7 +62,13 @@ impl NativeRemoteNewFactSetV1 {
 pub(crate) enum NativeRemoteNewOperationV1 {
     Materialize,
     Observe,
-    PrepareDecision { facts: NativeRemoteNewFactSetV1 },
+    PrepareDecision {
+        facts: NativeRemoteNewFactSetV1,
+    },
+    /// Publish one actual recipient native DECISION; no catalogue vote or Serving.
+    PublishDecision {
+        facts: NativeRemoteNewFactSetV1,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -85,7 +96,9 @@ impl NativeRemoteNewRequestV1 {
         {
             return Err(invalid("invalid bounded remote NEW request"));
         }
-        if let NativeRemoteNewOperationV1::PrepareDecision { facts } = &self.operation {
+        if let NativeRemoteNewOperationV1::PrepareDecision { facts }
+        | NativeRemoteNewOperationV1::PublishDecision { facts } = &self.operation
+        {
             facts.require_manifest(&self.manifest)?;
             if facts.phase_id != self.phase_id {
                 return Err(invalid(
@@ -349,6 +362,8 @@ pub(crate) struct NativeRemoteNewReplyV1 {
     pub request: NativeRemoteNewRequestV1,
     pub snapshot: NativeRemoteNewSnapshotV1,
     pub handoff: Option<NativeRemoteNewHandoffV1>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub native_decision: Option<NativeRemoteDecisionReceiptV1>,
     pub metadata_term: u64,
     pub metadata_read_index: u64,
     pub metadata_context_id: Uuid,
@@ -390,7 +405,9 @@ impl NativeRemoteNewReplyV1 {
                     "remote NEW handoff changed retained actual snapshot",
                 ));
             }
-            if let NativeRemoteNewOperationV1::PrepareDecision { facts } = &request.operation {
+            if let NativeRemoteNewOperationV1::PrepareDecision { facts }
+            | NativeRemoteNewOperationV1::PublishDecision { facts } = &request.operation
+            {
                 if handoff.fact_set_sha256 != facts.checksum_sha256 {
                     return Err(invalid(
                         "remote NEW handoff changed its exact intended fact set",
@@ -400,10 +417,21 @@ impl NativeRemoteNewReplyV1 {
         } else if matches!(
             request.operation,
             NativeRemoteNewOperationV1::PrepareDecision { .. }
+                | NativeRemoteNewOperationV1::PublishDecision { .. }
         ) {
             return Err(invalid(
                 "remote NEW preparation returned no actual handoff outcome",
             ));
+        }
+        match (&request.operation, &self.native_decision) {
+            (NativeRemoteNewOperationV1::PublishDecision { facts }, Some(receipt)) => {
+                receipt.require_request(request, facts)?
+            }
+            (NativeRemoteNewOperationV1::PublishDecision { .. }, None) => {
+                return Err(invalid("native DECISION outcome not proved"))
+            }
+            (_, None) => {}
+            _ => return Err(invalid("unrequested native DECISION outcome")),
         }
         Ok(())
     }

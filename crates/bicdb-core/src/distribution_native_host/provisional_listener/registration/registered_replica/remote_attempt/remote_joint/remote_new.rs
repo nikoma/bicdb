@@ -61,7 +61,11 @@ impl NativeRegisteredReplicaAdmission {
             &backend.service,
             peer,
             request,
-            matches!(&request.operation, NativeRemoteNewOperationV1::Materialize),
+            matches!(
+                &request.operation,
+                NativeRemoteNewOperationV1::Materialize
+                    | NativeRemoteNewOperationV1::PublishDecision { .. }
+            ),
             &token,
         )?;
         if first.metadata_store_id() != self.metadata_store_id {
@@ -126,7 +130,64 @@ impl NativeRegisteredReplicaAdmission {
         state.retain_request(request)?;
         state.require_current(&token)?;
         first.require_current()?;
+        let mut native_decision = None;
         let current = if matches!(
+            &request.operation,
+            NativeRemoteNewOperationV1::PublishDecision { .. }
+        ) {
+            let role = first
+                .role
+                .as_ref()
+                .ok_or_else(|| invalid("remote DECISION initial actual Role absent"))?;
+            let plan =
+                NativeJointHandoffPlan::from_actual_role_and_own(role, &first.own, first.business)?;
+            let source = backend.transport.fetch_remote_decision_source(
+                &plan,
+                &request.manifest,
+                &first.own,
+                first.business,
+                &token,
+            )?;
+            let fetched = backend.transport.fetch_remote_native_new_fact_set(
+                request,
+                &first.own,
+                first.business,
+                &token,
+            )?;
+            drop(first);
+            let fresh = RemoteNewRecipientMetadata::acquire(
+                &backend.provider,
+                &backend.transport,
+                backend.metadata.clone(),
+                &backend.service,
+                peer,
+                request,
+                true,
+                &token,
+            )?;
+            if fresh.metadata_store_id() != self.metadata_store_id {
+                return Err(invalid(
+                    "remote DECISION changed original target MStore UUID",
+                ));
+            }
+            native_decision = Some(
+                state.publish_remote_decision(
+                    request,
+                    fetched,
+                    source,
+                    fresh
+                        .role
+                        .as_ref()
+                        .ok_or_else(|| invalid("remote DECISION final actual Role absent"))?
+                        .clone(),
+                    fresh.own.clone(),
+                    fresh.business,
+                    fresh.point.clone(),
+                    &token,
+                )?,
+            );
+            fresh
+        } else if matches!(
             &request.operation,
             NativeRemoteNewOperationV1::PrepareDecision { .. }
         ) {
@@ -188,6 +249,7 @@ impl NativeRegisteredReplicaAdmission {
             request: request.clone(),
             snapshot: state.snapshot().clone(),
             handoff: state.handoff_outcome()?,
+            native_decision,
             metadata_term: current.own.term(),
             metadata_read_index: current.own.read_index(),
             metadata_context_id: current.own.context_id(),
@@ -203,6 +265,63 @@ impl NativeRegisteredReplicaAdmission {
 
 #[cfg(test)]
 impl NativeMetadataControlHost {
+    pub(crate) fn test_arm_remote_native_decision_cut(
+        &self,
+        range: crate::RangeId,
+        code: u8,
+    ) -> Result<()> {
+        let owner = self.registered_remote_joint_owner(range)?;
+        let phase = owner
+            .remote_new
+            .try_lock()
+            .ok_or_else(|| invalid("remote DECISION original phase busy"))?
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| invalid("remote DECISION original phase absent"))?;
+        phase.test_arm_remote_decision_cut(code)
+    }
+    pub(crate) fn test_remote_native_decision_current_reader_refusals(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        let owner = self.registered_remote_joint_owner(range)?;
+        let service = owner
+            .service()
+            .try_lock()
+            .ok_or_else(|| invalid("reader control original service busy"))?;
+        let database = service.database();
+        let db = database
+            .try_read()
+            .ok_or_else(|| invalid("reader control original DB busy"))?;
+        db.test_remote_native_decision_current_reader_refusals(owner.target().native(), range)
+    }
+    pub(crate) fn test_remote_native_decision_evidence(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        // MEMORY-ONLY custody observation after WriteFailed. Do not run the
+        // ordinary actual-native identity getter on an intentionally fenced DB.
+        // This cannot issue an owner handle or recover any native authority.
+        let receiver = self
+            .replica
+            .as_ref()
+            .ok_or_else(|| invalid("remote DECISION original receiver absent"))?;
+        let owner = receiver
+            .remote_joint_targets
+            .try_lock()
+            .ok_or_else(|| invalid("remote DECISION retained owner table busy"))?
+            .get(&range)
+            .cloned()
+            .ok_or_else(|| invalid("remote DECISION original owner absent"))?;
+        let phase = owner
+            .remote_new
+            .try_lock()
+            .ok_or_else(|| invalid("remote DECISION original phase busy"))?
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| invalid("remote DECISION original phase absent"))?;
+        phase.test_remote_decision_evidence()
+    }
     pub(crate) fn test_arm_remote_new_cancel_at_handoff(
         &self,
         range: crate::RangeId,

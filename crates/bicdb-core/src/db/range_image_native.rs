@@ -111,8 +111,12 @@ mod serving_configuration;
 pub(crate) use native_read::{
     NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,
 };
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use serving_configuration::test_remote_joint_decision_cut;
 #[cfg(feature = "tls-replication")]
 pub(crate) use serving_configuration::NativeRegisteredJointDecisionAttempt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use serving_configuration::NativeRemoteJointDecisionAttempt;
 pub(crate) use serving_configuration::{
     NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,
     NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,

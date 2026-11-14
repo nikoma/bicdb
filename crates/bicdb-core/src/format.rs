@@ -84,8 +84,11 @@ pub const NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG: &str = "native_joined_re
 /// Additional Joined history/row projection; must include the SAME strict
 /// pending-WAL index reader before the first intent can reach native WAL.
 pub const NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG: &str = "native_joined_remote_image_v1";
+/// Required companion provenance for genuine remote native DECISION.
+pub const NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG: &str = "native_remote_joint_decision_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
     NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG,
+    NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG,
     NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG,
     SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG,
     NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG,
@@ -680,6 +683,15 @@ fn migrate_to_current(
 }
 
 fn validate_supported(metadata: &FormatMetadata) -> Result<()> {
+    #[cfg(not(feature = "tls-replication"))]
+    if metadata
+        .feature_flags
+        .contains(NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG)
+    {
+        return Err(BicDbError::FormatCompatibility(
+            "remote decision semantic profile requires tls-replication reader".into(),
+        ));
+    }
     validate_supported_with_flags(metadata, KNOWN_FEATURE_FLAGS)
 }
 fn validate_supported_with_flags(metadata: &FormatMetadata, known: &[&str]) -> Result<()> {
@@ -2021,4 +2033,66 @@ pub(crate) fn native_joined_remote_image_active(root: &Path) -> Result<bool> {
     Ok(metadata
         .feature_flags
         .contains(NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG))
+}
+
+/// Re-fsync on every continuation; a visible flag after failed directory fsync
+/// does not prove the older-reader refusal is durable.
+#[cfg(feature = "tls-replication")]
+pub(crate) fn enable_native_remote_joint_decision(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "remote DECISION requires actual joint/image reader fences".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG.into());
+    persist_metadata_with(root, &metadata, true, |path, bytes, sync| {
+        storage::replace_durably(
+            path,
+            storage::ReplaceContents::Plain(bytes),
+            sync,
+            "remote_joint_decision.format",
+            storage::FailClosed::No,
+        )
+    })
+}
+pub(crate) fn native_remote_joint_decision_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG))
+}
+#[cfg(test)]
+pub(crate) fn test_old_reader_without_remote_joint_decision(root: &Path) -> Result<()> {
+    let metadata = read_or_legacy_metadata(root)?;
+    let old: Vec<_> = KNOWN_FEATURE_FLAGS
+        .iter()
+        .copied()
+        .filter(|f| *f != NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG)
+        .collect();
+    validate_supported_with_flags(&metadata, &old)
+}
+
+#[cfg(all(test, not(feature = "tls-replication")))]
+pub(crate) fn test_publish_remote_joint_decision_reader_refusal_only(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
 }

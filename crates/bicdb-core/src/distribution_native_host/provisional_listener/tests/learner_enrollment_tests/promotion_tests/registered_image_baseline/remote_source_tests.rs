@@ -17,6 +17,10 @@ pub(super) mod two_range_stall_tests;
 #[derive(Clone, Copy, Debug)]
 pub(super) enum SourceCase {
     TwoRangeSourceReplyStall,
+    TargetRemoteDecision,
+    TargetRemoteDecisionPostCommitCancel,
+    TargetRemoteDecisionBeforePutCancel,
+    TargetRemoteDecisionCommitUnknown,
     TargetRemoteNewPins,
     TargetRemoteNewWrongFact,
     TargetRemoteNewBeforeCancel,

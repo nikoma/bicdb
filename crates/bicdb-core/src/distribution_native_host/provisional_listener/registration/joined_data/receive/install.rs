@@ -12,8 +12,8 @@ pub(crate) struct NativeJoinedRemoteInstallPreflight {
     readonly_plan: crate::distribution_range_handoff::NativeJointReadOnlyPlanIdentity,
 }
 impl NativeJoinedRemoteInstallPreflight {
-    pub(crate) fn service(&self) -> &Arc<Mutex<ClusterDataNodeService>> {
-        &self.selected.origin().parts.backend.service
+    pub(crate) fn service(&self) -> Result<Arc<Mutex<ClusterDataNodeService>>> {
+        Ok(self.selected.origin().backend()?.service.clone())
     }
     pub(crate) fn readonly_plan(
         &self,
@@ -58,14 +58,14 @@ impl NativeJoinedRemoteInstallPreflight {
     pub(crate) fn require_runtime(&self, runtime: &Arc<RangeRecoveryRuntime>) -> Result<()> {
         let origin = self.selected.origin();
         origin.require_live()?;
-        if !Arc::ptr_eq(&origin.parts.runtime, runtime) {
+        if !Arc::ptr_eq(&origin.runtime()?, runtime) {
             return Err(invalid(
                 "Joined install preflight changed actual original runtime",
             ));
         }
         origin
-            .admission
-            .require_listener(&origin.parts.backend.service, runtime)
+            .admission()?
+            .require_listener(&origin.backend()?.service, runtime)
     }
     pub(crate) fn require_request(
         &self,
@@ -102,6 +102,110 @@ impl NativeJoinedRemoteInstallPreflight {
         }
         request.require_metadata_current()
     }
+    /// Physical work outside Runtime.sessions; then consume/drop the temporary
+    /// N Arc before the callback. The point is lexical with the exact held
+    /// service/Store/DB/hook/journal and never escapes as a Boolean grant.
+    pub(crate) fn with_rotation_point<R>(
+        self: &Arc<Self>,
+        request: &NativeJoinedRangeReceiveRequest,
+        frame: &NativeRemoteImageStep<'_>,
+        temporary_n: Arc<FrozenRangeMutationPermit>,
+        operation: impl for<'point, 'physical> FnOnce(
+            &'point crate::db::NativeJoinedRemoteRotationPoint<'physical>,
+        ) -> Result<R>,
+    ) -> Result<R> {
+        self.require_metadata_current(request)?;
+        self.require_request(request, frame)?;
+        request.require_original_frozen(&temporary_n)?;
+        let origin = self.selected.origin();
+        // Lexical strong owners, never stored in runtime custody: the final
+        // memory refusal need not upgrade/drop complex owners under its short
+        // gate, and host teardown cannot destroy these checked originals
+        // until after that callback and all physical guards have returned.
+        let _original = origin.original()?;
+        let _admission = origin.admission()?;
+        let backend = origin.backend()?;
+        let factory = origin.factory()?;
+        let service = backend.service.try_lock().ok_or_else(|| {
+            invalid("Joined rotation actual service busy before physical prepare")
+        })?;
+        let database = service.database();
+        if !Arc::ptr_eq(&database, &factory.database) {
+            return Err(invalid("Joined rotation changed actual DB owner"));
+        }
+        let db = database
+            .try_read()
+            .ok_or_else(|| invalid("Joined rotation actual DB busy before physical prepare"))?;
+        service.with_writer_data_domain_store(&db, |store| {
+            db.with_joined_remote_rotation_point(
+                store,
+                self,
+                request,
+                frame,
+                temporary_n,
+                operation,
+            )
+        })
+        // The callback may have consumed N into the original retained A. No
+        // later check is allowed to require old N or discard that exact owner.
+    }
+    /// Runtime custody is checked outside engine/service locks. The lexical
+    /// engine scope accepts only this exact opaque A lease and fresh source
+    /// request, never a caller-selected Frozen or a persisted DTO.
+    pub(crate) fn with_attempt_scope<R>(
+        self: &Arc<Self>,
+        request: &NativeJoinedRangeReceiveRequest,
+        frame: &NativeRemoteImageStep<'_>,
+        lease: &crate::distribution_range_recovery::JoinedRemoteImageInstallFreeze,
+        operation: impl for<'scope, 'physical> FnOnce(
+            &BicDb,
+            &RangeWriteStore,
+            &'scope crate::db::NativeJoinedRemoteAttemptScope<'physical>,
+        ) -> Result<R>,
+    ) -> Result<R> {
+        self.require_metadata_current(request)?;
+        self.require_request(request, frame)?;
+        lease.require_retained()?;
+        if !Arc::ptr_eq(self, lease.preflight()) {
+            return Err(invalid("Joined attempt scope changed original retained A"));
+        }
+        let result = {
+            let origin = self.selected.origin();
+            let _original = origin.original()?;
+            let _admission = origin.admission()?;
+            let backend = origin.backend()?;
+            let factory = origin.factory()?;
+            let service = backend
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("Joined attempt actual service busy"))?;
+            let database = service.database();
+            if !Arc::ptr_eq(&database, &factory.database) {
+                return Err(invalid("Joined attempt changed original actual DB"));
+            }
+            let db = database
+                .try_read()
+                .ok_or_else(|| invalid("Joined attempt actual DB busy"))?;
+            db.with_joined_remote_attempt_scope(self, request, frame, lease, |scope| {
+                service.with_writer_data_domain_store(&db, |store| operation(&db, store, scope))
+            })
+        };
+        let post = self
+            .require_metadata_current(request)
+            .and_then(|()| lease.require_retained())
+            .and_then(|()| self.require_request(request, frame));
+        match result {
+            Err(primary) => {
+                let _ = post;
+                Err(primary)
+            }
+            Ok(value) => {
+                post?;
+                Ok(value)
+            }
+        }
+    }
+
     /// Necessary actual PRE-rotation point. No Runtime/MStore lock is acquired
     /// here; the full physical precheck MUST occur before Runtime.sessions,
     /// then the final separately prepared memory-only point is used under
@@ -115,14 +219,14 @@ impl NativeJoinedRemoteInstallPreflight {
     ) -> Result<()> {
         self.require_request(request, frame)?;
         let origin = self.selected.origin();
-        let service = origin
-            .parts
-            .backend
+        let backend = origin.backend()?;
+        let factory = origin.factory()?;
+        let service = backend
             .service
             .try_lock()
             .ok_or_else(|| invalid("Joined install original service busy before rotation"))?;
         let database = service.database();
-        if !Arc::ptr_eq(&database, &origin.parts.factory.database) {
+        if !Arc::ptr_eq(&database, &factory.database) {
             return Err(invalid("Joined install changed actual DB before rotation"));
         }
         let db = database

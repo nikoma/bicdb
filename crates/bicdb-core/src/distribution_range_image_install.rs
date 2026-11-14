@@ -57,6 +57,8 @@ pub(crate) enum NativeImageInstallFreeze {
     Recovery(crate::distribution_range_recovery::RecoveryImageInstallFreeze),
     #[cfg(feature = "tls-replication")]
     RegisteredRemote(crate::distribution_range_recovery::RegisteredRemoteImageInstallFreeze),
+    #[cfg(feature = "tls-replication")]
+    JoinedRemote(crate::distribution_range_recovery::JoinedRemoteImageInstallFreeze),
 }
 impl From<FrozenRangeMutationPermit> for NativeImageInstallFreeze {
     fn from(frozen: FrozenRangeMutationPermit) -> Self {
@@ -79,12 +81,22 @@ impl NativeImageInstallFreeze {
             _ => false,
         }
     }
+    /// Refusal only: Joined must use its own activation/release producer.
+    pub(crate) fn requires_joined_remote_release(&self) -> bool {
+        #[cfg(feature = "tls-replication")]
+        if matches!(self, Self::JoinedRemote(_)) {
+            return true;
+        }
+        false
+    }
     pub(crate) fn try_as_frozen(&self) -> Result<&FrozenRangeMutationPermit> {
         match self {
             Self::Standalone(f) => Ok(f),
             Self::Recovery(lease) => lease.try_as_frozen(),
             #[cfg(feature = "tls-replication")]
             Self::RegisteredRemote(lease) => lease.try_as_frozen(),
+            #[cfg(feature = "tls-replication")]
+            Self::JoinedRemote(lease) => lease.try_as_frozen(),
         }
     }
     pub(crate) fn as_frozen(&self) -> &FrozenRangeMutationPermit {
@@ -93,6 +105,8 @@ impl NativeImageInstallFreeze {
             Self::Recovery(lease) => lease.as_frozen(),
             #[cfg(feature = "tls-replication")]
             Self::RegisteredRemote(lease) => lease.as_frozen(),
+            #[cfg(feature = "tls-replication")]
+            Self::JoinedRemote(lease) => lease.as_frozen(),
         }
     }
     fn require_install_start(
@@ -107,6 +121,11 @@ impl NativeImageInstallFreeze {
         if let Self::RegisteredRemote(_) = self {
             return Err(invalid(
                 "Registered remote freeze requires its distinct Installing/history/row producer",
+            ));
+        }
+        if self.requires_joined_remote_release() {
+            return Err(invalid(
+                "Joined remote freeze requires its distinct owned image producer",
             ));
         }
         if let Self::Recovery(lease) = self {

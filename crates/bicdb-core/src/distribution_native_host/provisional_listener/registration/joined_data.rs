@@ -47,6 +47,7 @@ pub(super) struct NativeJoinedDataHost {
     // stays owned through all subsequent failures; no generic re-enrollment.
     registered: Option<assigned_data::NativeRegisteredJoinedDataTransfer>,
     selected_range: Option<crate::RangeDescriptor>,
+    remote_attempts: BTreeMap<crate::RangeId, receive::NativeJoinedRemoteInstallAttempt>,
 }
 impl Drop for NativeJoinedDataHost {
     fn drop(&mut self) {
@@ -84,6 +85,7 @@ impl NativeJoinedDataHost {
             stopping: false,
             registered: None,
             selected_range: None,
+            remote_attempts: BTreeMap::new(),
         })
     }
     /// Infallible owner retention immediately after the source moved its real
@@ -108,6 +110,7 @@ impl NativeJoinedDataHost {
             published: Arc::new(AtomicBool::new(false)),
             stopping: false,
             selected_range: Some(transfer.range.clone()),
+            remote_attempts: BTreeMap::new(),
             registered: Some(transfer),
         }
     }

@@ -45,42 +45,41 @@ lost reply is not a new N, attempt, transaction or source capture.
 
 ## Physical preparation / FINAL memory boundary
 
-Fixed public-to-the-team names, implementation pending in A:
+Implemented in A, not compiled or executed yet:
 
 ```
-NativeJoinedRemoteRotationPoint<'scope>
-    ::prepare(...) -> Result<Self>       // actual I/O, OUTSIDE sessions
-    .require_current_memory(
-        store: &RangeWriteStore,
-        actual_unique_n: &FrozenRangeMutationPermit,
-    ) -> Result<()>                     // bounded memory only
+preflight.with_rotation_point(
+    request, frame, temporary_n_Arc_BY_VALUE,
+    |point: &NativeJoinedRemoteRotationPoint<'_>| { ... },
+) -> Result<R>
+point.require_owner_publication_memory(
+    actual_gate: &FrozenRangeOwnerPublication<'_>
+)
+point.publication_guard() -> NativeMetadataPublicationGuard<'_>
 ```
 
-`prepare` receives the exact `Arc<NativeJoinedRemoteInstallPreflight>`, current
-request and live source frame and borrows the **actual** service/Store/DB/
-hook/admission/native journal. It performs every source/selected/native/schema/
-policy/canonical/hash/custody check before the final boundary. The point's
-private representation must tie those checked facts lexically to the held
-physical guards and exact immutable candidate. It is not a boolean or weak ID.
+The host helper performs current-MStore/runtime checks BEFORE service/DB
+borrowing, and uses the exact physical service/Store/DB. The DB half in
+`db/range_image_native/writer_enrollment/joined_receive/rotation.rs` acquires
+actual admission/hook/journal guards and validates a transient borrowed storage
+view against the exact preflight, native/policy/source/schema/catalogue facts.
+Its private guard bundle does not borrow N. It captures the actual gate/private
+lease identity, then explicitly drops the consumed temporary N Arc BEFORE
+calling the runtime callback. The point cannot escape that callback.
 
-It captures `FrozenRangeMutationIdentity` (actual gate/private lease/owner),
-NOT a borrowed or Weak permit Arc. The caller's temporary N Arc can then drop
-so the runtime can obtain its unique actual N and rotate it. Reacquiring a
-fresh physical scope after dropping that temporary Arc is allowed only if it
-rechecks all actual facts under the new scope; a detached precheck is no grant.
-
-After physical preparation, B takes its selected operation/session and actual
-service/slot binding without performing I/O under Runtime.sessions. Final use
-checks exact current original owners, unique N/private lease, same checked
-State/slot and the actual member publication version. No full `require_live`,
-canonicalize, fsync, native read, serde/hash, callback or destructor under the
-short final guard. Fresh actual Role/OWN + local version + native epoch/quorum
-fences compose; the local guard is not a distributed lease. Preparation may
-need a callback borrowing the physical guard bundle rather than an escaping
-owned value; the lexical requirement takes precedence over syntactic shape.
+After physical preparation, B takes its selected session and actual unique N.
+The callback uses the point's actual member publication guard and memory-only
+check, then consumes N into the original retained A. No full `require_live`,
+canonicalize, fsync, native read, serde/hash or application callback occurs in
+that final memory check. The check uses separate request/owner liveness,
+sealed source-frame cancellation/deadline, actual private freeze identity,
+installed State/registration and sticky Core/page/WAL health. Actual physical
+guards remain lexically held throughout the callback. It never repeats an old-N
+postcheck after the callback has consumed N. Fresh Role/OWN + local version +
+native epoch/quorum fences compose; the local guard is not a distributed lease.
 
 A and B must review the final lexical representation before enabling transfer.
-No current type implements this final rotation point yet.
+The implementation is source only; runtime custody/rotation and acceptance are separate B work.
 
 ## Runtime custody and owned attempt (B/A)
 
@@ -141,3 +140,40 @@ No SOURCE/INITIAL bindings are created. Future Joined donor duties, cold
 reconstruction, controller integration, disk-stall progress and physical scale
 qualification remain separate. The complete two-populated-range acceptance is
 not executed or implemented by this interface note.
+
+### Pending runtime custody has no host ownership backedge
+
+The runtime owns the actual preflight and transferred A strongly. The retained
+receive origin consequently stores weak references to the actual runtime,
+backend, factory, admission, original FIRST continuation and coordinator. It
+copies the actual database-open and Store-slot guards, node/incarnation DATA,
+and retains the installed writer guard. It does not retain
+`RegisteredAssignedParts`. In particular the FIRST continuation can indirectly
+retain an image release lease/runtime and must remain weak here. The host keeps
+its original strong owners; no runtime-owned custody is weakened.
+
+Full physical operations upgrade those exact weak owners and retain each local
+Arc while borrowing its locks. `service()` returns
+`Result<Arc<Mutex<ClusterDataNodeService>>>`; consumers must bind the returned
+Arc before locking it. These upgrades do not create replacements or extend an
+expired request.
+
+The final memory-only refusal path checks the actual Joined lifetime, copied
+open/slot witnesses and whether the original weak FIRST owner has ended. That
+weak-count check is only an additional refusal, never proof of authority. It
+must not upgrade/drop a possible final complex owner under the publication
+guard. The physical wrapper lexically retains the upgraded exact FIRST owner and
+admission outside the gate; those owners drop only after the callback and
+physical guards return. The lexical physical point still owns the checked State/hook/native
+journal/DB/service guards and the sink independently requires the fresh request,
+actual local metadata version and unique original N.
+
+This source ownership correction has not independently exercised host teardown,
+row import, second-range activation or stalled disk I/O. Those remain runtime
+acceptance gates.
+
+The final owner consumer acquires the actual nonblocking gate publication borrow
+BEFORE the final request/Role/OWN/frame checks. A raw-permit precheck followed by
+blocking `try_rotate_owner` is not the final liveness boundary. The point's sole
+final API requires that actual held gate borrow and performs no recursive gate
+acquisition. The original request deadlines are unchanged.

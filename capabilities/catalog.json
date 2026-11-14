@@ -46,7 +46,7 @@
     "native_streaming_ha": {
       "acknowledged_commit_preservation": {
         "status": "conditional",
-        "summary": "Native synchronous HA can preserve acknowledged history with voter-majority copies and nondegrading policy.",
+        "summary": "Native synchronous commit-frame streaming; quorum settings alone do not establish acknowledged-commit preservation. Main handshake4 retains the issue190 data-epoch defect; snapshot and recovery qualification remain open.",
         "source_paths": [
           "crates/bicdb-pgwire/src/high_availability.rs",
           "crates/bicdb-core/src/db/replication_live.rs"
@@ -56,7 +56,10 @@
           "crates/bicdb-cli/tests/ha_failover_cli.rs"
         ],
         "conditions": [
-          "Identical static voting group; K >= floor(N/2); timeout policy fail; durable storage; handshake v4; qualify exact failure model."
+          "Identical static voting group; K >= floor(N/2); timeout policy fail; durable storage; actual current-main handshake v4. These settings alone do not establish preservation.",
+          "Current main retains source-confirmed election/snapshot/old-primary gaps issues190-193. The separate handshake5 correction is failed historical candidate evidence, not delivered source or production admission.",
+          "Transport carries CommitFrame records, not whole WAL; optional record_journal event payloads are disabled by default and do not establish every original transaction effect.",
+          "Exact-artifact failure/recovery qualification remains required; candidate issue200 archive-lineage and replicated-open failures are separate unresolved gates."
         ]
       },
       "automatic_primary_failover": {
@@ -70,7 +73,8 @@
           "crates/bicdb-pgwire/tests/embedded_ha.rs"
         ],
         "conditions": [
-          "At least three configured voters; client reconnection/ingress required."
+          "At least three configured voters; client reconnection/ingress required.",
+          "Implementation status is not timed failover/rejoin or snapshot-safety qualification; exact-artifact evidence and recovery gates remain required."
         ]
       },
       "automatic_range_rebalancing": {
@@ -188,37 +192,15 @@
         "test_paths": [],
         "conditions": []
       },
-      "native_automatic_range_rebalancing": {
+      "original_transaction_effect_replication": {
         "status": "unsupported",
-        "summary": "The enforced native range path has no production automatic placement/relocation controller; the one-range handoff driver requires local participant owners and same-process custody.",
+        "summary": "Range mutation quorum does not carry the original complete audit, sync and broker effect envelope; surviving rows do not establish effect parity (issue148).",
         "source_paths": [
-          "crates/bicdb-core/src/distribution_native_host/operator.rs",
-          "crates/bicdb-core/src/distribution_native_host/joined_data_handoff.rs",
-          "docs/design/native-fifth-data-path.md"
+          "crates/bicdb-core/src/db.rs",
+          "crates/bicdb-core/src/distribution_range_consensus.rs",
+          "crates/bicdb-core/src/db/spatial_paged.rs"
         ],
         "test_paths": [],
-        "conditions": []
-      },
-      "native_range_cold_handoff_recovery": {
-        "status": "unsupported",
-        "summary": "Losing the controller or a participant during native handoff has no complete cold reconstruction/continuation contract; ordinary database reopen does not recreate its live handoff owners.",
-        "source_paths": [
-          "crates/bicdb-core/src/distribution_native_host/joined_data_handoff.rs",
-          "docs/design/native-fifth-data-path.md"
-        ],
-        "test_paths": [],
-        "conditions": []
-      },
-      "native_range_broker_transactions": {
-        "status": "unsupported",
-        "summary": "Born-native transactions with pending broker publishes, including broker-only and mixed row/broker transactions, are refused before Prepare and application WAL. Row quorum capability does not supply broker replication.",
-        "source_paths": [
-          "crates/bicdb-core/src/db/range_image_native/writer_enrollment.rs",
-          "crates/bicdb-core/src/db/range_image_native/writer_enrollment/tests.rs"
-        ],
-        "test_paths": [
-          "crates/bicdb-core/src/db/range_image_native/writer_enrollment/tests.rs"
-        ],
         "conditions": []
       }
     },

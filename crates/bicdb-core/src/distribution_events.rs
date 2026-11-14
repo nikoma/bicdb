@@ -163,61 +163,183 @@ mod client {
         Interrupted,
     }
 
-    /// Outcome of waiting on the attempts of one request that are in flight.
-    enum Waited<T> {
-        /// An attempt (its number first) returned a decoded reply.
-        Replied(usize, T),
-        /// The attempt the caller is waiting for ended with an error.
+    /// Outcomes stay owned until every sibling has finished. They are local
+    /// diagnostics, not a distributed decision or permission to serve data.
+    enum CompletedOutcome {
+        Response(ClusterEventResponse),
+        RejectedResponse {
+            response: ClusterEventResponse,
+            error: usize,
+        },
+        Error(usize),
+    }
+    struct CompletedAttempt {
+        attempt: usize,
+        completed_at: std::time::Instant,
+        outcome: CompletedOutcome,
+    }
+    enum Waited {
+        Answered(usize),
         Failed,
-        /// The wait ended first, or nothing is in flight.
         Pending,
     }
-
-    /// Attempts of ONE request that were dispatched and have not reported.
-    /// Reaching the end of an attempt's slice of the budget only lets the
-    /// request go on to discovery and the next attempt; it does not hang up
-    /// on a member that accepted the request and is still executing it.
-    struct InFlight<T> {
-        replies: std::sync::mpsc::Receiver<(usize, Result<T>)>,
+    type AttemptReply = (usize, std::time::Instant, Result<ClusterEventResponse>);
+    struct InFlight {
+        replies: std::sync::mpsc::Receiver<AttemptReply>,
         attempts: Vec<(usize, crate::CancellationToken)>,
+        completed: Vec<CompletedAttempt>,
     }
-
-    impl<T> InFlight<T> {
-        /// Wait until `until` for a reply from any attempt, or for the error
-        /// of attempt `awaited`. Errors of other attempts are recorded and
-        /// the wait continues.
+    impl InFlight {
+        fn record(
+            &mut self,
+            (attempt, completed_at, reply): AttemptReply,
+            operation: &ClusterEventOperation,
+            errors: &mut EventOperationError,
+        ) -> Option<usize> {
+            self.attempts.retain(|(id, _)| *id != attempt);
+            // Keep the actual transport result even when its operation kind
+            // is wrong; that observation cannot resolve an uncertain append.
+            let index = self.completed.len();
+            let (outcome, answer) = match reply {
+                Ok(response) => {
+                    let matches_operation = matches!(
+                        (operation, &response),
+                        (
+                            ClusterEventOperation::Append { .. },
+                            ClusterEventResponse::Appended { .. }
+                        ) | (
+                            ClusterEventOperation::Scan { .. },
+                            ClusterEventResponse::Page { .. }
+                        )
+                    );
+                    if matches_operation {
+                        (CompletedOutcome::Response(response), Some(index))
+                    } else {
+                        let error =
+                            errors.write_failed(invalid("unexpected event operation response"));
+                        (CompletedOutcome::RejectedResponse { response, error }, None)
+                    }
+                }
+                Err(error) => (CompletedOutcome::Error(errors.write_failed(error)), None),
+            };
+            self.completed.push(CompletedAttempt {
+                attempt,
+                completed_at,
+                outcome,
+            });
+            answer
+        }
+        fn take_response(&mut self, index: usize) -> Result<ClusterEventResponse> {
+            match self.completed.swap_remove(index).outcome {
+                CompletedOutcome::Response(response) => Ok(response),
+                CompletedOutcome::Error(_) | CompletedOutcome::RejectedResponse { .. } => {
+                    Err(invalid("event ACK completion is not a response"))
+                }
+            }
+        }
         fn wait(
             &mut self,
             awaited: Option<usize>,
             until: std::time::Instant,
-            last_error: &mut BicDbError,
-        ) -> Waited<T> {
+            cancellation: &crate::CancellationToken,
+            operation: &ClusterEventOperation,
+            errors: &mut EventOperationError,
+        ) -> Result<Waited> {
+            loop {
+                // Includes the caller's thread-local memory/deadline envelope.
+                cancellation.check()?;
+                if self.attempts.is_empty() {
+                    return Ok(Waited::Pending);
+                }
+                let remaining = until.saturating_duration_since(std::time::Instant::now());
+                let reply = match self
+                    .replies
+                    .recv_timeout(remaining.min(std::time::Duration::from_millis(25)))
+                {
+                    Ok(reply) => reply,
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+                        if std::time::Instant::now() < until =>
+                    {
+                        continue
+                    }
+                    Err(_) => return Ok(Waited::Pending),
+                };
+                let attempt = reply.0;
+                if let Some(response) = self.record(reply, operation, errors) {
+                    cancellation.check()?;
+                    return Ok(Waited::Answered(response));
+                }
+                if awaited == Some(attempt) {
+                    return Ok(Waited::Failed);
+                }
+            }
+        }
+        fn hang_up(&mut self, operation: &ClusterEventOperation, errors: &mut EventOperationError) {
+            // Cancel all siblings, then retain EVERY returned outcome. DNS and
+            // user evidence callbacks retain their documented blocking limits.
+            for (_, token) in &self.attempts {
+                token.cancel();
+            }
+            while !self.attempts.is_empty() {
+                match self.replies.recv() {
+                    Ok(reply) => {
+                        self.record(reply, operation, errors);
+                    }
+                    Err(_) => break,
+                }
+            }
+        }
+    }
+
+    /// Typed reads of ONE request that were dispatched and have not reported.
+    /// The slice of the budget only releases the request to discovery and one
+    /// further read; it does not hang up on a member that is still reading.
+    type ReadReply = (
+        usize,
+        Result<crate::distribution_native_read::NativeEventGetReply>,
+    );
+    enum ReadWaited {
+        /// An exchange (its number first) returned a decoded typed reply.
+        Replied(usize, crate::distribution_native_read::NativeEventGetReply),
+        /// The exchange the caller is waiting for ended with an error.
+        Failed,
+        /// The wait ended first, or nothing is in flight.
+        Pending,
+    }
+    struct ReadsInFlight {
+        replies: std::sync::mpsc::Receiver<ReadReply>,
+        attempts: Vec<(usize, crate::CancellationToken)>,
+    }
+    impl ReadsInFlight {
+        fn wait(
+            &mut self,
+            awaited: Option<usize>,
+            until: std::time::Instant,
+            errors: &mut EventOperationError,
+        ) -> ReadWaited {
             loop {
                 if self.attempts.is_empty() {
-                    return Waited::Pending;
+                    return ReadWaited::Pending;
                 }
                 let remaining = until.saturating_duration_since(std::time::Instant::now());
                 let (attempt, reply) = match self.replies.recv_timeout(remaining) {
                     Ok(reply) => reply,
-                    Err(_) => return Waited::Pending,
+                    Err(_) => return ReadWaited::Pending,
                 };
                 self.attempts.retain(|(id, _)| *id != attempt);
                 match reply {
-                    Ok(reply) => return Waited::Replied(attempt, reply),
+                    Ok(reply) => return ReadWaited::Replied(attempt, reply),
                     Err(error) => {
-                        *last_error = error;
+                        errors.read_failed(error);
                         if awaited == Some(attempt) {
-                            return Waited::Failed;
+                            return ReadWaited::Failed;
                         }
                     }
                 }
             }
         }
-
-        /// Stop listening. One attempt at a time, so two ending exchanges
-        /// never record their diagnostics concurrently. Every attempt thread
-        /// reports exactly once; a cancelled socket exchange ends within its
-        /// polling interval and a connect within its own slice.
+        /// Stop listening, one exchange at a time. Every worker reports once;
+        /// a cancelled socket exchange ends within its polling interval.
         fn hang_up(&mut self) {
             while let Some((_, token)) = self.attempts.first() {
                 token.cancel();
@@ -241,6 +363,70 @@ mod client {
         silent_members:
             parking_lot::Mutex<std::collections::BTreeMap<ClusterNodeId, std::time::Instant>>,
     }
+
+    /// Keep the actual routed operation separate from later discovery failures.
+    /// A write whose outcome is unknown stays uncertain until a real success;
+    /// a later refusal cannot prove that earlier attempt rolled back.
+    #[derive(Default)]
+    struct EventOperationError {
+        // APP has at most five workers; keep their actual typed errors until
+        // final cleanup. The sequential Get path retains only its last error.
+        errors: Vec<crate::BicDbError>,
+        selected: Option<usize>,
+    }
+    impl EventOperationError {
+        fn write_failed(&mut self, error: crate::BicDbError) -> usize {
+            let uncertain = matches!(
+                self.selected.map(|index| &self.errors[index]),
+                Some(crate::BicDbError::CommitOutcomeUnknown { .. })
+                    | Some(crate::BicDbError::RpcEvidenceFailure {
+                        may_have_dispatched: true,
+                        ..
+                    })
+            );
+            let index = self.errors.len();
+            self.errors.push(error);
+            if !uncertain {
+                self.selected = Some(index);
+            }
+            index
+        }
+        fn take_evidence_or(&mut self, fallback: crate::BicDbError) -> crate::BicDbError {
+            // An actual same-operation ACK has resolved prior commit uncertainty.
+            // Preserve the original sibling fence detail, with no downgrade of
+            // a globally known may-have-dispatched observation.
+            let needs_dispatched = matches!(
+                &fallback,
+                crate::BicDbError::RpcEvidenceFailure {
+                    may_have_dispatched: true,
+                    ..
+                }
+            );
+            let index = self.errors.iter().position(|error| {
+                matches!(error,
+                crate::BicDbError::RpcEvidenceFailure { may_have_dispatched, .. }
+                    if !needs_dispatched || *may_have_dispatched)
+            });
+            index
+                .map(|index| self.errors.remove(index))
+                .unwrap_or(fallback)
+        }
+        fn read_failed(&mut self, error: crate::BicDbError) {
+            self.errors.clear();
+            self.errors.push(error);
+            self.selected = Some(0);
+        }
+        fn take_or(&mut self, fallback: crate::BicDbError) -> crate::BicDbError {
+            self.selected
+                .take()
+                .map(|index| self.errors.remove(index))
+                .unwrap_or(fallback)
+        }
+    }
+    #[cfg(test)]
+    mod error_retention_tests;
+    #[cfg(test)]
+    mod inflight_tests;
 
     impl ClusterEventClient {
         pub fn new(config: &DistributionConfig, topology: ClusterTopology) -> Result<Self> {
@@ -403,7 +589,15 @@ mod client {
                     crate::distribution_native_read::NativeEventReadMode::DeploymentDefault,
                 );
             }
-            let deadline = std::time::Instant::now() + self.request_timeout;
+            // Must run on the caller thread before spawning: an observer
+            // callback cannot escape same-sink reentry fencing on a new worker.
+            self.transport.require_rpc_evidence_call_entry()?;
+            crate::query_budget::check()?;
+            let budget = crate::query_budget::QueryBudgetContext::capture();
+            let configured_deadline = std::time::Instant::now() + self.request_timeout;
+            let deadline = budget.deadline().map_or(configured_deadline, |caller| {
+                caller.min(configured_deadline)
+            });
             let cancellation =
                 crate::CancellationToken::uncancelable().child_with_deadline(deadline);
             std::thread::scope(|scope| {
@@ -411,20 +605,43 @@ mod client {
                 let mut in_flight = InFlight {
                     replies,
                     attempts: Vec::new(),
+                    completed: Vec::new(),
                 };
+                let mut operation_error = EventOperationError::default();
                 let result = self.request_attempts(
                     scope,
                     &cancellation,
                     deadline,
+                    &budget,
                     &operation,
                     scan_range,
                     &reports,
                     &mut in_flight,
+                    &mut operation_error,
                 );
-                // Every RPC of this request ends before the request returns.
                 drop(reports);
-                in_flight.hang_up();
-                result
+                in_flight.hang_up(&operation, &mut operation_error);
+                match result {
+                    Ok(response) => {
+                        // The actual same-operation ACK resolves earlier commit
+                        // uncertainty, but cannot hide a sibling evidence fence.
+                        if let Err(error) = self.transport.require_rpc_evidence_current() {
+                            return Err(operation_error.take_evidence_or(error));
+                        }
+                        cancellation.check()?;
+                        in_flight.take_response(response)
+                    }
+                    Err(fallback) => {
+                        // A later sibling may have returned the uncertainty
+                        // during cleanup; select only after every outcome.
+                        let fallback = self
+                            .transport
+                            .require_rpc_evidence_current()
+                            .err()
+                            .unwrap_or(fallback);
+                        Err(operation_error.take_or(fallback))
+                    }
+                }
             })
         }
 
@@ -434,39 +651,42 @@ mod client {
             scope: &'scope std::thread::Scope<'scope, 'env>,
             cancellation: &crate::CancellationToken,
             deadline: std::time::Instant,
+            budget: &crate::query_budget::QueryBudgetContext,
             operation: &ClusterEventOperation,
             scan_range: Option<RangeId>,
-            reports: &std::sync::mpsc::Sender<(usize, Result<ClusterEventResponse>)>,
-            in_flight: &mut InFlight<ClusterEventResponse>,
-        ) -> Result<ClusterEventResponse> {
+            reports: &std::sync::mpsc::Sender<AttemptReply>,
+            in_flight: &mut InFlight,
+            operation_error: &mut EventOperationError,
+        ) -> Result<usize> {
             let mut last_error = invalid("event cluster request failed");
             for attempt in 0..5 {
+                cancellation.check()?;
                 self.transport.require_rpc_evidence_current()?;
-                if std::time::Instant::now() >= deadline {
-                    break;
-                }
                 if attempt > 0 {
                     let now = std::time::Instant::now();
                     let pause = std::time::Duration::from_millis(100 << (attempt - 1))
                         .min(deadline.saturating_duration_since(now));
-                    // An earlier attempt that is still executing may answer
-                    // during the pause; a pause with nothing in flight is the
-                    // plain backoff.
-                    if let Waited::Replied(_, response) =
-                        in_flight.wait(None, now + pause, &mut last_error)
-                    {
+                    if let Waited::Answered(response) = in_flight.wait(
+                        None,
+                        now + pause,
+                        cancellation,
+                        operation,
+                        operation_error,
+                    )? {
                         return Ok(response);
                     }
                     std::thread::sleep(
                         (now + pause).saturating_duration_since(std::time::Instant::now()),
                     );
-                    // A discovery outage during an election consumes a retry,
-                    // rather than aborting the remaining request budget. Invalid
-                    // or conflicting topologies still propagate through `?`.
+                    cancellation.check()?;
                     let discovery = self.refresh_members_until(deadline)?;
-                    if let Waited::Replied(_, response) =
-                        in_flight.wait(None, std::time::Instant::now(), &mut last_error)
-                    {
+                    if let Waited::Answered(response) = in_flight.wait(
+                        None,
+                        std::time::Instant::now(),
+                        cancellation,
+                        operation,
+                        operation_error,
+                    )? {
                         return Ok(response);
                     }
                     match discovery {
@@ -475,15 +695,10 @@ mod client {
                             last_error = invalid("no event cluster member is reachable");
                             continue;
                         }
-                        // The budget ended the round. Keep the error of the
-                        // last actual attempt: no member was shown to be
-                        // unreachable.
                         Discovery::Interrupted => break,
                     }
                 }
-                if std::time::Instant::now() >= deadline {
-                    break;
-                }
+                cancellation.check()?;
                 let (destination, request) = {
                     let topology = self.topology.read();
                     let range = if let Some(id) = scan_range {
@@ -505,30 +720,24 @@ mod client {
                         },
                     )
                 };
-                // Reserve part of the remaining budget for route discovery
-                // after a silent old leader. Otherwise every new request can
-                // exhaust its whole budget on the same stale route forever.
-                // The slice bounds how long this request WAITS on the route
-                // before asking the other members, and how long the attempt
-                // may spend connecting. It does not hang up on a member that
-                // accepted the request: a leader that is alive and still
-                // committing answers this same attempt, instead of having
-                // its work abandoned and repeated by a retry that then has
-                // even less of the budget.
+                // Preserve the half-budget discovery/retry schedule. Only the
+                // listening worker may wait for the SAME absolute deadline.
                 let now = std::time::Instant::now();
                 let slice_end = now + deadline.saturating_duration_since(now) / 2;
                 let token = cancellation.child();
                 let exchange = {
                     let token = token.clone();
                     let reports = reports.clone();
+                    let budget = budget.clone();
                     move || {
+                        let _budget = budget.install();
                         let reply = self.transport.application_event_listening(
                             &token,
                             slice_end,
                             &destination,
                             request,
                         );
-                        let _ = reports.send((attempt, reply));
+                        let _ = reports.send((attempt, std::time::Instant::now(), reply));
                     }
                 };
                 match std::thread::Builder::new()
@@ -537,19 +746,23 @@ mod client {
                 {
                     Ok(_) => in_flight.attempts.push((attempt, token)),
                     Err(error) => {
-                        last_error = error.into();
+                        operation_error.write_failed(error.into());
                         continue;
                     }
                 }
-                if let Waited::Replied(_, response) =
-                    in_flight.wait(Some(attempt), slice_end, &mut last_error)
-                {
+                if let Waited::Answered(response) = in_flight.wait(
+                    Some(attempt),
+                    slice_end,
+                    cancellation,
+                    operation,
+                    operation_error,
+                )? {
                     return Ok(response);
                 }
             }
-            // The attempts are spent or the budget is nearly so. Whatever is
-            // still in flight may yet answer inside the caller's deadline.
-            if let Waited::Replied(_, response) = in_flight.wait(None, deadline, &mut last_error) {
+            if let Waited::Answered(response) =
+                in_flight.wait(None, deadline, cancellation, operation, operation_error)?
+            {
                 return Ok(response);
             }
             self.transport.require_rpc_evidence_current()?;
@@ -563,27 +776,46 @@ mod client {
             mode: crate::distribution_native_read::NativeEventReadMode,
         ) -> Result<ClusterEventResponse> {
             let id = cluster_event_record_id(namespace, key)?;
-            let deadline = std::time::Instant::now() + self.request_timeout;
+            // As for writes: checked on the caller thread before any worker
+            // exists, and the workers inherit the caller's budget envelope.
+            self.transport.require_rpc_evidence_call_entry()?;
+            crate::query_budget::check()?;
+            let budget = crate::query_budget::QueryBudgetContext::capture();
+            let configured_deadline = std::time::Instant::now() + self.request_timeout;
+            let deadline = budget.deadline().map_or(configured_deadline, |caller| {
+                caller.min(configured_deadline)
+            });
             let parent = crate::CancellationToken::uncancelable().child_with_deadline(deadline);
             std::thread::scope(|scope| {
                 let (reports, replies) = std::sync::mpsc::channel();
-                let mut in_flight = InFlight {
+                let mut reads = ReadsInFlight {
                     replies,
                     attempts: Vec::new(),
                 };
+                let mut operation_error = EventOperationError::default();
                 let result = self.get_attempts(
                     scope,
                     &parent,
                     deadline,
+                    &budget,
                     (namespace, key, id.as_str()),
                     mode,
                     &reports,
-                    &mut in_flight,
+                    &mut reads,
+                    &mut operation_error,
                 );
                 // Every RPC of this request ends before the request returns.
                 drop(reports);
-                in_flight.hang_up();
-                result
+                reads.hang_up();
+                match result {
+                    Ok(value) => {
+                        // A value cannot hide an evidence fence raised by an
+                        // exchange that ended during cleanup.
+                        self.transport.require_rpc_evidence_current()?;
+                        Ok(value)
+                    }
+                    Err(error) => Err(error),
+                }
             })
         }
 
@@ -593,24 +825,23 @@ mod client {
             scope: &'scope std::thread::Scope<'scope, 'env>,
             parent: &crate::CancellationToken,
             deadline: std::time::Instant,
+            budget: &crate::query_budget::QueryBudgetContext,
             (namespace, key, id): (&str, &str, &str),
             mode: crate::distribution_native_read::NativeEventReadMode,
-            reports: &std::sync::mpsc::Sender<(
-                usize,
-                Result<crate::distribution_native_read::NativeEventGetReply>,
-            )>,
-            in_flight: &mut InFlight<crate::distribution_native_read::NativeEventGetReply>,
+            reports: &std::sync::mpsc::Sender<ReadReply>,
+            reads: &mut ReadsInFlight,
+            operation_error: &mut EventOperationError,
         ) -> Result<ClusterEventResponse> {
             use crate::distribution_native_read::{
                 NativeEventGetRequest, NativeEventGetResult, NativeEventGetUnavailableCode,
                 NativeEventRoute,
             };
-            // A typed result of an attempt that is not the one being awaited
+            // A typed result of an exchange that is not the one being awaited
             // can only end the request (a value, or an unsupported
             // deployment); its route and pacing advice is stale by then.
             fn late(
                 result: NativeEventGetResult,
-                last: &mut BicDbError,
+                operation_error: &mut EventOperationError,
             ) -> Result<Option<ClusterEventResponse>> {
                 match result {
                     NativeEventGetResult::Value { value, .. }
@@ -620,9 +851,9 @@ mod client {
                         }))
                     }
                     NativeEventGetResult::Redirect { .. } => {
-                        *last = invalid(
+                        operation_error.read_failed(invalid(
                             "typed event Get redirected; original request deadline retained",
-                        );
+                        ));
                         Ok(None)
                     }
                     NativeEventGetResult::Unavailable { code, detail, .. } => {
@@ -631,8 +862,9 @@ mod client {
                                 "explicit Strong Get is unsupported by this unenforced deployment",
                             ));
                         }
-                        *last =
-                            invalid(&format!("typed event Get unavailable ({code:?}): {detail}"));
+                        operation_error.read_failed(invalid(&format!(
+                            "typed event Get unavailable ({code:?}): {detail}"
+                        )));
                         Ok(None)
                     }
                 }
@@ -648,38 +880,47 @@ mod client {
             // A finite bound plus the SAME absolute request deadline. Typed
             // route/unavailable results never become a successful empty row.
             for attempt in 0..128 {
-                self.transport.require_rpc_evidence_current()?;
-                parent.check()?;
+                self.transport
+                    .require_rpc_evidence_current()
+                    .map_err(|error| operation_error.take_or(error))?;
+                parent
+                    .check()
+                    .map_err(|error| operation_error.take_or(error))?;
                 if attempt > 0 {
                     let until = (std::time::Instant::now() + retry_after).min(deadline);
                     // An exchange that is still in flight may answer during
                     // the pause.
-                    while let Waited::Replied(_, reply) = in_flight.wait(None, until, &mut last) {
-                        if let Some(value) = late(reply.result, &mut last)? {
+                    while let ReadWaited::Replied(_, reply) =
+                        reads.wait(None, until, operation_error)
+                    {
+                        if let Some(value) = late(reply.result, operation_error)? {
                             parent.check()?;
                             return Ok(value);
                         }
                     }
                     while std::time::Instant::now() < until {
-                        parent.check()?;
+                        parent
+                            .check()
+                            .map_err(|error| operation_error.take_or(error))?;
                         std::thread::sleep(
                             until
                                 .saturating_duration_since(std::time::Instant::now())
                                 .min(std::time::Duration::from_millis(5)),
                         );
                     }
-                    match self.refresh_members_until(deadline)? {
-                        Discovery::Observed => {}
-                        Discovery::Unanswered => {
+                    match self.refresh_members_until(deadline) {
+                        Ok(Discovery::Observed) => {}
+                        Ok(Discovery::Unanswered) => {
                             last = invalid("no member reached during typed Get discovery");
                             continue;
                         }
-                        // The budget ended the round; keep the last actual
-                        // typed result instead of reporting unreachability.
-                        Discovery::Interrupted => continue,
+                        Ok(Discovery::Interrupted) => continue,
+                        Err(error) => return Err(operation_error.take_or(error)),
                     }
                 }
-                parent.check()?;
+                parent
+                    .check()
+                    .map_err(|error| operation_error.take_or(error))?;
                 let now = std::time::Instant::now();
                 // Reserve part of the remaining budget for route discovery
                 // after a silent old route. As for writes, the slice bounds
@@ -688,10 +929,11 @@ mod client {
                 // itself may use what is left of the caller's budget.
                 let slice_end = (now + deadline.saturating_duration_since(now) / 2)
                     .min(now + std::time::Duration::from_secs(5));
-                if in_flight.attempts.len() >= MAX_IN_FLIGHT {
-                    while let Waited::Replied(_, reply) = in_flight.wait(None, slice_end, &mut last)
+                if reads.attempts.len() >= MAX_IN_FLIGHT {
+                    while let ReadWaited::Replied(_, reply) =
+                        reads.wait(None, slice_end, operation_error)
                     {
-                        if let Some(value) = late(reply.result, &mut last)? {
+                        if let Some(value) = late(reply.result, operation_error)? {
                             parent.check()?;
                             return Ok(value);
                         }
@@ -719,7 +961,7 @@ mod client {
                     // Retries reuse the request identity. An exchange added
                     // beside one that is still executing is an independent
                     // read and must not share its correlation.
-                    business_request_id: if in_flight.attempts.is_empty() {
+                    business_request_id: if reads.attempts.is_empty() {
                         business
                     } else {
                         uuid::Uuid::now_v7()
@@ -738,7 +980,9 @@ mod client {
                 let exchange = {
                     let token = token.clone();
                     let reports = reports.clone();
+                    let budget = budget.clone();
                     move || {
+                        let _budget = budget.install();
                         let reply = self.transport.native_event_get_listening(
                             &token,
                             slice_end,
@@ -752,19 +996,20 @@ mod client {
                     .name("event-get-attempt".into())
                     .spawn_scoped(scope, exchange)
                 {
-                    Ok(_) => in_flight.attempts.push((attempt, token)),
+                    Ok(_) => reads.attempts.push((attempt, token)),
                     Err(error) => {
-                        last = error.into();
+                        operation_error.read_failed(error.into());
                         continue;
                     }
                 }
                 loop {
-                    let (from, reply) = match in_flight.wait(Some(attempt), slice_end, &mut last) {
-                        Waited::Replied(from, reply) => (from, reply),
-                        Waited::Failed | Waited::Pending => break,
+                    let (from, reply) = match reads.wait(Some(attempt), slice_end, operation_error)
+                    {
+                        ReadWaited::Replied(from, reply) => (from, reply),
+                        ReadWaited::Failed | ReadWaited::Pending => break,
                     };
                     if from != attempt {
-                        if let Some(value) = late(reply.result, &mut last)? {
+                        if let Some(value) = late(reply.result, operation_error)? {
                             parent.check()?;
                             return Ok(value);
                         }
@@ -781,9 +1026,9 @@ mod client {
                         NativeEventGetResult::Redirect { route, .. } => {
                             hint = Some(route);
                             retry_after = std::time::Duration::from_millis(25);
-                            last = invalid(
+                            operation_error.read_failed(invalid(
                                 "typed event Get redirected; original request deadline retained",
-                            );
+                            ));
                         }
                         NativeEventGetResult::Unavailable {
                             code,
@@ -803,15 +1048,15 @@ mod client {
                             retry_after = std::time::Duration::from_millis(
                                 retry_after_ms.max(backoff).clamp(5, 250),
                             );
-                            last = invalid(&format!(
+                            operation_error.read_failed(invalid(&format!(
                                 "typed event Get unavailable ({code:?}): {detail}"
-                            ));
+                            )));
                         }
                     }
                     break;
                 }
             }
-            Err(last)
+            Err(operation_error.take_or(last))
         }
 
         /// Return true for a newly committed event, false for an identical

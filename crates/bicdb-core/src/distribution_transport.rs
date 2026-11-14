@@ -4117,6 +4117,13 @@ impl TcpClusterRelocationTransport {
         }
     }
 
+    pub(crate) fn require_rpc_evidence_call_entry(&self) -> Result<()> {
+        match &self.evidence {
+            Some(observer) => observer.require_call_entry(),
+            None => Ok(()),
+        }
+    }
+
     pub fn install_topology(&self, topology: ClusterTopology) -> Result<bool> {
         topology.validate()?;
         if topology.cluster_id != self.cluster_id {
@@ -5608,6 +5615,12 @@ impl TcpClusterRelocationTransport {
             if !matches!(error, BicDbError::RpcEvidenceFailure { .. }) {
                 observed.exchange_error(error)?;
             }
+        }
+        // A real evidence failure is already a non-success outcome. Preserve
+        // its typed dispatch status and original cause before caller cancellation
+        // can replace it; this exception never admits a late decoded SUCCESS.
+        if matches!(&exchange, Err(BicDbError::RpcEvidenceFailure { .. })) {
+            return Err(exchange.err().expect("checked actual evidence failure"));
         }
         // Preserve caller cancellation semantics and reject late decoded
         // responses. Socket progress does not renew the whole RPC budget.
@@ -7744,7 +7757,10 @@ mod tests {
 
 #[cfg(test)]
 mod event_client_retry_tests {
+    mod caller_query_budget_tests;
+    mod inflight_budget_tests;
     use super::*;
+    mod error_preservation_tests;
     use std::time::Instant;
 
     struct Observed {

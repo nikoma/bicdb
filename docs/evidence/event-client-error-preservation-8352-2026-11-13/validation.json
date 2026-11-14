@@ -1,0 +1,10 @@
+{
+  "offline_verification": "passed",
+  "tampered_artifact_negative": "refused",
+  "Rust_rerun": false,
+  "network_used_by_verifier": false,
+  "engine_opened": false,
+  "qualified": false,
+  "initial_document_diff_check": "flagged literal unified-patch context-line spaces; original patch compressed without changing its bytes",
+  "final_document_diff_check": "passed"
+}

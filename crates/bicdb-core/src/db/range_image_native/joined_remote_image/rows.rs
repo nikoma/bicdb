@@ -667,20 +667,21 @@ impl RetainedRemoteRows {
             }
             let claim = authority.claim();
             tx.range_mutation_claim = Some(authority.claim());
-            tx.native_joined_remote_row_grant = Some(NativeJoinedRemoteRowTransactionGrant {
-                request: context.point.retain_transaction_request()?,
-                lexical: context.scope.retained_scope_liveness(),
-                fence: context.fence.clone(),
-                proposal: context.proposal.clone(),
-                history: history.clone(),
-                intent: pending.intent.clone(),
-                range: context.fence.range().clone(),
-                claim,
-                database_open: db.incarnation_id().into(),
-                transaction_id: tx.id().0,
-                mutations_sha256: actual_hash,
-                logical: pending.logical.clone(),
-            });
+            tx.native_joined_remote_row_grant =
+                Some(Box::new(NativeJoinedRemoteRowTransactionGrant {
+                    request: context.point.retain_transaction_request()?,
+                    lexical: context.scope.retained_scope_liveness(),
+                    fence: context.fence.clone(),
+                    proposal: context.proposal.clone(),
+                    history: history.clone(),
+                    intent: pending.intent.clone(),
+                    range: context.fence.range().clone(),
+                    claim,
+                    database_open: db.incarnation_id().into(),
+                    transaction_id: tx.id().0,
+                    mutations_sha256: actual_hash,
+                    logical: pending.logical.clone(),
+                }));
             #[cfg(test)]
             cuts::fire(
                 false,

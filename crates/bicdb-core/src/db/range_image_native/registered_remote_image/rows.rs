@@ -618,7 +618,7 @@ impl RetainedRemoteRows {
             let claim = authority.claim();
             tx.range_mutation_claim = Some(authority.claim());
             tx.native_registered_remote_row_grant =
-                Some(NativeRegisteredRemoteRowTransactionGrant {
+                Some(Box::new(NativeRegisteredRemoteRowTransactionGrant {
                     request: context.point.retain_transaction_request()?,
                     lexical: context.scope.retained_scope_liveness(),
                     fence: context.fence.clone(),
@@ -631,7 +631,7 @@ impl RetainedRemoteRows {
                     transaction_id: tx.id().0,
                     mutations_sha256: actual_hash,
                     logical: pending.logical.clone(),
-                });
+                }));
             #[cfg(test)]
             cuts::fire(
                 false,

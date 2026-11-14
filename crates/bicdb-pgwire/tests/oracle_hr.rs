@@ -9,6 +9,23 @@ struct Running {
     port: u16,
 }
 
+// Write directly so a process-level abort cannot discard libtest's per-test
+// captured output. These are fixture identities/layouts, never query payloads.
+fn fixture_trace(event: &str, port: u16, profile: Option<&str>) {
+    use std::io::Write;
+    let current = thread::current();
+    let value = serde_json::json!({
+        "event": event,
+        "test_thread": current.name(),
+        "port": port,
+        "profile": profile,
+        "transaction_bytes": std::mem::size_of::<bicdb_core::Transaction>(),
+        "pointer_bytes": std::mem::size_of::<usize>(),
+        "runtime_stack_configuration": "unchanged",
+    });
+    let _ = writeln!(std::io::stderr().lock(), "ORACLE_HR_FIXTURE {value}");
+}
+
 async fn transaction_defaults_connect(
     server: &Running,
     profile: &str,
@@ -487,6 +504,7 @@ impl Running {
         let server = PgWireServer::open(path, config).unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
+        fixture_trace("server_start", port, Some(profile));
         let copy = server.clone();
         Self {
             server,
@@ -931,10 +949,12 @@ async fn query_logs_identify_connections_and_transaction_state() {
         slow_query_threshold: std::time::Duration::ZERO,
         ..Default::default()
     };
+    let profile = config.sql_profile.clone();
     let engine = PgWireServer::open(directory.path().join("db"), config).unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     let copy = engine.clone();
+    fixture_trace("server_start", port, Some(&profile));
     let server = Running {
         server: engine,
         port,
@@ -2460,8 +2480,10 @@ async fn oracle_preview_copies_qualified_lobs_and_preserves_constraints_after_re
 }
 impl Drop for Running {
     fn drop(&mut self) {
+        fixture_trace("server_shutdown_begin", self.port, None);
         self.server.request_shutdown();
         self.thread.take().unwrap().join().unwrap().unwrap();
+        fixture_trace("server_shutdown_complete", self.port, None);
     }
 }
 

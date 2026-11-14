@@ -9718,12 +9718,15 @@ pub struct Transaction {
     /// crate and therefore cannot be selected by SQL, pgwire, or extensions.
     bypass_commit_admission: bool,
     native_image_row_grant: Option<range_image_native::NativeImageTransactionGrant>,
+    // Import-only proof payloads must not reserve their full inline size in
+    // every ordinary transaction and SQL session/future, even when absent.
+    // Heap ownership preserves the same sealed grant and outcome custody.
     #[cfg(feature = "tls-replication")]
     native_registered_remote_row_grant:
-        Option<range_image_native::NativeRegisteredRemoteRowTransactionGrant>,
+        Option<Box<range_image_native::NativeRegisteredRemoteRowTransactionGrant>>,
     #[cfg(feature = "tls-replication")]
     native_joined_remote_row_grant:
-        Option<range_image_native::NativeJoinedRemoteRowTransactionGrant>,
+        Option<Box<range_image_native::NativeJoinedRemoteRowTransactionGrant>>,
     range_mutation_claim: Option<crate::distribution_range_mutation::RangeMutationClaim>,
     database_mutation_permit: Option<crate::distribution_range_mutation::DatabaseMutationPermit>,
     native_wal_retention: Option<native_wal_apply::NativeWalRetentionPin>,

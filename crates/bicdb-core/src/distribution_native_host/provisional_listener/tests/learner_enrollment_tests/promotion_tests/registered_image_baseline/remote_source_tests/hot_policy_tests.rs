@@ -10,10 +10,12 @@ use crate::distribution_range_handoff::{
     NativeJointPreparedServingCandidate, NativeJointPreparedServingRound,
 };
 
+mod new_decision_round_tests;
 mod prepared_candidate_tests;
 
 pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
     prepared_candidate_tests::is_case(case)
+        || new_decision_round_tests::is_case(case)
         || source_export_retirement_tests::is_case(case)
         || catalogue_tests::is_catalogue_control(case)
         || matches!(
@@ -444,6 +446,9 @@ pub(in super::super) fn exercise(
         .into_handoff()
         .unwrap();
     let (mq, business) = own(target, &request);
+    let original_new_issuance = new_decision_round_tests::is_case(case).then(|| {
+        new_decision_round_tests::OriginalIssuance::copy_from_actual(&role, &mq, business)
+    });
     let actual_new = operation(
         output,
         &mut ledger,
@@ -476,12 +481,20 @@ pub(in super::super) fn exercise(
         )
         .unwrap();
     }
-    let mut decision = new
-        .finish()
-        .unwrap()
-        .prepare_decision()
-        .unwrap()
-        .publication_round();
+    if new_decision_round_tests::is_case(case) {
+        new_decision_round_tests::exercise(
+            case,
+            new,
+            &original,
+            original_new_issuance.unwrap(),
+            &request,
+            process,
+            output,
+            acknowledged,
+        );
+        return;
+    }
+    let mut decision = new.prepare_decision().unwrap().publication_round();
     let mut publishers = plan.old_members().keys().cloned().collect::<Vec<_>>();
     publishers.push(node(4));
     for local in &publishers {

@@ -1073,8 +1073,7 @@ impl NativeJoinedDataHandoff {
                 )
                 .map_err(|error| stage_error("target materialization", error))?;
             let publication = round
-                .finish()
-                .and_then(|quorums| quorums.prepare_decision())
+                .prepare_decision()
                 .map_err(|error| stage_error("decision preparation", error))?
                 .publication_round();
             self.publishing = Some((publication, BTreeSet::new()));

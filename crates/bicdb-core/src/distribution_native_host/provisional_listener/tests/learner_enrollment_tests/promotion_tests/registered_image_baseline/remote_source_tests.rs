@@ -105,6 +105,8 @@ pub(super) enum SourceCase {
     RemoteOldCollectorDonorRevoked,
     RemoteOldCollectorCallerCanceled,
     TargetHotPolicy,
+    TargetNewDecisionOriginalIssuanceExpired,
+    TargetNewDecisionOriginalCallerCanceled,
     TargetPreparedCandidateForeignService,
     TargetPreparedCandidateExpiredOwn,
     TargetPreparedCandidateMissingArchive,

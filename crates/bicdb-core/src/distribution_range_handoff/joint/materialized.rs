@@ -173,8 +173,7 @@ impl NativeJointNewRound {
         self.observations.insert(facts.node_id, observation);
         Ok(())
     }
-    pub(crate) fn finish(self) -> Result<NativeJointMaterializedQuorums> {
-        self.old.require_current()?;
+    fn require_complete_membership(&self) -> Result<()> {
         let plan = self.old.plan();
         if self.observations.len() < plan.new_members().len() / 2 + 1
             || !self
@@ -186,6 +185,11 @@ impl NativeJointNewRound {
                 "actual NEW data materialization needs a distinct majority and its intended leader",
             ));
         }
+        Ok(())
+    }
+    pub(crate) fn finish(self) -> Result<NativeJointMaterializedQuorums> {
+        self.old.require_current()?;
+        self.require_complete_membership()?;
         for observation in self.observations.values() {
             observation.require_live_issuance()?;
             observation.require_current()?;
@@ -194,6 +198,20 @@ impl NativeJointNewRound {
             old: self.old,
             new: self.observations,
         })
+    }
+
+    /// Consume the original collected owners directly at the complete decision
+    /// validation boundary. No intermediate materialized quorum escapes with a
+    /// currentness claim. The ordinary preparation still checks ALL actual
+    /// owners and every original issuance before draining any capture pin, and
+    /// repeats its final complete current check before returning a capability.
+    pub(crate) fn prepare_decision(self) -> Result<NativeJointPreparedDecision> {
+        self.require_complete_membership()?;
+        NativeJointMaterializedQuorums {
+            old: self.old,
+            new: self.observations,
+        }
+        .prepare_decision()
     }
 }
 impl NativeJointMaterializedQuorums {

@@ -586,12 +586,7 @@ fn run_complete_joint_with_controls(
         .unwrap(),
     )
     .unwrap();
-    let mut publication = new
-        .finish()
-        .unwrap()
-        .prepare_decision()
-        .unwrap()
-        .publication_round();
+    let mut publication = new.prepare_decision().unwrap().publication_round();
     for local in [node("n0"), node("n1"), node("n2"), node("n3")] {
         let role = role(&fixture, &plan, &local);
         let business = role.business_request_id();

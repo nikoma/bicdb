@@ -86,6 +86,22 @@ pub(super) fn exercise(
     let primary = first.as_ref().err().map(|e| format!("{e:?}"));
     _failure_evidence.record_api("first", primary.as_deref());
     let native_first = target.test_remote_native_decision_evidence(mf.capture_range.id);
+    let health_first = factory.database.try_read().map(|db| {
+        db.test_registered_native_health_status(
+            native_first
+                .as_ref()
+                .ok()
+                .and_then(|v| v.pointer("/native/actual_native_attempt/native_xid"))
+                .and_then(serde_json::Value::as_u64),
+        )
+    });
+    _failure_evidence.record_compact(
+        false,
+        &native_first,
+        health_first.as_ref(),
+        &gate_before,
+        None,
+    );
     let after_first = state(&factory.database, topology, &node(4), ranges);
     evidence(&output.join("remote-decision-first-before-assertions.json"),&serde_json::json!({
         "case":format!("{case:?}"),"original_MF":mf,"phase":phase,"fact_set":facts,
@@ -189,8 +205,31 @@ pub(super) fn exercise(
     let retry_primary = retry.as_ref().err().map(|e| format!("{e:?}"));
     _failure_evidence.record_api("retry", retry_primary.as_deref());
     let native_after = target.test_remote_native_decision_evidence(mf.capture_range.id);
+    let health_after = factory.database.try_read().map(|db| {
+        db.test_registered_native_health_status(
+            native_after
+                .as_ref()
+                .ok()
+                .and_then(|v| v.pointer("/native/actual_native_attempt/native_xid"))
+                .and_then(serde_json::Value::as_u64),
+        )
+    });
+    _failure_evidence.record_compact(
+        true,
+        &native_after,
+        health_after.as_ref(),
+        &gate_before,
+        None,
+    );
     let after = state(&factory.database, topology, &node(4), ranges);
     let gate_after = gates(services, factory, mf.capture_range.id, mf);
+    _failure_evidence.record_compact(
+        true,
+        &native_after,
+        health_after.as_ref(),
+        &gate_before,
+        Some(&gate_after),
+    );
     evidence(&output.join("remote-decision-retry-before-assertions.json"),&serde_json::json!({
         "case":format!("{case:?}"),"original_native_xid":original_xid,"actual_error":retry_primary,
         "actual_reply":retry.as_ref().ok().map(|f|f.reply()),"native_first":native_first,

@@ -75,3 +75,35 @@ Test-only mutation hooks are not normal callbacks bypassing journal exclusion.
 Neither these controls nor a successful CI suite establishes automatic remote
 Serving, fault-safe physical rebalance, sustained capacity gain or production
 qualification.
+
+## Follow-up after failed 1fc acceptance
+
+The [complete 1fc result](native-1fc-acceptance-result.md) is **failed**:
+330 passed, 16 failed and one ignored. The protected-archive control passed;
+the middle-history control failed during an earlier preparation prerequisite,
+so that planned corruption remains **not tested** by this run. Supervisor and
+RF3 component passes do not close the serving failures.
+
+The source follow-up also uses the same borrowed journal scope inside a local
+prepared-evidence currentness check. It retains the original capture-pin mutex
+and validates that exact pin before and after the check; absent a pin, the
+original quiescent-Frozen check still applies. Quiescent Frozen excludes active
+and Controlled mutation; it does not itself exclude the retained source pin.
+The scope independently reads the real lineage, preparation CURRENT/archive,
+catalogue and every retained history entry. Original CLOSED identity, counter,
+CURRENT/archive and promise checks run before and after within that scope.
+Every foreign participant still runs its own complete check on its actual
+service and database. No local scope supplies another participant's proof.
+
+Registered, Installed and image profiles retain their full currentness path.
+The Registered target additionally proves that its catalogue materialization
+owns the exact same original preflight Arc before delegating to the existing
+full catalogue check, which itself validates the supplied physical base and
+its installed history. This removes a preceding duplicate base traversal; it
+does not replace physical validation with an ID or a cached NoWriter claim.
+Process, DB, slot, native admission, namespace, catalogue and durability checks
+remain required.
+
+These are source changes pending execution, not a measured speedup or a passed
+recovery fix. Full original acceptance, intended-cut execution and independent
+physical qualification remain required. No deadline or participant set changes.

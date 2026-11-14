@@ -1,0 +1,103 @@
+{
+  "base": "d9327c386495389b95407fe88ed3c92f028f92e5",
+  "changes": [
+    "Existing DECISION retry: genuine recipient Role +same business +recipient actual HostOWN, capped original Role/drive deadline; existing owned publication captures real attached MStore.",
+    "Initial serving preparation: capture actual point before service.lock and use existing with_point observer with same fresh Own/business/caller."
+  ],
+  "checks": [
+    "Direct rustfmt edition2021 skip_children check PASS",
+    "Version check29packages 1.0.510-beta PASS",
+    "git diff --check PASS"
+  ],
+  "classification": "Narrow production caller adaptation; source-only/uncompiled/unrun",
+  "delivered_main508": "f50acde6b0a2e923b92b31ab4b24d96f0dea5d6e",
+  "delivered_main508_tree": "e08ecb3168ac9329998d5ce4cfd9ea6932e2091b",
+  "manual_comparison": "Previous manual fixture used ordinary re-enrollment/legacy Image Recovery. Earlier Role+OWN fixture loop adapted here into new product caller. No Closed/with_point producer existed there to copy; do not manufacture it.",
+  "not_run": [
+    "Cargo",
+    "build",
+    "tests",
+    "CI/workflows",
+    "push",
+    "Azure"
+  ],
+  "remaining_limits": [
+    "No production controller/CLI driver caller; only in-process fixture host adapter.",
+    "Target with any range replica rejected; no Joined second-populated-range path.",
+    "Original safe-but-stuck consuming/cold-resume windows unchanged; mandatory point can refuse within existing consumed-decision preparation window.",
+    "Recovery restart specific original dropped preflight/unique freeze; not remote A/unknown outcome reset.",
+    "Normal initial process maintenance retains original writer and refuses wholesale policy change; no bypass added.",
+    "All old failed cohorts unchanged; new combined source needs existing required CI."
+  ],
+  "same_tree_as_c2eeb335": true,
+  "schema": "bicdb-main508-owned-context-integration-source-v1",
+  "source_files": [
+    {
+      "base_blob": "a52ea73992af9ba4df7a081f494f8acbc9908adb",
+      "base_sha256": "967870074c8aa9de143cf0219ae39d1aa1ff43f2d8e835c57363290ececa7700",
+      "path": "crates/bicdb-core/src/distribution_native_host/joined_data_handoff.rs",
+      "working_sha256": "3678a104bed61ba26ee6904f1f26a9ef46b818c23b0750c9d095e24c878f4eb3"
+    },
+    {
+      "base_blob": "153ea1fe033304d851297039df6a25f00f7a05e0",
+      "base_sha256": "3a6a2f628bfe469265de9bc65ae0d86e2f42200c559c00a723c6c98486e205a2",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/decision.rs",
+      "working_sha256": "3a6a2f628bfe469265de9bc65ae0d86e2f42200c559c00a723c6c98486e205a2"
+    },
+    {
+      "base_blob": "098abac4f412173d06cb5152f59d002892d033d1",
+      "base_sha256": "dde40e94ddeae5141322aa67ae79f84f9430b01b1f56d6b2ce6d6d4c9e4c23b5",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/committed.rs",
+      "working_sha256": "dde40e94ddeae5141322aa67ae79f84f9430b01b1f56d6b2ce6d6d4c9e4c23b5"
+    },
+    {
+      "base_blob": "a6a3afa4599c9b006ffaefc770e3df36ac378508",
+      "base_sha256": "4e27ae079d2b430511b4572b8218f6365fcf6ee7395d5b9e9f3ecef4ce910cac",
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_metadata.rs",
+      "working_sha256": "4e27ae079d2b430511b4572b8218f6365fcf6ee7395d5b9e9f3ecef4ce910cac"
+    },
+    {
+      "base_blob": "8cd7b697493a7615fd848ba017a21b641f79f692",
+      "base_sha256": "4e13740a26769c7c47f80de67fbbdc8eccd5152cd0dd8aef78a7c942588f8001",
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff.rs",
+      "working_sha256": "4e13740a26769c7c47f80de67fbbdc8eccd5152cd0dd8aef78a7c942588f8001"
+    },
+    {
+      "base_blob": "cfbd150fc44030314a5b284927225934db46b7f2",
+      "base_sha256": "95c63490df8a34580a4609aa9450f130313614cd502222a3fc09ac9e6e6bf407",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data.rs",
+      "working_sha256": "95c63490df8a34580a4609aa9450f130313614cd502222a3fc09ac9e6e6bf407"
+    },
+    {
+      "base_blob": "004fedc448102c746d3eca3d295a41c481ed4f87",
+      "base_sha256": "9c011d95b5fd77e20590e8edc462135f08a4a4b8e7caf45298966beac3c3ca6a",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data.rs",
+      "working_sha256": "9c011d95b5fd77e20590e8edc462135f08a4a4b8e7caf45298966beac3c3ca6a"
+    },
+    {
+      "base_blob": "4f22384a4340260125983075fc093f8a32b466db",
+      "base_sha256": "9b4e1929fbf48571bde60c0aba580f4855ac5265e77a9f20cb907eb46216f42e",
+      "path": "crates/bicdb-core/src/distribution_range_recovery/runtime.rs",
+      "working_sha256": "9b4e1929fbf48571bde60c0aba580f4855ac5265e77a9f20cb907eb46216f42e"
+    },
+    {
+      "absence_scan": {
+        "NativeJointWriterDomain::Closed": true,
+        "capture_actual_joint_metadata_point": true,
+        "observe_committed_native_joint_decision_with_point": true,
+        "take_native_closed_joint_lease": true
+      },
+      "blob": "50590457b662cc433a41ec9216abee4c663fcd82",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/fifth_data_path_tests.rs",
+      "sha256": "e96fbfc38fc1a2f0325001e073845e078ef277f6e90cc03c4da0d0f69c075a55",
+      "source": "cea9269680f792c3060043878a32c547ff2e3ab8"
+    }
+  ],
+  "source_version": "1.0.510-beta unchanged",
+  "unchanged_source_checks": {
+    "joined_private_constructors_and_first_remote_a_lanes_unchanged": true,
+    "no_protected_sink_change": true,
+    "private_legacy_restart_rules_unchanged": true,
+    "request_phase_host_leadership_budgets_and_existing_four_attempts": true
+  }
+}

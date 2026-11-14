@@ -1004,7 +1004,6 @@ impl NativeJoinedDataHandoff {
             .ok_or_else(|| handoff_error("plan custody absent before decision publication"))?;
         let mut publishers = plan.old_members().keys().cloned().collect::<Vec<_>>();
         publishers.push(self.target.clone());
-        let session = self.session.clone();
         let (publication, done) = self.publishing.as_mut().unwrap();
         for node in publishers {
             if done.contains(&node) {
@@ -1012,7 +1011,21 @@ impl NativeJoinedDataHandoff {
             }
             retry_timed_out(|| {
                 let role = members.role(&plan, &node, parent)?;
-                publication.publish_actual_member(role, &session)
+                let business = role.business_request_id();
+                // This request cannot renew the original Role. Use the actual
+                // recipient transport and keep its OWN/publication under the
+                // same Role deadline and the original drive caller.
+                let token = parent.child_with_deadline(role.deadline());
+                let own = members
+                    .get(&node)?
+                    .client
+                    .acquire_host_metadata_observation(
+                        &members.metadata_leader,
+                        business,
+                        REQUEST,
+                        &token,
+                    )?;
+                publication.publish_actual_owned_member(role, own, business, &token)
             })
             .map_err(|error| stage_error("decision publication", error))?;
             done.insert(node);
@@ -1126,10 +1139,19 @@ impl NativeJoinedDataHandoff {
                     .client
                     .acquire_host_metadata_observation(&leader, business, REQUEST, &token)
                     .map_err(|error| stage_error("serving preparation metadata", error))?;
+                // Acquire the actual attached local MStore point BEFORE any
+                // service/DB/native guard. A live OWN alone is insufficient at
+                // protected native publication sinks.
+                let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+                    &service, &fresh, business, &token,
+                )
+                .map_err(|error| stage_error("serving preparation metadata point", error))?;
                 let actual = {
                     let actual = service.lock();
                     let committed = actual
-                        .observe_committed_native_joint_decision(fresh, business, range)
+                        .observe_committed_native_joint_decision_with_point(
+                            fresh, business, range, point,
+                        )
                         .map_err(|error| stage_error("committed decision", error))?;
                     actual
                         .prepare_local_native_joint_serving(committed, lease, &session)

@@ -69,6 +69,7 @@ pub(super) fn record(
         })
     });
     let value = serde_json::json!({
+        "local_node_id":scope.prepared.local_node_id(),"range_id":range,
         "stage":stage,"new_native_commit_returned_this_call":!recovered,
         "existing_committed_record_reconciliation":recovered,
         "expected_native_page_xid":expected.native_page_xid,

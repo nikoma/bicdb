@@ -215,9 +215,14 @@ impl ActualServiceNativeJointPreparedEvidence {
     ) -> Result<crate::db::NativeJointPhaseOwner> {
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
-        self.writer_domain.require_current(
-            &database,
-            &service.range_writes,
+        // In-memory binding of the FRESH range only. The full writer-domain
+        // re-read that used to run here was repeated, with nothing in
+        // between, by `require_original_phase_owner` on the next line under
+        // this same database read guard; the fresh/original decision
+        // equality below ties the two ranges together.
+        self.writer_domain.require_lifetime(
+            self.catalogue.database_root(),
+            self.catalogue.store_open_id(),
             fresh.data().activation_range(),
         )?;
         self.require_original_phase_owner(&database, &service.range_writes)?;
@@ -305,12 +310,17 @@ impl ActualServiceNativeJointPreparedEvidence {
         );
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
-        self.writer_domain.require_current(
-            &database,
-            &service.range_writes,
+        // In-memory binding of the FRESH range only. The full writer-domain
+        // and original phase-owner re-reads that used to run here, before the
+        // read scope, are proved by `require_local_open_scope_history` at its
+        // entry and again at its exit, under this same database read guard
+        // and the scope's native journal; its fresh/original decision
+        // equality ties the two ranges together.
+        self.writer_domain.require_lifetime(
+            self.catalogue.database_root(),
+            self.catalogue.store_open_id(),
             fresh.data().activation_range(),
         )?;
-        self.require_original_phase_owner(&database, &service.range_writes)?;
         #[cfg(test)]
         let mut native_trace =
             crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(

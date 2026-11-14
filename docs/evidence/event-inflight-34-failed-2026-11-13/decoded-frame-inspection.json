@@ -1,0 +1,270 @@
+{
+  "scope": "bounded inspection of every nonnull raw_frame byte array in all six actual mock observation records; source JSON and full original ZIP/log retained",
+  "all_raw_frame_fields_in_tests_log_accounted_for": 30,
+  "decoded_or_partial_frames": 14,
+  "maximum_frame_bytes": 1485,
+  "credential_marker_list": [
+    "-----BEGIN PRIVATE KEY-----",
+    "-----BEGIN RSA PRIVATE KEY-----",
+    "-----BEGIN EC PRIVATE KEY-----",
+    "-----BEGIN OPENSSH PRIVATE KEY-----",
+    "\"access_token\"",
+    "\"refresh_token\"",
+    "\"client_secret\"",
+    "\"Authorization\"",
+    "\"authorization\"",
+    "Bearer "
+  ],
+  "no_actual_private_key_or_credential_marker_bytes_found_in_inspected_decoded_frames": true,
+  "not_a_general_secret_detection_guarantee": true,
+  "frames": [
+    {
+      "probe": "DifferentSink",
+      "attempt_id": "01a1d7a3-0ffc-71c2-bd3e-c01b18036414",
+      "operation": "event_append",
+      "phase": "request_frame_before_dispatch",
+      "request_id": 1,
+      "frame_bytes": 295,
+      "frame_sha256": "fb552256ed8cddd168becccb20e8b6138a804780909cf45e9c0125cf0870ce9c",
+      "complete_JSON_frame": true,
+      "decoded_top_level_keys": [
+        "caller_node_id",
+        "cluster_id",
+        "destination_node_id",
+        "protocol_version",
+        "request",
+        "request_id"
+      ],
+      "literal_credential_marker_matches": 0
+    },
+    {
+      "probe": "DifferentSink",
+      "attempt_id": "01a1d7a3-0ffc-71c2-bd3e-c01b18036414",
+      "operation": "event_append",
+      "phase": "response_frame_before_decode",
+      "request_id": 1,
+      "frame_bytes": 167,
+      "frame_sha256": "72977f8fdf1eea6702bd8f9db2342402ac1d64fab3a38b241018cd6f3b203780",
+      "complete_JSON_frame": true,
+      "decoded_top_level_keys": [
+        "cluster_id",
+        "protocol_version",
+        "request_id",
+        "response",
+        "source_node_id"
+      ],
+      "literal_credential_marker_matches": 0
+    },
+    {
+      "probe": "NestedExpiry",
+      "attempt_id": "01a1d7a3-1003-76b1-8229-31a5e465a609",
+      "operation": "event_append",
+      "phase": "request_frame_before_dispatch",
+      "request_id": 1,
+      "frame_bytes": 295,
+      "frame_sha256": "fb552256ed8cddd168becccb20e8b6138a804780909cf45e9c0125cf0870ce9c",
+      "complete_JSON_frame": true,
+      "decoded_top_level_keys": [
+        "caller_node_id",
+        "cluster_id",
+        "destination_node_id",
+        "protocol_version",
+        "request",
+        "request_id"
+      ],
+      "literal_credential_marker_matches": 0
+    },
+    {
+      "probe": "NestedExpiry",
+      "attempt_id": "01a1d7a3-1003-76b1-8229-31a5e465a609",
+      "operation": "event_append",
+      "phase": "partial_or_rejected_response_frame",
+      "request_id": 1,
+      "frame_bytes": 0,
+      "frame_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "complete_JSON_frame": false,
+      "decoded_top_level_keys": [],
+      "literal_credential_marker_matches": 0
+    },
+    {
+      "probe": "ReentryAfter",
+      "attempt_id": "01a1d7a3-106b-7da0-9047-05c1c8260e3e",
+      "operation": "event_append",
+      "phase": "request_frame_before_dispatch",
+      "request_id": 1,
+      "frame_bytes": 295,
+      "frame_sha256": "fb552256ed8cddd168becccb20e8b6138a804780909cf45e9c0125cf0870ce9c",
+      "complete_JSON_frame": true,
+      "decoded_top_level_keys": [
+        "caller_node_id",
+        "cluster_id",
+        "destination_node_id",
+        "protocol_version",
+        "request",
+        "request_id"
+      ],
+      "literal_credential_marker_matches": 0
+    },
+    {
+      "probe": "ReentryAfter",
+      "attempt_id": "01a1d7a3-106b-7da0-9047-05c1c8260e3e",
+      "operation": "event_append",
+      "phase": "response_frame_before_decode",
+      "request_id": 1,
+      "frame_bytes": 167,
+      "frame_sha256": "72977f8fdf1eea6702bd8f9db2342402ac1d64fab3a38b241018cd6f3b203780",
+      "complete_JSON_frame": true,
+      "decoded_top_level_keys": [
+        "cluster_id",
+        "protocol_version",
+        "request_id",
+        "response",
+        "source_node_id"
+      ],
+      "literal_credential_marker_matches": 0
+    },
+    {
+      "probe": "ReentryBefore",
+      "attempt_id": "01a1d7a3-1070-74c2-896b-33121e10b58e",
+      "operation": "event_append",
+      "phase": "request_frame_before_dispatch",
+      "request_id": 1,
+      "frame_bytes": 295,
+      "frame_sha256": "fb552256ed8cddd168becccb20e8b6138a804780909cf45e9c0125cf0870ce9c",
+      "complete_JSON_frame": true,
+      "decoded_top_level_keys": [
+        "caller_node_id",
+        "cluster_id",
+        "destination_node_id",
+        "protocol_version",
+        "request",
+        "request_id"
+      ],
+      "literal_credential_marker_matches": 0
+    },
+    {
+      "probe": "WorkerMemory",
+      "attempt_id": "01a1d7a3-12e5-7160-a731-827fc542043a",
+      "operation": "event_append",
+      "phase": "request_frame_before_dispatch",
+      "request_id": 1,
+      "frame_bytes": 295,
+      "frame_sha256": "fb552256ed8cddd168becccb20e8b6138a804780909cf45e9c0125cf0870ce9c",
+      "complete_JSON_frame": true,
+      "decoded_top_level_keys": [
+        "caller_node_id",
+        "cluster_id",
+        "destination_node_id",
+        "protocol_version",
+        "request",
+        "request_id"
+      ],
+      "literal_credential_marker_matches": 0
+    },
+    {
+      "probe": "CleanupEvidence",
+      "attempt_id": "01a1d7a3-1073-7e51-b5d8-6bb21392fe8a",
+      "operation": "event_append",
+      "phase": "request_frame_before_dispatch",
+      "request_id": 1,
+      "frame_bytes": 295,
+      "frame_sha256": "fb552256ed8cddd168becccb20e8b6138a804780909cf45e9c0125cf0870ce9c",
+      "complete_JSON_frame": true,
+      "decoded_top_level_keys": [
+        "caller_node_id",
+        "cluster_id",
+        "destination_node_id",
+        "protocol_version",
+        "request",
+        "request_id"
+      ],
+      "literal_credential_marker_matches": 0
+    },
+    {
+      "probe": "CleanupEvidence",
+      "attempt_id": "01a1d7a3-12cb-7e00-96b7-7329431786c1",
+      "operation": "metadata_snapshot_discovery",
+      "phase": "request_frame_before_dispatch",
+      "request_id": 2,
+      "frame_bytes": 155,
+      "frame_sha256": "e40ff0224aa84f6cfee59e71525d25583ff7b6fa4c5ba7f09f11462d233614e9",
+      "complete_JSON_frame": true,
+      "decoded_top_level_keys": [
+        "caller_node_id",
+        "cluster_id",
+        "destination_node_id",
+        "protocol_version",
+        "request",
+        "request_id"
+      ],
+      "literal_credential_marker_matches": 0
+    },
+    {
+      "probe": "CleanupEvidence",
+      "attempt_id": "01a1d7a3-12cb-7e00-96b7-7329431786c1",
+      "operation": "metadata_snapshot_discovery",
+      "phase": "response_frame_before_decode",
+      "request_id": 2,
+      "frame_bytes": 1485,
+      "frame_sha256": "4c82a9c89d4e359d6c974e07f5290ffc5ebd0606c54c3e74223c617071cf836f",
+      "complete_JSON_frame": true,
+      "decoded_top_level_keys": [
+        "cluster_id",
+        "protocol_version",
+        "request_id",
+        "response",
+        "source_node_id"
+      ],
+      "literal_credential_marker_matches": 0
+    },
+    {
+      "probe": "CleanupEvidence",
+      "attempt_id": "01a1d7a3-12ce-7db2-89ab-a337872a9aaa",
+      "operation": "event_append",
+      "phase": "request_frame_before_dispatch",
+      "request_id": 3,
+      "frame_bytes": 295,
+      "frame_sha256": "3534692f42ae01e8dfff7affc4e1971f18c92bac69d79d3265b6bc039df9366c",
+      "complete_JSON_frame": true,
+      "decoded_top_level_keys": [
+        "caller_node_id",
+        "cluster_id",
+        "destination_node_id",
+        "protocol_version",
+        "request",
+        "request_id"
+      ],
+      "literal_credential_marker_matches": 0
+    },
+    {
+      "probe": "CleanupEvidence",
+      "attempt_id": "01a1d7a3-12ce-7db2-89ab-a337872a9aaa",
+      "operation": "event_append",
+      "phase": "response_frame_before_decode",
+      "request_id": 3,
+      "frame_bytes": 167,
+      "frame_sha256": "2879d0aadbd1faf3de91fca1f31920026949ef7dd46c55c7aebb8b096f4c1704",
+      "complete_JSON_frame": true,
+      "decoded_top_level_keys": [
+        "cluster_id",
+        "protocol_version",
+        "request_id",
+        "response",
+        "source_node_id"
+      ],
+      "literal_credential_marker_matches": 0
+    },
+    {
+      "probe": "CleanupEvidence",
+      "attempt_id": "01a1d7a3-1073-7e51-b5d8-6bb21392fe8a",
+      "operation": "event_append",
+      "phase": "partial_or_rejected_response_frame",
+      "request_id": 1,
+      "frame_bytes": 0,
+      "frame_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "complete_JSON_frame": false,
+      "decoded_top_level_keys": [],
+      "literal_credential_marker_matches": 0
+    }
+  ]
+}

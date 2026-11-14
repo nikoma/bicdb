@@ -28,6 +28,9 @@
 //! and a later call continues from the committed metadata stage plus this
 //! custody. Losing the process that holds this object is a cold restart and
 //! is not covered.
+// No production caller yet: the driver is reached only from the in-process
+// multi-node fixture. Remove this once a controller drives it.
+#![allow(dead_code)]
 use super::*;
 use crate::distribution::{
     NativeJointHandoffStageV1, RangeDescriptor, RangeHandoffSession, RangeId, RangeRelocation,

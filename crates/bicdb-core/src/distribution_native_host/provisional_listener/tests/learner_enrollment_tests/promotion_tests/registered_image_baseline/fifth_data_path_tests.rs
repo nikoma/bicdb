@@ -856,6 +856,17 @@ fn native_fifth_data_path_transfer_failure_after_source_cut_resumes_to_completio
         assert_eq!(pending.phase, RelocationPhase::LearnerAllocated);
         assert!(pending.native_joint_handoff_v1.is_none());
         scenario.mark("transfer failed after the source cut");
+        // The target holds a partial install: not every row was copied.
+        let partial = scenario
+            .acknowledged
+            .iter()
+            .filter(|(key, value)| stored(five, 4, key).as_ref() == Some(value))
+            .count();
+        eprintln!(
+            "FIFTH_DATA_PATH partial install on the fifth: {partial} of {} rows",
+            scenario.acknowledged.len()
+        );
+        assert!(partial < scenario.acknowledged.len());
         // Safety of the interrupted state.
         assert_unwritable_and_intact(five, &scenario, "after-failed-transfer");
         // A permanent promise exists: the abort is refused, not attempted.
@@ -864,6 +875,17 @@ fn native_fifth_data_path_transfer_failure_after_source_cut_resumes_to_completio
             .abort_before_cut(&mut *five, &parent)
             .unwrap_err();
         assert!(refused.to_string().contains("can only be resumed"));
+        // The refusal does not depend on the driver's memory: a driver object
+        // without any custody reads the promise from the old voters' durable
+        // range logs and refuses as well.
+        let frozen = committed(five);
+        let without_custody = NativeJoinedDataHandoff::new(scenario.original.id, node(4))
+            .abort_before_cut(&mut *five, &parent)
+            .unwrap_err();
+        assert!(without_custody
+            .to_string()
+            .contains("durable state beyond the expected epoch"));
+        assert_eq!(committed(five), frozen);
         assert_unwritable_and_intact(five, &scenario, "after-refused-abort");
         // Resume: the same call again.
         assert_eq!(
@@ -916,6 +938,16 @@ fn native_fifth_data_path_interrupted_driver_reruns_to_completion() {
             }
             assert!(!scenario.handoff.completed());
             scenario.mark(&format!("driver returned after {stage:?}"));
+            // Past the source cut there is no abort, with or without custody.
+            let frozen = committed(five);
+            assert!(scenario
+                .handoff
+                .abort_before_cut(&mut *five, &parent)
+                .is_err());
+            assert!(NativeJoinedDataHandoff::new(scenario.original.id, node(4))
+                .abort_before_cut(&mut *five, &parent)
+                .is_err());
+            assert_eq!(committed(five), frozen);
             assert_unwritable_and_intact(five, &scenario, &format!("after-{stage:?}"));
         }
         assert_eq!(

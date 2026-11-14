@@ -584,3 +584,76 @@ Canonical manifest SHA256:
 complete archive verification SHA256:
 `cdc84cacc4de953d2d76f2686927628c6f58ac6b5ce63f713bf4b777b2243c93`.
 All prior failed candidates and the failed Azure experiment remain unchanged.
+
+## Source-only operational follow-up: candidate1fc
+
+This follow-up inspects candidate **1.0.515-beta**,
+`1fcfdc3adf7e38422173e072e6fec4ad56e48188`, tree
+`9d24cdf8cac1d9db4da35227182c71ff72a1bb7e`. Delivered main at this checkpoint
+remains **1.0.514-beta**, `7fc833e3a9130ea710a0fbbfbaba6b065eedf8d3`.
+Several candidate paths below are absent or changed on that delivered main;
+their source implementation must not be described as an already delivered
+runtime. The candidate's all-targets workspace/consumer compile check and
+Rails20-run/100-assertion check passed; native/runtime acceptance is still
+running at this checkpoint. This review executes no SDK or physical test.
+
+The [scoped publication correction](design/native-publication-scoped-validation.md)
+and [same-round supervisor admission](design/native203-supervisor-bounded-store-admission.md)
+remain subject to that actual CI result. Passing compilation does not close
+either the original failures or the following operational gaps.
+
+### Readiness is three different contracts
+
+| Indicator | Actual candidate source contract | Practical limit |
+| --- | --- | --- |
+| Replica observation | `joined_data/registered.rs::registered_range_status` reads actual native applied position, invalidation and Pending state against the retained bridge floor. | `replica_ready_observed` does not compare with a fresh globally committed head; it is not proof of current catch-up. INITIAL status lacks equivalent numeric replica diagnostics. |
+| Recovered leader observation | `distribution_range_consensus.rs::recover_local_leadership` fills recovered-epoch state only after actual prefix/tail recovery. Current writer/fences remain independently required. | A recovered map/status observation is not a fresh lease or future read permission. A follower can bind DATA without inventing local leader authority. |
+| Strong request admission | `distribution_native_read/event_dispatch.rs`, `distribution_range_recovery/runtime/strong_point_read.rs`, and `distribution_native_read/{strong,quorum}.rs` acquire fresh routing MQ, distinct read MQ, actual matching range quorum/history, a materialized snapshot at the required floor and a distinct final MQ/currentness proof. | Every Strong request builds its own proof. Published sockets, image bytes, metadata leadership and earlier readiness observations cannot substitute. Status explicitly requires a new request-bound barrier. |
+
+The typed SDK/transport/dispatcher path is a genuine production entry for
+explicitly opened native DATA. Only an actual observed Strong result becomes
+the tagged present/absent value; redirect and unavailable remain distinct.
+`event_wire.rs` rejects a legacy value for an explicit Strong request and
+distinguishes present JSON null from absence. These are source-confirmed
+guards, **not** proof that physical failover never produces a false absence.
+They also do not establish ordinary PostgreSQL/HTTP transparency.
+
+### Operational blockers and their next tests
+
+| Boundary | Classification at candidate1fc | Required next evidence |
+| --- | --- | --- |
+| Automatic full remote movement into Joined Serving | Source-confirmed integration gap | A normal process must drive genuine target ownership, remote phases, Serving/Open/release and terminal cleanup. `joined_data_handoff.rs` explicitly excludes a production caller; the CLI currently exposes INITIAL DATA open and Registered replica-only open. Fixture adapters are not an automatic operator. |
+| Permanent loss of an original replica during remote replacement | Unsupported remote lane | `joint/remote_old_collect.rs::NativeRemoteOldRound::finish` requires responses from **all** original OLD members and explicitly refuses unavailable/minority-tail histories. A surviving majority alone cannot complete this path. A separately sealed unavailable-member protocol must preserve actual committed/uncertain/sparse obligations and old-writer fencing; lowering the existing count is not that protocol. |
+| Cold DATA continuation after original owner/process loss | Source-confirmed integration gap | Recover the exact persisted intent/native outcomes under new actual authority and ownership. Metadata-only reopen cannot recreate Serving. Pending Registered-row retention deliberately refuses before generic replay; this is quarantine, not evidence of data loss or bounded recovery. |
+| Automatic hot-origin repair | Implemented bounded subset | `initial_data/hot_recovery.rs` retains original INITIAL ownership and the same epoch for a supported next unmaterialized Pending command. Materialized Pending, other lineage, unresolved earlier replica debt and new-session cases refuse; this is not general new-leader/cold repair. |
+| Ready/lag observability | Incomplete observation contract | Export actual applied and freshly observed committed positions separately, with observation identity/age. Do not turn a historical floor or cached status into Strong permission. |
+
+The donor's actual `collect_remote_old_for_source` loops over every original
+OLD member and aborts on a failed request. Dead-replica planning exists, but no
+sealed dead-member/minority-tail substitute feeds this certificate. The local
+old-owner round's different majority API cannot be reconstructed from remote
+reply DATA. Generic decommission also refuses remaining replicas/active moves;
+it does not prove this native replacement lane works after permanent loss.
+
+New rebalance plans already receive a stable `handoff_session` from
+`distribution.rs::apply_rebalance_plan`. The definition-only legacy session
+initializer is not evidence that every new plan lacks a session. The missing
+normal FIRST chain concerns actual coordinator/recipient-owned producers and
+continuations. Its current plan factory requires the genuine range-leader
+requester; the donor can be a different member. An authenticated donor or
+manifest cannot impersonate that coordinator. Existing receive preparation
+also requires mutable actual host ownership, not a host reconstructed by a
+wire listener from request DATA.
+
+The smallest read-consistency controls are an actual authority change after
+snapshot/before final MQ, and an actual newly selected leader held below the
+required materialization position. Require the latest acknowledged value or
+bounded typed unavailable/redirect, never successful false absence. Full
+movement acceptance additionally needs the genuine remote Joined producer,
+stale-route refresh, retained ACK/attempt reconciliation, crash/cold recovery
+and observed convergence. None was executed by this source review.
+
+The independently pinned 27-file readiness review has SHA256
+`479f9424f2f8724090e770704f8ca8342fe3bb90d342e99c236a4586992dad58`.
+It establishes source/callgraph findings only. Physical RPO/RTO, sustained
+capacity gain and production admission remain unqualified.

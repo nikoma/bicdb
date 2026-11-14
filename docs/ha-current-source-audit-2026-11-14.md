@@ -24,12 +24,28 @@ deployment are separate evidence states.
 The unmerged **1.0.512-beta** range-recovery candidate is
 `b7791177fc94fa8d1ea2072f6b4f62bb659000b6`, tree
 `e05d4b742ec49af5c06b75a65eaf4df1685df4df`. Its
-[required run](https://github.com/nikoma/bicdb/actions/runs/43601117766) is ongoing
-at this checkpoint. All-target/consumer compilation, PGwire's 511 passing tests
-and [Rails20 runs/100 assertions](https://github.com/nikoma/bicdb/actions/runs/43601117775)
-have completed; no passing native multi-node result is claimed. The CI
-checkout `50a1359db62f58d7d88f2889fbb06d6fb53cc5dd` has the exact candidate tree.
+[required run](https://github.com/nikoma/bicdb/actions/runs/43601117766) completed
+with **failure** on November14 at15:01:34UTC. Native multi-node tests recorded
+**324 passed,13 failed and one ignored**. All-target/consumer compilation,
+Core(1817 passed), SQL(2681 passed), PGwire(511 passed), the remaining-workspace
+job and [Rails20 runs/100 assertions](https://github.com/nikoma/bicdb/actions/runs/43601117775)
+succeeded. These are component/job results; the candidate remains unmerged and
+failed overall. The CI checkout
+`50a1359db62f58d7d88f2889fbb06d6fb53cc5dd` has the exact candidate tree.
 This is an immutable source/result checkpoint, not a live CI dashboard.
+
+Twelve native failures occur later at local activation with `QueryTimedOut`,
+after fresh preparation, resumed publication, member acquisition and phase
+completion. The thirteenth is a foreign-service negative control whose expected
+error-text assertion failed; the actual error was not retained. That control
+returned an error and passed its preceding original-ownership/liveness checks.
+All three previously failing remote-decision cases passed, but this does not
+establish the cause of their earlier failures. Failure-stage clocks and the
+negative control's exact error are the next diagnostic evidence required;
+neither a deadline increase nor a relaxed assertion is justified. The raw
+native log is12,991,102 bytes, SHA-256
+`70a2f2a1d255bf00bd815bc3761843f0321639ebea12b419f525931c52821860`.
+No physical fault-safe scale-out result is inferred from these tests.
 
 ## Evidence levels by deployment mode
 
@@ -44,7 +60,7 @@ operational instance and its configuration were independently verified.
 | 1: legacy single-primary file shipping | Ship/status/promote, with explicit fencing and redirection | Retained durability/crash regressions; no new physical run here | No current-main RPO/RTO campaign | Not established | Not established |
 | 1: native single-primary synchronous/asynchronous streaming | Ordered streaming, voting-only ACKs, elections/lease fencing; zero-loss claim blocked by issue190 | Configuration/election/bootstrap/kill regressions exist and required main511 CI passed; partial higher-epoch catch-up followed by another election is not covered | Historical limited failover results do not qualify511 | No; source safety blocker plus incomplete qualification | Not established |
 | 2: generic/legacy distributed range controller | Metadata consensus, per-range quorum, automatic placement and relocation | Retained functional and shared-host tests; ordinary SQL integration remains incomplete | Original461 Azure run showed some automatic movement; scale-out qualification failed | No | Not established |
-| 2: native distributed data/recovery path | Genuine physical owners, OLD/image/NEW/decision components and local continuation; automatic operator closure incomplete | Candidate b779 compiles; previous4ef native run failed307/23/one ignored; new runtime results pending | No new pinned four-to-five native campaign | No | Not established |
+| 2: native distributed data/recovery path | Genuine physical owners, OLD/image/NEW/decision components and local continuation; automatic operator closure incomplete | Candidate b779 compiles; native run failed324/13/one ignored; previous4ef failed307/23/one ignored | No new pinned four-to-five native campaign | No | Not established |
 | 3: Cell-scoped HA | Signed/encrypted Cell authorities, lease/fencing and authorized recovery; Phase5 asynchronous positive-RPO contract | Authority tests and synthetic signed drill fixtures; an admission verifier is not an operational drill | No current release-level recovery drill established | Not established | Not established |
 | 4: application fleet | Worker placement, leases/reassignment and single-writer state groups | Retained multi-process loopback and lifecycle scenarios; application workers do not create distributed SQL capacity | Independent-machine throughput gain not established | Not established | Not established |
 

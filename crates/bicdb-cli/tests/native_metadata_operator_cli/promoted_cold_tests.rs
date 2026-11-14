@@ -270,8 +270,34 @@ fn native_metadata_operator_actual_cli_automatic_promoted_voter_kill_reopen_same
     // NONleader founders only AFTER identity/state parity and all5 data refusals.
     // This is a distinct metadata-quorum check, not a claim those roots can
     // themselves cold-restart or that any native-data ACK survived an outage.
+    //
+    // A strict cold reopen clears the volatile leader label, and readiness
+    // (`owned_metadata_voter` with owned control and listener) does not promise
+    // leader contact: the first ready status can precede the retained leader's
+    // first heartbeat to the reopened process. So read the leader from the
+    // reopened process's own periodically refreshed status once it names one.
+    // No label is installed and nothing is restarted; a leader that is really
+    // absent, or a different one, still fails here.
+    let until = Instant::now() + Duration::from_secs(15);
+    let led = loop {
+        assert!(
+            processes.children[4].try_wait().unwrap().is_none(),
+            "cold fifth exited before it learned its leader"
+        );
+        let status: Value =
+            serde_json::from_slice(&std::fs::read(paths(&root, 4).1).unwrap()).unwrap();
+        assert_eq!(status["process_id"], processes.children[4].id());
+        if status["error"].is_null() && !status["host"]["metadata"]["leader_id"].is_null() {
+            break status;
+        }
+        assert!(
+            Instant::now() < until,
+            "cold fifth never heard from a metadata leader: {status}"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    };
     assert_eq!(
-        reopened["host"]["metadata"]["leader_id"], "n0",
+        led["host"]["metadata"]["leader_id"], "n0",
         "this first promoted-cold control covers the healthy retained leader n0"
     );
     let stopped = [2usize, 3usize];

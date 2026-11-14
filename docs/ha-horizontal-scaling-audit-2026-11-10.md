@@ -11,7 +11,25 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Current recovery candidate — 510
+## Latest source and current recovery candidate — November 14, 2026 UTC
+
+Verified remote main is **1.0.509-beta**,
+`7ad192a7d01ba1e0c1967bc4f1bc79d176a4c385`. The preceding 508 merge adds a
+[narrow abort/resume driver](releases/1.0.508-beta.md): same-process only, no
+production caller, an unwritable range during movement, and two known
+safe-but-stuck consuming windows. Main 509 fixes intermittent test causes and
+extends the existing focused selector. Neither change establishes physical
+scale-out or automatic operator-level recovery.
+
+The current **512 source candidate** combines that baseline with frozen memo
+511 (`2ec5f7545b5bb3706b2e229151a17c2569103bfe`) and the corrected native
+batch. Its [release scope](releases/1.0.512-beta.md) separates actual source
+implementation, historical test results and missing qualification. The eleven
+prepared-round timeouts have no demonstrated fix. Original 510 failures remain
+at their exact source below; they are not results for 512. No new physical
+experiment or production deployment is established.
+
+## Historical recovery candidate — 510
 
 The [510 integration review](design/ha-recovery-integration-review-2026-11-13.md)
 records the assembled native range-recovery candidate, original failed cohorts,

@@ -26,5 +26,15 @@
     }
   ],
   "resolution": "Canonical release508notes and rewritten product-driver fixture use deliveredmain508 bytes. Prior unmerged recovery-candidate508 notes and exact manualfixture remain archived without relabeling their failed results. Protected-native adaptations in that predecessor must be ported into the productdriver separately and validated; selecting new fixture does not establish compatibility.",
-  "qualification": "source port only; originalAzureFAILED; no physical or productionqualification"
+  "qualification": "source port only; originalAzureFAILED; no physical or productionqualification",
+  "product_adapter": {
+    "source": "88cc8041398ff0092c95772987842296b4b0096f",
+    "review": {
+      "path": "88cc-main508-owned-context-independent-source-review.json",
+      "bytes": 2468,
+      "sha256": "680ee0a8fdcb3c39f70786ad883bcd968df7b9fdb70e050a04e73724bc2b72f2"
+    },
+    "scope": "actualownedDECISION+actualMStorepointbeforeServicelock; bothoriginalSession/currentDriveparent plusminRoledeadline; retry/unknown custody unchanged",
+    "classification": "source-reviewed; runtime NOT TESTED; knownsameprocess/oneRange/nooperator limitations remain"
+  }
 }

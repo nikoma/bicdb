@@ -39,6 +39,11 @@ coordinator-crash resolver or reference-tested cross-range SQL executor was foun
 
 ## Rigorous two-phase locking, without a global clock
 
+The locking and predicate-coverage premise follows
+[Eswaran, Gray, Lorie and Traiger (1976)](https://research.ibm.com/publications/the-notions-of-consistency-and-predicate-locks-in-a-database-system).
+The transaction-home, movement and crash rules below are proposed BicDB
+integration constraints; this reference does not verify their implementation.
+
 A serializable implementation can use actual shared/exclusive locks over keys,
 missing-key gaps and scan predicates, holding both read and write claims until
 the transaction's terminal resolution. Every reader and writer of admitted SQL
@@ -97,7 +102,8 @@ Rigorous locking can supply serializable histories, but does **not** by itself
 reproduce PostgreSQL's fixed first-statement MVCC snapshot. A transaction can
 read A, overlap an unrelated commit to previously unread B, then lock/read B's
 new value while remaining serializable. PostgreSQL REPEATABLE READ would require
-the earlier snapshot of B. Preserve each requested isolation contract explicitly;
+the earlier snapshot of B. [PostgreSQL18's isolation contract](https://www.postgresql.org/docs/18/transaction-iso.html)
+pins that view at the first statement that is not transaction control. Preserve each requested isolation contract explicitly;
 do not silently relabel that behavior as compatible REPEATABLE READ. Supporting
 fixed views needs a separate retained-cut protocol or sufficiently broad locks
 established at the view boundary. READ COMMITTED statement/portal behavior and

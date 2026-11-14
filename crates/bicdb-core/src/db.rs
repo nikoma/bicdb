@@ -8566,12 +8566,19 @@ fn resulting_records_for_relation(
 /// Sharing requires the existing serializable admission or forced global
 /// writer gate. The ordinary invariant-only mutex does not exclude writers
 /// without invariants. Policy, tenant and expression results are NOT cached.
+#[cfg(test)]
+mod invariant_relation_snapshot_tests;
+
 struct NativeInvariantRelationSnapshot<'a> {
     db: &'a BicDb,
     tx: &'a Transaction,
     share_relations: bool,
-    cached_bytes: std::cell::Cell<usize>,
-    relations: std::cell::RefCell<BTreeMap<String, Arc<[Record]>>>,
+    cache_limit: usize,
+    relations: std::cell::RefCell<BTreeMap<String, CachedInvariantRelation>>,
+}
+struct CachedInvariantRelation {
+    records: Arc<[Record]>,
+    estimated_bytes: usize,
 }
 impl<'a> NativeInvariantRelationSnapshot<'a> {
     fn new(db: &'a BicDb, tx: &'a Transaction) -> Self {
@@ -8580,7 +8587,7 @@ impl<'a> NativeInvariantRelationSnapshot<'a> {
             tx,
             share_relations: tx.isolation == TransactionIsolation::Serializable
                 || global_commit_lock_enabled(),
-            cached_bytes: Default::default(),
+            cache_limit: crate::query_budget::limit(16 * 1024 * 1024),
             relations: Default::default(),
         }
     }
@@ -8590,23 +8597,48 @@ impl<'a> NativeInvariantRelationSnapshot<'a> {
             return Ok(resulting_records_for_relation(self.db, self.tx, relation)?.into());
         }
         if let Some(records) = self.relations.borrow().get(relation) {
-            return Ok(Arc::clone(records));
+            return Ok(Arc::clone(&records.records));
         }
-        // Preserve exact relation spelling, full rows and upsert/delete overlay.
-        // Do not retain failures, predicates or principals in this raw cache.
-        let records: Arc<[Record]> =
-            resulting_records_for_relation(self.db, self.tx, relation)?.into();
-        // Existing scan accounting covers only this relation. The memo keeps
-        // all prior raw relations alive too: include that retained residency in
-        // the existing cooperative estimator before inserting another cache.
-        let mut retained = self.cached_bytes.get();
-        for record in records.iter() {
-            crate::query_budget::retain_record(&mut retained, record)?;
-        }
-        self.cached_bytes.set(retained);
+        // Before another scan, discard cache-only bodies. Bodies still owned
+        // by an active subject/recursive loop already belong to the original
+        // evaluator's working set and are kept alive by that caller's Arc.
         self.relations
             .borrow_mut()
-            .insert(relation.to_owned(), Arc::clone(&records));
+            .retain(|_, entry| Arc::strong_count(&entry.records) > 1);
+        // Preserve the exact full relation + original ID-keyed tx overlay.
+        let records: Arc<[Record]> =
+            resulting_records_for_relation(self.db, self.tx, relation)?.into();
+        let mut entry_bytes = 0usize;
+        for record in records.iter() {
+            crate::query_budget::check()?;
+            entry_bytes =
+                entry_bytes.saturating_add(crate::query_budget::materialized_record_bytes(record)?);
+            if entry_bytes > self.cache_limit {
+                return Ok(records); // Original fresh scan, never a truncated set.
+            }
+        }
+        let retained = self
+            .relations
+            .borrow()
+            .values()
+            .fold(0usize, |total, entry| {
+                total.saturating_add(entry.estimated_bytes)
+            });
+        let combined = retained.saturating_add(entry_bytes);
+        if combined <= self.cache_limit {
+            // Observe each cached body once, irrespective of Arc reference count.
+            // Admission never raises the caller's limit or adds a memory refusal:
+            // a body that would exceed the memo cap remains an uncached scan.
+            crate::query_budget::observe(combined);
+            crate::query_budget::check()?;
+            self.relations.borrow_mut().insert(
+                relation.to_owned(),
+                CachedInvariantRelation {
+                    records: Arc::clone(&records),
+                    estimated_bytes: entry_bytes,
+                },
+            );
+        }
         Ok(records)
     }
 }

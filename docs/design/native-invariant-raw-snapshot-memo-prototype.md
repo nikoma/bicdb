@@ -40,14 +40,21 @@ Counterexamples required before any production claim:
   policy resolution, including a revoked publication; only raw rows are cached.
 - Inspect competing native-import/replication paths and actual serializable
   admission coverage before treating that deployment as a stable snapshot.
-- Cached full relations remain alive to pass end. The prototype applies the
-  existing cooperative record-memory estimator to the combined cached rows
-  before inserting a new relation; cache hits and record/subject iterations
-  still check the original query budget/deadline. This is not hard RSS
-  reservation, and an execution with no active memory limit has no new bound.
-  Combined-residency accounting, inherited scope/peak behavior and deadline
-  refusal require validation before production use. A budget refusal remains
-  before durable commit and must not be described as rollback of a later write.
+- Memo retention uses the smaller of16MiB and the inherited positive memory
+  limit. It estimates bodies with the same helper as `retain_record`, counts
+  each Arc body once, and falls back to the full uncached scan when a relation
+  or combined memo exceeds that cap. It never truncates rows or raises limits.
+  Before a miss it discards cache-only bodies; active recursive/subject Arcs
+  continue to own exactly the working set the uncached evaluator needed. The
+  original query deadline and memory failure are checked on hits and loops.
+  Cooperative accounting is not hard RSS reservation; temporary scans retain
+  their existing accounting and require resource validation.
+
+Four added readonly source tests cover all historical/tenant root rows and the
+unchanged tx overlay, small-cap uncached fallback, a real large relation with no
+active budget and with a sufficient active budget, and expired/already-failed
+scopes on a memo hit. They have not been compiled or run. They do not replace
+application acceptance, race/isolation testing or profiling.
 
 Existing commit trace attributes native validators to CONFLICT, not VALIDATE,
 and emits only every50000 commits. The observed growing ERP mutation latency

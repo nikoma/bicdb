@@ -705,12 +705,15 @@ fn serve_peer(
             stream_to_standby(server, config, stream, &peer, data_epoch, commit_seq)
         }
         ReplicationFrame::VoteRequest {
+            cluster_id,
             candidate,
             term,
             data_epoch,
             last_commit_seq,
-            ..
         } => {
+            if cluster_id != config.replication.cluster_id {
+                return Err(refuse(stream, "vote cluster_id mismatch"));
+            }
             if !config
                 .failover
                 .as_ref()
@@ -722,22 +725,25 @@ fn serve_peer(
             let granted = if candidate != peer {
                 false
             } else {
-                match db.replication_role() {
-                    // A primary that still holds its lease is alive.
-                    NodeRole::Primary => {
-                        server.sync_quorum.lease_refusal().is_some()
-                            && db
-                                .consider_vote(term, &candidate, data_epoch, last_commit_seq)
-                                .map_err(PgWireError::from)?
-                    }
-                    // A standby that hears its primary does not replace it.
+                // Preserve the ORIGINAL lease/contact vote eligibility before
+                // a higher authenticated term fences this node. Closing a
+                // lease must not itself make this request eligible to vote.
+                let may_vote = match db.replication_role() {
+                    NodeRole::Primary => server.sync_quorum.lease_refusal().is_some(),
                     _ => {
                         let timeout = config.failover.as_ref().map(|failover| failover.timeout);
                         timeout.is_some_and(|timeout| runtime.silent_for() >= timeout)
-                            && db
-                                .consider_vote(term, &candidate, data_epoch, last_commit_seq)
-                                .map_err(PgWireError::from)?
                     }
+                };
+                if may_vote {
+                    db.consider_vote(term, &candidate, data_epoch, last_commit_seq)
+                        .map_err(PgWireError::from)?
+                } else {
+                    // Even a stale/refused static voter's higher term must
+                    // reach an old primary, so ordinary restart/election can
+                    // re-establish authority and let that voter catch up.
+                    db.observe_election_term(term).map_err(PgWireError::from)?;
+                    false
                 }
             };
             eprintln!(

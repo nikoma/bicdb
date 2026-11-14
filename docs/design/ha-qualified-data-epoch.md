@@ -80,6 +80,26 @@ exact durable prefix, with no later term. A later term refuses replay and retain
 the original offer. This exception cannot renew an old stream/Ping or bypass the
 recipient's live authority checks.
 
+A higher refused ballot also needs a lawful path back to the old primary;
+otherwise a member that now refuses old-epoch streams can be stranded while
+that primary retains another lease. The existing authenticated VoteRequest is
+used, with no new wire field: cluster/static-voter and candidate identity are
+validated before term effects. The handler captures its original lease/contact
+`may_vote` before fencing. A request that is ineligible to receive a vote still
+propagates its higher term; one eligible to vote uses the unchanged freshness
+comparison and durable ballot. Both paths durably fence an old primary even if
+the candidate is stale. They close its live quorum before fallible state IO and
+never advance data epoch or name the candidate as primary.
+
+The existing primary-supervisor restart/demotion and ordinary elections can then
+select an up-to-date member at a later term; the short member can follow that
+actual winner and catch up. The new Core component source drives actual native
+ballots, demotion/re-election and frame import for that sequence. This is not a
+real-peer timing result or bounded RTO proof. No PreVote, extra retry policy,
+new timeout or new balancing/controller behavior is introduced. The exact
+planned-drain replay exception above remains limited to its own reserved term;
+a later observed term refuses it.
+
 Independent review also found a pre-existing staging race: a target can cast a
 newer durable vote after `stage_standby_bootstrap` copied its HA file, then
 restart into the older copied ballot. The companion fix retains SHA256 of the
@@ -213,6 +233,12 @@ frames, the importer, HA-file replacement, reopen and native voting to cover:
   refusal; a later shorter vote observes the actual applied prefix.
 - Exact durable planned-offer replay, later-term refusal preserving that offer,
   and refusal to restage over an installed incomplete snapshot before recovery.
+- Full-P/short-D real native refusal and fencing, real later full-prefix votes,
+  promotion and D catch-up; actual pre-rename and post-rename IO failures prove
+  live writer revocation before state persistence returns.
+- Existing development-TCP observer rejection now checks exact unchanged term/
+  data epoch; a new development-TCP candidate/cluster mismatch case checks no
+  term effect. These are not real TLS or multiprocess qualification runs.
 
 Existing vote assertions remain, but their setup now uses a genuine promotion
 instead of gifting an epoch through `record_primary(empty_history)`. Existing

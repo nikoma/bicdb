@@ -659,6 +659,15 @@ fn allowed_observer_cannot_fence_a_primary_or_request_election_votes() {
         }
     }
     let host = EmbeddedHaDatabase::open(root.path(), cfg, DbConfig::default()).unwrap();
+    let before = {
+        let database = host.database();
+        let db = database.read();
+        (
+            db.replication_election_term(),
+            db.replication_epoch(),
+            db.ha_node_status().data_epoch,
+        )
+    };
     for request in [
         ReplicationFrame::VoteRequest {
             cluster_id: "embedded-test".into(),
@@ -695,6 +704,15 @@ fn allowed_observer_cannot_fence_a_primary_or_request_election_votes() {
     assert_eq!(db.replication_role(), NodeRole::Primary);
     assert!(db.replication_epoch() < 100);
     assert!(db.replication_election_term() < 101);
+    assert_eq!(
+        (
+            db.replication_election_term(),
+            db.replication_epoch(),
+            db.ha_node_status().data_epoch
+        ),
+        before
+    );
+    assert!(db.ha_node_status().voted.is_none());
     assert!(db.sync_quorum().lease_refusal().is_some());
     drop(db);
     drop(database);
@@ -779,4 +797,84 @@ fn invalid_failover_configuration_is_rejected_before_host_initialization() {
     assert!(error.to_string().contains("group majority"));
     assert!(!initialized.load(std::sync::atomic::Ordering::SeqCst));
     assert!(!path.exists());
+}
+
+#[test]
+fn vote_request_candidate_and_cluster_mismatches_cannot_advance_a_primary_term() {
+    use bicdb_core::{
+        replication::ReplicationFrame,
+        replication_transport::{recv_frame, send_frame},
+    };
+    let root = tempfile::tempdir().unwrap();
+    let ports = [port(), port(), port()];
+    let host = EmbeddedHaDatabase::open(
+        root.path().join("n0"),
+        config(0, &ports, true),
+        DbConfig::default(),
+    )
+    .unwrap();
+    let before = {
+        let database = host.database();
+        let db = database.read();
+        (
+            db.replication_election_term(),
+            db.replication_epoch(),
+            db.ha_node_status().data_epoch,
+        )
+    };
+    for foreign_cluster in [false, true] {
+        let mut peer = TcpStream::connect(("127.0.0.1", ports[0])).unwrap();
+        peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        send_frame(
+            &mut peer,
+            &ReplicationFrame::Hello {
+                protocol_version: bicdb_pgwire::HA_REPLICATION_PROTOCOL_VERSION,
+                cluster_id: "embedded-test".into(),
+                node_id: "n1".into(),
+                epoch: 0,
+            },
+            65536,
+        )
+        .unwrap();
+        send_frame(
+            &mut peer,
+            &ReplicationFrame::VoteRequest {
+                cluster_id: if foreign_cluster {
+                    "foreign"
+                } else {
+                    "embedded-test"
+                }
+                .into(),
+                candidate: if foreign_cluster { "n1" } else { "n2" }.into(),
+                term: 101,
+                data_epoch: 0,
+                last_commit_seq: 0,
+            },
+            65536,
+        )
+        .unwrap();
+        let response = recv_frame(&mut peer, 65536).unwrap();
+        if foreign_cluster {
+            assert!(
+                matches!(response, ReplicationFrame::Error { message, .. } if message.contains("cluster_id mismatch"))
+            );
+        } else {
+            assert!(
+                matches!(response, ReplicationFrame::VoteResponse { granted: false, term, .. } if term == before.0)
+            );
+        }
+        let database = host.database();
+        let db = database.read();
+        assert_eq!(db.replication_role(), NodeRole::Primary);
+        assert_eq!(
+            (
+                db.replication_election_term(),
+                db.replication_epoch(),
+                db.ha_node_status().data_epoch
+            ),
+            before
+        );
+        assert!(db.ha_node_status().voted.is_none());
+    }
+    host.shutdown(Duration::from_secs(2)).unwrap();
 }

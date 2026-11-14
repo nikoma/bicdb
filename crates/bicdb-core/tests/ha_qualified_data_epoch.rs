@@ -446,3 +446,92 @@ fn public_restage_cannot_bypass_an_installed_pending_bootstrap() {
     let target = open(&path, ReplicationMode::Standby);
     assert!(target.get("items", "r7").unwrap().is_some());
 }
+
+#[test]
+fn refused_short_candidate_fences_primary_then_full_prefix_can_be_reelected_and_rejoined() {
+    use bicdb_core::NodeRole;
+    let root = tempfile::tempdir().unwrap();
+    let p_path = root.path().join("p");
+    let p = source(&p_path);
+    let frames = p
+        .replication_frames_after(&mut ReplicationCursor::new(0), 100)
+        .unwrap();
+    let prefix = p.replication_election_position().unwrap();
+    let mut d = open(&root.path().join("d"), ReplicationMode::Standby);
+    let mut c = open(&root.path().join("c"), ReplicationMode::Standby);
+    for frame in &frames {
+        c.apply_replication_frame(frame).unwrap();
+    }
+    let term = d.begin_candidacy("d").unwrap();
+    let short = d.replication_election_position().unwrap();
+    let authority = p.replication_writer_authority();
+    let original_primary = p.ha_node_status().primary_id;
+    assert!(authority.active());
+    assert!(!p.consider_vote(term, "d", short.0, short.1).unwrap());
+    assert_eq!(p.replication_role(), NodeRole::Fenced);
+    assert!(!authority.active());
+    assert_eq!(p.replication_election_term(), term);
+    assert_eq!(p.ha_node_status().primary_id, original_primary);
+    assert_eq!(p.replication_epoch(), 0);
+    assert_eq!(p.replication_election_position().unwrap(), prefix);
+    assert!(p.ha_node_status().voted.is_none());
+    drop(p);
+    let p = open(&p_path, ReplicationMode::Primary);
+    assert_eq!(p.replication_role(), NodeRole::Fenced);
+    p.demote_to_standby().unwrap(); // Actual normal restart transition.
+    let next = p.begin_candidacy("p").unwrap();
+    assert_eq!(next, term + 1);
+    assert!(d.consider_vote(next, "p", prefix.0, prefix.1).unwrap());
+    assert!(c.consider_vote(next, "p", prefix.0, prefix.1).unwrap());
+    assert_eq!(p.ha_node_status().voted, Some((next, "p".into())));
+    p.promote_by_election(next, "p", None).unwrap();
+    drop(p);
+    let p = open(&p_path, ReplicationMode::Primary);
+    let starts = p.ha_node_status().epoch_starts;
+    d.record_primary("p", next, None, &starts).unwrap();
+    for frame in p
+        .replication_frames_after(&mut ReplicationCursor::new(0), 100)
+        .unwrap()
+    {
+        d.apply_replication_frame(&frame).unwrap();
+    }
+    assert!(d
+        .qualify_replication_data_epoch("p", next, prefix.1)
+        .unwrap());
+    assert_eq!(d.replication_election_position().unwrap(), (next, prefix.1));
+    assert_eq!(
+        d.get("items", "r7").unwrap().unwrap().metadata,
+        p.get("items", "r7").unwrap().unwrap().metadata
+    );
+}
+
+#[test]
+fn higher_term_fence_revokes_the_live_writer_before_native_state_io_failure() {
+    use bicdb_page::test_faults::arm_io_failure;
+    for consider in [false, true] {
+        for step in ["write", "dir_sync"] {
+            let root = tempfile::tempdir().unwrap();
+            let p = source(&root.path().join("p"));
+            let authority = p.replication_writer_authority();
+            assert!(authority.active());
+            let fault = arm_io_failure(&format!("ha_node.{step}"), p.data_path(), 1, false);
+            let result = if consider {
+                p.consider_vote(1, "short", 0, 0).map(|_| ())
+            } else {
+                p.observe_election_term(1)
+            };
+            assert!(result.is_err());
+            assert_eq!(fault.fired(), 1);
+            assert!(!authority.active());
+            assert_eq!(p.replication_epoch(), 0);
+            assert_eq!(p.ha_node_status().data_epoch, 0);
+            assert!(p.ha_node_status().voted.is_none());
+            let write: bicdb_core::Result<()> = (|| {
+                let mut tx = p.begin_transaction()?;
+                tx.insert("items", Record::new("after-failed-fence"))?;
+                tx.commit()
+            })();
+            assert!(write.is_err());
+        }
+    }
+}

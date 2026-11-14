@@ -602,21 +602,41 @@ impl BicDb {
         })
     }
 
-    /// Learn a peer's election term without treating a candidacy as a primary.
+    /// Learn an authenticated voter's higher term, fencing an old primary
+    /// without treating the candidate as a primary or advancing data history.
     pub fn observe_election_term(&self, term: u64) -> Result<()> {
+        let quiesced = self.serializable_commit_admission.write();
+        self.observe_election_term_with_exclusion(term, &quiesced)
+    }
+
+    fn observe_election_term_with_exclusion(
+        &self,
+        term: u64,
+        _quiesced: &parking_lot::RwLockWriteGuard<'_, ()>,
+    ) -> Result<()> {
         if self.replication_election_term() >= term {
             return Ok(());
         }
+        let was_primary = self.ha_node.role() == NodeRole::Primary;
+        if was_primary {
+            // Revoke the live lease BEFORE any fallible reader/state IO. A
+            // failed fence publication must not leave an old writer active.
+            self.sync_quorum
+                .close("a higher election term fenced this primary");
+        }
         self.ha_node.with_file(|file| {
             file.election_term = file.election_term.max(term);
+            if was_primary {
+                file.role = Some(NodeRole::Fenced);
+            }
         })
     }
 
     /// Decides a vote request: `candidate` wants to become primary in `term`
     /// and holds commits up to `candidate_seq` from a primary of
     /// `candidate_data_epoch`. Grants at most one candidate per term, and
-    /// only one at least as up to date as this node. A primary that grants a
-    /// vote has lost its group and fences itself.
+    /// only one at least as up to date as this node. A higher authenticated
+    /// term fences a primary even if the candidate is refused as stale.
     pub fn consider_vote(
         &self,
         term: u64,
@@ -624,24 +644,42 @@ impl BicDb {
         candidate_data_epoch: u64,
         candidate_seq: u64,
     ) -> Result<bool> {
-        let _quiesced = self.serializable_commit_admission.write();
-        let (_, own_seq) = self.replication_election_position()?;
+        let quiesced = self.serializable_commit_admission.write();
+        let (_, own_seq) = match self.replication_election_position() {
+            Ok(position) => position,
+            Err(error) => {
+                // Unknown local history must never vote, but cannot preserve
+                // an old primary lease after learning an authenticated term.
+                self.observe_election_term_with_exclusion(term, &quiesced)?;
+                return Err(error);
+            }
+        };
+        let higher_primary =
+            self.ha_node.role() == NodeRole::Primary && term > self.replication_election_term();
+        if higher_primary {
+            self.sync_quorum
+                .close("a higher election term fenced this primary");
+        }
         // Eligibility and the durable ballot must share one lock; two
         // concurrent requests cannot both win the same node's term.
         let (granted, fenced) = self.ha_node.with_file(|file| {
             if term <= file.epoch || term < file.election_term {
                 return (false, false);
             }
+            let was_primary = file.role.unwrap_or_else(|| self.ha_node.role()) == NodeRole::Primary;
+            let fenced = was_primary && term > file.election_term;
             file.election_term = term;
+            if fenced {
+                file.role = Some(NodeRole::Fenced);
+            }
             if let Some((voted_term, voted_for)) = &file.voted {
                 if *voted_term > term || (*voted_term == term && voted_for != candidate) {
-                    return (false, false);
+                    return (false, fenced);
                 }
             }
             if (candidate_data_epoch, candidate_seq) < (file.data_epoch, own_seq) {
-                return (false, false);
+                return (false, fenced);
             }
-            let was_primary = file.role.unwrap_or_else(|| self.ha_node.role()) == NodeRole::Primary;
             file.voted = Some((term, candidate.to_string()));
             if was_primary {
                 file.role = Some(NodeRole::Fenced);
@@ -650,7 +688,7 @@ impl BicDb {
         })?;
         if fenced {
             self.sync_quorum
-                .close("this primary voted for a successor and is fenced");
+                .close("a higher election term or successor vote fenced this primary");
         }
         Ok(granted)
     }

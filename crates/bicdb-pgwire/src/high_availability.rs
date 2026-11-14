@@ -780,7 +780,7 @@ fn serve_peer(
                 && epoch >= db.replication_epoch()
                 && db.replication_role() != NodeRole::Primary
             {
-                // Only current authority may renew contact. A stale peer still
+                // Only current-term contact may renew the timer. A stale peer still
                 // needs the informational Pong below to learn our actual epoch
                 // and fence/restart itself; this response grants no lease/ACK.
                 runtime.heard_now();
@@ -1950,8 +1950,8 @@ mod stale_ping_tests {
         // fake clock, contact override, quorum DTO or publication grant exists.
         let runtime = Arc::new(HaRuntime::new());
         let before = *runtime.last_heard.lock().unwrap();
-        for epoch in [old_epoch, expected.epoch] {
-            assert_eq!(other.replication_epoch(), epoch);
+        for (sender_id, sender) in [("n2", &other), ("n1", &leader)] {
+            let epoch = sender.replication_epoch();
             let actual_server = server.clone();
             let actual_runtime = runtime.clone();
             let actual_config = config.clone();
@@ -1984,8 +1984,8 @@ mod stale_ping_tests {
                 &ReplicationFrame::Hello {
                     protocol_version: HA_REPLICATION_PROTOCOL_VERSION,
                     cluster_id: config.replication.cluster_id.clone(),
-                    node_id: "n2".into(),
-                    epoch: other.replication_epoch(),
+                    node_id: sender_id.into(),
+                    epoch,
                 },
             )
             .unwrap();
@@ -1993,7 +1993,7 @@ mod stale_ping_tests {
                 &mut peer,
                 &ReplicationFrame::Ping {
                     cluster_id: config.replication.cluster_id.clone(),
-                    node_id: "n2".into(),
+                    node_id: sender_id.into(),
                     epoch,
                 },
             )
@@ -2010,14 +2010,16 @@ mod stale_ping_tests {
             };
             assert_eq!(actual, expected.epoch);
             assert_eq!(primary_id, expected.primary_id);
-            // The next positive request derives from this ACTUAL reply and
-            // persisted authority observation, not a manufactured fresh epoch.
-            other.observe_replication_epoch(actual).unwrap();
-            assert_eq!(other.ha_node_status().data_epoch, position.0);
             let after = *runtime.last_heard.lock().unwrap();
-            if epoch == old_epoch {
+            if sender_id == "n2" {
+                assert_eq!(epoch, old_epoch);
                 assert_eq!(after, before);
             } else {
+                // Positive contact is from the ACTUAL quorum-elected leader,
+                // not a follower made to look authoritative by learning Pong.
+                assert_eq!(sender_id, "n1");
+                assert_eq!(sender.replication_role(), NodeRole::Primary);
+                assert_eq!(epoch, expected.epoch);
                 assert!(after > before);
             }
         }

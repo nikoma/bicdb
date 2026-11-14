@@ -59,8 +59,9 @@ The new private unit control uses the real TCP handler and its SAME original
 HaRuntime, created through the production constructor. Real file-backed native
 candidacy/votes/promotion produce the known newer epoch; no vote/history DTO or
 fake clock is installed. The stale request receives actual Pong data without
-changing that runtime's contact Instant. The peer persists the authority learned
-from that actual reply, then a current request exercises genuine contact renewal.
+changing that runtime's contact Instant. The positive exchange then comes from the actual quorum-elected n1 leader,
+using its own recorded epoch, and exercises current-term contact renewal. An
+informational reply to a follower does not make that follower a primary.
 This is development TCP, not TLS or multiprocess qualification. The control and
 correction have not been compiled/executed in this successor.
 

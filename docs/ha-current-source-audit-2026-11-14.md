@@ -21,7 +21,8 @@ passed. Its separately built optimized CLI identifies as `bicdb 1.0.511-beta`:
 Source delivery, compilation, application acceptance, physical qualification and
 deployment are separate evidence states.
 
-The unmerged **1.0.512-beta** range-recovery candidate is
+The historical failed range-recovery branch used source version **1.0.512-beta**;
+its original candidate is
 `b7791177fc94fa8d1ea2072f6b4f62bb659000b6`, tree
 `e05d4b742ec49af5c06b75a65eaf4df1685df4df`. Its
 [required run](https://github.com/nikoma/bicdb/actions/runs/43601117766) completed
@@ -91,6 +92,12 @@ failed or independently prove a final serving/WAL state. Narrow correction
 error, preserves all other assertions and is **uncompiled and unexecuted**.
 The native diagnostic supplement SHA256 is
 `84e77f9aa17826efbaabfe606d24875d2e749b98f826cd1e7a31f4a67ed721c9`.
+The complete native candidate capture retains eleven full logs and eight
+original artifact ZIPs, with zero unavailable files, partials or hash mismatches.
+Its canonical manifest SHA256 is
+`1ef5836a8c5431c453911cc81923f12f1dad0a13756d763bef25017190120777`;
+complete-capture verification SHA256 is
+`80658df9c5a1ce9ff67ad1f162b5faca5ad1713fc313b070b74e7c10e4fcfdb8`.
 
 ## Separate streaming correction and actual regression feedback
 
@@ -170,7 +177,14 @@ No mixed-version upgrade, all-legacy bootstrap-source procedure, data-head/ACK-c
 protection for issue 193 or complete physical HA qualification is supplied by
 these corrections. Versions, binaries, release publication and deployment remain
 separate states. A next unused version and final versioned-head validation are
-required before merging; PR188's active512 reservation is not reused in parallel.
+required before merging. After both failed captures were frozen, PR188 was
+closed as historical evidence, preserving its branch and exact source heads.
+Its active version reservation was retired. The next unused source version,
+**1.0.512-beta**, is assigned to the separate corrected streaming batch and
+this documentation; final versioned-head required CI remains pending at this
+checkpoint. Historical failed branches sharing a version label must always be
+identified by full source SHA. No binary, release or deployment is produced by
+that source-version assignment.
 
 The terminal streaming capture retains eleven complete executed-job logs and
 seven original artifact ZIPs, with raw hashes, gzip/ZIP CRC verification and

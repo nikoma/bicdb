@@ -10,10 +10,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 mod assigned_data;
+mod first_coordinator;
 mod initial_data;
 mod remote_new_metadata;
 pub(crate) use assigned_data::NativeAssignedDataAdmission;
 use assigned_data::NativeAssignedDataHost;
+pub(crate) use first_coordinator::NativeFirstCoordinatorAction;
 mod data_owner;
 mod joined_data;
 pub(crate) use data_owner::NativeDataOwnerAdmission;
@@ -425,6 +427,7 @@ pub(crate) struct NativeMetadataControlHost {
     listener: Option<ClusterDataServerHandle>,
     network: ClusterNetworkTransportConfig,
     config: DistributionConfig,
+    first_coordinators: BTreeMap<crate::RangeId, first_coordinator::NativeFirstCoordinator>,
 }
 impl NativeMetadataControlHost {
     pub(crate) fn new(
@@ -448,6 +451,7 @@ impl NativeMetadataControlHost {
             listener: None,
             network,
             config,
+            first_coordinators: BTreeMap::new(),
         }
     }
     pub(in crate::distribution_native_host) fn from_registered_member(
@@ -469,6 +473,7 @@ impl NativeMetadataControlHost {
             listener: None,
             network,
             config,
+            first_coordinators: BTreeMap::new(),
         }
     }
     pub(in crate::distribution_native_host) fn is_running(&self) -> bool {
@@ -856,6 +861,9 @@ impl NativeMetadataControlHost {
         self.backend.heartbeat(parent)
     }
     pub(crate) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
+        for operation in self.first_coordinators.values() {
+            operation.stop_original_process();
+        }
         if let Some(assigned) = self.assigned.as_mut() {
             assigned.stop(parent)?;
         }

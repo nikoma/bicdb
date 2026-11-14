@@ -238,7 +238,45 @@ pub(crate) struct NativeUnassignedLearnerHost {
     _service: Arc<Mutex<crate::ClusterDataNodeService>>,
     metadata_transition: metadata_transition::NativeLearnerMetadataTransition,
 }
+/// Structural provenance from the ACTUAL JoinFresh host constructor. This is
+/// neither a cold loader nor a current request/Role/physical image permission.
+pub(in crate::distribution_native_host) struct NativeFirstJoinFreshReceiverOrigin {
+    provider: std::sync::Weak<NativeLearnerBirthProvider>,
+    factory: Arc<NativeUnassignedLearnerFactory>,
+}
+impl NativeFirstJoinFreshReceiverOrigin {
+    pub(in crate::distribution_native_host) fn require_factory(
+        &self,
+        factory: &Arc<NativeUnassignedLearnerFactory>,
+    ) -> Result<()> {
+        let provider = self
+            .provider
+            .upgrade()
+            .ok_or_else(|| invalid("FIRST original JoinFresh host ended"))?;
+        if !Arc::ptr_eq(&provider.factory, factory) || !Arc::ptr_eq(&self.factory, factory) {
+            return Err(invalid("FIRST changed actual JoinFresh factory"));
+        }
+        Ok(())
+    }
+    pub(in crate::distribution_native_host) fn require_same_origin(
+        &self,
+        other: &Self,
+    ) -> Result<()> {
+        if !self.provider.ptr_eq(&other.provider) || !Arc::ptr_eq(&self.factory, &other.factory) {
+            return Err(invalid(
+                "FIRST cannot replace original JoinFresh receiver origin",
+            ));
+        }
+        self.require_factory(&other.factory)
+    }
+}
 impl NativeUnassignedLearnerHost {
+    fn first_receiver_origin(&self) -> NativeFirstJoinFreshReceiverOrigin {
+        NativeFirstJoinFreshReceiverOrigin {
+            provider: Arc::downgrade(&self.provider),
+            factory: self.provider.factory.clone(),
+        }
+    }
     #[cfg(test)]
     pub(super) fn test_service(&self) -> Arc<Mutex<crate::ClusterDataNodeService>> {
         Arc::clone(&self._service)

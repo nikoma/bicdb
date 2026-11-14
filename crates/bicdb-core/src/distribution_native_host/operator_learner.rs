@@ -47,6 +47,19 @@ enum NativeLearnerLifecycle {
     Cold(NativeColdLearnerMetadataHost),
 }
 impl NativeMetadataLearnerHost {
+    /// Receive-only queue service on this SAME actual node-owner thread.
+    /// Each entry still owns its original authenticated request deadline.
+    /// This never chooses placement or initiates an OLD freeze automatically.
+    pub fn poll_native_first_receiver(&mut self, parent: &CancellationToken) -> Result<bool> {
+        parent.check()?;
+        if self.stopped {
+            return Err(invalid("FIRST receiver owner stopped"));
+        }
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.poll_native_first_receiver(parent),
+            NativeLearnerLifecycle::Cold(host) => host.poll_native_first_receiver(parent),
+        }
+    }
     pub fn start_fresh_metadata_only(
         root: &Path,
         cluster: crate::ClusterId,

@@ -39,6 +39,8 @@ pub(crate) use learner_cold::NativeColdLearnerMetadataHost;
 #[cfg(feature = "tls-replication")]
 mod learner_birth;
 #[cfg(feature = "tls-replication")]
+use learner_birth::NativeFirstJoinFreshReceiverOrigin;
+#[cfg(feature = "tls-replication")]
 pub(crate) use learner_birth::{
     NativeLearnerBirthObservation, NativeLearnerBirthProvider, NativeLearnerBirthRequest,
     NativeLearnerBirthResponse, NativeUnassignedLearnerHost,
@@ -66,6 +68,14 @@ pub(crate) use provisional_listener::{
 };
 #[cfg(feature = "tls-replication")]
 mod joined_data_handoff;
+#[cfg(feature = "tls-replication")]
+mod remote_first;
+#[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeFirstCoordinatorAction;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_first::{
+    NativeFirstReceiveOperationV1, NativeFirstReceiveReplyV1, NativeFirstReceiveRequestV1,
+};
 #[cfg(feature = "tls-replication")]
 mod metadata_supervisor;
 #[cfg(feature = "tls-replication")]

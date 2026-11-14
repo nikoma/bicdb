@@ -107,6 +107,29 @@ pub struct NativeMetadataHost {
     last_metadata_promotion: Option<serde_json::Value>,
 }
 impl NativeMetadataHost {
+    /// Finite internal component only. No periodic automatic placement entry.
+    pub(crate) fn begin_finite_remote_first(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        donor: ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual control owner absent"))?
+            .begin_finite_remote_first(relocation, donor, parent)
+    }
+    pub(crate) fn drive_finite_remote_first(
+        &mut self,
+        range: crate::RangeId,
+        action: NativeFirstCoordinatorAction,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual control owner absent"))?
+            .drive_finite_remote_first(range, action, parent)
+    }
     pub fn start_fresh_metadata_only(
         root: &Path,
         plan: NativeMetadataBootstrapPlan,

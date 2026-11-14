@@ -718,6 +718,12 @@ pub fn run(command: Command) -> Result<()> {
             let mut last_refresh = Instant::now();
             let mut stopping = false;
             while lifetime.check().is_ok() && !stopping {
+                // Receive-only service on this original mutable owner thread.
+                // It consumes an already authenticated bounded Step; it never
+                // plans relocation or initiates an OLD cut periodically.
+                if let Err(error) = host.poll_native_first_receiver(&lifetime) {
+                    eprintln!("native FIRST receiver queue refused: {error}");
+                }
                 if command_file.exists() {
                     let request: Request =
                         serde_json::from_slice(&read_bounded(&command_file, 16 * 1024)?)?;

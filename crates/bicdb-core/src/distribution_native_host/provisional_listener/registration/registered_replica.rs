@@ -9,6 +9,7 @@ use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use std::sync::Weak;
 
 mod closed_fence;
+mod first_receive;
 mod no_domain;
 mod remote_attempt;
 mod remote_image;
@@ -58,8 +59,29 @@ pub(crate) struct NativeRegisteredReplicaAdmission {
     original_hook: crate::db::NativeRegisteredReceiverHook,
     closed_fence_ready: Weak<AtomicBool>,
     joint_targets: Weak<RegisteredJointTargets>,
+    first_receive: Weak<crate::distribution_native_host::remote_first::NativeFirstReceiveQueue>,
+    first_origin: Option<Weak<crate::distribution_native_host::NativeFirstJoinFreshReceiverOrigin>>,
 }
 impl NativeRegisteredReplicaAdmission {
+    pub(crate) fn receive_first_from_authenticated_dispatch(
+        self: &Arc<Self>,
+        peer: crate::distribution_consensus::MetadataReadParticipant,
+        request: crate::distribution_native_host::NativeFirstReceiveRequestV1,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_native_host::NativeFirstReceiveReplyV1> {
+        self.require_live()?;
+        self.first_origin
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .ok_or_else(|| invalid("FIRST refuses cold/generic receiver reconstruction"))?
+            .require_factory(
+                &self
+                    .factory
+                    .upgrade()
+                    .ok_or_else(|| invalid("FIRST original factory ended"))?,
+            )?;
+        self.admit_first_from_actual_peer(peer, request, parent)
+    }
     #[cfg(test)]
     pub(crate) fn test_keep_original_registration(
         &self,
@@ -116,6 +138,10 @@ pub(super) struct NativeRegisteredReplicaReceiver {
         remote_attempt::NativeRegisteredRemoteInstallAttempt,
     >,
     remote_joint_targets: Arc<RegisteredJointTargets>,
+    first_receive: Arc<crate::distribution_native_host::remote_first::NativeFirstReceiveQueue>,
+    first_origin: Option<Arc<crate::distribution_native_host::NativeFirstJoinFreshReceiverOrigin>>,
+    first_attempts:
+        std::collections::BTreeMap<crate::RangeId, Arc<first_receive::NativeFirstReceiverAttempt>>,
     remote_images: std::collections::BTreeMap<
         crate::RangeId,
         crate::db::NativeRegisteredRemoteImageInstallation,
@@ -176,8 +202,13 @@ impl NativeRegisteredReplicaReceiver {
         business: Uuid,
         network: &ClusterNetworkTransportConfig,
         parent: &CancellationToken,
+        first_origin: Option<crate::distribution_native_host::NativeFirstJoinFreshReceiverOrigin>,
     ) -> Result<Self> {
         parent.check()?;
+        if let Some(origin) = &first_origin {
+            origin.require_factory(factory)?;
+        }
+        let first_origin = first_origin.map(Arc::new);
         let metadata_store_id = backend.registered_replica_store_id()?;
         let (database, database_open, store) = {
             let service = backend
@@ -261,6 +292,8 @@ impl NativeRegisteredReplicaReceiver {
         let life = Arc::new(AtomicBool::new(true));
         let closed_fence_ready = Arc::new(AtomicBool::new(false));
         let remote_joint_targets = Arc::new(Mutex::new(std::collections::BTreeMap::new()));
+        let first_receive =
+            Arc::new(crate::distribution_native_host::remote_first::NativeFirstReceiveQueue::new());
         let admission = Arc::new(NativeRegisteredReplicaAdmission {
             service: Arc::downgrade(&backend.service),
             runtime: Arc::downgrade(&runtime),
@@ -276,6 +309,8 @@ impl NativeRegisteredReplicaReceiver {
             original_hook,
             closed_fence_ready: Arc::downgrade(&closed_fence_ready),
             joint_targets: Arc::downgrade(&remote_joint_targets),
+            first_receive: Arc::downgrade(&first_receive),
+            first_origin: first_origin.as_ref().map(Arc::downgrade),
         });
         admission.require_listener(&backend.service, &runtime)?;
         parent.check()?;
@@ -293,6 +328,9 @@ impl NativeRegisteredReplicaReceiver {
             remote_attempts: Default::default(),
             remote_images: Default::default(),
             remote_joint_targets,
+            first_receive,
+            first_origin,
+            first_attempts: Default::default(),
         })
     }
     fn advance(
@@ -416,6 +454,40 @@ impl NativeMetadataControlHost {
         business: Uuid,
         parent: &CancellationToken,
     ) -> Result<()> {
+        self.open_registered_replica_receiver_inner(factory, observed, business, parent, None)
+    }
+    pub(in crate::distribution_native_host) fn open_registered_replica_receiver_from_join_fresh(
+        &mut self,
+        origin: crate::distribution_native_host::NativeFirstJoinFreshReceiverOrigin,
+        factory: &Arc<NativeUnassignedLearnerFactory>,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        origin.require_factory(factory)?;
+        if let Some(receiver) = &self.replica {
+            receiver
+                .first_origin
+                .as_ref()
+                .ok_or_else(|| invalid("FIRST cannot broaden an existing generic receiver"))?
+                .require_same_origin(&origin)?;
+        }
+        self.open_registered_replica_receiver_inner(
+            factory,
+            observed,
+            business,
+            parent,
+            Some(origin),
+        )
+    }
+    fn open_registered_replica_receiver_inner(
+        &mut self,
+        factory: &Arc<NativeUnassignedLearnerFactory>,
+        observed: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+        first_origin: Option<crate::distribution_native_host::NativeFirstJoinFreshReceiverOrigin>,
+    ) -> Result<()> {
         parent.check()?;
         if self.assigned.is_some() {
             return Err(invalid(
@@ -435,6 +507,7 @@ impl NativeMetadataControlHost {
                 business,
                 &self.network,
                 parent,
+                first_origin,
             )?;
             owner.old_listener = Some(self.listener.take().ok_or_else(|| {
                 invalid(

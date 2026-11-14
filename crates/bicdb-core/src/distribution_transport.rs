@@ -95,6 +95,7 @@ mod native_source_discovery;
 mod native_source_export;
 pub(crate) use native_source_discovery::AuthenticatedNativeSourceDiscovery;
 pub(crate) use native_source_export::AuthenticatedRegisteredExportNew;
+mod native_first;
 mod native_new;
 mod native_old;
 use crate::distribution_native_host::{
@@ -128,6 +129,7 @@ pub(crate) use learner_birth::AuthenticatedNativeLearnerBirthReply;
 pub(crate) use native_abort::{
     AuthenticatedNativeAbortCandidateReply, AuthenticatedNativeAbortPromiseReply,
 };
+pub(crate) use native_first::AuthenticatedNativeFirstReceive;
 pub(crate) use native_image_source::AuthenticatedNativeRemoteImageSourceFrame;
 #[cfg(test)]
 pub(crate) mod native_image_response_stall;
@@ -549,6 +551,9 @@ enum ClusterDataRequest {
         batch: RangeDigestRepairBatch,
         limits: RangeDigestRepairLimits,
     },
+    NativeFirstReceive {
+        request: Box<crate::distribution_native_host::NativeFirstReceiveRequestV1>,
+    },
 }
 
 impl ClusterDataRequest {
@@ -562,6 +567,7 @@ impl ClusterDataRequest {
             | Self::NativeObserveRegisteredExportNew { .. }
             | Self::NativeSourceExportRetirement { .. }
             | Self::NativeSourceDiscovery { .. }
+            | Self::NativeFirstReceive { .. }
             | Self::NativeDecisionSourceProvenance { .. } => None,
             Self::ExportSchemaBundle { range_id, .. } => Some(*range_id),
             Self::InstallSchemaBundle { .. }
@@ -660,6 +666,7 @@ impl ClusterDataRequest {
                 | Self::NativeObserveRegisteredExportNew { .. }
                 | Self::NativeSourceExportRetirement { .. }
                 | Self::NativeSourceDiscovery { .. }
+                | Self::NativeFirstReceive { .. }
                 | Self::NativeDecisionSourceProvenance { .. }
         )
     }
@@ -729,6 +736,7 @@ enum ClusterDataResponse {
     RangeDigestState(RangeDigestState),
     RangeDigestBucket(RangeDigestBucketScanStep),
     RangeDigestRepairState(RangeDigestRepairState),
+    NativeFirstReceive(Box<crate::distribution_native_host::NativeFirstReceiveReplyV1>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1712,6 +1720,21 @@ fn handle_cluster_data_connection(
                 actual.into_reply(),
             ));
         }
+        if let ClusterDataRequest::NativeFirstReceive { request } = request.request {
+            let receiver = registered_replica.ok_or_else(|| {
+                transport_error("FIRST receive requires original Registered receiver")
+            })?;
+            // Move the ACTUAL authenticated peer into the original owner
+            // thread's ingress. Never reconstruct it from selectors/MF DATA.
+            let peer = authenticated_caller.ok_or_else(|| {
+                transport_error("FIRST receive requires actual authenticated coordinator")
+            })?;
+            let parent =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return receiver
+                .receive_first_from_authenticated_dispatch(peer, *request, &parent)
+                .map(|reply| ClusterDataResponse::NativeFirstReceive(Box::new(reply)));
+        }
         if let ClusterDataRequest::NativeSourceDiscovery { request } = request.request {
             let donor = initial_data.ok_or_else(|| {
                 transport_error("source discovery requires actual INITIAL donor owner")
@@ -2588,6 +2611,9 @@ fn dispatch_cluster_data_request(
         )),
         ClusterDataRequest::NativeSourceDiscovery { .. } => Err(transport_error(
             "source discovery requires actual before-latch donor owner",
+        )),
+        ClusterDataRequest::NativeFirstReceive { .. } => Err(transport_error(
+            "FIRST receive requires original before-latch receiver ingress",
         )),
         ClusterDataRequest::NativeRemoteOld { .. } => Err(transport_error(
             "native OLD requires its actual before-latch owner",
@@ -5583,6 +5609,7 @@ impl TcpClusterRelocationTransport {
                     | ClusterDataRequest::NativeObserveRegisteredExportNew { .. }
                     | ClusterDataRequest::NativeSourceExportRetirement { .. }
                     | ClusterDataRequest::NativeSourceDiscovery { .. }
+                    | ClusterDataRequest::NativeFirstReceive { .. }
                     | ClusterDataRequest::NativeDecisionSourceProvenance { .. }
                     | ClusterDataRequest::MetadataReadProbe { .. }
                     | ClusterDataRequest::MetadataReadAcquire { .. }

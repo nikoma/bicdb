@@ -1,6 +1,15 @@
 //! Existing Registered member control transition; never a fresh-voter factory.
 use super::*;
 impl NativeUnassignedLearnerHost {
+    pub(in crate::distribution_native_host) fn poll_native_first_receiver(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<bool> {
+        let Some(control) = self.metadata_transition.control.as_mut() else {
+            return Ok(false);
+        };
+        control.poll_first_receive(parent)
+    }
     #[cfg(test)]
     pub(in crate::distribution_native_host) fn test_registered_image_control_mut(
         &mut self,
@@ -242,13 +251,20 @@ impl NativeUnassignedLearnerHost {
         parent: &CancellationToken,
     ) -> Result<()> {
         self.validate_owned_metadata_member(observed, business, parent)?;
+        let origin = self.first_receiver_origin();
         self.metadata_transition
             .control
             .as_mut()
             .ok_or_else(|| {
                 invalid("actual Registered metadata control required before replica receiver")
             })?
-            .open_registered_replica_receiver(&self.provider.factory, observed, business, parent)
+            .open_registered_replica_receiver_from_join_fresh(
+                origin,
+                &self.provider.factory,
+                observed,
+                business,
+                parent,
+            )
     }
     pub(in crate::distribution_native_host) fn replica_receiver_status(
         &self,

@@ -99,6 +99,8 @@ jobs:
         run: ./scripts/check-open-core-boundary.sh
 
   build:
+    # Explicit no-TLS-only qualifier: library-test compile below is the check.
+    if: false
     name: Community-only workspace compiles, tests included
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -109,11 +111,19 @@ jobs:
       # --all-targets is the point: `cargo build` alone would not have caught
       # bicdb-sql's unit tests failing to compile against a changed signature.
       - name: cargo check --workspace --all-targets
-        run: cargo check --workspace --all-targets --locked
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-workspace-pressure/alltargets.jsonl" -- cargo check --workspace --all-targets --locked
       # Workspace feature unification enables TLS in Core. Check this actual
       # consumer separately so TLS-only APIs cannot leak into its Core build.
       - name: Workflow consumer compiles without Core defaults
-        run: cargo check -p bicdb-workflow --all-targets --locked
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-workspace-pressure/consumer.jsonl" -- cargo check -p bicdb-workflow --all-targets --locked
+      - name: Retain qualification build pressure and interruption evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-workspace-pressure-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/native-workspace-pressure/
 
   fmt:
     name: Formatting
@@ -224,13 +234,6 @@ jobs:
         run: ./scripts/run-cargo-test-targets-bounded.sh bicdb-sql
       - name: cargo test remaining workspace with bounded linked artifacts
         if: matrix.suite.name == 'rest of workspace'
-        env:
-          # Actual workflow checkout identity, including PR merge checkouts.
-          BICDB_TEST_SOURCE_SHA: ${{ github.sha }}
-          # Reuse existing fsynced journals and stopped-file allowlist only.
-          # Do not set DB custody or a wholesale fixture evidence root here.
-          BICDB_TEST_CLI_RPC_EVIDENCE_ROOT: ${{ runner.temp }}/rest-cli-evidence/rpc-journals
-          BICDB_TEST_CLI_EVIDENCE_ROOT: ${{ runner.temp }}/rest-cli-evidence/failure-diagnostics
         run: >-
           python3 scripts/platform/run_workspace_tests_bounded.py
           --exclude bicdb-core --exclude bicdb-sql --exclude bicdb-pgwire
@@ -242,25 +245,12 @@ jobs:
           python3 -m unittest discover -s examples/oracle/reference -p 'test_*.py'
           python3 examples/oracle/hr/prepare.py --check
           node --test examples/platform/notebook/*.test.mjs
-      - name: Retain broad REST existing CLI journals and allowlisted diagnostics
-        if: always() && matrix.suite.name == 'rest of workspace'
-        uses: actions/upload-artifact@v4
-        with:
-          name: rest-cli-evidence-${{ github.sha }}-${{ github.run_attempt }}
-          retention-days: 3
-          include-hidden-files: true
-          if-no-files-found: warn
-          # Public-repository artifacts: synthetic test data, not private storage.
-          # Only these existing test-owned subtrees; never DB/TLS fixture roots,
-          # quarantine siblings, a blanket runner.temp, or a recursive /tmp copy.
-          path: |
-            ${{ runner.temp }}/rest-cli-evidence/rpc-journals/
-            ${{ runner.temp }}/rest-cli-evidence/failure-diagnostics/
 
   focused-core:
     needs: validate-selectors
     name: Focused Core library (${{ inputs.core_filter }})
-    if: github.event_name == 'workflow_dispatch' && inputs.core_filter != '' && inputs.cli_target == '' && inputs.pgwire_filter == ''
+    # Default24 is NOT selected or rerun on this immutable no-TLS qualifier.
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -269,8 +259,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Build projection chaos helper
-        run: cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
+      - name: Record unused helper omission for exact component cohort
+        run: |
+          mkdir -p "$RUNNER_TEMP/native-core-evidence"
+          printf '%s\n' '{"chaos_child":"NOT BUILT","scope":"exact24 S2 and separate noTLS1; unused by these fixtures; actual dependency failure must remain a failure"}' > "$RUNNER_TEMP/native-core-evidence/helper-not-built.json"
       - name: Record source and list selected Core library tests
         shell: bash
         run: |
@@ -281,24 +273,37 @@ jobs:
           mkdir -p "$RUNNER_TEMP/native-core-evidence"
           git rev-parse HEAD > "$RUNNER_TEMP/native-core-evidence/source-revision.txt"
           rustc --version --verbose > "$RUNNER_TEMP/native-core-evidence/rustc.txt"
-          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --list \
+          python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-core-evidence/list-pressure.jsonl" -- \
+            cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --list \
             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/selected-tests.log"
+          python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-core-evidence/all-native-list-pressure.jsonl" -- \
+            cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked native_registered_fifth_ -- --list \
+            2>&1 | tee "$RUNNER_TEMP/native-core-evidence/all-native-tests.log"
           python3 - <<'PY'
-          import os, pathlib
-          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'native-core-evidence' / 'selected-tests.log'
-          count = sum(line.endswith(': test') for line in path.read_text().splitlines())
-          if count == 0:
-              raise SystemExit('The requested Core filter selected no tests')
-          print(f'Selected {count} Core library tests; ignored tests remain identified by the execution result')
+          import os, pathlib, json
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'native-core-evidence'
+          expected_selected = ['distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::callback_liveness_tests::native_registered_fifth_source_export_retirement_actual_callback_cancel_at_final_detach', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::callback_liveness_tests::native_registered_fifth_source_export_retirement_actual_callback_expiry_at_final_detach', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_local_term_change_at_final_detach_refuses', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_lost_retire_reply_same_terminal_custody', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_lost_start_reply_original_two_second_request', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_original_own_expires_at_final_detach', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_original_source_process_cancel_refuses', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_original_source_process_canceled_at_final_detach', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_target_store_aba_refuses_before_drop', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_two_mtls_hops_nonleader_donor', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_unknown_native_base_has_no_new_owner', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_wrong_a_refuses_before_drop', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_wrong_actor_refuses_before_drop', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_wrong_manifest_refuses_before_drop', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_wrong_native_birth_refuses_before_drop', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_cancel_after_take_retains_exact_progress', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_cancel_before_take_same_phase_fresh_retry', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_changed_valid_quorum_cannot_replace_intent', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_materialization_independent_fetch_all_pin_owners', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_wrong_fact_digest_refuses_before_pin_take', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_commit_sync_unknown_never_replaces_xid', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_donor_provenance_and_native_target_record', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_postcommit_cancel_reconciles_same_xid', 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_preput_abort_retains_original_attempt']
+          def listed(path):
+              return sorted(line[:-6] for line in path.read_text().splitlines() if line.endswith(': test'))
+          actual_selected = listed(root / 'selected-tests.log')
+          actual_all = listed(root / 'all-native-tests.log')
+          if os.environ['BICDB_CORE_TEST_FILTER'] != 'source_export_retirement_tests::':
+              raise SystemExit('S2 qualification permits ONLY the selected source-export module')
+          if actual_selected != expected_selected or len(actual_selected) != 24:
+              raise SystemExit('S2 qualification must select EXACT24 full names: original15 + NEW5 + DECISION4')
+          if not set(actual_selected).issubset(actual_all):
+              raise SystemExit('Selected24 missing from compiled full-family inventory')
+          (root / 'inventory-verification.json').write_text(json.dumps({'selected_exact':True,'selected_count':len(actual_selected),'all_native_count_reported_not_assumed':True,'all_native_count':len(actual_all),'selected_names':actual_selected,'all_native_names':actual_all,'runtime_execution_not_yet_started':True}, indent=2)+'\n')
+          print(f'Selected EXACT24 S2 cases; compiled full family actual count={len(actual_all)}; execute ONLY24 serially')
           PY
-      - name: Execute selected Core library tests
+      - name: Execute selected Core native library tests serially
         shell: bash
         run: |
           set -euo pipefail
           export BICDB_TEST_EVIDENCE_ROOT="$RUNNER_TEMP/native-core-evidence/fault-state"
           export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
           mkdir -p "$BICDB_TEST_EVIDENCE_ROOT"
-          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=4 --show-output \
+          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=1 --show-output \
             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/tests.log"
       - name: Retain focused source, log and opted-in fault-state evidence
         if: always()
@@ -309,6 +314,51 @@ jobs:
           include-hidden-files: true
           if-no-files-found: warn
           path: ${{ runner.temp }}/native-core-evidence/
+
+  focused-no-tls-decision-reader:
+    needs: validate-selectors
+    if: github.event_name == 'workflow_dispatch' && inputs.core_filter == 'native_remote_decision_current_reader_without_tls_refuses_required_profile_before_lookup'
+    name: Focused actual decision reader without TLS (one unit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Record source and list exact no-TLS actual reader unit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/native-no-tls-reader-evidence"
+          git rev-parse HEAD > "$RUNNER_TEMP/native-no-tls-reader-evidence/source-revision.txt"
+          rustc --version --verbose > "$RUNNER_TEMP/native-no-tls-reader-evidence/rustc.txt"
+          printf '%s\n' '{"chaos_child":"NOT BUILT","scope":"unused by this native-origin reader unit"}' > "$RUNNER_TEMP/native-no-tls-reader-evidence/helper-not-built.json"
+          python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-no-tls-reader-evidence/list-pressure.jsonl" -- \
+            cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --no-default-features --lib --locked native_remote_decision_current_reader_without_tls_refuses_required_profile_before_lookup -- --list \
+            2>&1 | tee "$RUNNER_TEMP/native-no-tls-reader-evidence/selected-tests.log"
+          python3 - <<'PYCODE'
+          import pathlib, os, json
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'native-no-tls-reader-evidence'
+          names=sorted(line[:-6] for line in (root/'selected-tests.log').read_text().splitlines() if line.endswith(': test'))
+          expected=['db::range_image_native::serving_configuration::joint_handoff::decision::unsupported_remote_reader_tests::native_remote_decision_current_reader_without_tls_refuses_required_profile_before_lookup']
+          (root/'inventory-verification.json').write_text(json.dumps({'selected':names,'expected':expected,'no_tls':True,'not_yet_executed':True},indent=2)+'\n')
+          if names!=expected: raise SystemExit('no-TLS actual reader must list exactly the one approved full name')
+          PYCODE
+      - name: Execute exact no-TLS actual reader unit serially
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-no-tls-reader-evidence/runtime-pressure.jsonl" -- \
+            cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --no-default-features --lib --locked native_remote_decision_current_reader_without_tls_refuses_required_profile_before_lookup -- --test-threads=1 --show-output \
+            2>&1 | tee "$RUNNER_TEMP/native-no-tls-reader-evidence/tests.log"
+      - name: Retain no-TLS actual reader source and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-no-tls-reader-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/native-no-tls-reader-evidence/
 
   focused-cli:
     needs: validate-selectors

@@ -7719,6 +7719,7 @@ mod tests {
 
 #[cfg(test)]
 mod event_client_retry_tests {
+    mod caller_query_budget_tests;
     use super::*;
     use std::time::Instant;
 

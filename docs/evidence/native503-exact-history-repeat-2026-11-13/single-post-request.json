@@ -1,0 +1,16 @@
+{
+  "original_run": 43529104485,
+  "original_job": 132242099377,
+  "source": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+  "original_failure_docs": "3218ee4b635c9710f69889e4294445a6526db680",
+  "original_raw_log_sha256": "8af0ca1ea94ef88ae64a0ed4101d907d044072acd20ff8ce2c22d4149da09e54",
+  "reason": "One controlled exact-source full serial history repeat after source forensics and separate instrumented4case pass; tests of whole-history interaction/availability, not a code fix or qualification",
+  "scope": "rerun only the failed required job, unchanged originalworkflow/testlist/order/budgets/source; preserve old andnew actualcheckout/tree/runner/attempt/result",
+  "original_run_confirmed_terminal": "completed/failure/attempt1",
+  "coordinated_owner_preference": "ERP503owner exactc6 full history; 7ab213qualifier1d5 keptlocal/notdispatched",
+  "original_causes": "inconclusive regardless laterpass",
+  "new_test_or_HA_result": null,
+  "dispatch_count": 1,
+  "created_at_utc": "2026-11-14T01:16:15.598809+00:00",
+  "post_returned_success_at_utc": "2026-11-14T01:16:17.819483+00:00"
+}

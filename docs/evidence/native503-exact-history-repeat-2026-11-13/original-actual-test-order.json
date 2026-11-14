@@ -1,0 +1,1072 @@
+{
+  "source": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+  "job": 132242099377,
+  "log_sha256": "8af0ca1ea94ef88ae64a0ed4101d907d044072acd20ff8ce2c22d4149da09e54",
+  "actual_test_start_lines": [
+    {
+      "line": 13741,
+      "test": "db::range_image_native::rf3_fixture::actual_rf3_two_initial_ranges_have_real_genesis_and_independent_origin_indices",
+      "suffix": "ok"
+    },
+    {
+      "line": 13742,
+      "test": "db::range_image_native::rf3_fixture::native_commit_uncertainty::native_commit_uncertainty_actual_local_commit_publication_error_keeps_decision",
+      "suffix": "ok"
+    },
+    {
+      "line": 13743,
+      "test": "db::range_image_native::rf3_fixture::native_commit_uncertainty::native_commit_uncertainty_lost_genuine_durable_commit_replies_never_abort_or_ack",
+      "suffix": "ok"
+    },
+    {
+      "line": 13744,
+      "test": "db::range_image_native::rf3_fixture::native_commit_uncertainty::native_commit_uncertainty_prepare_only_failure_remains_no_ack_and_definite_local_abort",
+      "suffix": "ok"
+    },
+    {
+      "line": 13745,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::activation_rplusone::activated_anchor_keeps_r1_after_new_ack_and_late_prepared_follower_activates",
+      "suffix": "ok"
+    },
+    {
+      "line": 13746,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::activation_smoke::actual_native_completion_quorum_rejects_duplicate_and_original_cancellation",
+      "suffix": "ok"
+    },
+    {
+      "line": 13747,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::activation_smoke::actual_native_same_voter_activation_releases_only_after_durable_decision_and_never_returns_ready",
+      "suffix": "ok"
+    },
+    {
+      "line": 13748,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::activation_tests::actual_late_prepared_follower_after_two_activations_and_one_endpoint_loss_completes",
+      "suffix": "ok"
+    },
+    {
+      "line": 13749,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_collection_holds_no_recipient_service_or_database_latch",
+      "suffix": "ok"
+    },
+    {
+      "line": 13750,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_current_quorum_recovers_without_old_data_leader_and_rejects_stale_scope",
+      "suffix": "ok"
+    },
+    {
+      "line": 13751,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_unwired_participant_receiver_refuses_without_materializing",
+      "suffix": "ok"
+    },
+    {
+      "line": 13752,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::expired_ready_delivery_tests::native_ready_actual_tls_both_matching_peer_attempts_expire_without_counting_or_mutation",
+      "suffix": "ok"
+    },
+    {
+      "line": 13753,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_cancellation_and_delayed_decode_preserve_original_budget",
+      "suffix": "ok"
+    },
+    {
+      "line": 13754,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_follower_observes_without_generic_range_leadership",
+      "suffix": "ok"
+    },
+    {
+      "line": 13755,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_metadata_leader_observes_over_its_actual_listener",
+      "suffix": "ok"
+    },
+    {
+      "line": 13756,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_response_cannot_be_retagged_under_new_request",
+      "suffix": "ok"
+    },
+    {
+      "line": 13757,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_spoofed_member_incarnation_and_missing_member_refuse",
+      "suffix": "ok"
+    },
+    {
+      "line": 13758,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_unassigned_learner_observes_but_cannot_supply_quorum",
+      "suffix": "ok"
+    },
+    {
+      "line": 13759,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_by_readonly_status",
+      "suffix": "ok"
+    },
+    {
+      "line": 13760,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplicate_sha",
+      "suffix": "ok"
+    },
+    {
+      "line": 13761,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_wrong_actor_cannot_complete_but_current_voter_can_observe",
+      "suffix": "ok"
+    },
+    {
+      "line": 13762,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_normal_tls::native_normal_actual_mtls_catchup_then_two_acks_and_old_duplicate_preserves_new_value",
+      "suffix": "ok"
+    },
+    {
+      "line": 13763,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_normal_tls::native_normal_actual_mtls_wrong_actor_bootstrap_scope_epoch_refuse_before_native_mutation",
+      "suffix": "ok"
+    },
+    {
+      "line": 13764,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_recovered_serving_requires_actual_activated_open",
+      "suffix": "ok"
+    },
+    {
+      "line": 13765,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_uses_current_r2_not_activation_anchor_and_refuses_cq_only_peer",
+      "suffix": "ok"
+    },
+    {
+      "line": 13766,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_local_io_context_outlives_canceled_collector",
+      "suffix": "ok"
+    },
+    {
+      "line": 13767,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_enrolled_births_require_actual_metadata_and_peer_facts",
+      "suffix": "ok"
+    },
+    {
+      "line": 13768,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_expired_healthy_attempt_retries_without_renewing_parent",
+      "suffix": "ok"
+    },
+    {
+      "line": 13769,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_fresh_metadata_unadmitted_candidate",
+      "suffix": "ok"
+    },
+    {
+      "line": 13770,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_genuine_other_birth_in_metadata_cannot_admit_local_a",
+      "suffix": "ok"
+    },
+    {
+      "line": 13771,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_majority_returns_while_minority_worker_retains_context",
+      "suffix": "ok"
+    },
+    {
+      "line": 13772,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_missing_quorum_never_returns_candidate",
+      "suffix": "ok"
+    },
+    {
+      "line": 13773,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_rejects_old_challenge_actor_incarnation_and_pins",
+      "suffix": "ok"
+    },
+    {
+      "line": 13774,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_unenrolled_quorum_cannot_be_admitted",
+      "suffix": "ok"
+    },
+    {
+      "line": 13775,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_ready_actual_tls_duplicate_voter_cannot_count_twice",
+      "suffix": "ok"
+    },
+    {
+      "line": 13776,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_ready_actual_tls_fast_clean_zero_minority_does_not_starve_matching_one_majority",
+      "suffix": "ok"
+    },
+    {
+      "line": 13777,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_ready_actual_tls_preparation_status_and_local_closed_quorum_remain_frozen",
+      "suffix": "ok"
+    },
+    {
+      "line": 13778,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::after_transfer::native_strong_point_after_actual_same_voter_leader_transfer_and_recovery_reads_acked_value",
+      "suffix": "ok"
+    },
+    {
+      "line": 13779,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::missing_catalogue_tests::native_event_endpoint_missing_catalogue_same_birth_restart_must_never_return_acked_absence",
+      "suffix": "ok"
+    },
+    {
+      "line": 13780,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_actual_hook_refresh_requires_refreshed_dispatch_publication",
+      "suffix": "ok"
+    },
+    {
+      "line": 13781,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_actual_hostmq_nonleader_and_stale_hint_are_redirect_data_only",
+      "suffix": "ok"
+    },
+    {
+      "line": 13782,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_actual_tls_value_null_object_and_absence_have_distinct_presence",
+      "suffix": "ok"
+    },
+    {
+      "line": 13783,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_empty_slot_refuses_before_actual_db_and_service_guards_then_publishes",
+      "suffix": "ok"
+    },
+    {
+      "line": 13784,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_explicit_strong_actual_born1_refuses_without_legacy_downgrade",
+      "suffix": "ok"
+    },
+    {
+      "line": 13785,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_real_client_cancel_retains_actual_io_context_and_never_returns_absence",
+      "suffix": "ok"
+    },
+    {
+      "line": 13786,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_routing_retries_do_not_renew_original_deadline_or_become_absence",
+      "suffix": "ok"
+    },
+    {
+      "line": 13787,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_stale_route_retries_until_actual_new_leader_ready_under_original_budget",
+      "suffix": "ok"
+    },
+    {
+      "line": 13788,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::stale_gateway_tests::native_event_endpoint_same_stale_gateway_preserves_full_acked_value_after_real_transfer",
+      "suffix": "ok"
+    },
+    {
+      "line": 13789,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::four_member_activation_tests::native_activation_four_metadata_members_keeps_exact_three_data_voters",
+      "suffix": "ok"
+    },
+    {
+      "line": 13790,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activated_anchor_archive_tests::native_current_joint_actual_image_target_anchor_r3_at_r4_refuses_missing_serving_archive",
+      "suffix": "ok"
+    },
+    {
+      "line": 13791,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_caller_cancel_and_exact_fresh_recovery",
+      "suffix": "ok"
+    },
+    {
+      "line": 13792,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_foreign_db_and_store_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13793,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_missing_decision_archive_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13794,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_writer_replacement_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13795,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_c1_image_tests::native_joint_closed_c1_image_actual_old_owners_ended_cannot_reissue_quorum",
+      "suffix": "ok"
+    },
+    {
+      "line": 13796,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_c1_image_tests::native_joint_closed_c1_image_actual_rows_copy_without_policy_reinstall",
+      "suffix": "ok"
+    },
+    {
+      "line": 13797,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_c1_image_tests::native_joint_closed_c1_image_live_original_writer_replacement_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13798,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_c1_image_tests::native_joint_closed_c1_image_original_caller_cancel_before_actual_row_wal_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13799,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_c1_image_tests::native_joint_closed_c1_image_step_role_cancel_before_actual_row_wal_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13800,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_policy_baseline_tests::native_joint_policy_original_writer_reaches_actual_decision_without_reinstall_baseline",
+      "suffix": "ok"
+    },
+    {
+      "line": 13801,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::current_joint_authority_tests::native_current_joint_actual_authority_and_original_writer_cannot_rebase_recovery",
+      "suffix": "ok"
+    },
+    {
+      "line": 13802,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_activation_idempotence_tests::native_post_joint_actual_activation_idempotence_after_fresh_activation_ack4_and_strong",
+      "suffix": "ok"
+    },
+    {
+      "line": 13803,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read",
+      "suffix": "ok"
+    },
+    {
+      "line": 13804,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogue_reply_while_frozen",
+      "suffix": "ok"
+    },
+    {
+      "line": 13805,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_phase_refuses_expired_original_caller_with_later_long_budget",
+      "suffix": "ok"
+    },
+    {
+      "line": 13806,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_preparation_phase_publishes_all_final_members_after_original_expiry",
+      "suffix": "ok"
+    },
+    {
+      "line": 13807,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::observer_scope_cut_tests::native_current_joint_observer_scope_actual_foreign_identity_cancel_and_hook_cuts",
+      "suffix": "ok"
+    },
+    {
+      "line": 13808,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_final_sweep_foreign_actual_writer_reenrollment_refuses_old_phase",
+      "suffix": "ok"
+    },
+    {
+      "line": 13809,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_original_caller_cancel_cannot_start_fresh_phase",
+      "suffix": "ok"
+    },
+    {
+      "line": 13810,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_step_cancel_recovers_exact_fact_with_original_caller_live",
+      "suffix": "ok"
+    },
+    {
+      "line": 13811,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_image_release_refuses_hot_writer_reinstallation_before_owner_drop",
+      "suffix": "ok"
+    },
+    {
+      "line": 13812,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_survivor_release_refuses_hot_writer_reinstallation_before_owner_drop",
+      "suffix": "ok"
+    },
+    {
+      "line": 13813,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::post_joint_no_data_tests::native_post_joint_actual_new_domain_prepare_only_recovers_then_ack4_and_strong",
+      "suffix": "ok"
+    },
+    {
+      "line": 13814,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::native_joint_actual_old_capture_finished_publish_cancel_does_not_renew_or_end_session",
+      "suffix": "ok"
+    },
+    {
+      "line": 13815,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::native_joint_actual_old_capture_initial_request_cancel_at_wait_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13816,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::native_joint_actual_old_closure_four_metadata_rf3_nonempty_complete_prefix_and_shared_pin",
+      "suffix": "ok"
+    },
+    {
+      "line": 13817,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::mismatch_tests::native_event_endpoint_cached_enforced_sender_promotes_default_and_actual_legacy_default_remains",
+      "suffix": "ok"
+    },
+    {
+      "line": 13818,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::mismatch_tests::native_event_endpoint_enrolled_identity_actual_legacy_refuses_all_paths_before_latches",
+      "suffix": "ok"
+    },
+    {
+      "line": 13819,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::mismatch_tests::native_event_endpoint_enrolled_identity_legacy_coordinator_refuses_before_recovery_prepare",
+      "suffix": "ok"
+    },
+    {
+      "line": 13820,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_abort_cold::native_abort_actual_canonical_publication_before_raw_mark_cold_reuses_exact_decision",
+      "suffix": "ok"
+    },
+    {
+      "line": 13821,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_abort_tests::native_abort_actual_enforced_post_durable_commit_errors_cannot_become_no_effect_or_abort",
+      "suffix": "ok"
+    },
+    {
+      "line": 13822,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_abort_tests::native_abort_actual_enforced_prepare_failure_canonical_metadata_history_then_next_ack",
+      "suffix": "ok"
+    },
+    {
+      "line": 13823,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_abort_tests::native_abort_actual_enforced_prior_leader_no_effect_fresh_e2_abort_then_new_leader_ack",
+      "suffix": "ok"
+    },
+    {
+      "line": 13824,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_born_v2_image_tests::native_born_v2_actual_policy_image_clear_copy_history_and_prepared_with_distinct_local_b",
+      "suffix": "ok"
+    },
+    {
+      "line": 13825,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_actual_final_metadata_leader_change_refuses_owned_snapshot",
+      "suffix": "ok"
+    },
+    {
+      "line": 13826,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_born2_legacy_event_get_never_falls_back_to_empty_database",
+      "suffix": "ok"
+    },
+    {
+      "line": 13827,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_canceled_actual_local_io_retains_owned_context_until_drain",
+      "suffix": "ok"
+    },
+    {
+      "line": 13828,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_fresh_born2_actual_tls_ack_value_and_absence_with_local_b",
+      "suffix": "ok"
+    },
+    {
+      "line": 13829,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_initial_four_metadata_members_rf3_keeps_exact_data_identity",
+      "suffix": "ok"
+    },
+    {
+      "line": 13830,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_policy_native_wal_publication_failure_fences_old_guard_and_prepare",
+      "suffix": "ok"
+    },
+    {
+      "line": 13831,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_raw_cq_or_pending_native_cannot_return_old_row_or_absence",
+      "suffix": "ok"
+    },
+    {
+      "line": 13832,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_reservation_deadline_and_native_writer_do_not_invert_stamps",
+      "suffix": "ok"
+    },
+    {
+      "line": 13833,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_stale_route_and_missing_or_foreign_installed_hook_refuse",
+      "suffix": "ok"
+    },
+    {
+      "line": 13834,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::service_open_guard_tests::native_service_actual_tls_original_open_ended_refuses_before_held_service_and_replacement_latches",
+      "suffix": "ok"
+    },
+    {
+      "line": 13835,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_foreign_database_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13836,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_foreign_store_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13837,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_hook_replacement_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13838,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_missing_middle_history_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13839,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_original_caller_cancel_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13840,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_schema_generation_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13841,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_tls_reply_and_fresh_finish",
+      "suffix": "ok"
+    },
+    {
+      "line": 13842,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_archive_damage_refused_at_exit",
+      "suffix": "ok"
+    },
+    {
+      "line": 13843,
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_current_damage_refused_at_exit",
+      "suffix": "FAILED"
+    },
+    {
+      "line": 13844,
+      "test": "db::range_image_native::rf3_fixture::native_normal_apply_actual_rf3_services_materialize_two_acks_and_lost_apply_catchup",
+      "suffix": "ok"
+    },
+    {
+      "line": 13845,
+      "test": "db::range_image_native::rf3_fixture::native_repair_regression::actual_native_catchup_produces_prefix_one_before_next_prepare_and_ack",
+      "suffix": "ok"
+    },
+    {
+      "line": 13846,
+      "test": "db::range_image_native::rf3_fixture::native_rf3_actual_services_ack_origin_while_bare_replica_apply_remains_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13847,
+      "test": "db::range_image_native::rf3_fixture::native_rf3_oversize_refuses_before_any_durable_quorum_or_native_pending",
+      "suffix": "ok"
+    },
+    {
+      "line": 13848,
+      "test": "distribution_native_host::provisional_listener::tests::heartbeat_backlog_tests::native_initial_metadata_actual_tls_65_barriers_resume_across_finite_heartbeat_calls",
+      "suffix": "ok"
+    },
+    {
+      "line": 13849,
+      "test": "distribution_native_host::provisional_listener::tests::heartbeat_backlog_tests::native_initial_metadata_actual_tls_barrier_backlog_advances_beyond_first_batch",
+      "suffix": "ok"
+    },
+    {
+      "line": 13850,
+      "test": "distribution_native_host::provisional_listener::tests::heartbeat_backlog_tests::native_initial_metadata_actual_tls_midround_retirement_skips_stale_peer",
+      "suffix": "ok"
+    },
+    {
+      "line": 13851,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_activation_rpc_refuses_unprepared_and_wrong_actual_leader",
+      "suffix": "ok"
+    },
+    {
+      "line": 13852,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_cancel_waiter_preserves_actual_other_owner",
+      "suffix": "ok"
+    },
+    {
+      "line": 13853,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_finite_open_never_starts_process_worker",
+      "suffix": "FAILED"
+    },
+    {
+      "line": 13854,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_original_writer_replacement_refuses_without_reserving_or_clearing",
+      "suffix": "ok"
+    },
+    {
+      "line": 13855,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_queued_read_handoff_and_unrelated_range_progress",
+      "suffix": "ok"
+    },
+    {
+      "line": 13856,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation",
+      "suffix": "FAILED"
+    },
+    {
+      "line": 13857,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::peer_transport_tests::native_hot_recovery_actual_socket_blackhole_subrequest_timeout_and_parent_cancel",
+      "suffix": "ok"
+    },
+    {
+      "line": 13858,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::peer_transport_tests::native_hot_recovery_actual_socket_eof_reset_and_authenticated_rejection_are_distinct",
+      "suffix": "ok"
+    },
+    {
+      "line": 13859,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::peer_transport_tests::native_hot_recovery_completed_fence_simulated_old_reader_refuses_before_receipt_and_after_rewrite",
+      "suffix": "ok"
+    },
+    {
+      "line": 13860,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::peer_transport_tests::native_hot_recovery_completed_materialization_requires_actual_QQ_leader_and_live_parent",
+      "suffix": "ok"
+    },
+    {
+      "line": 13861,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::peer_transport_tests::native_hot_recovery_wire30_refuses_actual29_peer_without_catalogue_mutation",
+      "suffix": "ok"
+    },
+    {
+      "line": 13862,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_cancel_partial_quorum_then_nonempty_is_not_new_genesis",
+      "suffix": "ok"
+    },
+    {
+      "line": 13863,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root",
+      "suffix": "FAILED"
+    },
+    {
+      "line": 13864,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_genesis_refuses_changed_epoch_restore_and_actual_foreign_birth",
+      "suffix": "ok"
+    },
+    {
+      "line": 13865,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_genesis_refuses_same_root_same_birth_new_actual_open",
+      "suffix": "ok"
+    },
+    {
+      "line": 13866,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_actual_rpc_post_admission_fault_requires_autonomous_tail_recovery",
+      "suffix": "ok"
+    },
+    {
+      "line": 13867,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_origin_fault_arm_drop_revokes_retained_probe_without_erasing_successor",
+      "suffix": "ok"
+    },
+    {
+      "line": 13868,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_one_peer_loss_actual_rpc_requires_autonomous_tail_recovery",
+      "suffix": "ok"
+    },
+    {
+      "line": 13869,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_actual_CQ2_native1_before_fence_requires_automatic_R4_convergence",
+      "suffix": "ok"
+    },
+    {
+      "line": 13870,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_actual_semantic_rejection_then_socket_loss_retains_veto",
+      "suffix": "ok"
+    },
+    {
+      "line": 13871,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_blackhole_actual_rpc_requires_autonomous_tail_recovery",
+      "suffix": "ok"
+    },
+    {
+      "line": 13872,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_completion_reply_requires_fresh_recovery",
+      "suffix": "ok"
+    },
+    {
+      "line": 13873,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_fence_reply_requires_automatic_R4_convergence",
+      "suffix": "ok"
+    },
+    {
+      "line": 13874,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_prepare_reply_requires_automatic_R4_convergence",
+      "suffix": "ok"
+    },
+    {
+      "line": 13875,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_origin_completion_reply_requires_fresh_reattest",
+      "suffix": "ok"
+    },
+    {
+      "line": 13876,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_second_actual_origin_unknown5_same_owners_requires_ack6_and_full_replica_convergence",
+      "suffix": "ok"
+    },
+    {
+      "line": 13877,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_socket_eof_actual_rpc_requires_autonomous_tail_recovery",
+      "suffix": "ok"
+    },
+    {
+      "line": 13878,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::registry_refresh_tests::native_initial_data_registry_actual_native_publication_error_fresh_retry_and_cold_no_grant",
+      "suffix": "ok"
+    },
+    {
+      "line": 13879,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::registry_refresh_tests::native_initial_data_registry_original_cancellation_and_retained_old_store_slot_refuse",
+      "suffix": "ok"
+    },
+    {
+      "line": 13880,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::registry_refresh_tests::native_initial_data_registry_original_writer_replacement_refuses_before_new_audit",
+      "suffix": "ok"
+    },
+    {
+      "line": 13881,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::routing_discovery_tests::native_initial_data_healthy_metadata_discovery_while_all_data_services_held",
+      "suffix": "ok"
+    },
+    {
+      "line": 13882,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::routing_discovery_tests::native_initial_data_routing_refuses_replaced_store_with_old_actual_owner_retained",
+      "suffix": "ok"
+    },
+    {
+      "line": 13883,
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::routing_discovery_tests::native_initial_data_routing_refuses_wrong_actual_service_and_stopped_owner",
+      "suffix": "ok"
+    },
+    {
+      "line": 13884,
+      "test": "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_exposed_cold_copy_never_reenters_prevote_or_resets_term",
+      "suffix": "ok"
+    },
+    {
+      "line": 13885,
+      "test": "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_drain_deadline_retains_stopping_owner_and_same_store",
+      "suffix": "ok"
+    },
+    {
+      "line": 13886,
+      "test": "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_foreign_c_and_incomplete_barrier_never_expose_votes",
+      "suffix": "ok"
+    },
+    {
+      "line": 13887,
+      "test": "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_original_cancel_cannot_relabel_accepted_fact",
+      "suffix": "ok"
+    },
+    {
+      "line": 13888,
+      "test": "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_prepared_cold_copy_reopens_same_store_without_birth_fallback",
+      "suffix": "ok"
+    },
+    {
+      "line": 13889,
+      "test": "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_protected_proposal_and_both_metadata_cuts_resume_exact_c_on_cold_copy",
+      "suffix": "ok"
+    },
+    {
+      "line": 13890,
+      "test": "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_sequential_launch_uses_historical_same_c_after_first_vote",
+      "suffix": "ok"
+    },
+    {
+      "line": 13891,
+      "test": "distribution_native_host::provisional_listener::tests::learner_birth_tests::native_unassigned_learner_birth_tls_live_scope_cancel_and_permanent_provisional_refusal",
+      "suffix": "ok"
+    },
+    {
+      "line": 13892,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::cold_tests::native_learner_cold_actual_uid_receipt_old_decoder_refuses_and_none_voter_bytes_unchanged",
+      "suffix": "ok"
+    },
+    {
+      "line": 13893,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::cold_tests::native_learner_cold_all_owners_sidecar_and_both_prepared_cuts_keep_uuid_and_actual_tls_ack",
+      "suffix": "ok"
+    },
+    {
+      "line": 13894,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::cold_tests::native_learner_cold_prepared_missing_or_changed_original_and_nonzero_vote_never_reset",
+      "suffix": "ok"
+    },
+    {
+      "line": 13895,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::cold_tests::native_learner_cold_registered_loss_refuses_and_bind_cancel_retry_keeps_real_owner",
+      "suffix": "ok"
+    },
+    {
+      "line": 13896,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::cold_tests::registered_catchup_tests::native_registered_metadata_cancel_promotion_catchup_and_all_owner_cold_voter_reopen",
+      "suffix": "ok"
+    },
+    {
+      "line": 13897,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::native_enrolled_learner_metadata_constructor_failure_retains_prepared_quarantine_identity",
+      "suffix": "ok"
+    },
+    {
+      "line": 13898,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::native_enrolled_learner_metadata_registered_cancel_and_bind_retry_keep_same_owned_uuid",
+      "suffix": "ok"
+    },
+    {
+      "line": 13899,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::native_enrolled_learner_same_service_metadata_tls_catchup_bound_ack_and_strict_reopen",
+      "suffix": "ok"
+    },
+    {
+      "line": 13900,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::native_registered_learner_enrollment_rejects_original_canceled_or_expired_fact_before_held_latches",
+      "suffix": "ok"
+    },
+    {
+      "line": 13901,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::native_registered_learner_enrollment_retries_only_exact_persisted_pending_entry",
+      "suffix": "ok"
+    },
+    {
+      "line": 13902,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::native_registered_learner_enrollment_tls_commits_exact_birth_and_preserves_identity_fences",
+      "suffix": "ok"
+    },
+    {
+      "line": 13903,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::bootstrap_budget_tests::native_metadata_fresh_bootstrap_original_budget_and_cancel_refuse_before_root",
+      "suffix": "ok"
+    },
+    {
+      "line": 13904,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::native_metadata_promotion_pending_entry_and_held_ack_cannot_cross_actual_leader_transfer",
+      "suffix": "ok"
+    },
+    {
+      "line": 13905,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::native_metadata_promotion_requires_actual_owned_ack_and_original_live_budget",
+      "suffix": "ok"
+    },
+    {
+      "line": 13906,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_owned_metadata_validation_original_cancel_exits_while_actual_final_store_held",
+      "suffix": "ok"
+    },
+    {
+      "line": 13907,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_owned_metadata_validation_waits_for_actual_final_store_then_keeps_same_proof",
+      "suffix": "ok"
+    },
+    {
+      "line": 13908,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_registered_metadata_catchup_original_cancel_exits_while_actual_final_store_held",
+      "suffix": "ok"
+    },
+    {
+      "line": 13909,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_registered_metadata_catchup_waits_for_actual_final_store_with_same_proof",
+      "suffix": "ok"
+    },
+    {
+      "line": 13912,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_assigned_policy_requires_image",
+      "suffix": "ok"
+    },
+    {
+      "line": 13915,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_durable_invalidation_is_not_unknown_absence",
+      "suffix": "ok"
+    },
+    {
+      "line": 13918,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_foreign_database_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13921,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_nonleader_rpc_initiator_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13924,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_receiver_stop_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13927,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_sink_fsync_then_original_cancel_retains_refusal",
+      "suffix": "ok"
+    },
+    {
+      "line": 13930,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_sink_io_unknown_exact_live_refsync",
+      "suffix": "ok"
+    },
+    {
+      "line": 13933,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_store_slot_restore_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13936,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_captured_original_caller_cancel_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13939,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_generic_ingress_stays_strict",
+      "suffix": "ok"
+    },
+    {
+      "line": 13942,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_original_empty_hook_aba_refused",
+      "suffix": "ok"
+    },
+    {
+      "line": 13943,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_receives_image_becomes_voter_and_serves_after_one_original_stops",
+      "suffix": "ok"
+    },
+    {
+      "line": 13944,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_transfer_failure_after_source_cut_characterization",
+      "suffix": "ok"
+    },
+    {
+      "line": 13945,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_unavailable_target_leaves_range_writable_on_original_four",
+      "suffix": "ok"
+    },
+    {
+      "line": 13948,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_baseline",
+      "suffix": "ok"
+    },
+    {
+      "line": 13951,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::placement_cases::native_registered_fifth_placement_actual_metadata_leader_can_initiate",
+      "suffix": "ok"
+    },
+    {
+      "line": 13954,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::placement_cases::native_registered_fifth_placement_actual_planner_retiree_is_not_initiator",
+      "suffix": "ok"
+    },
+    {
+      "line": 13957,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_source_actual_hook_revoked_after_promise_before_native_wal",
+      "suffix": "ok"
+    },
+    {
+      "line": 13960,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_source_actual_session_cancel_preserves_issued_facts_target_closed",
+      "suffix": "ok"
+    },
+    {
+      "line": 13963,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_source_actual_tls_history_rows_seal_local_old_seed",
+      "suffix": "ok"
+    },
+    {
+      "line": 13964,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::replica_receiver_tests::native_registered_replica_receiver_actual_tls_preserves_owner_and_refuses_blank_app_strong",
+      "suffix": "ok"
+    },
+    {
+      "line": 13965,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::self_maintenance_tests::native_metadata_promoted_leader_maintenance_never_appends_to_itself",
+      "suffix": "ok"
+    },
+    {
+      "line": 13966,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::stale_seed_tests::native_metadata_fresh_sixth_stale_seed_discovers_current_quorum_before_root",
+      "suffix": "ok"
+    },
+    {
+      "line": 13967,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::writer_registry_continuity_tests::native_initial_data_registry_actual_added_voter_remains_bound_on_later_member_mutation",
+      "suffix": "ok"
+    },
+    {
+      "line": 13968,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::writer_registry_continuity_tests::native_initial_data_registry_legacy_none_policy_refuses_retroactive_continuity_capture",
+      "suffix": "ok"
+    },
+    {
+      "line": 13969,
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::schema_label_tests::native_registered_learner_schema_commits_actual_label_and_refuses_contradictory_or_bound_missing_label",
+      "suffix": "ok"
+    },
+    {
+      "line": 13970,
+      "test": "distribution_native_host::provisional_listener::tests::learner_factory_tests::native_unassigned_fifth_factory_actual_host_mq_create_reopen_and_proposal",
+      "suffix": "ok"
+    },
+    {
+      "line": 13971,
+      "test": "distribution_native_host::provisional_listener::tests::metadata_supervisor_tests::native_owned_metadata_supervisor_actual_tls_invalid_and_stale_messages_do_not_renew_contact",
+      "suffix": "ok"
+    },
+    {
+      "line": 13972,
+      "test": "distribution_native_host::provisional_listener::tests::metadata_supervisor_tests::native_owned_metadata_supervisor_actual_tls_majority_minority_stationary_leader_and_heal",
+      "suffix": "ok"
+    },
+    {
+      "line": 13973,
+      "test": "distribution_native_host::provisional_listener::tests::metadata_supervisor_tests::native_owned_metadata_supervisor_closed_ingress_cannot_hold_leadership_same_worker_resumes",
+      "suffix": "ok"
+    },
+    {
+      "line": 13974,
+      "test": "distribution_native_host::provisional_listener::tests::metadata_supervisor_tests::native_owned_metadata_supervisor_strict_metadata_reopen_preserves_protected_uuid_and_durable_state",
+      "suffix": "ok"
+    },
+    {
+      "line": 13975,
+      "test": "distribution_native_host::provisional_listener::tests::native_initial_birth_tls_all_actual_factories_bind_initial_config_without_admitting_writes",
+      "suffix": "ok"
+    },
+    {
+      "line": 13976,
+      "test": "distribution_native_host::provisional_listener::tests::native_initial_birth_tls_before_latch_but_busy_actual_factory_is_bounded_unavailable",
+      "suffix": "ok"
+    },
+    {
+      "line": 13977,
+      "test": "distribution_native_host::provisional_listener::tests::native_initial_birth_tls_provisional_surface_never_falls_through_even_after_factory_owner_ends",
+      "suffix": "ok"
+    },
+    {
+      "line": 13978,
+      "test": "distribution_native_host::provisional_listener::tests::native_initial_birth_tls_refuses_incomplete_duplicate_changed_plan_and_expired_attempt",
+      "suffix": "ok"
+    },
+    {
+      "line": 13979,
+      "test": "distribution_native_host::provisional_listener::tests::native_initial_birth_tls_refuses_registered_root_stale_peer_and_plaintext_host",
+      "suffix": "ok"
+    },
+    {
+      "line": 13980,
+      "test": "distribution_native_host::provisional_listener::tests::process_tests::native_initial_birth_process_child",
+      "suffix": "ignored, internal child entry requires a parent-owned bounded private process configuration"
+    },
+    {
+      "line": 13981,
+      "test": "distribution_native_host::provisional_listener::tests::process_tests::native_initial_birth_process_four_independent_factories_and_cold_restart",
+      "suffix": "ok"
+    },
+    {
+      "line": 13982,
+      "test": "distribution_native_host::provisional_listener::tests::process_tests::startup_tests::native_initial_startup_four_processes_actual_election_host_mq_and_writer_policies",
+      "suffix": "ok"
+    },
+    {
+      "line": 13983,
+      "test": "distribution_native_host::provisional_listener::tests::process_tests::startup_tests::registration_tests::native_metadata_registration_four_process_commands_commit_exact_learner",
+      "suffix": "ok"
+    },
+    {
+      "line": 13984,
+      "test": "distribution_native_host::tests::native_host_actual_seed_strict_reopen_preserves_birth_and_still_cannot_ack",
+      "suffix": "ok"
+    },
+    {
+      "line": 13985,
+      "test": "distribution_native_host::tests::native_host_initial_metadata_binds_every_actual_factory_and_rejects_recreated_root",
+      "suffix": "ok"
+    },
+    {
+      "line": 13986,
+      "test": "distribution_native_host::tests::native_host_initial_plan_assigns_replicas_and_leaders_without_manual_shards",
+      "suffix": "ok"
+    },
+    {
+      "line": 13987,
+      "test": "distribution_native_host::tests::native_host_initial_seed_refuses_existing_root_and_incompatible_plan",
+      "suffix": "ok"
+    }
+  ]
+}

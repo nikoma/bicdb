@@ -479,3 +479,108 @@ complete verification SHA256:
 `c58958d3a133249d389da504e292560f71cd6be69009a8c91b4e93a5083927bf`.
 Local restricted modes do not imply owner-only GitHub artifact access. The
 original failed source and all prior classifications remain unchanged.
+
+## Later terminal follow-up: PR203
+
+Delivered source is now **1.0.514-beta**, `7fc833e3a9130ea710a0fbbfbaba6b065eedf8d3`;
+PR202 delivered this documentation checkpoint and synchronized version metadata.
+It changed no runtime behavior. Its required PR checks passed. The separate
+push checks are a distinct run and are not implied by the PR result.
+
+The changed native candidate in [PR203](https://github.com/nikoma/bicdb/pull/203)
+is **unmerged 1.0.515-beta**, source
+`7b965c6854843b7a127a5575214deddee2bc2c36`, actual CI checkout
+`316c34d465b186a7c3a72b069a3696d70919f19d`, identical tree
+`dbb9160973c722fc63b3b13546ce0194c41281c9`. It includes the main513 backend
+refactor, retained native handoff batch, own-Controlled-guard lifetime repair,
+StoreABA diagnostic correction and post-WAL failure observations. None of the
+following evidence establishes a delivered runtime fix or physical qualification.
+
+[Required run43632072415](https://github.com/nikoma/bicdb/actions/runs/43632072415)
+is terminal **failed**. Its serial native job132560706302 reports **329 passed,
+14 failed, one ignored**, in3856.86s. This duration is not RTO. Core, SQL,
+PostgreSQL-wire, compilation and the remaining workspace passed; the latter
+completed at20:52:24UTC. The separate Rails run43632072572 reports20 runs,
+100 assertions, zero failures/errors/skips. These passes do not override the
+failed native acceptance tests.
+
+| Finding | Classification | Actual evidence and limit |
+| --- | --- | --- |
+| Six collection negative controls | Passed | All six exercised Registered n4 refusal, including StoreABA. They do not exercise successful survivor n2/n1 publication or full serving availability. |
+| Separately retained Controlled callback | Passed | Core's two-Controlled regression preserves refusal while another actual callback remains; the same Frozen owner is retained. |
+| Twelve original hot serving scenarios | Failed | All panic at `hot_policy_tests.rs:863`, during `publication.publish_actual_local_member`, with `QueryTimedOut`. |
+| Three native-commit/postcondition cuts | Failed | Native commit returned before `complete_postcondition` timed out. Historical readback DATA is present; successful publication/recovery is unproven. |
+| Eight post-preflight cuts | Failed | Final foreign validation and journal preflight complete; timeout precedes the WAL-entry marker. No marker does not prove absence of prior native effects. |
+| One early-ALL cut | Failed | Foreign prepared n4 validation expires before journal entry. Later early-ALL admission assertion is not tested. |
+| Foreign-MStore writer-domain scenario | Failed | An incidental fixture `try_lock().unwrap()` fails before the intended foreign-MStore cut. The intended safety rejection is not tested. |
+| Closed-ingress metadata recovery | Failed | A newly elected leader lacks the committed current-term anchor before the wait expires. Later ingress rebind/worker resume is not tested. |
+| CPU versus disk cause; two additional failures' causal schedules | Inconclusive | Traces locate stages, but no controlled causal reproduction or profile establishes the cause. |
+| Later Open, ALL-release, FIRST/new-DATA APP and full Strong assertions | Not tested | The twelve whole-test failures stop before these assertions. |
+| Physical fault-safe scale-out, stable five-node throughput, current physical RPO/RTO | Not tested | No replacement Azure cluster or new qualification run is implied by CI. |
+
+The three post-WAL cases are
+`native_registered_fifth_remote_hot_closed_actual_mstore_contention_same_own_progress`,
+`native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt`
+and `native_registered_fifth_prepared_fresh_actual_expired_round_then_new_collection`.
+Each reports n2/range1/native xid36, matching expected CURRENT/archive checksums
+and equal raw record hashes, durableLSN160, nextLSN161 and nextXid37. The gate
+reports Controlled0, no capture pin, no poisoning and the original Frozen owner
+retained. These are helper-reported readback facts, **not independently
+cold-opened database reconciliation**. The failed API call does not establish
+rollback, durable-data loss or permission to execute a new logical transaction.
+WAL begins with9/11/19ms left and takes5088/5117/4911us. The physical
+postcondition starts with3/5/13ms left and takes approximately76–77ms. Observed
+cancellation-request bits are false; the original deadline expires. These
+measurements identify a finite-window failure, not its CPU/I/O cause.
+
+Earlier assertions did execute before these later failures: CLOSED audit
+reply-loss and both CLOSED MStore controls; both Registered DECISION same-attempt
+lost-reply retries; and genuine new collection after an expired round. These
+are bounded partial passes, not twelve wholly untested fault scenarios or
+successful end-to-end serving tests.
+
+The additional RF3 failure is
+`native_writer_data_domain_actual_foreign_mstore_refuses_without_native_change`,
+at `writer_data_domain_fact_tests.rs:102`, before owned-member observation and
+before the deliberate foreign-MStore fault; the member ordinal and lock holder
+were not retained. The additional supervisor failure is
+`native_owned_metadata_supervisor_closed_ingress_cannot_hold_leadership_same_worker_resumes`:
+the wait at `metadata_supervisor_tests.rs:205` follows actual n2 election and
+stopping n2 ingress. Final n0 is Leader/term3/commit0/log2/last-term3; n1 is
+Follower/term3/commit1/log1/last-term1. Neither an unanchored Leader status nor
+the observed store-busy messages prove successful recovery or its failure cause.
+
+Reproduction remains the exact source's unchanged serial native CI target;
+all344 actual case names and complete failure sections are retained. See the
+[executed issue195 update](https://github.com/nikoma/bicdb/issues/195#issuecomment-6884036164)
+for source identity, cuts and the next isolated checks. A standalone filtered
+pass would not replace the original serial-suite result.
+
+The smallest next tests must preserve original deadlines and application
+assertions. Validate one publication with the exact held journal/DB/Frozen
+owner, independently reread post-write physical state and retain complete
+foreign validation plus fresh request/MStore/Role checks. Corrupt CURRENT,
+archive or a retained middle history entry; change the actual owner/slot; and
+hold another Controlled callback: each must refuse without false Serving or
+Strong readiness. Exercise the original positive serving path after those
+controls. For the RF3 setup, distinguish original-OWN acquisition from the
+deliberate foreign-MStore rejection. For the supervisor, control the suspected
+MStore contention schedule and independently verify current-term anchoring;
+do not widen deadlines, remove assertions or classify failures as flakiness.
+
+Native raw log13,364,752 bytes has SHA256
+`e4d350e73723c7ab8da14bdca191b8aaa2ac3df72cf6e629a9a6ae1d10d5d903`;
+gzip SHA256
+`c53e857455bd226d131468b0e40dde9ee3ef8e7db46b423deef313844cf38977`.
+The failure classification SHA256 is
+`411f65f5bacbf9b89f0da545435158a1e563170708a6198185064c005d34e855`;
+the independently source-pinned cut matrix SHA256 is
+`734ffe4fa2821063b85ce63d7f3f68b1b810afc77cbdd1f6e042768cc0a46250`.
+The complete restricted archive retains eleven full gzip logs and eight unique
+original artifact ZIPs. Offline rehashing, ZIP API-digest/CRC checks and all
+fifteen job states (four skipped) reconcile without a missing non-skipped log.
+Canonical manifest SHA256:
+`1a8fc56fbd309a7e8d4960399920c24030be7d3d766a457b9dcdfde8d745fcf0`;
+complete archive verification SHA256:
+`cdc84cacc4de953d2d76f2686927628c6f58ac6b5ce63f713bf4b777b2243c93`.
+All prior failed candidates and the failed Azure experiment remain unchanged.

@@ -11,6 +11,18 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
+## Current recovery candidate — 508
+
+The [508 integration review](design/ha-recovery-integration-review-2026-11-13.md)
+records the assembled native range-recovery candidate, original failed cohorts,
+source defects and unexecuted successors. The delivered baseline at its cutoff
+is **1.0.506-beta**, `6c432f6aaf59ef88252a6a559d400b2946b1bc13`; all required
+checks passed for that documentation/evidence and CLI-prerequisite merge.
+The 508 candidate is not yet compiled, runtime-qualified, merged or deployed at
+this review cutoff. Historical evidence below must not be reused as a test of
+that changed runtime. The failed Azure qualification and the open SQL,
+controller, repeated-movement and physical scaling gates remain unchanged.
+
 ## Latest delivered source — 2026-11-14 UTC
 
 The runtime evidence baseline for this documentation update is remote main

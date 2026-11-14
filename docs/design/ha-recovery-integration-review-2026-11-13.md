@@ -2,8 +2,10 @@
 
 This is a source integration checkpoint, not release or production
 qualification. The verified delivered baseline at this checkpoint is
-1.0.505-beta, `e25b3ba194c6f3ad73e2f393b68b175fbf1edd92`. The code described
-below is an isolated successor batch. The original Azure expansion remains a
+1.0.506-beta, `6c432f6aaf59ef88252a6a559d400b2946b1bc13`. Its complete
+merge tree equals required-CI-tested head `f71598ecd498aebed0eca52fa13e7ab01fe61497`;
+all required checks passed. It produced no binary or deployment. The code
+described below is an isolated **1.0.508-beta candidate**. The original Azure expansion remains a
 failed scale-out qualification; no replacement physical experiment has run.
 
 | Finding or change | Evidence and classification | Remaining gate |
@@ -17,6 +19,7 @@ failed scale-out qualification; no replacement physical experiment has run.
 | Joined joint-continuation custody | **Not tested:** source `368fbcbf17cc4fbd98a377103f83a7d9dd10e3ff`, refined at `b811b56f65a6243f30f0ceba5029586e1f795a9d`. Host retains the same actual A before fallible postchecks; independently fresh joint authority is separate from expired snapshot authority. | Actual NEW observation, native decision, explicit release and final Serving producer. A custody getter is not a serving grant. |
 | Remote decision/transport cohort | **Failed source compilation, then deliberately cancelled:** source `7afb806cb6e6ec51df3e3b4372db3667ef05ac6e`, run 43565417585. Exact source comparison proved the known missing-import defect before cancellation; terminal logs preserve three E0425 errors per job. The intended 24 runtime cases and workflow consumer were not reached. | Combined import correction must compile and execute; cancellation is not a passing or infrastructure-only result. |
 | Pre-freeze historical predecessor custody | **Not tested:** `4d117b7c171d4e91d68ae24c3c06e490bcd08131` captures real predecessor policy before freeze; `154b6ec79d951191f2778309c2145e0544135e72` enforces exact original allocation before effects. | Born-profile controls, actual Serving-profile execution, concurrency schedule, Joined OLD admission and repeated movement remain separate gates. |
+| Constrain-first continuation | **Failed source availability invariant; correction not tested:** the earlier retained constraint lane had no predecessor or close-outcome owner. `c6d74e3c8d2027c4cb58193c3adc69a5319ba057` captures before the first real constraint freeze, retains the same owner and initializes only the first close outcome. | Execute `native_registered_fifth_remote_old_actual_constraints_then_close_preserves_original_custody`: original absence assertions, actual Close and exact fresh replay must all pass. The original constraint-only unresolved case stays unchanged. |
 | Remote decision reader without TLS | **Passed, narrow scope:** corrected source `2ac5c38ad8b0e39439d927053931776f1f09d2bb`, run 43566245411, one actual reader-compatibility unit passed in 0.05 s. It refuses an unsupported semantic profile. | No remote committed record, failover, physical or scale-out guarantee was tested by this unit. Original 7afb no-TLS compilation failure remains a failure with zero runtime cases. |
 
 ## Findings that must not disappear during integration
@@ -98,3 +101,10 @@ NEW proof or current metadata, and no public raw native-write callback. The
 concrete decision publisher remains outstanding and must separately retain and
 verify those actual inputs. This scope is **not tested** until compiled and
 exercised through the actual multi-range fixture.
+
+The required CI commands are monitored by the existing approved process-group
+memory guard (SHA-256 `1fc9b018175b95de49ad59738f37209e76427f05a890aeae24d55bdcb59736c7`).
+Removing its eight wrapper prefixes and two pressure-artifact steps reproduces
+the previous workflow exactly, including job names, conditions, commands,
+selectors, thread settings and deadlines. No qualifier job is added. A guard
+interruption is a resource-interrupted run, never a passing test result.

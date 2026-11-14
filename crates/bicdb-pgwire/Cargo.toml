@@ -1,6 +1,6 @@
 [package]
 name = "bicdb-pgwire"
-version = "1.0.508-beta"
+version = "1.0.509-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
@@ -16,8 +16,8 @@ axum.workspace = true
 axum-server.workspace = true
 argon2.workspace = true
 base64.workspace = true
-bicdb-core = { path = "../bicdb-core", version = "1.0.508-beta" }
-bicdb-sql = { path = "../bicdb-sql", version = "1.0.508-beta", default-features = false }
+bicdb-core = { path = "../bicdb-core", version = "1.0.509-beta" }
+bicdb-sql = { path = "../bicdb-sql", version = "1.0.509-beta", default-features = false }
 ctrlc.workspace = true
 hex.workspace = true
 hmac.workspace = true
@@ -39,7 +39,7 @@ uuid.workspace = true
 x509-parser.workspace = true
 
 [dev-dependencies]
-bicdb-page = { path = "../bicdb-page", version = "1.0.508-beta" }
+bicdb-page = { path = "../bicdb-page", version = "1.0.509-beta" }
 futures-util = "0.3"
 openssl = "0.10"
 postgres-openssl = "0.5.3"

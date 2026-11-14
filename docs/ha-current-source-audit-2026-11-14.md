@@ -4,6 +4,8 @@
 experiment remains failed. A new single-primary streaming election defect is
 recorded in [issue190](https://github.com/nikoma/bicdb/issues/190); snapshot ballot
 rollback is recorded separately in [issue191](https://github.com/nikoma/bicdb/issues/191).
+Post-vote old-primary acknowledgments are recorded in
+[issue192](https://github.com/nikoma/bicdb/issues/192).
 
 Inspected delivered main is **1.0.511-beta**,
 `74f17b912cec7f2fe093d10dcf1618a43b35f454`, tree
@@ -101,6 +103,14 @@ authority/data checks; blindly merging ballots can still overwrite data after a
 promotion. A refusal of changed state preserves safety but does not establish
 automatic bounded recovery. Old/new installer compatibility must account for
 bootstrap installation occurring before the ordinary format-reader check.
+
+Issue192 records the related vote/ACK induction gap. After a standby votes in a
+higher term, an old-primary stream can resume: its epoch is compared to the last
+known primary epoch, rather than the durable ballot term. A delayed candidate
+can promote using earlier votes after the old primary has obtained newer ACKs.
+The initial silence check does not exclude reconnection after voting. Both early
+and final apply/ACK term checks are necessary; a vote can occur between them.
+This is another confirmed source schedule, not an executed loss experiment.
 
 ## Native range components and the missing automatic operator
 

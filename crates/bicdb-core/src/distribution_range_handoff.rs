@@ -33,6 +33,13 @@ pub(crate) use joint::{
 pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{
+    NativeRemoteNewFactSetV1, NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum,
+    NativeRemoteNewOperationV1, NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit,
+    NativeRemoteNewReplyV1, NativeRemoteNewRequestV1, NativeRemoteNewRound,
+    NativeRemoteNewSnapshotV1, NativeRemoteNewTargetPinIssuance,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::{
     NativeRemoteOldCutCertificate, NativeRemoteOldImageProof, NativeRemoteOldRound,
 };
 #[cfg(feature = "tls-replication")]

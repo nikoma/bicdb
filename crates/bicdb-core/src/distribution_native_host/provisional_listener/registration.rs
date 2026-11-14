@@ -11,6 +11,7 @@ use std::time::Instant;
 
 mod assigned_data;
 mod initial_data;
+mod remote_new_metadata;
 pub(crate) use assigned_data::NativeAssignedDataAdmission;
 use assigned_data::NativeAssignedDataHost;
 mod data_owner;

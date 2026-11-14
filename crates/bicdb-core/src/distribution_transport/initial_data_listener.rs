@@ -40,6 +40,7 @@ pub(super) fn require_request(
     match request {
         ClusterDataRequest::NativeRemoteImageSourceFrame { .. }
         | ClusterDataRequest::NativeRemoteOld { .. }
+        | ClusterDataRequest::NativeRemoteNew { .. }
         | ClusterDataRequest::NativeSourceExportRetirement { .. }
         | ClusterDataRequest::NativeSourceDiscovery { .. } => admission.require_initial_source_hosting(),
         ClusterDataRequest::Ping

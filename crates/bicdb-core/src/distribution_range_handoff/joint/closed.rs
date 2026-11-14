@@ -17,6 +17,42 @@ pub(crate) struct NativeJointOldObservation {
     service: Arc<Mutex<ClusterDataNodeService>>,
 }
 impl NativeJointOldObservation {
+    #[cfg(feature = "tls-replication")]
+    pub(super) fn actual_native_birth(&self) -> Result<crate::distribution::NativeStoreBirthV1> {
+        crate::distribution::NativeStoreBirthV1::from_actual_native(self.native.native_admission())
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(super) fn take_remote_new_decision_pin(
+        &self,
+        permit: &super::remote_new::NativeRemoteNewPinHandoffPermit<'_>,
+    ) -> Result<Option<Arc<SourceCaptureReadPin>>> {
+        permit.require_old(self)?;
+        self.require_current()?;
+        let mut pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("remote NEW OLD pin handoff busy"))?;
+        if pin.as_ref().is_some_and(|pin| Arc::strong_count(pin) != 1) {
+            return Err(invalid(
+                "remote NEW OLD pin still borrowed by actual source export; retain all custody",
+            ));
+        }
+        if pin.is_none() && !permit.old_already_detached() {
+            return Err(invalid(
+                "remote NEW OLD pin absent outside original retained handoff",
+            ));
+        }
+        let dropped = {
+            let _version = permit.publication_guard()?;
+            permit.require_memory_current()?;
+            let dropped = pin.take();
+            permit.record_old_detached();
+            dropped
+        };
+        // Return the actual pin AFTER the short version guard; its Drop may
+        // acquire the range gate, and must never run under that guard.
+        Ok(dropped)
+    }
     pub(super) fn actual_service(&self) -> &Arc<Mutex<ClusterDataNodeService>> {
         &self.service
     }

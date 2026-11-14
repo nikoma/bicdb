@@ -112,6 +112,36 @@ pub(crate) struct NativeWriterHostState {
     data_domains: parking_lot::RwLock<data_domains::WriterDataDomains>,
 }
 impl NativeWriterHostState {
+    /// Necessary memory-only original hook/coordinator/open/schema lifetime
+    /// refusal at the remote read-pin handoff. No DB/native/MStore IO and no
+    /// writer, read, metadata or serving authority is created by this check.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_remote_new_registration_memory(&self) -> Result<()> {
+        let registration = self
+            .registration
+            .upgrade()
+            .ok_or_else(|| invalid("remote NEW original writer registration ended"))?;
+        let actual = registration
+            .authority()
+            .ok_or_else(|| invalid("remote NEW original writer authority ended"))?;
+        let expected = self
+            .coordinator
+            .upgrade()
+            .ok_or_else(|| invalid("remote NEW original writer coordinator ended"))?;
+        if !registration.is_active()
+            || registration.generation() != self.record.generation
+            || !Arc::ptr_eq(&actual, &expected)
+            || self.directory.upgrade().is_none()
+            || self.schema.generation() != self.schema_generation
+        {
+            return Err(invalid("remote NEW original writer lifetime changed"));
+        }
+        self.health
+            .upgrade()
+            .ok_or_else(|| invalid("remote NEW original database health ended"))?
+            .check()
+            .map_err(|e| BicDbError::PagedStorage(e.to_string()))
+    }
     pub(crate) fn registration_generation(&self) -> Uuid {
         self.record.generation
     }
@@ -322,6 +352,19 @@ pub(crate) struct NativeRegisteredReceiverHook {
     actual_open: Weak<()>,
 }
 impl NativeRegisteredReceiverHook {
+    /// Necessary original empty-hook lifetime only. Full actual slot/native
+    /// validation remains at scope entry; this grants no image/row authority.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_remote_new_registration_memory(&self) -> Result<()> {
+        let original = self
+            .registration
+            .upgrade()
+            .ok_or_else(|| invalid("remote NEW original Registered hook ended"))?;
+        if !original.is_active() || self.actual_open.upgrade().is_none() {
+            return Err(invalid("remote NEW original Registered hook/open changed"));
+        }
+        Ok(())
+    }
     #[cfg(test)]
     pub(crate) fn test_keep_original_registration(
         &self,

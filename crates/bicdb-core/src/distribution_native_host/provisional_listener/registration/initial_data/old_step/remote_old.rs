@@ -140,6 +140,7 @@ impl NativeInitialDataAdmission {
                     }
                     let actual_runtime = Arc::new(NativeJointHandoffRuntime::new(service.clone())?);
                     let held = Arc::new(Mutex::new(RetainedInitialOld {
+                        remote_new: None,
                         writer: step.writer.clone(),
                         plan_sha256: request.scope_sha256.clone(),
                         plan: step.plan().clone(),
@@ -280,6 +281,7 @@ impl NativeInitialDataAdmission {
                 }
                 let runtime = Arc::new(NativeJointHandoffRuntime::new(service.clone())?);
                 let owner = Arc::new(Mutex::new(RetainedInitialOld {
+                    remote_new: None,
                     writer: Arc::clone(step.writer_snapshot()),
                     plan_sha256: request.scope_sha256.clone(),
                     plan: step.plan().clone(),

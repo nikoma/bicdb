@@ -15,6 +15,11 @@ mod source_export_retirement_tests;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum SourceCase {
+    TargetRemoteNewPins,
+    TargetRemoteNewWrongFact,
+    TargetRemoteNewBeforeCancel,
+    TargetRemoteNewAfterCancel,
+    TargetRemoteNewChangedIntent,
     TargetSourceExportRetire,
     TargetSourceExportReplyLost,
     TargetSourceExportStartReplyLost,

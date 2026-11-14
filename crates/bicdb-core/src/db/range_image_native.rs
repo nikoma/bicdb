@@ -2356,3 +2356,6 @@ pub(crate) use writer_enrollment::{NativeJointPhaseOwner, NativeJointWriterDomai
 
 #[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use joined_remote_proposal::test_joined_remote_proposal_after_native_begin;
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeRemoteOldDecisionWriterScope;

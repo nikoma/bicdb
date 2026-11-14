@@ -16,12 +16,6 @@ impl NativeInitialDataAdmission {
         parent: &CancellationToken,
     ) -> Result<NativeRemoteNewReplyV1> {
         let token = request.cancellation(parent)?;
-        if matches!(
-            &request.operation,
-            NativeRemoteNewOperationV1::PublishDecision { .. }
-        ) {
-            return Err(invalid("OLD-only remote native DECISION publication not implemented; original custody retained"));
-        }
         self.require_initial_source_hosting()?;
         let process = self
             .image_sources
@@ -60,7 +54,11 @@ impl NativeInitialDataAdmission {
             &service,
             peer,
             request,
-            matches!(&request.operation, NativeRemoteNewOperationV1::Materialize),
+            matches!(
+                &request.operation,
+                NativeRemoteNewOperationV1::Materialize
+                    | NativeRemoteNewOperationV1::PublishDecision { .. }
+            ),
             &token,
         )?;
         let retained = {
@@ -113,7 +111,55 @@ impl NativeInitialDataAdmission {
         state.retain_request(request)?;
         state.require_current(&token)?;
         first.require_current()?;
+        let mut native_decision = None;
         let current = if matches!(
+            &request.operation,
+            NativeRemoteNewOperationV1::PublishDecision { .. }
+        ) {
+            let role = first
+                .role
+                .as_ref()
+                .ok_or_else(|| invalid("remote OLD decision initial fresh Role absent"))?;
+            let plan=crate::distribution_range_handoff::NativeJointHandoffPlan::from_actual_role_and_own(role,&first.own,first.business)?;
+            let source = transport.fetch_remote_decision_source(
+                &plan,
+                &state,
+                &request.manifest,
+                &first.own,
+                first.business,
+                &token,
+            )?;
+            let fetched = transport.fetch_remote_native_new_fact_set(
+                request,
+                &first.own,
+                first.business,
+                &token,
+            )?;
+            drop(first);
+            let fresh = RemoteNewRecipientMetadata::acquire(
+                &provider, &transport, metadata, &service, peer, request, true, &token,
+            )?;
+            if fresh.metadata_store_id() != state.snapshot().metadata_store_id {
+                return Err(invalid("remote OLD decision original MStore UUID changed"));
+            }
+            native_decision = Some(
+                state.publish_remote_decision(
+                    request,
+                    fetched,
+                    source,
+                    fresh
+                        .role
+                        .as_ref()
+                        .ok_or_else(|| invalid("remote OLD decision final actual Role absent"))?
+                        .clone(),
+                    fresh.own.clone(),
+                    fresh.business,
+                    fresh.point.clone(),
+                    &token,
+                )?,
+            );
+            fresh
+        } else if matches!(
             &request.operation,
             NativeRemoteNewOperationV1::PrepareDecision { .. }
         ) {
@@ -160,7 +206,7 @@ impl NativeInitialDataAdmission {
             request: request.clone(),
             snapshot: state.snapshot().clone(),
             handoff: state.handoff_outcome()?,
-            native_decision: None,
+            native_decision,
             metadata_term: current.own.term(),
             metadata_read_index: current.own.read_index(),
             metadata_context_id: current.own.context_id(),
@@ -171,5 +217,47 @@ impl NativeInitialDataAdmission {
         current.require_current()?;
         token.check()?;
         Ok(reply)
+    }
+}
+
+#[cfg(test)]
+fn original_old_remote_phase(
+    host: &NativeMetadataControlHost,
+    range: crate::RangeId,
+) -> Result<Arc<NativeRemoteNewParticipant>> {
+    let initial = host
+        .data
+        .as_ref()
+        .ok_or_else(|| invalid("original OLD host absent"))?;
+    let held = initial
+        .old_closures
+        .try_lock()
+        .ok_or_else(|| invalid("original OLD table busy"))?
+        .get(&range)
+        .cloned()
+        .ok_or_else(|| invalid("original OLD closure absent"))?;
+    let phase = held
+        .try_lock()
+        .ok_or_else(|| invalid("original OLD phase custody busy"))?
+        .remote_new
+        .as_ref()
+        .cloned()
+        .ok_or_else(|| invalid("original OLD remote NEW phase absent"))?;
+    Ok(phase)
+}
+#[cfg(test)]
+impl NativeMetadataControlHost {
+    pub(crate) fn test_arm_old_remote_native_decision_cut(
+        &self,
+        range: crate::RangeId,
+        code: u8,
+    ) -> Result<()> {
+        original_old_remote_phase(self, range)?.test_arm_remote_decision_cut(code)
+    }
+    pub(crate) fn test_old_remote_native_decision_evidence(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        original_old_remote_phase(self, range)?.test_remote_decision_evidence()
     }
 }

@@ -1,5 +1,6 @@
 //! Actual recipient-owned donor discovery; no recovery-purpose cast.
 use super::*;
+mod decision_provenance;
 mod export_retirement;
 
 impl NativeInitialDataAdmission {
@@ -201,12 +202,25 @@ impl SourceDiscoveryAdmission<'_> {
         self.caller.check()
     }
 }
+enum DiscoveryCaller {
+    Target,
+    DecisionParticipant,
+}
 impl NativeInitialDataAdmission {
     fn acquire_source_discovery<'a>(
         self: &'a Arc<Self>,
         peer: &MetadataReadParticipant,
         request: &NativeSourceDiscoveryRequestV1,
         parent: &'a CancellationToken,
+    ) -> Result<SourceDiscoveryAdmission<'a>> {
+        self.acquire_source_discovery_for(peer, request, parent, DiscoveryCaller::Target)
+    }
+    fn acquire_source_discovery_for<'a>(
+        self: &'a Arc<Self>,
+        peer: &MetadataReadParticipant,
+        request: &NativeSourceDiscoveryRequestV1,
+        parent: &'a CancellationToken,
+        caller: DiscoveryCaller,
     ) -> Result<SourceDiscoveryAdmission<'a>> {
         request.require_shape()?;
         self.require_live()?;
@@ -217,9 +231,25 @@ impl NativeInitialDataAdmission {
         registry.require_original_process()?;
         let old = self.retained_actual_old_source(request.range_id)?;
         request.require_plan(old.plan())?;
+        let observer_birth = match caller {
+            DiscoveryCaller::Target => {
+                if peer.node_id() != &request.target_id {
+                    return Err(invalid("source discovery target identity differs"));
+                }
+                &request.target_birth
+            }
+            DiscoveryCaller::DecisionParticipant => {
+                if request.operation != NativeSourceDiscoveryOperationV1::DecisionProvenance
+                    || (!old.plan().old_members().contains_key(peer.node_id())
+                        && !old.plan().new_members().contains_key(peer.node_id()))
+                {
+                    return Err(invalid("decision provenance readonly observer is not an original OLD/NEW participant"));
+                }
+                old.plan().enrolled_birth(peer.node_id())?
+            }
+        };
         if old.node_id() != &request.source_id
-            || peer.node_id() != &request.target_id
-            || peer.member_incarnation() != request.target_birth.node_incarnation()
+            || peer.member_incarnation() != observer_birth.node_incarnation()
             || peer.plaintext_loopback()
         {
             return Err(invalid(
@@ -255,13 +285,19 @@ impl NativeInitialDataAdmission {
             .nodes
             .get(&request.target_id)
             .ok_or_else(|| invalid("discovery target absent"))?;
+        let observer = current
+            .nodes
+            .get(peer.node_id())
+            .ok_or_else(|| invalid("decision provenance observer absent from current OWN"))?;
         if current.cluster_id != request.cluster_id
             || current.range_image_bootstrap_id != Some(request.bootstrap_id)
             || target.native_store_birth_v1.as_ref() != Some(&request.target_birth)
             || target.lifecycle != ClusterNodeLifecycle::Active
+            || observer.lifecycle != ClusterNodeLifecycle::Active
+            || observer.native_store_birth_v1.as_ref() != Some(observer_birth)
             || peer
                 .certificate_sha256()
-                .is_none_or(|p| !target.accepts_tls_certificate_sha256(p))
+                .is_none_or(|p| !observer.accepts_tls_certificate_sha256(p))
         {
             return Err(invalid(
                 "source discovery actual target birth/TLS/current domain differs",

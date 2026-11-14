@@ -42,7 +42,8 @@ pub(super) fn require_request(
         | ClusterDataRequest::NativeRemoteOld { .. }
         | ClusterDataRequest::NativeRemoteNew { .. }
         | ClusterDataRequest::NativeSourceExportRetirement { .. }
-        | ClusterDataRequest::NativeSourceDiscovery { .. } => admission.require_initial_source_hosting(),
+        | ClusterDataRequest::NativeSourceDiscovery { .. }
+        | ClusterDataRequest::NativeDecisionSourceProvenance { .. } => admission.require_initial_source_hosting(),
         ClusterDataRequest::Ping
         | ClusterDataRequest::RegisterMetadataLearner { .. }
         | ClusterDataRequest::FetchBootstrapSnapshot

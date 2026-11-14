@@ -146,6 +146,65 @@ impl NativeRemoteJointDecisionAttempt {
             "native_attempt_limit":1,"actual_commit_sync_fault_count":self.sync_fault_count,"no_catalogue_vote_or_serving":true})
     }
 }
+// Both variants are actual lexical physical owners, not deserialized policy.
+enum RemotePhysicalScope<'a> {
+    Registered(crate::db::NativeRegisteredJointExclusionScope<'a>),
+    Old(crate::db::NativeRemoteOldDecisionWriterScope<'a>),
+}
+struct RemoteLocalPoint<'a> {
+    native: &'a NativeRecoveryAdmission,
+    receipt: &'a str,
+    r: u64,
+    h0: &'a str,
+    h: &'a str,
+    b: u64,
+    frozen: &'a FrozenRangeMutationPermit,
+}
+impl RemotePhysicalScope<'_> {
+    fn require_current(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        admission: &NativeRemoteDecisionAdmission<'_>,
+    ) -> Result<()> {
+        match self {
+            Self::Registered(scope) => {
+                admission.require_target(scope.target())?;
+                scope.require_current(db, store)
+            }
+            Self::Old(scope) => scope.require_current(db, store, admission),
+        }
+    }
+    fn local_point(&self) -> RemoteLocalPoint<'_> {
+        match self {
+            Self::Registered(scope) => {
+                let target = scope.target();
+                let base = target.base();
+                RemoteLocalPoint {
+                    native: target.native(),
+                    receipt: base.native_receipt_sha256(),
+                    r: base.range_index(),
+                    h0: base.logical_genesis_sha256(),
+                    h: base.logical_history_sha256(),
+                    b: base.target_snapshot_bound().get(),
+                    frozen: scope.frozen(),
+                }
+            }
+            Self::Old(scope) => {
+                let close = scope.native_close();
+                RemoteLocalPoint {
+                    native: close.native_admission(),
+                    receipt: close.checksum_sha256(),
+                    r: close.range_index(),
+                    h0: close.logical_genesis_sha256(),
+                    h: close.logical_history_sha256(),
+                    b: close.local_visibility_sequence(),
+                    frozen: scope.frozen(),
+                }
+            }
+        }
+    }
+}
 impl BicDb {
     pub(super) fn require_remote_native_decision_profile(
         &self,
@@ -227,21 +286,63 @@ impl BicDb {
         admission.require_target(target)?;
         admission.require_current()?;
         let scope = self.registered_joint_exclusion_scope(target, frozen, parent)?;
-        scope.require_current(self, store)?;
+        self.persist_remote_native_decision_body(
+            RemotePhysicalScope::Registered(scope),
+            store,
+            admission,
+            attempt,
+            parent,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn publish_remote_old_native_decision(
+        &self,
+        writer: &crate::db::NativeWriterHostState,
+        native: &NativeJointOldCloseReceipt,
+        promise: &crate::distribution_range_consensus::NativeJointOldPromiseReceipt,
+        frozen: &FrozenRangeMutationPermit,
+        store: &RangeWriteStore,
+        admission: &NativeRemoteDecisionAdmission<'_>,
+        attempt: &mut NativeRemoteJointDecisionAttempt,
+        parent: &CancellationToken,
+    ) -> Result<NativeJointDecisionReceipt> {
+        admission.require_old_parts(native, promise, frozen, writer)?;
+        admission.require_current()?;
+        let scope = self.remote_old_decision_writer_scope(
+            writer, native, promise, frozen, store, admission, parent,
+        )?;
+        self.persist_remote_native_decision_body(
+            RemotePhysicalScope::Old(scope),
+            store,
+            admission,
+            attempt,
+            parent,
+        )
+    }
+    fn persist_remote_native_decision_body(
+        &self,
+        physical: RemotePhysicalScope<'_>,
+        store: &RangeWriteStore,
+        admission: &NativeRemoteDecisionAdmission<'_>,
+        attempt: &mut NativeRemoteJointDecisionAttempt,
+        parent: &CancellationToken,
+    ) -> Result<NativeJointDecisionReceipt> {
+        physical.require_current(self, store, admission)?;
         let metadata = admission.metadata();
         metadata.require_native_store_point(self, store)?;
         if attempt.expected != *admission.data() {
             return Err(invalid("remote native DECISION changed original body"));
         }
-        let point = target.base();
-        let native = target.native();
+        let point = physical.local_point();
+        let native = point.native;
+        let frozen = point.frozen;
         admission.data().require_actual_local_point(
             native,
-            point.native_receipt_sha256(),
-            point.range_index(),
-            point.logical_genesis_sha256(),
-            point.logical_history_sha256(),
-            point.target_snapshot_bound().get(),
+            point.receipt,
+            point.r,
+            point.h0,
+            point.h,
+            point.b,
         )?;
         if native.local_node_id() != admission.role().local_node_id()
             || native.local_member_incarnation() != admission.role().local_member_incarnation()
@@ -280,11 +381,11 @@ impl BicDb {
                 birth_sha256: native.birth_sha256().into(),
                 local_node_id: native.local_node_id().clone(),
                 local_incarnation: native.local_member_incarnation(),
-                local_native_receipt_sha256: point.native_receipt_sha256().into(),
-                local_range_index: point.range_index(),
-                local_logical_genesis_sha256: point.logical_genesis_sha256().into(),
-                local_logical_history_sha256: point.logical_history_sha256().into(),
-                actual_local_visibility_sequence: point.target_snapshot_bound().get(),
+                local_native_receipt_sha256: point.receipt.into(),
+                local_range_index: point.r,
+                local_logical_genesis_sha256: point.h0.into(),
+                local_logical_history_sha256: point.h.into(),
+                actual_local_visibility_sequence: point.b,
                 post_quorum_metadata_context_id: role.context_id(),
                 post_quorum_metadata_term: role.metadata_term(),
                 post_quorum_metadata_read_index: role.metadata_read_index(),
@@ -338,7 +439,7 @@ impl BicDb {
                 before_put::fire();
                 admission.require_current()?;
                 metadata.require_native_store_point(self, store)?;
-                scope.require_current(self, store)?;
+                physical.require_current(self, store, admission)?;
                 parent.check()?;
                 attempt.native.as_mut().unwrap().outcome = RemoteOutcome::PutEntered;
                 for name in [
@@ -459,7 +560,7 @@ impl BicDb {
         self.require_registered_joint_decision_storage_healthy()?;
         metadata.require_native_store_point(self, store)?;
         admission.require_current()?;
-        scope.require_current(self, store)?;
+        physical.require_current(self, store, admission)?;
         parent.check()?;
         drop(controlled);
         self.range_mutation_gate()

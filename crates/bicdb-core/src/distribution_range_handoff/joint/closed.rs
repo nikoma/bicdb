@@ -396,3 +396,52 @@ impl NativeJointOldObservation {
             .require_native_joint_decision_receipt(receipt)
     }
 }
+
+#[cfg(feature = "tls-replication")]
+impl NativeJointOldObservation {
+    pub(super) fn require_remote_decision_parts(
+        &self,
+        native: &crate::db::NativeJointOldCloseReceipt,
+        promise: &crate::distribution_range_consensus::NativeJointOldPromiseReceipt,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        if !std::ptr::eq(self.native.as_ref(), native)
+            || !std::ptr::eq(self.promise.as_ref(), promise)
+            || !std::ptr::eq(self.frozen.as_ref(), frozen)
+        {
+            return Err(invalid(
+                "remote OLD decision changed original actual closure/promise/Frozen",
+            ));
+        }
+        Ok(())
+    }
+    pub(super) fn publish_remote_decision(
+        &self,
+        writer: &crate::db::NativeWriterHostState,
+        admission: &super::remote_new::NativeRemoteDecisionAdmission<'_>,
+        attempt: &mut crate::db::NativeRemoteJointDecisionAttempt,
+        parent: &crate::CancellationToken,
+    ) -> Result<crate::db::NativeJointDecisionReceipt> {
+        admission.require_old_parts(&self.native, &self.promise, &self.frozen, writer)?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("remote OLD decision original pin busy"))?;
+        if pin.is_some() {
+            return Err(invalid("remote OLD decision requires original pin handoff"));
+        }
+        let mut service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("remote OLD decision original service busy"))?;
+        service.publish_remote_old_decision(
+            writer,
+            &self.native,
+            &self.promise,
+            &self.frozen,
+            admission,
+            attempt,
+            parent,
+        )
+    }
+}

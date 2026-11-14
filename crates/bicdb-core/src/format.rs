@@ -2061,10 +2061,10 @@ pub(crate) fn enable_native_remote_joint_decision(root: &Path) -> Result<()> {
         .contains(NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG)
         || !metadata
             .feature_flags
-            .contains(NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG)
+            .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG)
     {
         return Err(BicDbError::InvalidConfig(
-            "remote DECISION requires actual joint/image reader fences".into(),
+            "remote DECISION requires actual joint/native-image reader fences".into(),
         ));
     }
     metadata

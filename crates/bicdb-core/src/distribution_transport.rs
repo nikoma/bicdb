@@ -293,6 +293,9 @@ enum ClusterDataRequest {
     NativeSourceDiscovery {
         request: crate::distribution_range_image::NativeSourceDiscoveryRequestV1,
     },
+    NativeDecisionSourceProvenance {
+        request: crate::distribution_range_handoff::NativeRemoteDecisionSourceRequestV1,
+    },
     NativeRemoteOld {
         request: crate::distribution_range_handoff::NativeRemoteOldRequestV1,
     },
@@ -558,7 +561,8 @@ impl ClusterDataRequest {
             | Self::NativeRemoteNew { .. }
             | Self::NativeObserveRegisteredExportNew { .. }
             | Self::NativeSourceExportRetirement { .. }
-            | Self::NativeSourceDiscovery { .. } => None,
+            | Self::NativeSourceDiscovery { .. }
+            | Self::NativeDecisionSourceProvenance { .. } => None,
             Self::ExportSchemaBundle { range_id, .. } => Some(*range_id),
             Self::InstallSchemaBundle { .. }
             | Self::StageSignedSchemaBundle { .. }
@@ -656,6 +660,7 @@ impl ClusterDataRequest {
                 | Self::NativeObserveRegisteredExportNew { .. }
                 | Self::NativeSourceExportRetirement { .. }
                 | Self::NativeSourceDiscovery { .. }
+                | Self::NativeDecisionSourceProvenance { .. }
         )
     }
 }
@@ -667,6 +672,7 @@ enum ClusterDataResponse {
     NativeRemoteOld(crate::distribution_range_handoff::NativeRemoteOldReplyV1),
     NativeRemoteNew(crate::distribution_range_handoff::NativeRemoteNewReplyV1),
     NativeSourceDiscovery(crate::distribution_range_image::NativeSourceDiscoveryReplyV1),
+    NativeDecisionSourceProvenance(crate::distribution_range_image::NativeSourceDiscoveryReplyV1),
     NativeObserveRegisteredExportNew(
         crate::distribution_range_image::NativeRegisteredNewExportReplyV1,
     ),
@@ -1692,6 +1698,20 @@ fn handle_cluster_data_connection(
             }
             return Ok(ClusterDataResponse::NativeSourceExportRetirement(reply));
         }
+        if let ClusterDataRequest::NativeDecisionSourceProvenance { request } = request.request {
+            let donor = initial_data.ok_or_else(|| {
+                transport_error("decision provenance needs actual INITIAL original donor")
+            })?;
+            let peer = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("decision provenance needs authenticated participant")
+            })?;
+            let parent =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            let actual = donor.observe_participant_decision_provenance(peer, &request, &parent)?;
+            return Ok(ClusterDataResponse::NativeDecisionSourceProvenance(
+                actual.into_reply(),
+            ));
+        }
         if let ClusterDataRequest::NativeSourceDiscovery { request } = request.request {
             let donor = initial_data.ok_or_else(|| {
                 transport_error("source discovery requires actual INITIAL donor owner")
@@ -2562,6 +2582,9 @@ fn dispatch_cluster_data_request(
         ClusterDataRequest::NativeObserveRegisteredExportNew { .. }
         | ClusterDataRequest::NativeSourceExportRetirement { .. } => Err(transport_error(
             "export retirement requires its actual before-latch owner",
+        )),
+        ClusterDataRequest::NativeDecisionSourceProvenance { .. } => Err(transport_error(
+            "decision provenance requires original before-latch source owner",
         )),
         ClusterDataRequest::NativeSourceDiscovery { .. } => Err(transport_error(
             "source discovery requires actual before-latch donor owner",
@@ -5535,6 +5558,7 @@ impl TcpClusterRelocationTransport {
                     | ClusterDataRequest::NativeObserveRegisteredExportNew { .. }
                     | ClusterDataRequest::NativeSourceExportRetirement { .. }
                     | ClusterDataRequest::NativeSourceDiscovery { .. }
+                    | ClusterDataRequest::NativeDecisionSourceProvenance { .. }
                     | ClusterDataRequest::MetadataReadProbe { .. }
                     | ClusterDataRequest::MetadataReadAcquire { .. }
                     | ClusterDataRequest::HostMetadataReadAcquire { .. }

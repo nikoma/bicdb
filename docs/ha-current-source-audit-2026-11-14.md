@@ -119,7 +119,7 @@ snapshot custody. The complete candidate remains failed:
   `e9718a8d4d69a8e1f1e45e693d4fa32ee5ecb238f5357559bb960d59af302645`.
 - The existing CLI `killing_the_primary_loses_no_acknowledged_write` also
   failed its **old-primary rejoin** wait at `ha_failover_cli.rs:389`.
-  Successor takeover and the preceding external ACK-set survival assertion
+  Successor takeover and the preceding test-process in-memory ACK-set survival assertion
   passed; the recorded takeover observation was 6.2 s. Final old-writer fencing
   and complete standby checks were not reached. Logs retain stale-term refusals,
   consistent with the issue197 discovery boundary; no additional independent
@@ -143,8 +143,10 @@ uncompiled and unexecuted** successor at this checkpoint. It:
 
 - Retains informational Pong for an allowed stale peer while denying stale
   contact renewal. Same-runtime development-TCP controls use
-  n1 after actual Core ballots and promotion for the positive request and an actual later n2 ballot for the old-epoch
-  contact refusal. Informational epoch knowledge grants no writer lease.
+  n1 after actual Core ballots and promotion for the positive request. A later
+  actual n2 ballot tests refusal to renew contact when the sender matches the
+  known primary epoch but is below the new durable ballot. Informational epoch
+  knowledge grants no writer lease.
 - Retains genesis in memory only from actual empty-root birth under the original
   DirectoryLock, independently of initial HA enablement. Opening with HA enabled
   persists it immediately; another first HA-state producer can persist the same

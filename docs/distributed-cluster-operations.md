@@ -1,7 +1,9 @@
 # Distributed cluster operations
 
-See the [2026-11-10 maturity audit](ha-horizontal-scaling-audit-2026-11-10.md)
-for source-scoped tests, missing transparent SQL integration, physical evidence
+See the [November 14 evidence checkpoint](ha-current-source-audit-2026-11-14.md)
+for the separate delivered, failed and untested native recovery paths and the
+remaining automatic-operator gate. The [initial maturity audit](ha-horizontal-scaling-audit-2026-11-10.md)
+retains source-scoped tests, missing transparent SQL integration, physical evidence
 limits and recovery blockers. The subsequent
 [Azure 4→5 results](azure-scale-out-results-2026-11-11.md) show real automatic
 movement, no demonstrated capacity gain, and a longer growth trial that failed

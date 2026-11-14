@@ -1,7 +1,10 @@
 # BicDB High Availability
 
-For the current-source capability matrix, measured evidence and independent
-4→5-node experiment, see the [2026-11-10 HA/scaling audit](ha-horizontal-scaling-audit-2026-11-10.md).
+For the source-pinned capability matrix and latest captured regression failures,
+see the [November 14 evidence checkpoint](ha-current-source-audit-2026-11-14.md).
+It separates delivered source, failed candidates, reviewed corrections and
+unperformed physical qualification. The [initial HA/scaling audit](ha-horizontal-scaling-audit-2026-11-10.md)
+retains the independent 4→5-node experiment proposal and earlier evidence.
 Automatic range movement does not currently provide transparent distributed SQL.
 The [2026-11-11 focused HA validation](evidence/native-ha-current-2026-11-11/README.md)
 records exact-source voter/observer and crash-recovery results separately from

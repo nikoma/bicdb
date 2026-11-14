@@ -5,13 +5,18 @@ Initial audit of remote `main`: **1.0.455-beta**, commit
 This document and its required source-version bump do not change runtime behavior.
 Paths and symbols below refer to that revision unless an older revision is named.
 
+The [November 14 evidence checkpoint](ha-current-source-audit-2026-11-14.md)
+pins the later delivered 511 source, failed native and streaming candidates,
+reviewed corrections and remaining qualification gates. The dated snapshots
+below preserve their original source scope; they are not a live main status.
+
 **The ultimate requirement is not met:** adding a node can trigger automatic
 range replica movement and leader balancing, but BicDB does not currently offer
 transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Latest delivered source — 2026-11-14 UTC
+## Delivered-source checkpoint — 2026-11-14 UTC (505)
 
 The runtime evidence baseline for this documentation update is remote main
 **1.0.505-beta**, `e25b3ba194c6f3ad73e2f393b68b175fbf1edd92`.

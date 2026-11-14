@@ -262,3 +262,38 @@ payloads with retained cursors and reconciles full count/byte/content hashes.
 It retains selected image generation, namespace/schema and index definitions.
 This is source-only and unexecuted. Definition equality is not index/FTS
 contents parity; no final/base/catalogue/Serving result is published yet.
+
+
+## Physical scan lock correction
+
+The initial c7 verifier source held service, global native journal, admission
+and hook guards across the physical collection scan. A raw-row count bound did
+not bound that I/O or the time other ranges waited for those guards. This was
+a confirmed source availability gap, not an executed failure experiment.
+
+Its successor prepares a host-retained selected read point under the genuine
+native/history/rows/Installing scope, then drops ALL those global guards before
+scanning. Only the actual DB read borrow, original opaque A and pinned
+schema/image/index/cursor identity remain. Both actual request and authenticated
+source-frame cancellation/deadlines constrain the scan; linking them cannot
+extend either original request. Failed read attempts and tentative candidate
+DATA stay retained. An expired postcheck does not publish the cursor or renew
+the old metadata/source observation.
+
+Publication reacquires current actual native/source/history/rows checks and
+matches the original verifier revision. All hashing, I/O and allocation precede
+the nonblocking native current-gate plus actual metadata-version/request check.
+Only a memory state swap happens there; old state/read-point destructors run
+after both short guards drop. The shared Frozen identity is observational DATA,
+not a shared permit or ordinary write grant. The generic guarded VerifyTarget
+operation refuses, so the actual host must use this unlocked producer.
+
+This corrects that source locking boundary but does not prove independence of
+underlying page/cache/index I/O, general PostgreSQL writer locks, or all fixed
+native pre/postchecks. A genuine selected-row I/O-stall test with unchanged
+R1 SDK calls is still required. The earlier transport-only hold is insufficient.
+
+Also, auto_checkpoint_if_due returns immediately for ServerPaged. The earlier
+success/live-request checkpoint guard is defensive contract hardening; it did
+not fix a confirmed live checkpoint-I/O defect in this Joined deployment mode
+and establishes no measured recovery benefit.

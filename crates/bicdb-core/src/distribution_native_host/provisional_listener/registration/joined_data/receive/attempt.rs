@@ -274,6 +274,18 @@ impl NativeMetadataControlHost {
         operation: crate::db::NativeJoinedRemoteImageOperation,
     ) -> Result<crate::db::NativeJoinedRemoteImageProgress> {
         parent.check()?;
+        if let crate::db::NativeJoinedRemoteImageOperation::VerifyTarget {
+            max_scanned_records,
+        } = &operation
+        {
+            return self.verify_joined_remote_target_unlocked(
+                request,
+                frame,
+                parent,
+                *max_scanned_records,
+            );
+        }
+        parent.check()?;
         let host = self.joined_receive_host_mut()?;
         request.origin().require_host(host)?;
         let backend = host.parts.backend.clone();
@@ -379,5 +391,148 @@ impl NativeMetadataControlHost {
             .and_then(|attempt| attempt.image.as_ref())
             .map(|image| image.test_state())
             .ok_or_else(|| invalid("Joined actual original image owner absent"))
+    }
+}
+
+impl NativeMetadataControlHost {
+    fn verify_joined_remote_target_unlocked(
+        &mut self,
+        request: &NativeJoinedRangeReceiveRequest,
+        frame: &NativeRemoteImageStep<'_>,
+        parent: &CancellationToken,
+        max_scanned_records: usize,
+    ) -> Result<crate::db::NativeJoinedRemoteImageProgress> {
+        parent.check()?;
+        if !(1..=16384).contains(&max_scanned_records) {
+            return Err(invalid("Joined target raw scan budget invalid"));
+        }
+        parent.check()?;
+        let host = self.joined_receive_host_mut()?;
+        request.origin().require_host(host)?;
+        let backend = host.parts.backend.clone();
+        let factory = host.parts.factory.clone();
+        let attempt = host
+            .remote_attempts
+            .get_mut(&request.origin().range_id())
+            .ok_or_else(|| invalid("Joined actual target scan attempt absent"))?;
+        let preflight = attempt.preflight.clone();
+        let lease = attempt
+            .lease
+            .as_ref()
+            .ok_or_else(|| invalid("Joined target scan actual A absent"))?;
+        lease.require_retained()?;
+        preflight.require_metadata_current(request)?;
+        let fence = attempt
+            .installing
+            .as_ref()
+            .and_then(|p| p.fence())
+            .cloned()
+            .ok_or_else(|| invalid("Joined target scan requires actual durable Installing"))?;
+        let point = NativeJoinedRemoteImagePoint {
+            preflight: &preflight,
+            lease,
+            request,
+            frame,
+        };
+        point.require_live()?;
+        let image = attempt.image.as_mut().ok_or_else(|| {
+            invalid("Joined target scan requires actual retained rows/history owner")
+        })?;
+        // PREPARE: actual native/history/rows/Installing/source scope, with NO
+        // physical collection scan. The read point is host-retained first.
+        let prepared = {
+            let _original = preflight.selected().origin().original()?;
+            let _admission = preflight.selected().origin().admission()?;
+            let service = backend
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("Joined scan prepare service busy"))?;
+            let database = service.database();
+            if !Arc::ptr_eq(&database, &factory.database) {
+                return Err(invalid("Joined scan prepare actual DB changed"));
+            }
+            let db = database
+                .try_read()
+                .ok_or_else(|| invalid("Joined scan prepare DB busy"))?;
+            db.with_joined_remote_mutation_scope(&preflight, request, frame, lease, |scope| {
+                service.with_writer_data_domain_store(&db, |store| {
+                    let context = crate::db::NativeJoinedRemoteImageContext::new(
+                        &db, store, &point, scope, &fence,
+                    )?;
+                    image.prepare_target_scan(&db, &context)
+                })
+            })
+        };
+        let prepare_post = preflight
+            .require_metadata_current(request)
+            .and_then(|()| lease.require_retained());
+        prepared?;
+        prepare_post?;
+        parent.check()?;
+        point.require_live()?;
+        // READ: no service, native journal, admission or hook guard exists.
+        // Only the actual DB read borrow + original selected A/identity remain.
+        let scanned = {
+            let db = factory
+                .database
+                .try_read()
+                .ok_or_else(|| invalid("Joined unlocked target DB busy"))?;
+            image.scan_target_unlocked(&db, request, frame, lease, parent, max_scanned_records)
+        };
+        let read_post = preflight
+            .require_metadata_current(request)
+            .and_then(|()| lease.require_retained());
+        match scanned {
+            Err(primary) => {
+                let _ = read_post;
+                return Err(primary);
+            }
+            Ok(()) => read_post?,
+        }
+        parent.check()?;
+        point.require_live()?;
+        // PUBLISH: independently reacquire actual fixed native/source checks.
+        // The physical cursor/hash is not counted until the short actual
+        // gate/version/request boundary accepts this fresh request.
+        let published = {
+            let _original = preflight.selected().origin().original()?;
+            let _admission = preflight.selected().origin().admission()?;
+            let service = backend
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("Joined scan publish service busy"))?;
+            let database = service.database();
+            if !Arc::ptr_eq(&database, &factory.database) {
+                return Err(invalid("Joined scan publish actual DB changed"));
+            }
+            let db = database
+                .try_read()
+                .ok_or_else(|| invalid("Joined scan publish DB busy"))?;
+            db.with_joined_remote_mutation_scope(&preflight, request, frame, lease, |scope| {
+                service.with_writer_data_domain_store(&db, |store| {
+                    let context = crate::db::NativeJoinedRemoteImageContext::new(
+                        &db, store, &point, scope, &fence,
+                    )?;
+                    image.publish_target_scan(&db, &context)
+                })
+            })
+        };
+        let post = preflight
+            .require_metadata_current(request)
+            .and_then(|()| lease.require_retained())
+            .and_then(|()| parent.check())
+            .and_then(|()| point.require_live());
+        match published {
+            Err(primary) => {
+                let _ = post;
+                Err(primary)
+            }
+            Ok(progress) => {
+                post?;
+                Ok(crate::db::NativeJoinedRemoteImageProgress::Verification(
+                    progress,
+                ))
+            }
+        }
     }
 }

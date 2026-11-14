@@ -195,6 +195,7 @@ pub(crate) struct NativeJoinedRemoteImageInstallation {
     native_history_commit_returned: Option<u64>,
     rows: Option<rows::RetainedRemoteRows>,
     verification: Option<verification::JoinedTargetVerifier>,
+    scan_pending: Option<verification::JoinedTargetScanReadPoint>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct NativeJoinedRemoteHistoryProgress {
@@ -261,11 +262,9 @@ impl NativeJoinedRemoteImageInstallation {
             NativeJoinedRemoteImageOperation::BeginVerification => self
                 .begin_verification(db, context)
                 .map(NativeJoinedRemoteImageProgress::Verification),
-            NativeJoinedRemoteImageOperation::VerifyTarget {
-                max_scanned_records,
-            } => self
-                .verify_target(db, context, max_scanned_records)
-                .map(NativeJoinedRemoteImageProgress::Verification),
+            NativeJoinedRemoteImageOperation::VerifyTarget { .. } => Err(invalid(
+                "Joined physical target scan requires actual unlocked host read-point path",
+            )),
         }
     }
     #[cfg(test)]
@@ -274,6 +273,7 @@ impl NativeJoinedRemoteImageInstallation {
             "header":p.header,"issued_native_xid":p.native_begin,"commit_returned":p.commit_returned,
             "candidate_framed":p.bytes.is_some()})),"rows":self.rows.as_ref().map(|r|r.test_state()),
             "verification":self.verification.as_ref().map(|v|v.test_state()),
+            "pending_read_point":self.scan_pending.as_ref().map(|p|p.test_state()),
             "native_base_published":false,"Serving":false})
     }
 }
@@ -314,6 +314,7 @@ impl NativeJoinedRemoteImageInstallation {
             native_history_commit_returned: None,
             rows: None,
             verification: None,
+            scan_pending: None,
         })
     }
     fn require_owner(

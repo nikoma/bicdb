@@ -73,6 +73,22 @@ impl CancellationToken {
         child
     }
 
+    /// Independently cancelable child observing both REAL parents and their
+    /// earliest deadline. Used only to constrain the new local read phase;
+    /// this never extends or cancels either original request.
+    pub(crate) fn child_linked_to(&self, other: &Self) -> Self {
+        let mut child = self.child();
+        let mut upstream = child.upstream_cancel_requests.to_vec();
+        upstream.extend(other.upstream_cancel_requests.iter().cloned());
+        upstream.push(Arc::clone(&other.cancel_requested));
+        child.upstream_cancel_requests = Arc::from(upstream);
+        child.deadline = match (child.deadline, other.deadline) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
+        child
+    }
+
     pub fn cancel(&self) {
         self.cancel_requested.store(true, Ordering::SeqCst);
     }
@@ -123,5 +139,40 @@ impl CancellationToken {
 impl Default for CancellationToken {
     fn default() -> Self {
         Self::uncancelable()
+    }
+}
+
+#[cfg(test)]
+mod linked_read_phase_tests {
+    use super::*;
+    #[test]
+    fn linked_read_phase_observes_both_original_sources_without_canceling_parents() {
+        let first = CancellationToken::uncancelable();
+        let second = CancellationToken::uncancelable();
+        let child = first.child_linked_to(&second);
+        child.cancel();
+        assert!(!first.is_cancel_requested());
+        assert!(!second.is_cancel_requested());
+        let child = first.child_linked_to(&second);
+        second.cancel();
+        assert!(matches!(child.check(), Err(BicDbError::QueryCanceled)));
+        let first = CancellationToken::uncancelable();
+        let second = CancellationToken::uncancelable();
+        let child = first.child_linked_to(&second);
+        first.cancel();
+        assert!(matches!(child.check(), Err(BicDbError::QueryCanceled)));
+    }
+    #[test]
+    fn linked_read_phase_preserves_earlier_deadline_and_upstream_cancellation() {
+        let expired = Instant::now() - std::time::Duration::from_millis(1);
+        let root = CancellationToken::uncancelable();
+        let first = root.child();
+        let second = CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(expired));
+        let child = first.child_linked_to(&second);
+        assert_eq!(child.deadline(), Some(expired));
+        assert!(matches!(child.check(), Err(BicDbError::QueryTimedOut)));
+        let child = first.child_linked_to(&CancellationToken::uncancelable());
+        root.cancel();
+        assert!(matches!(child.check(), Err(BicDbError::QueryCanceled)));
     }
 }

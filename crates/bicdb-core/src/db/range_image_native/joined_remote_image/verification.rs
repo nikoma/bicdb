@@ -1,8 +1,10 @@
 //! Independent bounded target-primary scan. No index parity, floor or Ready.
 use super::*;
+mod scan_point;
 use crate::distribution_range_image::{
     canonical_range_image_catalog, content_hasher, LocalRangeImageSealV1,
 };
+pub(in crate::db::range_image_native::joined_remote_image) use scan_point::JoinedTargetScanReadPoint;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) enum JoinedTargetVerificationStatus {
@@ -21,6 +23,7 @@ pub(crate) struct NativeJoinedRemoteVerificationProgress {
     pub target_reserved_b: u64,
 }
 /// Original-owner scan state, never reconstructed from a source DTO.
+#[derive(Clone)]
 pub(super) struct JoinedTargetVerifier {
     generation: Uuid,
     database_open: String,
@@ -210,101 +213,8 @@ impl NativeJoinedRemoteImageInstallation {
             JoinedTargetVerificationStatus::Scanning
         }))
     }
-    pub(crate) fn verify_target(
-        &mut self,
-        db: &BicDb,
-        context: &NativeJoinedRemoteImageContext<'_>,
-        max_scanned_records: usize,
-    ) -> Result<NativeJoinedRemoteVerificationProgress> {
-        if !(1..=16384).contains(&max_scanned_records) {
-            return Err(invalid("Joined target raw scan bound invalid"));
-        }
-        self.begin_verification(db, context)?;
-        let seal = finished_seal(context)?;
-        let rows = self.completed_rows(db, context, &seal)?;
-        let state = self.verification.as_mut().unwrap();
-        state.require_current(db, context, &seal, &rows, &self.header)?;
-        if db.replication_shippable_seq() < state.target_reserved_b {
-            return Ok(state.progress(JoinedTargetVerificationStatus::WaitingForDurability));
-        }
-        if db.current_visibility_watermark() < state.target_reserved_b {
-            return Ok(state.progress(JoinedTargetVerificationStatus::WaitingForVisibility));
-        }
-        if state.complete {
-            return Ok(state.progress(JoinedTargetVerificationStatus::Complete));
-        }
-        let meta = &context.point.preflight().bindings().collections()[state.collection];
-        let mut content = state.content.clone();
-        let mut records = state.records;
-        let mut bytes = state.bytes;
-        let exported = db.for_each_range_snapshot_batch_with_cancellation(
-            &meta.name,
-            context.fence.range(),
-            state.after.as_deref(),
-            &crate::distribution::RangeSnapshotOptions {
-                max_records_per_batch: 1024,
-                max_bytes_per_batch: 8 * 1024 * 1024,
-                max_record_bytes: 8 * 1024 * 1024,
-            },
-            max_scanned_records,
-            context.point.request().cancellation(),
-            |batch| {
-                for record in batch.records {
-                    let encoded = bounded_json(&record, 8 * 1024 * 1024)?;
-                    for frame in [meta.name.as_bytes(), encoded.as_slice()] {
-                        content.update((frame.len() as u64).to_be_bytes());
-                        content.update(frame);
-                    }
-                    records = records
-                        .checked_add(1)
-                        .ok_or_else(|| invalid("Joined target scan count overflow"))?;
-                    bytes = bytes
-                        .checked_add(encoded.len() as u64)
-                        .ok_or_else(|| invalid("Joined target scan byte overflow"))?;
-                }
-                Ok(false)
-            },
-        )?;
-        if exported.snapshot_commit_sequence < state.target_reserved_b {
-            return Ok(state.progress(JoinedTargetVerificationStatus::WaitingForVisibility));
-        }
-        let (collection, after) = if exported.completed {
-            (state.collection + 1, None)
-        } else {
-            if exported.resume_after_key <= state.after {
-                return Err(invalid("Joined target raw scan cursor failed to advance"));
-            }
-            (state.collection, exported.resume_after_key)
-        };
-        let complete = collection == context.point.preflight().bindings().collections().len();
-        if complete
-            && (records != state.seal.record_count
-                || bytes != state.seal.serialized_record_bytes
-                || hex::encode(content.clone().finalize()) != state.seal.image_root_sha256)
-        {
-            state.invalid = true;
-            return Err(invalid("Joined independent actual target scan differs from Finished seal including missing or extra records"));
-        }
-        state.require_current(db, context, &seal, &rows, &self.header)?;
-        state.content = content;
-        state.records = records;
-        state.bytes = bytes;
-        state.collection = collection;
-        state.after = after;
-        state.complete = complete;
-        state.min_snapshot_b = Some(
-            state
-                .min_snapshot_b
-                .map_or(exported.snapshot_commit_sequence, |b| {
-                    b.min(exported.snapshot_commit_sequence)
-                }),
-        );
-        Ok(state.progress(if complete {
-            JoinedTargetVerificationStatus::Complete
-        } else {
-            JoinedTargetVerificationStatus::Scanning
-        }))
-    }
+    // Physical verification is intentionally absent from this guarded context.
+    // The host uses the retained unlocked read-point producer instead.
     pub(super) fn verified_contents(
         &mut self,
         db: &BicDb,

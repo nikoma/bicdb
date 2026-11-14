@@ -339,7 +339,10 @@ pub(super) fn exercise(
     let gate_after = gates(services, factory, mf.capture_range.id, mf);
     let native_after = old_records(services, &plan);
     let target_after = state(&factory.database, pending, &node(4), ranges).unwrap();
-    evidence(&output.join("remote-new-before-assertions.json"),&serde_json::json!({"case":format!("{case:?}"),"original_MF":mf,"phase_id":phase_id,"actual_facts":facts,"actual_replies":replies,"target_phase":target_control.test_remote_new_phase_evidence(mf.capture_range.id),"gate_before":gate_before,"gate_after":gate_after,"native_before":native_before,"native_after":native_after,"target_before":target_before,"target_after":target_after,"every_operation":ledger,"acknowledged":acknowledged,"source_frame_journal":journal,"RAM_handoff_not_native_DECISION":true,"Serving_OLD_cleanup_or_physical_qualification":false})).unwrap();
+    // Retain the diagnostic failure separately; BicDbError is intentionally not
+    // serializable and this observation must not replace the primary operation.
+    let target_phase_result = target_control.test_remote_new_phase_evidence(mf.capture_range.id);
+    evidence(&output.join("remote-new-before-assertions.json"),&serde_json::json!({"case":format!("{case:?}"),"original_MF":mf,"phase_id":phase_id,"actual_facts":facts,"actual_replies":replies,"target_phase":target_phase_result.as_ref().ok(),"target_phase_error":target_phase_result.as_ref().err().map(|error|format!("{error:?}")),"gate_before":gate_before,"gate_after":gate_after,"native_before":native_before,"native_after":native_after,"target_before":target_before,"target_after":target_after,"every_operation":ledger,"acknowledged":acknowledged,"source_frame_journal":journal,"RAM_handoff_not_native_DECISION":true,"Serving_OLD_cleanup_or_physical_qualification":false})).unwrap();
     for id in participants {
         let key = id.as_str();
         assert!(gate_after[key]["capture_pin"].is_null());

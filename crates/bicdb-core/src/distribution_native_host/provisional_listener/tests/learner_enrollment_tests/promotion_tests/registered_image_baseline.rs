@@ -30,8 +30,10 @@ fn state(
     local: &ClusterNodeId,
     ranges: &[crate::RangeDescriptor],
 ) -> Result<serde_json::Value> {
+    // Evidence read of a live owner: wait briefly for a latch its own
+    // worker holds for a moment, instead of failing on that moment.
     let db = database
-        .try_read()
+        .try_read_for(Duration::from_secs(2))
         .ok_or_else(|| BicDbError::Cluster("baseline actual DB busy during snapshot".into()))?;
     let admission = db.native_recovery_admission(
         &topology.cluster_id,

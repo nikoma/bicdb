@@ -1,6 +1,7 @@
 //! Genuine pinned-TLS publication after actual S2 + all participant pin handoffs.
 //! Native DECISION only: these tests do not count a vote or activate a writer.
 use super::*;
+mod failure_evidence;
 pub(super) fn is_case(case: SourceCase) -> bool {
     matches!(
         case,
@@ -55,6 +56,9 @@ pub(super) fn exercise(
     journal: &[serde_json::Value],
     ledger: &mut Vec<serde_json::Value>,
 ) {
+    // Preserve the existing exact per-call diagnostic bytes on a failing test.
+    // This DATA-only guard never retains a native owner or changes its lifetime.
+    let mut _failure_evidence = failure_evidence::OnPanic::new(output);
     let before = state(&factory.database, topology, &node(4), ranges).unwrap();
     let gate_before = gates(services, factory, mf.capture_range.id, mf);
     let operation = NewOp::PublishDecision {
@@ -80,6 +84,7 @@ pub(super) fn exercise(
     );
     // Actual API result precedes ALL diagnostics; diagnostic errors are DATA.
     let primary = first.as_ref().err().map(|e| format!("{e:?}"));
+    _failure_evidence.record_api("first", primary.as_deref());
     let native_first = target.test_remote_native_decision_evidence(mf.capture_range.id);
     let after_first = state(&factory.database, topology, &node(4), ranges);
     evidence(&output.join("remote-decision-first-before-assertions.json"),&serde_json::json!({
@@ -89,6 +94,21 @@ pub(super) fn exercise(
         "before":before,"after":after_first.as_ref().ok(),"after_error":after_first.as_ref().err().map(ToString::to_string),
         "source_APP_acknowledgments":acknowledged,"every_actual_operation":ledger,"source_frame_journal":journal,
         "no_catalogue_vote_Ready_Serving_cold_or_physical_qualification":true})).unwrap();
+    if code.is_none() {
+        // Report a failed real publication at its actual API boundary. An
+        // absent format flag after an earlier refusal is not a reader bug.
+        first
+            .as_ref()
+            .expect("actual native publication must succeed before reader-fence controls");
+    }
+    let native_first = native_first.unwrap();
+    if let Some(code) = code {
+        assert_eq!(native_first["actual_test_cut"]["code"], code);
+        assert_eq!(
+            native_first["actual_test_cut"]["fired"], true,
+            "the actual intended native cut must be reached; an earlier refusal is not its proof"
+        );
+    }
     let old_reader_error = crate::format::test_old_reader_without_remote_joint_decision(
         factory.database.read().data_path(),
     )
@@ -99,7 +119,6 @@ pub(super) fn exercise(
         old_reader_error.is_some(),
         "older reader must refuse actual remote semantic flag"
     );
-    let native_first = native_first.unwrap();
     let actual = &native_first["native"]["actual_native_attempt"];
     let original_xid = actual["native_xid"]
         .as_u64()
@@ -168,6 +187,7 @@ pub(super) fn exercise(
         output,
     );
     let retry_primary = retry.as_ref().err().map(|e| format!("{e:?}"));
+    _failure_evidence.record_api("retry", retry_primary.as_deref());
     let native_after = target.test_remote_native_decision_evidence(mf.capture_range.id);
     let after = state(&factory.database, topology, &node(4), ranges);
     let gate_after = gates(services, factory, mf.capture_range.id, mf);

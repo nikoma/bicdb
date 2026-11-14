@@ -20,6 +20,8 @@ pub(super) struct DecisionCustody {
     native: Option<crate::db::NativeRemoteJointDecisionAttempt>,
     #[cfg(test)]
     cut: u8,
+    #[cfg(test)]
+    observed_cut: Option<(u8, Arc<AtomicBool>)>,
 }
 /// Constructor is private to the original participant after genuine callbacks.
 /// This does NOT implement or convert to a local publication admission.
@@ -247,6 +249,10 @@ impl NativeRemoteNewParticipant {
         let _test_cut = {
             let code = std::mem::take(&mut retained.cut);
             let caller = context.caller.clone();
+            let fired = Arc::new(AtomicBool::new(false));
+            if code != 0 {
+                retained.observed_cut = Some((code, fired.clone()));
+            }
             if code == 3 {
                 retained
                     .native
@@ -257,6 +263,9 @@ impl NativeRemoteNewParticipant {
             crate::db::test_remote_joint_decision_cut(
                 code == 2,
                 Box::new(move || {
+                    if code != 0 {
+                        fired.store(true, Ordering::Release);
+                    }
                     if code == 1 || code == 2 {
                         caller.cancel();
                     }
@@ -332,6 +341,7 @@ impl NativeRemoteNewParticipant {
             .ok_or_else(|| invalid("remote DECISION diagnostic custody busy"))?;
         Ok(
             serde_json::json!({"expected":held.expected,"retained_request_contexts":held.contexts.len(),
+            "actual_test_cut":held.observed_cut.as_ref().map(|(code,fired)|serde_json::json!({"code":code,"fired":fired.load(Ordering::Acquire)})),
             "retained_encoded_bytes":held.encoded_bytes,"native":held.native.as_ref().map(|n|n.test_evidence()),
             "source_callback_actual_observers":held.contexts.iter().map(|c|serde_json::json!({"node":c.source.actual_observer(),"birth":c.source.actual_observer_birth()})).collect::<Vec<_>>(),
             "original_phase":self.snapshot.phase_id,"original_MF_binding":self.snapshot.binding,

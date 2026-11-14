@@ -159,3 +159,38 @@ SHA256 `7bbdcb64911cb71c6923a64e9fd50dddcd2be00956d67b04d5a627abea5981d7`.
 These linked latest results are checkpoint summaries; their complete public
 logical projections are not part of this506 packet. The original full82 and
 transport-component public projections above are included and portable.
+
+## Follow-up captured November 14, 2026
+
+The original03:51 UTC checkpoint above is retained. This follow-up records
+subsequent terminal results; it does not change the earlier executions or
+qualify the source prototypes as delivered main.
+
+| Exact source and run | Disposition | Actual evidence and remaining boundary |
+| --- | --- | --- |
+| Source-record successor `331c12a52fe3efa0d89021e33f8944c8acd4886a`; qualifier `220d249501bd00dcf135993b290c62be058fd443`, [run43555215776](https://github.com/nikoma/bicdb/actions/runs/43555215776), Core job132326461560 | Failed |82 executed:74 passed/eight failed, zero ignored,1149.55s. Workspace all-target/consumer checks passed. Eight cases now reach native DECISION then fail catalogue confirmation with `enforced native writer host policy is not installed`; generic catalogue persistence requires a writer before the later FIRST enrollment. This is a distinct failure from the old receipt-domain mismatch. Later APP/Strong phases of these cases are not tested. |
+| Same331 run: actual DECISION term cuts | Passed, bounded refusal controls | Both intended cuts were independently reconciled: before-put actual term mutation with real abort; after-commit actual term mutation with retained committed CURRENT/archive/xid. Neither counts the target vote. These are process controls, not physical power loss or fresh-term recovery qualification. |
+| Original-handler diagnostic successor `74f3cd41ceeb81ce3587de4bca3d16aa88711a4c`; qualifier `33880aea5bc4c400f70bfee9e9b0020eaf027452`, [run43553888444](https://github.com/nikoma/bicdb/actions/runs/43553888444), Core job132322278671 | Passed, component only |15 executed/passed, zero failed/ignored,277.19s; all-target/consumer checks passed. The OWN-expiry control retains the original RPC timeout, waits only for tagged original-handler completion after business guards, and checks capture/pin/terminal state. No RPC retry, refreshed authority or business-deadline extension. This does not prove full socket-worker completion, settle the original913 failed case or qualify a complete move. |
+| Freeze-identity composition `664ea595de1081856c269675c31cc08f4a4c31d8`; qualifier `99836e0a504d2778c1aaf3cd229127fe4de25d19`, [run43558003879](https://github.com/nikoma/bicdb/actions/runs/43558003879), Core job132335152165 | Passed, two primitives only | Exact two compiler-listed/executed freeze identity controls passed, zero failures/ignored; all-target/consumer checks passed. This does not test Joined receive, row installation or controller convergence. Earlier qualifier `f0558e476` failed two E0616 privacy checks before runtime; that compile failure is retained separately. |
+| Remote NEW source `4e76b409f1db165488fe7e6056e2be4cfafb7f39`; qualifier `ba9fc463b98bc85b3c309088f33351dd3594d78e`, [run43560423642](https://github.com/nikoma/bicdb/actions/runs/43560423642), jobs132342638492/132342659680 | Failed compilation; runtime not tested | Both jobs fail the same E0277: a new diagnostic attempts JSON serialization of `Result<Value, BicDbError>`. Zero runtime tests executed; neither20 selected cases nor102 inventory names are a compiled/executed result. Test-only successor `ad8a2b35a1799dfe05647699439048af9a192291` records value and error separately; no successor runtime pass is claimed here. |
+| PR185 head `2ddfef5f9f54ab8cef29c3b1d7fec6e33f92567e`, [run43553796767](https://github.com/nikoma/bicdb/actions/runs/43553796767), workspace job132321987763 | Failed | `ha_failover_cli` returned one pass/one failure in49.82s: n2 exited at startup with `Address already in use`, then no replacement primary appeared after the kill. At least one pre-kill ACK occurred; exact IDs/count and post-kill loss reconciliation are unavailable. This is not a healthy-three-node election or data-loss result. Exact conflicting endpoint/owner remains inconclusive. Core/native/SQL/PG/Rails and workspace compilation passed separately. |
+| Decision catalogue successor `a5911ec99d0564c011d916309bda64b6ae62a9dc` and combined Joined/remote source `a78c167246d5985e64164fbe3ef6dcfc243a9a87` | Not tested at this cutoff | Source review/static checks are separate from the authorized live qualifications. The87-case decision run and eight-control combined-source run have no claimed terminal runtime result here. Row/history/base/final catalogue/activation and automatic multi-process movement remain incomplete. |
+
+The [CLI fixture report](design/native-ha-cli-port-reservations.md) records the
+original failure, raw-log hash, reproducible successor controls and remaining
+release-to-bind race. Its correction changes test prerequisites and evidence;
+it does not change the server protocol or weaken the original loss assertions.
+
+The full331 artifact14098449878 remains private native custody. Its82 custody
+manifests and8286 file hashes were checked;17 SDK journals contain136 records
+and68 complete framed messages. The164 source APP acknowledgments across
+independent fixtures are not post-movement APP/Strong results. Twenty-four pure
+DATA tamper refusals inside two cases are not24 additional executed cases.
+The raw Core log SHA256 is
+`1d8a11dba06355d7c5aac504d819eff04a8c9792fe95134b3fefb924fd9d6024`.
+
+The full74 diagnostic artifact14098125992 is retained privately, SHA256
+`ccf1646ed03347823d2bb64c09487cedb098096780643296e8964fa332556845`.
+These later results are summaries with linked CI and private custody, not new
+self-contained public evidence packets. No physical RPO/RTO, sustained
+five-node throughput comparison, deployment or production admission follows.

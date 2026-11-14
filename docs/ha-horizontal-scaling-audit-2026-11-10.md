@@ -26,10 +26,14 @@ No release binary or verified deployment was produced by that merge.
 The [follow-up qualification checkpoint](ha-qualification-checkpoint-2026-11-13.md)
 separates original failures, diagnostic passes, the exact-source native repeat,
 corrected client controls and missing cross-process/multi-range producers.
-The newer native handoff prototypes remain separate source branches: the
-corrected82-case fixture still failed10 cases, and the first15-case export-reference
-protocol cohort failed one case with its post-timeout state inconclusive.
-Neither is delivered or production-qualified by505 or this506 documentation update.
+The newer native handoff prototypes remain separate source branches. The
+source-record successor executed82 cases with74 passes/eight failures at
+Registered DECISION catalogue publication. A diagnostic successor executed all15
+export-reference controls successfully, including actual original-handler
+completion after timeout; its result does not settle the earlier14/1 failure.
+The [checkpoint follow-up](ha-qualification-checkpoint-2026-11-13.md#follow-up-captured-november-14-2026)
+also records the failed CLI fixture prerequisites and unexecuted successors.
+These prototype changes are not delivered or production-qualified by505 or this506 update.
 The original Azure scale-out qualification remains failed.
 
 ## Merged-source snapshot — 2026-11-13 UTC (502)

@@ -65,3 +65,21 @@ now fail the prerequisite with its evidence, rather than becoming a misleading
 failover result. Restarting the killed node keeps the configured peer addresses;
 this fixture does not claim to reserve a stopped production node's address or
 qualify physical fault recovery.
+
+## Reproduction and disposition
+
+The original failed run is **failed** at fixture/election availability; its
+acknowledged-write reconciliation is **not tested** and its exact collision
+owner is **inconclusive**. The reserved-endpoint correction and two added
+controls are **not tested** until their own hosted run completes. A source
+review or successful formatting check is not execution evidence.
+
+On an isolated build/test host, the integration target is reproducible with
+`CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo test -p bicdb-cli --test ha_failover_cli --locked -- --test-threads=4 --show-output`.
+Pin the actual tested source and retain complete output. The original port
+race at main505 is intermittent; the smallest deterministic successor control
+is `occupied_replication_listener_is_reported_before_ha_fault`, which retains
+the exact selected replication listener through the real child's startup.
+It must report child exit before any HA fault or loss assertion. The separate
+`held_endpoint_reservations_exclude_parallel_ha_groups` control retains twelve
+real endpoints across parallel fixtures and verifies their exclusivity.

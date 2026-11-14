@@ -36308,10 +36308,10 @@ pub(crate) use range_image_native::{NativeJointPhaseOwner, NativeJointWriterDoma
 pub(crate) use range_image_native::test_joined_remote_proposal_after_native_begin;
 
 #[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeRemoteOldDecisionWriterScope;
+#[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::{
     NativeJoinedRemoteFinalImageReceipt, NativeJoinedRemoteImageContext,
     NativeJoinedRemoteImageInstallation, NativeJoinedRemoteImageOperation,
     NativeJoinedRemoteImageProgress,
 };
-#[cfg(feature = "tls-replication")]
-pub(crate) use range_image_native::NativeRemoteOldDecisionWriterScope;

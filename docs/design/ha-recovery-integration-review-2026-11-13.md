@@ -28,7 +28,7 @@ The next producer needs the real original State, protected predecessor audit,
 native OLD closure, actual range exclusion and independently fresh authority.
 It must not request effective ordinary Serving after closure.
 
-**Failed source validation; runtime exploit not tested.** Independent review also found that a remote reply could validate an OLD
+**Failed source validation; runtime reproduction not tested.** Independent review also found that a remote reply could validate an OLD
 decision receipt without explicitly correlating its node ID with the reply's
 authenticated participant snapshot. The required deterministic negative control
 starts with a genuine successful OLD reply, changes the receipt node to another
@@ -36,6 +36,9 @@ OLD member, recomputes the outer checksum and requires rejection. This is a
 source protocol-validation defect, not evidence of an observed wrong publication
 or lost acknowledged commit. Its correction must remain separate from the
 original failed qualification evidence.
+Source successor `d3b7242368329960274b67d7637a9a3063095ec5` adds that
+explicit same-recipient association and the genuine-reply negative control.
+The correction and new control are **not tested** pending combined CI.
 
 **Failed source lock invariant; runtime reproduction not tested.** The Joined
 materialized-owner and original Joined mutation-scope callgraphs require an

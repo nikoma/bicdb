@@ -428,8 +428,15 @@ pub(super) fn validate_application_module_upgrade(
                 .filter(|guard| guard.subject_resource == *subject)
                 .collect::<Vec<_>>();
             if old_guards != new_guards {
-                return Err(AppRuntimeError::InvalidPackage(
-                    "immutable reference guard cannot be rewritten".into(),
+                return Err(immutable_reference_guard_refusal(
+                    &import.contract.owner_application,
+                    &previous.package.manifest.identity.name,
+                    &import.resource,
+                    subject,
+                    old_guards
+                        .iter()
+                        .chain(new_guards.iter())
+                        .map(|guard| guard.name.as_str()),
                 ));
             }
         }
@@ -461,13 +468,42 @@ pub(super) fn validate_application_module_upgrade(
                 .filter(|invariant| invariant.subject_resource == *subject)
                 .collect::<Vec<_>>();
             if before != after {
-                return Err(AppRuntimeError::InvalidPackage(
-                    "immutable reference guard cannot be rewritten".into(),
+                return Err(immutable_reference_guard_refusal(
+                    &import.publication.owner_application,
+                    &previous.package.manifest.identity.name,
+                    &import.resource,
+                    subject,
+                    before
+                        .iter()
+                        .chain(after.iter())
+                        .map(|guard| guard.name.as_str()),
                 ));
             }
         }
     }
     Ok(())
+}
+
+fn immutable_reference_guard_refusal<'a>(
+    owner: &str,
+    importer: &str,
+    reference: &str,
+    subject: &str,
+    guard_names: impl Iterator<Item = &'a str>,
+) -> AppRuntimeError {
+    let bounded = |value: &str| value.chars().take(96).collect::<String>();
+    let names = guard_names
+        .map(bounded)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .take(8)
+        .collect::<Vec<_>>();
+    // Contract identifiers only: no expressions, row data or actor claims. Debug
+    // quoting escapes control characters; size is bounded even for SDK metadata.
+    AppRuntimeError::InvalidPackage(format!(
+        "immutable reference guard cannot be rewritten: owner={:?}, importer={:?}, reference={:?}, subject={:?}, guards={names:?}",
+        bounded(owner), bounded(importer), bounded(reference), bounded(subject),
+    ))
 }
 
 fn ensure_application_module_can_disable(

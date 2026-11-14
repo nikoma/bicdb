@@ -38,6 +38,8 @@ pub(crate) use materialized::{
     NativeJointNewRound,
 };
 
+#[cfg(feature = "tls-replication")]
+pub(crate) use decision::NativeRegisteredDecisionCatalogueRetry;
 mod decision;
 pub(crate) use decision::{
     NativeJointDecisionData, NativeJointDecisionPublicationAdmission,

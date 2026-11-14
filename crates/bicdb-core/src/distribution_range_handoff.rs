@@ -38,6 +38,8 @@ pub(crate) use joint::{
     NativeRemoteOldOperationV1, NativeRemoteOldReplyV1, NativeRemoteOldRequestV1,
 };
 
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::NativeRegisteredDecisionCatalogueRetry;
 pub(crate) const HANDOFF_RANGE_LOG_FORMAT: u32 = 4;
 pub(crate) const MAX_HANDOFF_PROMISES: usize = 65_536;
 

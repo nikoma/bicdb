@@ -36,6 +36,19 @@ pub(crate) struct NativeRegisteredRemoteJointOwner {
     >,
 }
 impl NativeRegisteredRemoteJointOwner {
+    pub(crate) fn original_target_arc(&self) -> &Arc<NativeRegisteredRemoteJointTarget> {
+        &self.target
+    }
+    pub(crate) fn existing_decision_attempt(
+        &self,
+    ) -> Result<Option<Arc<parking_lot::Mutex<crate::db::NativeRegisteredJointDecisionAttempt>>>>
+    {
+        Ok(self
+            .decision_attempt
+            .try_lock()
+            .ok_or_else(|| invalid("Registered original decision custody busy"))?
+            .clone())
+    }
     pub(crate) fn retain_decision_attempt(
         &self,
         data: &crate::distribution_range_handoff::NativeJointDecisionData,
@@ -75,6 +88,20 @@ impl NativeRegisteredRemoteJointOwner {
             None => Ok(
                 serde_json::json!({"native_attempts":[],"not_started":true,"data_not_authority":true}),
             ),
+        }
+    }
+    #[cfg(test)]
+    pub(crate) fn test_decision_catalogue_evidence(&self) -> Result<Option<serde_json::Value>> {
+        let retained = self.existing_decision_attempt()?;
+        match retained {
+            None => Ok(None),
+            Some(attempt) => {
+                let guard = attempt
+                    .try_lock()
+                    .ok_or_else(|| invalid("Registered catalogue evidence custody active"))?;
+                let evidence = guard.test_catalogue_evidence();
+                Ok(evidence)
+            }
         }
     }
     /// Same actual host/receiver/DB/slot lifetime, never a finite phase token
@@ -219,6 +246,19 @@ impl NativeRegisteredRemoteJointTarget {
             ));
         }
         self.preflight.require_original_process()
+    }
+    /// Necessary original physical identity for ONE already retained decision
+    /// catalogue publication. Generic current/durability checks remain strict.
+    pub(crate) fn require_materialized_identity_point(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        self.require_original_point(db, frozen)?;
+        self.catalogue
+            .require_identity_point(store, db, &self.base)?;
+        self.preflight.original.store.require_live()
     }
     pub(crate) fn require_materialized_point(
         &self,

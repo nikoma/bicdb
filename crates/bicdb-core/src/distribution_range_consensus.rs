@@ -159,12 +159,18 @@ mod native_writer;
 #[cfg(feature = "tls-replication")]
 pub(crate) use native_writer::NativeAssignedCoordinatorWriterPublication;
 mod registered_joint_identity;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use joint_handoff_state::{test_registered_decision_catalogue_cut, CatalogueCut};
 pub(crate) use joint_handoff_state::{
     NativeJointBridgeCatalogue, NativeJointCatalogueActivationFact,
     NativeJointCatalogueActivationReceipt, NativeJointOldCatalogPreflight,
     NativeJointOldPromiseReceipt, NativeJointReleaseObservedObligations,
 };
 use joint_handoff_state::{NativeJointLocalState, NATIVE_JOINT_HANDOFF_CATALOG_FORMAT};
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint_handoff_state::{
+    NativeRegisteredDecisionCatalogueAuthority, NativeRegisteredDecisionCataloguePublication,
+};
 #[cfg(test)]
 pub(crate) use native_prefix::tests::{
     fixture as native_origin_fixture, seed_actual_origin, test_catalog_command,

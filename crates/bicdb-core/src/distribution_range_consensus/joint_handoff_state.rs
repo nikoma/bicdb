@@ -4,6 +4,16 @@ use super::*;
 use crate::distribution_range_handoff::NativeJointHandoffPlan;
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 
+#[cfg(feature = "tls-replication")]
+mod registered_decision;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_decision::{
+    NativeRegisteredDecisionCatalogueAuthority, NativeRegisteredDecisionCataloguePublication,
+};
+
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_decision::{test_registered_decision_catalogue_cut, CatalogueCut};
+
 mod bridge;
 pub(crate) use bridge::NativeJointBridgeCatalogue;
 mod activation;
@@ -513,54 +523,18 @@ impl RangeWriteStore {
         admission: &crate::distribution_range_handoff::NativeJointDecisionPublicationAdmission,
         receipt: &crate::db::NativeJointDecisionReceipt,
     ) -> Result<()> {
-        self.confirm_native_joint_decision_inner(
-            database,
-            admission,
-            receipt,
-            #[cfg(feature = "tls-replication")]
-            None,
-        )
-    }
-    #[cfg(feature = "tls-replication")]
-    pub(crate) fn confirm_native_registered_joint_decision(
-        &mut self,
-        database: &crate::BicDb,
-        admission: &crate::distribution_range_handoff::NativeJointDecisionPublicationAdmission,
-        receipt: &crate::db::NativeJointDecisionReceipt,
-        scope: &crate::db::NativeRegisteredJointExclusionScope<'_>,
-        metadata: &crate::distribution_data::ActualNativeJointMetadataPoint,
-    ) -> Result<()> {
-        admission.require_registered_own()?;
-        let (own, business) = admission.registered_metadata_request()?;
-        metadata.require_request(own, business)?;
-        metadata.require_native_store_point(database, self)?;
-        scope.require_current(database, self)?;
-        self.confirm_native_joint_decision_inner(database, admission, receipt, Some(scope))?;
-        admission.require_registered_own()?;
-        metadata.require_native_store_point(database, self)?;
-        scope.require_current(database, self)
+        self.confirm_native_joint_decision_inner(database, admission, receipt)
     }
     fn confirm_native_joint_decision_inner(
         &mut self,
         database: &crate::BicDb,
         admission: &crate::distribution_range_handoff::NativeJointDecisionPublicationAdmission,
         receipt: &crate::db::NativeJointDecisionReceipt,
-        #[cfg(feature = "tls-replication")] registered: Option<
-            &crate::db::NativeRegisteredJointExclusionScope<'_>,
-        >,
     ) -> Result<()> {
         admission.require_live()?;
         admission.require_native_metadata_point(database, self, receipt.native_admission())?;
         receipt.require_current(database)?;
         self.require_native_catalog_durability(database.data_path())?;
-        #[cfg(feature = "tls-replication")]
-        if let Some(scope) = registered {
-            admission.require_registered_own()?;
-            scope.require_current(database, self)?;
-        } else {
-            self.require_native_writer_host_base()?;
-        }
-        #[cfg(not(feature = "tls-replication"))]
         self.require_native_writer_host_base()?;
         if receipt.local_node_id() != &self.catalog.node_id
             || receipt.local_node_id() != admission.role().local_node_id()

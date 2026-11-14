@@ -24,6 +24,11 @@ pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
             | SourceCase::TargetHotDecisionTermBeforePut
             | SourceCase::TargetHotDecisionTermAfterCommit
             | SourceCase::TargetHotFirstPolicyTermBeforeHook
+            | SourceCase::TargetHotDecisionCatalogueBeforeMemory
+            | SourceCase::TargetHotDecisionCatalogueRenameFailed
+            | SourceCase::TargetHotDecisionCatalogueReadbackFailed
+            | SourceCase::TargetHotDecisionCataloguePostCanceled
+            | SourceCase::TargetHotDecisionCataloguePostTerm
     )
 }
 #[test]
@@ -416,6 +421,29 @@ pub(in super::super) fn exercise(
         let request = budget(5000);
         let role = actual_role(&provider, &actor, &plan, local, &request);
         let (mq, business) = own(client, &request);
+        if i == 4 && catalogue_tests::is_catalogue_control(case) {
+            catalogue_tests::exercise(
+                case,
+                &mut decision,
+                role,
+                mq,
+                business,
+                &request,
+                &provider,
+                &actor,
+                &plan,
+                client,
+                &metadata[i],
+                &original,
+                factory,
+                pending,
+                ranges,
+                acknowledged,
+                output,
+                &mut ledger,
+            );
+            return;
+        }
         if i == 4 && local_term_tests::is_decision_control(case) {
             let before = local_term_tests::snapshot(target_control, factory, pending, ranges);
             let (callback, mutation) =
@@ -805,3 +833,5 @@ pub(in super::super) fn exercise(
 mod data_tests;
 
 mod local_term_tests;
+
+mod catalogue_tests;

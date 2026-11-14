@@ -32,6 +32,8 @@ struct NativeAttempt {
 pub(crate) struct NativeRegisteredJointDecisionAttempt {
     expected: NativeJointDecisionData,
     native: Vec<NativeAttempt>,
+    catalogue:
+        Option<crate::distribution_range_consensus::NativeRegisteredDecisionCataloguePublication>,
 }
 impl NativeRegisteredJointDecisionAttempt {
     /// Custody only; DATA cannot publish through this type without a fresh
@@ -41,7 +43,11 @@ impl NativeRegisteredJointDecisionAttempt {
         Ok(Self {
             expected: expected.clone(),
             native: Vec::new(),
+            catalogue: None,
         })
+    }
+    pub(crate) fn has_retained_catalogue(&self) -> bool {
+        self.catalogue.is_some()
     }
     fn require_expected(&self, admission: &NativeJointDecisionPublicationAdmission) -> Result<()> {
         if self.expected != *admission.data() {
@@ -81,6 +87,10 @@ impl NativeRegisteredJointDecisionAttempt {
                 && actual.bytes == bounded_json(record, MAX_NATIVE_RECEIPT_BYTES)? => Ok(()),
             _ => Err(invalid("Registered native record is not the SAME known committed attempt/xid; resolver required")),
         }
+    }
+    #[cfg(test)]
+    pub(crate) fn test_catalogue_evidence(&self) -> Option<serde_json::Value> {
+        self.catalogue.as_ref().map(|c| c.test_evidence())
     }
     #[cfg(test)]
     pub(crate) fn test_evidence(&self) -> Result<serde_json::Value> {
@@ -156,7 +166,7 @@ impl BicDb {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn publish_registered_joint_decision_and_count(
         &self,
-        target: &crate::distribution_native_host::NativeRegisteredRemoteJointTarget,
+        target: &Arc<crate::distribution_native_host::NativeRegisteredRemoteJointTarget>,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
         store: &mut RangeWriteStore,
@@ -181,9 +191,14 @@ impl BicDb {
             metadata,
             attempt,
         )?;
-        store.confirm_native_registered_joint_decision(
-            self, admission, &receipt, &scope, metadata,
-        )?;
+        if attempt.catalogue.is_none() {
+            // Retain the exact whole candidate BEFORE any catalogue memory/IO.
+            attempt.catalogue = Some(crate::distribution_range_consensus::NativeRegisteredDecisionCataloguePublication::begin(
+                store, self, target.clone(), admission, &receipt, &scope, metadata)?);
+        }
+        attempt.catalogue.as_mut().unwrap().advance(self, store,
+            crate::distribution_range_consensus::NativeRegisteredDecisionCatalogueAuthority::Initial(admission),
+            &receipt, &scope, metadata)?;
         drop(controlled);
         // Complete physical/readback/postchecks BEFORE the short final gate.
         scope.require_current(self, store)?;
@@ -199,6 +214,55 @@ impl BicDb {
             receipt,
         };
         point.count(metadata, admission, durable)
+    }
+    /// No native begin/put/commit here. Only the original retained candidate's
+    /// exact metadata file can be reconciled under the SAME actual prepared owners.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn reconcile_registered_joint_decision_catalogue(
+        &self,
+        target: &Arc<crate::distribution_native_host::NativeRegisteredRemoteJointTarget>,
+        frozen: &FrozenRangeMutationPermit,
+        parent: &CancellationToken,
+        store: &mut RangeWriteStore,
+        retry: &crate::distribution_range_handoff::NativeRegisteredDecisionCatalogueRetry<'_>,
+        metadata: &ActualNativeJointMetadataPoint,
+        attempt: &mut NativeRegisteredJointDecisionAttempt,
+    ) -> Result<()> {
+        if !attempt.has_retained_catalogue() {
+            return Ok(());
+        }
+        if attempt.expected != *retry.data() {
+            return Err(invalid(
+                "Registered catalogue retry changed original expected decision",
+            ));
+        }
+        let scope = self.registered_joint_exclusion_scope(target, frozen, parent)?;
+        scope.require_identity_point(self, store)?;
+        retry.require_native_point(self, store, target, metadata)?;
+        let receipt = self.read_native_joint_decision(
+            target.native(),
+            retry.data().old_range().id,
+            retry.data().checksum_sha256(),
+        )?;
+        attempt.require_retained_committed(&receipt.record)?;
+        let controlled = self.range_mutation_gate().try_controlled_mutation(frozen)?;
+        self.range_mutations.validate(
+            retry.data().old_range().id,
+            &RangeMutationAuthority::Controlled(&controlled),
+        )?;
+        attempt.catalogue.as_mut().unwrap().advance(
+            self,
+            store,
+            crate::distribution_range_consensus::NativeRegisteredDecisionCatalogueAuthority::Retry(
+                retry,
+            ),
+            &receipt,
+            &scope,
+            metadata,
+        )?;
+        drop(controlled);
+        scope.require_current(self, store)?;
+        parent.check()
     }
     fn persist_registered_joint_decision(
         &self,

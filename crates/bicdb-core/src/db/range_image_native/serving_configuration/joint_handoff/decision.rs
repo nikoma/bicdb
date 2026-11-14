@@ -98,6 +98,9 @@ impl NativeJointDecisionReceipt {
     pub(crate) fn native_database_incarnation(&self) -> &str {
         self.native.database_incarnation()
     }
+    pub(crate) fn metadata_context_id(&self) -> Uuid {
+        self.record.post_quorum_metadata_context_id
+    }
     pub(crate) fn metadata_anchor(&self) -> (u64, u64) {
         (
             self.record.post_quorum_metadata_term,

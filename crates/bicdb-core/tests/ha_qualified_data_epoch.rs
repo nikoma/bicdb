@@ -380,3 +380,69 @@ fn higher_durable_ballot_fences_old_stream_before_apply_and_before_ack_eligibili
     assert_eq!(target.replication_election_term(), 2);
     assert_eq!(target.ha_node_status().data_epoch, 0);
 }
+
+#[test]
+fn exact_durable_switchover_offer_replays_but_a_later_term_refuses_it() {
+    let root = tempfile::tempdir().unwrap();
+    let p = source(&root.path().join("p"));
+    let offer = p.drain_for_switchover("target").unwrap();
+    assert_eq!(p.drain_for_switchover("target").unwrap(), offer);
+    assert!(p.drain_for_switchover("different").is_err());
+    p.observe_election_term(offer.target_epoch + 1).unwrap();
+    assert!(p.drain_for_switchover("target").is_err());
+    assert_eq!(p.planned_switchover(), Some(offer.clone()));
+    assert_eq!(p.replication_epoch(), offer.source_epoch);
+    assert_eq!(p.ha_node_status().data_epoch, offer.source_epoch);
+}
+
+#[test]
+fn public_restage_cannot_bypass_an_installed_pending_bootstrap() {
+    let root = tempfile::tempdir().unwrap();
+    let p = source(&root.path().join("p"));
+    let path = root.path().join("target");
+    let target = open(&path, ReplicationMode::Standby);
+    drop(target);
+    let archive = root.path().join("snapshot");
+    p.create_standby_snapshot(&archive, "pending-installed-key")
+        .unwrap();
+    stage_standby_bootstrap(&path, &archive, "pending-installed-key", true).unwrap();
+    let staging = bicdb_core::standby_bootstrap_staging(&path);
+    let replaced = root.path().join("target.replaced");
+    // Both actual rename boundaries, before the install completion sync.
+    std::fs::rename(&path, &replaced).unwrap();
+    std::fs::rename(&staging, &path).unwrap();
+    let original = std::fs::read(replaced.join(HA_NODE_FILE)).unwrap();
+    let ready = std::fs::read(path.join("BOOTSTRAP_READY_V2")).unwrap();
+    let error =
+        stage_standby_bootstrap(&path, &archive, "pending-installed-key", true).unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("recover the installed bootstrap before staging"));
+    assert_eq!(
+        std::fs::read(replaced.join(HA_NODE_FILE)).unwrap(),
+        original
+    );
+    assert_eq!(
+        std::fs::read(path.join("BOOTSTRAP_READY_V2")).unwrap(),
+        ready
+    );
+    assert!(!staging.exists());
+    std::fs::rename(
+        path.join("BOOTSTRAP_READY_V2"),
+        path.join("BOOTSTRAP_READY"),
+    )
+    .unwrap();
+    assert!(stage_standby_bootstrap(&path, &archive, "pending-installed-key", true).is_err());
+    assert_eq!(
+        std::fs::read(replaced.join(HA_NODE_FILE)).unwrap(),
+        original
+    );
+    std::fs::rename(
+        path.join("BOOTSTRAP_READY"),
+        path.join("BOOTSTRAP_READY_V2"),
+    )
+    .unwrap();
+    assert!(bicdb_core::finish_standby_bootstrap(&path).unwrap());
+    let target = open(&path, ReplicationMode::Standby);
+    assert!(target.get("items", "r7").unwrap().is_some());
+}

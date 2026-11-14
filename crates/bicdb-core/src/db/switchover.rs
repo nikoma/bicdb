@@ -29,20 +29,42 @@ impl BicDb {
                 "planned switchover requires a durable replication primary",
             ));
         }
-        self.require_replication_primary_epoch(self.replication_epoch())?;
         if target.trim().is_empty() || target == self.config.replication.node_id {
             return Err(replication_error(
                 "switchover needs a different target node",
             ));
         }
         if let Some(offer) = self.planned_switchover() {
-            if offer.target_node_id == target {
-                return Ok(offer);
+            if offer.target_node_id != target {
+                return Err(replication_error(
+                    "primary is already drained for another target",
+                ));
             }
-            return Err(replication_error(
-                "primary is already drained for another target",
-            ));
+            // Our own durable drain reserved target_epoch. It is not an old
+            // stream renewal: replay only this exact retained offer/prefix and
+            // ballot, never one superseded by a later election/authority term.
+            let (data_epoch, applied) = self.replication_election_position()?;
+            let current = self.ha_node.read(|file| {
+                file.switchover.as_ref() == Some(&offer)
+                    && file.epoch == offer.source_epoch
+                    && file.election_term == offer.target_epoch
+                    && file
+                        .voted
+                        .as_ref()
+                        .is_some_and(|(term, node)| *term == offer.target_epoch && node == target)
+                    && data_epoch == offer.source_epoch
+                    && applied == offer.commit_seq
+                    && offer.cluster_id == self.config.replication.cluster_id
+                    && offer.source_node_id == self.config.replication.node_id
+            });
+            if !current {
+                return Err(replication_error(
+                    "retained switchover offer was superseded or its exact durable prefix changed",
+                ));
+            }
+            return Ok(offer);
         }
+        self.require_replication_primary_epoch(self.replication_epoch())?;
         self.replication_election_position()?;
         self.ensure_writable("planned switchover")?;
         let seq = self.last_committed_tx.load(AtomicOrdering::SeqCst);

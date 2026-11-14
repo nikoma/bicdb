@@ -129,6 +129,9 @@ impl BicDb {
 /// standby keeps its own voting identity and highest observed epoch, while
 /// adopting the snapshot's data epoch and accepted history.
 pub fn stage_standby_bootstrap(path: &Path, archive: &Path, key: &str, fsync: bool) -> Result<()> {
+    if path.join(BOOTSTRAP_READY).exists() || path.join(LEGACY_BOOTSTRAP_READY).exists() {
+        return Err(replication_error("complete or explicitly recover the installed bootstrap before staging another; original and stage retained"));
+    }
     // Capture before long restore IO. A live peer may vote meanwhile; the
     // installer must compare this exact preimage again under both locks.
     let target_bytes = bounded_bootstrap_bytes(&path.join(ha_node::HA_NODE_FILE), 8 * 1024 * 1024)

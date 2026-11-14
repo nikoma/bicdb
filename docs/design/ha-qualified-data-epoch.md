@@ -73,6 +73,13 @@ is compared against that actual applied/durable point and refused. Stale Ping
 cannot renew primary contact, and stale-source switchover is refused. Learning a
 ballot never manufactures a new data epoch or a committed primary.
 
+An exact retained planned-switchover offer is a separate idempotent replay case:
+its first durable drain itself reserves the target election term. Replay requires
+the same original offer/ballot, source/config identities, source data epoch and
+exact durable prefix, with no later term. A later term refuses replay and retains
+the original offer. This exception cannot renew an old stream/Ping or bypass the
+recipient's live authority checks.
+
 Independent review also found a pre-existing staging race: a target can cast a
 newer durable vote after `stage_standby_bootstrap` copied its HA file, then
 restart into the older copied ballot. The companion fix retains SHA256 of the
@@ -199,9 +206,13 @@ frames, the importer, HA-file replacement, reopen and native voting to cover:
   preserving that ballot/stage, and fresh snapshot restaging/progress; versioned
   and legacy-ready admission boundaries; actual first-directory rename followed
   by the real new-version recovery entry (not a process-kill simulation).
+  Public staging also refuses an already-installed pending new/legacy marker,
+  rather than bypassing its recovery and deleting the original `.replaced` state.
 - Higher durable ballots refusing old announcement/Ping eligibility and final
   qualification, including a real imported frame between early check and final
   refusal; a later shorter vote observes the actual applied prefix.
+- Exact durable planned-offer replay, later-term refusal preserving that offer,
+  and refusal to restage over an installed incomplete snapshot before recovery.
 
 Existing vote assertions remain, but their setup now uses a genuine promotion
 instead of gifting an epoch through `record_primary(empty_history)`. Existing

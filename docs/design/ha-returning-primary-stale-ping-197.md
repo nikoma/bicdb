@@ -61,7 +61,12 @@ candidacy/votes/promotion produce the known newer epoch; no vote/history DTO or
 fake clock is installed. The stale request receives actual Pong data without
 changing that runtime's contact Instant. The positive exchange then comes from the actual quorum-elected n1 leader,
 using its own recorded epoch, and exercises current-term contact renewal. An
-informational reply to a follower does not make that follower a primary.
+informational reply to a follower does not make that follower a primary. A third
+exchange follows an actual higher n2 candidacy and the recipient's real vote:
+n1's epoch still equals the receiver's known primary epoch but is below its
+durable ballot. Pong remains informational and the SAME contact Instant must
+remain unchanged, isolating the durable-term guard rather than only the
+numeric-primary-epoch check.
 This is development TCP, not TLS or multiprocess qualification. The control and
 correction have not been compiled/executed in this successor.
 

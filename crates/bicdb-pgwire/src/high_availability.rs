@@ -1950,7 +1950,21 @@ mod stale_ping_tests {
         // fake clock, contact override, quorum DTO or publication grant exists.
         let runtime = Arc::new(HaRuntime::new());
         let before = *runtime.last_heard.lock().unwrap();
-        for (sender_id, sender) in [("n2", &other), ("n1", &leader)] {
+        for (stage, (sender_id, sender)) in [("n2", &other), ("n1", &leader), ("n1", &leader)]
+            .into_iter()
+            .enumerate()
+        {
+            if stage == 2 {
+                // A REAL higher ballot fences the old leader even though its
+                // epoch equals the receiver's still-recorded primary epoch.
+                let ballot = other.begin_candidacy("n2").unwrap();
+                let prefix = other.replication_election_position().unwrap();
+                let db = server.read_db().unwrap();
+                assert!(db.consider_vote(ballot, "n2", prefix.0, prefix.1).unwrap());
+                assert_eq!(db.replication_epoch(), expected.epoch);
+                assert!(db.replication_election_term() > leader.replication_epoch());
+            }
+            let contact_before = *runtime.last_heard.lock().unwrap();
             let epoch = sender.replication_epoch();
             let actual_server = server.clone();
             let actual_runtime = runtime.clone();
@@ -2011,16 +2025,23 @@ mod stale_ping_tests {
             assert_eq!(actual, expected.epoch);
             assert_eq!(primary_id, expected.primary_id);
             let after = *runtime.last_heard.lock().unwrap();
-            if sender_id == "n2" {
+            if stage == 0 {
+                assert_eq!(sender_id, "n2");
                 assert_eq!(epoch, old_epoch);
                 assert_eq!(after, before);
             } else {
-                // Positive contact is from the ACTUAL quorum-elected leader,
-                // not a follower made to look authoritative by learning Pong.
                 assert_eq!(sender_id, "n1");
                 assert_eq!(sender.replication_role(), NodeRole::Primary);
                 assert_eq!(epoch, expected.epoch);
-                assert!(after > before);
+                if stage == 1 {
+                    // ACTUAL quorum-elected leader, not a follower made to
+                    // look authoritative by learning informational Pong.
+                    assert!(after > before);
+                } else {
+                    // Numeric primary epoch still matches: only the actual
+                    // durable-term predicate prevents this contact renewal.
+                    assert_eq!(after, contact_before);
+                }
             }
         }
         assert!(runtime.connections.lock().unwrap().is_empty());

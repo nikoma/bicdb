@@ -63,7 +63,12 @@ advance. It checks the actual original writer before/after each chunk. A sealed
 non-owning gate/owner/private-lease identity detects thaw/refreeze and ABA
 without retaining a Weak permit Arc that would block unique N-to-A rotation.
 Two primitive tests cover this identity/rotation invariant; they are not run.
-This is not yet an actual I/O-stall availability result. Neither scope can authorize a row
+This is not yet an actual I/O-stall availability result. The reused scanner
+checks serialized record size before its range-membership filter; therefore
+an unrelated record over the unchanged8MiB bound can refuse this absence scan.
+This is a current limitation, not proof that the selected range has rows. A
+future key-only primary-index absence scan needs its own actual snapshot/backing
+contract; this change does not raise limits or omit validation. Neither scope can authorize a row
 transaction, native installation, NEW vote or Open. Unknown lower bounds are
 not a certified zero. The scope is deliberately distinct from all FIRST scopes.
 Current-MStore checks occur outside engine locks; local version checks are not

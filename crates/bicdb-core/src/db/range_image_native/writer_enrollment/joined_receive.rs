@@ -4,15 +4,34 @@
 use super::*;
 use crate::distribution_native_host::NativeJoinedRangeReceiveRequest;
 use crate::distribution_range_consensus::RangeWriteStore;
+mod rotation;
+pub(crate) use rotation::NativeJoinedRemoteRotationPoint;
+
+enum JoinedReceiveGuard<'a, T> {
+    Owned(T),
+    Borrowed(&'a T),
+}
+impl<T> std::ops::Deref for JoinedReceiveGuard<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Owned(value) => value,
+            Self::Borrowed(value) => value,
+        }
+    }
+}
 
 pub(crate) struct NativeJoinedReceiveStorageScope<'a> {
     db: &'a BicDb,
     request: &'a NativeJoinedRangeReceiveRequest,
     native: &'a NativeRecoveryAdmission,
     frozen: &'a FrozenRangeMutationPermit,
-    _admission: parking_lot::RwLockReadGuard<'a, ()>,
-    hook: parking_lot::RwLockReadGuard<'a, crate::db::commit_admission_hook::CommitAdmissionSlot>,
-    journal: NativeImageJournalGuard<'a>,
+    _admission: JoinedReceiveGuard<'a, parking_lot::RwLockReadGuard<'a, ()>>,
+    hook: JoinedReceiveGuard<
+        'a,
+        parking_lot::RwLockReadGuard<'a, crate::db::commit_admission_hook::CommitAdmissionSlot>,
+    >,
+    journal: JoinedReceiveGuard<'a, NativeImageJournalGuard<'a>>,
 }
 impl NativeJoinedReceiveStorageScope<'_> {
     pub(crate) fn role(&self) -> &crate::distribution_range_recovery::RecoveryRoleAdmission {
@@ -265,15 +284,17 @@ impl BicDb {
             request,
             native,
             frozen,
-            _admission: self
-                .serializable_commit_admission
-                .try_read()
-                .ok_or_else(|| invalid("Joined receive actual writer admission busy"))?,
-            hook: self
-                .commit_admission
-                .try_read()
-                .ok_or_else(|| invalid("Joined receive original installed hook busy"))?,
-            journal: self.try_native_image_journal()?,
+            _admission: JoinedReceiveGuard::Owned(
+                self.serializable_commit_admission
+                    .try_read()
+                    .ok_or_else(|| invalid("Joined receive actual writer admission busy"))?,
+            ),
+            hook: JoinedReceiveGuard::Owned(
+                self.commit_admission
+                    .try_read()
+                    .ok_or_else(|| invalid("Joined receive original installed hook busy"))?,
+            ),
+            journal: JoinedReceiveGuard::Owned(self.try_native_image_journal()?),
         };
         scope.require_database(self)?;
         let result = operation(&scope);

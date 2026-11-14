@@ -144,6 +144,8 @@ pub(crate) use range_image_native::NativeJoinedPublicationScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeJoinedReceiveStorageScope;
 #[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeJoinedRemoteRotationPoint;
+#[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeJoinedRowAbsenceScan;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredClosedPersistScope;

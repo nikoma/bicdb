@@ -45,42 +45,39 @@ lost reply is not a new N, attempt, transaction or source capture.
 
 ## Physical preparation / FINAL memory boundary
 
-Fixed public-to-the-team names, implementation pending in A:
+Implemented in A, not compiled or executed yet:
 
 ```
-NativeJoinedRemoteRotationPoint<'scope>
-    ::prepare(...) -> Result<Self>       // actual I/O, OUTSIDE sessions
-    .require_current_memory(
-        store: &RangeWriteStore,
-        actual_unique_n: &FrozenRangeMutationPermit,
-    ) -> Result<()>                     // bounded memory only
+preflight.with_rotation_point(
+    request, frame, temporary_n_Arc_BY_VALUE,
+    |point: &NativeJoinedRemoteRotationPoint<'_>| { ... },
+) -> Result<R>
+point.require_current_memory(actual_unique_n: &FrozenRangeMutationPermit)
+point.publication_guard() -> NativeMetadataPublicationGuard<'_>
 ```
 
-`prepare` receives the exact `Arc<NativeJoinedRemoteInstallPreflight>`, current
-request and live source frame and borrows the **actual** service/Store/DB/
-hook/admission/native journal. It performs every source/selected/native/schema/
-policy/canonical/hash/custody check before the final boundary. The point's
-private representation must tie those checked facts lexically to the held
-physical guards and exact immutable candidate. It is not a boolean or weak ID.
+The host helper performs current-MStore/runtime checks BEFORE service/DB
+borrowing, and uses the exact physical service/Store/DB. The DB half in
+`db/range_image_native/writer_enrollment/joined_receive/rotation.rs` acquires
+actual admission/hook/journal guards and validates a transient borrowed storage
+view against the exact preflight, native/policy/source/schema/catalogue facts.
+Its private guard bundle does not borrow N. It captures the actual gate/private
+lease identity, then explicitly drops the consumed temporary N Arc BEFORE
+calling the runtime callback. The point cannot escape that callback.
 
-It captures `FrozenRangeMutationIdentity` (actual gate/private lease/owner),
-NOT a borrowed or Weak permit Arc. The caller's temporary N Arc can then drop
-so the runtime can obtain its unique actual N and rotate it. Reacquiring a
-fresh physical scope after dropping that temporary Arc is allowed only if it
-rechecks all actual facts under the new scope; a detached precheck is no grant.
-
-After physical preparation, B takes its selected operation/session and actual
-service/slot binding without performing I/O under Runtime.sessions. Final use
-checks exact current original owners, unique N/private lease, same checked
-State/slot and the actual member publication version. No full `require_live`,
-canonicalize, fsync, native read, serde/hash, callback or destructor under the
-short final guard. Fresh actual Role/OWN + local version + native epoch/quorum
-fences compose; the local guard is not a distributed lease. Preparation may
-need a callback borrowing the physical guard bundle rather than an escaping
-owned value; the lexical requirement takes precedence over syntactic shape.
+After physical preparation, B takes its selected session and actual unique N.
+The callback uses the point's actual member publication guard and memory-only
+check, then consumes N into the original retained A. No full `require_live`,
+canonicalize, fsync, native read, serde/hash or application callback occurs in
+that final memory check. The check uses separate request/owner liveness,
+sealed source-frame cancellation/deadline, actual private freeze identity,
+installed State/registration and sticky Core/page/WAL health. Actual physical
+guards remain lexically held throughout the callback. It never repeats an old-N
+postcheck after the callback has consumed N. Fresh Role/OWN + local version +
+native epoch/quorum fences compose; the local guard is not a distributed lease.
 
 A and B must review the final lexical representation before enabling transfer.
-No current type implements this final rotation point yet.
+The implementation is source only; runtime custody/rotation and acceptance are separate B work.
 
 ## Runtime custody and owned attempt (B/A)
 

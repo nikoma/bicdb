@@ -29,6 +29,20 @@ impl NativeJoinedRangeReceiveOrigin {
     pub(crate) fn guard(&self) -> &Arc<crate::db::InstalledNativeWriterHostGuard> {
         &self.guard
     }
+    /// Memory/open/slot lifetime only. Unlike require_live, this never calls
+    /// the installed writer's filesystem/root checks or obtains engine locks.
+    pub(crate) fn require_live_memory(&self) -> Result<()> {
+        if !self
+            .life
+            .upgrade()
+            .is_some_and(|v| v.load(Ordering::Acquire))
+        {
+            return Err(invalid("additional-range original Joined owner ended"));
+        }
+        self.original.require_first_policy_attempt_lifetime()?;
+        self.parts.database.require_live()?;
+        self.parts.store.require_live()
+    }
     pub(crate) fn require_live(&self) -> Result<()> {
         if !self
             .life
@@ -247,6 +261,13 @@ impl NativeJoinedRangeReceiveRequest {
     }
     pub(crate) fn cancellation(&self) -> &CancellationToken {
         &self.phase
+    }
+    pub(crate) fn require_request_memory(&self) -> Result<()> {
+        self.parent.check()?;
+        self.phase.check()?;
+        self.origin.require_live_memory()?;
+        self.role.role().require_live_request()?;
+        self.own.require_live_request(self.business)
     }
     pub(crate) fn require_live(&self) -> Result<()> {
         self.parent.check()?;

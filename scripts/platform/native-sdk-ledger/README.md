@@ -1,11 +1,20 @@
-# Offline verifier for the stock-SDK experiment ledger
+# Offline verification and external collection for the stock SDK ledger
 
-The producer is source commit `b44064c2bf1b22712e5f30d2031aa5d58e907e44`,
-based on the 1.0.512-beta candidate
-`4efcfc2cccc51307721777ad7d53a251e67bbbf3`. The producer has not been compiled
-or run. This Python code verifies its format using synthetic fixtures; that is
-instrumentation testing, not a BicDB durability, HA, consistency, or scaling test.
-No network or database process is involved in these controls.
+This directory contains the format verifier, a read-only cross-run reconciliation
+plan generator/checker, and external receipt collection/controller tooling. The
+Rust producer and its seven shared parser controls have not been compiled or
+executed at this checkpoint. Source availability does not establish a working
+SDK client, database durability, HA, consistency or scale-out.
+
+The original producer source was
+`b44064c2bf1b22712e5f30d2031aa5d58e907e44`, based on the 1.0.512-beta candidate
+`4efcfc2cccc51307721777ad7d53a251e67bbbf3`. Its format and reconciliation
+successors preserve those historical inputs. The external-sink successor is
+`9c9d2ddcf83b8c913ab54dc6a67c4a688f77e36c`; it adds descriptor-bound collector
+storage and strict receipt schemas. Its 61 focused Python controls passed,
+including actual loopback TLS and local file operations. Earlier verifier and
+reconciliation controls use synthetic journals/replies. None runs a BicDB SDK,
+database process, physical fault or cluster expansion.
 
 ```sh
 python3 scripts/platform/native-sdk-ledger/test_verify.py
@@ -110,18 +119,29 @@ completion record; no successful final record is assumed.
 The stock SDK is a trusted member API, not an ordinary PostgreSQL application
 principal. Current `authorize_cluster_data_caller` requires APP callers to be
 active metadata voting members with their membership-bound TLS certificate;
-typed reads require an active registered member. A new standalone CA-signed client
-can fetch bootstrap but cannot perform APP. A dedicated non-placement experiment
-principal is not implemented here. Do not silently add a sixth data/voting member
-or copy a server's private key to the driver. The experiment's identity/topology
-decision remains explicit and unresolved.
+typed reads require an active registered member. A new standalone CA-signed
+client can fetch bootstrap but cannot perform APP. A dedicated non-placement
+database principal is not implemented here. The explicit future arrangement
+runs the trusted probe on an existing isolated member, retaining its member key
+on that host, and sends evidence to a separate collector under distinct
+instrumentation identities. Do not silently add a sixth data/voting member or
+copy a server's private key to the driver. See the
+[identity and custody contract](../../../docs/design/native-colocated-probe-external-durable-sink.md).
+The arrangement has not been exercised with a real BicDB cluster.
 
-There is no cross-run reconciliation-plan generator or proof that reads cover
-every earlier successful, failed, uncertain, or explicitly retried write. There
-is no optimized probe binary, local SDK smoke result, independent-machine result,
-server durability proof, sustained-throughput driver, or automatic controller
-qualification in this leaf. The original failed Azure scale-out result remains
-failed. These controls neither change its outcome nor clear the production gate.
+`reconcile.py generate` and `coverage` implement bounded read-only plans and
+coverage checking. Their [contract](RECONCILIATION.md) includes successful,
+failed, uncertain and potentially unobserved writes. `verify_external.py`
+checks collector/receipt linkage. These are implemented tooling paths, not
+evidence that any real acknowledged value survived or that live reads covered
+the original corpus. Actual reconciliation must still execute against the
+source-pinned cluster and retain every original outcome.
+
+There is no verified optimized probe binary, local SDK smoke result,
+independent-machine result, server durability proof, sustained-throughput driver
+or automatic controller qualification. The original failed Azure scale-out
+result remains failed. These controls neither change its outcome nor clear the
+production gate.
 # External receipt tooling
 
 The format-1 verifier and cross-run reconciler above retain their original

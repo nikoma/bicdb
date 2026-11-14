@@ -5,6 +5,17 @@ The current example-only external-sink successor is described at the end and
 in [its design](native-colocated-probe-external-durable-sink.md). Neither source
 availability nor offline checks establish Rust/SDK or physical qualification.
 
+Current tooling includes a bounded offline verifier and cross-run read-only
+reconciliation generator/checker. The external-sink source
+`9c9d2ddcf83b8c913ab54dc6a67c4a688f77e36c` passed 61 focused Python controls,
+including local file and loopback TLS operations. The Rust producer's compilation
+and real SDK/cluster experiment remain unexecuted. Statements below about the
+first leaf's missing verifier/generator describe that historical b440 design;
+they are not the current Python implementation inventory. See the
+[current tooling overview](../../scripts/platform/native-sdk-ledger/README.md).
+
+## Historical b440 source-time design
+
 This source leaf is based on `4efcfc2cccc51307721777ad7d53a251e67bbbf3`
 (1.0.512-beta candidate). It has not been compiled or run. The current native
 automatic-relocation and cold-handoff qualification gates remain open. This

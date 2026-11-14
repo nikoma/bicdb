@@ -109,11 +109,19 @@ jobs:
       # --all-targets is the point: `cargo build` alone would not have caught
       # bicdb-sql's unit tests failing to compile against a changed signature.
       - name: cargo check --workspace --all-targets
-        run: cargo check --workspace --all-targets --locked
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-workspace-pressure/alltargets.jsonl" -- cargo check --workspace --all-targets --locked
       # Workspace feature unification enables TLS in Core. Check this actual
       # consumer separately so TLS-only APIs cannot leak into its Core build.
       - name: Workflow consumer compiles without Core defaults
-        run: cargo check -p bicdb-workflow --all-targets --locked
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-workspace-pressure/consumer.jsonl" -- cargo check -p bicdb-workflow --all-targets --locked
+      - name: Retain qualification build pressure and interruption evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-workspace-pressure-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/native-workspace-pressure/
 
   fmt:
     name: Formatting
@@ -249,7 +257,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build projection chaos helper
-        run: cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-core-evidence/helper-pressure.jsonl" -- cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
       - name: Record source and list selected Core library tests
         shell: bash
         run: |
@@ -260,24 +268,30 @@ jobs:
           mkdir -p "$RUNNER_TEMP/native-core-evidence"
           git rev-parse HEAD > "$RUNNER_TEMP/native-core-evidence/source-revision.txt"
           rustc --version --verbose > "$RUNNER_TEMP/native-core-evidence/rustc.txt"
-          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --list \
+          selected_filters=("event_client_" "actual_rpc_evidence_")
+          printf '%s\n' "${selected_filters[@]}" > "$RUNNER_TEMP/native-core-evidence/requested-filters.txt"
+          python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/native-core-evidence/list-pressure.jsonl" -- \
+            cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked -- --list "${selected_filters[@]}" \
             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/selected-tests.log"
           python3 - <<'PY'
           import os, pathlib
           path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'native-core-evidence' / 'selected-tests.log'
           count = sum(line.endswith(': test') for line in path.read_text().splitlines())
-          if count == 0:
-              raise SystemExit('The requested Core filter selected no tests')
+          expected = ['a_known_follower_can_supply_committed_route_discovery', 'a_leader_still_committing_past_the_attempt_slice_answers_the_same_request', 'actual_rpc_evidence_complete_record_quota_fences_without_truncation', 'actual_rpc_evidence_large_complete_frame_byte_quota_refuses_before_dispatch', 'actual_rpc_evidence_mtls_canceled_before_dispatch_records_original_cancellation', 'actual_rpc_evidence_mtls_exact_frames_and_discovery_errors_survive_fallback', 'actual_rpc_evidence_mtls_parallel_requests_share_journal_without_false_reentrancy', 'actual_rpc_evidence_mtls_response_retained_before_original_cancellation_override', 'actual_rpc_evidence_post_response_sync_failure_returns_unknown_and_never_rearms', 'actual_rpc_evidence_pre_dispatch_sync_failure_fences_without_application_mutation', 'actual_rpc_evidence_same_thread_reentry_refuses_without_dispatch', 'an_exhausted_request_budget_is_not_reported_as_unreachable_members', 'event_client_append_preserves_actual_error_when_route_discovery_fails', 'event_client_append_preserves_primary_when_conflicting_discovery_stops_retry', 'event_client_caller_query_budget_expired_refuses_before_tcp_dispatch', 'event_client_caller_query_budget_live_scope_accepts_actual_mock_ack', 'event_client_different_sink_nested_request_is_allowed_without_global_callback_lock', 'event_client_get_preserves_actual_error_when_route_discovery_exhausts_deadline', 'event_client_nested_caller_deadline_expires_during_actual_mock_reply', 'event_client_no_operation_keeps_discovery_error', 'event_client_out_of_order_worker_unknown_survives_later_refusal_and_cleanup', 'event_client_query_budget_context_keeps_tight_nested_deadline_and_shared_peak', 'event_client_refresh_without_operation_keeps_no_member_error', 'event_client_same_sink_reentry_after_response_preserves_parent_dispatch_uncertainty', 'event_client_same_sink_reentry_before_dispatch_refuses_child_and_parent_without_io', 'event_client_sibling_cleanup_evidence_failure_cannot_hide_behind_actual_mock_ack', 'event_client_typed_same_operation_response_keeps_all_worker_outcomes_until_cleanup', 'event_client_unknown_write_survives_later_refusal_and_refresh_or_deadline', 'event_client_worker_memory_envelope_updates_original_caller_peak_and_refuses_io', 'legacy_metadata_controllers_remain_usable_for_discovery', 'permanently_silent_old_leader_refreshes_from_another_member', 'silent_discovery_member_cannot_exhaust_the_retry_budget', 'silent_event_route_leaves_budget_for_discovery_and_retry', 'transient_topology_refresh_does_not_abort_an_event_request']
+          actual = [line[:-6].rsplit('::', 1)[-1] for line in path.read_text().splitlines() if line.endswith(': test')]
+          if count != 34 or sorted(actual) != expected:
+              raise SystemExit('Qualification must select exactly the 25 client and nine existing RPC-evidence cases')
           print(f'Selected {count} Core library tests; ignored tests remain identified by the execution result')
           PY
-      - name: Execute selected Core library tests
+      - name: Execute client and existing RPC-evidence cases serially
         shell: bash
         run: |
           set -euo pipefail
           export BICDB_TEST_EVIDENCE_ROOT="$RUNNER_TEMP/native-core-evidence/fault-state"
           export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
           mkdir -p "$BICDB_TEST_EVIDENCE_ROOT"
-          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=4 --show-output \
+          selected_filters=("event_client_" "actual_rpc_evidence_")
+          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked -- "${selected_filters[@]}" --test-threads=1 --show-output \
             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/tests.log"
       - name: Retain focused source, log and opted-in fault-state evidence
         if: always()

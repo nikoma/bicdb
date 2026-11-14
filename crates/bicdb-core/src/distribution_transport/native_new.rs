@@ -28,6 +28,37 @@ impl AuthenticatedNativeRemoteNewFactSet {
         }
         Ok(())
     }
+    pub(crate) fn decision_materialized_facts(
+        &self,
+    ) -> Result<
+        BTreeMap<ClusterNodeId, crate::distribution_range_handoff::NativeJointMaterializedFacts>,
+    > {
+        self.require_request_live()?;
+        self.frames
+            .iter()
+            .map(|(id, frame)| {
+                let reply = frame.reply();
+                let handoff = reply.handoff.as_ref().ok_or_else(|| {
+                    transport_error("remote DECISION requires actual participant pin handoff")
+                })?;
+                if handoff.fact_set_sha256 != self.facts.checksum_sha256
+                    || !handoff.original_freeze_retained
+                {
+                    return Err(transport_error(
+                        "remote DECISION changed actual participant handoff intent",
+                    ));
+                }
+                Ok((
+                    id.clone(),
+                    reply
+                        .snapshot
+                        .new_materialized
+                        .clone()
+                        .ok_or_else(|| transport_error("remote DECISION missing actual NEW"))?,
+                ))
+            })
+            .collect()
+    }
     pub(crate) fn facts(&self) -> &NativeRemoteNewFactSetV1 {
         &self.facts
     }
@@ -36,6 +67,62 @@ impl AuthenticatedNativeRemoteNewFactSet {
     }
 }
 
+/// Only an actual native-pinned donor exchange constructs this distinct fact.
+/// The donor reads its ORIGINAL retained certificate, not caller MF constraints.
+pub(crate) struct AuthenticatedNativeRemoteDecisionSource {
+    actual: super::native_source_discovery::AuthenticatedNativeSourceDiscovery,
+}
+impl AuthenticatedNativeRemoteDecisionSource {
+    pub(crate) fn historical_provenance(
+        &self,
+    ) -> &crate::distribution_range_handoff::NativeRemoteDecisionSourceData {
+        self.actual
+            .reply()
+            .decision_provenance
+            .as_ref()
+            .expect("actual transport constructor requires source provenance")
+    }
+    pub(crate) fn provenance_sha256(&self) -> &str {
+        &self
+            .actual
+            .reply()
+            .decision_provenance
+            .as_ref()
+            .expect("actual transport constructor requires source provenance")
+            .checksum_sha256
+    }
+
+    pub(crate) fn require_request_live(&self) -> Result<()> {
+        self.actual.require_request_live()
+    }
+    pub(crate) fn data(
+        &self,
+        manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
+    ) -> Result<&crate::distribution_range_handoff::NativeRemoteDecisionSourceData> {
+        self.require_request_live()?;
+        if self.actual.reply().manifest.checksum_sha256 != manifest.checksum_sha256 {
+            return Err(transport_error(
+                "remote decision source returned another original MF",
+            ));
+        }
+        let data = self
+            .actual
+            .reply()
+            .decision_provenance
+            .as_ref()
+            .ok_or_else(|| {
+                transport_error("remote decision source omitted original constraints")
+            })?;
+        data.require_manifest(manifest)?;
+        Ok(data)
+    }
+    pub(crate) fn retained_encoded_bytes(&self) -> Result<usize> {
+        Ok(
+            crate::distribution_range_image::bounded_json(self.actual.reply(), 4 * 1024 * 1024)?
+                .len(),
+        )
+    }
+}
 pub(crate) struct AuthenticatedNativeRemoteNewFrame {
     reply: NativeRemoteNewReplyV1,
     original_request: CancellationToken,
@@ -74,6 +161,33 @@ impl AuthenticatedNativeRemoteNewFrame {
     }
 }
 impl TcpClusterRelocationTransport {
+    pub(crate) fn fetch_remote_decision_source(
+        &self,
+        plan: &crate::distribution_range_handoff::NativeJointHandoffPlan,
+        manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<AuthenticatedNativeRemoteDecisionSource> {
+        let remaining = parent
+            .deadline()
+            .and_then(|d| d.checked_duration_since(Instant::now()))
+            .ok_or(BicDbError::QueryTimedOut)?;
+        let request = crate::distribution_range_image::NativeSourceDiscoveryRequestV1::from_plan(
+            plan,
+            manifest.source_id.clone(),
+            manifest.target_id.clone(),
+            manifest.target_attempt,
+            crate::distribution_range_image::NativeSourceDiscoveryOperationV1::DecisionProvenance,
+            own,
+            business,
+            remaining.as_millis().clamp(1, 4000) as u64,
+        )?;
+        let actual = self.request_remote_image_source_discovery(plan, &request, own, parent)?;
+        let result = AuthenticatedNativeRemoteDecisionSource { actual };
+        result.data(manifest)?;
+        Ok(result)
+    }
     pub(crate) fn observe_remote_source_export_terminal(
         &self,
         manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
@@ -113,7 +227,9 @@ impl TcpClusterRelocationTransport {
         parent: &CancellationToken,
     ) -> Result<AuthenticatedNativeRemoteNewFactSet> {
         request.require_shape()?;
-        let NativeRemoteNewOperationV1::PrepareDecision { facts } = &request.operation else {
+        let (NativeRemoteNewOperationV1::PrepareDecision { facts }
+        | NativeRemoteNewOperationV1::PublishDecision { facts }) = &request.operation
+        else {
             return Err(transport_error(
                 "remote NEW callback set requires exact prepare intent",
             ));
@@ -234,7 +350,9 @@ impl TcpClusterRelocationTransport {
                 "remote NEW actual response/metadata identity regressed",
             ));
         }
-        if let NativeRemoteNewOperationV1::PrepareDecision { facts } = &request.operation {
+        if let NativeRemoteNewOperationV1::PrepareDecision { facts }
+        | NativeRemoteNewOperationV1::PublishDecision { facts } = &request.operation
+        {
             if reply.handoff.as_ref().is_none_or(|handoff| {
                 handoff.fact_set_sha256 != facts.checksum_sha256
                     || !handoff.original_freeze_retained

@@ -4,11 +4,17 @@
 use super::*;
 #[cfg(feature = "tls-replication")]
 mod registered;
+#[cfg(feature = "tls-replication")]
+mod remote;
 use crate::distribution_range_handoff::{
     NativeJointDecisionData, NativeJointDecisionPublicationAdmission,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use registered::NativeRegisteredJointDecisionAttempt;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use remote::test_remote_joint_decision_cut;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote::NativeRemoteJointDecisionAttempt;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -28,6 +34,8 @@ struct NativeJointDecisionRecord {
     post_quorum_metadata_term: u64,
     post_quorum_metadata_read_index: u64,
     native_page_xid: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    remote_provenance_sha256: Option<String>,
     checksum_sha256: String,
 }
 fn key(range: RangeId) -> String {
@@ -64,6 +72,10 @@ impl NativeJointDecisionRecord {
             || !digest(&self.birth_sha256)
             || !digest(&self.local_native_receipt_sha256)
             || !digest(&self.local_logical_history_sha256)
+            || self
+                .remote_provenance_sha256
+                .as_ref()
+                .is_some_and(|hash| !digest(hash))
             || self.checksum()? != self.checksum_sha256
         {
             return Err(invalid("damaged protected complete joint decision record"));
@@ -146,6 +158,16 @@ impl NativeJointDecisionReceipt {
                 &self.record.checksum_sha256,
             ))?
             .ok_or_else(|| invalid("immutable complete joint decision archive missing"))?;
+        #[cfg(feature = "tls-replication")]
+        database.require_remote_native_decision_profile(&self.record)?;
+        #[cfg(not(feature = "tls-replication"))]
+        if self.record.remote_provenance_sha256.is_some()
+            || format::native_remote_joint_decision_active(database.data_path())?
+        {
+            return Err(invalid(
+                "remote decision provenance requires tls-replication reader",
+            ));
+        }
         if actual != self.record || archived != self.record {
             return Err(invalid("protected current/archive joint decision differ"));
         }
@@ -278,6 +300,7 @@ impl BicDb {
             post_quorum_metadata_term: role.metadata_term(),
             post_quorum_metadata_read_index: role.metadata_read_index(),
             native_page_xid: 0,
+            remote_provenance_sha256: None,
             checksum_sha256: String::new(),
         };
         let _journal = self.try_native_image_journal()?;

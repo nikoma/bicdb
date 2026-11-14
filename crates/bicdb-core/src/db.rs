@@ -134,6 +134,8 @@ pub(crate) use range_image_native::test_registered_remote_final_image_after_wal;
 pub(crate) use range_image_native::test_registered_remote_proposal_cut;
 #[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use range_image_native::test_registered_remote_row_wal_cut;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use range_image_native::test_remote_joint_decision_cut;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeAssignedWriterInstallAttempt;
 #[cfg(feature = "tls-replication")]
@@ -159,6 +161,8 @@ pub(crate) use range_image_native::NativeRegisteredNoDomainScope;
 pub(crate) use range_image_native::NativeRegisteredRemoteAttemptScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredRemoteMutationScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeRemoteJointDecisionAttempt;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
     FreshNativeCatalogueBootstrap, FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard,

@@ -1,6 +1,7 @@
 //! Original process-owned NEW participant. Retention here is RAM custody,
 //! never a durable DECISION journal or a cold-recovery capability.
 use super::*;
+pub(super) mod decision;
 use crate::distribution_consensus::HostMetadataReadObservation;
 use crate::distribution_data::{ActualNativeJointMetadataPoint, ClusterDataNodeService};
 use crate::distribution_native_host::{
@@ -65,6 +66,7 @@ pub(crate) struct NativeRemoteNewParticipant {
     handoff: Mutex<RetainedHandoff>,
     handoff_started: AtomicBool,
     progress: PinProgress,
+    decision: Mutex<decision::DecisionCustody>,
 }
 impl NativeRemoteNewParticipant {
     #[allow(clippy::too_many_arguments)]
@@ -156,6 +158,7 @@ impl NativeRemoteNewParticipant {
             handoff: Mutex::new(Default::default()),
             handoff_started: AtomicBool::new(false),
             progress: Default::default(),
+            decision: Mutex::new(Default::default()),
         })
     }
 
@@ -271,6 +274,7 @@ impl NativeRemoteNewParticipant {
             handoff: Mutex::new(Default::default()),
             handoff_started: AtomicBool::new(false),
             progress: Default::default(),
+            decision: Mutex::new(Default::default()),
         })
     }
 

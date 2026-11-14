@@ -128,6 +128,67 @@ impl NativeJointDecisionData {
         }
         Ok(())
     }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn from_remote_historical_data(
+        plan: &NativeJointHandoffPlan,
+        manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
+        source: &super::remote_new::NativeRemoteDecisionSourceData,
+        new_materialized: BTreeMap<ClusterNodeId, NativeJointMaterializedFacts>,
+    ) -> Result<Self> {
+        source.require_manifest(manifest)?;
+        source.binding.require_plan(plan)?;
+        let mut data = Self {
+            version: 1,
+            scope: plan.data().clone(),
+            old_closed: manifest.actual_old_closures.clone(),
+            observed_irrevocable: source.constraints.clone(),
+            new_materialized,
+            selected_source: manifest.source_id.clone(),
+            range_index: manifest.range_index,
+            h0: manifest.h0.clone(),
+            h: manifest.h.clone(),
+            checksum_sha256: String::new(),
+        };
+        data.checksum_sha256 = hex::encode(sha2::Sha256::digest(
+            crate::distribution_range_image::bounded_json(&data, MAX_DECISION_BYTES)?,
+        ));
+        data.validate()?;
+        Ok(data) // DATA only; no LocalQQ or local publication admission.
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_remote_source_data(
+        &self,
+        source: &super::remote_new::NativeRemoteDecisionSourceData,
+    ) -> Result<()> {
+        self.validate()?;
+        source.binding.require_shape()?;
+        if source.binding.scope_sha256 != self.scope.checksum()?
+            || source.binding.source_id != self.selected_source
+            || source.binding.target_id != self.scope.target
+            || source.constraints != self.observed_irrevocable
+            || source.constraints.len() != self.scope.old_members.len()
+            || source.original_close_records.len() != self.old_closed.len()
+            || source.checksum()? != source.checksum_sha256
+        {
+            return Err(invalid(
+                "protected remote decision source obligations/plan changed",
+            ));
+        }
+        for (id, fact) in &self.old_closed {
+            source
+                .original_close_records
+                .get(id)
+                .ok_or_else(|| invalid("protected remote original OLD record missing"))?
+                .require_materialized_facts(fact)?;
+        }
+        Ok(())
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn remote_new_facts(
+        &self,
+    ) -> &BTreeMap<ClusterNodeId, NativeJointMaterializedFacts> {
+        &self.new_materialized
+    }
     pub(crate) fn checksum_sha256(&self) -> &str {
         &self.checksum_sha256
     }

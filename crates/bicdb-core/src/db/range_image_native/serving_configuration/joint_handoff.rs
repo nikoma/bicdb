@@ -487,6 +487,10 @@ mod old_record_data;
 pub(crate) use old_record_data::NativeJointOldCloseRecordData;
 
 mod decision;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use decision::test_remote_joint_decision_cut;
 pub(crate) use decision::NativeJointDecisionReceipt;
 #[cfg(feature = "tls-replication")]
 pub(crate) use decision::NativeRegisteredJointDecisionAttempt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use decision::NativeRemoteJointDecisionAttempt;

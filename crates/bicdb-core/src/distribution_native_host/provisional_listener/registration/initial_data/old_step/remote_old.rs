@@ -162,6 +162,10 @@ impl NativeInitialDataAdmission {
             {
                 return Err(invalid("OLD source retains another exact session"));
             }
+            held.predecessor
+                .as_ref()
+                .ok_or_else(|| invalid("OLD original pre-freeze predecessor absent"))?
+                .require_same_owner(step.historical_predecessor())?;
             step.require_joint_runtime(&held.runtime)?;
             if held.constraints.is_none() {
                 held.constraints = Some(

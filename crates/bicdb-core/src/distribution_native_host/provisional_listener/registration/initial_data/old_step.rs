@@ -218,6 +218,31 @@ impl NativeInitialOldStep<'_> {
     ) -> &Arc<crate::db::NativeWriterHistoricalPredecessor> {
         &self.predecessor
     }
+    #[cfg(test)]
+    pub(crate) fn test_duplicate_predecessor_admission(&self) -> Result<serde_json::Value> {
+        self.require_metadata_current()?;
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("duplicate predecessor actual service busy"))?;
+        let database = service.database();
+        let db = database
+            .try_read()
+            .ok_or_else(|| invalid("duplicate predecessor actual DB busy"))?;
+        let before = db.test_native_old_close_record(self.plan.old_range().id)?;
+        let other = db.capture_writer_historical_predecessor(self.writer.clone(), &self.plan)?;
+        self.predecessor.require_same_owner(&self.predecessor)?;
+        let different = self.predecessor.require_same_owner(&other);
+        let after = db.test_native_old_close_record(self.plan.old_range().id)?;
+        Ok(
+            serde_json::json!({"actual_original":self.predecessor.test_evidence(),
+            "actual_second_capture":other.test_evidence(),
+            "same_original_owner_accepted":true,
+            "distinct_genuine_capture_refusal":different.err().map(|e|e.to_string()),
+            "native_close_before":before,"native_close_after":after,
+            "component_actual_producers_and_same_production_guard_not_concurrent_RPC":true}),
+        )
+    }
     pub(crate) fn require_joint_runtime(
         &self,
         runtime: &crate::distribution_range_handoff::NativeJointHandoffRuntime,
@@ -405,6 +430,11 @@ impl NativeInitialDataHost {
                 "OLD continuation changed original plan/runtime owner",
             ));
         }
+        owner
+            .predecessor
+            .as_ref()
+            .ok_or_else(|| invalid("OLD original pre-freeze predecessor absent"))?
+            .require_same_owner(step.historical_predecessor())?;
         if owner.actual.is_none() {
             let observation = runtime.close_old_for_initial_step(&step, parent)?;
             // Actual native/promise/pin ownership BEFORE the next fallible

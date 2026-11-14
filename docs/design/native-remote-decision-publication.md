@@ -264,3 +264,17 @@ adapter still require independent execution. Joined ingress is not enabled by
 this producer, and it is not a repeated-movement or production qualification.
 No cold reconstruction, new attempts after uncertainty, catalogue votes,
 activation/Open, final OLD retirement or controller integration is supplied.
+
+
+A follow-up source review of the frozen predecessor component identified a
+concurrent-admission ambiguity: two still-current steps could capture distinct
+owners before either inserted the original table entry. The successor checks
+exact predecessor allocation at both actual retained admission sites, before
+constraints, freeze or native closure. A losing duplicate capture refuses
+before effects; a genuinely fresh step retrieves the table's original owner.
+The original outcome also continues to reject replacement owners. The existing
+`RemoteOldFrames` case adds one separately bounded component observation using
+two genuine pre-freeze DB producers and that same production guard, recording
+its refusal and unchanged native-close absence before assertions. It is not a
+concurrent TCP schedule test, a new runtime case or proof of the Serving profile.
+The original frozen source and all failed qualification evidence remain intact.

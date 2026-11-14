@@ -17,6 +17,16 @@ enum Profile {
     },
 }
 impl NativeWriterHistoricalPredecessor {
+    /// Exact original allocation only, before a retained caller may initiate
+    /// constraints/freeze/closure. Equal DATA does not join a second capture.
+    pub(crate) fn require_same_owner(&self, candidate: &Self) -> Result<()> {
+        if !std::ptr::eq(self, candidate) {
+            return Err(invalid(
+                "OLD admission changed original pre-freeze predecessor owner; retry outside owner",
+            ));
+        }
+        Ok(())
+    }
     /// Full original database identity for pre/post OLD-step validation. This
     /// is not called while a caller already holds the commit-hook guard.
     pub(crate) fn require_original_database(

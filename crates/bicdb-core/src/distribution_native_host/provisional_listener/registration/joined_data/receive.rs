@@ -17,7 +17,7 @@ use crate::distribution_consensus::{
 };
 use crate::distribution_data::{ClusterServiceOpenGuard, RangeWriteServiceSlotGuard};
 use crate::distribution_range_consensus::RangeWriteStore;
-use crate::distribution_range_recovery::HandoffRoleAdmission;
+use crate::distribution_range_recovery::{HandoffRoleAdmission, RangeRecoveryRuntime};
 pub(crate) use install::NativeJoinedRemoteInstallPreflight;
 pub(crate) use preflight::NativeJoinedRangeReceivePreflight;
 

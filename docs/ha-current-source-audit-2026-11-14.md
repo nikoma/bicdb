@@ -67,9 +67,9 @@ mean passed/failed/ignored. Its
 [Rails run](https://github.com/nikoma/bicdb/actions/runs/43608687112) passed
 20 runs/100 assertions. Serial native **failed: 324 passed, 13 failed, one
 ignored** in 3,755.32 s, with the same thirteen failing cases as b779. The
-remaining-workspace job is still running at this checkpoint. These results
-neither repair nor reclassify the failed b779 native run. No source/head is
-changed while its evidence is collected.
+remaining-workspace job passed; the complete required run is **failed** solely
+on the native job. These results neither repair nor reclassify the failed b779
+native run. Its source/head remains preserved with its evidence.
 
 The retained diagnostics narrow issue195 without establishing an underlying
 CPU or I/O cause. All twelve activation errors end at

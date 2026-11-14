@@ -27,3 +27,32 @@ impl ClusterDataNodeService {
         )
     }
 }
+
+impl ClusterDataNodeService {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn publish_remote_old_decision(
+        &mut self,
+        writer: &crate::db::NativeWriterHostState,
+        native: &crate::db::NativeJointOldCloseReceipt,
+        promise: &NativeJointOldPromiseReceipt,
+        frozen: &FrozenRangeMutationPermit,
+        admission: &crate::distribution_range_handoff::NativeRemoteDecisionAdmission<'_>,
+        attempt: &mut crate::db::NativeRemoteJointDecisionAttempt,
+        parent: &CancellationToken,
+    ) -> Result<crate::db::NativeJointDecisionReceipt> {
+        parent.check()?;
+        admission.require_old_parts(native, promise, frozen, writer)?;
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
+        self.require_native_catalog_database(&database)?;
+        database.publish_remote_old_native_decision(
+            writer,
+            native,
+            promise,
+            frozen,
+            &self.range_writes,
+            admission,
+            attempt,
+            parent,
+        )
+    }
+}

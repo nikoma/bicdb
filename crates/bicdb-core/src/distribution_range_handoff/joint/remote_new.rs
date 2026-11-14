@@ -11,7 +11,7 @@ mod decision;
 mod participant;
 pub(crate) use decision::{
     NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,
-    NativeRemoteDecisionSourceData,
+    NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1,
 };
 pub(crate) use participant::{
     NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit, NativeRemoteNewTargetPinIssuance,

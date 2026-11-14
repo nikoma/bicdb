@@ -143,6 +143,7 @@ impl NativeRegisteredReplicaAdmission {
                 NativeJointHandoffPlan::from_actual_role_and_own(role, &first.own, first.business)?;
             let source = backend.transport.fetch_remote_decision_source(
                 &plan,
+                &state,
                 &request.manifest,
                 &first.own,
                 first.business,

@@ -2,6 +2,7 @@
 //! S2 export retirement. No local OLD/NEW owner is passed to an RPC caller.
 use super::*;
 mod remote_decision_tests;
+mod remote_old_decision_tests;
 use crate::distribution_range_handoff::{
     NativeRemoteNewFactSetV1, NativeRemoteNewOperationV1 as NewOp, NativeRemoteNewRequestV1,
     NativeRemoteNewRound,
@@ -9,7 +10,8 @@ use crate::distribution_range_handoff::{
 use crate::distribution_transport::AuthenticatedNativeRemoteNewFrame;
 
 pub(super) fn is_case(case: SourceCase) -> bool {
-    remote_decision_tests::is_case(case)
+    remote_old_decision_tests::is_case(case)
+        || remote_decision_tests::is_case(case)
         || matches!(
             case,
             SourceCase::TargetRemoteNewPins
@@ -140,7 +142,7 @@ fn gates(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn exercise(
     case: SourceCase,
-    _controls: &mut [NativeMetadataControlHost],
+    controls: &mut [NativeMetadataControlHost],
     clients: &[Arc<TcpClusterRelocationTransport>],
     services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
     target_control: &NativeMetadataControlHost,
@@ -355,6 +357,26 @@ pub(super) fn exercise(
     assert_eq!(native_before, native_after);
     assert_eq!(target_before, target_after);
     assert!(!factory.database.read().commit_admission_ready());
+    if remote_old_decision_tests::is_case(case) {
+        remote_old_decision_tests::exercise(
+            case,
+            controls,
+            clients,
+            services,
+            target_control,
+            factory,
+            pending,
+            ranges,
+            mf,
+            phase_id,
+            &facts,
+            &plan,
+            acknowledged,
+            output,
+            journal,
+            &mut ledger,
+        );
+    }
     if remote_decision_tests::is_case(case) {
         remote_decision_tests::exercise(
             case,

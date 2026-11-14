@@ -156,3 +156,56 @@ The no-TLS successor also rejects this semantic flag in ordinary format
 validation, before open/migration can silently accept its unsupported profile.
 The reader-only unit checks that real format validation refusal as well; it
 does not reopen a live database or construct a remote committed record.
+
+## Source-only extension: genuine OLD native publishers
+
+A separate successor adds the necessary OLD-only/survivor publisher, still
+without catalogue voting, a dual-configuration durability quorum, Open or
+Serving. Its added controls are uncompiled/unexecuted at this source stage.
+
+`NativeDecisionSourceProvenance` is a **distinct readonly ingress**. It accepts
+only `DecisionProvenance` and compares the actual mTLS observer ID/incarnation,
+claimed birth, retained plan's OLD/NEW membership, and fresh source OWN/current
+MStore enrollment. Original Start, Describe and capture APIs remain target-only.
+A nonparticipant, wrong actual observer, wrong enrolled birth, Start or Describe
+on the readonly ingress refuses without a capture or native publication.
+
+The private transport producer now consumes the genuine original remote NEW
+participant before fetching. Its enrolled observer birth must equal that
+participant's actual protected native snapshot and current OWN, before and
+after the real pinned exchange. The sealed result retains the actual transport
+observer ID and bound birth; the publication admission checks them against the
+same original participant again. Decoded request/reply DATA cannot mint it.
+
+INITIAL `PublishDecision` independently fetches source evidence and the exact
+NEW set, then obtains fresh actual recipient Role/OWN/MStore. It uses the
+original OLD observation, exact native close/promise, installed writer State,
+DB/open, hook/coordinator/registry, Store and original Frozen. The lexical OLD
+scope checks pure stored predecessor-policy facts and original hook identity;
+it does **not** require effective ordinary Serving while CLOSED. The ordinary
+State, APP/Strong and generic service accessors are unchanged.
+
+The common private native writer accepts an enum containing either a real
+Registered exclusion scope or this real OLD scope. Local native facts are
+selected from the corresponding actual image base or original close receipt;
+there is no Registered cast, manufactured local QQ or cross-node comparison
+of database sequence numbers. OLD's Frozen remains owned by its original
+handoff session. The target A/source MF/session remain protected correlation
+in every node's sidecar. An OLD sidecar must match its actual original native
+close/birth; a target sidecar must match its real image snapshot. Both require
+the same complete decision body, while their local native/provenance hashes
+and xids are naturally distinct.
+
+Four added genuine pipeline cases cover retiree publication with actual
+postcommit cancellation/fresh same-xid reconciliation, survivor publication,
+a nonleader donor's independent self-callback/publication, and the readonly
+observer/capture-ingress refusals. Existing four Registered cases and their
+budgets/assertions remain. The OLD checks preserve native candidate bytes,
+source ACK/frame evidence, catalogue/rows/other-range state and the original
+freeze. An actual ordinary gate attempt must still refuse before and after;
+this is a **gate component check**, not an end-to-end APP/SQL admission result.
+
+A real remote receipt is still only a native fact. No implementation here
+counts OLD/new majorities or changes placement, routing, authority, ordinary
+read readiness, catalogue decision state, activation/Open, final source
+custody retirement or production qualification.

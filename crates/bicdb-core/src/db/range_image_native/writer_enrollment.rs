@@ -58,6 +58,10 @@ pub(crate) use registered_remote_mutation::NativeRegisteredRemoteMutationScope;
 pub(in crate::db::range_image_native) use registered_remote_mutation::RegisteredRemoteMutationScopeLiveness;
 #[cfg(feature = "tls-replication")]
 mod old_constraints;
+#[cfg(feature = "tls-replication")]
+mod remote_old_decision;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_old_decision::NativeRemoteOldDecisionWriterScope;
 mod registry_refresh;
 #[cfg(feature = "tls-replication")]
 pub(crate) use assigned_install::NativeAssignedWriterInstallAttempt;

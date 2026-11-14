@@ -44,10 +44,11 @@ mod remote_new;
 #[cfg(feature = "tls-replication")]
 pub(crate) use remote_new::{
     NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,
-    NativeRemoteDecisionSourceData, NativeRemoteNewFactSetV1, NativeRemoteNewHandoffV1,
-    NativeRemoteNewMaterializedQuorum, NativeRemoteNewOperationV1, NativeRemoteNewParticipant,
-    NativeRemoteNewPinHandoffPermit, NativeRemoteNewReplyV1, NativeRemoteNewRequestV1,
-    NativeRemoteNewRound, NativeRemoteNewSnapshotV1, NativeRemoteNewTargetPinIssuance,
+    NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1, NativeRemoteNewFactSetV1,
+    NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum, NativeRemoteNewOperationV1,
+    NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit, NativeRemoteNewReplyV1,
+    NativeRemoteNewRequestV1, NativeRemoteNewRound, NativeRemoteNewSnapshotV1,
+    NativeRemoteNewTargetPinIssuance,
 };
 
 #[cfg(feature = "tls-replication")]

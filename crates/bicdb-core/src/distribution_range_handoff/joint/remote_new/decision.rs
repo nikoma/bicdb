@@ -137,7 +137,8 @@ impl NativeRemoteDecisionReceiptV1 {
         self.binding.require_manifest(&request.manifest)?;
         if self.phase_id != request.phase_id
             || self.fact_set_sha256 != facts.checksum_sha256
-            || self.node_id != request.manifest.target_id
+            || (self.node_id != request.manifest.target_id
+                && !request.manifest.old_members.contains_key(&self.node_id))
             || self.native_page_xid == 0
             || !is_digest(&self.decision_sha256)
             || !is_digest(&self.native_record_sha256)
@@ -174,8 +175,6 @@ impl NativeRemoteDecisionBindingV1 {
         if self.phase_id.is_nil()
             || self.participant.binding != self.binding
             || self.participant.phase_id != self.phase_id
-            || self.participant.node_id != self.binding.target_id
-            || self.participant.birth != self.binding.target_birth
             || self.participant.database_open.is_empty()
             || self.participant.store_open.is_nil()
             || self.participant.metadata_store_id.is_nil()
@@ -187,6 +186,62 @@ impl NativeRemoteDecisionBindingV1 {
                 "remote DECISION durable binding changed original actual target/MF/phase",
             ));
         }
+        if self.participant.node_id == self.binding.target_id {
+            if self.participant.birth != self.binding.target_birth
+                || self.participant.new_materialized.is_none()
+            {
+                return Err(invalid(
+                    "remote DECISION target binding lacks genuine image point",
+                ));
+            }
+        } else {
+            let old =
+                self.participant.original_old.as_ref().ok_or_else(|| {
+                    invalid("remote DECISION non-target lacks original OLD point")
+                })?;
+            let record = self
+                .source_proof
+                .original_close_records
+                .get(&self.participant.node_id)
+                .ok_or_else(|| {
+                    invalid("remote DECISION OLD participant not in original certificate")
+                })?;
+            record.require_materialized_facts(old)?;
+            if old.node_id != self.participant.node_id
+                || old.birth_id != self.participant.birth.birth_id()
+                || old.birth_sha256 != self.participant.birth.birth_sha256()
+            {
+                return Err(invalid(
+                    "remote DECISION OLD binding changes actual original native birth",
+                ));
+            }
+        }
         Ok(())
+    }
+}
+
+/// Readonly participant ingress, DISTINCT from source capture/discovery APIs.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct NativeRemoteDecisionSourceRequestV1 {
+    pub source: crate::distribution_range_image::NativeSourceDiscoveryRequestV1,
+    pub observer_id: ClusterNodeId,
+    pub observer_birth: crate::distribution::NativeStoreBirthV1,
+}
+impl NativeRemoteDecisionSourceRequestV1 {
+    pub(crate) fn require_shape(&self) -> Result<()> {
+        self.source.require_shape()?;
+        if self.source.operation
+            != crate::distribution_range_image::NativeSourceDiscoveryOperationV1::DecisionProvenance
+            || self.observer_birth.node_incarnation() == 0
+        {
+            return Err(invalid(
+                "participant provenance ingress accepts only readonly decision observation",
+            ));
+        }
+        self.observer_birth.validate_for(
+            Some(self.source.bootstrap_id),
+            self.observer_birth.node_incarnation(),
+        )
     }
 }

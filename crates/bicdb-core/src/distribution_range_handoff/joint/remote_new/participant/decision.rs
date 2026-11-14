@@ -44,6 +44,29 @@ impl NativeRemoteDecisionAdmission<'_> {
         value.validate()?;
         Ok(value)
     }
+    pub(crate) fn plan(&self) -> &NativeJointHandoffPlan {
+        self.plan
+    }
+    pub(crate) fn require_old_parts(
+        &self,
+        native: &crate::db::NativeJointOldCloseReceipt,
+        promise: &crate::distribution_range_consensus::NativeJointOldPromiseReceipt,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+        writer: &crate::db::NativeWriterHostState,
+    ) -> Result<()> {
+        match &self.participant.original {
+            OriginalParticipant::Old {
+                actual,
+                writer: original,
+                ..
+            } if std::ptr::eq(original.as_ref(), writer) => {
+                actual.require_remote_decision_parts(native, promise, frozen)
+            }
+            _ => Err(invalid(
+                "remote OLD decision changed genuine original participant/writer",
+            )),
+        }
+    }
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
         self.data
     }
@@ -110,31 +133,20 @@ impl NativeRemoteNewParticipant {
                 "remote DECISION needs its explicit production operation",
             ));
         };
-        let (target, service, frozen, owner) = match &self.original {
-            OriginalParticipant::Registered {
-                target,
-                service,
-                frozen,
-                owner,
-                ..
-            } => (
-                target,
-                service,
-                frozen,
+        let original_registered_owner = match &self.original {
+            OriginalParticipant::Registered { owner, .. } => Some(
                 owner
                     .upgrade()
-                    .ok_or_else(|| invalid("remote DECISION original owner ended"))?,
+                    .ok_or_else(|| invalid("remote DECISION original Registered owner ended"))?,
             ),
-            _ => {
-                return Err(invalid(
-                    "OLD-only remote native DECISION publisher not yet implemented",
-                ))
-            }
+            OriginalParticipant::Old { .. } => None,
         };
         let handoff = self
             .handoff_outcome()?
             .ok_or_else(|| invalid("remote DECISION original pin handoff incomplete"))?;
-        if fetched.actual_observer() != &self.snapshot.node_id
+        if source.actual_observer() != &self.snapshot.node_id
+            || source.actual_observer_birth() != &self.snapshot.birth
+            || fetched.actual_observer() != &self.snapshot.node_id
             || fetched.facts() != facts
             || handoff.fact_set_sha256 != facts.checksum_sha256
             || role.local_node_id() != &self.snapshot.node_id
@@ -242,16 +254,14 @@ impl NativeRemoteNewParticipant {
             plan: &plan,
         };
         admission.require_current()?;
-        owner.require_first_policy_attempt_lifetime()?;
-        let receipt =
-            crate::distribution_data::ClusterDataNodeService::publish_remote_registered_decision(
-                service,
-                target,
-                frozen.try_as_frozen()?,
-                &admission,
-                retained.native.as_mut().unwrap(),
-                parent,
-            )?;
+        if let Some(owner) = &original_registered_owner {
+            owner.require_first_policy_attempt_lifetime()?;
+        }
+        let receipt=match &self.original {
+            OriginalParticipant::Registered {target,service,frozen,..}=>crate::distribution_data::ClusterDataNodeService::publish_remote_registered_decision(
+                service,target,frozen.try_as_frozen()?,&admission,retained.native.as_mut().unwrap(),parent)?,
+            OriginalParticipant::Old {actual,writer,..}=>actual.publish_remote_decision(writer,&admission,retained.native.as_mut().unwrap(),parent)?,
+        };
         admission.require_current()?;
         context.metadata.require_external_current()?;
         parent.check()?;
@@ -299,6 +309,7 @@ impl NativeRemoteNewParticipant {
         Ok(
             serde_json::json!({"expected":held.expected,"retained_request_contexts":held.contexts.len(),
             "retained_encoded_bytes":held.encoded_bytes,"native":held.native.as_ref().map(|n|n.test_evidence()),
+            "source_callback_actual_observers":held.contexts.iter().map(|c|serde_json::json!({"node":c.source.actual_observer(),"birth":c.source.actual_observer_birth()})).collect::<Vec<_>>(),
             "original_phase":self.snapshot.phase_id,"original_MF_binding":self.snapshot.binding,
             "no_catalogue_vote_or_serving":true}),
         )

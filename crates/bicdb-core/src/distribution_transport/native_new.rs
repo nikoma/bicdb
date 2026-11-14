@@ -70,57 +70,46 @@ impl AuthenticatedNativeRemoteNewFactSet {
 /// Only an actual native-pinned donor exchange constructs this distinct fact.
 /// The donor reads its ORIGINAL retained certificate, not caller MF constraints.
 pub(crate) struct AuthenticatedNativeRemoteDecisionSource {
-    actual: super::native_source_discovery::AuthenticatedNativeSourceDiscovery,
+    reply: crate::distribution_range_image::NativeSourceDiscoveryReplyV1,
+    request: CancellationToken,
+    actual_observer: ClusterNodeId,
+    actual_observer_birth: crate::distribution::NativeStoreBirthV1,
 }
 impl AuthenticatedNativeRemoteDecisionSource {
+    pub(crate) fn actual_observer(&self) -> &ClusterNodeId {
+        &self.actual_observer
+    }
+    pub(crate) fn actual_observer_birth(&self) -> &crate::distribution::NativeStoreBirthV1 {
+        &self.actual_observer_birth
+    }
     pub(crate) fn historical_provenance(
         &self,
     ) -> &crate::distribution_range_handoff::NativeRemoteDecisionSourceData {
-        self.actual
-            .reply()
+        self.reply
             .decision_provenance
             .as_ref()
-            .expect("actual transport constructor requires source provenance")
+            .expect("actual transport requires source provenance")
     }
     pub(crate) fn provenance_sha256(&self) -> &str {
-        &self
-            .actual
-            .reply()
-            .decision_provenance
-            .as_ref()
-            .expect("actual transport constructor requires source provenance")
-            .checksum_sha256
+        &self.historical_provenance().checksum_sha256
     }
-
     pub(crate) fn require_request_live(&self) -> Result<()> {
-        self.actual.require_request_live()
+        self.request.check()
     }
     pub(crate) fn data(
         &self,
         manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
     ) -> Result<&crate::distribution_range_handoff::NativeRemoteDecisionSourceData> {
         self.require_request_live()?;
-        if self.actual.reply().manifest.checksum_sha256 != manifest.checksum_sha256 {
-            return Err(transport_error(
-                "remote decision source returned another original MF",
-            ));
+        if self.reply.manifest.checksum_sha256 != manifest.checksum_sha256 {
+            return Err(transport_error("decision source changed original MF"));
         }
-        let data = self
-            .actual
-            .reply()
-            .decision_provenance
-            .as_ref()
-            .ok_or_else(|| {
-                transport_error("remote decision source omitted original constraints")
-            })?;
+        let data = self.historical_provenance();
         data.require_manifest(manifest)?;
         Ok(data)
     }
     pub(crate) fn retained_encoded_bytes(&self) -> Result<usize> {
-        Ok(
-            crate::distribution_range_image::bounded_json(self.actual.reply(), 4 * 1024 * 1024)?
-                .len(),
-        )
+        Ok(crate::distribution_range_image::bounded_json(&self.reply, 4 * 1024 * 1024)?.len())
     }
 }
 pub(crate) struct AuthenticatedNativeRemoteNewFrame {
@@ -161,32 +150,144 @@ impl AuthenticatedNativeRemoteNewFrame {
     }
 }
 impl TcpClusterRelocationTransport {
+    #[cfg(test)]
+    pub(crate) fn test_send_participant_decision_provenance(
+        &self,
+        request: &crate::distribution_range_handoff::NativeRemoteDecisionSourceRequestV1,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_image::NativeSourceDiscoveryReplyV1> {
+        let (response, _, _) = self.call_with_native_destination_cancellable(
+            parent,
+            &request.source.source_id,
+            ClusterDataRequest::NativeDecisionSourceProvenance {
+                request: request.clone(),
+            },
+        )?;
+        match response {
+            ClusterDataResponse::NativeDecisionSourceProvenance(reply) => Ok(reply),
+            other => Err(unexpected_response(
+                "test-only participant provenance DATA",
+                other,
+            )),
+        }
+    }
     pub(crate) fn fetch_remote_decision_source(
         &self,
         plan: &crate::distribution_range_handoff::NativeJointHandoffPlan,
+        participant: &crate::distribution_range_handoff::NativeRemoteNewParticipant,
         manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
         own: &HostMetadataReadObservation,
         business: Uuid,
         parent: &CancellationToken,
     ) -> Result<AuthenticatedNativeRemoteDecisionSource> {
+        participant.require_current(parent)?;
+        let original = participant.snapshot();
+        if original.node_id != self.caller_node_id
+            || original.binding
+                != crate::distribution_range_image::NativeSourceExportBindingV1::from_manifest(
+                    manifest,
+                )?
+        {
+            return Err(transport_error(
+                "decision source observer changed genuine original participant",
+            ));
+        }
+        super::native_source_export::require_client_point(
+            self,
+            manifest,
+            own,
+            business,
+            &self.caller_node_id,
+        )?;
+        let current = own.committed_topology(business)?;
+        let observer = current
+            .nodes
+            .get(&self.caller_node_id)
+            .ok_or_else(|| transport_error("decision source observer absent"))?;
+        if !plan.old_members().contains_key(&self.caller_node_id)
+            && !plan.new_members().contains_key(&self.caller_node_id)
+        {
+            return Err(transport_error(
+                "decision source observer outside fixed OLD/NEW participants",
+            ));
+        }
+        let observer_birth = plan.enrolled_birth(&self.caller_node_id)?;
+        if observer.native_store_birth_v1.as_ref() != Some(observer_birth)
+            || observer_birth != &original.birth
+        {
+            return Err(transport_error(
+                "decision source observer enrolled birth changed",
+            ));
+        }
         let remaining = parent
             .deadline()
             .and_then(|d| d.checked_duration_since(Instant::now()))
             .ok_or(BicDbError::QueryTimedOut)?;
-        let request = crate::distribution_range_image::NativeSourceDiscoveryRequestV1::from_plan(
-            plan,
-            manifest.source_id.clone(),
-            manifest.target_id.clone(),
-            manifest.target_attempt,
-            crate::distribution_range_image::NativeSourceDiscoveryOperationV1::DecisionProvenance,
-            own,
-            business,
-            remaining.as_millis().clamp(1, 4000) as u64,
+        let source_request=crate::distribution_range_image::NativeSourceDiscoveryRequestV1::from_plan(plan,
+            manifest.source_id.clone(),manifest.target_id.clone(),manifest.target_attempt,
+            crate::distribution_range_image::NativeSourceDiscoveryOperationV1::DecisionProvenance,own,business,
+            remaining.as_millis().clamp(1,4000) as u64)?;
+        let request = crate::distribution_range_handoff::NativeRemoteDecisionSourceRequestV1 {
+            source: source_request,
+            observer_id: self.caller_node_id.clone(),
+            observer_birth: observer_birth.clone(),
+        };
+        request.require_shape()?;
+        let token = request.source.cancellation(parent)?;
+        self.require_numeric_metadata_destination(&manifest.source_id, &token)?;
+        let (response, peer, birth) = self.call_with_native_destination_cancellable(
+            &token,
+            &manifest.source_id,
+            ClusterDataRequest::NativeDecisionSourceProvenance {
+                request: request.clone(),
+            },
         )?;
-        let actual = self.request_remote_image_source_discovery(plan, &request, own, parent)?;
-        let result = AuthenticatedNativeRemoteDecisionSource { actual };
-        result.data(manifest)?;
-        Ok(result)
+        token.check()?;
+        own.require_live_request(business)?;
+        let source = current
+            .nodes
+            .get(&manifest.source_id)
+            .ok_or_else(|| transport_error("decision source disappeared"))?;
+        if peer.node_id() != &manifest.source_id
+            || peer.member_incarnation() != source.incarnation
+            || peer.plaintext_loopback()
+            || peer
+                .certificate_sha256()
+                .is_none_or(|pin| !source.accepts_tls_certificate_sha256(pin))
+            || birth.as_ref() != Some(&manifest.source_birth)
+        {
+            return Err(transport_error(
+                "decision source actual pinned TLS/native identity changed",
+            ));
+        }
+        let reply = match response {
+            ClusterDataResponse::NativeDecisionSourceProvenance(reply) => reply,
+            other => {
+                return Err(unexpected_response(
+                    "participant decision provenance",
+                    other,
+                ))
+            }
+        };
+        if reply.request != request.source
+            || reply.checksum()? != reply.checksum_sha256
+            || reply.source_metadata_context.is_nil()
+            || reply.source_metadata_term < own.term()
+            || reply.source_metadata_read_index < own.read_index()
+        {
+            return Err(transport_error(
+                "decision source exact request/current source authority changed",
+            ));
+        }
+        participant.require_current(parent)?;
+        let frame = AuthenticatedNativeRemoteDecisionSource {
+            reply,
+            request: token,
+            actual_observer: self.caller_node_id.clone(),
+            actual_observer_birth: observer_birth.clone(),
+        };
+        frame.data(manifest)?;
+        Ok(frame)
     }
     pub(crate) fn observe_remote_source_export_terminal(
         &self,

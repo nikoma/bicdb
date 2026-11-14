@@ -44,3 +44,11 @@ reviewable; this compact packet does not claim to embed all raw input. Original
 Azure evidence and recorded teardown remain unchanged. Physical four-to-five
 convergence, zero lost acknowledged commits, stable post-convergence throughput,
 RPO/RTO and production admission remain unqualified.
+
+The separate broker-refusal CI corroboration pins two actual named passes in
+old174 Core. One test covers both broker-only and mixed branches before WAL;
+the other preserves legacy local outbox behavior. This adds historical CI
+evidence to the source erratum, not a new execution or broker failover proof.
+Whole-database streaming has a separate exporter/importer coverage gap for
+broker/sync frames; the born-native refusal must not be generalized to that
+legacy-commit mode or used to promise its outbox survival.

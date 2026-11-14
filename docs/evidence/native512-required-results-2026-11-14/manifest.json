@@ -113,6 +113,11 @@
       "path": "ha512-custody-composition-static-checks.json",
       "bytes": 2426,
       "sha256": "6829fc07bcb724db3eded9eba2c369381678aedf7a5adcdd18c95bdc57e655e0"
+    },
+    {
+      "path": "native-broker-refusal-ci-corroboration-1742776.json",
+      "bytes": 1985,
+      "sha256": "fb559a9b6f9ce49554208512316bbb1b4efc4aaaadb228dffb8f482151f4d4c9"
     }
   ],
   "raw_custody": "complete rawCIlogs and ZIPs retained outsideGit under/root/bicdb-ha-private-evidence; linked run/job/rawSHA in individualreceipts. This compact packet includes completepercase nativefailure sections, not allrawlogs/DBcustody.",

@@ -1,0 +1,29 @@
+{
+  "source": "1742776ab02957a053aded2ad4f665500d9325bf",
+  "actual_checkout": "4700100a7741ffe402e0c0281201e4f1a6d0f0a6",
+  "run": 43581326157,
+  "job": 132406489569,
+  "observed_at_utc": "2026-11-14T11:11:20.811447+00:00",
+  "classification": "passed exact historical component refusal controls; current changedhead not executed",
+  "named_pass_lines": {
+    "native_writer_broker_effects_refuse_before_wal_even_without_record_mutations": {
+      "line": 24578,
+      "raw_line": "2026-11-14T09:46:42.8341654Z test db::range_image_native::writer_enrollment::tests::native_writer_broker_effects_refuse_before_wal_even_without_record_mutations ... ok"
+    },
+    "native_writer_broker_effect_refusal_preserves_legacy_transactional_outbox": {
+      "line": 24569,
+      "raw_line": "2026-11-14T09:46:42.6624589Z test db::range_image_native::writer_enrollment::tests::native_writer_broker_effect_refusal_preserves_legacy_transactional_outbox ... ok"
+    }
+  },
+  "raw_bytes": 2794405,
+  "raw_sha256": "b06ac1f1ea7015b028ecfa5939f88b11798cfe7d0cc48f72ab4f21d533f25c88",
+  "test_source_path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/tests.rs",
+  "test_source_sha256": "189a25db45251d58354c4845e7c3bb05154c5c9a8d5ff2d98709686dc6d384ed",
+  "scope": [
+    "First named test is one executed Rust test with broker-only and mixedrow/broker branches, not two additional test counts.",
+    "It asserts Unsupported, actualtransactionAborted, unchanged WAL written_seq/commits, unchanged range catalogue, rangeindex/visibility unchanged, row absent and broker empty.",
+    "Second named test preserves legacy transactionaloutbox behavior; this does not prove standby/relocation replication.",
+    "Original source audit ba2 and correctionaf6 remain byte-identical; this later check adds actualCI corroboration, not a new execution.",
+    "No broker replication/failover, native broker support, physical/production qualification or current artifact acceptance inferred."
+  ]
+}

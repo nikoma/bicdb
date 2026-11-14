@@ -30428,20 +30428,28 @@ mod event_horizon_tests {
         // *lagging* peer still converges from a bundle (asserted above); a
         // peer with no history needs the snapshot path.
         drop(db);
-        let mut archive = Vec::new();
-        crate::replication_transport::write_snapshot_archive(&temp.path().join("a"), &mut archive)
+        // The archive transport API exists only with TLS replication. Keep
+        // trimming, lagging-peer and local-reopen assertions in every build.
+        #[cfg(feature = "tls-replication")]
+        {
+            let mut archive = Vec::new();
+            crate::replication_transport::write_snapshot_archive(
+                &temp.path().join("a"),
+                &mut archive,
+            )
             .unwrap();
-        let fresh_root = temp.path().join("b");
-        crate::replication_transport::restore_snapshot_archive_atomic(
-            &mut archive.as_slice(),
-            &fresh_root,
-            false,
-        )
-        .unwrap();
-        let mut fresh = audit_db(&fresh_root);
-        let kept = fresh.get("items", "kept").unwrap().unwrap();
-        assert_eq!(kept.metadata["value"], 4);
-        assert!(fresh.get("items", "doomed").unwrap().is_none());
+            let fresh_root = temp.path().join("b");
+            crate::replication_transport::restore_snapshot_archive_atomic(
+                &mut archive.as_slice(),
+                &fresh_root,
+                false,
+            )
+            .unwrap();
+            let mut fresh = audit_db(&fresh_root);
+            let kept = fresh.get("items", "kept").unwrap().unwrap();
+            assert_eq!(kept.metadata["value"], 4);
+            assert!(fresh.get("items", "doomed").unwrap().is_none());
+        }
 
         // And the local db still reconciles to the same state after reopen.
         let mut reopened = audit_db(&temp.path().join("a"));

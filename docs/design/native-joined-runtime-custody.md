@@ -52,3 +52,20 @@ transfer. Existing15-case Registered S2 passes do not qualify this Joined path.
 The first range's acknowledged values, Strong contract, native WAL and indexes
 must remain valid throughout. Actual disk-stall and cold/process-restart gates
 remain separate and open.
+
+## Source review correction: liveness at the actual gate point
+
+The initial untested source a24af4d8fe3e2b79fe4b0a1b9ef91282a68f9b3b checked
+liveness before `try_rotate_owner`, but that method waits on the gate mutex.
+A held actual gate could therefore cross the original deadline before owner
+mutation. The same issue affected a reacquired view after blocking validation.
+This is a source-confirmed contract gap, not an observed data-loss finding or
+an executed runtime failure. The source review is not described as qualified.
+
+The correction acquires the actual gate publication borrow with `try_lock`
+before final request/frame/Role/OWN/version checks. Point identity validation
+uses that held gate without recursive acquisition; owner publication is an
+infallible memory update. Reacquisition similarly holds an actual current-gate
+borrow through final checks and exact custody cloning. No original deadline or
+permit is renewed. A busy latch refuses without waiting or changing ownership.
+Primitive and complete Joined controls remain required before qualification.

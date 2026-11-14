@@ -52,7 +52,9 @@ preflight.with_rotation_point(
     request, frame, temporary_n_Arc_BY_VALUE,
     |point: &NativeJoinedRemoteRotationPoint<'_>| { ... },
 ) -> Result<R>
-point.require_current_memory(actual_unique_n: &FrozenRangeMutationPermit)
+point.require_owner_publication_memory(
+    actual_gate: &FrozenRangeOwnerPublication<'_>
+)
 point.publication_guard() -> NativeMetadataPublicationGuard<'_>
 ```
 
@@ -169,3 +171,9 @@ actual local metadata version and unique original N.
 This source ownership correction has not independently exercised host teardown,
 row import, second-range activation or stalled disk I/O. Those remain runtime
 acceptance gates.
+
+The final owner consumer acquires the actual nonblocking gate publication borrow
+BEFORE the final request/Role/OWN/frame checks. A raw-permit precheck followed by
+blocking `try_rotate_owner` is not the final liveness boundary. The point's sole
+final API requires that actual held gate borrow and performs no recursive gate
+acquisition. The original request deadlines are unchanged.

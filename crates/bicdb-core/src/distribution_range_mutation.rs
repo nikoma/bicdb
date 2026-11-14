@@ -170,6 +170,87 @@ pub(crate) struct FrozenRangeMutationPermit {
     lease: Uuid,
 }
 
+/// Actual gate acquired without waiting BEFORE the caller's final bounded
+/// authority checks. Fields remain private; this grants only the same owned
+/// permit's infallible owner publication, never native WAL or Serving.
+pub(crate) struct FrozenRangeOwnerPublication<'a> {
+    inner: &'a Arc<Inner>,
+    range_id: RangeId,
+    original_owner: &'a mut Uuid,
+    lease: Uuid,
+    next_owner: Uuid,
+    state: parking_lot::MappedMutexGuard<'a, RangeState>,
+}
+impl std::fmt::Debug for FrozenRangeOwnerPublication<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FrozenRangeOwnerPublication")
+            .field("range", &self.range_id)
+            .finish_non_exhaustive()
+    }
+}
+impl FrozenRangeOwnerPublication<'_> {
+    /// The actual map state and original permit were validated under this
+    /// still-held gate. No fallible operation, allocation, callback or gate
+    /// reacquisition occurs between the caller's final checks and this update.
+    pub(crate) fn publish(mut self) {
+        self.state.frozen = Some((self.next_owner, self.lease));
+        *self.original_owner = self.next_owner;
+    }
+}
+
+/// Read-only original gate publication borrow. Holding this opaque value
+/// permits final request checks and same-A view retention without a later
+/// mutex wait. It exposes no state, mutable permit, extraction or callback.
+/// An actual source read pin may remain: restoring custody is not a writer
+/// admission, and the existing quiescent-freeze contract permits that reader.
+pub(crate) struct FrozenRangeCurrentPublication<'a> {
+    _inner: &'a Arc<Inner>,
+    range_id: RangeId,
+    _owner: Uuid,
+    _lease: Uuid,
+    _state: parking_lot::MappedMutexGuard<'a, RangeState>,
+}
+impl std::fmt::Debug for FrozenRangeCurrentPublication<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FrozenRangeCurrentPublication")
+            .field("range", &self.range_id)
+            .finish_non_exhaustive()
+    }
+}
+
+fn require_frozen_publication_state(
+    state: Option<&RangeState>,
+    owner: Uuid,
+    lease: Uuid,
+) -> Result<()> {
+    let state = state.ok_or_else(|| invalid("frozen publication state absent"))?;
+    if state.poisoned
+        || state.frozen_owner_dropped
+        || state.frozen != Some((owner, lease))
+        || state.pending.is_some()
+        || !state.active.is_empty()
+        || !state.controlled.is_empty()
+    {
+        return Err(invalid(
+            "frozen publication is not the actual quiescent owner/lease",
+        ));
+    }
+    Ok(())
+}
+fn require_frozen_owner_publication_state(
+    state: Option<&RangeState>,
+    owner: Uuid,
+    lease: Uuid,
+) -> Result<()> {
+    require_frozen_publication_state(state, owner, lease)?;
+    if state.is_some_and(|state| state.capture_pin.is_some()) {
+        return Err(invalid(
+            "frozen owner publication still has an actual source read pin",
+        ));
+    }
+    Ok(())
+}
+
 /// Non-owning identity DATA for a retained bounded scan. Holding a Weak to the
 /// PERMIT Arc would prevent its legitimate unique N->A rotation. This retains
 /// only the gate identity and private lease nonce; it creates no exclusion,
@@ -182,6 +263,24 @@ pub(crate) struct FrozenRangeMutationIdentity {
     lease: Uuid,
 }
 impl FrozenRangeMutationIdentity {
+    /// Compare the original private gate/range/owner/lease while that ACTUAL
+    /// gate is already held. Unlike require_same_current this never relocks it.
+    pub(crate) fn require_in_owner_publication(
+        &self,
+        actual: &FrozenRangeOwnerPublication<'_>,
+    ) -> Result<()> {
+        if !Weak::ptr_eq(&self.inner, &Arc::downgrade(actual.inner))
+            || self.range_id != actual.range_id
+            || self.owner != *actual.original_owner
+            || self.lease != actual.lease
+        {
+            return Err(invalid(
+                "frozen publication changed original private gate/range/owner/lease",
+            ));
+        }
+        // The private map borrow prevents any intervening gate mutation.
+        require_frozen_owner_publication_state(Some(&actual.state), self.owner, self.lease)
+    }
     pub(crate) fn require_same_current(&self, permit: &FrozenRangeMutationPermit) -> Result<()> {
         if !Weak::ptr_eq(&self.inner, &Arc::downgrade(&permit.inner))
             || self.inner.upgrade().is_none()
@@ -723,6 +822,62 @@ impl RangeMutationGate {
 }
 
 impl FrozenRangeMutationPermit {
+    /// Acquire the actual gate NONBLOCKING before the caller's final Role,
+    /// OWN, frame, process and cancellation checks. No authority is inferred
+    /// here; the opaque returned guard supports only this original N->A update.
+    pub(crate) fn try_owner_publication(
+        &mut self,
+        next_owner: Uuid,
+    ) -> Result<FrozenRangeOwnerPublication<'_>> {
+        if next_owner.is_nil() {
+            return Err(invalid("new frozen publication owner is nil"));
+        }
+        let range_id = self.range_id;
+        let lease = self.lease;
+        let inner = &self.inner;
+        let owner = &mut self.owner;
+        let ranges = inner
+            .ranges
+            .try_lock()
+            .ok_or_else(|| invalid("frozen owner publication gate busy"))?;
+        require_frozen_owner_publication_state(ranges.get(&range_id), *owner, lease)?;
+        let state = parking_lot::MutexGuard::map(ranges, |ranges| {
+            ranges
+                .get_mut(&range_id)
+                .expect("validated actual gate state stays held")
+        });
+        Ok(FrozenRangeOwnerPublication {
+            inner,
+            range_id,
+            original_owner: owner,
+            lease,
+            next_owner,
+            state,
+        })
+    }
+    /// Hold this original immutable A gate across final memory checks and
+    /// actual view retention. Busy/nonquiescent states refuse without waiting.
+    pub(crate) fn try_current_publication(&self) -> Result<FrozenRangeCurrentPublication<'_>> {
+        let range_id = self.range_id;
+        let ranges = self
+            .inner
+            .ranges
+            .try_lock()
+            .ok_or_else(|| invalid("frozen current publication gate busy"))?;
+        require_frozen_publication_state(ranges.get(&range_id), self.owner, self.lease)?;
+        let state = parking_lot::MutexGuard::map(ranges, |ranges| {
+            ranges
+                .get_mut(&range_id)
+                .expect("validated actual current gate state stays held")
+        });
+        Ok(FrozenRangeCurrentPublication {
+            _inner: &self.inner,
+            range_id,
+            _owner: self.owner,
+            _lease: self.lease,
+            _state: state,
+        })
+    }
     pub(crate) fn observe_identity(&self) -> Result<FrozenRangeMutationIdentity> {
         let point = FrozenRangeMutationIdentity {
             inner: Arc::downgrade(&self.inner),
@@ -915,6 +1070,132 @@ mod tests {
         RangeId::new(id).unwrap()
     }
     fn assert_send_sync<T: Send + Sync>() {}
+    #[test]
+    fn frozen_publication_owner_guard_updates_only_original_after_checks() {
+        let gate = RangeMutationGate::default();
+        let original = Uuid::now_v7();
+        let next = Uuid::now_v7();
+        let mut frozen = Arc::new(gate.try_freeze(range(1), original).unwrap());
+        let identity = frozen.observe_identity().unwrap();
+        let actual = Arc::get_mut(&mut frozen).expect("identity must not pin the permit Arc");
+        let publication = actual.try_owner_publication(next).unwrap();
+        identity.require_in_owner_publication(&publication).unwrap();
+        publication.publish();
+        assert_eq!(frozen.owner(), next);
+        gate.validate_quiescent_frozen(range(1), &frozen).unwrap();
+        assert!(identity.require_same_current(&frozen).is_err());
+        assert!(gate.try_enter(range(1)).is_err());
+    }
+    #[test]
+    fn frozen_publication_busy_gate_refuses_without_wait_or_owner_change() {
+        let gate = RangeMutationGate::default();
+        let original = Uuid::now_v7();
+        let mut frozen = gate.try_freeze(range(1), original).unwrap();
+        let blocked = gate.inner.ranges.lock();
+        // This is the actual same-thread mutex hold. A blocking constructor
+        // would deadlock; both real try-lock operations must return refusal.
+        assert!(
+            matches!(frozen.try_owner_publication(Uuid::now_v7()), Err(BicDbError::Cluster(ref e)) if e.contains("gate busy"))
+        );
+        assert!(
+            matches!(frozen.try_current_publication(), Err(BicDbError::Cluster(ref e)) if e.contains("gate busy"))
+        );
+        drop(blocked);
+        assert_eq!(frozen.owner(), original);
+        gate.validate_quiescent_frozen(range(1), &frozen).unwrap();
+    }
+    #[test]
+    fn frozen_publication_expired_and_canceled_requests_drop_without_rotation() {
+        let gate = RangeMutationGate::default();
+        let original = Uuid::now_v7();
+        let mut frozen = gate.try_freeze(range(1), original).unwrap();
+        let identity = frozen.observe_identity().unwrap();
+        let deadline = Instant::now() + Duration::from_millis(3);
+        let expired = CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(deadline));
+        let publication = frozen.try_owner_publication(Uuid::now_v7()).unwrap();
+        while Instant::now() < deadline {
+            thread::yield_now(); // genuine monotonic expiry after gate acquisition
+        }
+        identity.require_in_owner_publication(&publication).unwrap();
+        assert!(matches!(expired.check(), Err(BicDbError::QueryTimedOut)));
+        drop(publication); // caller refused its final real deadline; no publish
+        let canceled = CancellationToken::new(Arc::new(AtomicBool::new(false)), None);
+        let publication = frozen.try_owner_publication(Uuid::now_v7()).unwrap();
+        canceled.cancel(); // actual token changes AFTER gate acquisition
+        identity.require_in_owner_publication(&publication).unwrap();
+        assert!(matches!(canceled.check(), Err(BicDbError::QueryCanceled)));
+        drop(publication);
+        let current = frozen.try_current_publication().unwrap();
+        assert!(matches!(canceled.check(), Err(BicDbError::QueryCanceled)));
+        drop(current);
+        assert_eq!(frozen.owner(), original);
+        identity.require_same_current(&frozen).unwrap();
+        assert!(gate.try_enter(range(1)).is_err());
+    }
+    #[test]
+    fn frozen_publication_identity_refuses_other_gate_range_and_refreeze() {
+        let gate = RangeMutationGate::default();
+        let other_gate = RangeMutationGate::default();
+        let original = Uuid::now_v7();
+        let frozen = gate.try_freeze(range(1), original).unwrap();
+        let identity = frozen.observe_identity().unwrap();
+        let mut foreign = other_gate.try_freeze(range(1), original).unwrap();
+        let guard = foreign.try_owner_publication(Uuid::now_v7()).unwrap();
+        assert!(identity.require_in_owner_publication(&guard).is_err());
+        drop(guard);
+        let mut other_range = gate.try_freeze(range(2), original).unwrap();
+        let guard = other_range.try_owner_publication(Uuid::now_v7()).unwrap();
+        assert!(identity.require_in_owner_publication(&guard).is_err());
+        drop(guard);
+        drop(frozen);
+        let mut replacement = gate.try_freeze(range(1), original).unwrap();
+        let guard = replacement.try_owner_publication(Uuid::now_v7()).unwrap();
+        assert!(identity.require_in_owner_publication(&guard).is_err());
+        drop(guard);
+        assert_eq!(foreign.owner(), original);
+        assert_eq!(other_range.owner(), original);
+        assert_eq!(replacement.owner(), original);
+        gate.validate_quiescent_frozen(range(1), &replacement)
+            .unwrap();
+    }
+    #[test]
+    fn frozen_publication_current_allows_read_pin_owner_and_controlled_write_refuse() {
+        let gate = RangeMutationGate::default();
+        let original = Uuid::now_v7();
+        let mut frozen = gate.try_freeze(range(1), original).unwrap();
+        let pin = gate.try_source_capture_read_pin(range(1), &frozen).unwrap();
+        assert!(frozen.try_owner_publication(Uuid::now_v7()).is_err());
+        let current = frozen.try_current_publication().unwrap();
+        assert!(gate.inner.ranges.try_lock().is_none());
+        drop(current);
+        gate.validate_source_capture_read_pin(range(1), &pin)
+            .unwrap();
+        drop(pin);
+        let controlled = gate.try_controlled_mutation(&frozen).unwrap();
+        assert!(frozen.try_owner_publication(Uuid::now_v7()).is_err());
+        assert!(frozen.try_current_publication().is_err());
+        drop(controlled);
+        assert!(frozen.try_owner_publication(Uuid::nil()).is_err());
+        assert_eq!(frozen.owner(), original);
+        let publication = frozen.try_owner_publication(Uuid::now_v7()).unwrap();
+        drop(publication);
+        gate.validate_quiescent_frozen(range(1), &frozen).unwrap();
+    }
+    #[test]
+    fn frozen_publication_current_guard_holds_original_gate_until_drop() {
+        let gate = RangeMutationGate::default();
+        let original = Uuid::now_v7();
+        let frozen = gate.try_freeze(range(1), original).unwrap();
+        let mut other = gate.try_freeze(range(2), original).unwrap();
+        let current = frozen.try_current_publication().unwrap();
+        assert!(gate.inner.ranges.try_lock().is_none());
+        assert!(other.try_owner_publication(Uuid::now_v7()).is_err());
+        drop(current);
+        assert_eq!(frozen.owner(), original);
+        assert_eq!(other.owner(), original);
+        gate.validate_quiescent_frozen(range(1), &frozen).unwrap();
+        gate.validate_quiescent_frozen(range(2), &other).unwrap();
+    }
     #[test]
     fn frozen_scan_identity_does_not_pin_permit_arc_and_rejects_rotated_owner() {
         let gate = RangeMutationGate::default();

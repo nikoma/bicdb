@@ -146,15 +146,20 @@ impl RangeRecoveryRuntime {
                 "Joined original A view is still owned; resume that host attempt",
             ));
         }
-        request.require_request_memory()?;
-        frame.require_request_live()?;
-        parent.check()?;
+        let frozen = actual.frozen.get().unwrap();
+        if frozen.owner() != preflight.attempt_id() {
+            return Err(invalid("Joined reacquisition changed original A owner"));
+        }
+        // Acquire the actual gate WITHOUT waiting before final liveness. This
+        // guard owns the checked gate point until the exact A view is cloned.
+        let _gate = frozen.try_current_publication()?;
         let _version = request
             .member()
             .publication_version()
             .try_publication_guard()?;
-        self.gate
-            .validate_quiescent_frozen(range, actual.frozen.get().unwrap())?;
+        request.require_request_memory()?;
+        frame.require_request_live()?;
+        parent.check()?;
         // No new capability is manufactured: clone the sole actual custody
         // cell under its map guard, then the host must retain this same view.
         Ok(Some(JoinedRemoteImageInstallFreeze {
@@ -210,7 +215,6 @@ impl RangeRecoveryRuntime {
                 .joined_remote
                 .insert(scope.range_id, custody.clone());
             let result = (|| -> Result<()> {
-                let _version = point.publication_guard()?;
                 let session = sessions
                     .current
                     .get_mut(&scope.range_id)
@@ -227,9 +231,11 @@ impl RangeRecoveryRuntime {
                     .ok_or_else(|| invalid("Joined original N is already leased"))?;
                 let frozen = Arc::get_mut(original)
                     .ok_or_else(|| invalid("Joined original N still has callback owners"))?;
-                point.require_current_memory(frozen)?;
+                let publication = frozen.try_owner_publication(attempt)?;
+                let _version = point.publication_guard()?;
+                point.require_owner_publication_memory(&publication)?;
                 parent.check()?;
-                frozen.try_rotate_owner(attempt)?;
+                publication.publish();
                 // All fallible validation precedes the actual take. The fresh
                 // preallocated cell/map retain A before returning or unwinding.
                 let frozen = Arc::try_unwrap(session.frozen.take().unwrap())

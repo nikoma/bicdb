@@ -95,6 +95,43 @@ impl RangeWriteStore {
         if image.is_none() {
             self.require_no_image_install(range)?;
         }
+        self.closed_writer_local_promise_after_image(data)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn closed_writer_local_promise_for_transition(
+        &self,
+        database: &crate::BicDb,
+        data: &crate::distribution_range_handoff::NativeJointDecisionData,
+        scope: &crate::db::NativeWriterClosedHistoricalReadScope<'_>,
+    ) -> Result<Option<crate::distribution_range_handoff::RangeHandoffPromise>> {
+        self.require_closed_transition_no_image(database, data, scope)?;
+        self.closed_writer_local_promise_after_image(data)
+    }
+    #[cfg(feature = "tls-replication")]
+    fn require_closed_transition_no_image(
+        &self,
+        database: &crate::BicDb,
+        data: &crate::distribution_range_handoff::NativeJointDecisionData,
+        scope: &crate::db::NativeWriterClosedHistoricalReadScope<'_>,
+    ) -> Result<()> {
+        scope.require_catalogue_identity(database, self, data)?;
+        self.require_native_writer_host_base()?;
+        if self
+            .catalog
+            .image_install_intents
+            .contains_key(&data.old_range().id)
+        {
+            return Err(range_write_error(
+                "CLOSED historical survivor conflicts with image install",
+            ));
+        }
+        Ok(())
+    }
+    fn closed_writer_local_promise_after_image(
+        &self,
+        data: &crate::distribution_range_handoff::NativeJointDecisionData,
+    ) -> Result<Option<crate::distribution_range_handoff::RangeHandoffPromise>> {
+        let range = data.old_range().id;
         if self.catalog.backup_fences.contains_key(&range) {
             return Err(range_write_error(
                 "CLOSED writer transition cannot bypass backup refusal",
@@ -138,12 +175,47 @@ impl RangeWriteStore {
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
         committed.require_current(database)?;
-        self.require_decided_joint_catalogue_base(
+        self.require_decided_joint_catalogue_base_with_no_image(
             database,
             committed.native_receipt(),
             image,
             frozen,
+            || self.require_joint_historical_no_image(database, committed, frozen),
         )
+    }
+    fn require_joint_historical_no_image(
+        &self,
+        database: &crate::BicDb,
+        committed: &CommittedNativeJointDecisionObservation,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        match committed.closed_writer_domain() {
+            None => self.require_no_image_install(committed.data().old_range().id),
+            #[cfg(feature = "tls-replication")]
+            Some(crate::db::NativeJointWriterDomain::Closed(actual)) => {
+                committed.require_current(database)?;
+                committed.require_native_publication_metadata(database, self)?;
+                actual.require_joint_historical_catalogue_identity(
+                    database,
+                    self,
+                    committed.data(),
+                    frozen,
+                )?;
+                if self
+                    .catalog
+                    .image_install_intents
+                    .contains_key(&committed.data().old_range().id)
+                {
+                    return Err(range_write_error(
+                        "protected CLOSED historical survivor conflicts with image install",
+                    ));
+                }
+                Ok(())
+            }
+            _ => Err(range_write_error(
+                "joint historical no-image read substituted a non-CLOSED owner",
+            )),
+        }
     }
     fn require_decided_joint_catalogue_base(
         &self,
@@ -151,6 +223,22 @@ impl RangeWriteStore {
         native: &crate::db::NativeJointDecisionReceipt,
         image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        self.require_decided_joint_catalogue_base_with_no_image(
+            database,
+            native,
+            image,
+            frozen,
+            || self.require_no_image_install(native.data().old_range().id),
+        )
+    }
+    fn require_decided_joint_catalogue_base_with_no_image(
+        &self,
+        database: &crate::BicDb,
+        native: &crate::db::NativeJointDecisionReceipt,
+        image: Option<&dyn NativeJointImageMaterialization>,
+        frozen: &FrozenRangeMutationPermit,
+        no_image: impl FnOnce() -> Result<()>,
     ) -> Result<()> {
         native.require_current(database)?;
         let data = native.data();
@@ -213,7 +301,7 @@ impl RangeWriteStore {
                     ));
                 }
             }
-            None => self.require_no_image_install(range)?,
+            None => no_image()?,
         }
         self.require_actual_abort_controls_covered(database, range, data.range_index())?;
         let progress = self.progress(range);
@@ -235,6 +323,26 @@ impl RangeWriteStore {
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<BTreeMap<u64, NativeReadCatalogueDecision>> {
         self.require_decided_joint_catalogue_base(database, native, image, frozen)?;
+        self.collect_native_resolved_decisions(
+            native.data().old_range().id,
+            native.data().range_index(),
+        )
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn closed_writer_catalogue_decisions_for_transition(
+        &self,
+        database: &crate::BicDb,
+        native: &crate::db::NativeJointDecisionReceipt,
+        frozen: &FrozenRangeMutationPermit,
+        scope: &crate::db::NativeWriterClosedHistoricalReadScope<'_>,
+    ) -> Result<BTreeMap<u64, NativeReadCatalogueDecision>> {
+        self.require_decided_joint_catalogue_base_with_no_image(
+            database,
+            native,
+            None,
+            frozen,
+            || self.require_closed_transition_no_image(database, native.data(), scope),
+        )?;
         self.collect_native_resolved_decisions(
             native.data().old_range().id,
             native.data().range_index(),

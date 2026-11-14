@@ -478,6 +478,7 @@ impl ClusterDataNodeService {
                 host,
                 business,
                 native,
+                &actual.writer_domain,
                 actual.lease.try_frozen()?,
                 parent,
             )
@@ -866,6 +867,7 @@ impl ClusterDataNodeService {
                     metadata,
                     business,
                     metadata_point,
+                    closed_writer_domain: Some(domain.clone()),
                 };
                 let result =
                     CommittedNativeJointDecisionObservation::from_actual_service(evidence)?;

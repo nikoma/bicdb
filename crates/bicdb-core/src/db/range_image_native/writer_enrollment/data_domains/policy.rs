@@ -7,7 +7,28 @@ use crate::distribution_consensus::{
 use crate::distribution_data::{
     ClusterDataNodeService, ClusterServiceOpenGuard, RangeWriteServiceSlotGuard,
 };
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
+
+/// Only local lock contention is retried, under the SAME already acquired OWN
+/// and caller. No network operation, proof renewal, engine guard or TTL change.
+fn lock_actual_metadata<'a>(
+    metadata: &'a Mutex<MetadataConsensusStore>,
+    require_live: impl Fn() -> Result<()>,
+) -> Result<MutexGuard<'a, MetadataConsensusStore>> {
+    for _ in 0..1024 {
+        require_live()?;
+        if let Some(actual) = metadata.try_lock_for(std::time::Duration::from_millis(5)) {
+            require_live()?;
+            return Ok(actual);
+        }
+        #[cfg(test)]
+        metadata_test_cut::fire("busy_slice", None);
+    }
+    require_live()?;
+    Err(invalid(
+        "writer DATA actual MStore contention slice bound exhausted",
+    ))
+}
 
 pub(crate) struct NativeWriterDataDomainPolicy {
     policy: SealedHostWriterEnrollment,
@@ -43,10 +64,13 @@ impl NativeWriterDataDomainPolicy {
                 actual.native_replica_listener_store_open_guard(),
             )
         };
+        #[cfg(test)]
+        metadata_test_cut::fire("before_acquire", Some(own.deadline()));
         let member = {
-            let actual = metadata
-                .try_lock()
-                .ok_or_else(|| invalid("writer DATA actual MStore busy"))?;
+            let actual = lock_actual_metadata(metadata, || {
+                parent.check()?;
+                own.require_live_request(business)
+            })?;
             actual.require_listener_database(&open)?;
             actual.observe_owned_native_metadata_member(&own, business, parent)?
         };
@@ -92,9 +116,7 @@ impl NativeWriterDataDomainPolicy {
             .metadata
             .upgrade()
             .ok_or_else(|| invalid("writer DATA actual MStore ended"))?;
-        let actual = metadata
-            .try_lock()
-            .ok_or_else(|| invalid("writer DATA actual MStore busy at boundary"))?;
+        let actual = lock_actual_metadata(&metadata, || self.require_live())?;
         actual.require_listener_database(&self.open)?;
         self.member.require_current(&actual)?;
         self.require_live()
@@ -134,5 +156,38 @@ impl NativeWriterDataDomainPolicy {
         self.member.require_database_point(db)?;
         self.member.publication_version().require_current_memory()?;
         self.require_live()
+    }
+}
+
+#[cfg(test)]
+mod metadata_test_cut {
+    use std::cell::RefCell;
+    pub(crate) type Cut = Box<dyn FnMut(&'static str, Option<std::time::Instant>)>;
+    thread_local! { static CUT: RefCell<Option<Cut>> = const { RefCell::new(None) }; }
+    pub(crate) struct Guard(Option<Cut>);
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            CUT.with(|slot| {
+                *slot.borrow_mut() = self.0.take();
+            });
+        }
+    }
+    pub(crate) fn install(cut: Cut) -> Guard {
+        Guard(CUT.with(|slot| slot.borrow_mut().replace(cut)))
+    }
+    pub(super) fn fire(stage: &'static str, deadline: Option<std::time::Instant>) {
+        CUT.with(|slot| {
+            if let Some(cut) = slot.borrow_mut().as_mut() {
+                cut(stage, deadline);
+            }
+        });
+    }
+}
+#[cfg(test)]
+impl BicDb {
+    pub(crate) fn test_writer_policy_metadata_cut(
+        cut: impl FnMut(&'static str, Option<std::time::Instant>) + 'static,
+    ) -> metadata_test_cut::Guard {
+        metadata_test_cut::install(Box::new(cut))
     }
 }

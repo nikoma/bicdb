@@ -171,7 +171,10 @@ fn archive(generation: Uuid, sequence: u32) -> String {
 }
 
 mod closed;
-pub(crate) use closed::{NativeClosedWriterDomain, NativeWriterDataDomainTransition};
+pub(crate) use closed::{
+    NativeClosedWriterDomain, NativeWriterClosedHistoricalReadScope,
+    NativeWriterDataDomainTransition,
+};
 mod policy;
 pub(crate) use policy::NativeWriterDataDomainPolicy;
 mod serving;

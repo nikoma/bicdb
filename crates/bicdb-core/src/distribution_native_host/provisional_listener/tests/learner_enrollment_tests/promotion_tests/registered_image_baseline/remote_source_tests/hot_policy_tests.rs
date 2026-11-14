@@ -16,6 +16,9 @@ pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
         || matches!(
             case,
             SourceCase::TargetHotPolicy
+                | SourceCase::TargetHotClosedAuditReplyLost
+                | SourceCase::TargetHotClosedMetadataContention
+                | SourceCase::TargetHotClosedMetadataOwnExpired
                 | SourceCase::TargetHotEarlyPolicy
                 | SourceCase::TargetHotStoreReplacement
                 | SourceCase::TargetHotDecisionReplyLost
@@ -551,6 +554,7 @@ pub(in super::super) fn exercise(
     let current = metadata[0].lock().committed_topology().clone();
     assert_eq!(current.range_by_id(untouched.id), Some(&untouched));
     let mut prepared: Option<NativeJointPreparedServingRound> = None;
+    let mut closed_control_ran = false;
     for (local, (service, lease)) in decision.into_new_serving_owners().unwrap() {
         let i = (0..5).find(|i| node(*i) == local).unwrap();
         let client = &all_clients[i];
@@ -558,9 +562,29 @@ pub(in super::super) fn exercise(
             controls[i]
                 .begin_native_writer_data_domain(selected, lease.clone(), process)
                 .unwrap();
-            controls[i]
-                .advance_native_writer_closed_domain(selected, &budget(5000))
-                .unwrap();
+            if matches!(case, SourceCase::TargetHotClosedAuditReplyLost) && !closed_control_ran {
+                closed_control_ran = true;
+                closed_tests::exercise(&mut controls[i], selected, process, output);
+            } else if matches!(
+                case,
+                SourceCase::TargetHotClosedMetadataContention
+                    | SourceCase::TargetHotClosedMetadataOwnExpired
+            ) && !closed_control_ran
+            {
+                closed_control_ran = true;
+                closed_metadata_tests::exercise(
+                    case,
+                    &mut controls[i],
+                    &metadata[i],
+                    selected,
+                    process,
+                    output,
+                );
+            } else {
+                controls[i]
+                    .advance_native_writer_closed_domain(selected, &budget(5000))
+                    .unwrap();
+            }
             Some(
                 controls[i]
                     .native_closed_writer_domain(selected, process)
@@ -610,6 +634,17 @@ pub(in super::super) fn exercise(
                     Some(NativeJointPreparedServingRound::begin(observation, process).unwrap())
             }
         }
+    }
+    if matches!(
+        case,
+        SourceCase::TargetHotClosedAuditReplyLost
+            | SourceCase::TargetHotClosedMetadataContention
+            | SourceCase::TargetHotClosedMetadataOwnExpired
+    ) {
+        assert!(
+            closed_control_ran,
+            "genuine original survivor CLOSED cut must be exercised"
+        );
     }
     let prepared = Arc::new(prepared.unwrap().finish().unwrap());
     let mut publication = prepared.resume_native_publication().unwrap();
@@ -850,3 +885,7 @@ mod data_tests;
 mod local_term_tests;
 
 mod catalogue_tests;
+
+mod closed_tests;
+
+mod closed_metadata_tests;

@@ -12,21 +12,40 @@ pub(crate) struct CommittedNativeJointDecisionObservation {
     business: Uuid,
     database_incarnation: String,
     metadata_point: Option<Arc<crate::distribution_data::ActualNativeJointMetadataPoint>>,
+    closed_writer_domain: Option<crate::db::NativeJointWriterDomain>,
 }
 impl CommittedNativeJointDecisionObservation {
     pub(crate) fn from_actual_service(
         evidence: ActualServiceNativeJointCommittedEvidence,
     ) -> Result<Self> {
-        let (native, metadata, business, database_incarnation, metadata_point) =
-            evidence.into_parts();
+        let (
+            native,
+            metadata,
+            business,
+            database_incarnation,
+            metadata_point,
+            closed_writer_domain,
+        ) = evidence.into_parts();
         let result = Self {
             native,
             metadata,
             business,
             database_incarnation,
             metadata_point,
+            closed_writer_domain,
         };
         result.require_metadata_current()?;
+        match &result.closed_writer_domain {
+            None => {}
+            #[cfg(feature = "tls-replication")]
+            Some(crate::db::NativeJointWriterDomain::Closed(actual))
+                if actual.data() == result.data() => {}
+            _ => {
+                return Err(invalid(
+                    "committed CLOSED historical owner is not the original exact protected domain",
+                ))
+            }
+        }
         Ok(result)
     }
     pub(super) fn require_metadata_current(&self) -> Result<()> {
@@ -128,6 +147,11 @@ impl CommittedNativeJointDecisionObservation {
             ));
         }
         self.native.require_current(database)
+    }
+    /// The actual service producer alone can retain this owner. Native/metadata
+    /// records cannot construct it; ordinary/Installed observations keep None.
+    pub(crate) fn closed_writer_domain(&self) -> Option<&crate::db::NativeJointWriterDomain> {
+        self.closed_writer_domain.as_ref()
     }
     pub(crate) fn require_native_publication_metadata(
         &self,

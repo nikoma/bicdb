@@ -256,6 +256,7 @@ impl RangeWriteStore {
         host: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         native: &crate::db::NativeJointServingBridgeReceipt,
+        writer_domain: &crate::db::NativeJointWriterDomain,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<()> {
@@ -287,8 +288,14 @@ impl RangeWriteStore {
         }
         native.require_current(database)?;
         self.require_native_joint_host_base(database, data.old_range().id)?;
-        if let Ok(writer) = self.native_writer_host_state() {
-            writer.require_database(database, data.activation_range())?;
+        writer_domain.require_current(database, self, data.activation_range())?;
+        #[cfg(feature = "tls-replication")]
+        if let crate::db::NativeJointWriterDomain::Closed(actual) = writer_domain {
+            if actual.data() != data {
+                return Err(range_write_error(
+                    "joint activation refsync changed exact protected CLOSED decision",
+                ));
+            }
         }
         let range = data.old_range().id;
         let expected = NativeJointCatalogueActivation::from_actual(native)?;

@@ -64,6 +64,32 @@ impl NativeClosedWriterFact {
         }
         Ok(())
     }
+    #[cfg(feature = "tls-replication")]
+    pub(in crate::db::range_image_native) fn require_current_for_transition(
+        &self,
+        database: &BicDb,
+        store: &RangeWriteStore,
+        image: Option<&dyn NativeJointImageMaterialization>,
+        frozen: &FrozenRangeMutationPermit,
+        scope: &crate::db::NativeWriterClosedHistoricalReadScope<'_>,
+    ) -> Result<()> {
+        let current = database.observe_closed_writer_joint_fact_for_transition(
+            &self.native,
+            self.decision.data(),
+            store,
+            image,
+            frozen,
+            scope,
+        )?;
+        if current.point != self.point
+            || current.decision.checksum_sha256() != self.decision.checksum_sha256()
+        {
+            return Err(invalid(
+                "CLOSED scoped historical fact changed exact native decision/point",
+            ));
+        }
+        Ok(())
+    }
 }
 impl BicDb {
     pub(in crate::db::range_image_native) fn observe_closed_writer_joint_fact(
@@ -73,6 +99,65 @@ impl BicDb {
         store: &RangeWriteStore,
         image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
+    ) -> Result<NativeClosedWriterFact> {
+        self.observe_closed_writer_joint_fact_with_catalogue(
+            native,
+            data,
+            store,
+            image,
+            frozen,
+            |decision| {
+                Ok((
+                    store.closed_writer_local_promise(data, image)?,
+                    store.closed_writer_catalogue_decisions(self, decision, image, frozen)?,
+                ))
+            },
+        )
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(in crate::db::range_image_native) fn observe_closed_writer_joint_fact_for_transition(
+        &self,
+        native: &NativeRecoveryAdmission,
+        data: &crate::distribution_range_handoff::NativeJointDecisionData,
+        store: &RangeWriteStore,
+        image: Option<&dyn NativeJointImageMaterialization>,
+        frozen: &FrozenRangeMutationPermit,
+        scope: &crate::db::NativeWriterClosedHistoricalReadScope<'_>,
+    ) -> Result<NativeClosedWriterFact> {
+        // Images keep their existing full materialization checks. Only actual
+        // survivor no-image historical reads use the retained transition scope.
+        match image {
+            Some(_) => self.observe_closed_writer_joint_fact(native, data, store, image, frozen),
+            None => self.observe_closed_writer_joint_fact_with_catalogue(
+                native,
+                data,
+                store,
+                None,
+                frozen,
+                |decision| {
+                    Ok((
+                        store.closed_writer_local_promise_for_transition(self, data, scope)?,
+                        store.closed_writer_catalogue_decisions_for_transition(
+                            self, decision, frozen, scope,
+                        )?,
+                    ))
+                },
+            ),
+        }
+    }
+    fn observe_closed_writer_joint_fact_with_catalogue(
+        &self,
+        native: &NativeRecoveryAdmission,
+        data: &crate::distribution_range_handoff::NativeJointDecisionData,
+        store: &RangeWriteStore,
+        image: Option<&dyn NativeJointImageMaterialization>,
+        frozen: &FrozenRangeMutationPermit,
+        catalogue: impl FnOnce(
+            &NativeJointDecisionReceipt,
+        ) -> Result<(
+            Option<crate::distribution_range_handoff::RangeHandoffPromise>,
+            BTreeMap<u64, NativeReadCatalogueDecision>,
+        )>,
     ) -> Result<NativeClosedWriterFact> {
         native.require_current(self)?;
         data.require_actual_native(native)?;
@@ -92,9 +177,7 @@ impl BicDb {
             ));
         }
         let actual = self.current_native_range_source_lineage(range)?;
-        let local_promise = store.closed_writer_local_promise(data, image)?;
-        let obligations =
-            store.closed_writer_catalogue_decisions(self, &decision, image, frozen)?;
+        let (local_promise, obligations) = catalogue(&decision)?;
         for (index, expected) in obligations {
             let actual_entry =
                 self.read_native_history_entry(range, actual.history_generation(), index)?;

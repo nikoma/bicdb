@@ -18,7 +18,7 @@ failed scale-out qualification; no replacement physical experiment has run.
 
 ## Findings that must not disappear during integration
 
-The initial remote OLD publisher source
+**Not tested for repeated movement; unsupported by this producer.** The initial remote OLD publisher source
 `65a4cea3a16fd51bc2e22ed51277895e31359857` is limited to the actual INITIAL
 actor and its immutable from-birth predecessor configuration. It does not prove
 that a later received Joined range can become an OLD participant, or that the
@@ -28,7 +28,7 @@ The next producer needs the real original State, protected predecessor audit,
 native OLD closure, actual range exclusion and independently fresh authority.
 It must not request effective ordinary Serving after closure.
 
-Independent review also found that a remote reply could validate an OLD
+**Failed source validation; runtime exploit not tested.** Independent review also found that a remote reply could validate an OLD
 decision receipt without explicitly correlating its node ID with the reply's
 authenticated participant snapshot. The required deterministic negative control
 starts with a genuine successful OLD reply, changes the receipt node to another
@@ -37,8 +37,9 @@ source protocol-validation defect, not evidence of an observed wrong publication
 or lost acknowledged commit. Its correction must remain separate from the
 original failed qualification evidence.
 
-The Joined materialized-owner callgraph also requires explicit review of
-borrowed hook identity. A full identity helper that reacquires a blocking hook
+**Failed source lock invariant; runtime reproduction not tested.** The Joined
+materialized-owner and original Joined mutation-scope callgraphs require an
+explicit borrowed-hook identity path. A full identity helper that reacquires a blocking hook
 read while a Joined mutation scope already holds that read can deadlock behind
 a queued writer. The required correction must reuse the actual borrowed hook
 and original identity; dropping exclusion or weakening the identity check is

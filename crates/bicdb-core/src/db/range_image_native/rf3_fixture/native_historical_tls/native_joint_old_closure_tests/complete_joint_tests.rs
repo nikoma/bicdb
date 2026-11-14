@@ -593,8 +593,22 @@ fn run_complete_joint_with_controls(
         .unwrap()
         .publication_round();
     for local in [node("n0"), node("n1"), node("n2"), node("n3")] {
+        let role = role(&fixture, &plan, &local);
+        let business = role.business_request_id();
+        // The protected publisher requires an independently observed local
+        // OWN and its actual attached MStore point, in addition to the Role.
+        // Keep acquisition/publication inside this SAME original Role budget.
+        let request = parent.child_with_deadline(role.deadline());
+        let own = fixture.clients[&local]
+            .acquire_host_metadata_observation(
+                &node("n1"),
+                business,
+                Duration::from_secs(5),
+                &request,
+            )
+            .unwrap();
         publication
-            .publish_actual_member(role(&fixture, &plan, &local), &parent)
+            .publish_actual_owned_member(role, own, business, &request)
             .unwrap();
     }
     let decision = publication.finish().unwrap();

@@ -950,8 +950,16 @@ fn exercise(five: &mut Five, fault: Fault) {
         .unwrap()
         .publication_round();
     for &i in old_indices.iter().chain(std::iter::once(&4)) {
+        let role = members.role(&plan, i);
+        let business = role.business_request_id();
+        // Supply real local OWN/current-MStore authority without renewing the
+        // original Role or borrowing the metadata leader's transport identity.
+        let request = parent.child_with_deadline(role.deadline());
+        let own = members.clients[i]
+            .acquire_host_metadata_observation(&node(0), business, Duration::from_secs(5), &request)
+            .unwrap();
         publication
-            .publish_actual_member(members.role(&plan, i), &parent)
+            .publish_actual_owned_member(role, own, business, &request)
             .unwrap();
     }
     mark("joint decision published");

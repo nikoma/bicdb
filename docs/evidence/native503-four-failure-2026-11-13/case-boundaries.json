@@ -1,0 +1,34 @@
+[
+  {
+    "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_current_damage_refused_at_exit",
+    "start_line_in_full_log": 13991,
+    "end_line_in_full_log": 15951,
+    "section_file": "case-1-raw-section.log.gz",
+    "uncompressed_sha256": "f649acbf89566d034399d40e17ab685a054fa3d403b1b9f4002b43b77b12f697",
+    "scope": "Exact byte slice of original full log, with failure stdout boundaries; no DB/ledger contents recovered."
+  },
+  {
+    "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_finite_open_never_starts_process_worker",
+    "start_line_in_full_log": 15952,
+    "end_line_in_full_log": 15957,
+    "section_file": "case-2-raw-section.log.gz",
+    "uncompressed_sha256": "bbe225cd537ac38030c003208570af249bd0f5aef5b8693eb544f4bcbb5b6f61",
+    "scope": "Exact byte slice of original full log, with failure stdout boundaries; no DB/ledger contents recovered."
+  },
+  {
+    "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation",
+    "start_line_in_full_log": 15958,
+    "end_line_in_full_log": 15962,
+    "section_file": "case-3-raw-section.log.gz",
+    "uncompressed_sha256": "40cced31a020b5168808378f2607da0088feaac0864c5a600866ba26dd151646",
+    "scope": "Exact byte slice of original full log, with failure stdout boundaries; no DB/ledger contents recovered."
+  },
+  {
+    "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root",
+    "start_line_in_full_log": 15963,
+    "end_line_in_full_log": 15980,
+    "section_file": "case-4-raw-section.log.gz",
+    "uncompressed_sha256": "e7565ab0ef9b20332335ab37c133d37563eb6dade9650d49511d18beb3f99407",
+    "scope": "Exact byte slice of original full log, with failure stdout boundaries; no DB/ledger contents recovered."
+  }
+]

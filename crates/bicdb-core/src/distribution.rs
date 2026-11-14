@@ -5363,6 +5363,7 @@ mod tests {
             DistributionStore::initialize_at(root.path(), cfg.clone(), true, 1).unwrap();
         let initial = store.topology().clone();
         let router = crate::ClusterRequestRouter::new(cfg.clone(), initial.clone()).unwrap();
+        #[cfg(feature = "tls-replication")]
         let transport = crate::TcpClusterRelocationTransport::from_topology(
             cfg.cluster_id.clone(),
             cfg.node_id.clone(),
@@ -5377,6 +5378,7 @@ mod tests {
             .install_authoritative_topology(foreign.clone())
             .is_err());
         assert!(router.install_topology(foreign.clone()).is_err());
+        #[cfg(feature = "tls-replication")]
         assert!(transport.install_topology(foreign).is_err());
         let before = fs::read(root.path().join(DEFAULT_DISTRIBUTION_CONFIG)).unwrap();
         let mut erased = cfg.clone();

@@ -355,6 +355,10 @@ pub(super) fn exercise(
         .test_source_discovery_state(selected.id)
         .unwrap();
     assert_eq!(before["source"]["capture_retained"], true);
+    assert_eq!(
+        before["source"]["original_export_session_cancel_requested"],
+        false
+    );
     assert!(before["source"]["actual_gate"]["capture_pin"].is_string());
     assert!(before["source"]["export_retirement"]["completed"].is_null());
     let target_before_retire = if native_unknown {
@@ -623,12 +627,36 @@ pub(super) fn exercise(
         assert!(result.is_ok(), "actual retirement: {result:?}");
     }
     assert_eq!(after["source"]["capture_retained"], false);
-    assert!(after["source"]["actual_gate"]["capture_pin"].is_null());
+    assert_eq!(
+        after["source"]["original_export_session_cancel_requested"],
+        true
+    );
+    // OLD retains the shared native read pin until genuine decision/Open
+    // continuation. ONLY this completed S2 export's actual Arc is retired.
+    assert_eq!(
+        after["source"]["actual_gate"]["capture_pin"],
+        before["source"]["actual_gate"]["capture_pin"]
+    );
     assert_eq!(
         after["source"]["actual_gate"]["frozen"],
         before["source"]["actual_gate"]["frozen"]
     );
     assert_eq!(after["source"]["actual_gate"]["poisoned"], false);
+    let custody = &after["source"]["export_retirement"]["observations"][0];
+    let before_count = custody["exact_export_pin_references_before"]
+        .as_u64()
+        .unwrap();
+    let after_count = custody["exact_export_pin_references_after_drop"]
+        .as_u64()
+        .unwrap();
+    assert!(
+        after_count < before_count,
+        "actual export read-pin reference did not retire"
+    );
+    assert!(
+        after_count > 0,
+        "original OLD read-pin obligation must remain owned"
+    );
     assert_eq!(
         after["source"]["export_retirement"]["observations"]
             .as_array()

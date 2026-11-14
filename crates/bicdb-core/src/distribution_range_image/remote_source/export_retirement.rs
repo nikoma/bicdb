@@ -14,6 +14,12 @@ pub(super) struct RetainedExportRetirement {
 struct RetainedExportRetirementAttempt {
     observation: crate::distribution_transport::AuthenticatedRegisteredExportNew,
     intended: NativeSourceExportRetiredV1,
+    #[cfg(test)]
+    export_read_pin: std::sync::Weak<crate::distribution_range_mutation::SourceCaptureReadPin>,
+    #[cfg(test)]
+    export_read_references_before: usize,
+    #[cfg(test)]
+    export_read_references_after_drop: Option<usize>,
 }
 #[cfg(test)]
 impl NativeRemoteImageSourceRegistry {
@@ -366,7 +372,10 @@ impl NativeRetainedRemoteImageSource {
             .ok_or_else(|| invalid("export retirement diagnostic busy"))?;
         Ok(
             serde_json::json!({"completed":state.completed,"request_count":state.requests.len(),
-            "observations":state.observations.iter().map(|x| serde_json::json!({"actual_reply":x.observation.reply(),"intended":x.intended})).collect::<Vec<_>>(),
+            "observations":state.observations.iter().map(|x| serde_json::json!({"actual_reply":x.observation.reply(),"intended":x.intended,
+                "exact_export_pin_references_before":x.export_read_references_before,
+                "exact_export_pin_references_after_drop":x.export_read_references_after_drop,
+                "exact_export_pin_references_now":x.export_read_pin.strong_count()})).collect::<Vec<_>>(),
             "old_fence_retirement":false,"serving_grant":false}),
         )
     }
@@ -426,7 +435,8 @@ impl NativeRetainedRemoteImageSource {
 
     /// The only remote side-effect sink. Fresh recipient authority and an
     /// independently fetched actual pinned NEW observation are both required.
-    /// The source keeps ALL OLD/native fences after releasing only this pin.
+    /// The source keeps ALL OLD/native fences and their shared underlying read
+    /// pin after removing ONLY this completed export capture/reference.
     pub(crate) fn retire_export_from_remote_new(
         &self,
         request: &NativeSourceExportRequestV1,
@@ -486,6 +496,14 @@ impl NativeRetainedRemoteImageSource {
         state.observations.push(RetainedExportRetirementAttempt {
             observation,
             intended: outcome,
+            #[cfg(test)]
+            export_read_pin: Arc::downgrade(&source.capture.as_ref().unwrap().source_read_pin),
+            #[cfg(test)]
+            export_read_references_before: Arc::strong_count(
+                &source.capture.as_ref().unwrap().source_read_pin,
+            ),
+            #[cfg(test)]
+            export_read_references_after_drop: None,
         });
         let retained = state.observations.last().unwrap();
         retained
@@ -516,6 +534,12 @@ impl NativeRetainedRemoteImageSource {
         drop(publication);
         // Terminal custody is installed before destructors or reply checks.
         drop(capture);
+        #[cfg(test)]
+        {
+            let attempted = state.observations.last_mut().unwrap();
+            attempted.export_read_references_after_drop =
+                Some(attempted.export_read_pin.strong_count());
+        }
         Ok(outcome)
     }
 }

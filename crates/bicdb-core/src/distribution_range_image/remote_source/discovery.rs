@@ -355,7 +355,7 @@ impl NativeRemoteImageSourceRegistry {
                 Err(error) => serde_json::json!({"diagnostic_error":error.to_string()}),
             };
             serde_json::json!({"source_session":held.source_session,"capture_attempted":held.capture_attempted,
-                "capture_retained":held.capture.is_some(),"published":held.published,"manifest":held.manifest,
+                "capture_retained":held.capture.is_some(),"original_export_session_cancel_requested":held.original_session.is_cancel_requested(),"published":held.published,"manifest":held.manifest,
                 "export_retirement":source.test_export_retirement_state()?,"actual_gate":gate})
         } else {
             serde_json::Value::Null

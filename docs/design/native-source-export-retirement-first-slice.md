@@ -94,8 +94,10 @@ do not publish a local source retainer or pass a local NEW object to the donor.
 They preserve operation intents, exact outcomes, original source-frame journal,
 APP acknowledgments and native OLD records before assertions.
 An additional memory-only actual-gate observation distinguishes capture-object
-removal from releasing its real read pin. Successful cases require that source
-pin to disappear while the original OLD freeze and target read pin remain.
+removal from retiring its actual capture-owned reference. Successful cases retain
+a private test-only Weak to the exact actual read-pin Arc and require
+its strong-reference count to decrease after dropping the capture. OLD retains
+the shared underlying gate pin and freeze; the target read pin also remains.
 Diagnostic contention is recorded as an error, never interpreted as no pin.
 
 | Control | Required observation | Status |
@@ -121,7 +123,7 @@ qualification campaign, or unchanged SQL application acceptance.
 
 ## Remaining blockers
 
-This component retires only a completed source export pin. It does not produce
+This component retires only a completed source export read-pin reference. It does not produce
 remote NEW quorum, a globally durable decision, activation, ALL-Open,
 OLD-custody release, target read-pin release, FIRST policy, Serving or controller
 convergence. The new target read pin deliberately blocks incompatible local
@@ -130,7 +132,7 @@ NEW constructor cannot silently replace it. No NEW/decision/Open proof is
 fabricated to escape that obligation.
 
 The source/session/discovery registries still retain their cap of eight.
-Removing an export pin does not remove those entries. Safe registry retirement
+Removing an export capture/reference does not remove those entries. Safe registry retirement
 needs actual decision/Open/cleanup producers and remains a blocker for the full
 64-range four-to-five-node qualification. There is no TTL eviction.
 
@@ -158,3 +160,12 @@ measured runtime failure. Original source-process/session cancellation is a
 different owner; the new sink checks that ancestry explicitly at the detach
 point. The final-cut controls await execution and must retain their exact
 results before any claim about those branches.
+
+A source review after initial freeze also corrected a new diagnostic assertion:
+`NativeJointOldObservation::prepare_capture` clones its actual retained read-pin
+Arc into the capture. Dropping that S2 capture retires its reference, not the
+OLD owner's shared underlying gate pin. Requiring the gate pin to disappear
+would incorrectly demand early OLD obligation release. The successor keeps the
+OLD gate/freeze intact and observes the exact Arc's before/after reference counts
+through a test-only Weak. This is a source-derived test correction, not evidence
+of a runtime failure or permission to release OLD custody before its real gate.

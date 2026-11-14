@@ -1,0 +1,58 @@
+# Original writer CLOSED historical read scope
+
+Source baseline: `a5911ec99d0564c011d916309bda64b6ae62a9dc` (prototype source
+1.0.502-beta). The original hosted run 43561072006 remains FAILED: 79 passed,
+eight failed. Seven failures reached the survivor's selected DATA-domain CLOSED
+publication and then demanded ordinary Serving permission from a joint historical
+no-image/catalogue read. The eighth failure was the separate immediate actual
+MStore `try_lock` refusal. This change does not reclassify that evidence.
+
+The original transition marks its selected range pending before native audit
+publication. Ordinary `NativeWriterHostState::require_range_id` correctly refuses
+that range. The previous historical re-observation called
+`closed_writer_local_promise` and `require_decided_joint_catalogue_base`, whose
+ordinary no-image guard demanded that same Serving permission. This creates a
+self-refusal after the transition has fenced itself.
+
+A private, borrowed `NativeWriterClosedHistoricalReadScope` now comes only from
+the actual retained `NativeWriterDataDomainTransition` and its fresh actual
+`NativeWriterDataDomainPolicy`. It binds the original State, coordinator lifetime,
+service/runtime/process, DB birth/open, Store slot, original registration/hook,
+quiescent original lease, selected survivor range, complete protected joint
+native decision, and current OWN/member/version point. It can inspect only the
+same retained prewrite candidate, or the same attempted record after exact native
+CLOSED CURRENT and immutable archive validation. A begun but unframed, missing,
+changed, aborted or otherwise unproven native audit cannot use this path to
+replace its native transaction or become a verified CLOSED domain.
+
+Only joint historical no-image reads use this scope. They still require actual
+image-intent absence, backup refusal, exact permanent LOCAL promise/native OLD
+closure, complete native/catalogue decision, abort coverage and resolved log cut.
+The generic no-image helper, ordinary writer range admission, APP and Strong
+checks remain unchanged. Images retain the existing materialization checks.
+There is no deserialization/parts constructor and no Serving or CLOSED-success
+grant produced by the read scope. Verified CLOSED publication still requires the
+native record and audit verification followed by the external actual MStore
+postcheck. A pending transition remains unavailable to ordinary operations.
+
+The actual issued native xid is retained as the first operation of the native
+transaction closure, before scope checks and framing. The exact framed record is
+retained before any native put. Unknown outcomes keep the same attempt; this
+change adds no abort-retry protocol, replacement xid, TTL, range-wide bypass or
+new source lineage.
+
+The added genuine fifth-fixture case
+`native_registered_fifth_remote_hot_closed_audit_native_reply_lost_same_attempt_retry`
+uses the real initial survivor, real CLOSED native CURRENT/archive readback, and
+an actual cancellation after that native publication. At that boundary it records
+ordinary selected-range and no-image refusal, typed historical success, and
+other-range scope refusal. It then requires fresh same-owner reconciliation to
+retain the exact whole native audit record/xid. All original 87 selectors,
+assertions and budgets remain. The new control is source only until executed;
+formatting is not a compile/runtime result.
+
+The independent immediate MStore contention failure is not fixed or causally
+attributed by this leaf. Other open gates include later complete hot Serving,
+unchanged-client APP/full Strong after movement, a second populated range on the
+same actual target, restart/cold custody, normal controller/CLI integration,
+fault-safe bounded rebalance and physical sustained capacity qualification.

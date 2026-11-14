@@ -72,6 +72,7 @@ pub(super) enum SourceCase {
     RemoteOldCollectorDonorRevoked,
     RemoteOldCollectorCallerCanceled,
     TargetHotPolicy,
+    TargetHotClosedAuditReplyLost,
     TargetHotEarlyPolicy,
     TargetHotStoreReplacement,
     TargetHotDecisionReplyLost,

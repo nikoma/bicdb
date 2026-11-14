@@ -1,12 +1,12 @@
 [package]
 name = "bicdb-cell-ha"
-version = "1.0.506-beta"
+version = "1.0.508-beta"
 edition.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-bicdb-core = { path = "../bicdb-core", version = "1.0.506-beta" }
+bicdb-core = { path = "../bicdb-core", version = "1.0.508-beta" }
 ciborium.workspace = true
 ed25519-dalek.workspace = true
 hex.workspace = true

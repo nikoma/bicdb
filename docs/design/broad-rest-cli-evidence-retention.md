@@ -45,6 +45,8 @@ repair or qualify the failed behavior.
 Upstream artifacts belong to a public GitHub repository under its access and
 retention policy. Local 0700/0600 permissions do not make that upload private.
 These are synthetic test journals, including complete protocol frames, and the
-existing narrow failure allowlist. Committed documentation projections must
-exclude keys, custody contents and raw frames. Neither public artifact access
-nor local file permissions establish absence of secrets in arbitrary output.
+existing narrow failure allowlist. The retained paths omit database and TLS
+directories; the journals still contain complete test application payloads.
+They must not be described as excluding raw frames. Neither public artifact
+access nor local file permissions establish absence of secrets in arbitrary
+output.

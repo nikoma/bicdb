@@ -102,6 +102,45 @@ impl NativeJoinedRemoteInstallPreflight {
         }
         request.require_metadata_current()
     }
+    /// Physical work outside Runtime.sessions; then consume/drop the temporary
+    /// N Arc before the callback. The point is lexical with the exact held
+    /// service/Store/DB/hook/journal and never escapes as a Boolean grant.
+    pub(crate) fn with_rotation_point<R>(
+        self: &Arc<Self>,
+        request: &NativeJoinedRangeReceiveRequest,
+        frame: &NativeRemoteImageStep<'_>,
+        temporary_n: Arc<FrozenRangeMutationPermit>,
+        operation: impl for<'point, 'physical> FnOnce(
+            &'point crate::db::NativeJoinedRemoteRotationPoint<'physical>,
+        ) -> Result<R>,
+    ) -> Result<R> {
+        self.require_metadata_current(request)?;
+        self.require_request(request, frame)?;
+        request.require_original_frozen(&temporary_n)?;
+        let origin = self.selected.origin();
+        let service = origin.parts.backend.service.try_lock().ok_or_else(|| {
+            invalid("Joined rotation actual service busy before physical prepare")
+        })?;
+        let database = service.database();
+        if !Arc::ptr_eq(&database, &origin.parts.factory.database) {
+            return Err(invalid("Joined rotation changed actual DB owner"));
+        }
+        let db = database
+            .try_read()
+            .ok_or_else(|| invalid("Joined rotation actual DB busy before physical prepare"))?;
+        service.with_writer_data_domain_store(&db, |store| {
+            db.with_joined_remote_rotation_point(
+                store,
+                self,
+                request,
+                frame,
+                temporary_n,
+                operation,
+            )
+        })
+        // The callback may have consumed N into the original retained A. No
+        // later check is allowed to require old N or discard that exact owner.
+    }
     /// Necessary actual PRE-rotation point. No Runtime/MStore lock is acquired
     /// here; the full physical precheck MUST occur before Runtime.sessions,
     /// then the final separately prepared memory-only point is used under

@@ -67,3 +67,26 @@ attributed by this leaf. Other open gates include later complete hot Serving,
 unchanged-client APP/full Strong after movement, a second populated range on the
 same actual target, restart/cold custody, normal controller/CLI integration,
 fault-safe bounded rebalance and physical sustained capacity qualification.
+
+
+The follow-on pre-Serving callgraph is source-pinned in
+[native-writer-closed-joint-read-callgraph.json](native-writer-closed-joint-read-callgraph.json).
+The actual Closed service producer now retains its existing Closed domain in the
+committed observation; ordinary/Installed and Registered producers keep no such
+domain. Only exact complete-decision equality is accepted. A persisted decision,
+metadata snapshot or missing writer never constructs that domain. Historical
+catalogue observe/revalidation checks this actual owner, independently fresh
+committed OWN/native/MStore point, and exact original survivor Frozen allocation
+before checking image-intent absence. A Weak reference retains allocation
+identity without pinning the permit or affecting unique release. Existing image
+materialization validation stays intact for image-owning paths.
+
+The actualHost activation re-fsync sink also validates its caller's original
+typed writer domain rather than demanding ordinary Serving from a Closed domain.
+Its genuine native decision, current metadata, exact existing catalogue activation,
+original frozen owner and actual fsync requirements remain. Fresh Open,
+activation receipt recovery, release, source/OLD retirement and final Serving
+policy were traced separately; their existing typed domain paths remain.
+Ordinary recovery/Ready factory guards stay strict and must execute after the
+actual Serving policy. This audit is source evidence only, not a claim that any
+later phase or the physical operator path has passed.

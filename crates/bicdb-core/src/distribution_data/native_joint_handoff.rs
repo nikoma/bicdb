@@ -1100,6 +1100,8 @@ pub(crate) struct ActualServiceNativeJointCommittedEvidence {
     business: Uuid,
     database_incarnation: String,
     metadata_point: Option<Arc<crate::distribution_data::ActualNativeJointMetadataPoint>>,
+    // Actual non-serialized original CLOSED owner only, never inferred from DATA.
+    closed_writer_domain: Option<crate::db::NativeJointWriterDomain>,
 }
 impl ActualServiceNativeJointCommittedEvidence {
     pub(crate) fn into_parts(
@@ -1110,6 +1112,7 @@ impl ActualServiceNativeJointCommittedEvidence {
         Uuid,
         String,
         Option<Arc<crate::distribution_data::ActualNativeJointMetadataPoint>>,
+        Option<crate::db::NativeJointWriterDomain>,
     ) {
         (
             self.native,
@@ -1117,6 +1120,7 @@ impl ActualServiceNativeJointCommittedEvidence {
             self.business,
             self.database_incarnation,
             self.metadata_point,
+            self.closed_writer_domain,
         )
     }
 }
@@ -1198,6 +1202,7 @@ impl ClusterDataNodeService {
             metadata,
             business,
             metadata_point,
+            closed_writer_domain: None,
         };
         let observation=crate::distribution_range_handoff::CommittedNativeJointDecisionObservation::from_actual_service(evidence)?;
         observation.require_current(&database)?;

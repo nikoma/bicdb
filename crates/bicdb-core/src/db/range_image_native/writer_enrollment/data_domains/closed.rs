@@ -204,6 +204,8 @@ pub(crate) struct NativeClosedWriterDomain {
     native_helper_health: Option<bool>,
     native_helper_calls: u32,
     native_bytes: Option<Arc<Vec<(String, Vec<u8>)>>>,
+    // Weak allocation identity only: does not pin the actual permit/lease.
+    survivor_frozen: Option<Weak<crate::distribution_range_mutation::FrozenRangeMutationPermit>>,
 }
 impl NativeClosedWriterDomain {
     #[cfg(test)]
@@ -247,6 +249,35 @@ impl NativeClosedWriterDomain {
         self.writer
             .require_store(&self.writer.root, self.slot.id())?;
         self.record.validate(&self.writer.record)
+    }
+    /// Necessary pre-Serving historical no-image proof from THIS protected
+    /// original CLOSED owner, under a distinct fresh committed observation.
+    pub(crate) fn require_joint_historical_catalogue_identity(
+        &self,
+        db: &BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        data: &NativeJointDecisionData,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        if self.data() != data
+            || self
+                .survivor_frozen
+                .as_ref()
+                .is_none_or(|original| !std::ptr::eq(original.as_ptr(), frozen))
+            || self.slot.id() != store.native_writer_store_open_id()
+            || !Arc::ptr_eq(&self.writer, &store.native_writer_host_state()?)
+            || frozen.owner() != data.promise().session_id
+            || !data
+                .old_members()
+                .contains_key(&self.writer.record.facts.local_node_id)
+        {
+            return Err(invalid(
+                "CLOSED historical catalogue changed original owner/decision/Store/freeze",
+            ));
+        }
+        self.require_current_for_store(db, store, data.activation_range())?;
+        db.range_mutation_gate()
+            .validate_quiescent_frozen(data.old_range().id, frozen)
     }
     pub(crate) fn require_current_for_store(
         &self,
@@ -748,6 +779,10 @@ impl NativeWriterDataDomainTransition {
             native_helper_health: self.native_helper_health,
             native_helper_calls: self.native_helper_calls,
             native_bytes: self.native_bytes.clone(),
+            survivor_frozen: match lease {
+                NativeJointServingLease::Survivor(original) => Some(Arc::downgrade(original)),
+                _ => None,
+            },
         }));
         Ok(())
     }

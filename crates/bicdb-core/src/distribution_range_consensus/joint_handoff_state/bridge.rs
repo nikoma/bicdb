@@ -175,12 +175,47 @@ impl RangeWriteStore {
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
         committed.require_current(database)?;
-        self.require_decided_joint_catalogue_base(
+        self.require_decided_joint_catalogue_base_with_no_image(
             database,
             committed.native_receipt(),
             image,
             frozen,
+            || self.require_joint_historical_no_image(database, committed, frozen),
         )
+    }
+    fn require_joint_historical_no_image(
+        &self,
+        database: &crate::BicDb,
+        committed: &CommittedNativeJointDecisionObservation,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        match committed.closed_writer_domain() {
+            None => self.require_no_image_install(committed.data().old_range().id),
+            #[cfg(feature = "tls-replication")]
+            Some(crate::db::NativeJointWriterDomain::Closed(actual)) => {
+                committed.require_current(database)?;
+                committed.require_native_publication_metadata(database, self)?;
+                actual.require_joint_historical_catalogue_identity(
+                    database,
+                    self,
+                    committed.data(),
+                    frozen,
+                )?;
+                if self
+                    .catalog
+                    .image_install_intents
+                    .contains_key(&committed.data().old_range().id)
+                {
+                    return Err(range_write_error(
+                        "protected CLOSED historical survivor conflicts with image install",
+                    ));
+                }
+                Ok(())
+            }
+            _ => Err(range_write_error(
+                "joint historical no-image read substituted a non-CLOSED owner",
+            )),
+        }
     }
     fn require_decided_joint_catalogue_base(
         &self,

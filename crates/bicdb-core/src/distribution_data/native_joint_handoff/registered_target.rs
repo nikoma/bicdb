@@ -444,6 +444,7 @@ impl ClusterDataNodeService {
             metadata,
             business,
             metadata_point,
+            closed_writer_domain: None,
         };
         let observed = crate::distribution_range_handoff::CommittedNativeJointDecisionObservation::from_actual_service(evidence)?;
         observed.require_current(&database)?;

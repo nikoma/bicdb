@@ -2,6 +2,8 @@
 //! blank FIRST receiver, selected NoDomain proof, image or serving permission.
 //! Every later operation must supply its own actual Role/OWN/native evidence.
 use super::*;
+mod attempt;
+pub(super) use attempt::NativeJoinedRemoteInstallAttempt;
 mod install;
 mod preflight;
 use crate::distribution_consensus::{

@@ -72,3 +72,20 @@ Actual unrelated-R1 progress, failed persistence/same-candidate recovery, and
 unchanged original native xid require the later genuine host/row fixture.
 The production sink exists as source, but there is still no complete host row,
 base/catalogue/activation path or executed additional-range result.
+
+## Actual host custody entry points
+
+The Joined host now owns an additional-range attempt map. It retains the exact
+prepared preflight before runtime transfer, then stores the actual A lease
+immediately on return, before any further fallible check. Runtime-owned A is
+also retained independently. A retry must identify the same preflight; neither
+host nor runtime silently constructs another attempt after uncertainty.
+
+Dedicated host entry points advance the retained native proposal and selected
+Installing publication using fresh actual requests. Every native/candidate
+owner is stored before its first possible persistence. The original serving
+host, State, hook, coordinator and dispatcher are retained. These are source
+paths, not an executed second-range admission result. There is no native row
+import/base/final/catalogue producer yet, and no new source/donor authority.
+A native proposal whose exact xid cannot be proved committed remains blocked;
+this batch supplies no automatic replacement-xid or cold-repair policy.

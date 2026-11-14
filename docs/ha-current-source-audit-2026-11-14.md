@@ -65,9 +65,32 @@ The subsequent diagnostic range head is
 passed compilation, Core 1,817/0/16, PGwire 511/0/2 and SQL 2,681/0/4, where counts
 mean passed/failed/ignored. Its
 [Rails run](https://github.com/nikoma/bicdb/actions/runs/43608687112) passed
-20 runs/100 assertions. Serial native and remaining-workspace results are
-pending at this checkpoint. These results neither repair nor reclassify the
-failed b779 native run. No source/head is changed while its evidence is collected.
+20 runs/100 assertions. Serial native **failed: 324 passed, 13 failed, one
+ignored** in 3,755.32 s, with the same thirteen failing cases as b779. The
+remaining-workspace job is still running at this checkpoint. These results
+neither repair nor reclassify the failed b779 native run. No source/head is
+changed while its evidence is collected.
+
+The retained diagnostics narrow issue195 without establishing an underlying
+CPU or I/O cause. All twelve activation errors end at
+`pin_release_before_full_sweep`, before pin release or post-quorum metadata RPC.
+At activation entry their phase budgets had 249,464–614,948 microseconds left;
+the calls returned 319,357–704,409 microseconds later, after expiry. Original
+caller/thread deadlines were absent and the recorded cancellation-request bits
+were false. The exact member or inner validator consuming that time was not
+instrumented. Later intended crash/recovery cuts were **not tested** because
+activation failed first. The raw native log is 12,967,020 bytes, SHA256
+`2a2c06352869a17cecb227cad273270a173c4fa0c65721c8e33889dfa303b82c`.
+
+The foreign-service control now retains the exact refusal:
+`cluster error: native range image: native writer store/root/open changed`.
+It refused counting and retained original ownership/liveness; its expected-text
+assertion failed. The marker does not identify which store/root/open disjunct
+failed or independently prove a final serving/WAL state. Narrow correction
+`5b3fdab4a039abdd1cb28611607843dc676f68cc` matches the exact typed Cluster
+error, preserves all other assertions and is **uncompiled and unexecuted**.
+The native diagnostic supplement SHA256 is
+`84e77f9aa17826efbaabfe606d24875d2e749b98f826cd1e7a31f4a67ed721c9`.
 
 ## Separate streaming correction and actual regression feedback
 
@@ -76,10 +99,10 @@ Single-primary source `2c0193c37852546c51b99e2918c24ea17bb44e2b`, tree
 inheriting source version511, with no assigned release version. Its actual
 checkout `dba3a015df88ecc81ca5515258a2950680662aa2` has the same tree.
 [Required run43609026644](https://github.com/nikoma/bicdb/actions/runs/43609026644)
-**failed Core and PGwire**. All-target/non-default-consumer compilation,
+**failed Core, PGwire and remaining-workspace jobs**. All-target/non-default-consumer compilation,
 repository checks, native 216/0/1 and SQL 2,681/0/4 passed.
 [Rails](https://github.com/nikoma/bicdb/actions/runs/43609026629) passed 20
-runs/100 assertions. The remaining-workspace result is still pending. The
+runs/100 assertions. All jobs are terminal and their complete logs are retained. The
 native component result is25 minutes of CI execution, not a measured RTO.
 
 The twelve new file-backed epoch controls passed 12/0 in 1.59 s on that source.
@@ -94,6 +117,16 @@ snapshot custody. The complete candidate remains failed:
   UPDATE 9 and stale-writer assertions were not reached. The target recorded
   11 passed/one failed; raw 789,941 bytes, SHA256
   `e9718a8d4d69a8e1f1e45e693d4fa32ee5ecb238f5357559bb960d59af302645`.
+- The existing CLI `killing_the_primary_loses_no_acknowledged_write` also
+  failed its **old-primary rejoin** wait at `ha_failover_cli.rs:389`.
+  Successor takeover and the preceding external ACK-set survival assertion
+  passed; the recorded takeover observation was 6.2 s. Final old-writer fencing
+  and complete standby checks were not reached. Logs retain stale-term refusals,
+  consistent with the issue197 discovery boundary; no additional independent
+  cause or current-release RTO guarantee is established. The CLI target recorded
+  three passed/one failed. The complete remaining-workspace log is 70,457,194
+  bytes, SHA256
+  `30c32b33238c9c885b6fa9fc5b5b2fc93324cd2bbc93988e7214730fe7f9739c`.
 - [Issue198](https://github.com/nikoma/bicdb/issues/198): existing
   `external_attachments_require_a_snapshot_and_cannot_be_acknowledged_as_missing_blobs`
   failed at `live_replication.rs:1311`. A genuinely fresh standalone source
@@ -137,6 +170,14 @@ these corrections. Versions, binaries, release publication and deployment remain
 separate states. A next unused version and final versioned-head validation are
 required before merging; PR188's active512 reservation is not reused in parallel.
 
+The terminal streaming capture retains eleven complete executed-job logs and
+seven original artifact ZIPs, with raw hashes, gzip/ZIP CRC verification and
+25 artifact-member hashes. Zero unavailable logs or partial captures remain.
+Its canonical manifest SHA256 is
+`45314c66cab5fd23a2b28f098f1bea51742f2b753035c3a74cc49ba120febf7f`.
+The CLI failure-evidence upload reported no matching files; no absent ledger or
+HA-state artifact is invented. This archive documents a failed candidate.
+
 ## Findings classified at this checkpoint
 
 | Finding | Classification | Scope |
@@ -144,10 +185,10 @@ required before merging; PR188's active512 reservation is not reused in parallel
 | Original Azure four-to-five convergence within 300 s | Failed | Historical experiment remains failed; no stable converged five-node comparison. |
 | Original two temporarily unreadable ACK records' causes | Inconclusive | Later matches do not establish routing/read-watermark/catch-up cause or the causal visibility-restoration event. |
 | b779 native handoff acceptance | Failed | 324 passed/13 failed/one ignored; raw log and complete capture retained. |
-| [Native activation issue195](https://github.com/nikoma/bicdb/issues/195) | Failed | Twelve local-activation timeouts; inner cause remains inconclusive pending diagnostic execution. |
-| [Foreign-service control196](https://github.com/nikoma/bicdb/issues/196) | Failed | Counting refused, expected-error assertion failed; actual error not retained at b779. |
+| [Native activation issue195](https://github.com/nikoma/bicdb/issues/195) | Failed | All twelve 503 timeouts occur in the pre-pin full validation sweep; exact inner cause remains inconclusive. Later intended cuts were not tested. |
+| [Foreign-service control196](https://github.com/nikoma/bicdb/issues/196) | Failed | 503 retains exact store/root/open refusal; counting refused and expected-error assertion failed. Narrow matcher correction is not tested. |
 | 2c's new epoch/ballot component controls | Passed | Twelve file-backed Core cases at exact2c source; no physical/production qualification. |
-| 2c returning-primary and attachment-recovery acceptance | Failed | Issues197/198; later assertions were not reached. |
+| 2c returning-primary and attachment-recovery acceptance | Failed | Core, PGwire and CLI failures at issues197/198 boundaries; CLI ACK-set survival passed before rejoin failed. Later assertions were not reached. |
 | f41 corrective runtime behavior and three new Core controls | Not tested | Source review and static checks are distinct from execution. |
 | Snapshot target-data-head/ACK-copy protection193 | Not tested | Open source/API gate; the separate genuine regression source 6bb1f64e is unexecuted. |
 | Current-artifact physical RPO/RTO and latency percentiles | Not tested | No independent-machine current-artifact qualification dataset. |
@@ -168,7 +209,7 @@ operational instance and its configuration were independently verified.
 | 1: legacy single-primary file shipping | Ship/status/promote, with explicit fencing and redirection | Retained durability/crash regressions; no new physical run here | No current-main RPO/RTO campaign | Not established | Not established |
 | 1: native single-primary synchronous/asynchronous streaming | Ordered streaming, voting-only ACKs, elections/lease fencing; zero-loss claim blocked by issue190 | Configuration/election/bootstrap/kill regressions exist and required main511 CI passed; partial higher-epoch catch-up followed by another election is not covered | Historical limited failover results do not qualify511 | No; source safety blocker plus incomplete qualification | Not established |
 | 2: generic/legacy distributed range controller | Metadata consensus, per-range quorum, automatic placement and relocation | Retained functional and shared-host tests; ordinary SQL integration remains incomplete | Original461 Azure run showed some automatic movement; scale-out qualification failed | No | Not established |
-| 2: native distributed data/recovery path | Genuine physical owners, OLD/image/NEW/decision components and local continuation; automatic operator closure incomplete | Diagnostic503 compiles; serial result pending. b779 failed324/13/one ignored; previous4ef failed307/23/one ignored | No new pinned four-to-five native campaign | No | Not established |
+| 2: native distributed data/recovery path | Genuine physical owners, OLD/image/NEW/decision components and local continuation; automatic operator closure incomplete | Diagnostic503 compiles but fails native324/13/one ignored, repeating b779; previous4ef failed307/23/one ignored | No new pinned four-to-five native campaign | No | Not established |
 | 3: Cell-scoped HA | Signed/encrypted Cell authorities, lease/fencing and authorized recovery; Phase5 asynchronous positive-RPO contract | Authority tests and synthetic signed drill fixtures; an admission verifier is not an operational drill | No current release-level recovery drill established | Not established | Not established |
 | 4: application fleet | Worker placement, leases/reassignment and single-writer state groups | Retained multi-process loopback and lifecycle scenarios; application workers do not create distributed SQL capacity | Independent-machine throughput gain not established | Not established | Not established |
 

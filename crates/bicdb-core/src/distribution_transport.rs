@@ -4254,6 +4254,29 @@ impl TcpClusterRelocationTransport {
         destination: &ClusterNodeId,
         request: &crate::distribution_native_read::NativeEventGetRequest,
     ) -> Result<crate::distribution_native_read::NativeEventGetReply> {
+        self.native_event_get_connect_bound(cancellation, None, destination, request)
+    }
+
+    /// The typed read counterpart of `application_event_listening`: the
+    /// connect must finish by `connect_by`; the reply may be awaited for as
+    /// long as `cancellation` allows.
+    pub(crate) fn native_event_get_listening(
+        &self,
+        cancellation: &CancellationToken,
+        connect_by: Instant,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_native_read::NativeEventGetRequest,
+    ) -> Result<crate::distribution_native_read::NativeEventGetReply> {
+        self.native_event_get_connect_bound(cancellation, Some(connect_by), destination, request)
+    }
+
+    fn native_event_get_connect_bound(
+        &self,
+        cancellation: &CancellationToken,
+        connect_by: Option<Instant>,
+        destination: &ClusterNodeId,
+        request: &crate::distribution_native_read::NativeEventGetRequest,
+    ) -> Result<crate::distribution_native_read::NativeEventGetReply> {
         request.validate()?;
         cancellation.check()?;
         let expected_enforced_store = self
@@ -4267,10 +4290,12 @@ impl TcpClusterRelocationTransport {
         if expected_enforced_store {
             wire_request.mode = crate::distribution_native_read::NativeEventReadMode::Strong;
         }
-        let response = self.call_cancellable(
+        let (response, _, _) = self.call_with_native_destination_connect_bound(
             cancellation,
             destination,
             ClusterDataRequest::NativeEventGet(wire_request.clone()),
+            false,
+            connect_by,
         )?;
         let ClusterDataResponse::NativeEventGet(reply) = response else {
             return Err(unexpected_response(
@@ -7784,6 +7809,7 @@ mod event_client_retry_tests {
             let mut failures = transient_failures;
             let mut discovered = false;
             let mut silent_remaining = silent_first != SilentFirst::None;
+            let mut silent = Vec::new();
             let unavailable = || ClusterDataRemoteError {
                 code: "temporarily_unavailable".into(),
                 message: "metadata election is in progress".into(),
@@ -7817,22 +7843,28 @@ mod event_client_retry_tests {
                 if should_be_silent {
                     silent_remaining = false;
                     // Accept a complete request but send no response. Wait for
-                    // the client's own network deadline to close this socket,
-                    // rather than restoring availability with a test timer.
-                    stream
-                        .set_read_timeout(Some(Duration::from_secs(6)))
-                        .unwrap();
-                    let mut byte = [0u8; 1];
-                    match stream.read(&mut byte) {
-                        Ok(0) => {}
-                        Err(error)
-                            if matches!(
-                                error.kind(),
-                                std::io::ErrorKind::ConnectionReset
-                                    | std::io::ErrorKind::UnexpectedEof
-                            ) => {}
-                        result => panic!("silent request was not closed by client: {result:?}"),
-                    }
+                    // the client itself to close this socket, rather than
+                    // restoring availability with a test timer. As on a real
+                    // member, one unanswered exchange does not stop the
+                    // listener from accepting others meanwhile.
+                    silent.push(thread::spawn(move || {
+                        stream
+                            .set_read_timeout(Some(Duration::from_secs(6)))
+                            .unwrap();
+                        let mut byte = [0u8; 1];
+                        match stream.read(&mut byte) {
+                            Ok(0) => {}
+                            Err(error)
+                                if matches!(
+                                    error.kind(),
+                                    std::io::ErrorKind::ConnectionReset
+                                        | std::io::ErrorKind::UnexpectedEof
+                                ) => {}
+                            result => {
+                                panic!("silent request was not closed by client: {result:?}")
+                            }
+                        }
+                    }));
                     continue;
                 }
                 let response = match request.request {
@@ -7906,6 +7938,9 @@ mod event_client_retry_tests {
                 )
                 .unwrap();
             }
+            for exchange in silent {
+                exchange.join().unwrap();
+            }
         });
         let result = client.get("retry", "kept");
         stop.store(true, Ordering::SeqCst);
@@ -7955,13 +7990,15 @@ mod event_client_retry_tests {
     }
 
     /// One member that always serves discovery promptly. Its FIRST
-    /// application request is answered only after `first_reply_after` (never
-    /// when `None`); every later one is refused at once, as a range leader
-    /// refuses a second command while the first is still being committed.
-    fn append_to_working_leader(
+    /// application request (an append, or a typed read when `read`) is
+    /// answered only after `first_reply_after` (never when `None`); every
+    /// later one is refused at once, as a range leader refuses a second
+    /// command while the first is still being committed.
+    fn request_to_working_leader(
         request_timeout: Duration,
         first_reply_after: Option<Duration>,
-    ) -> (Result<bool>, Duration, usize) {
+        read: bool,
+    ) -> (Result<serde_json::Value>, Duration, usize) {
         let root = tempfile::tempdir().unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
@@ -8018,7 +8055,8 @@ mod event_client_retry_tests {
                         return;
                     };
                     let response = match request.request {
-                        ClusterDataRequest::ApplicationEvent(_) => {
+                        ClusterDataRequest::ApplicationEvent(_)
+                        | ClusterDataRequest::NativeEventGet(_) => {
                             if seen.fetch_add(1, Ordering::SeqCst) == 0 {
                                 let Some(delay) = first_reply_after else {
                                     // Accepted, never answered: wait for the
@@ -8030,9 +8068,25 @@ mod event_client_retry_tests {
                                     return;
                                 };
                                 thread::sleep(delay);
-                                Ok(ClusterDataResponse::ApplicationEvent(
-                                    crate::ClusterEventResponse::Appended { inserted: true },
-                                ))
+                                Ok(match request.request {
+                                    ClusterDataRequest::NativeEventGet(get) => {
+                                        // The member is never told more than
+                                        // the caller's whole budget.
+                                        assert!(
+                                            u128::from(get.budget_ms)
+                                                <= request_timeout.as_millis()
+                                        );
+                                        ClusterDataResponse::NativeEventGet(crate::distribution_native_read::NativeEventGetReply::new(
+                                            &get,
+                                            crate::distribution_native_read::NativeEventGetResult::LegacyValue {
+                                                value: Some(serde_json::json!({"kept": true})).into(),
+                                            },
+                                        ))
+                                    }
+                                    _ => ClusterDataResponse::ApplicationEvent(
+                                        crate::ClusterEventResponse::Appended { inserted: true },
+                                    ),
+                                })
                             } else {
                                 Err(ClusterDataRemoteError {
                                     code: "cluster_data_operation_failed".into(),
@@ -8062,7 +8116,15 @@ mod event_client_retry_tests {
             }
         });
         let started = Instant::now();
-        let result = client.append("retry", "kept", serde_json::json!({"kept": true}));
+        let result = if read {
+            client
+                .get("retry", "kept")
+                .map(|value| serde_json::json!(value))
+        } else {
+            client
+                .append("retry", "kept", serde_json::json!({"kept": true}))
+                .map(|inserted| serde_json::json!(inserted))
+        };
         let elapsed = started.elapsed();
         stop.store(true, Ordering::SeqCst);
         serving.join().unwrap();
@@ -8074,10 +8136,14 @@ mod event_client_retry_tests {
         // The first attempt's slice is half of the budget. The leader needs
         // longer than that, and refuses the retries sent meanwhile. Hanging
         // up at the slice would lose the only answer the leader ever gives.
-        let (result, elapsed, applications) =
-            append_to_working_leader(Duration::from_secs(3), Some(Duration::from_millis(1800)));
-        assert!(
+        let (result, elapsed, applications) = request_to_working_leader(
+            Duration::from_secs(3),
+            Some(Duration::from_millis(1800)),
+            false,
+        );
+        assert_eq!(
             result.unwrap(),
+            serde_json::json!(true),
             "the first attempt's own new ACK is returned"
         );
         assert!(elapsed >= Duration::from_millis(1800));
@@ -8089,10 +8155,29 @@ mod event_client_retry_tests {
     }
 
     #[test]
+    fn a_read_needing_more_than_half_the_budget_answers_the_same_request() {
+        // The read's first slice is half of the budget. The member needs
+        // longer, within the budget it was told, and refuses the read sent
+        // beside it meanwhile.
+        let (result, elapsed, reads) = request_to_working_leader(
+            Duration::from_secs(3),
+            Some(Duration::from_millis(1800)),
+            true,
+        );
+        assert_eq!(result.unwrap(), serde_json::json!({"kept": true}));
+        assert!(elapsed >= Duration::from_millis(1800));
+        assert!(elapsed < Duration::from_secs(3));
+        assert!(
+            reads >= 2,
+            "the slice still releases the request to discovery and a retry"
+        );
+    }
+
+    #[test]
     fn an_exhausted_request_budget_is_not_reported_as_unreachable_members() {
         // Every member answered discovery throughout. The request ran out of
         // budget waiting for its route; that is what the error must say.
-        let (result, elapsed, _) = append_to_working_leader(Duration::from_secs(1), None);
+        let (result, elapsed, _) = request_to_working_leader(Duration::from_secs(1), None, false);
         let error = result.unwrap_err().to_string();
         assert!(
             !error.contains("no event cluster member is reachable"),

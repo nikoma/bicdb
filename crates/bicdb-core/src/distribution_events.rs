@@ -164,11 +164,12 @@ mod client {
     }
 
     /// Outcome of waiting on the attempts of one request that are in flight.
-    enum Waited {
-        Answered(ClusterEventResponse),
+    enum Waited<T> {
+        /// An attempt (its number first) returned a decoded reply.
+        Replied(usize, T),
         /// The attempt the caller is waiting for ended with an error.
         Failed,
-        /// The wait ended first; the attempt is still in flight.
+        /// The wait ended first, or nothing is in flight.
         Pending,
     }
 
@@ -176,21 +177,21 @@ mod client {
     /// Reaching the end of an attempt's slice of the budget only lets the
     /// request go on to discovery and the next attempt; it does not hang up
     /// on a member that accepted the request and is still executing it.
-    struct InFlight {
-        replies: std::sync::mpsc::Receiver<(usize, Result<ClusterEventResponse>)>,
+    struct InFlight<T> {
+        replies: std::sync::mpsc::Receiver<(usize, Result<T>)>,
         attempts: Vec<(usize, crate::CancellationToken)>,
     }
 
-    impl InFlight {
-        /// Wait until `until` for an answer from any attempt, or for the
-        /// error of attempt `awaited`. Errors of other attempts are recorded
-        /// and the wait continues.
+    impl<T> InFlight<T> {
+        /// Wait until `until` for a reply from any attempt, or for the error
+        /// of attempt `awaited`. Errors of other attempts are recorded and
+        /// the wait continues.
         fn wait(
             &mut self,
             awaited: Option<usize>,
             until: std::time::Instant,
             last_error: &mut BicDbError,
-        ) -> Waited {
+        ) -> Waited<T> {
             loop {
                 if self.attempts.is_empty() {
                     return Waited::Pending;
@@ -202,7 +203,7 @@ mod client {
                 };
                 self.attempts.retain(|(id, _)| *id != attempt);
                 match reply {
-                    Ok(response) => return Waited::Answered(response),
+                    Ok(reply) => return Waited::Replied(attempt, reply),
                     Err(error) => {
                         *last_error = error;
                         if awaited == Some(attempt) {
@@ -436,7 +437,7 @@ mod client {
             operation: &ClusterEventOperation,
             scan_range: Option<RangeId>,
             reports: &std::sync::mpsc::Sender<(usize, Result<ClusterEventResponse>)>,
-            in_flight: &mut InFlight,
+            in_flight: &mut InFlight<ClusterEventResponse>,
         ) -> Result<ClusterEventResponse> {
             let mut last_error = invalid("event cluster request failed");
             for attempt in 0..5 {
@@ -451,7 +452,7 @@ mod client {
                     // An earlier attempt that is still executing may answer
                     // during the pause; a pause with nothing in flight is the
                     // plain backoff.
-                    if let Waited::Answered(response) =
+                    if let Waited::Replied(_, response) =
                         in_flight.wait(None, now + pause, &mut last_error)
                     {
                         return Ok(response);
@@ -463,7 +464,7 @@ mod client {
                     // rather than aborting the remaining request budget. Invalid
                     // or conflicting topologies still propagate through `?`.
                     let discovery = self.refresh_members_until(deadline)?;
-                    if let Waited::Answered(response) =
+                    if let Waited::Replied(_, response) =
                         in_flight.wait(None, std::time::Instant::now(), &mut last_error)
                     {
                         return Ok(response);
@@ -540,7 +541,7 @@ mod client {
                         continue;
                     }
                 }
-                if let Waited::Answered(response) =
+                if let Waited::Replied(_, response) =
                     in_flight.wait(Some(attempt), slice_end, &mut last_error)
                 {
                     return Ok(response);
@@ -548,7 +549,7 @@ mod client {
             }
             // The attempts are spent or the budget is nearly so. Whatever is
             // still in flight may yet answer inside the caller's deadline.
-            if let Waited::Answered(response) = in_flight.wait(None, deadline, &mut last_error) {
+            if let Waited::Replied(_, response) = in_flight.wait(None, deadline, &mut last_error) {
                 return Ok(response);
             }
             self.transport.require_rpc_evidence_current()?;
@@ -561,12 +562,85 @@ mod client {
             key: &str,
             mode: crate::distribution_native_read::NativeEventReadMode,
         ) -> Result<ClusterEventResponse> {
-            use crate::distribution_native_read::{
-                NativeEventGetRequest, NativeEventGetResult, NativeEventRoute,
-            };
             let id = cluster_event_record_id(namespace, key)?;
             let deadline = std::time::Instant::now() + self.request_timeout;
             let parent = crate::CancellationToken::uncancelable().child_with_deadline(deadline);
+            std::thread::scope(|scope| {
+                let (reports, replies) = std::sync::mpsc::channel();
+                let mut in_flight = InFlight {
+                    replies,
+                    attempts: Vec::new(),
+                };
+                let result = self.get_attempts(
+                    scope,
+                    &parent,
+                    deadline,
+                    (namespace, key, id.as_str()),
+                    mode,
+                    &reports,
+                    &mut in_flight,
+                );
+                // Every RPC of this request ends before the request returns.
+                drop(reports);
+                in_flight.hang_up();
+                result
+            })
+        }
+
+        #[allow(clippy::too_many_arguments)]
+        fn get_attempts<'scope, 'env>(
+            &'env self,
+            scope: &'scope std::thread::Scope<'scope, 'env>,
+            parent: &crate::CancellationToken,
+            deadline: std::time::Instant,
+            (namespace, key, id): (&str, &str, &str),
+            mode: crate::distribution_native_read::NativeEventReadMode,
+            reports: &std::sync::mpsc::Sender<(
+                usize,
+                Result<crate::distribution_native_read::NativeEventGetReply>,
+            )>,
+            in_flight: &mut InFlight<crate::distribution_native_read::NativeEventGetReply>,
+        ) -> Result<ClusterEventResponse> {
+            use crate::distribution_native_read::{
+                NativeEventGetRequest, NativeEventGetResult, NativeEventGetUnavailableCode,
+                NativeEventRoute,
+            };
+            // A typed result of an attempt that is not the one being awaited
+            // can only end the request (a value, or an unsupported
+            // deployment); its route and pacing advice is stale by then.
+            fn late(
+                result: NativeEventGetResult,
+                last: &mut BicDbError,
+            ) -> Result<Option<ClusterEventResponse>> {
+                match result {
+                    NativeEventGetResult::Value { value, .. }
+                    | NativeEventGetResult::LegacyValue { value } => {
+                        Ok(Some(ClusterEventResponse::Value {
+                            value: value.into_option(),
+                        }))
+                    }
+                    NativeEventGetResult::Redirect { .. } => {
+                        *last = invalid(
+                            "typed event Get redirected; original request deadline retained",
+                        );
+                        Ok(None)
+                    }
+                    NativeEventGetResult::Unavailable { code, detail, .. } => {
+                        if matches!(code, NativeEventGetUnavailableCode::LegacyUnsupported) {
+                            return Err(invalid(
+                                "explicit Strong Get is unsupported by this unenforced deployment",
+                            ));
+                        }
+                        *last =
+                            invalid(&format!("typed event Get unavailable ({code:?}): {detail}"));
+                        Ok(None)
+                    }
+                }
+            }
+            // A read that is still executing is listened to, and at most one
+            // further exchange is added beside it: a slow member is not sent
+            // a new read for every shrinking slice of the budget.
+            const MAX_IN_FLIGHT: usize = 2;
             let business = uuid::Uuid::now_v7();
             let mut hint: Option<NativeEventRoute> = None;
             let mut retry_after = std::time::Duration::from_millis(50);
@@ -578,6 +652,14 @@ mod client {
                 parent.check()?;
                 if attempt > 0 {
                     let until = (std::time::Instant::now() + retry_after).min(deadline);
+                    // An exchange that is still in flight may answer during
+                    // the pause.
+                    while let Waited::Replied(_, reply) = in_flight.wait(None, until, &mut last) {
+                        if let Some(value) = late(reply.result, &mut last)? {
+                            parent.check()?;
+                            return Ok(value);
+                        }
+                    }
                     while std::time::Instant::now() < until {
                         parent.check()?;
                         std::thread::sleep(
@@ -598,9 +680,27 @@ mod client {
                     }
                 }
                 parent.check()?;
+                let now = std::time::Instant::now();
+                // Reserve part of the remaining budget for route discovery
+                // after a silent old route. As for writes, the slice bounds
+                // how long the request WAITS before asking the other members
+                // and how long an attempt may spend connecting; the exchange
+                // itself may use what is left of the caller's budget.
+                let slice_end = (now + deadline.saturating_duration_since(now) / 2)
+                    .min(now + std::time::Duration::from_secs(5));
+                if in_flight.attempts.len() >= MAX_IN_FLIGHT {
+                    while let Waited::Replied(_, reply) = in_flight.wait(None, slice_end, &mut last)
+                    {
+                        if let Some(value) = late(reply.result, &mut last)? {
+                            parent.check()?;
+                            return Ok(value);
+                        }
+                    }
+                    continue;
+                }
                 let (destination, range_id, range_epoch) = {
                     let topology = self.topology.read();
-                    let current = topology.range_for_key(CLUSTER_EVENTS_COLLECTION, &id)?;
+                    let current = topology.range_for_key(CLUSTER_EVENTS_COLLECTION, id)?;
                     match hint.as_ref().filter(|h| {
                         h.generation >= topology.generation
                             && topology.nodes.contains_key(&h.leader)
@@ -609,67 +709,106 @@ mod client {
                         None => (current.leader.clone(), current.id, current.epoch),
                     }
                 };
-                let now = std::time::Instant::now();
-                let attempt_end = (now + deadline.saturating_duration_since(now) / 2)
-                    .min(now + std::time::Duration::from_secs(5));
-                let cancellation = parent.child_with_deadline(attempt_end);
+                // The member is never told a longer budget than this caller
+                // has left (and never more than the protocol's five seconds).
+                let exchange_end = deadline.min(now + std::time::Duration::from_secs(5));
+                let token = parent.child_with_deadline(exchange_end);
                 let request = NativeEventGetRequest {
                     version: 1,
                     mode,
-                    business_request_id: business,
+                    // Retries reuse the request identity. An exchange added
+                    // beside one that is still executing is an independent
+                    // read and must not share its correlation.
+                    business_request_id: if in_flight.attempts.is_empty() {
+                        business
+                    } else {
+                        uuid::Uuid::now_v7()
+                    },
                     challenge: uuid::Uuid::now_v7(),
                     range_id,
                     range_epoch,
                     namespace: namespace.into(),
                     key: key.into(),
                     budget_ms: u64::try_from(
-                        attempt_end.saturating_duration_since(now).as_millis(),
+                        exchange_end.saturating_duration_since(now).as_millis(),
                     )
                     .unwrap_or(5000)
                     .clamp(1, 5000),
                 };
-                match self.transport.native_event_get_cancellable(
-                    &cancellation,
-                    &destination,
-                    &request,
-                ) {
-                    Ok(reply) => {
-                        match reply.result {
-                            NativeEventGetResult::Value { value, .. }
-                            | NativeEventGetResult::LegacyValue { value } => {
-                                parent.check()?;
-                                return Ok(ClusterEventResponse::Value {
-                                    value: value.into_option(),
-                                });
-                            }
-                            NativeEventGetResult::Redirect { route, .. } => {
-                                hint = Some(route);
-                                retry_after = std::time::Duration::from_millis(25);
-                                last=invalid("typed event Get redirected; original request deadline retained");
-                            }
-                            NativeEventGetResult::Unavailable {
-                                code,
-                                route,
-                                retry_after_ms,
-                                detail,
-                            } => {
-                                if matches!(code,crate::distribution_native_read::NativeEventGetUnavailableCode::LegacyUnsupported) {
-                                    return Err(invalid("explicit Strong Get is unsupported by this unenforced deployment"));
-                                }
-                                if route.is_some() {
-                                    hint = route;
-                                }
-                                let backoff = 25u64.saturating_mul(1u64 << attempt.min(4));
-                                retry_after = std::time::Duration::from_millis(
-                                    retry_after_ms.max(backoff).clamp(5, 250),
-                                );
-                                last = invalid(&format!(
-                                    "typed event Get unavailable ({code:?}): {detail}"
+                let exchange = {
+                    let token = token.clone();
+                    let reports = reports.clone();
+                    move || {
+                        let reply = self.transport.native_event_get_listening(
+                            &token,
+                            slice_end,
+                            &destination,
+                            &request,
+                        );
+                        let _ = reports.send((attempt, reply));
+                    }
+                };
+                match std::thread::Builder::new()
+                    .name("event-get-attempt".into())
+                    .spawn_scoped(scope, exchange)
+                {
+                    Ok(_) => in_flight.attempts.push((attempt, token)),
+                    Err(error) => {
+                        last = error.into();
+                        continue;
+                    }
+                }
+                loop {
+                    let (from, reply) = match in_flight.wait(Some(attempt), slice_end, &mut last) {
+                        Waited::Replied(from, reply) => (from, reply),
+                        Waited::Failed | Waited::Pending => break,
+                    };
+                    if from != attempt {
+                        if let Some(value) = late(reply.result, &mut last)? {
+                            parent.check()?;
+                            return Ok(value);
+                        }
+                        continue;
+                    }
+                    match reply.result {
+                        NativeEventGetResult::Value { value, .. }
+                        | NativeEventGetResult::LegacyValue { value } => {
+                            parent.check()?;
+                            return Ok(ClusterEventResponse::Value {
+                                value: value.into_option(),
+                            });
+                        }
+                        NativeEventGetResult::Redirect { route, .. } => {
+                            hint = Some(route);
+                            retry_after = std::time::Duration::from_millis(25);
+                            last = invalid(
+                                "typed event Get redirected; original request deadline retained",
+                            );
+                        }
+                        NativeEventGetResult::Unavailable {
+                            code,
+                            route,
+                            retry_after_ms,
+                            detail,
+                        } => {
+                            if matches!(code, NativeEventGetUnavailableCode::LegacyUnsupported) {
+                                return Err(invalid(
+                                    "explicit Strong Get is unsupported by this unenforced deployment",
                                 ));
                             }
+                            if route.is_some() {
+                                hint = route;
+                            }
+                            let backoff = 25u64.saturating_mul(1u64 << attempt.min(4));
+                            retry_after = std::time::Duration::from_millis(
+                                retry_after_ms.max(backoff).clamp(5, 250),
+                            );
+                            last = invalid(&format!(
+                                "typed event Get unavailable ({code:?}): {detail}"
+                            ));
                         }
                     }
-                    Err(error) => last = error,
+                    break;
                 }
             }
             Err(last)

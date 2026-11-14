@@ -83,6 +83,11 @@ fn fail_io_mode() -> bool {
 
 /// See `checkpoints` in `main`.
 const MIN_CHECKPOINTS: u64 = 20;
+
+/// How long a fail-closed run whose writers finished keeps its DDL and
+/// checkpoint threads going while the armed fault has not fenced the
+/// database. Reached only when the fault cannot be reached at all.
+const FAULT_REACH_BOUND: Duration = Duration::from_secs(60);
 pub const WRITERS: usize = 4;
 
 /// Passphrase of the base backups taken in archive mode.
@@ -482,6 +487,7 @@ fn main() {
         }
         // Writers are the first WRITERS spawned threads; wait for them by
         // polling their ledgers rather than joining inside the scope.
+        let mut writers_finished_at = None;
         loop {
             std::thread::sleep(Duration::from_millis(20));
             let wanted = if bounded_checkpoints() {
@@ -489,15 +495,41 @@ fn main() {
             } else {
                 MIN_CHECKPOINTS
             };
-            let finished = commits == 0
-                || writers_done.load(Ordering::Acquire) == WRITERS as u64
-                    && (fail_io || checkpoints.load(Ordering::Acquire) >= wanted)
-                || checkpoints.load(Ordering::Acquire) >= wanted
-                    && (0..WRITERS).all(|writer| {
-                        std::fs::read_to_string(ledger.join(format!("writer-{writer}")))
-                            .map(|text| text.lines().last() == Some(commits.to_string().as_str()))
-                            .unwrap_or(false)
-                    });
+            let writers_finished = writers_done.load(Ordering::Acquire) == WRITERS as u64;
+            let enough_checkpoints = checkpoints.load(Ordering::Acquire) >= wanted;
+            let finished = if commits == 0 {
+                true
+            } else if fail_io && archive.is_some() {
+                // Archive faults do not fence the database; the archiver
+                // records them itself.
+                writers_finished
+            } else if fail_io {
+                // The fail-closed matrix names its fault by call count
+                // (`page_log.sync:60`), and how many calls of a site the
+                // writers cause depends on timing: in the transaction-log
+                // mode commits do not sync the page log at all, only the
+                // materializer and checkpoint timers do, so writers on a
+                // fast disk finish before the n-th call. The DDL and
+                // checkpoint threads keep exercising every site, so keep
+                // the run going until the fault fenced the database. The
+                // bound only ends a run whose fault can never be reached;
+                // the parent then reports exactly that.
+                writers_finished && {
+                    let since = *writers_finished_at.get_or_insert_with(std::time::Instant::now);
+                    since.elapsed() >= FAULT_REACH_BOUND
+                        || !db.read().expect("db lock").durability_state().is_healthy()
+                }
+            } else {
+                enough_checkpoints
+                    && (writers_finished
+                        || (0..WRITERS).all(|writer| {
+                            std::fs::read_to_string(ledger.join(format!("writer-{writer}")))
+                                .map(|text| {
+                                    text.lines().last() == Some(commits.to_string().as_str())
+                                })
+                                .unwrap_or(false)
+                        }))
+            };
             if finished {
                 done.store(true, Ordering::Release);
                 break;
@@ -520,6 +552,24 @@ fn main() {
             // open recovers and verifies instead.
             if db.checkpoint_for_resume().is_ok() {
                 append_line(&violations, "checkpoint succeeded on a fenced database");
+            }
+            // The fault may have fired after the last writer finished, so
+            // no writer saw it: a commit must be refused all the same.
+            let late = db.begin_transaction().and_then(|mut tx| {
+                tx.insert(
+                    "rows",
+                    Record::new("after-fence")
+                        .with_metadata(json!({"owner": WRITERS, "seq": 0, "uk": "after-fence"})),
+                )?;
+                tx.commit()
+            });
+            match late {
+                Ok(()) => append_line(&violations, "commit acknowledged on a fenced database"),
+                Err(error) if !error.is_durability_failure() => append_line(
+                    &violations,
+                    &format!("commit on a fenced database: not a durability failure: {error}"),
+                ),
+                Err(_) => {}
             }
             return;
         }

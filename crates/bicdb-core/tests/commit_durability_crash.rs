@@ -565,6 +565,10 @@ const FAIL_IO_SPECS: &[&str] = &[
 ];
 
 fn fail_io_case(mode: &str, spec: &str) {
+    fail_io_case_with(mode, spec, COMMITS)
+}
+
+fn fail_io_case_with(mode: &str, spec: &str, commits: u64) {
     let label = format!("{mode} fail-io {spec}");
     let temp = tempfile::tempdir().unwrap();
     let keep = KeepOnPanic(temp.path().to_path_buf(), label.clone());
@@ -575,7 +579,7 @@ fn fail_io_case(mode: &str, spec: &str) {
         .arg(&db)
         .arg(&ledger)
         .arg(durability(mode))
-        .arg(COMMITS.to_string())
+        .arg(commits.to_string())
         .env("BICDB_TEST_FAIL_IO", spec)
         .env_remove("BICDB_TEST_WAL_VOLATILE_TAIL")
         .env_remove("BICDB_TEST_CRASH_AT");
@@ -678,6 +682,19 @@ fn production_path_fails_closed_at_every_io_failure_site_with_eviction() {
 #[test]
 fn transaction_log_only_path_fails_closed_at_every_io_failure_site() {
     fail_io_matrix("transaction-log");
+}
+
+/// A fail-closed case names its fault by call count, and the writers alone
+/// do not determine how often a site is called: in the transaction-log mode
+/// the page log is synced by the materializer and checkpoint timers, not by
+/// commits, so quick writers used to finish before `page_log.sync:60` and the
+/// case reported a healthy database. With writers that finish almost at once
+/// the child must still run until the fault fences the database.
+#[test]
+fn fail_io_fault_is_reached_after_the_writers_finished() {
+    for mode in ["transaction-log", "all-logs"] {
+        fail_io_case_with(mode, "page_log.sync:60", 2);
+    }
 }
 
 /// Diagnostic: repeat one case. `DURABILITY_CASE=<mode>/<point>` and

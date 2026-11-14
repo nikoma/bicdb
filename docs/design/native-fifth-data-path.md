@@ -98,8 +98,9 @@ joint record) and from the custody it retains, and continues from there:
 
 - Source cut and transfer. A retained closure is bound to its original
   issuance window and cannot enter a new round, and a capture is single-use.
-  Every run therefore releases the hosts' retained closures, closes the old
-  voters again with fresh roles and takes a new capture. Closing again
+  A run that still has to ship the image therefore releases the hosts'
+  retained closures, closes the old voters again with fresh roles and takes a
+  new capture. Closing again
   confirms the same durable promise and native close record; a different
   session is refused.
 - Target install. A transfer that already modified the target cannot be
@@ -118,7 +119,8 @@ joint record) and from the custody it retains, and continues from there:
   the stages already committed.
 - Open, release and serving. Every finished part (policy continuation,
   preparation, publication, each member's Open, the release continuation,
-  each member's release) is retained and skipped by a later run.
+  each member's release) is retained and skipped by a later run. No test
+  interrupts the driver inside this part.
 - A run after completion returns immediately and changes nothing.
 
 **Custody.** The joint machinery issues live owners that cannot be decoded

@@ -1,0 +1,21 @@
+{
+  "run": 43529104485,
+  "job": 132242099377,
+  "event": "pull_request",
+  "run_head_sha": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+  "actual_checkout_sha": "de15f8f9836e0e93fb2e912ad230437bc975aa6a",
+  "actual_checkout_ref": "refs/remotes/pull/181/merge",
+  "checkout_git_log_line": 265,
+  "checkout_git_log_text": "2026-11-13T23:42:57.8947634Z de15f8f9836e0e93fb2e912ad230437bc975aa6a",
+  "checkout_announcement_line": 262,
+  "checkout_announcement_text": "2026-11-13T23:42:57.8833193Z HEAD is now at de15f8f Merge c6a081a6026f4efd00d80f392c94b67f2f2f4e12 into 629857f5eaaeee5f5a9124d505406d8cd6a29535",
+  "run_head_tree": "a4712298110429f1c0d7ce63876b200e42a874b3",
+  "actual_checkout_tree": "a4712298110429f1c0d7ce63876b200e42a874b3",
+  "same_commit": false,
+  "same_complete_tree": true,
+  "proof": "Raw Git commit objects recomputed by portable verifier; each embeds exactly the same tree. Fourteen source blobs have full retained Git-tree membership paths. No equal-SHA assumption.",
+  "raw_git_tree_object_count": 26,
+  "source_pin_count": 14,
+  "main_comparison_sha": "629857f5eaaeee5f5a9124d505406d8cd6a29535",
+  "main_comparison_tree": "33480d5ab92f676ded81906093f1d648cf96e860"
+}

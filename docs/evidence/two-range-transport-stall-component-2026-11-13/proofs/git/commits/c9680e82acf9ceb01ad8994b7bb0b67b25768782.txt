@@ -1,0 +1,6 @@
+tree 58ffd19460b3db0abee1dee2fcdc509144ad240f
+parent c08fb440be78ff1b891dc9a5e4c6ec87228918cb
+author nikoma <niko.manek@gmail.com> 1794624112 -0800
+committer nikoma <niko.manek@gmail.com> 1794624112 -0800
+
+test(ha): expose stall helper to its owning fixture scope

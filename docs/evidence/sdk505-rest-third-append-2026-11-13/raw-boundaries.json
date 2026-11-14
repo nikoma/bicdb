@@ -1,0 +1,160 @@
+{
+  "full_raw_bytes": 85809455,
+  "full_raw_lines": 637367,
+  "maximum_raw_line_bytes": 3190,
+  "test_results": [
+    {
+      "test": "native_metadata_operator_actual_cli_four_process_startup_registration_and_data_refusal",
+      "result": "ok",
+      "raw_line": 637071
+    },
+    {
+      "test": "promoted_cold_tests::native_metadata_operator_actual_cli_automatic_promoted_voter_kill_reopen_same_root",
+      "result": "ok",
+      "raw_line": 637072
+    },
+    {
+      "test": "native_metadata_operator_actual_cli_single_join_fresh_becomes_local_metadata_voter",
+      "result": "ok",
+      "raw_line": 637073
+    },
+    {
+      "test": "initial_data_tests::native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value",
+      "result": "FAILED",
+      "raw_line": 637074
+    },
+    {
+      "test": "replica_receiver_tests::native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner_no_data_grant",
+      "result": "ok",
+      "raw_line": 637075
+    },
+    {
+      "test": "writer_registry_refresh_baseline::native_metadata_registry_addition_actual_cli_requires_healthy_existing_read_and_fresh_ack",
+      "result": "ok",
+      "raw_line": 637076
+    }
+  ],
+  "failed_stdout_header": {
+    "line": 637080,
+    "text": "2026-11-14T01:26:19.9458788Z ---- initial_data_tests::native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value stdout ----"
+  },
+  "panic": {
+    "line": 637101,
+    "text": "2026-11-14T01:26:19.9781336Z thread 'initial_data_tests::native_initial_data_actual_cli_four_process_first_ack_and_strong_full_value' (75326) panicked at crates/bicdb-cli/tests/native_metadata_operator_cli/initial_data_tests.rs:271:17:"
+  },
+  "target_summary": {
+    "line": 637110,
+    "text": "2026-11-14T01:26:19.9786300Z test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 52.18s"
+  },
+  "ledger_record_raw_line_positions": [
+    {
+      "line": 637082,
+      "stage": "four_initial_owners",
+      "logical_operation_id": null,
+      "key": null
+    },
+    {
+      "line": 637083,
+      "stage": "first_receiver_pending",
+      "logical_operation_id": null,
+      "key": null
+    },
+    {
+      "line": 637084,
+      "stage": "attempt",
+      "logical_operation_id": "01a1d7a9-5e21-71d1-9637-8ed477734cb9",
+      "key": "before-initial-data-quorum"
+    },
+    {
+      "line": 637085,
+      "stage": "reply",
+      "logical_operation_id": "01a1d7a9-5e21-71d1-9637-8ed477734cb9",
+      "key": "before-initial-data-quorum"
+    },
+    {
+      "line": 637086,
+      "stage": "data_open_action",
+      "logical_operation_id": null,
+      "key": null
+    },
+    {
+      "line": 637087,
+      "stage": "data_open_action",
+      "logical_operation_id": null,
+      "key": null
+    },
+    {
+      "line": 637088,
+      "stage": "data_open_action",
+      "logical_operation_id": null,
+      "key": null
+    },
+    {
+      "line": 637089,
+      "stage": "data_open_action",
+      "logical_operation_id": null,
+      "key": null
+    },
+    {
+      "line": 637090,
+      "stage": "data_open_action",
+      "logical_operation_id": null,
+      "key": null
+    },
+    {
+      "line": 637091,
+      "stage": "data_open_action",
+      "logical_operation_id": null,
+      "key": null
+    },
+    {
+      "line": 637092,
+      "stage": "attempt",
+      "logical_operation_id": "01a1d7a9-76c6-7cc0-bcea-f0f071f0cfb3",
+      "key": "external-first-ack"
+    },
+    {
+      "line": 637093,
+      "stage": "reply",
+      "logical_operation_id": "01a1d7a9-76c6-7cc0-bcea-f0f071f0cfb3",
+      "key": "external-first-ack"
+    },
+    {
+      "line": 637094,
+      "stage": "strong_reply",
+      "logical_operation_id": "01a1d7a9-7926-7663-a152-d3c4fbb2376f",
+      "key": "external-first-ack"
+    },
+    {
+      "line": 637095,
+      "stage": "attempt",
+      "logical_operation_id": "01a1d7a9-7b02-7cf0-b925-2d70a0970c37",
+      "key": "external-json-null"
+    },
+    {
+      "line": 637096,
+      "stage": "reply",
+      "logical_operation_id": "01a1d7a9-7b02-7cf0-b925-2d70a0970c37",
+      "key": "external-json-null"
+    },
+    {
+      "line": 637097,
+      "stage": "strong_reply",
+      "logical_operation_id": "01a1d7a9-7d97-76e0-8b28-1628dccb51c3",
+      "key": "external-json-null"
+    },
+    {
+      "line": 637098,
+      "stage": "attempt",
+      "logical_operation_id": "01a1d7a9-7fda-7e02-bc20-f7cecc2e95d9",
+      "key": "external-empty-object"
+    },
+    {
+      "line": 637099,
+      "stage": "reply",
+      "logical_operation_id": "01a1d7a9-7fda-7e02-bc20-f7cecc2e95d9",
+      "key": "external-empty-object"
+    }
+  ],
+  "timestamps_are_stdout_delivery_not_API_latency": true
+}

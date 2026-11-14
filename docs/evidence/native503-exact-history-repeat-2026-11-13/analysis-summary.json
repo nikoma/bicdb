@@ -1,0 +1,211 @@
+{
+  "captured_at_utc": "2026-11-14T01:41:46.986385+00:00",
+  "source": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+  "source_version": "1.0.503-beta candidate/unmerged",
+  "run": 43529104485,
+  "attempt": 2,
+  "only_actual_new_job": 132276661454,
+  "native_result": "212 passed;0failed;1ignored;877filtered;913.06s",
+  "native_job_conclusion": "success",
+  "run_conclusion": "success",
+  "actual_checkout": "de15f8f9836e0e93fb2e912ad230437bc975aa6a",
+  "actual_checkout_proof": [
+    {
+      "command_line": 265,
+      "actual_checkout": "de15f8f9836e0e93fb2e912ad230437bc975aa6a",
+      "value_line": 266
+    }
+  ],
+  "actual_full_tree": "a4712298110429f1c0d7ce63876b200e42a874b3",
+  "source_head_same_tree": true,
+  "original_checkout_same": true,
+  "runner": {
+    "runner_id": 1000024937,
+    "runner_name": "GitHub Actions 1000024937",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions",
+    "labels": [
+      "ubuntu-latest"
+    ]
+  },
+  "original_runner": {
+    "runner_id": 1000024718,
+    "runner_name": "GitHub Actions 1000024718",
+    "labels": [
+      "ubuntu-latest"
+    ]
+  },
+  "runner_image": {
+    "agent": "2.338.2",
+    "image": "ubuntu-24.04",
+    "image_version": "20261111.370.1",
+    "same_declared_image_as_original": true,
+    "not_proven": "identical load, resources, cache state, timing or physical host"
+  },
+  "selection": {
+    "actual_start_names": 213,
+    "same_exact_order_as_original": true,
+    "same_ignored_internal_child": true,
+    "original_four": [
+      {
+        "line": 13844,
+        "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_current_damage_refused_at_exit",
+        "suffix": "ok"
+      },
+      {
+        "line": 13854,
+        "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_finite_open_never_starts_process_worker",
+        "suffix": "ok"
+      },
+      {
+        "line": 13857,
+        "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation",
+        "suffix": "ok"
+      },
+      {
+        "line": 13865,
+        "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root",
+        "suffix": "ok"
+      }
+    ],
+    "source_assertions_budgets_flags_order_changed": false
+  },
+  "raw_log": {
+    "file": "native-job.log.gz",
+    "raw_bytes": 3356187,
+    "raw_sha256": "546058667c030f6e4f6abb427801031816782a9e23c5541541b6d1357858e312",
+    "gzip_sha256": "98316e8f4058f8d31b0f551805f8d14392d157afbd2a6b3e59fb69b8c838fdf5"
+  },
+  "attempt2_display_jobs": [
+    {
+      "attempt2_display_job_id": 132276661454,
+      "name": "bicdb-core native multi-node (serial)",
+      "started_at": "2026-11-14T01:16:19Z",
+      "completed_at": "2026-11-14T01:40:07Z",
+      "conclusion": "success",
+      "classification": "new actual native execution",
+      "original_job_id": 132242099377
+    },
+    {
+      "attempt2_display_job_id": 132276661582,
+      "name": "Licensing invariants",
+      "started_at": "2026-11-13T23:42:33Z",
+      "completed_at": "2026-11-13T23:42:43Z",
+      "conclusion": "success",
+      "classification": "copied prior result; not rerun",
+      "original_job_id": 132242071783
+    },
+    {
+      "attempt2_display_job_id": 132276661913,
+      "name": "Validate focused test selectors",
+      "started_at": "2026-11-13T23:42:33Z",
+      "completed_at": "2026-11-13T23:42:35Z",
+      "conclusion": "success",
+      "classification": "copied prior result; not rerun",
+      "original_job_id": 132242071845
+    },
+    {
+      "attempt2_display_job_id": 132276662541,
+      "name": "rest of workspace",
+      "started_at": "2026-11-13T23:42:38Z",
+      "completed_at": "2026-11-14T01:08:40Z",
+      "conclusion": "success",
+      "classification": "copied prior result; not rerun",
+      "original_job_id": 132242099407
+    },
+    {
+      "attempt2_display_job_id": 132276662701,
+      "name": "bicdb-core",
+      "started_at": "2026-11-13T23:42:37Z",
+      "completed_at": "2026-11-14T00:08:17Z",
+      "conclusion": "success",
+      "classification": "copied prior result; not rerun",
+      "original_job_id": 132242099462
+    },
+    {
+      "attempt2_display_job_id": 132276662864,
+      "name": "Focused PGwire library (${{ inputs.pgwire_filter }})",
+      "started_at": "2026-11-14T01:16:18Z",
+      "completed_at": "2026-11-13T23:42:35Z",
+      "conclusion": "skipped",
+      "classification": "not executed/skipped",
+      "original_job_id": 132242101149
+    },
+    {
+      "attempt2_display_job_id": 132276701456,
+      "name": "Public repository has no private dependencies",
+      "started_at": "2026-11-13T23:42:33Z",
+      "completed_at": "2026-11-13T23:43:08Z",
+      "conclusion": "success",
+      "classification": "copied prior result; not rerun",
+      "original_job_id": 132242071450
+    },
+    {
+      "attempt2_display_job_id": 132276706384,
+      "name": "Focused CLI integration (${{ inputs.cli_target }})",
+      "started_at": "2026-11-14T01:16:26Z",
+      "completed_at": "2026-11-13T23:42:35Z",
+      "conclusion": "skipped",
+      "classification": "not executed/skipped",
+      "original_job_id": 132242101597
+    },
+    {
+      "attempt2_display_job_id": 132276710706,
+      "name": "Community-only workspace compiles, tests included",
+      "started_at": "2026-11-13T23:42:34Z",
+      "completed_at": "2026-11-13T23:47:53Z",
+      "conclusion": "success",
+      "classification": "copied prior result; not rerun",
+      "original_job_id": 132242071909
+    },
+    {
+      "attempt2_display_job_id": 132276713048,
+      "name": "bicdb-sql",
+      "started_at": "2026-11-13T23:42:38Z",
+      "completed_at": "2026-11-14T00:23:39Z",
+      "conclusion": "success",
+      "classification": "copied prior result; not rerun",
+      "original_job_id": 132242099447
+    },
+    {
+      "attempt2_display_job_id": 132276713967,
+      "name": "Formatting",
+      "started_at": "2026-11-13T23:42:33Z",
+      "completed_at": "2026-11-13T23:43:06Z",
+      "conclusion": "success",
+      "classification": "copied prior result; not rerun",
+      "original_job_id": 132242071771
+    },
+    {
+      "attempt2_display_job_id": 132276716567,
+      "name": "Focused Core library (${{ inputs.core_filter }})",
+      "started_at": "2026-11-14T01:16:28Z",
+      "completed_at": "2026-11-13T23:42:35Z",
+      "conclusion": "skipped",
+      "classification": "not executed/skipped",
+      "original_job_id": 132242101992
+    },
+    {
+      "attempt2_display_job_id": 132276717979,
+      "name": "bicdb-pgwire",
+      "started_at": "2026-11-13T23:42:37Z",
+      "completed_at": "2026-11-13T23:53:11Z",
+      "conclusion": "success",
+      "classification": "copied prior result; not rerun",
+      "original_job_id": 132242099365
+    }
+  ],
+  "APP_and_native_outcome_scope": "Full test pass includes original assertions, but this uninstrumented repeat has no call-level SDK ledger or new payload/native outcome reconciliation; do not substitute focused7ab counts as repeat measurements.",
+  "original_failure": {
+    "job": 132242099377,
+    "result": "208 passed;4failed;1ignored;1197.50s",
+    "raw_log_sha256": "8af0ca1ea94ef88ae64a0ed4101d907d044072acd20ff8ce2c22d4149da09e54",
+    "archive": "3218ee4b635c9710f69889e4294445a6526db680",
+    "unchanged": true,
+    "causes": "inconclusive"
+  },
+  "qualification_scope": "This controlled exact-source full-history repeat clears its CI check. It is not a code fix, original cause explanation, RPO/RTO, benchmark, physical HA or scale-out/production qualification.",
+  "runtime_RAM_metrics": "not available; unchanged workflow has no new memory guard or instrumentation",
+  "no_new_dispatches_or_retries_by_capture": true,
+  "engine_opened": false
+}

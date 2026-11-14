@@ -1,0 +1,590 @@
+{
+  "total_count": 9,
+  "jobs": [
+    {
+      "id": 132303983577,
+      "run_id": 43548089992,
+      "workflow_name": "tests",
+      "head_branch": "qual/native-source-stall-component-c968",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43548089992",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAeze6T2Q",
+      "head_sha": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132303983577",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43548089992/job/132303983577",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-14T02:46:02Z",
+      "started_at": "2026-11-14T02:46:04Z",
+      "completed_at": "2026-11-14T02:46:13Z",
+      "name": "Licensing invariants",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-14T02:46:05Z",
+          "completed_at": "2026-11-14T02:46:05Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-14T02:46:05Z",
+          "completed_at": "2026-11-14T02:46:11Z"
+        },
+        {
+          "name": "scripts/validate-licensing.sh",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-14T02:46:11Z",
+          "completed_at": "2026-11-14T02:46:11Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-14T02:46:11Z",
+          "completed_at": "2026-11-14T02:46:11Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-14T02:46:11Z",
+          "completed_at": "2026-11-14T02:46:11Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132303983577",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000025031,
+      "runner_name": "GitHub Actions 1000025031",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 132303983754,
+      "run_id": 43548089992,
+      "workflow_name": "tests",
+      "head_branch": "qual/native-source-stall-component-c968",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43548089992",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAeze6Uig",
+      "head_sha": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132303983754",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43548089992/job/132303983754",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-14T02:46:02Z",
+      "started_at": "2026-11-14T02:46:04Z",
+      "completed_at": "2026-11-14T02:46:36Z",
+      "name": "Formatting",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-14T02:46:05Z",
+          "completed_at": "2026-11-14T02:46:06Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-14T02:46:06Z",
+          "completed_at": "2026-11-14T02:46:12Z"
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@1.96.0",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-14T02:46:12Z",
+          "completed_at": "2026-11-14T02:46:21Z"
+        },
+        {
+          "name": "Run cargo fmt --all -- --check",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-14T02:46:21Z",
+          "completed_at": "2026-11-14T02:46:34Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-14T02:46:34Z",
+          "completed_at": "2026-11-14T02:46:34Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-14T02:46:34Z",
+          "completed_at": "2026-11-14T02:46:34Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132303983754",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000025033,
+      "runner_name": "GitHub Actions 1000025033",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 132303983766,
+      "run_id": 43548089992,
+      "workflow_name": "tests",
+      "head_branch": "qual/native-source-stall-component-c968",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43548089992",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAeze6Ulg",
+      "head_sha": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132303983766",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43548089992/job/132303983766",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-14T02:46:02Z",
+      "started_at": "2026-11-14T02:46:04Z",
+      "completed_at": "2026-11-14T02:46:39Z",
+      "name": "Public repository has no private dependencies",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-14T02:46:05Z",
+          "completed_at": "2026-11-14T02:46:05Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-14T02:46:05Z",
+          "completed_at": "2026-11-14T02:46:11Z"
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-14T02:46:11Z",
+          "completed_at": "2026-11-14T02:46:20Z"
+        },
+        {
+          "name": "Install boundary scanner",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-14T02:46:20Z",
+          "completed_at": "2026-11-14T02:46:29Z"
+        },
+        {
+          "name": "Enforce open-core dependency direction",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-14T02:46:29Z",
+          "completed_at": "2026-11-14T02:46:38Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-11-14T02:46:38Z",
+          "completed_at": "2026-11-14T02:46:38Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-11-14T02:46:38Z",
+          "completed_at": "2026-11-14T02:46:38Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132303983766",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000025032,
+      "runner_name": "GitHub Actions 1000025032",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 132303983792,
+      "run_id": 43548089992,
+      "workflow_name": "tests",
+      "head_branch": "qual/native-source-stall-component-c968",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43548089992",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAeze6UsA",
+      "head_sha": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132303983792",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43548089992/job/132303983792",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-14T02:46:02Z",
+      "started_at": "2026-11-14T02:46:04Z",
+      "completed_at": "2026-11-14T02:46:09Z",
+      "name": "Validate focused test selectors",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-14T02:46:05Z",
+          "completed_at": "2026-11-14T02:46:05Z"
+        },
+        {
+          "name": "Reject incompatible or malformed selectors",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-14T02:46:05Z",
+          "completed_at": "2026-11-14T02:46:07Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-14T02:46:07Z",
+          "completed_at": "2026-11-14T02:46:07Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132303983792",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000025034,
+      "runner_name": "GitHub Actions 1000025034",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 132303983971,
+      "run_id": 43548089992,
+      "workflow_name": "tests",
+      "head_branch": "qual/native-source-stall-component-c968",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43548089992",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAeze6VYw",
+      "head_sha": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132303983971",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43548089992/job/132303983971",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-14T02:46:02Z",
+      "started_at": "2026-11-14T02:46:04Z",
+      "completed_at": "2026-11-14T02:50:53Z",
+      "name": "Community-only workspace compiles, tests included",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-14T02:46:04Z",
+          "completed_at": "2026-11-14T02:46:05Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-14T02:46:05Z",
+          "completed_at": "2026-11-14T02:46:10Z"
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-14T02:46:10Z",
+          "completed_at": "2026-11-14T02:46:21Z"
+        },
+        {
+          "name": "Run Swatinem/rust-cache@v2",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-14T02:46:21Z",
+          "completed_at": "2026-11-14T02:46:36Z"
+        },
+        {
+          "name": "cargo check --workspace --all-targets",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-14T02:46:36Z",
+          "completed_at": "2026-11-14T02:50:23Z"
+        },
+        {
+          "name": "Workflow consumer compiles without Core defaults",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-14T02:50:23Z",
+          "completed_at": "2026-11-14T02:50:51Z"
+        },
+        {
+          "name": "Retain qualification build pressure and interruption evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-14T02:50:51Z",
+          "completed_at": "2026-11-14T02:50:51Z"
+        },
+        {
+          "name": "Post Run Swatinem/rust-cache@v2",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-11-14T02:50:51Z",
+          "completed_at": "2026-11-14T02:50:51Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-11-14T02:50:51Z",
+          "completed_at": "2026-11-14T02:50:52Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15,
+          "started_at": "2026-11-14T02:50:52Z",
+          "completed_at": "2026-11-14T02:50:52Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132303983971",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000025035,
+      "runner_name": "GitHub Actions 1000025035",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 132304020107,
+      "run_id": 43548089992,
+      "workflow_name": "tests",
+      "head_branch": "qual/native-source-stall-component-c968",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43548089992",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAeze8iiw",
+      "head_sha": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132304020107",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43548089992/job/132304020107",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-14T02:46:10Z",
+      "started_at": "2026-11-14T02:46:12Z",
+      "completed_at": "2026-11-14T02:58:55Z",
+      "name": "Focused Core library (native_registered_fifth_remote_selected_rows_reply_stall_other_populated_range_original_sdk_progress)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-14T02:46:13Z",
+          "completed_at": "2026-11-14T02:46:14Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-14T02:46:14Z",
+          "completed_at": "2026-11-14T02:46:20Z"
+        },
+        {
+          "name": "Run dtolnay/rust-toolchain@stable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-14T02:46:20Z",
+          "completed_at": "2026-11-14T02:46:29Z"
+        },
+        {
+          "name": "Run Swatinem/rust-cache@v2",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-14T02:46:29Z",
+          "completed_at": "2026-11-14T02:46:39Z"
+        },
+        {
+          "name": "Build projection chaos helper",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-14T02:46:39Z",
+          "completed_at": "2026-11-14T02:56:29Z"
+        },
+        {
+          "name": "Record exact source and list one component plus whole inventory",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-14T02:56:29Z",
+          "completed_at": "2026-11-14T02:58:25Z"
+        },
+        {
+          "name": "Execute only the exact transport-stall component serially",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-14T02:58:25Z",
+          "completed_at": "2026-11-14T02:58:38Z"
+        },
+        {
+          "name": "Retain focused source, log and opted-in fault-state evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-14T02:58:38Z",
+          "completed_at": "2026-11-14T02:58:40Z"
+        },
+        {
+          "name": "Post Run Swatinem/rust-cache@v2",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15,
+          "started_at": "2026-11-14T02:58:40Z",
+          "completed_at": "2026-11-14T02:58:52Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16,
+          "started_at": "2026-11-14T02:58:52Z",
+          "completed_at": "2026-11-14T02:58:52Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17,
+          "started_at": "2026-11-14T02:58:52Z",
+          "completed_at": "2026-11-14T02:58:52Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132304020107",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000025036,
+      "runner_name": "GitHub Actions 1000025036",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 132304021353,
+      "run_id": 43548089992,
+      "workflow_name": "tests",
+      "head_branch": "qual/native-source-stall-component-c968",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43548089992",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAeze8naQ",
+      "head_sha": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132304021353",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43548089992/job/132304021353",
+      "status": "completed",
+      "conclusion": "skipped",
+      "created_at": "2026-11-14T02:46:10Z",
+      "started_at": "2026-11-14T02:46:10Z",
+      "completed_at": "2026-11-14T02:46:10Z",
+      "name": "Focused CLI integration (${{ inputs.cli_target }})",
+      "steps": [],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132304021353",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": null,
+      "runner_name": null,
+      "runner_group_id": null,
+      "runner_group_name": null
+    },
+    {
+      "id": 132304021469,
+      "run_id": 43548089992,
+      "workflow_name": "tests",
+      "head_branch": "qual/native-source-stall-component-c968",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43548089992",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAeze8n3Q",
+      "head_sha": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132304021469",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43548089992/job/132304021469",
+      "status": "completed",
+      "conclusion": "skipped",
+      "created_at": "2026-11-14T02:46:10Z",
+      "started_at": "2026-11-14T02:46:10Z",
+      "completed_at": "2026-11-14T02:46:10Z",
+      "name": "matrix.suite.name",
+      "steps": [],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132304021469",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": null,
+      "runner_name": null,
+      "runner_group_id": null,
+      "runner_group_name": null
+    },
+    {
+      "id": 132304021788,
+      "run_id": 43548089992,
+      "workflow_name": "tests",
+      "head_branch": "qual/native-source-stall-component-c968",
+      "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43548089992",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOUimcAs8AAAAeze8pHA",
+      "head_sha": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132304021788",
+      "html_url": "https://github.com/nikoma/bicdb/actions/runs/43548089992/job/132304021788",
+      "status": "completed",
+      "conclusion": "skipped",
+      "created_at": "2026-11-14T02:46:10Z",
+      "started_at": "2026-11-14T02:46:10Z",
+      "completed_at": "2026-11-14T02:46:10Z",
+      "name": "Focused PGwire library (${{ inputs.pgwire_filter }})",
+      "steps": [],
+      "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132304021788",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": null,
+      "runner_name": null,
+      "runner_group_id": null,
+      "runner_group_name": null
+    }
+  ]
+}

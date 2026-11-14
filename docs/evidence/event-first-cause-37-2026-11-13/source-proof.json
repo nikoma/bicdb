@@ -1,0 +1,294 @@
+{
+  "object_types": {
+    "1ce471aa315b93f58c00ddce5c0577505df472ab": "commit",
+    "072ade050c8f490e19890493871b6a89d4087fbb": "tree",
+    "0bbe70e71912aac79110542724fbaaed84d60043": "tree",
+    "700ec073513e7ac7cc46df10bb0dc292abc215cd": "tree",
+    "cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f": "commit",
+    "e9eb277bf9657cf660df90bfc21faa1a6ad042b9": "tree",
+    "39b82a1699a5f56fdd23a46cc970b5e17bd606d7": "tree",
+    "de07f5308b1a1783115c657713d5712efe4c3bbe": "tree",
+    "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6": "commit",
+    "eed2f400cd7bf9a0282dba4223865e6c30f85ade": "tree",
+    "cdc4a8612c0e161508a63c7ffb8a282af062dd37": "tree",
+    "091a94aac3f7f3ab8deb56710b0ee55c5dacdcc6": "tree",
+    "521243e597c2d833be840773acac728a85161969": "commit",
+    "52c6c9d80a03997fd3b370df20edae29536c2a91": "tree",
+    "6dd0313c7e41a276960c725978927fcfcc7cdd94": "commit",
+    "033e6449ea4454f9201ae3f407c2152a2ae44015": "tree",
+    "99f1a05bce08ba0ad5f8a777a844317d6c7a6d2b": "commit",
+    "6e1547a07a2749be2946ba50f2028b74ac080b90": "tree",
+    "cfc18d1de9fcf82432aa88e6b988a47a3c0e81b1": "tree",
+    "d9a67bccf3901e17637579300cc6e47469008d57": "blob",
+    "878cce6bb74a5022262bc89ad7ca842acb253684": "blob",
+    "6c546cb885525179b35a5128a0741ff2dd1d26e6": "tree",
+    "fccc1703908dcc405c7bc858084a38c11d9e0bcd": "tree",
+    "a06a451179d4ef63bd89ffa782b8bb31165d7991": "blob",
+    "8114148008bb4951d19e5db32256fcb172e841fe": "blob",
+    "2e2dcbeca58374f74e54e6e2f49d9b4c76066efe": "tree",
+    "984a49ac17af8ddb3c1fe11bbdbe1548011545a6": "tree",
+    "dc6c9c9232853b1631533e52af90799645cd56e5": "blob",
+    "f978539d26fe61da833ab9d5e0267240aadeb3a4": "blob",
+    "37da9d578201095016fdc71d80cdc33be859583c": "blob",
+    "0113877bcc6f2b7c85ffd0fadbb5e04bf7b3dbea": "tree",
+    "0f8d4fb6321184de035acde84edd5849a29aaac7": "blob",
+    "3b2124442e5f0a3d1670bdd4b076ed0aef233be4": "tree",
+    "502de8a0293a5db0f11707415fe9a9839cf02b22": "blob",
+    "6bfaa71a2a9ede8915a9a7a80ac5219e0dd65da1": "blob",
+    "a480fa4d8d71f99d45421abdcf0ee2f25c522f86": "blob",
+    "20bd724d42ef2ed117bf024e2d41a000546fcdbb": "tree",
+    "1882f48b809c4baae986c5fc829b3a82feb3d93f": "tree",
+    "b9d197cc66f602d3b35d723c92b50ef9f25da7c7": "tree",
+    "ff32c0e05354e70bf5ff168e25146c789f70b2fe": "blob",
+    "6ab9db04498c0f45fff46be91afb5dee8eb95ea6": "tree",
+    "52c76c7a99220bc9ed1557f468acb6f7b8237a45": "blob",
+    "d05f7fbbd2108b7f94c7800def643f2d6fc2a746": "blob",
+    "8277456ba276e7c70fca4b5ec7062bd3f6c45b43": "blob",
+    "ec70e2c8d5d9ad539fcb70bde66ec6f21f377834": "tree",
+    "5461671d149b04a90abe287dd20ce96b2488f4ea": "tree",
+    "35c42d63d54e91cc2b015e7463217a4bd3762cef": "tree",
+    "9abb27d3e465b149485e5b68ba8df73314f8e08b": "tree",
+    "62c669080b2b733076cdd3000ba9886c01138a0c": "blob",
+    "288f2f9a496657ce2625e79b64dcd20eaa8c28e0": "tree",
+    "1d655af2c9568740f7030c57903d3faac15af187": "tree",
+    "1b2868b779d5734780944cfa119de7f2d417561f": "blob",
+    "d8302acd1ddd8a8b400fe2f972d8eca430714396": "tree",
+    "37d306dc026453bd1f2496d25deb9b61d4dea7cc": "tree",
+    "050171a6befd2163e3b94c6b69ff384a98f67deb": "blob"
+  },
+  "commits": {
+    "1ce471aa315b93f58c00ddce5c0577505df472ab": {
+      "root": "072ade050c8f490e19890493871b6a89d4087fbb",
+      "crates": "0bbe70e71912aac79110542724fbaaed84d60043",
+      "core": "700ec073513e7ac7cc46df10bb0dc292abc215cd",
+      "scope": "retained source identity"
+    },
+    "cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f": {
+      "root": "e9eb277bf9657cf660df90bfc21faa1a6ad042b9",
+      "crates": "39b82a1699a5f56fdd23a46cc970b5e17bd606d7",
+      "core": "de07f5308b1a1783115c657713d5712efe4c3bbe",
+      "scope": "retained source identity"
+    },
+    "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6": {
+      "root": "eed2f400cd7bf9a0282dba4223865e6c30f85ade",
+      "crates": "cdc4a8612c0e161508a63c7ffb8a282af062dd37",
+      "core": "091a94aac3f7f3ab8deb56710b0ee55c5dacdcc6",
+      "scope": "retained source identity"
+    },
+    "521243e597c2d833be840773acac728a85161969": {
+      "root": "52c6c9d80a03997fd3b370df20edae29536c2a91",
+      "crates": "39b82a1699a5f56fdd23a46cc970b5e17bd606d7",
+      "core": "de07f5308b1a1783115c657713d5712efe4c3bbe",
+      "scope": "retained source identity"
+    },
+    "6dd0313c7e41a276960c725978927fcfcc7cdd94": {
+      "root": "033e6449ea4454f9201ae3f407c2152a2ae44015",
+      "crates": "cdc4a8612c0e161508a63c7ffb8a282af062dd37",
+      "core": "091a94aac3f7f3ab8deb56710b0ee55c5dacdcc6",
+      "scope": "retained source identity"
+    },
+    "99f1a05bce08ba0ad5f8a777a844317d6c7a6d2b": {
+      "root": "6e1547a07a2749be2946ba50f2028b74ac080b90",
+      "crates": "cdc4a8612c0e161508a63c7ffb8a282af062dd37",
+      "core": "091a94aac3f7f3ab8deb56710b0ee55c5dacdcc6",
+      "scope": "source-only Core identity; no99f CI result included"
+    }
+  },
+  "paths": [
+    {
+      "commit": "1ce471aa315b93f58c00ddce5c0577505df472ab",
+      "path": "crates/bicdb-core/src/distribution_events.rs",
+      "blob": "d9a67bccf3901e17637579300cc6e47469008d57"
+    },
+    {
+      "commit": "1ce471aa315b93f58c00ddce5c0577505df472ab",
+      "path": "crates/bicdb-core/src/query_budget.rs",
+      "blob": "878cce6bb74a5022262bc89ad7ca842acb253684"
+    },
+    {
+      "commit": "1ce471aa315b93f58c00ddce5c0577505df472ab",
+      "path": "crates/bicdb-core/src/distribution_events/client/error_retention_tests.rs",
+      "blob": "a06a451179d4ef63bd89ffa782b8bb31165d7991"
+    },
+    {
+      "commit": "1ce471aa315b93f58c00ddce5c0577505df472ab",
+      "path": "crates/bicdb-core/src/distribution_events/client/inflight_tests.rs",
+      "blob": "8114148008bb4951d19e5db32256fcb172e841fe"
+    },
+    {
+      "commit": "1ce471aa315b93f58c00ddce5c0577505df472ab",
+      "path": "crates/bicdb-core/src/distribution_transport/event_client_retry_tests/error_preservation_tests.rs",
+      "blob": "dc6c9c9232853b1631533e52af90799645cd56e5"
+    },
+    {
+      "commit": "1ce471aa315b93f58c00ddce5c0577505df472ab",
+      "path": "crates/bicdb-core/src/distribution_transport/event_client_retry_tests/caller_query_budget_tests.rs",
+      "blob": "f978539d26fe61da833ab9d5e0267240aadeb3a4"
+    },
+    {
+      "commit": "1ce471aa315b93f58c00ddce5c0577505df472ab",
+      "path": "crates/bicdb-core/src/distribution_transport/event_client_retry_tests/inflight_budget_tests.rs",
+      "blob": "37da9d578201095016fdc71d80cdc33be859583c"
+    },
+    {
+      "commit": "1ce471aa315b93f58c00ddce5c0577505df472ab",
+      "path": "crates/bicdb-core/src/query_budget/worker_context_tests.rs",
+      "blob": "0f8d4fb6321184de035acde84edd5849a29aaac7"
+    },
+    {
+      "commit": "1ce471aa315b93f58c00ddce5c0577505df472ab",
+      "path": "crates/bicdb-core/src/distribution_transport/evidence/tests.rs",
+      "blob": "502de8a0293a5db0f11707415fe9a9839cf02b22"
+    },
+    {
+      "commit": "1ce471aa315b93f58c00ddce5c0577505df472ab",
+      "path": "crates/bicdb-core/src/distribution_transport/evidence.rs",
+      "blob": "6bfaa71a2a9ede8915a9a7a80ac5219e0dd65da1"
+    },
+    {
+      "commit": "1ce471aa315b93f58c00ddce5c0577505df472ab",
+      "path": "crates/bicdb-core/src/distribution_transport.rs",
+      "blob": "a480fa4d8d71f99d45421abdcf0ee2f25c522f86"
+    },
+    {
+      "commit": "cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f",
+      "path": "crates/bicdb-core/src/distribution_events.rs",
+      "blob": "d9a67bccf3901e17637579300cc6e47469008d57"
+    },
+    {
+      "commit": "cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f",
+      "path": "crates/bicdb-core/src/query_budget.rs",
+      "blob": "878cce6bb74a5022262bc89ad7ca842acb253684"
+    },
+    {
+      "commit": "cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f",
+      "path": "crates/bicdb-core/src/distribution_events/client/error_retention_tests.rs",
+      "blob": "a06a451179d4ef63bd89ffa782b8bb31165d7991"
+    },
+    {
+      "commit": "cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f",
+      "path": "crates/bicdb-core/src/distribution_events/client/inflight_tests.rs",
+      "blob": "8114148008bb4951d19e5db32256fcb172e841fe"
+    },
+    {
+      "commit": "cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f",
+      "path": "crates/bicdb-core/src/distribution_transport/event_client_retry_tests/error_preservation_tests.rs",
+      "blob": "dc6c9c9232853b1631533e52af90799645cd56e5"
+    },
+    {
+      "commit": "cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f",
+      "path": "crates/bicdb-core/src/distribution_transport/event_client_retry_tests/caller_query_budget_tests.rs",
+      "blob": "f978539d26fe61da833ab9d5e0267240aadeb3a4"
+    },
+    {
+      "commit": "cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f",
+      "path": "crates/bicdb-core/src/distribution_transport/event_client_retry_tests/inflight_budget_tests.rs",
+      "blob": "37da9d578201095016fdc71d80cdc33be859583c"
+    },
+    {
+      "commit": "cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f",
+      "path": "crates/bicdb-core/src/query_budget/worker_context_tests.rs",
+      "blob": "0f8d4fb6321184de035acde84edd5849a29aaac7"
+    },
+    {
+      "commit": "cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f",
+      "path": "crates/bicdb-core/src/distribution_transport/evidence/tests.rs",
+      "blob": "ff32c0e05354e70bf5ff168e25146c789f70b2fe"
+    },
+    {
+      "commit": "cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f",
+      "path": "crates/bicdb-core/src/distribution_transport/evidence/tests/first_cause_tests.rs",
+      "blob": "52c76c7a99220bc9ed1557f468acb6f7b8237a45"
+    },
+    {
+      "commit": "cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f",
+      "path": "crates/bicdb-core/src/distribution_transport/evidence.rs",
+      "blob": "d05f7fbbd2108b7f94c7800def643f2d6fc2a746"
+    },
+    {
+      "commit": "cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f",
+      "path": "crates/bicdb-core/src/distribution_transport.rs",
+      "blob": "8277456ba276e7c70fca4b5ec7062bd3f6c45b43"
+    },
+    {
+      "commit": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+      "path": "crates/bicdb-core/src/distribution_events.rs",
+      "blob": "d9a67bccf3901e17637579300cc6e47469008d57"
+    },
+    {
+      "commit": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+      "path": "crates/bicdb-core/src/query_budget.rs",
+      "blob": "878cce6bb74a5022262bc89ad7ca842acb253684"
+    },
+    {
+      "commit": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+      "path": "crates/bicdb-core/src/distribution_events/client/error_retention_tests.rs",
+      "blob": "a06a451179d4ef63bd89ffa782b8bb31165d7991"
+    },
+    {
+      "commit": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+      "path": "crates/bicdb-core/src/distribution_events/client/inflight_tests.rs",
+      "blob": "8114148008bb4951d19e5db32256fcb172e841fe"
+    },
+    {
+      "commit": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+      "path": "crates/bicdb-core/src/distribution_transport/event_client_retry_tests/error_preservation_tests.rs",
+      "blob": "dc6c9c9232853b1631533e52af90799645cd56e5"
+    },
+    {
+      "commit": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+      "path": "crates/bicdb-core/src/distribution_transport/event_client_retry_tests/caller_query_budget_tests.rs",
+      "blob": "f978539d26fe61da833ab9d5e0267240aadeb3a4"
+    },
+    {
+      "commit": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+      "path": "crates/bicdb-core/src/distribution_transport/event_client_retry_tests/inflight_budget_tests.rs",
+      "blob": "37da9d578201095016fdc71d80cdc33be859583c"
+    },
+    {
+      "commit": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+      "path": "crates/bicdb-core/src/query_budget/worker_context_tests.rs",
+      "blob": "0f8d4fb6321184de035acde84edd5849a29aaac7"
+    },
+    {
+      "commit": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+      "path": "crates/bicdb-core/src/distribution_transport/evidence/tests.rs",
+      "blob": "ff32c0e05354e70bf5ff168e25146c789f70b2fe"
+    },
+    {
+      "commit": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+      "path": "crates/bicdb-core/src/distribution_transport/evidence/tests/first_cause_tests.rs",
+      "blob": "62c669080b2b733076cdd3000ba9886c01138a0c"
+    },
+    {
+      "commit": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+      "path": "crates/bicdb-core/src/distribution_transport/evidence.rs",
+      "blob": "d05f7fbbd2108b7f94c7800def643f2d6fc2a746"
+    },
+    {
+      "commit": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+      "path": "crates/bicdb-core/src/distribution_transport.rs",
+      "blob": "8277456ba276e7c70fca4b5ec7062bd3f6c45b43"
+    },
+    {
+      "commit": "521243e597c2d833be840773acac728a85161969",
+      "path": ".github/workflows/tests.yml",
+      "blob": "1b2868b779d5734780944cfa119de7f2d417561f"
+    },
+    {
+      "commit": "521243e597c2d833be840773acac728a85161969",
+      "path": "scripts/qualification/guard-build-memory.py",
+      "blob": "050171a6befd2163e3b94c6b69ff384a98f67deb"
+    },
+    {
+      "commit": "6dd0313c7e41a276960c725978927fcfcc7cdd94",
+      "path": ".github/workflows/tests.yml",
+      "blob": "1b2868b779d5734780944cfa119de7f2d417561f"
+    },
+    {
+      "commit": "6dd0313c7e41a276960c725978927fcfcc7cdd94",
+      "path": "scripts/qualification/guard-build-memory.py",
+      "blob": "050171a6befd2163e3b94c6b69ff384a98f67deb"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "format": 1,
+  "findings": [
+    {
+      "id": "CLI-ORIGINAL-FIRST-ACK",
+      "classification": "failed",
+      "root_cause": "inconclusive",
+      "source": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+      "reproduce": "CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 RUST_TEST_THREADS=4 cargo test -p bicdb-cli --test native_metadata_operator_cli --locked -- --test-threads=4",
+      "trigger": "After four DATA ingress publications, first positive append of items/external-first-ack returned no event cluster member is reachable at initial_data_tests.rs:271.",
+      "outcome": "No positive ACK; durable effect unknown. Original low-level journal unavailable. New diagnostic passed this case and does not explain it.",
+      "next_smallest_test": "Preserve the original APP error and every actual refresh attempt/deadline in a deterministic client regression; separately preserve actual four-thread process/status/journal observations with unchanged assertions. No TTL increase or Strong warmup.",
+      "fix_boundary": "Keep a prior APP error plus typed discovery outcomes rather than replace it with a blanket reachability claim. A diagnostic change alone does not close first-ACK availability."
+    },
+    {
+      "id": "CLI-DISCOVERY-ERROR-MASKING",
+      "classification": "failed",
+      "evidence_kind": "source-reviewed diagnostic defect; original causal role inconclusive",
+      "source": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+      "path": "crates/bicdb-core/src/distribution_events.rs",
+      "trigger": "An APP error is followed by a discovery round that makes zero successful observations; deadline exhaustion can prevent some or all probes.",
+      "next_smallest_test": "Drive a real client APP refusal followed by budget exhaustion and assert the final diagnostic preserves the original refusal and the exact attempted/not-attempted peer set. Keep all original budgets and no-loss assertions."
+    },
+    {
+      "id": "CLI-PREPARE-PREREQUISITE-TIMEOUT",
+      "classification": "failed",
+      "root_cause": "inconclusive",
+      "source": "03454e72cab0dea71b4783153fabf6716d9784fd",
+      "test": "replica_receiver_tests::native_registered_replica_receiver_actual_cli_four_data_then_fifth_same_owner_no_data_grant",
+      "trigger": "First prepare sequence1 with 5000ms configured budget timed out. All four stopped statuses remain provisional sequence0; n0/n1/n2 metadata JSON exist, n3 file missing. All children alive before cleanup.",
+      "not_tested": ["failed-case public APP/Strong", "fifth receiver", "image or movement"],
+      "native_outcome": "inconclusive; metadata JSON and missing file do not prove native-WAL completion, absence, rollback or durability",
+      "next_smallest_test": "Instrument actual command acceptance and each CONFIG/birth/preparation peer phase. Use a controlled slow actual recipient to cross the original client deadline; retain same configuration/birth and reconcile the pending sequence before a fresh bounded prepare. Prove no APP/Strong grant and no new birth/unknown reset. Do not widen the budget or blindly replace the command.",
+      "fix_boundary": "Determine where time is consumed before choosing a change. Any resumption must retain original partial preparation custody and observe actual state before publishing success."
+    },
+    {
+      "id": "CLI-FOUR-INITIAL-DATA-DIAGNOSTIC",
+      "classification": "passed",
+      "scope": "Three returned APP ACKs, exact present full/null/empty Strong values, true unwritten absence and same-owner reread in one shared-runner diagnostic. No node fault or relocation qualification."
+    },
+    {
+      "id": "CLI-REGISTRY-ADDITION-DIAGNOSTIC",
+      "classification": "passed",
+      "scope": "Two returned APP ACKs, three present Strong reads, replica-only refusal probes and unchanged DATA assignment while metadata voter five joins. No physical data relocation or capacity claim."
+    },
+    {
+      "id": "OPERATOR-SCALE-OUT-QUALIFICATION",
+      "classification": "not tested",
+      "scope": "Second populated range, cold DATA/Serving startup, automatic operator relocation/leadership, bounded fault-safe repair, VM fault handling, sustained throughput improvement and general cross-range SQL."
+    }
+  ]
+}

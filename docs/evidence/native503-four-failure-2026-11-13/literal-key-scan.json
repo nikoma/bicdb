@@ -1,0 +1,7 @@
+{
+  "scope": "Packaged files and losslessly decompressed raw log/case sections; recognized PEM private-key-block marker only. Public Git PGP signatures are not private keys.",
+  "recognized_private_block_files": [],
+  "guarantees_secret_absence": false,
+  "upstream_repo_public": true,
+  "no_database_or_custody_contents_packaged": true
+}

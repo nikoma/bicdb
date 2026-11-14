@@ -1,0 +1,22 @@
+{
+  "format": 1,
+  "created_utc": "2026-11-13T23:25:58.453530+00:00",
+  "parent_product_source": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+  "qualifier_source": "03454e72cab0dea71b4783153fabf6716d9784fd",
+  "qualifier_ref": "qual/native-cli-first-ack-pressure-68b",
+  "changed_files": [
+    ".github/workflows/tests.yml"
+  ],
+  "all_other_tracked_blobs_identical": true,
+  "source_version_unchanged": "1.0.501-beta",
+  "workflow_diff_sha256": "08b5cb49fcb634ee691427e89e008ef749cc65bd71709076bfb02610e7d3208c",
+  "test_target": "native_metadata_operator_cli",
+  "test_threads": 4,
+  "cargo_build_jobs": 1,
+  "incremental": 0,
+  "cli_failure_db_custody": false,
+  "original_forensic_report_sha256": "409ecdf736a95cf1dcd4e517821686e8d40c3ae5a0bac7f55830a1f7914608f5",
+  "scope": "Diagnostic environment qualifier only; not an unchanged retry or production/runtime feature; no main/version change. Original broad retry remains untouched.",
+  "runtime_or_tests_modified": false,
+  "dispatches_issued": 0
+}

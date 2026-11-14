@@ -1,0 +1,353 @@
+{
+  "scope": "Whitelisted fields from copied MStore JSON; originals omitted, not engine/fdatasync/cold-recovery proof. Default verification checks retained correlation; --original-zip independently rederives these fields.",
+  "records": [
+    {
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dc-61e0-70d2-b8ac-45065f047b94",
+      "points": {
+        "n0": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dc-61e0-70d2-b8ac-45065f047b94/custody/node0/native-initial-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10160,
+          "original_sha256": "853afd74fff4b679a0b87aaacf26442546ee851facaf66584b33e493e450bf93",
+          "derived_point": {
+            "node_id": "n0",
+            "current_term": 1,
+            "role": "leader",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        },
+        "n4": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dc-61e0-70d2-b8ac-45065f047b94/custody/node4/native-learner-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10162,
+          "original_sha256": "5a5ae9fa4b885e324a2e85f80994444551a1388ff250aadca95b0a3bee217d62",
+          "derived_point": {
+            "node_id": "n4",
+            "current_term": 1,
+            "role": "follower",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        }
+      }
+    },
+    {
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dc-8cfa-7aa2-9022-a591a55b977b",
+      "points": {
+        "n0": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dc-8cfa-7aa2-9022-a591a55b977b/custody/node0/native-initial-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10160,
+          "original_sha256": "23449689074391a065a3c93d68155888fe27ddf9e5ed8e7ed81c66ee6f48f119",
+          "derived_point": {
+            "node_id": "n0",
+            "current_term": 1,
+            "role": "leader",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        },
+        "n4": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dc-8cfa-7aa2-9022-a591a55b977b/custody/node4/native-learner-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10162,
+          "original_sha256": "3ec87343ff0ec323d78f45e40f535e1a05fb730b09efcff958f95ceb07bbf3c3",
+          "derived_point": {
+            "node_id": "n4",
+            "current_term": 1,
+            "role": "follower",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        }
+      }
+    },
+    {
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dc-b527-79c3-a00b-73a71b470563",
+      "points": {
+        "n0": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dc-b527-79c3-a00b-73a71b470563/custody/node0/native-initial-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10160,
+          "original_sha256": "4cdb789315266799f1761f71155d87aacbc4685294d72fab88ce62de2c3cc759",
+          "derived_point": {
+            "node_id": "n0",
+            "current_term": 1,
+            "role": "leader",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        },
+        "n4": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dc-b527-79c3-a00b-73a71b470563/custody/node4/native-learner-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10162,
+          "original_sha256": "d4f431a0ed9fd0574f4ec8fa47af50fdae37d975ba0f43b749bd445468a74a58",
+          "derived_point": {
+            "node_id": "n4",
+            "current_term": 1,
+            "role": "follower",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        }
+      }
+    },
+    {
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dc-e34f-7a13-a5b5-a0102807faac",
+      "points": {
+        "n0": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dc-e34f-7a13-a5b5-a0102807faac/custody/node0/native-initial-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10160,
+          "original_sha256": "78a28c8d31f75b789b3f58793aa5245da193f3197aa73f26c618b40e90ccabe4",
+          "derived_point": {
+            "node_id": "n0",
+            "current_term": 1,
+            "role": "leader",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        },
+        "n4": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dc-e34f-7a13-a5b5-a0102807faac/custody/node4/native-learner-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10162,
+          "original_sha256": "4435ce41c9f38fdd12e4b27cdd1779105bf91f6c28b547e5635cf46b217e18e1",
+          "derived_point": {
+            "node_id": "n4",
+            "current_term": 1,
+            "role": "follower",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        }
+      }
+    },
+    {
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dd-0dd9-7f32-adeb-a965f077c35a",
+      "points": {
+        "n0": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dd-0dd9-7f32-adeb-a965f077c35a/custody/node0/native-initial-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10160,
+          "original_sha256": "af4a7c9f851d4ea66868fd6e03be55e97b00439470181b05b456981c430728ae",
+          "derived_point": {
+            "node_id": "n0",
+            "current_term": 1,
+            "role": "leader",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        },
+        "n4": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dd-0dd9-7f32-adeb-a965f077c35a/custody/node4/native-learner-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10162,
+          "original_sha256": "31d7f14b1d54a2c485bca13ae0965be63a775f401ba2cf8b750ce5b7bb0fb451",
+          "derived_point": {
+            "node_id": "n4",
+            "current_term": 1,
+            "role": "follower",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        }
+      }
+    },
+    {
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dd-3a89-7061-a3a4-5be20e4ab9bd",
+      "points": {
+        "n0": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dd-3a89-7061-a3a4-5be20e4ab9bd/custody/node0/native-initial-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10160,
+          "original_sha256": "919b0a50f15adf6c97321e3e7171ae092a05ebb71e0b6b49c15e2a1513c72145",
+          "derived_point": {
+            "node_id": "n0",
+            "current_term": 1,
+            "role": "leader",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        },
+        "n4": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dd-3a89-7061-a3a4-5be20e4ab9bd/custody/node4/native-learner-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10162,
+          "original_sha256": "efc1004b535a28587b60c986008502163b180632334257c69677715982ee80ca",
+          "derived_point": {
+            "node_id": "n4",
+            "current_term": 1,
+            "role": "follower",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        }
+      }
+    },
+    {
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dd-63ee-7ae2-9624-509ebf0fa675",
+      "points": {
+        "n0": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dd-63ee-7ae2-9624-509ebf0fa675/custody/node0/native-initial-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10160,
+          "original_sha256": "c0054d393162021df4a8c43e06ef3ffe7e28459d9a63967107f681072bd85a2f",
+          "derived_point": {
+            "node_id": "n0",
+            "current_term": 1,
+            "role": "leader",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        },
+        "n4": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dd-63ee-7ae2-9624-509ebf0fa675/custody/node4/native-learner-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10162,
+          "original_sha256": "d5ecbf808cebd49169974509d66f50d1f901cf4110518b67da38e92bf0044b75",
+          "derived_point": {
+            "node_id": "n4",
+            "current_term": 1,
+            "role": "follower",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        }
+      }
+    },
+    {
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dd-8c0b-78f2-94e1-7c2b1ba56d00",
+      "points": {
+        "n0": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dd-8c0b-78f2-94e1-7c2b1ba56d00/custody/node0/native-initial-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10160,
+          "original_sha256": "36e356f15798e186722fb04b47e04cb0e51c544266dfa6ba3895ba2b9f3278b3",
+          "derived_point": {
+            "node_id": "n0",
+            "current_term": 1,
+            "role": "leader",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        },
+        "n4": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dd-8c0b-78f2-94e1-7c2b1ba56d00/custody/node4/native-learner-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10162,
+          "original_sha256": "777eaa09873c4e567f2ca97162657c5095edfbde3bdf5c07ba09da21d43a6f17",
+          "derived_point": {
+            "node_id": "n4",
+            "current_term": 1,
+            "role": "follower",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        }
+      }
+    },
+    {
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dd-b35e-70b3-a663-c99bf03f3621",
+      "points": {
+        "n0": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dd-b35e-70b3-a663-c99bf03f3621/custody/node0/native-initial-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10160,
+          "original_sha256": "62d2e0d91cf7a3977e35591a32c6d619a874460f94900e40c9cbd866f8a366df",
+          "derived_point": {
+            "node_id": "n0",
+            "current_term": 1,
+            "role": "leader",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        },
+        "n4": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dd-b35e-70b3-a663-c99bf03f3621/custody/node4/native-learner-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10162,
+          "original_sha256": "90c3d6c33ae1ac04eca5a4f00ffdcd41f44ae66389ab97e0e7d65fbcd8aef838",
+          "derived_point": {
+            "node_id": "n4",
+            "current_term": 1,
+            "role": "follower",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        }
+      }
+    },
+    {
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7dd-da17-74c3-afd5-e8e421460d1a",
+      "points": {
+        "n0": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dd-da17-74c3-afd5-e8e421460d1a/custody/node0/native-initial-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10160,
+          "original_sha256": "e62048da9e560e90eafbf75d5f3d325b69e3692beb1525ea63eb8c8ece5b271e",
+          "derived_point": {
+            "node_id": "n0",
+            "current_term": 1,
+            "role": "leader",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        },
+        "n4": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7dd-da17-74c3-afd5-e8e421460d1a/custody/node4/native-learner-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10162,
+          "original_sha256": "9100d78a3ec332cccbf5b44b916355ca09b96f4b862650e37f3dd7c016587796",
+          "derived_point": {
+            "node_id": "n4",
+            "current_term": 1,
+            "role": "follower",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        }
+      }
+    },
+    {
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7de-00db-7f10-937e-b9b397e35ec8",
+      "points": {
+        "n0": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7de-00db-7f10-937e-b9b397e35ec8/custody/node0/native-initial-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10160,
+          "original_sha256": "70210e9aff5fb11ecefaa62794970e77d3aaf7ad76925011b9a0dd6cdcd18892",
+          "derived_point": {
+            "node_id": "n0",
+            "current_term": 1,
+            "role": "leader",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        },
+        "n4": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7de-00db-7f10-937e-b9b397e35ec8/custody/node4/native-learner-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 10162,
+          "original_sha256": "06912b5e3beb84b17d86cf74be05f878eac7c3f71bfb42c259d10371b98ac4e2",
+          "derived_point": {
+            "node_id": "n4",
+            "current_term": 1,
+            "role": "follower",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        }
+      }
+    },
+    {
+      "case_root": "fault-state/native-registered-fifth-image-01a1d7e8-0268-7882-a21b-e474380df398",
+      "points": {
+        "n0": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7e8-0268-7882-a21b-e474380df398/custody/node0/native-initial-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 11337,
+          "original_sha256": "c3eacf48f81b11b95a4294cefd08b5111a47ea5d50fcb787903ac0dbbc1baf43",
+          "derived_point": {
+            "node_id": "n0",
+            "current_term": 1,
+            "role": "leader",
+            "leader_id": "n0",
+            "commit_index": 5
+          }
+        },
+        "n4": {
+          "original_member": "fault-state/native-registered-fifth-image-01a1d7e8-0268-7882-a21b-e474380df398/custody/node4/native-learner-metadata/cluster-metadata-consensus.json",
+          "original_bytes": 11339,
+          "original_sha256": "c39736cd7e4aeb8394803c74377de1b2497e38eb412586da51c86b9ef60c3c0b",
+          "derived_point": {
+            "node_id": "n4",
+            "current_term": 2,
+            "role": "follower",
+            "leader_id": null,
+            "commit_index": 5
+          }
+        }
+      }
+    }
+  ]
+}

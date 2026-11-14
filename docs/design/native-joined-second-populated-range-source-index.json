@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "source_commit": "5a85900f571c389ff97e278a0b9555048bdeadec",
+  "source_role": "unmerged qualification prototype, not a claim about later main",
+  "inherited_source_version": "1.0.502-beta",
+  "review_type": "source inspection and design requirements only; no runtime/tests/CI executed for this document",
+  "finding": "CONFIRMED_IMPLEMENTATION_GAP",
+  "full_second_populated_range_runtime_acceptance": "NOT_TESTED",
+  "qualified": false,
+  "physically_tested_by_this_deliverable": false,
+  "deployed_by_this_deliverable": false,
+  "source_report": {
+    "name": "two-populated-ranges-stall-feasibility-5a859-corrected-inventory.json",
+    "sha256": "caad29993e0cf40d4df7edef8af6e91898b2937b879a43d87c06742155685cea",
+    "scope": "Corrected16path feasibility audit; original71 inventory error preserved separately and corrected to82 compiler-listed baseline cases."
+  },
+  "component_source": {
+    "commit": "c08fb440be78ff1b891dc9a5e4c6ec87228918cb",
+    "separate_branch": true,
+    "scope": "Actual selected Rows response transport hold after export; unaffected Initial source-range SDK APP/Strong. Does not receive second populated range on Joined.",
+    "execution_results_imported": false,
+    "baseline_compiler_listed_cases": 82,
+    "expected_component_cases": 83,
+    "actual_component_listing_required": true,
+    "prior_test_custody_defect_commits": [
+      "a6cbea3053fb0df886768998484f80649b3da67d",
+      "cb07f60475df79a7d8aa7d864bcf4f5d3af187a4"
+    ]
+  },
+  "guards_to_preserve": [
+    "Never-installed current/previous protected writer-policy absence in Registered FIRST receive lane",
+    "FIRST exactly one LOCAL VOTER range, not global descriptor count",
+    "Original database/open/native birth/Store slot/installed writer/coordinator identities",
+    "Retained first-range native outcomes, WAL/history and request-specific Strong proofs",
+    "Assigned CLOSED refuses existing protected business obligations",
+    "Joined lacks INITIAL OLD/donor/source authority until a distinct genuine producer exists"
+  ],
+  "required_new_producer": "Actual Joined-owned selected-range receive/policy continuation into existing populated database; fresh Role/OWN/current protected MStore point plus native epoch/dual-quorum fencing; exact original attempt custody; no whole-DB overwrite or FIRST reuse.",
+  "separate_remaining_gates": [
+    "Complete first move then second receive while original client continues first-range APP/fullStrong",
+    "Actual disk/engine-stall isolation, distinct from after-export transport hold",
+    "Joined becomes actual authenticated OLD/donor",
+    "Cold restart reconciles both ranges and all outstanding WAL/native attempts",
+    "Automatic operator/controller end-to-end execution",
+    "Independent-host physical four-to-five scale-out, fault-safe convergence and sustained throughput gain",
+    "Ordinary PostgreSQL distributed-SQL transparency and multi-range transaction guarantees"
+  ],
+  "source_pins": [
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs",
+      "blob": "69975b241541dfd01b04775e209b257dc52486d2",
+      "bytes": 42511,
+      "sha256": "b6a2be588deee03502b47eb0311c9e2300b339c17caad3e6018498e4f4b96b26"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "blob": "475b8de7da3b54431f9dd1a13fd8c07311dc611d",
+      "bytes": 30412,
+      "sha256": "bc8b9f0caa408a1035e82fc144f469be94fbd98219ff25731d38a7149974dc55"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests/data_tests.rs",
+      "blob": "df3a5d629a75420b38ef4f7c77792ed14c725aa8",
+      "bytes": 15173,
+      "sha256": "02b087b59a149afb96c5e4060b6f84159ba44408d3dfe84879b7971951ed00bd"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_attempt.rs",
+      "blob": "6b8ba40334736ef0ef006e99217e47ee15cbc951",
+      "bytes": 23080,
+      "sha256": "581db47b5a3938e363ff9d41d8ba86f2084bc087c721580e4645bd8072aeabef"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_image.rs",
+      "blob": "75b8e4e71acecc251b0b2e6b74dc1e69646a7c48",
+      "bytes": 19998,
+      "sha256": "acf90b9c2f7f907f32da1c5dc9d44c5ec264d238e7e2e7398bd1fd33955a1b88"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_attempt/remote_joint/first_data_policy.rs",
+      "blob": "d262fabc64f3f430cf82a0d0d5a97a0926b16986",
+      "bytes": 11756,
+      "sha256": "2b46a3dec37cf169d1c82fa5f0d08a190fe7d8a61680efc076a2e1a8f1747ba1"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data.rs",
+      "blob": "4611b929b266715ea61358d167168fa877084452",
+      "bytes": 22379,
+      "sha256": "4d2fecb1a71fdf368bbde5c2796b2d443106beca6649e4298e93ba44342c3f5a"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/registered.rs",
+      "blob": "040e053e29e954c468eedfaf1bd2e64275dde74c",
+      "bytes": 9508,
+      "sha256": "f645bbe06bcc3bdf813f237f27e50efeedd3751aa4785d2f293258aeace58758"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data.rs",
+      "blob": "0bb5bef73ae3de89d0ad8e1a74d1d0e9050ae064",
+      "bytes": 53773,
+      "sha256": "673b4993dd1815f0b07c25494f8562f5aa790ddeecf045e35feb7b6e97368039"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/writer_data_domain.rs",
+      "blob": "90c125d971c85304030e6a9231ba3a5771faf8ef",
+      "bytes": 7543,
+      "sha256": "caa238828ef53a886ae2c5e6f5e6b2929184480811ce4efd84d1408b53fd6fb1"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment.rs",
+      "blob": "cf38700eb74d45b1801f9cdac9b5bffd338882c3",
+      "bytes": 38078,
+      "sha256": "bd87073dd046f478f15f07f65ca8c454e290fd9f1077930a0d988b176a2bce7e"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/learner_factory/assigned_closed.rs",
+      "blob": "6d4591dd6c439401975e906e46d4005dc1acde24",
+      "bytes": 2794,
+      "sha256": "f1c077cd8f6fa26d957540f9c871a2651b98217c508ceeb292a6db0c7b2bfc01"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport/initial_data_listener.rs",
+      "blob": "9a2d51add258d905c96660537d54dbb2e42b2a25",
+      "bytes": 4525,
+      "sha256": "bad69684c85895663faa366c9da93636adef37877378290dd46d0b9c4086c849"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_image.rs",
+      "blob": "d3140c412494d43062dfdc4ac9289f8f1b6f1185",
+      "bytes": 30485,
+      "sha256": "1cde71b87445077fedf15efd8f85876114f2660f931bdeb3d9d86248a50312ad"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_image/remote_source.rs",
+      "blob": "35ae75c6bedf2792301aaa4cca6ca57375d9fa29",
+      "bytes": 40531,
+      "sha256": "c546a7141b006122fffb5d68fefe6d85030f78a76f4540e5bb4c71b2e6965fa7"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution.rs",
+      "blob": "bdbd3a8cbcbc897fd82a8b60d79241d9775fb33a",
+      "bytes": 260194,
+      "sha256": "fb4d1daebaffb32fdb328d449efae969962e861a292e4ee728c9c2a16e5837c8"
+    }
+  ]
+}

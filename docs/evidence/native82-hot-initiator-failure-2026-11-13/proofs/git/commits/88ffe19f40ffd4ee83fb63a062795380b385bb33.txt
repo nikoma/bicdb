@@ -1,0 +1,6 @@
+tree 265bad38c9050e5f856ea3814a72931ce45940ce
+parent 244e8f773fd9207b6c04108cca205226fd92206a
+author nikoma <niko.manek@gmail.com> 1794622223 -0800
+committer nikoma <niko.manek@gmail.com> 1794622223 -0800
+
+Qualify all 82 compiler-listed native cases including existing macro controls

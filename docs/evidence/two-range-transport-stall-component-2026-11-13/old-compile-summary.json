@@ -1,0 +1,98 @@
+{
+  "source": "b01ed646b476cbb5f76a495d0f71bc8d13b929d6",
+  "runtime": "c08fb440be78ff1b891dc9a5e4c6ec87228918cb",
+  "run": 43547094599,
+  "classification": "both jobs RustE0603 failed compilation; no selected1/whole83 listing and zero runtime execution",
+  "jobs": [
+    {
+      "job": 132300848308,
+      "raw_bytes": 1374750,
+      "raw_sha256": "01da789a8578f08503b0f3865645c6ca8f58f178d7fdf1d06621f6e8f3a518f1",
+      "errors": [
+        {
+          "line": 14285,
+          "text": "2026-11-14T02:38:13.4453600Z error[E0603]: function `exercise` is private"
+        },
+        {
+          "line": 14541,
+          "text": "2026-11-14T02:38:54.6073960Z ##[error]Process completed with exit code 101."
+        }
+      ],
+      "tests_executed": 0
+    },
+    {
+      "job": 132300870146,
+      "raw_bytes": 1322874,
+      "raw_sha256": "2c15efd3ab46769df1e486bbf2656e0dbe8588d9e41a04f6c5d9c6dec985df5c",
+      "errors": [
+        {
+          "line": 13314,
+          "text": "2026-11-14T02:43:36.7582228Z error[E0603]: function `exercise` is private"
+        },
+        {
+          "line": 13850,
+          "text": "2026-11-14T02:44:12.6421097Z ##[error]Process completed with exit code 101."
+        }
+      ],
+      "tests_executed": 0
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 14094194341,
+      "sha256": "2e515bb040a3e445139d47d81ac4d9806eb0177f9647b15f2c48596a5a968429",
+      "members": [
+        {
+          "name": "alltargets.jsonl",
+          "bytes": 25836,
+          "sha256": "258c6bae0d1f05d14009c7a82a3360699c7a8d07c1adfb2e6ee9316b4153d8ca"
+        }
+      ]
+    },
+    {
+      "id": 14094414929,
+      "sha256": "d8078590c9cd66cedea452a5b5e9d779955586dafb7f1e825a15dffb1c3b4095",
+      "members": [
+        {
+          "name": "exact-test-name.txt",
+          "bytes": 270,
+          "sha256": "4ad3124caa0a9a6b7b4aff0a46f1b723ab5013f87673207235ac4720134cbbbc"
+        },
+        {
+          "name": "helper-pressure.jsonl",
+          "bytes": 59715,
+          "sha256": "7542e943856e6f90f1d0c7eb3583d6125f751adb7281fab5660fa0d4cfc9814c"
+        },
+        {
+          "name": "list-pressure.jsonl",
+          "bytes": 5793,
+          "sha256": "e4060de55dbd4cbb50721d26c0af61da138a2221becab02d97f38b3c3b90a3a7"
+        },
+        {
+          "name": "requested-filter.txt",
+          "bytes": 101,
+          "sha256": "5c49c09870ebf1700c47c2d9bc455a443f668fb72630d02de04279a2de438458"
+        },
+        {
+          "name": "rustc.txt",
+          "bytes": 196,
+          "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+        },
+        {
+          "name": "selected-tests.log",
+          "bytes": 35870,
+          "sha256": "0d3c70e0267242832bc20c8e7bfd35e97c1d3d5dc5018c3b090924812b742011"
+        },
+        {
+          "name": "source-revision.txt",
+          "bytes": 41,
+          "sha256": "d8f51117dba4aeb2f2230a0886959fc5c43717f0687fa9c0b6d15f1c76071435"
+        }
+      ]
+    }
+  ],
+  "scope": "testhelperprivacy;notenginefailure;noAPP/newphase/faultcontrolclaim",
+  "new_qualifier_authorized_source": "c9680e82acf9ceb01ad8994b7bb0b67b25768782",
+  "canceled": false,
+  "new_dispatches_by_capture": 0
+}

@@ -1,0 +1,31 @@
+diff --git a/.github/workflows/tests.yml b/.github/workflows/tests.yml
+index 77037dae9..501571ec3 100644
+--- a/.github/workflows/tests.yml
++++ b/.github/workflows/tests.yml
+@@ -298,7 +298,7 @@ jobs:
+     env:
+       BICDB_CLI_TEST_TARGET: ${{ inputs.cli_target }}
+       BICDB_CAPTURE_CLI_DB_FAILURE: ${{ inputs.cli_failure_db_custody }}
+-      RUST_TEST_THREADS: "1"
++      RUST_TEST_THREADS: "4"
+     steps:
+       - uses: actions/checkout@v4
+       - uses: dtolnay/rust-toolchain@stable
+@@ -327,7 +327,7 @@ jobs:
+               raise SystemExit('The requested CLI integration target selected no tests')
+           print(f'Selected {count} CLI integration tests; actual execution remains required')
+           PYCODE
+-      - name: Execute CLI integration target serially
++      - name: Execute CLI integration target with four test threads
+         shell: bash
+         run: |
+           set -euo pipefail
+@@ -340,7 +340,7 @@ jobs:
+             mkdir -p "$BICDB_TEST_CLI_DB_EVIDENCE_ROOT"
+           fi
+           export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
+-          cargo test -p bicdb-cli --test "$BICDB_CLI_TEST_TARGET" --locked -- --nocapture --test-threads=1 \
++          cargo test -p bicdb-cli --test "$BICDB_CLI_TEST_TARGET" --locked -- --nocapture --test-threads=4 \
+             2>&1 | tee "$RUNNER_TEMP/native-cli-evidence/tests.log"
+           python3 - <<'PYCODE'
+           import os, pathlib, re

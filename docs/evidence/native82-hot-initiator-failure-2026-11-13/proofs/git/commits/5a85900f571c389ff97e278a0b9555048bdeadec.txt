@@ -1,0 +1,6 @@
+tree 87cac8c97234f1b61cf902207424854d4b682932
+parent 3b4bef4eecbdf1e770bba2428cd860fda89e7dba
+author nikoma <niko.manek@gmail.com> 1794620349 -0800
+committer nikoma <niko.manek@gmail.com> 1794620349 -0800
+
+fix(ha): repair joined-source coordinator import and sealed writer access

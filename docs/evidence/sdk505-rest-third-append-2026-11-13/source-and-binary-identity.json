@@ -1,0 +1,24 @@
+{
+  "run": 43531547345,
+  "job": 132250282106,
+  "run_head_sha": "01308fb09512f02e0c61b740fc339382e44b3521",
+  "actual_checkout_sha": "222dda9319a54336e8428465338affb3b145ba60",
+  "actual_checkout_raw_line": 280,
+  "same_commit": false,
+  "same_complete_tree": true,
+  "tree": "a25798570d16209cedc469de011ad3836c59dd4a",
+  "source_runtime_env_as_observed": "UNAVAILABLE_RUNTIME_SOURCE",
+  "source_env_not_retrofilled": true,
+  "binary_identity": {
+    "source": "UNAVAILABLE_RUNTIME_SOURCE",
+    "source_available": false,
+    "source_authority": "BICDB_TEST_SOURCE_SHA runtime environment; not option_env or runtime git lookup",
+    "test_package_version": "1.0.505-beta",
+    "binary_sha256": "67468c83b7145ac299e1e20cf01b4aa31167520988b7d8d9ea9464c8fc39b09f",
+    "binary_bytes": 774154024,
+    "binary_scope": "actual CARGO_BIN_EXE_bicdb bytes read before process/startup/ACK phase; not a published release"
+  },
+  "binary_file_retained": false,
+  "git_tree_object_count": 11,
+  "source_pin_count": 7
+}

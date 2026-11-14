@@ -1,0 +1,130 @@
+{
+  "source": "2b8c2b2de400038729a226ff61b9b275df846d18",
+  "run": 43537820765,
+  "job": {
+    "id": 132271009934,
+    "run_id": 43537820765,
+    "workflow_name": "tests",
+    "head_branch": "qual/native503-passive-four-7ab",
+    "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43537820765",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOUimcAs8AAAAey_dwjg",
+    "head_sha": "2b8c2b2de400038729a226ff61b9b275df846d18",
+    "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132271009934",
+    "html_url": "https://github.com/nikoma/bicdb/actions/runs/43537820765/job/132271009934",
+    "status": "completed",
+    "conclusion": "success",
+    "created_at": "2026-11-14T01:00:19Z",
+    "started_at": "2026-11-14T01:00:21Z",
+    "completed_at": "2026-11-14T01:10:31Z",
+    "name": "Focused Core library (native503_passive_four)",
+    "steps": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 1,
+        "started_at": "2026-11-14T01:00:22Z",
+        "completed_at": "2026-11-14T01:00:23Z"
+      },
+      {
+        "name": "Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 2,
+        "started_at": "2026-11-14T01:00:23Z",
+        "completed_at": "2026-11-14T01:00:27Z"
+      },
+      {
+        "name": "Run dtolnay/rust-toolchain@stable",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 3,
+        "started_at": "2026-11-14T01:00:27Z",
+        "completed_at": "2026-11-14T01:00:35Z"
+      },
+      {
+        "name": "Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 4,
+        "started_at": "2026-11-14T01:00:35Z",
+        "completed_at": "2026-11-14T01:00:43Z"
+      },
+      {
+        "name": "Build projection chaos helper",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 5,
+        "started_at": "2026-11-14T01:00:43Z",
+        "completed_at": "2026-11-14T01:08:35Z"
+      },
+      {
+        "name": "Record source and list selected Core library tests",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 6,
+        "started_at": "2026-11-14T01:08:35Z",
+        "completed_at": "2026-11-14T01:10:01Z"
+      },
+      {
+        "name": "Execute the four original native cases serially with passive capture",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 7,
+        "started_at": "2026-11-14T01:10:01Z",
+        "completed_at": "2026-11-14T01:10:18Z"
+      },
+      {
+        "name": "Retain focused source, log and opted-in fault-state evidence",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 8,
+        "started_at": "2026-11-14T01:10:18Z",
+        "completed_at": "2026-11-14T01:10:19Z"
+      },
+      {
+        "name": "Post Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 15,
+        "started_at": "2026-11-14T01:10:19Z",
+        "completed_at": "2026-11-14T01:10:29Z"
+      },
+      {
+        "name": "Post Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 16,
+        "started_at": "2026-11-14T01:10:29Z",
+        "completed_at": "2026-11-14T01:10:29Z"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 17,
+        "started_at": "2026-11-14T01:10:29Z",
+        "completed_at": "2026-11-14T01:10:29Z"
+      }
+    ],
+    "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132271009934",
+    "labels": [
+      "ubuntu-latest"
+    ],
+    "runner_id": 1000024919,
+    "runner_name": "GitHub Actions 1000024919",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  },
+  "raw_bytes": 4383012,
+  "raw_sha256": "69c4d8a68cb23ec693b713101d9b91819ce0431804994c14157c4cdaf176ff15",
+  "gzip_sha256": "45e5ce2ea4d2cd295b8462672db1a035339c52672de739c1a07f9783e0250aad",
+  "test_results": [],
+  "summaries": [
+    "2026-11-14T01:10:18.0368042Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 1086 filtered out; finished in 15.52s"
+  ],
+  "snapshots": 4,
+  "snapshot_parse_errors": [],
+  "failure_lines": []
+}

@@ -1,0 +1,116 @@
+{
+  "id": 132293554417,
+  "run_id": 43544810818,
+  "workflow_name": "tests",
+  "head_branch": "qual/native-joined-source-82-5a859",
+  "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43544810818",
+  "run_attempt": 1,
+  "node_id": "CR_kwDOUimcAs8AAAAezU9w8Q",
+  "head_sha": "88ffe19f40ffd4ee83fb63a062795380b385bb33",
+  "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132293554417",
+  "html_url": "https://github.com/nikoma/bicdb/actions/runs/43544810818/job/132293554417",
+  "status": "completed",
+  "conclusion": "failure",
+  "created_at": "2026-11-14T02:10:43Z",
+  "started_at": "2026-11-14T02:10:45Z",
+  "completed_at": "2026-11-14T02:36:38Z",
+  "name": "Focused Core library (native_registered_fifth_)",
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-14T02:10:46Z",
+      "completed_at": "2026-11-14T02:10:47Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-14T02:10:47Z",
+      "completed_at": "2026-11-14T02:10:53Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-14T02:10:53Z",
+      "completed_at": "2026-11-14T02:11:02Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-14T02:11:02Z",
+      "completed_at": "2026-11-14T02:11:11Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-14T02:11:11Z",
+      "completed_at": "2026-11-14T02:19:07Z"
+    },
+    {
+      "name": "Record source and list selected Core library tests",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-14T02:19:07Z",
+      "completed_at": "2026-11-14T02:20:45Z"
+    },
+    {
+      "name": "Execute selected Core native library tests serially",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 7,
+      "started_at": "2026-11-14T02:20:45Z",
+      "completed_at": "2026-11-14T02:36:26Z"
+    },
+    {
+      "name": "Retain focused source, log and opted-in fault-state evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 8,
+      "started_at": "2026-11-14T02:36:26Z",
+      "completed_at": "2026-11-14T02:36:35Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-14T02:36:35Z",
+      "completed_at": "2026-11-14T02:36:35Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-14T02:36:35Z",
+      "completed_at": "2026-11-14T02:36:35Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 17,
+      "started_at": "2026-11-14T02:36:35Z",
+      "completed_at": "2026-11-14T02:36:35Z"
+    }
+  ],
+  "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132293554417",
+  "labels": [
+    "ubuntu-latest"
+  ],
+  "runner_id": 1000025024,
+  "runner_name": "GitHub Actions 1000025024",
+  "runner_group_id": 0,
+  "runner_group_name": "GitHub Actions"
+}

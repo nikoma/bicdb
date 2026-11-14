@@ -1,0 +1,166 @@
+{
+  "format": 1,
+  "scope": "Original failed505 broad REST native CLI evidence; no repair/qualification",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 5077,
+      "sha256": "ce381065dc88f99ce14910bd23336e1f0d3e4c3561fa6d727a86a60f3a0b714b"
+    },
+    {
+      "path": "classification-original.json",
+      "bytes": 49005,
+      "sha256": "7fe8d72d0570490aa82f55ced402e6bb6f41d84edd63c20003f04563b6a45816"
+    },
+    {
+      "path": "inspection-original.json",
+      "bytes": 3675,
+      "sha256": "4644dd261d9b2c1abf3b92ac17bb0f77e576eb728f6f2264d351a9c36d265bbb"
+    },
+    {
+      "path": "issues.md",
+      "bytes": 2905,
+      "sha256": "f8619833419f55906e78b0aa028ec68040164b5569e85fe778191e2d90c4b20f"
+    },
+    {
+      "path": "job-terminal.json",
+      "bytes": 4250,
+      "sha256": "29b316d87da50f20baa7c8c3909ea03432c69bd0e0ad8c52b065402d0f476966"
+    },
+    {
+      "path": "ledger-original.json",
+      "bytes": 31684,
+      "sha256": "b74b298e39689c9766d13901585228d8cd94de3bcfe4d78f367f7be6e42d6dce"
+    },
+    {
+      "path": "literal-key-scan.json",
+      "bytes": 389,
+      "sha256": "62d2a1ad517d1af7a18545033888da6a3049e099c678b3327866379957eea731"
+    },
+    {
+      "path": "proofs/git/commits/01308fb09512f02e0c61b740fc339382e44b3521.txt",
+      "bytes": 319,
+      "sha256": "ef26dd822295fe374fe533d1affa81093fd6414f189e40b908688a972a382642"
+    },
+    {
+      "path": "proofs/git/commits/222dda9319a54336e8428465338affb3b145ba60.txt",
+      "bytes": 1176,
+      "sha256": "3c620dcad0efa0294cbf0305f8d740f6815c3457fd56ca31e92e5043d1d0199f"
+    },
+    {
+      "path": "proofs/git/trees/2ba1aff8236e24795da66b8618276df43be69791.bin",
+      "bytes": 4322,
+      "sha256": "38624f26be7893e951d750b675315bcbebbb7b1c721b1b7d1dfa4b9389a37cbb"
+    },
+    {
+      "path": "proofs/git/trees/50214581d35acb3c975341541f23085e589594a6.bin",
+      "bytes": 1196,
+      "sha256": "970415f5acba910e734fd87989e63133ea4cfded672f2c86da4255bce5cc6617"
+    },
+    {
+      "path": "proofs/git/trees/5e234ee04e8cedbc824780cf5f9ffc0fbb18ad5d.bin",
+      "bytes": 369,
+      "sha256": "6d76fe7e2b3a26da3ec9b375a93974b6880b0d8da21ead0f73485cc09a4205b8"
+    },
+    {
+      "path": "proofs/git/trees/8b785669e4e17b5e4c23ed3a0e81fb9d3797a14b.bin",
+      "bytes": 1159,
+      "sha256": "786180259a36335a623d61ac6e7733482095668c330f93b8eb122934e3430391"
+    },
+    {
+      "path": "proofs/git/trees/8d85d3aca94d47842887e6f8b6dc75dcf0ca6a7f.bin",
+      "bytes": 707,
+      "sha256": "943c0e0fea1f37489c43f3e8a5536cdbae58673347ef9e1c0e95541312f2ed2d"
+    },
+    {
+      "path": "proofs/git/trees/a25798570d16209cedc469de011ad3836c59dd4a.bin",
+      "bytes": 1839,
+      "sha256": "dea21a5aa355cf2173f4be7431ad95841851fc98e5317b8f9ec5149a25183a9a"
+    },
+    {
+      "path": "proofs/git/trees/b25cedca4878694319ac4db50f990ebdc72c7e2d.bin",
+      "bytes": 74,
+      "sha256": "e95551ad989a20540aa26c8ebca790e6c6994c522e398e539295b2d8af72194a"
+    },
+    {
+      "path": "proofs/git/trees/c97e768c2e9b16d6c95c261495eb2d89f4e8a944.bin",
+      "bytes": 74,
+      "sha256": "ccc46e97289b2e72463931a86dc6c3e868db86576439d671218d8809559dfbdd"
+    },
+    {
+      "path": "proofs/git/trees/ca67f3eacb28b4a924a5c9b01790144b60322a40.bin",
+      "bytes": 5353,
+      "sha256": "d33717090846a0da2655c4966f364e1ae6961cc540c3d6556cd3148f5c72b426"
+    },
+    {
+      "path": "proofs/git/trees/cc5d7a479ffb7617da4954bba670e4d32c87c78f.bin",
+      "bytes": 334,
+      "sha256": "ea40daecee1c31efb563d3f85d6905b8780712ed238567f4d7c07001ccc0d6ca"
+    },
+    {
+      "path": "proofs/git/trees/eccd228736ddfde72db8a464073733db34fe75f0.bin",
+      "bytes": 532,
+      "sha256": "123eb443b2457d26e7c9f583a33a3a0612f5de7505beab83bc1458bf44a914fa"
+    },
+    {
+      "path": "raw-boundaries.json",
+      "bytes": 4658,
+      "sha256": "f26c794c13c9b624a41e9c893c61c4b439ced412dba72a3745be6d63115a6000"
+    },
+    {
+      "path": "raw-rest-job.log.gz",
+      "bytes": 8914862,
+      "sha256": "48921837ed29a92829b98008e18db5a63ed4ccb6457e54da7546f86015ac403c"
+    },
+    {
+      "path": "run-observation.json",
+      "bytes": 11990,
+      "sha256": "37499e6911ff031722af618ed3dc1940f2133542a93dc2d684650d2bb190eeea"
+    },
+    {
+      "path": "source-and-binary-identity.json",
+      "bytes": 1007,
+      "sha256": "3757b612bb5ef8c78d04979786095b324e51efac42ea333e0605880f139627f2"
+    },
+    {
+      "path": "sources/.github/workflows/tests.yml",
+      "bytes": 19916,
+      "sha256": "48c255ae145e842d8e6667e915a951ebf170190ec9617b303cb08372ca7f4c47"
+    },
+    {
+      "path": "sources/crates/bicdb-cli/tests/native_metadata_operator_cli/custody.rs",
+      "bytes": 13573,
+      "sha256": "1835e17e5bb68fa7e12bdd0d039588244c813995d369c906bb7a50af82668480"
+    },
+    {
+      "path": "sources/crates/bicdb-cli/tests/native_metadata_operator_cli/initial_data_tests.rs",
+      "bytes": 14757,
+      "sha256": "4ce4779afcb43583010f37a9c9c1abb2b5a09faca9c11d6c9a00d9df0903d24e"
+    },
+    {
+      "path": "sources/crates/bicdb-cli/tests/native_metadata_operator_cli/rpc_evidence.rs",
+      "bytes": 12925,
+      "sha256": "cad7672b6477692bd8938898ed80f9b08eeb8581e7e5bef421ac754f88bdb87d"
+    },
+    {
+      "path": "sources/crates/bicdb-cli/tests/native_metadata_operator_cli.rs",
+      "bytes": 40003,
+      "sha256": "f269766469be08eb5a81a98ae3d2e1846a1b8d960aa2190f189eacd1016c21dd"
+    },
+    {
+      "path": "sources/crates/bicdb-core/src/distribution_events.rs",
+      "bytes": 37465,
+      "sha256": "a07eb5e23b0d0ea705b61bedfae35152e722140881b0c4c544d93c7b1ee8c12f"
+    },
+    {
+      "path": "sources/scripts/platform/run_workspace_tests_bounded.py",
+      "bytes": 3544,
+      "sha256": "8856c5ac5613bff1fc4a7c1a9dda200f0ed9e9a6583e03727f5a767e71112291"
+    },
+    {
+      "path": "verify.py",
+      "bytes": 14784,
+      "sha256": "90b0345cb0dca202b090f5358bb7b1342b184e2196346392adb3e3f3213e04ca"
+    }
+  ]
+}

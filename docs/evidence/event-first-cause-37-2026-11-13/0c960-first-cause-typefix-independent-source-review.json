@@ -1,0 +1,23 @@
+{
+  "source": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+  "base": "cd3660eafb3ea3c6ea5b15d3c8bd3e33d124e00f",
+  "scope": "read-only review of test type correction; no source mutation/build/test/CI",
+  "confirmed_blockers": [],
+  "source_review_miss_acknowledged": "Earlier cd366 source review did not catch the heterogeneous Result<T> reference-array compilation errors. Hosted E0308 evidence is authoritative and preserved.",
+  "actual_failed_qualifier": "521243e597c2d833be840773acac728a85161969",
+  "actual_failed_run": 43542004108,
+  "workspace_job": 132284456735,
+  "failed_log_raw_sha256": "8d308fcababe3b60efa890550141bec14911e90b1d06f4a968ece3e5fc974da6",
+  "changed_paths": [
+    "crates/bicdb-core/src/distribution_transport/evidence/tests/first_cause_tests.rs",
+    "docs/design/event-rpc-evidence-first-cause.md"
+  ],
+  "test_blob": "62c669080b2b733076cdd3000ba9886c01138a0c",
+  "test_sha256": "0117eb0a8a266e3914eee86e2ec11d4e54c31de8e28339fbd045c0fce4ed9ddd",
+  "assessment": [
+    "Each heterogeneous Result<T,BicDbError> is borrowed and projected to the same Option<&BicDbError> element type.",
+    "Some(exact RpcEvidenceFailure) matching still rejects None from every successful Result, every other error kind, wrong dispatch uncertainty and wrong cause.",
+    "Original results remain owned for the recorded outcomes and source assertions; no production code or original34 bodies changed."
+  ],
+  "runtime_state": "corrected source not compiled or executed by reviewer; original qualifier compile failure is not runtime outcome; Root owns terminal capture and next one37 dispatch"
+}

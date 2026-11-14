@@ -666,6 +666,46 @@ impl NativeJointActivationAdmission {
         phase.require_local_publication_identity(self.local.local_node_id(), &identity)?;
         self.require_live()
     }
+    /// Component negative over genuine retained owners only. Returns DATA;
+    /// neither a service, preparation nor identity capability escapes.
+    #[cfg(test)]
+    pub(crate) fn test_fresh_publication_identity_substitutions(
+        &self,
+        foreign_service: &Arc<Mutex<ClusterDataNodeService>>,
+    ) -> Result<serde_json::Value> {
+        self.require_live()?;
+        if Arc::ptr_eq(foreign_service, &self.local.service) {
+            return Err(invalid(
+                "publication identity control requires genuine other service",
+            ));
+        }
+        let foreign = foreign_service
+            .try_lock()
+            .ok_or_else(|| invalid("publication identity control foreign service busy"))?;
+        let foreign_result =
+            self.require_fresh_publication_service_identity(&foreign, &self.local.actual);
+        drop(foreign);
+        let local = self
+            .local
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("publication identity control original service busy"))?;
+        let other = self
+            .quorum
+            .observations
+            .iter()
+            .find(|(id, _)| *id != self.local.local_node_id())
+            .map(|(_, member)| member)
+            .ok_or_else(|| invalid("publication identity control other preparation absent"))?;
+        let other_result = self.require_fresh_publication_service_identity(&local, &other.actual);
+        Ok(
+            serde_json::json!({"foreign_service_error":foreign_result.as_ref().err().map(ToString::to_string),
+            "foreign_service_returned_success":foreign_result.is_ok(),
+            "other_actual_preparation_error":other_result.as_ref().err().map(ToString::to_string),
+            "other_actual_preparation_returned_success":other_result.is_ok(),
+            "scope":"real retained-owner identity component, no authority/payload constructor"}),
+        )
+    }
     pub(crate) fn require_publication_service_entry(
         &self,
         service: &ClusterDataNodeService,

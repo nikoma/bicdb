@@ -59,6 +59,17 @@ pub(super) fn exercise(
     } else {
         2
     };
+    let component = if code == 1 {
+        let foreign = (0..services.len()).find(|other| *other != i).unwrap();
+        Some(admission.test_fresh_publication_identity_substitutions(&services[foreign]))
+    } else {
+        None
+    };
+    let after_component = if code == 1 {
+        Some(snapshot(&services[i], range))
+    } else {
+        None
+    };
     BicDb::test_arm_closed_publication_scope_fault(code).unwrap();
     let primary = publication.publish_actual_local_member(admission, process);
     // Actual API outcome and clocks captured before any diagnostic storage I/O.
@@ -77,6 +88,10 @@ pub(super) fn exercise(
         "original_own_at_return":own_at_return,"phase_remaining_us_at_return":phase_remaining,
         "phase_cancel_requested_at_return":phase_canceled,
         "fault":fault,"post_wal_failure":postwal,
+        "identity_component":component.as_ref().and_then(|r|r.as_ref().ok()),
+        "identity_component_error":component.as_ref().and_then(|r|r.as_ref().err()).map(ToString::to_string),
+        "after_identity_component":after_component.as_ref().and_then(|r|r.as_ref().ok()),
+        "after_identity_component_diagnostic_error":after_component.as_ref().and_then(|r|r.as_ref().err()).map(ToString::to_string),
         "before":before.as_ref().ok(),"before_diagnostic_error":before.as_ref().err().map(ToString::to_string),
         "after":after.as_ref().ok(),"after_diagnostic_error":after.as_ref().err().map(ToString::to_string),
         "scope":"test-owned after-scope corruption; API error never proves rollback; no Serving/physical qualification"});
@@ -100,6 +115,18 @@ pub(super) fn exercise(
     assert!(fault["fault_xid"].as_u64().is_some_and(|n| n > 0));
     let error = primary.expect_err("the unchanged final publisher must reject actual corruption");
     if code == 1 {
+        let component = component.unwrap().unwrap();
+        let after_component = after_component.unwrap().unwrap();
+        for key in ["foreign_service_error", "other_actual_preparation_error"] {
+            assert_eq!(
+                component[key],
+                "cluster error: fresh publication substituted original service/preparation"
+            );
+        }
+        for key in ["native_next_xid", "native_next_lsn"] {
+            assert_eq!(before["storage"][key], after_component["storage"][key]);
+        }
+        assert_eq!(before["gate"], after_component["gate"]);
         assert!(
             matches!(error,BicDbError::Cluster(ref d) if d=="native range image: writer CLOSED audit CURRENT/archive missing")
         );

@@ -23,6 +23,20 @@ import collector as C
 import verify as V
 
 
+def require_witness_receipt(receipt, header, client_sha, server_sha, last_receipt, last_witness):
+    expected = C.COMMON | {"collector_certificate_sha256", "client_certificate_sha256",
+                           "receipt_sequence", "witness_sequence"}
+    V.require(isinstance(receipt, dict) and set(receipt) == expected, "exact witness receipt field set")
+    V.require(all(V.equal(receipt[k], value) for k, value in header.items())
+              and receipt["client_certificate_sha256"] == client_sha
+              and receipt["collector_certificate_sha256"] == server_sha,
+              "exact controller receipt identity/hash binding")
+    V.require(type(receipt["receipt_sequence"]) is int and receipt["receipt_sequence"] > last_receipt
+              and type(receipt["witness_sequence"]) is int and receipt["witness_sequence"] > last_witness,
+              "typed monotonic witness receipt counters")
+    return receipt["receipt_sequence"], receipt["witness_sequence"]
+
+
 class WitnessClient:
     def __init__(self, config):
         V.require(set(config) == {"address", "server_name", "server_certificate_sha256", "ca_path",
@@ -39,16 +53,20 @@ class WitnessClient:
         self.context.load_cert_chain(config["cert_path"], config["key_path"])
         self.client_sha = C.sha(C.first_leaf_der(config["cert_path"]))
         self.failed = False
+        self.last_receipt = 0
+        self.last_witness = 0
 
     def record(self, witness):
         V.require(not self.failed, "controller fenced after ambiguous receipt")
         try:
+            # Include witness framing/hash work in this SAME absolute window.
+            window = C.Window(time.monotonic() + self.config["io_timeout_ms"] / 1000)
             payload = C.encode(witness)
             V.require(len(payload) <= C.MAX_HEADER, "controller witness byte bound")
             h = {"format": 1, "action": "witness", "payload_sha256": C.sha(payload),
                  "payload_bytes": len(payload), **{k: self.config[k] for k in
                  ("run_id", "producer_id", "session_id")}}
-            window = C.Window(time.monotonic() + self.config["io_timeout_ms"] / 1000)
+            window.remaining()  # No endpoint connection after a known framing expiry.
             with socket.socket(socket.AF_INET6 if ":" in self.host else socket.AF_INET) as sock:
                 window.timeout(sock)
                 sock.connect((self.host, self.port))
@@ -63,12 +81,10 @@ class WitnessClient:
                     length, = struct.unpack("!I", window.read(stream, 4))
                     V.require(0 < length <= C.MAX_HEADER, "receipt length bound")
                     receipt = V.decode(window.read(stream, length))
-                    V.require(all(receipt.get(k) == value for k, value in h.items())
-                              and receipt.get("client_certificate_sha256") == self.client_sha
-                              and receipt.get("collector_certificate_sha256") == self.config["server_certificate_sha256"]
-                              and type(receipt.get("witness_sequence")) is int
-                              and receipt["witness_sequence"] > 0, "exact controller receipt binding")
+                    counters = require_witness_receipt(receipt, h, self.client_sha,
+                               self.config["server_certificate_sha256"], self.last_receipt, self.last_witness)
                     window.timeout(stream)
+                    self.last_receipt, self.last_witness = counters
                     return receipt
         except BaseException:
             self.failed = True

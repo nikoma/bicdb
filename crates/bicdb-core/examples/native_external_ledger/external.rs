@@ -1,7 +1,7 @@
 //! Example-only pinned mTLS sink. Never supplies database replies/authority.
 use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ClientConnection, RootCertStore, StreamOwned};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -31,30 +31,9 @@ struct Config {
     key_free_inputs_reviewed: bool,
 }
 
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct Receipt {
-    format: u32,
-    action: String,
-    run_id: Uuid,
-    producer_id: Uuid,
-    session_id: Uuid,
-    payload_sha256: String,
-    payload_bytes: usize,
-    collector_certificate_sha256: String,
-    client_certificate_sha256: String,
-    receipt_sequence: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    sequence: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    record_sha256: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    previous_record_sha256: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    durable_end_offset: Option<u64>,
-}
+#[path = "receipt.rs"]
+mod receipt;
+use receipt::{decode_receipt, Receipt};
 
 fn invalid(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message)
@@ -347,7 +326,7 @@ impl External {
             let mut raw = vec![0; length];
             stream.read_exact(&mut raw)?;
             check_end(end)?;
-            let receipt: Receipt = serde_json::from_slice(&raw)?;
+            let receipt = decode_receipt(&raw, action)?;
             if receipt.format != 1 || receipt.action != action || receipt.run_id != self.run
                 || receipt.producer_id != self.config.producer_id || receipt.session_id != self.session
                 || receipt.payload_sha256 != hash(payload) || receipt.payload_bytes != payload.len()

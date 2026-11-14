@@ -264,11 +264,14 @@ class Window:
         self.written_bytes = 0
         self.request_header_DATA = None
 
-    def timeout(self, stream):
+    def remaining(self):
         remaining = self.end - time.monotonic()
         if remaining <= 0:
             raise TimeoutError("original instrumentation IO deadline expired")
-        stream.settimeout(remaining)
+        return remaining
+
+    def timeout(self, stream):
+        stream.settimeout(self.remaining())
 
     def read(self, stream, count):
         result = bytearray()

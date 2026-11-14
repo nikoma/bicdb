@@ -10,6 +10,7 @@ use crate::distribution_range_image::{
     RangeImageCursorV1, RangeImageHistoryCursorV1,
 };
 use crate::distribution_transport::AuthenticatedNativeRemoteImageSourceFrame;
+mod constraint_then_close_tests;
 mod source_discovery_tests;
 mod source_export_retirement_tests;
 pub(super) mod two_range_stall_tests;
@@ -97,6 +98,7 @@ pub(super) enum SourceCase {
     TargetCatalogueFloorDirSyncRetry,
     TargetCatalogueFloorCanceled,
     RemoteConstraintCapture,
+    RemoteConstraintThenClose,
     RemoteOldCollectorExpiredObservation,
     RemoteOldCollectorUnrelatedAdvance,
     RemoteOldCollectorPlanChanged,
@@ -163,6 +165,13 @@ fn native_registered_fifth_remote_old_post_native_cancel_retains_outcome_and_exa
     run_registered_image_baseline_with_source(
         Case::Required,
         Some(SourceCase::RemoteOldRetainedNative),
+    );
+}
+#[test]
+fn native_registered_fifth_remote_old_actual_constraints_then_close_preserves_original_custody() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::RemoteConstraintThenClose),
     );
 }
 #[test]
@@ -261,6 +270,7 @@ pub(super) fn uses_actual_remote_old_seed(case: SourceCase) -> bool {
                 | SourceCase::SourceDiscoveryPlanRevoked
                 | SourceCase::SourceDiscoveryProcessRevoked
                 | SourceCase::RemoteOldFrames
+                | SourceCase::RemoteConstraintThenClose
                 | SourceCase::RemoteOldRetainedNative
                 | SourceCase::TargetImageRows
                 | SourceCase::TargetImageRowsWithoutAudit
@@ -609,6 +619,17 @@ fn remote_old_seed(
                 observed["native_close_after"]
             );
         }
+        let constraint_first = matches!(case, SourceCase::RemoteConstraintThenClose).then(|| {
+            constraint_then_close_tests::constrain(
+                recipient_index,
+                controls,
+                clients,
+                services,
+                plan,
+                output,
+                journal,
+            )
+        });
         let hook = native_fault.then(|| {
             crate::distribution_native_host::CancelRemoteOldAfterNativeWal::install(
                 &database,
@@ -787,6 +808,19 @@ fn remote_old_seed(
             own.require_live_request(business).unwrap();
         }
         assert!(actual.reply().closed.is_some());
+        if let Some(before) = constraint_first {
+            constraint_then_close_tests::after_close(
+                recipient_index,
+                &before,
+                actual.reply(),
+                controls,
+                clients,
+                services,
+                plan,
+                output,
+                journal,
+            );
+        }
         last_closed = Instant::now();
     }
     // Every OLD mutation request was <=4s at its real receiver and completed

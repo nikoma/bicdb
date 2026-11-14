@@ -178,9 +178,14 @@ impl NativeInitialDataAdmission {
                 // BEFORE metadata/reply checks may fail. No phase or DTO can
                 // stand in for a possibly completed mutation.
                 let actual_runtime = held.runtime.clone();
-                let outcome = held.outcome.as_mut().ok_or_else(|| {
-                    invalid("remote OLD missing original retained producer outcome owner")
-                })?;
+                // A constraint-first owner already retains the same runtime,
+                // Frozen, complete raw/native constraints and predecessor.
+                // Allocate its FIRST actual close outcome BEFORE invoking any
+                // promise/native producer; never replace an existing attempt.
+                if held.outcome.is_none() {
+                    held.outcome = Some(Default::default());
+                }
+                let outcome = held.outcome.as_mut().unwrap();
                 let observation =
                     actual_runtime.close_old_retained_for_initial_step(&step, outcome, &token)?;
                 held.actual = Some(Arc::new(observation));
@@ -287,7 +292,7 @@ impl NativeInitialDataAdmission {
                 let runtime = Arc::new(NativeJointHandoffRuntime::new(service.clone())?);
                 let owner = Arc::new(Mutex::new(RetainedInitialOld {
                     remote_new: None,
-                    predecessor: None,
+                    predecessor: Some(step.historical_predecessor().clone()),
                     writer: Arc::clone(step.writer_snapshot()),
                     plan_sha256: request.scope_sha256.clone(),
                     plan: step.plan().clone(),
@@ -314,6 +319,10 @@ impl NativeInitialDataAdmission {
                     "OLD constraint capture cannot retag another original producer",
                 ));
             }
+            held.predecessor
+                .as_ref()
+                .ok_or_else(|| invalid("OLD constraint original pre-freeze predecessor absent"))?
+                .require_same_owner(step.historical_predecessor())?;
             let runtime = held.runtime.clone();
             step.require_joint_runtime(&runtime)?;
             let facts = runtime.observe_constraints_for_constraint_step(
@@ -357,7 +366,7 @@ impl NativeInitialDataAdmission {
     ) -> Result<ActualNativeRemoteOldFrame> {
         token.check()?;
         self.require_live()?;
-        let (plan, actual, constraint_owner, retained_constraints, writer) = {
+        let (plan, actual, constraint_owner, retained_constraints, writer, predecessor) = {
             let entries = table
                 .try_lock()
                 .ok_or_else(|| invalid("OLD source retained table busy at observation"))?;
@@ -378,6 +387,10 @@ impl NativeInitialDataAdmission {
                     invalid("OLD actual irreversible constraints were not retained")
                 })?,
                 held.writer.clone(),
+                held.predecessor
+                    .as_ref()
+                    .ok_or_else(|| invalid("readonly OLD original pre-freeze predecessor absent"))?
+                    .clone(),
             )
         };
         request.require_plan(&plan)?;
@@ -439,23 +452,18 @@ impl NativeInitialDataAdmission {
             self.database.require_database(&db)?;
             member.require_database(&db)?;
             self.store_slot.require_live()?;
+            s.require_remote_old_historical_writer(
+                &db,
+                &writer,
+                &self.store_slot,
+                &predecessor,
+                &plan,
+            )?;
             if actual.is_some() {
                 let lineage = db.current_native_range_source_lineage(request.range_id)?;
                 plan.require_old_native_configuration(&lineage)?;
-                s.require_remote_old_original_writer(
-                    &db,
-                    &writer,
-                    &self.store_slot,
-                    lineage.native_write_range()?,
-                )?;
             } else {
-                writer.require_old_constraint_predecessor(&db, &plan)?;
-                s.require_remote_old_original_writer(
-                    &db,
-                    &writer,
-                    &self.store_slot,
-                    &plan.old_native_predecessor_data()?,
-                )?;
+                writer.require_old_constraint_predecessor_bindings(&db, &plan)?;
             }
             let topology = own.committed_topology(own_business)?;
             let bootstrap = topology

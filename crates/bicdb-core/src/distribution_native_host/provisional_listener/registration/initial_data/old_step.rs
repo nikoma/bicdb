@@ -40,6 +40,62 @@ pub(crate) struct NativeInitialOldStep<'request> {
     _local: std::marker::PhantomData<std::rc::Rc<()>>,
 }
 impl NativeInitialDataAdmission {
+    fn observe_original_old_predecessor(
+        &self,
+        plan: &Arc<NativeJointHandoffPlan>,
+        writer: &Arc<crate::db::NativeWriterHostState>,
+        service: &Arc<Mutex<ClusterDataNodeService>>,
+    ) -> Result<Arc<crate::db::NativeWriterHistoricalPredecessor>> {
+        // Reuse only the SAME original pre-freeze owner from the actual table.
+        // A native/JSON receipt never reconstructs provenance after closure.
+        let previous = {
+            let table = self
+                .old_closures
+                .upgrade()
+                .ok_or_else(|| invalid("OLD predecessor original table ended"))?;
+            let entries = table
+                .try_lock()
+                .ok_or_else(|| invalid("OLD predecessor original table busy"))?;
+            let held = entries.get(&plan.old_range().id).cloned();
+            drop(entries);
+            match held {
+                None => None,
+                Some(held) => {
+                    let held = held
+                        .try_lock()
+                        .ok_or_else(|| invalid("OLD predecessor original owner busy"))?;
+                    if held.plan_sha256 != plan.checksum_sha256()?
+                        || !Arc::ptr_eq(&held.writer, writer)
+                    {
+                        return Err(invalid(
+                            "OLD predecessor changed original retained plan/State",
+                        ));
+                    }
+                    Some(
+                        held.predecessor
+                            .as_ref()
+                            .ok_or_else(|| {
+                                invalid("OLD retained owner has no original pre-freeze predecessor")
+                            })?
+                            .clone(),
+                    )
+                }
+            }
+        };
+        match previous {
+            Some(actual) => Ok(actual),
+            None => {
+                let actual = service
+                    .try_lock()
+                    .ok_or_else(|| invalid("OLD pre-freeze predecessor actual service busy"))?;
+                let db = actual.database();
+                let db = db
+                    .try_read()
+                    .ok_or_else(|| invalid("OLD pre-freeze predecessor actual DB busy"))?;
+                db.capture_writer_historical_predecessor(writer.clone(), plan)
+            }
+        }
+    }
     /// Network acquisition has already finished. Only an actual same-open
     /// native metadata owner can complete this constructor. No metadata guard
     /// spans its DB validation, and the actual observed OWN is retained.
@@ -129,55 +185,7 @@ impl NativeInitialDataAdmission {
             &role, &own, business,
         )?);
         let writer = self.writer();
-        // Reuse only the SAME original pre-freeze owner from the actual table.
-        // A native/JSON receipt never reconstructs provenance after closure.
-        let previous = {
-            let table = self
-                .old_closures
-                .upgrade()
-                .ok_or_else(|| invalid("OLD predecessor original table ended"))?;
-            let entries = table
-                .try_lock()
-                .ok_or_else(|| invalid("OLD predecessor original table busy"))?;
-            let held = entries.get(&plan.old_range().id).cloned();
-            drop(entries);
-            match held {
-                None => None,
-                Some(held) => {
-                    let held = held
-                        .try_lock()
-                        .ok_or_else(|| invalid("OLD predecessor original owner busy"))?;
-                    if held.plan_sha256 != plan.checksum_sha256()?
-                        || !Arc::ptr_eq(&held.writer, &writer)
-                    {
-                        return Err(invalid(
-                            "OLD predecessor changed original retained plan/State",
-                        ));
-                    }
-                    Some(
-                        held.predecessor
-                            .as_ref()
-                            .ok_or_else(|| {
-                                invalid("OLD retained owner has no original pre-freeze predecessor")
-                            })?
-                            .clone(),
-                    )
-                }
-            }
-        };
-        let predecessor = match previous {
-            Some(actual) => actual,
-            None => {
-                let actual = service
-                    .try_lock()
-                    .ok_or_else(|| invalid("OLD pre-freeze predecessor actual service busy"))?;
-                let db = actual.database();
-                let db = db
-                    .try_read()
-                    .ok_or_else(|| invalid("OLD pre-freeze predecessor actual DB busy"))?;
-                db.capture_writer_historical_predecessor(writer.clone(), &plan)?
-            }
-        };
+        let predecessor = self.observe_original_old_predecessor(&plan, &writer, &service)?;
         let step = NativeInitialOldStep {
             writer,
             predecessor,
@@ -564,5 +572,40 @@ impl NativeInitialDataAdmission {
         }
         actual.require_current()?;
         Ok(actual)
+    }
+}
+
+#[cfg(test)]
+impl NativeMetadataControlHost {
+    /// Actual retained custody diagnostics only; no owner/pin handle escapes.
+    pub(crate) fn test_constraint_close_custody(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        let initial = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("constraint-close original INITIAL host absent"))?;
+        let table = initial
+            .old_closures
+            .try_lock()
+            .ok_or_else(|| invalid("constraint-close original table busy"))?;
+        let held = table
+            .get(&range)
+            .ok_or_else(|| invalid("constraint-close original owner absent"))?
+            .clone();
+        drop(table);
+        let held = held
+            .try_lock()
+            .ok_or_else(|| invalid("constraint-close original custody busy"))?;
+        Ok(serde_json::json!({"scope_sha256":held.plan_sha256,
+            "runtime_allocation_diagnostic_only":format!("{:p}",Arc::as_ptr(&held.runtime)),
+            "predecessor_allocation_diagnostic_only":held.predecessor.as_ref().map(|p|format!("{:p}",Arc::as_ptr(p))),
+            "constraint_owner_allocation_diagnostic_only":held.constraint_owner.as_ref().map(|p|format!("{:p}",Arc::as_ptr(p))),
+            "predecessor":held.predecessor.as_ref().map(|p|p.test_evidence()),
+            "constraints":held.constraints,
+            "constraint_frozen":held.constraint_owner.as_ref().map(|p|p.test_original_frozen_custody()),
+            "actual_closed_frozen":held.actual.as_ref().map(|p|p.test_original_frozen_custody()),
+            "actual_close_present":held.actual.is_some(),"outcome_present":held.outcome.is_some()}))
     }
 }

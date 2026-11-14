@@ -10,6 +10,15 @@ impl NativeWriterHostState {
     ) -> Result<()> {
         let predecessor = plan.old_native_predecessor_data()?;
         self.require_database(database, &predecessor)?;
+        self.require_old_constraint_predecessor_bindings(database, plan)
+    }
+    /// Actual identity/schema/restore/member constraints only. The distinct
+    /// step must also consume its retained pre-freeze predecessor scope.
+    pub(crate) fn require_old_constraint_predecessor_bindings(
+        &self,
+        database: &BicDb,
+        plan: &crate::distribution_range_handoff::NativeJointHandoffPlan,
+    ) -> Result<()> {
         let actual = &self.record.facts;
         let native = database.native_recovery_admission(
             &actual.cluster_id,

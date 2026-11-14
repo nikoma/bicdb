@@ -5,6 +5,7 @@ use super::*;
 pub(crate) struct NativeInitialOldConstraintStep<'request> {
     admission: &'request NativeInitialDataAdmission,
     writer: Arc<crate::db::NativeWriterHostState>,
+    predecessor: Arc<crate::db::NativeWriterHistoricalPredecessor>,
     service: Arc<Mutex<ClusterDataNodeService>>,
     runtime: Arc<RangeRecoveryRuntime>,
     metadata: Arc<Mutex<MetadataConsensusStore>>,
@@ -56,8 +57,11 @@ impl NativeInitialDataAdmission {
         let plan = Arc::new(NativeJointHandoffPlan::from_actual_role_and_own(
             &role, &own, business,
         )?);
+        let writer = self.writer();
+        let predecessor = self.observe_original_old_predecessor(&plan, &writer, &service)?;
         let step = NativeInitialOldConstraintStep {
-            writer: self.writer(),
+            writer,
+            predecessor,
             admission: self,
             service,
             runtime,
@@ -88,6 +92,11 @@ impl NativeInitialDataAdmission {
     }
 }
 impl NativeInitialOldConstraintStep<'_> {
+    pub(super) fn historical_predecessor(
+        &self,
+    ) -> &Arc<crate::db::NativeWriterHistoricalPredecessor> {
+        &self.predecessor
+    }
     /// Exact retained writer Arc for owner identity; no current-writer lookup
     /// and no new authority. All existing live/store/plan checks still apply.
     pub(super) fn writer_snapshot(&self) -> &Arc<crate::db::NativeWriterHostState> {
@@ -154,8 +163,9 @@ impl NativeInitialOldConstraintStep<'_> {
         self.admission.store_slot.require_live()?;
         self.writer
             .require_store(database.data_path(), self.admission.store_slot.id())?;
+        self.predecessor.require_original_database(database, plan)?;
         self.writer
-            .require_old_constraint_predecessor(database, plan)?;
+            .require_old_constraint_predecessor_bindings(database, plan)?;
         database.require_native_writer_catalogue_custody(store)?;
         self.require_live()
     }

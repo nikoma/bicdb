@@ -2,9 +2,10 @@
 
 Scope of this document: one range moving from an original three-voter set to a
 set that contains a genuine registered fifth member, in a five-host fixture
-that runs in one process. It states what is exercised, what is new source, and
-what is still missing. It is not a physical four-to-five qualification, an
-automatic controller, or a cross-process result.
+that runs in one process. It states what is exercised, how a failure is
+handled, what is new source, and what is still missing. It is not a physical
+four-to-five qualification, an automatic controller, or a cross-process
+result.
 
 ## What the path does
 
@@ -42,13 +43,154 @@ metadata voter and opened its replica-only receiver:
 Steps 3 to 6 and 8 reuse the existing joint handoff objects unchanged. No
 fence, quorum rule, deadline or refusal in that machinery is modified.
 
+## Failure handling: abort before the source cut, resume after it
+
+The boundary is the first durable handoff promise on an old voter.
+
+- A source close (step 3) records a permanent handoff promise on the old
+  voter and advances that voter's durable range epoch to the activation
+  epoch. Nothing revokes it. From that point the only continuation is to
+  finish the same handoff.
+- Before it, the committed learner allocation (step 2) is the only change.
+  No old voter and not the target holds durable state of the new range
+  epoch; the target holds a writer policy that does not cover the range and
+  no image.
+
+**Abort (steps 1 and 2).** `NativeJoinedDataHandoff::abort_before_cut` commits
+the original range descriptor again through the real metadata consensus: the
+original voters at the epoch the allocation expected, the learner replica and
+the relocation removed. The original owners' installed policy, recovered
+leadership and native write configuration are those of exactly that
+descriptor, so nothing is re-enrolled, nothing is recovered and no permission
+is created; writes are acknowledged by the original voters again as soon as
+the commit is applied. A later run of the driver starts a new learner
+allocation with a new relocation and session.
+
+The abort is refused, and the handoff can only be resumed, when
+
+- this driver started a source round, or
+- the committed relocation is past its bare learner allocation (the metadata
+  consensus itself refuses to erase a relocation that carries a joint
+  decision), or
+- any old voter's durable range log is already beyond the expected epoch.
+  Every old voter is read; an old voter that cannot be read refuses the
+  abort.
+
+The last check is the durable truth and does not depend on the driver's
+memory. It matters because this abort removes the committed relocation: on a
+range with a recorded promise that would leave the promise without its
+handoff.
+
+Why the abort does not keep the allocation epoch. Keeping the range at the
+allocation epoch and re-enrolling the original owners there was tried first.
+The leader recovers leadership at that epoch, but the first write is refused
+by both followers with "native ordinary status needs actual current
+same-voter/configuration proof": a follower accepts ordinary replication at a
+learner-allocation epoch only from a role that carries the committed
+relocation, and the ordinary role never does. The refused write also leaves a
+prepared entry on the leader that generic recovery will not resolve. Making
+followers accept ordinary replication at that epoch would change a native
+refusal, so it is not done here.
+
+### The abort gives the range epoch back; minting it again is safe
+
+The abort returns the range from the allocation epoch `e+1` to `e`, so a later
+handoff commits `e+1` a second time. The two descriptors of that epoch are
+not the same descriptor, and nothing that consumes a range epoch accepts one
+for the other:
+
+- **Identity beyond (range, epoch).** The abort keeps the relocation and
+  replica counters advanced, so the second allocation has a new relocation
+  id, a new learner replica id (hence a different descriptor and
+  configuration digest) and a new random session id and nonce. Every handoff
+  operation on an old voter or on the target runs under a role that the
+  metadata leader witnesses freshly for exactly (relocation id, plan id,
+  session id, nonce) against the committed relocation; the plan checksum, the
+  recovery fence scope, the durable promise, the joint session and the image
+  install intent all carry that session and nonce. A role for the aborted
+  identity cannot be witnessed after the abort, at either epoch, and the
+  first session under the new relocation is refused too.
+- **A request issued before the abort and delivered after it.** A role lives
+  five seconds. The source close re-checks at every persistence boundary that
+  the voter's own metadata store is still at the commit index and committed
+  configuration it was issued against, so a voter that applied the abort
+  refuses the close and records nothing.
+- **Durable state keyed by epoch.** Before the first promise no member holds
+  durable state of `e+1`: the old voters' range logs stay at `e` (the abort
+  requires that of every old voter), and the target is fenced and receives
+  its install only after a closed old majority, which is after promises
+  exist. A promise, a recovery fence or an install intent left by another
+  session at the same epoch is refused, never adopted: each compares session,
+  nonce or configuration digest, not the epoch alone.
+- **State keyed by the voter configuration only.** The installed writer
+  policy and the leader's recovered-epoch mark are keyed by (range, epoch,
+  leader, voters), which is identical for both descriptors and carries no
+  relocation authority. The driver does not create either at `e+1` before
+  the cut.
+- **Clients and routing.** Clients and member transports replace their
+  configuration by metadata generation, which only grows; no consumer
+  refuses a lower range epoch at a higher generation. A client that cached
+  the first `e+1` descriptor is refused by the leader, refreshes, and
+  continues at `e` and later at the new leader.
+
+Not covered: a second collector that starts a source round concurrently with
+the abort. An old voter that has not yet applied the abort could then record
+a promise for the removed relocation. It would be refused by every later
+handoff (different session) and that voter would need repair. One driver per
+range is assumed.
+
+`native_fifth_data_path_abort_then_new_handoff_completes` exercises the
+points above on the same target; the fixture has one spare member, so a
+second handoff onto a different target is not exercised.
+
+**Resume (steps 3 to 9).** The driver is run again. Each run derives its
+position from the committed metadata (the relocation phase and the staged
+joint record) and from the custody it retains, and continues from there:
+
+- Source cut and transfer. A retained closure is bound to its original
+  issuance window and cannot enter a new round, and a capture is single-use.
+  A run that still has to ship the image therefore releases the hosts'
+  retained closures, closes the old voters again with fresh roles and takes a
+  new capture. Closing again
+  confirms the same durable promise and native close record; a different
+  session is refused.
+- Target install. A transfer that already modified the target cannot be
+  returned as untouched or adopted. `RangeRecoveryRuntime::
+  restart_dropped_image_transfer` restarts the dropped transfer of the same
+  retained recovery session under a new attempt. The dropped attempt's freeze
+  remains the only exclusion owner and is rotated to the new attempt under the
+  same checks as the first transfer; the store requires the same handoff
+  lineage and refuses to supersede a completed image. The new installer starts
+  its bounded clear and copy again, which replaces the partial Installing
+  state.
+- Decision. The publication round is retained once it exists; a later run
+  publishes only the members still missing.
+- Membership stages. Each of the three commits is taken only when the
+  committed relocation records the preceding stage, so a repeated run skips
+  the stages already committed.
+- Open, release and serving. Every finished part (policy continuation,
+  preparation, publication, each member's Open, the release continuation,
+  each member's release) is retained and skipped by a later run. No test
+  interrupts the driver inside this part.
+- A run after completion returns immediately and changes nothing.
+
+**Custody.** The joint machinery issues live owners that cannot be decoded
+from disk: the range freezes, the closed old quorum, the finalized target
+image, the durable decision and the serving continuation. The driver object
+retains them between runs. "Resume" therefore means running the same driver
+object again in the process that holds it; a run that failed or returned
+between stages is covered. Losing that process is a cold restart of the
+collector and is not covered.
+
 ## New source
 
 | Location | What it adds |
 | --- | --- |
-| `distribution_native_host/provisional_listener/registration/joined_data.rs` | `NativeJoinedDataHost`: the DATA owner of a registered member without initial ranges. `open_joined_data` installs the host policy and binds the DATA socket, `refresh_joined_data_policy` re-enrolls the same coordinator after the committed configuration changed, `publish_joined_data` recovers led ranges and opens application and Strong ingress. It refuses a member that has initial ranges or another DATA owner. |
+| `distribution_native_host/joined_data_handoff.rs` | `NativeJoinedDataHandoff`: the driver of steps 1 to 9 for one range, with `drive`, `drive_until` (stop after a named stage) and `abort_before_cut`. It sequences the existing joint objects and retains their custody between runs. The hosts are reached through `NativeJoinedDataHandoffHosts`, whose methods are existing host actions. It has no production caller yet. |
+| `distribution_native_host/provisional_listener/registration/joined_data.rs` | `NativeJoinedDataHost`: the DATA owner of a registered member without initial ranges. `open_joined_data` installs the host policy and binds the DATA socket, `refresh_joined_data_policy` re-enrolls the same coordinator after the committed configuration changed, `publish_joined_data` recovers led ranges and opens application and Strong ingress, `joined_data_handoff_parts` hands the owner's own recovery runtime and DATA transport to the driver. It refuses a member that has initial ranges or another DATA owner. |
+| `distribution_range_recovery/runtime.rs`, `restart_dropped_image_transfer` | Restarts a dropped image transfer of the same retained recovery session under a new attempt (see "Resume"). It cannot return the freeze to its session and grants no rows, serving or recovery authority. |
 | `registration/initial_data.rs`, `refresh_data_policy` | An initial owner re-enrolls its retained coordinator at the current committed configuration. The metadata-only registry refresh still refuses any DATA change; this is a separate complete policy publication. Application ingress is closed across the replacement. It is refused once the process-owned maintenance worker is bound. |
-| `registration/initial_data.rs`, `forget_old_closure` | Releases the host's retained custody of one old closure after its collector finished. Durable promise, native close record and joint state are untouched. |
+| `registration/initial_data.rs`, `forget_old_closure` | Releases the host's retained custody of one old closure. Durable promise, native close record and joint state are untouched. |
 | `NativeInitialDataAdmission` | The retained admission's writer reference can be replaced by its own owner after a policy publication, and can be constructed for a joined owner (no image-source registry, no initial genesis). Every existing check on it is unchanged. |
 
 The joined owner reuses the immutable initial-DATA listener mode, so its
@@ -58,7 +200,10 @@ ones. The registered receiver and assigned-closed modes are not changed.
 ## What is exercised
 
 `fifth_data_path_tests.rs` (module `registered_image_baseline`) starts four
-initial owners and one registered fifth member with real mutual-TLS sockets:
+initial owners and one registered fifth member with real mutual-TLS sockets
+and drives every case through `NativeJoinedDataHandoff`. The fixture
+implements the host actions; the planning view of the metadata stages and the
+wait for a committed configuration are fixture wiring.
 
 - `native_fifth_data_path_receives_image_becomes_voter_and_serves_after_one_original_stops`
   writes rows acknowledged by the four-member cluster, runs steps 1 to 9, and
@@ -68,29 +213,64 @@ initial owners and one registered fifth member with real mutual-TLS sockets:
   absent on the retired source; after one surviving original is stopped, a
   further write is acknowledged, is on `T` and the remaining original, absent
   on the stopped one, and every acknowledged row is still Strong-readable.
+  These requirements are the "acceptance" used by the cases below.
 - `native_fifth_data_path_unavailable_target_leaves_range_writable_on_original_four`
   stops the fifth member first. Step 1 refuses, the committed configuration is
   unchanged, and a write and Strong reads on the four originals succeed.
-- `native_fifth_data_path_transfer_failure_after_source_cut_characterization`
-  fails the transfer after the first copied step. It asserts only safety
-  (every acknowledged row remains on every old voter; an acknowledgement, if
-  returned, is on an old majority) and prints what the old configuration
-  accepts. It is a characterization, not a success claim.
+- `native_fifth_data_path_target_stopped_after_allocation_aborts_to_original_voters`
+  commits the learner allocation, shows that a write is then refused, stops
+  the fifth member and aborts. The committed range is the original descriptor
+  again, no relocation is left, new writes are acknowledged on a majority of
+  the original voters and every acknowledged row is Strong-readable.
+- `native_fifth_data_path_abort_then_new_handoff_completes` aborts with the
+  fifth member running and writes on the original voters. A source close
+  issued before the abort and delivered after it is refused and fences
+  nothing; no role can be witnessed for the aborted identity; a client holding
+  the first allocation's descriptor writes and reads again. The driver then
+  allocates again: the same epoch carries a different descriptor, relocation
+  and session, the first identity and the first session under the new
+  relocation are refused on an old voter and on the target, and the first
+  attempt's plan refuses a role of the new one. The new relocation completes
+  with the acceptance, including the rows written after the abort.
+- `native_fifth_data_path_transfer_failure_after_source_cut_resumes_to_completion`
+  fails the transfer after the source cut and the first copied step. In that
+  state every acknowledged row is on every old voter, a write is refused and
+  the abort is refused, with and without the driver's custody. Running the
+  driver again closes the source again, replaces the target's partial install
+  and completes with the acceptance. Along the way the target runtime is
+  asked to restart a transfer in each state where it must refuse (no
+  session, a session that never transferred, a lease still held, the dropped
+  attempt's own id, a scope of another session) and refuses each.
+- `native_fifth_data_path_interrupted_driver_reruns_to_completion` lets the
+  driver return after the joint decision, after the certification and after
+  the union membership, checks each time that the range refuses writes and
+  keeps every acknowledged row, runs it again to completion with the
+  acceptance, and checks that one more run changes nothing.
 
 ## What is not delivered
 
-- **No abort after the learner allocation.** From step 2 the range is not
-  writable until step 9 completes: the original owners' installed policy does
-  not cover the new range epoch, and after step 3 each old voter holds a
-  permanent promise. A failure in between is safe but leaves the range
-  unavailable; the only continuation is to finish the same handoff. Resuming
-  an interrupted transfer on the target is not implemented. This is the
-  opposite of "unfreeze on the old configuration" and remains open.
+- **Unwritable interval.** From the learner allocation (step 2) to the end of
+  step 9, or to the abort, the range does not acknowledge writes. The abort
+  and the resume end that interval; they do not shorten it.
+- **Custody loss.** Resume needs the driver object that holds the live joint
+  owners. A lost collector process, and a restart of any participant in the
+  middle of the path, are not covered. Two narrower cases inside one process
+  are also not covered: if the decision cannot be prepared after the
+  finalized image was handed to it, the image custody is gone and a completed
+  image cannot be shipped again; and a failure while the durable decision is
+  handed to the serving preparation loses the decision custody. Both leave
+  the range safe and unwritable.
+- **All old voters.** The source round requires every old voter to answer,
+  not only a majority, and the abort requires every old voter's durable
+  progress.
+- **Abort of a partially cut range.** There is none by design. If some but not
+  all old voters hold the promise, the handoff must be resumed.
 - **In-process orchestration.** The source capture, the old and new rounds,
-  the decision and the phase rounds are local objects driven by the test. The
-  authenticated remote source stream and remote old collector exist only as
-  separate, unfinished work and are not used here. There is no command-driven
-  or automatic controller.
+  the decision and the phase rounds are local objects sequenced by the driver
+  in one process. The authenticated remote source stream and remote old
+  collector exist only as separate, unfinished work and are not used here.
+  The driver has no production caller: there is no command-driven or
+  automatic controller.
 - **Process maintenance.** The initial owner's policy change is refused when
   the process-owned hot maintenance worker is bound, and that worker follows
   the initial range descriptors only. A range that changed configuration is

@@ -546,6 +546,127 @@ impl RangeRecoveryRuntime {
             returned: false,
         })
     }
+    /// Restart a DROPPED image transfer of the same retained recovery session
+    /// under a new attempt. The dropped attempt may already have modified its
+    /// target, so it can neither be returned as untouched nor adopted. The
+    /// dropped attempt's freeze stays the only exclusion owner throughout:
+    /// it is never released, and it is rotated from the dropped attempt to
+    /// the new one under the same checks as the first transfer. The Store
+    /// preflight and the installer independently require the same handoff
+    /// lineage and a physical state that never completed; the new installer
+    /// starts its bounded clear and copy again. This grants no rows, serving
+    /// or recovery authority, and it cannot return the freeze to its session.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn restart_dropped_image_transfer(
+        self: &Arc<Self>,
+        scope: &RecoveryFenceScope,
+        source: &crate::distribution_range_image::TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &crate::distribution_range_consensus::NativeImageInstallRole<'_>,
+        purpose: crate::distribution_range_consensus::ImageInstallPurpose,
+        attempt_id: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<RecoveryImageInstallFreeze> {
+        let _operation = self.reserve(scope.range_id)?;
+        scope.require_role(role.role())?;
+        let token = parent.child_with_deadline(role.role().deadline());
+        token.check()?;
+        let (dropped_attempt, original) = {
+            let sessions = self.sessions.lock();
+            let session = sessions
+                .current
+                .get(&scope.range_id)
+                .ok_or_else(|| invalid("no dropped image recovery session"))?;
+            if !session.scope.same_session(scope) {
+                return Err(invalid("dropped image belongs to another recovery session"));
+            }
+            let frozen = session
+                .frozen
+                .as_ref()
+                .ok_or_else(|| invalid("image freeze is still leased"))?;
+            let dropped = session
+                .image_preflight
+                .as_ref()
+                .ok_or_else(|| invalid("no retained dropped-transfer preflight"))?;
+            if frozen.owner() != dropped.attempt_id()
+                || dropped.original_freeze_owner() != scope.freeze_owner()?
+                || attempt_id == dropped.attempt_id()
+                || attempt_id == scope.freeze_owner()?
+            {
+                return Err(invalid(
+                    "dropped transfer owner/scope differs or the attempt is not new",
+                ));
+            }
+            self.gate
+                .validate_quiescent_frozen(scope.range_id, frozen)?;
+            (dropped.attempt_id(), Arc::clone(frozen))
+        };
+        let preflight = {
+            let mut service = loop {
+                token.check()?;
+                if let Some(service) = self.service.try_lock_for(LATCH_POLL) {
+                    break service;
+                }
+            };
+            service.preflight_recovery_image_transfer(
+                source, role, &original, purpose, attempt_id, &token,
+            )?
+        };
+        if preflight.range_id() != scope.range_id
+            || preflight.nonce() != scope.recovery_nonce
+            || preflight.session_id() != scope.freeze_owner()?
+            || preflight.original_freeze_owner() != dropped_attempt
+            || preflight.attempt_id() != attempt_id
+        {
+            return Err(invalid(
+                "restarted image transfer preflight has a different recovery session",
+            ));
+        }
+        // Discard the temporary read reference before the only owner rotates
+        // from the dropped attempt to the new attempt.
+        drop(original);
+        token.check()?;
+        let mut sessions = self.sessions.lock();
+        let session = sessions
+            .current
+            .get_mut(&scope.range_id)
+            .ok_or_else(|| invalid("recovery session disappeared before image restart"))?;
+        if !session.scope.same_session(scope)
+            || session
+                .image_preflight
+                .as_ref()
+                .is_none_or(|dropped| dropped.attempt_id() != dropped_attempt)
+        {
+            return Err(invalid("recovery session changed before image restart"));
+        }
+        let arc = session
+            .frozen
+            .as_mut()
+            .ok_or_else(|| invalid("recovery freeze is already leased"))?;
+        let frozen = Arc::get_mut(arc)
+            .ok_or_else(|| invalid("source/callback still owns the dropped image freeze"))?;
+        if frozen.owner() != dropped_attempt {
+            return Err(invalid(
+                "dropped image freeze owner changed before image restart",
+            ));
+        }
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("service is busy before image restart transfer"))?;
+        service.rotate_recovery_image_transfer(&preflight, source, role, frozen, &token)?;
+        drop(service);
+        let arc = session.frozen.take().unwrap();
+        session.image_preflight = None;
+        let frozen =
+            Arc::try_unwrap(arc).expect("unique recovery freeze checked under session lock");
+        Ok(RecoveryImageInstallFreeze {
+            runtime: Arc::clone(self),
+            scope: scope.clone(),
+            frozen: Some(frozen),
+            preflight: Some(preflight),
+            returned: false,
+        })
+    }
     /// Read-only freeze sharing. SourceCapture must atomically acquire its
     /// own exclusive read pin; this Arc cannot grant a frozen write bypass.
     pub(crate) fn source_capture_freeze(

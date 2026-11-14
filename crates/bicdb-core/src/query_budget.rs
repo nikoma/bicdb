@@ -112,6 +112,11 @@ impl Drop for QueryMemoryScope {
 pub fn active() -> bool {
     BUDGETS.with(|b| b.borrow().iter().any(|b| b.limit > 0))
 }
+/// Read-only diagnostic scalar; unlike context capture this shares no counters.
+#[cfg(test)]
+pub(crate) fn test_current_deadline() -> Option<std::time::Instant> {
+    BUDGETS.with(|budgets| budgets.borrow().iter().filter_map(|b| b.deadline).min())
+}
 pub fn limit(default: usize) -> usize {
     BUDGETS.with(|b| {
         b.borrow()

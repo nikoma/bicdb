@@ -535,3 +535,123 @@ fn higher_term_fence_revokes_the_live_writer_before_native_state_io_failure() {
         }
     }
 }
+
+#[test]
+fn genuinely_fresh_standalone_snapshot_publishes_its_original_genesis_before_backup() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("standalone");
+    let mut db = BicDb::open_with_config(
+        &path,
+        DbConfig::default()
+            .with_fsync(true)
+            .with_storage_mode(StorageMode::ServerPaged),
+    )
+    .unwrap();
+    assert!(!path.join(HA_NODE_FILE).exists());
+    db.create_collection("items").unwrap();
+    let mut tx = db.begin_transaction().unwrap();
+    tx.insert(
+        "items",
+        Record::new("original").with_metadata(json!({"value": "standalone original"})),
+    )
+    .unwrap();
+    tx.commit().unwrap();
+    let expected = serde_json::to_value(db.get("items", "original").unwrap().unwrap()).unwrap();
+    let point = db.replication_election_position().unwrap();
+    assert_eq!(point, (0, db.last_applied_commit_seq()));
+    assert!(!path.join(HA_NODE_FILE).exists());
+
+    let target = root.path().join("target");
+    drop(open(&target, ReplicationMode::Standby));
+    let archive = root.path().join("standalone-snapshot");
+    assert_eq!(
+        db.create_standby_snapshot(&archive, "fresh-standalone-key")
+            .unwrap(),
+        point.1
+    );
+    assert!(path.join(HA_NODE_FILE).is_file());
+    stage_standby_bootstrap(&target, &archive, "fresh-standalone-key", true).unwrap();
+    let restored = open(&target, ReplicationMode::Standby);
+    assert_eq!(restored.replication_election_position().unwrap(), point);
+    assert_eq!(
+        serde_json::to_value(restored.get("items", "original").unwrap().unwrap()).unwrap(),
+        expected
+    );
+    // The snapshot published actual SAME-open genesis, so this state survives
+    // an ordinary close/reopen rather than depending on a fresh-open guess.
+    drop(db);
+    let reopened = open(&path, ReplicationMode::Primary);
+    assert_eq!(reopened.replication_election_position().unwrap(), point);
+}
+
+#[test]
+fn standalone_close_without_ha_publication_does_not_bless_a_later_populated_open() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("standalone");
+    let mut db = BicDb::open_with_config(
+        &path,
+        DbConfig::default()
+            .with_fsync(true)
+            .with_storage_mode(StorageMode::ServerPaged),
+    )
+    .unwrap();
+    db.create_collection("items").unwrap();
+    let mut tx = db.begin_transaction().unwrap();
+    tx.insert("items", Record::new("original")).unwrap();
+    tx.commit().unwrap();
+    assert!(db.replication_election_position().is_ok());
+    assert!(!path.join(HA_NODE_FILE).exists());
+    drop(db);
+    assert!(!path.join(HA_NODE_FILE).exists());
+    let db = open(&path, ReplicationMode::Primary);
+    assert_eq!(db.replication_resume_position().unwrap(), None);
+    assert!(db.replication_election_position().is_err());
+    let archive = root.path().join("unknown-snapshot");
+    let error = db
+        .create_standby_snapshot(&archive, "unknown-standalone-key")
+        .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("unqualified legacy HA data epoch"));
+    assert!(!archive.exists());
+    assert!(db.get("items", "original").unwrap().is_some());
+}
+
+#[test]
+fn first_standalone_ha_publication_failure_creates_no_snapshot_and_fences_unknown_io() {
+    use bicdb_page::test_faults::arm_io_failure;
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("standalone");
+    let db = BicDb::open_with_config(
+        &path,
+        DbConfig::default()
+            .with_fsync(true)
+            .with_storage_mode(StorageMode::ServerPaged),
+    )
+    .unwrap();
+    assert!(!path.join(HA_NODE_FILE).exists());
+    assert_eq!(db.replication_election_position().unwrap(), (0, 0));
+    let fault = arm_io_failure("ha_node.dir_sync", &path, 1, false);
+    let archive = root.path().join("must-not-exist");
+    let error = db
+        .create_standby_snapshot(&archive, "first-publication-key")
+        .unwrap_err();
+    assert_eq!(fault.fired(), 1);
+    assert!(error.is_durability_failure());
+    // The actual rename happened but its directory-sync return was unknown;
+    // neither its visible state nor the original RAM origin permits an archive.
+    assert!(path.join(HA_NODE_FILE).is_file());
+    assert!(!archive.exists());
+    assert!(db.replication_resume_position().is_err());
+    assert!(db.replication_election_position().is_err());
+    assert!(db.begin_candidacy("standalone").is_err());
+    drop(fault);
+    drop(db);
+    let reopened = open(&path, ReplicationMode::Primary);
+    assert_eq!(reopened.replication_election_position().unwrap(), (0, 0));
+    let archive = root.path().join("verified-after-reopen");
+    reopened
+        .create_standby_snapshot(&archive, "first-publication-key")
+        .unwrap();
+    assert!(archive.is_file());
+}

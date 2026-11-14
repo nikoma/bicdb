@@ -270,3 +270,10 @@ unacknowledged-suffix replacement, snapshot, planned switchover, coordinated
 protocol refusal and reopen at qualification/HA-file failure cuts. No such run,
 power-loss test, RPO/RTO qualification or production election claim is supplied
 by this source change.
+
+The same original required run also exposed the fresh standalone origin
+publication boundary in the attachment recovery test. See
+[the issue198 correction](ha-fresh-standalone-origin-198.md) for the exact failed
+prerequisite, the unchanged original assertions and the distinction between
+actual fresh birth and unqualified populated legacy state. Its new source
+controls remain unexecuted until the successor receives required validation.

@@ -112,6 +112,11 @@ impl BicDb {
         let applied = self.last_applied_commit_seq();
         self.tx_log.write_durable(applied)?;
         self.replication_election_position()?;
+        // A genuine fresh standalone open can hold genesis only in memory.
+        // Publish that SAME qualified state through the reader/durability
+        // barrier before copying it into the archive. Missing/legacy history
+        // was refused above; neither the snapshot nor a no-op can bless it.
+        self.ha_node.with_file(|_| ())?;
         crate::backup::create_backup_from_open_database(
             self,
             archive,

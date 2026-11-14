@@ -233,13 +233,14 @@ impl HaNode {
         configured: NodeRole,
         fsync: bool,
         health: Arc<bicdb_page::DurabilityHealth>,
-        fresh_ha_birth: bool,
+        fresh_data_birth: bool,
+        persist_genesis_at_open: bool,
     ) -> Result<Self> {
         let path = root.join(HA_NODE_FILE);
         let file = match fs::read(&path) {
             Ok(bytes) => serde_json::from_slice::<HaNodeFile>(&bytes)?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                if fresh_ha_birth {
+                if fresh_data_birth {
                     HaNodeFile::genesis()
                 } else {
                     HaNodeFile::default()
@@ -267,7 +268,11 @@ impl HaNode {
             fsync,
             health,
         };
-        if fresh_ha_birth {
+        // Standalone operation may later enter HA on this SAME actual open.
+        // Retain its genuine empty-directory origin without creating an HA
+        // state/reader flag until an HA producer actually publishes it. A
+        // populated directory reopened without a state file remains unknown.
+        if fresh_data_birth && persist_genesis_at_open {
             node.with_file(|_| ())?;
         }
         Ok(node)

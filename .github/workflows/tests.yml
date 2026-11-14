@@ -22,6 +22,16 @@ on:
         type: string
         required: false
         default: ''
+      core_target:
+        description: 'Optional Core integration-test target (crates/bicdb-core/tests/<name>.rs); mutually exclusive with other selectors'
+        type: string
+        required: false
+        default: ''
+      core_target_repeat:
+        description: 'How many times to run the selected Core integration-test target (1-50); every round runs and is counted'
+        type: string
+        required: false
+        default: '1'
       cli_target:
         description: 'Optional CLI integration-test target for manual validation; requires empty core_filter'
         type: string
@@ -62,6 +72,8 @@ jobs:
       CORE_FILTER: ${{ inputs.core_filter }}
       PGWIRE_FILTER: ${{ inputs.pgwire_filter }}
       CLI_TARGET: ${{ inputs.cli_target }}
+      CORE_TARGET: ${{ inputs.core_target }}
+      CORE_TARGET_REPEAT: ${{ inputs.core_target_repeat }}
       CLI_DB_CUSTODY: ${{ inputs.cli_failure_db_custody }}
     steps:
       - name: Reject incompatible or malformed selectors
@@ -70,15 +82,19 @@ jobs:
           set -euo pipefail
           python3 - <<'PYCODE'
           import os, re
-          values = {name: os.environ.get(name, '') for name in ('CORE_FILTER', 'PGWIRE_FILTER', 'CLI_TARGET')}
+          values = {name: os.environ.get(name, '') for name in ('CORE_FILTER', 'PGWIRE_FILTER', 'CLI_TARGET', 'CORE_TARGET')}
           selected = [name for name, value in values.items() if value]
           if len(selected) > 1:
-              raise SystemExit('Select at most one of core_filter, pgwire_filter and cli_target')
+              raise SystemExit('Select at most one of core_filter, pgwire_filter, cli_target and core_target')
           for name, value in values.items():
               if value and (value.startswith('-') or len(value) > 512 or any(ord(c) < 32 or ord(c) == 127 for c in value)):
                   raise SystemExit(f'{name} must be a bounded single-line substring, not an option')
           if values['CLI_TARGET'] and not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_-]{0,127}', values['CLI_TARGET']):
               raise SystemExit('CLI_TARGET must be a bounded Cargo integration-target name')
+          if values['CORE_TARGET'] and not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_-]{0,127}', values['CORE_TARGET']):
+              raise SystemExit('CORE_TARGET must be a bounded Cargo integration-target name')
+          if values['CORE_TARGET'] and not re.fullmatch(r'[1-9]|[1-4][0-9]|50', os.environ.get('CORE_TARGET_REPEAT', '') or '1'):
+              raise SystemExit('core_target_repeat must be an integer from 1 to 50')
           if os.environ.get('CLI_DB_CUSTODY') == 'true' and values['CLI_TARGET'] != 'native_metadata_operator_cli':
               raise SystemExit('DB custody requires explicit manual native_metadata_operator_cli target')
           print('Selected: ' + (selected[0] if selected else 'all broad suites'))
@@ -146,7 +162,7 @@ jobs:
 
   test:
     needs: validate-selectors
-    if: github.event_name != 'workflow_dispatch' || (inputs.core_filter == '' && inputs.cli_target == '' && inputs.pgwire_filter == '')
+    if: github.event_name != 'workflow_dispatch' || (inputs.core_filter == '' && inputs.cli_target == '' && inputs.pgwire_filter == '' && inputs.core_target == '')
     name: ${{ matrix.suite.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -278,7 +294,7 @@ jobs:
   focused-core:
     needs: validate-selectors
     name: Focused Core library (${{ inputs.core_filter }})
-    if: github.event_name == 'workflow_dispatch' && inputs.core_filter != '' && inputs.cli_target == '' && inputs.pgwire_filter == ''
+    if: github.event_name == 'workflow_dispatch' && inputs.core_filter != '' && inputs.cli_target == '' && inputs.pgwire_filter == '' && inputs.core_target == ''
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -328,10 +344,64 @@ jobs:
           if-no-files-found: warn
           path: ${{ runner.temp }}/native-core-evidence/
 
+  focused-core-target:
+    needs: validate-selectors
+    name: Focused Core integration target (${{ inputs.core_target }} x${{ inputs.core_target_repeat }})
+    if: github.event_name == 'workflow_dispatch' && inputs.core_target != '' && inputs.core_filter == '' && inputs.cli_target == '' && inputs.pgwire_filter == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      BICDB_CORE_TEST_TARGET: ${{ inputs.core_target }}
+      BICDB_CORE_TEST_REPEAT: ${{ inputs.core_target_repeat }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Selecting one target does not build the examples that Core's
+      # out-of-process tests run as children (a plain `cargo test` does).
+      - name: Build Core child-process examples
+        run: cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --examples --locked
+      - name: Build and list the selected Core integration target
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/core-target-evidence"
+          git rev-parse HEAD > "$RUNNER_TEMP/core-target-evidence/source-revision.txt"
+          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --test "$BICDB_CORE_TEST_TARGET" --locked -- --list \
+            2>&1 | tee "$RUNNER_TEMP/core-target-evidence/selected-tests.log"
+      - name: Execute the selected Core integration target
+        shell: bash
+        run: |
+          set -uo pipefail
+          # Every round runs even after a failure, as the broad suite's
+          # thread count, so the result is a pass count and not a first hit.
+          failed=0
+          for round in $(seq 1 "${BICDB_CORE_TEST_REPEAT:-1}"); do
+            echo "::group::round $round"
+            if cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --test "$BICDB_CORE_TEST_TARGET" --locked -- --test-threads=4 \
+              2>&1 | tee "$RUNNER_TEMP/core-target-evidence/round-$round.log"; then
+              echo "CORE_TARGET_ROUND $round passed"
+            else
+              failed=$((failed + 1))
+              echo "CORE_TARGET_ROUND $round FAILED"
+            fi
+            echo "::endgroup::"
+          done
+          echo "CORE_TARGET_SUMMARY rounds=${BICDB_CORE_TEST_REPEAT:-1} failed=$failed" | tee "$RUNNER_TEMP/core-target-evidence/summary.txt"
+          test "$failed" -eq 0
+      - name: Retain source revision and round logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: focused-core-target-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/core-target-evidence/
+
   focused-cli:
     needs: validate-selectors
     name: Focused CLI integration (${{ inputs.cli_target }})
-    if: github.event_name == 'workflow_dispatch' && inputs.cli_target != '' && inputs.core_filter == '' && inputs.pgwire_filter == ''
+    if: github.event_name == 'workflow_dispatch' && inputs.cli_target != '' && inputs.core_filter == '' && inputs.pgwire_filter == '' && inputs.core_target == ''
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -413,7 +483,7 @@ jobs:
   focused-pgwire:
     name: Focused PGwire library (${{ inputs.pgwire_filter }})
     needs: validate-selectors
-    if: github.event_name == 'workflow_dispatch' && inputs.pgwire_filter != '' && inputs.core_filter == '' && inputs.cli_target == ''
+    if: github.event_name == 'workflow_dispatch' && inputs.pgwire_filter != '' && inputs.core_filter == '' && inputs.cli_target == '' && inputs.core_target == ''
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:

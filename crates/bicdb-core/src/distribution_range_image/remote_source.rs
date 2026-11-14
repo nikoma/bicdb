@@ -671,6 +671,14 @@ pub(crate) struct NativeRemoteImageSourceRegistry {
     drop_next_export_reply: std::sync::atomic::AtomicBool,
     #[cfg(test)]
     export_detach_cut: Mutex<Option<Box<dyn FnOnce(Instant, &CancellationToken) + Send>>>,
+    #[cfg(test)]
+    export_callback_fault: std::sync::atomic::AtomicU8,
+    #[cfg(test)]
+    export_callback_trace: Mutex<Option<serde_json::Value>>,
+    #[cfg(test)]
+    export_callback_final_bits: std::sync::atomic::AtomicU16,
+    #[cfg(test)]
+    export_callback_final_own_remaining_us: std::sync::atomic::AtomicU64,
     transport: Arc<TcpClusterRelocationTransport>,
     provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
     original_process: std::sync::OnceLock<CancellationToken>,
@@ -689,6 +697,14 @@ impl NativeRemoteImageSourceRegistry {
             drop_next_export_reply: std::sync::atomic::AtomicBool::new(false),
             #[cfg(test)]
             export_detach_cut: Mutex::new(None),
+            #[cfg(test)]
+            export_callback_fault: std::sync::atomic::AtomicU8::new(0),
+            #[cfg(test)]
+            export_callback_trace: Mutex::new(None),
+            #[cfg(test)]
+            export_callback_final_bits: std::sync::atomic::AtomicU16::new(0),
+            #[cfg(test)]
+            export_callback_final_own_remaining_us: std::sync::atomic::AtomicU64::new(0),
             transport,
             provider,
             original_process: std::sync::OnceLock::new(),

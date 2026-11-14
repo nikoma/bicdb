@@ -5,6 +5,8 @@ This source batch is based on runtime `5a85900f571c389ff97e278a0b9555048bdeadec`
 it does not establish a current-main release, successful relocation, Serving,
 physical qualification or throughput improvement. The thirteen new actual-TCP
 controls have not been compiled or executed at this document's source freeze.
+The callback-liveness successor preserves those thirteen bodies and adds two
+actual callback-token controls, for fifteen static cases pending compiler listing.
 
 The earlier qualification of the unchanged base compiled and listed **82**
 tests. Its expected-name guard stopped before runtime because it expected 71
@@ -61,6 +63,9 @@ and Serving admission; no deserialized object constructs those authorities.
    only cancellation, capture detachment and the precomputed terminal outcome
    move. It drops the guard before the capture destructor or any postchecks.
    Busy/changed/dirty metadata preserves the intended observation and capture.
+   Immediately before detachment it also checks the original authenticated
+   target callback's distinct request token using a memory-only method. Native
+   validation and fresh donor OWN must not silently outlive that callback.
    This co-fences only local metadata authority, not a distributed lease or
    foreign liveness. It cancels only the original exporter session, removes its
    completed capture, and installs terminal custody before fallible reply checks.
@@ -115,6 +120,8 @@ Diagnostic contention is recorded as an error, never interpreted as no pin.
 | Actual original process cancellation at final detach | Source-process ancestry cancels while actual OWN remains live; intended observation and capture retained | Not tested |
 | Actual original donor-process cancellation | Refusal; no replacement source/capture | Not tested |
 | Actual native commit-sync-unknown prerequisite | Existing real fault control leaves no completed target NEW owner; export stays retained | Not tested |
+| Actual callback cancellation at final detach | Cancel the token retained by the real pinned exchange; OWN, outer request, original process and session stay live; capture/OLD/native state retained | Not tested |
+| Actual callback expiry at final detach | New adversarial case shortens the real outbound callback wire budget to 600 ms, waits for that same token, proves other original scopes remain live and preserves capture/OLD/native state | Not tested |
 
 These controls use one test process with multiple actual node/DB owners and
 loopback TCP/mTLS on one CI host,
@@ -169,3 +176,28 @@ would incorrectly demand early OLD obligation release. The successor keeps the
 OLD gate/freeze intact and observes the exact Arc's before/after reference counts
 through a test-only Weak. This is a source-derived test correction, not evidence
 of a runtime failure or permission to release OLD custody before its real gate.
+
+The final donor OWN guard does not cover every token. The authenticated target
+callback can carry a shorter original deadline than the outer Retire and the
+fresh final donor OWN. Its former `require_source` check preceded local native/
+MStore work. The successor adds only a memory liveness check of that actual
+callback under the final version guard, immediately before cancellation,
+capture detachment and terminal publication. It performs no native or OLD I/O
+under that guard. An invalid callback leaves the intended observation and
+capture retained. Already completed terminal Describe remains historical DATA;
+it does not demand a now-expired callback or revive the canceled exporter.
+
+Only the new expiry adversary applies the 600 ms cap, before the real mTLS
+request; that budget appears in the actual request/reply and its sealed token.
+Production's 4000 ms cap, the original thirteen controls, outer/OWN/SDK budgets
+and all prior assertions remain unchanged. The two controls retain before/after
+token diagnostics, exact callback request identity, source capture, shared OLD
+pin, native receipts and complete target state before assertions. They require
+the actual callback to have completed while live at cut entry. If preceding
+work already exhausted it, the result is a prerequisite failure, not a proven
+final-use refusal. No token, pin or capability getter is exposed to the fixture;
+private test cuts act on the existing real exchange and return diagnostic DATA.
+Test-only final-point atomics additionally record that the guarded callback
+check actually ran with the distinct outer/session/process scopes and OWN
+deadline still live. No JSON, callback, extra latch or I/O occurs in that probe;
+the fixture assembles and persists its report after the actual API returns.

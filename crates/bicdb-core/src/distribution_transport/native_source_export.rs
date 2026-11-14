@@ -14,6 +14,25 @@ pub(crate) struct AuthenticatedRegisteredExportNew {
     request: CancellationToken,
 }
 impl AuthenticatedRegisteredExportNew {
+    /// Memory-only liveness of THIS actual authenticated callback request.
+    /// It conveys no OLD/native/metadata authority and performs no IO.
+    pub(crate) fn require_request_live(&self) -> Result<()> {
+        self.request.check()
+    }
+    #[cfg(test)]
+    pub(crate) fn test_request_liveness(&self) -> serde_json::Value {
+        serde_json::json!({"cancel_requested":self.request.is_cancel_requested(),
+            "remaining_us":self.request.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_micros()),
+            "exact_error":self.require_request_live().err().map(|e|format!("{e:?}"))})
+    }
+    #[cfg(test)]
+    pub(crate) fn test_cancel_original_request(&self) {
+        self.request.cancel();
+    }
+    #[cfg(test)]
+    pub(crate) fn test_original_request_deadline(&self) -> Option<Instant> {
+        self.request.deadline()
+    }
     pub(crate) fn reply(&self) -> &NativeRegisteredNewExportReplyV1 {
         &self.reply
     }
@@ -23,7 +42,7 @@ impl AuthenticatedRegisteredExportNew {
         old: &NativeRemoteOldCutCertificate,
         seal: &LocalRangeImageSealV1,
     ) -> Result<()> {
-        self.request.check()?;
+        self.require_request_live()?;
         old.require_current()?;
         self.reply.require_manifest(manifest)?;
         self.reply.request.binding.require_plan(&old.plan())?;
@@ -45,7 +64,7 @@ impl AuthenticatedRegisteredExportNew {
             ));
         }
         old.require_current()?;
-        self.request.check()
+        self.require_request_live()
     }
 }
 

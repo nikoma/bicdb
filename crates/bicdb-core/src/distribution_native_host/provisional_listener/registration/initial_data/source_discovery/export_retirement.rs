@@ -96,6 +96,13 @@ impl NativeInitialDataAdmission {
             challenge: Uuid::now_v7(),
             budget_ms: remaining.as_millis().min(4000).max(1) as u64,
         };
+        #[cfg(test)]
+        let observe = {
+            let mut actual_request = observe;
+            actual_request.budget_ms =
+                registry.test_callback_request_budget(actual_request.budget_ms);
+            actual_request
+        };
         // No MStore, service, DB, source session or registry map latch spans
         // this callback. ALL genuine network work precedes final donor OWN.
         let observation = transport.observe_remote_registered_export_new(
@@ -135,6 +142,24 @@ impl NativeInitialDataAdmission {
 }
 #[cfg(test)]
 impl NativeMetadataControlHost {
+    pub(crate) fn test_arm_source_export_callback_request(&self, expire: bool) -> Result<()> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual export donor absent"))?
+            .image_sources
+            .as_ref()
+            .ok_or_else(|| invalid("original export registry absent"))?
+            .test_arm_callback_request_fault(expire)
+    }
+    pub(crate) fn test_source_export_callback_request_trace(&self) -> Result<serde_json::Value> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual export donor absent"))?
+            .image_sources
+            .as_ref()
+            .ok_or_else(|| invalid("original export registry absent"))?
+            .test_callback_request_trace()
+    }
     pub(crate) fn test_source_export_before_detach(
         &self,
         callback: Box<dyn FnOnce(Instant, &CancellationToken) + Send>,

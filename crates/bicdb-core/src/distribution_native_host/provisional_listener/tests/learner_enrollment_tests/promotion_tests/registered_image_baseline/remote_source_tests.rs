@@ -28,6 +28,8 @@ pub(super) enum SourceCase {
     TargetSourceExportTermAtDetach,
     TargetSourceExportExpiryAtDetach,
     TargetSourceExportProcessCancelAtDetach,
+    TargetSourceExportCallbackCancelAtDetach,
+    TargetSourceExportCallbackExpiryAtDetach,
     SourceDiscovery,
     SourceDiscoveryReplyLost,
     SourceDiscoveryWrongActor,

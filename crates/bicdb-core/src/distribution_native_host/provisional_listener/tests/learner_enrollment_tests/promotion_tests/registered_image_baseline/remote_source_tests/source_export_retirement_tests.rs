@@ -1,6 +1,7 @@
 //! Actual S2 Start and TWO distinct pinned-mTLS retirement hops. No test hands
 //! a source retainer, target owner, local NEW or certificate to the donor RPC.
 use super::*;
+mod callback_liveness_tests;
 use crate::distribution_range_image::{
     NativeSourceDiscoveryOperationV1 as DiscoveryOp, NativeSourceDiscoveryRequestV1,
     NativeSourceExportOperationV1 as ExportOp, NativeSourceExportRequestV1,
@@ -22,6 +23,8 @@ pub(super) fn is_case(case: SourceCase) -> bool {
             | SourceCase::TargetSourceExportTermAtDetach
             | SourceCase::TargetSourceExportExpiryAtDetach
             | SourceCase::TargetSourceExportProcessCancelAtDetach
+            | SourceCase::TargetSourceExportCallbackCancelAtDetach
+            | SourceCase::TargetSourceExportCallbackExpiryAtDetach
     )
 }
 macro_rules! actual_case {
@@ -487,6 +490,14 @@ pub(super) fn exercise(
             evidence(&path,&value).unwrap();
         })).unwrap();
     }
+    if callback_liveness_tests::is_case(case) {
+        controls[donor]
+            .test_arm_source_export_callback_request(matches!(
+                case,
+                SourceCase::TargetSourceExportCallbackExpiryAtDetach
+            ))
+            .unwrap();
+    }
     let sent_by = if matches!(case, SourceCase::TargetSourceExportWrongActor) {
         node(0)
     } else {
@@ -545,8 +556,29 @@ pub(super) fn exercise(
             | SourceCase::TargetSourceExportTermAtDetach
             | SourceCase::TargetSourceExportExpiryAtDetach
             | SourceCase::TargetSourceExportProcessCancelAtDetach
+            | SourceCase::TargetSourceExportCallbackCancelAtDetach
+            | SourceCase::TargetSourceExportCallbackExpiryAtDetach
     );
     evidence(&output.join("source-export-retirement-before-assertions.json"),&serde_json::json!({"version":1,"case":format!("{case:?}"),"actual_donor":node(donor),"range_leader":selected.leader,"retiring_replica":plan.retiring_source(),"request":request,"before":before,"after":after,"exact_error":result.as_ref().err().map(|e|format!("{e:?}")),"actual_reply":result.as_ref().ok(),"old_native_before":native_before,"old_native_after":native_after,"target_before":original_target,"target_before_retire":target_before_retire,"target_health":factory.database.read().test_registered_native_health_status(None),"actual_target_gate_after":target_gate_after,"source_manifest":manifest,"source_frame_journal":journal,"acknowledged":acknowledged,"old_retirement_tested":false,"serving_tested":false,"physical_qualification":false})).unwrap();
+    if callback_liveness_tests::is_case(case) {
+        callback_liveness_tests::finish(
+            case,
+            &controls[donor],
+            factory,
+            pending,
+            ranges,
+            &before,
+            &after,
+            &native_before,
+            &native_after,
+            &target_before_retire,
+            &result,
+            &manifest,
+            &journal,
+            acknowledged,
+            output,
+        );
+    }
     assert_eq!(
         native_before, native_after,
         "export retirement must not rewrite native OLD receipts"

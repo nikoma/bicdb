@@ -2,6 +2,8 @@
 //! constructs local NEW, Role, Frozen, quorum, writer or Serving authority.
 use super::*;
 use crate::db::NativeRegisteredRemoteFinalImagePointer;
+#[cfg(test)]
+mod callback_liveness;
 
 #[derive(Default)]
 pub(super) struct RetainedExportRetirement {
@@ -516,6 +518,14 @@ impl NativeRetainedRemoteImageSource {
         let terminal = outcome.clone();
         #[cfg(test)]
         self.registry.test_run_export_detach_cut(own.deadline())?;
+        #[cfg(test)]
+        self.registry.test_run_callback_request_cut(
+            &retained.observation,
+            own,
+            business,
+            parent,
+            &source.original_session,
+        )?;
         // This NONBLOCKING guard co-fences only the actual local metadata
         // version. It is not a distributed lease or foreign-liveness grant.
         // All native/MStore/DB/capture checks and allocations preceded it.
@@ -528,6 +538,18 @@ impl NativeRetainedRemoteImageSource {
         if Instant::now() >= own.deadline() {
             return Err(BicDbError::QueryTimedOut);
         }
+        // The peer callback has a DISTINCT original request/deadline. Native
+        // validation and fresh donor OWN can outlive that shorter observation.
+        // Check only its memory liveness here, never OLD/native IO under gate.
+        let callback_live = retained.observation.require_request_live();
+        #[cfg(test)]
+        self.registry.test_record_callback_final_point(
+            &callback_live,
+            parent,
+            &source.original_session,
+            own.deadline(),
+        );
+        callback_live?;
         source.original_session.cancel();
         let capture = source.capture.take();
         state.completed = Some(terminal);

@@ -58,6 +58,31 @@ impl NativeJointWriterDomain {
             }
         }
     }
+    /// Necessary identity only; used exclusively by permissionless collection
+    /// and fresh publication service entry. Generic currentness stays strict.
+    pub(crate) fn require_preparation_collection_identity(
+        &self,
+        db: &BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        range: &RangeDescriptor,
+        frozen: &FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        if let Self::Closed(domain) = self {
+            if domain.has_survivor_comparison_binding() {
+                store.require_native_writer_host_base()?;
+                self.require_lifetime(db.data_path(), store.native_writer_store_open_id(), range)?;
+                domain.require_preparation_collection_identity(db, store, range, frozen)?;
+                return self.require_lifetime(
+                    db.data_path(),
+                    store.native_writer_store_open_id(),
+                    range,
+                );
+            }
+        }
+        let _ = frozen;
+        self.require_current(db, store, range)
+    }
     /// SAME actual CLOSED owner under an existing borrowed publication scope.
     /// Other profiles keep their unchanged full currentness path.
     pub(crate) fn require_current_with_publication_scope(

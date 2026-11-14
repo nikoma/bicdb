@@ -17,6 +17,9 @@ impl NativeJointPreparationCollectionIdentity {
         actual.require_phase_writer_lifetime(&self.owner)?;
         actual.origin.require_actual(actual)
     }
+    pub(crate) fn same_comparison(&self, other: &Self) -> bool {
+        self.owner.same_actual(&other.owner)
+    }
     pub(crate) fn is_same_owner(&self, actual: &crate::db::NativeJointPhaseOwner) -> bool {
         self.owner.same_actual(actual)
     }
@@ -47,7 +50,8 @@ impl ActualServiceNativeJointPreparedEvidence {
         service.require_native_catalog_database(&database)?;
         // Actual State/registration, root/open/Store, range/domain and A checks
         // are NOT replaced by a hash or an old successful preparation receipt.
-        let owner = self.require_original_phase_owner(&database, &service.range_writes)?;
+        let owner =
+            self.require_original_phase_owner_for_collection(&database, &service.range_writes)?;
         fresh.require_current(&database)?; // unchanged native DECISION proof
         let old = self.committed.metadata_anchor();
         let current = fresh.metadata_anchor();

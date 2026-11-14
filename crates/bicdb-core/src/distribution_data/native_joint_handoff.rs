@@ -105,6 +105,28 @@ impl ClusterDataNodeService {
         writer.require_store(database.data_path(), slot.id())?;
         writer.require_database(database, predecessor)
     }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_remote_old_historical_writer(
+        &self,
+        database: &BicDb,
+        writer: &Arc<crate::db::NativeWriterHostState>,
+        slot: &crate::distribution_data::RangeWriteServiceSlotGuard,
+        predecessor: &crate::db::NativeWriterHistoricalPredecessor,
+        plan: &NativeJointHandoffPlan,
+    ) -> Result<()> {
+        self.require_native_catalog_database(database)?;
+        slot.require_live()?;
+        if self.range_writes.native_writer_store_open_id() != slot.id()
+            || !Arc::ptr_eq(&self.range_writes.native_writer_host_state()?, writer)
+        {
+            return Err(data_error(
+                "remote OLD historical original State/Store changed",
+            ));
+        }
+        writer.require_store(database.data_path(), slot.id())?;
+        predecessor.require_historical(database, writer, plan)?;
+        predecessor.require_original_database(database, plan)
+    }
     pub(crate) fn close_native_joint_old(
         &mut self,
         plan: Arc<NativeJointHandoffPlan>,
@@ -462,6 +484,11 @@ pub(crate) struct ActualServiceNativeJointConstraints {
     frozen: Arc<FrozenRangeMutationPermit>,
 }
 impl ActualServiceNativeJointConstraints {
+    #[cfg(test)]
+    pub(crate) fn test_original_frozen_custody(&self) -> serde_json::Value {
+        serde_json::json!({"allocation_diagnostic_only":format!("{:p}",Arc::as_ptr(&self.frozen)),
+            "owner":self.frozen.owner()})
+    }
     pub(crate) fn into_actual_facts(
         self,
         service: &ClusterDataNodeService,

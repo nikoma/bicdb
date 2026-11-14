@@ -418,6 +418,11 @@ impl NativeJointOldObservation {
             .require_historical(db, writer, &self.plan)
     }
     #[cfg(test)]
+    pub(crate) fn test_original_frozen_custody(&self) -> serde_json::Value {
+        serde_json::json!({"allocation_diagnostic_only":format!("{:p}",Arc::as_ptr(&self.frozen)),
+            "owner":self.frozen.owner()})
+    }
+    #[cfg(test)]
     pub(crate) fn test_remote_decision_predecessor(&self) -> Result<serde_json::Value> {
         Ok(self
             .predecessor

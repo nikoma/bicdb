@@ -278,3 +278,39 @@ two genuine pre-freeze DB producers and that same production guard, recording
 its refusal and unchanged native-close absence before assertions. It is not a
 concurrent TCP schedule test, a new runtime case or proof of the Serving profile.
 The original frozen source and all failed qualification evidence remain intact.
+
+
+### Constraints-first continuation correction (source successor)
+
+`observe_constraints_for_constraint_step` already performs the real range freeze
+before reading raw/native safety. A constraints-first owner therefore cannot
+capture new Serving provenance during a subsequent Close. Its genuine constraint
+admission now obtains the same sealed pre-freeze predecessor as Close admission;
+the original table retains that exact allocation before constraint observation.
+Both entry points check the same original allocation before constraints/freeze.
+Constraint revalidation uses that historical proof plus every original schema,
+restore, member-pin/birth, actual State/Store and current authority check. The
+strict ordinary predecessor helper remains available unchanged in meaning.
+The joint-only readonly response also consumes the retained historical identity,
+so it never requires a previously released Serving generation after freeze.
+
+Close after successful constraint collection retains the existing original
+constraint owner, complete facts, runtime, Frozen and predecessor. It allocates
+the first actual producer-outcome holder before invoking Close; an existing
+outcome is never replaced. Uncertain closure remains quarantined and is not a
+new attempt, a rebuilt proof or a closed vote. Successful closure transfers its
+actual receipts to the original OLD observation as before.
+
+The additional actual INITIAL/born-profile test
+`native_registered_fifth_remote_old_actual_constraints_then_close_preserves_original_custody`
+uses pinned real RPCs for Constrain, Close and an independently fresh exact Close
+replay. Before Close it requires the original closed/native-record absence and
+complete constraints. After Close it compares actual retained runtime,
+predecessor, constraint-owner and Frozen allocation diagnostics, full constraints
+and native record bytes; replay must reuse the same actual closure. Diagnostic
+addresses are JSON identity observations only, never authority or owner handles.
+Every primary operation/result and custody read is retained before assertions.
+The original constraint-only unresolved-minority test and all its absence
+assertions remain unchanged. Neither test supplies a Joined/Serving predecessor
+or qualifies repeated movement, cold recovery or physical scale-out. No result
+is claimed until the coherent source actually compiles and executes in CI.

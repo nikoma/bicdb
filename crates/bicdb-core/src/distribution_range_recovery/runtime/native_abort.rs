@@ -5,12 +5,6 @@ use super::*;
 use std::collections::VecDeque;
 use std::sync::mpsc;
 
-struct CancelAbortWorkers(CancellationToken);
-impl Drop for CancelAbortWorkers {
-    fn drop(&mut self) {
-        self.0.cancel();
-    }
-}
 impl RangeRecoveryRuntime {
     pub(crate) fn observe_native_abort_promise(
         &self,
@@ -253,7 +247,10 @@ impl RangeRecoveryRuntime {
             .collect::<VecDeque<_>>();
         let workers = 4.min(queue.len());
         let worker_token = token.child();
-        let _cancel = CancelAbortWorkers(worker_token.clone());
+        // Each promise worker holds this operation's range context. Teardown
+        // waits, bounded, for them so a resolved abort does not leave the next
+        // recovery step on this range refused as busy.
+        let mut promise_workers = CollectionWorkers::new(worker_token.clone());
         if !round.has_quorum() {
             let transport = self
                 .participant_transport
@@ -269,7 +266,7 @@ impl RangeRecoveryRuntime {
                 let request = vote_request.clone();
                 let child = worker_token.clone();
                 let operation = Arc::clone(&operation);
-                std::thread::Builder::new()
+                let handle = std::thread::Builder::new()
                     .name("native-abort-promise".into())
                     .spawn(move || {
                         let _operation = operation;
@@ -295,6 +292,7 @@ impl RangeRecoveryRuntime {
                             }
                         }
                     })?;
+                promise_workers.push(handle);
             }
             drop(tx);
             let mut outstanding = 0;

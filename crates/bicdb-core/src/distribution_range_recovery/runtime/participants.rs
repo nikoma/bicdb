@@ -7,12 +7,6 @@ use std::sync::mpsc;
 
 const WORKERS: usize = 4;
 const ATTEMPTS: usize = 2;
-/// How long a finished collection waits for its workers to leave. Each worker
-/// holds the operation's range context, so until it exits the next recovery
-/// step on this range is refused as busy although the operation has returned.
-/// Idle workers leave as soon as they are scheduled; only a worker still
-/// inside a peer exchange can outlast this, and then busy is the truth.
-const WORKER_EXIT_WAIT: Duration = Duration::from_millis(250);
 struct Job {
     phase: u64,
     node: ClusterNodeId,
@@ -36,15 +30,7 @@ impl Drop for ParticipantPool {
         drop(std::mem::replace(&mut self.jobs, jobs));
         let (_unused, results) = mpsc::sync_channel(1);
         drop(std::mem::replace(&mut self.results, results));
-        let until = Instant::now() + WORKER_EXIT_WAIT;
-        for handle in self.handles.drain(..) {
-            while !handle.is_finished() && Instant::now() < until {
-                std::thread::sleep(Duration::from_millis(1));
-            }
-            if handle.is_finished() {
-                let _ = handle.join();
-            }
-        }
+        wait_for_worker_exit(self.handles.drain(..));
     }
 }
 impl ParticipantPool {

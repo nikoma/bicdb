@@ -89,7 +89,7 @@ impl RangeRecoveryRuntime {
         let runtime = Arc::clone(self);
         let request = request.clone();
         let (tx, rx) = mpsc::sync_channel(1);
-        std::thread::Builder::new()
+        let receiver = std::thread::Builder::new()
             .name("native-read-receiver".into())
             .spawn(move || {
                 // STRONG_TRACE_BEGIN
@@ -123,6 +123,9 @@ impl RangeRecoveryRuntime {
             token.check()?;
             match rx.recv_timeout(LATCH_POLL) {
                 Ok(result) => {
+                    // The worker replies before it releases its context; it
+                    // is past its IO, so let it leave before this returns.
+                    wait_for_worker_exit([receiver]);
                     token.check()?;
                     cancel.0.take();
                     return result;
@@ -485,7 +488,7 @@ if let Ok(observation) = &result {
         // STRONG_TRACE_END
 
         let (out, result) = mpsc::sync_channel(1);
-        std::thread::Builder::new()
+        let finisher = std::thread::Builder::new()
             .name("native-read-candidate".into())
             .spawn(move || {
                 let _operation = operation;
@@ -551,6 +554,11 @@ if let Ok(observation) = &result {
             token.check()?;
             match result.recv_timeout(LATCH_POLL) {
                 Ok(verdict) => {
+                    // The worker replies before it releases this operation;
+                    // it is past its IO, so let it leave before this returns.
+                    // Probe workers are deliberately NOT awaited: a stalled
+                    // minority must never hold the majority verdict hostage.
+                    wait_for_worker_exit([finisher]);
                     token.check()?;
                     return verdict
                         .map_err(|e| invalid(&format!("{e}; failed probes: {failures:?}")));

@@ -2344,6 +2344,10 @@ impl BicDb {
             }
         }
         drop(issuers);
+        // The pass and tx overlay are lexical. Share raw materializations only
+        // when existing admission excludes other committers; the invariant-only
+        // mutex does not exclude non-invariant writers. No gate is changed.
+        let invariant_snapshot = NativeInvariantRelationSnapshot::new(self, tx);
         for validator in tx.native_commit_validators() {
             match validator {
                 NativeCommitValidator::AppendOnly { relation } => {
@@ -2550,7 +2554,7 @@ impl BicDb {
                 }
                 NativeCommitValidator::ApplicationInvariant { definition } => {
                     if !tx.writes.is_empty() || tx.validate_existing_application_invariants {
-                        validate_carrier_invariant(self, tx, definition)?;
+                        validate_carrier_invariant(&invariant_snapshot, definition)?;
                     }
                 }
             }

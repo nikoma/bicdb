@@ -15,6 +15,8 @@ failed scale-out qualification; no replacement physical experiment has run.
 | Joined image final and native base | **Not tested:** source `12a74f59369eafb07d137ec1aa10f9889e62ef52` and `05d0427009d9517a5bb53d33993992f4e1c7aaa0`. Independent source review checked issued-xid/byte/outcome custody and exact committed CURRENT/archive relations. | Actual image, uncertain-outcome, cold recovery and second populated range cases. |
 | Joined selected catalogue and materialized owner | **Not tested:** source `c8c04b38734808eaf82d736e0e26415f058e0f14`. Its same-candidate retry and known-success paths are distinct; ordinary durability guards remain strict. | Physical-lock callgraph review, compilation and real multi-range fixture. |
 | Joined joint-continuation custody | **Not tested:** source `368fbcbf17cc4fbd98a377103f83a7d9dd10e3ff`, refined at `b811b56f65a6243f30f0ceba5029586e1f795a9d`. Host retains the same actual A before fallible postchecks; independently fresh joint authority is separate from expired snapshot authority. | Actual NEW observation, native decision, explicit release and final Serving producer. A custody getter is not a serving grant. |
+| Remote decision/transport cohort | **Failed source compilation, then deliberately cancelled:** source `7afb806cb6e6ec51df3e3b4372db3667ef05ac6e`, run 43565417585. Exact source comparison proved the known missing-import defect before cancellation; terminal logs preserve three E0425 errors per job. The intended 24 runtime cases and workflow consumer were not reached. | Combined import correction must compile and execute; cancellation is not a passing or infrastructure-only result. |
+| Pre-freeze historical predecessor custody | **Not tested:** `4d117b7c171d4e91d68ae24c3c06e490bcd08131` captures real predecessor policy before freeze; `154b6ec79d951191f2778309c2145e0544135e72` enforces exact original allocation before effects. | Born-profile controls, actual Serving-profile execution, concurrency schedule, Joined OLD admission and repeated movement remain separate gates. |
 | Remote decision reader without TLS | **Passed, narrow scope:** corrected source `2ac5c38ad8b0e39439d927053931776f1f09d2bb`, run 43566245411, one actual reader-compatibility unit passed in 0.05 s. It refuses an unsupported semantic profile. | No remote committed record, failover, physical or scale-out guarantee was tested by this unit. Original 7afb no-TLS compilation failure remains a failure with zero runtime cases. |
 
 ## Findings that must not disappear during integration
@@ -28,6 +30,24 @@ immutable policy cannot be substituted for the actual historical Serving audit.
 The next producer needs the real original State, protected predecessor audit,
 native OLD closure, actual range exclusion and independently fresh authority.
 It must not request effective ordinary Serving after closure.
+
+The candidate now includes that necessary historical producer at `4d117b7c1`:
+real immutable Serving and CLOSED archives are captured while the original
+writer is still Serving, before the runtime freeze invalidates its generation.
+Later checks consume this retained proof, rather than renewing the old Serving
+permission. This remains **not tested** for the Serving profile. The actual
+Joined OLD/discovery ingress is still absent, so the producer alone does not
+establish repeated movement.
+
+**Failed source custody invariant; correction not tested.** Two callers could
+capture predecessor proofs P1/P2 before the first original table insertion.
+The first 4d source checked only plan and writer identity at the held-owner
+boundary. The losing caller could then use P2 while the table retained P1,
+causing later reconciliation to refuse. Source `154b6ec79` requires exact Arc
+identity before constraints, freeze or native effects. Its genuine duplicate
+capture control is authored and unrun; it does not prove a concurrent TCP
+schedule. No unsafe grant or lost acknowledged data was demonstrated by this
+source finding.
 
 **Failed source validation; runtime reproduction not tested.** Independent review also found that a remote reply could validate an OLD
 decision receipt without explicitly correlating its node ID with the reply's

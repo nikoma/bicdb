@@ -8562,12 +8562,13 @@ fn resulting_records_for_relation(
     Ok(records.into_values().collect())
 }
 
+#[cfg(test)]
+mod invariant_relation_snapshot_tests;
+
 /// Raw relations shared only within one stable commit-validation pass.
 /// Sharing requires the existing serializable admission or forced global
 /// writer gate. The ordinary invariant-only mutex does not exclude writers
 /// without invariants. Policy, tenant and expression results are NOT cached.
-#[cfg(test)]
-mod invariant_relation_snapshot_tests;
 
 struct NativeInvariantRelationSnapshot<'a> {
     db: &'a BicDb,

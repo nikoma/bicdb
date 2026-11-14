@@ -50,8 +50,8 @@ Counterexamples required before any production claim:
   Cooperative accounting is not hard RSS reservation; temporary scans retain
   their existing accounting and require resource validation.
 
-Four added readonly source tests cover all historical/tenant root rows and the
-unchanged tx overlay, small-cap uncached fallback, a real large relation with no
+Five added readonly source tests cover all historical/tenant root rows and the
+unchanged tx overlay, small-cap and combined-live-body uncached fallback, cache-only eviction, a real large relation with no
 active budget and with a sufficient active budget, and expired/already-failed
 scopes on a memo hit. They have not been compiled or run. They do not replace
 application acceptance, race/isolation testing or profiling.

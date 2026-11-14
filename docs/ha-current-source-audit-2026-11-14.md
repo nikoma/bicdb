@@ -47,6 +47,16 @@ native log is12,991,102 bytes, SHA-256
 `70a2f2a1d255bf00bd815bc3761843f0321639ebea12b419f525931c52821860`.
 No physical fault-safe scale-out result is inferred from these tests.
 
+The diagnostic-only successor components `eacd70fc0` and `fc680d226` retain
+fixed-capacity failure-stage clocks around the same activation operations and
+log the candidate-count outcome before fallible fixture evidence export. They
+preserve all original assertions and deadlines. Diagnostics report omitted or
+truncated fields explicitly, perform no fresh authority checks after failure,
+and retain no native owner or request token. Standalone formatting and diff
+checks passed; Rust compilation and execution for this successor have not run
+at this source checkpoint. This instrumentation is not a recovery fix.
+
+
 ## Evidence levels by deployment mode
 
 Implemented means the specified code path exists. CI-tested means an identified

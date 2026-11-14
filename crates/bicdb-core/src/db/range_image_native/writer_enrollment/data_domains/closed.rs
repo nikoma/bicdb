@@ -315,6 +315,17 @@ impl NativeClosedWriterDomain {
         range: &RangeDescriptor,
     ) -> Result<()> {
         let db = scope.database();
+        // Only an original no-image OLD survivor has this comparison binding.
+        // A real installed-image CLOSED owner keeps its original full path;
+        // absence of this optional optimization is never a new refusal.
+        if self.survivor_frozen.is_none()
+            || !self
+                .data()
+                .old_members()
+                .contains_key(&self.writer.record.facts.local_node_id)
+        {
+            return self.require_current_for_store(db, store, range);
+        }
         scope.require_closed_source_lineage(db, store, self)?;
         if crate::distribution_native_read::canonical_range(range) != *self.range() {
             return Err(invalid("CLOSED writer changed its selected range"));

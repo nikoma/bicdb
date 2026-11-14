@@ -1,0 +1,122 @@
+{
+  "qualifier": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+  "runtime": "c9680e82acf9ceb01ad8994b7bb0b67b25768782",
+  "original_failed_qualifier": "b01ed646b476cbb5f76a495d0f71bc8d13b929d6",
+  "original_failed_runtime": "c08fb440be78ff1b891dc9a5e4c6ec87228918cb",
+  "commits": {
+    "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc": {
+      "tree": "02335378d3f18f787cd379a64ec2a35bda246a61",
+      "core_tree": "9068ea94acc33d8645cc76c1d51d11c79eda0127"
+    },
+    "c9680e82acf9ceb01ad8994b7bb0b67b25768782": {
+      "tree": "58ffd19460b3db0abee1dee2fcdc509144ad240f",
+      "core_tree": "9068ea94acc33d8645cc76c1d51d11c79eda0127"
+    },
+    "b01ed646b476cbb5f76a495d0f71bc8d13b929d6": {
+      "tree": "bc3335e47de0c975e64190932edf8888305e8b6c",
+      "core_tree": "9109e4eedb45a731334f17d2eb6e88a746010e0e"
+    },
+    "c08fb440be78ff1b891dc9a5e4c6ec87228918cb": {
+      "tree": "a6033632df7c96ef9fd1a129b4ddef7fde3423c1",
+      "core_tree": "9109e4eedb45a731334f17d2eb6e88a746010e0e"
+    }
+  },
+  "pins": [
+    {
+      "commit": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "path": "Cargo.toml",
+      "bytes": 5576,
+      "sha256": "7c756098550cdd9c86d781044c6427a369dc9983ce9296df07ed4d720ae7a3ad",
+      "blob": "9417817c48ec70a66ea2f60b7e547d13dc67b9d1"
+    },
+    {
+      "commit": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "path": "crates/bicdb-core/Cargo.toml",
+      "bytes": 2084,
+      "sha256": "9b6de6573937e707f4e4bd99365ae797706b784c3b80a71f16c840275d7656ce",
+      "blob": "baf0efd419253db6b50f77df1bc9e2073df91566"
+    },
+    {
+      "commit": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "path": "crates/bicdb-core/src/distribution_transport.rs",
+      "bytes": 328146,
+      "sha256": "dc12a9cb1770c04819f1ce043938390d2d543dade7f54ecc1d12228d2a44197d",
+      "blob": "f61ab64c86644ad3f59115f7b25021418b13e661"
+    },
+    {
+      "commit": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "path": "crates/bicdb-core/src/distribution_transport/native_image_response_stall.rs",
+      "bytes": 5454,
+      "sha256": "5d7483590105054e1bed151cb15dbc7791824490380dacc1f33a17152f60cb17",
+      "blob": "a162ee7f38521ddd832a08175d48d07bcab16579"
+    },
+    {
+      "commit": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs",
+      "bytes": 43228,
+      "sha256": "9e95ff89fb00268fbc38f6706959535c41bd2f7ff620066994447ffb39caf4b2",
+      "blob": "af8684afaca148bffe1c5ba7edf43ac43013638b"
+    },
+    {
+      "commit": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/original_sdk_rpc.rs",
+      "bytes": 7501,
+      "sha256": "fb8a0f26d83901a625c072557e083067b2255092ec587eb621f5009a7283b363",
+      "blob": "f47ed67bec2aaa6993a34ad82788ad776678c9a0"
+    },
+    {
+      "commit": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs",
+      "bytes": 77179,
+      "sha256": "1a89eff29c7db39732da92104cce2117b832bdcf13614805d4439ec383228a74",
+      "blob": "ed9a00d5a3cc04f0541a9820e8ce307b81043eb8"
+    },
+    {
+      "commit": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/two_range_stall_tests.rs",
+      "bytes": 13977,
+      "sha256": "5cdac2fcf644670d06aa886162245d72e79470ac43e8103d53b2e77bff430f05",
+      "blob": "7e72c187c7d0369f3cd69fcb39fa06f3650ee656"
+    },
+    {
+      "commit": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "path": ".github/workflows/tests.yml",
+      "bytes": 44343,
+      "sha256": "60ea2b503f6e16011e2216b2a3ba6b959347f36e45bc76399615c7379d83a434",
+      "blob": "a84ea8a27e7cf2a4e3c2adf72883c926d0d1473b"
+    },
+    {
+      "commit": "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc",
+      "path": "scripts/qualification/guard-build-memory.py",
+      "bytes": 4627,
+      "sha256": "1fc9b018175b95de49ad59738f37209e76427f05a890aeae24d55bdcb59736c7",
+      "blob": "050171a6befd2163e3b94c6b69ff384a98f67deb"
+    },
+    {
+      "commit": "b01ed646b476cbb5f76a495d0f71bc8d13b929d6",
+      "path": ".github/workflows/tests.yml",
+      "bytes": 44343,
+      "sha256": "60ea2b503f6e16011e2216b2a3ba6b959347f36e45bc76399615c7379d83a434",
+      "blob": "a84ea8a27e7cf2a4e3c2adf72883c926d0d1473b"
+    },
+    {
+      "commit": "c08fb440be78ff1b891dc9a5e4c6ec87228918cb",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/two_range_stall_tests.rs",
+      "bytes": 13967,
+      "sha256": "d98c27f19e1dcc1400cff0f4021454626fe37d66de3570ceff4e3d0654f8941e",
+      "blob": "165f42f849388d3969ea85c0bf11342638149169"
+    }
+  ],
+  "runtime_delta_c08_to_c968": "diff --git a/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/two_range_stall_tests.rs b/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/two_range_stall_tests.rs\nindex 165f42f84..7e72c187c 100644\n--- a/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/two_range_stall_tests.rs\n+++ b/crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/two_range_stall_tests.rs\n@@ -83,7 +83,7 @@ fn call(\n     }\n }\n #[allow(clippy::too_many_arguments)]\n-pub(super) fn exercise(\n+pub(in super::super) fn exercise(\n     controls: &[NativeMetadataControlHost],\n     clients: &[Arc<TcpClusterRelocationTransport>],\n     services: &[Arc<Mutex<crate::ClusterDataNodeService>>],\n",
+  "qualifier_delta_paths": {
+    "21669a25e0d95ff5b7a9ec8d367d5895c6d8e8fc": [
+      ".github/workflows/tests.yml",
+      "scripts/qualification/guard-build-memory.py"
+    ],
+    "b01ed646b476cbb5f76a495d0f71bc8d13b929d6": [
+      ".github/workflows/tests.yml",
+      "scripts/qualification/guard-build-memory.py"
+    ]
+  },
+  "binary_sha256": "not measured/retained by this packet"
+}

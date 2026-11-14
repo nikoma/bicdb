@@ -1,6 +1,9 @@
 //! Actual range-leader finite FIRST owner. Not a remote backend or periodic
 //! relocation loop. It cannot announce global DECISION/Open/Serving.
 use super::*;
+
+#[cfg(test)]
+mod acceptance;
 use crate::distribution_native_host::remote_first::{
     NativeFirstReceiveOperationV1, NativeFirstReceiveRequestV1,
 };

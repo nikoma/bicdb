@@ -9,6 +9,10 @@ use crate::distribution_range_recovery::HandoffRoleAdmission;
 use std::cell::Cell;
 use std::sync::mpsc::{self, SyncSender};
 use std::sync::Weak;
+#[cfg(test)]
+mod controls;
+#[cfg(test)]
+pub(in crate::distribution_native_host) use controls::NativeFirstIngressFault;
 
 pub(crate) struct NativeFirstReceiveIngress {
     pub(in crate::distribution_native_host) peer: MetadataReadParticipant,
@@ -21,6 +25,8 @@ pub(crate) struct NativeFirstReceiveIngress {
     pub(in crate::distribution_native_host) point: Arc<ActualNativeJointMetadataPoint>,
     pub(in crate::distribution_native_host) original: Arc<NativeRegisteredReplicaAdmission>,
     used: Cell<bool>,
+    #[cfg(test)]
+    test_fault: Option<NativeFirstIngressFault>,
     hash: String,
     queue: Weak<NativeFirstReceiveQueue>,
     reply: SyncSender<Result<NativeFirstReceiveReplyV1>>,
@@ -43,6 +49,8 @@ impl NativeFirstReceiveIngress {
                 self.used.get(),
                 &result,
             );
+            #[cfg(test)]
+            queue.test_after_complete(&self, &result);
         }
         let _ = self.reply.try_send(result);
     }
@@ -82,10 +90,14 @@ struct QueueState {
 }
 pub(crate) struct NativeFirstReceiveQueue {
     state: Mutex<QueueState>,
+    #[cfg(test)]
+    controls: Mutex<controls::State>,
 }
 impl NativeFirstReceiveQueue {
     pub(in crate::distribution_native_host) fn new() -> Self {
         Self {
+            #[cfg(test)]
+            controls: Mutex::new(controls::State::new()),
             state: Mutex::new(QueueState {
                 binding: None,
                 admitted: 0,
@@ -243,6 +255,8 @@ impl NativeFirstReceiveQueue {
                 point,
                 original,
                 used: Cell::new(false),
+                #[cfg(test)]
+                test_fault: None,
                 hash,
                 queue: Arc::downgrade(self),
                 reply: send,
@@ -270,13 +284,19 @@ impl NativeFirstReceiveQueue {
             .state
             .try_lock()
             .ok_or_else(|| invalid("FIRST ingress busy"))?;
-        let entry = state.pending.take();
+        #[allow(unused_mut)]
+        let mut entry = state.pending.take();
         if entry.is_some() {
             state
                 .current
                 .as_mut()
                 .expect("actual admitted request")
                 .processing = true;
+        }
+        drop(state);
+        #[cfg(test)]
+        if let Some(actual) = &mut entry {
+            self.test_before_consume(actual);
         }
         Ok(entry)
     }

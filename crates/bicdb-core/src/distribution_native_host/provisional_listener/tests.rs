@@ -427,3 +427,5 @@ mod heartbeat_backlog_tests;
 mod metadata_supervisor_tests;
 
 mod initial_data_tests;
+
+mod first_owned_tests;

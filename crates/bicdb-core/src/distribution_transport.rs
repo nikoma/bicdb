@@ -1731,9 +1731,15 @@ fn handle_cluster_data_connection(
             })?;
             let parent =
                 CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
-            return receiver
-                .receive_first_from_authenticated_dispatch(peer, *request, &parent)
-                .map(|reply| ClusterDataResponse::NativeFirstReceive(Box::new(reply)));
+            #[cfg(test)]
+            let actual_sequence = request.sequence;
+            let reply =
+                receiver.receive_first_from_authenticated_dispatch(peer, *request, &parent)?;
+            #[cfg(test)]
+            if receiver.test_take_first_reply_loss(actual_sequence) {
+                suppress_actual_completion_reply.set(true);
+            }
+            return Ok(ClusterDataResponse::NativeFirstReceive(Box::new(reply)));
         }
         if let ClusterDataRequest::NativeSourceDiscovery { request } = request.request {
             let donor = initial_data.ok_or_else(|| {

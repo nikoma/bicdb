@@ -87,6 +87,12 @@ impl NativeRegisteredReplicaAdmission {
         self.admit_first_from_actual_peer(peer, request, parent)
     }
     #[cfg(test)]
+    pub(crate) fn test_take_first_reply_loss(&self, sequence: u64) -> bool {
+        self.first_receive
+            .upgrade()
+            .is_some_and(|queue| queue.test_take_reply_loss(sequence))
+    }
+    #[cfg(test)]
     pub(crate) fn test_keep_original_registration(
         &self,
     ) -> Result<impl std::any::Any + Send + Sync> {

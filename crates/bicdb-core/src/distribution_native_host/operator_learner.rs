@@ -60,6 +60,33 @@ impl NativeMetadataLearnerHost {
             NativeLearnerLifecycle::Cold(host) => host.poll_native_first_receiver(parent),
         }
     }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_first_receiver_arm(
+        &self,
+        fault: crate::distribution_native_host::remote_first::NativeFirstIngressFault,
+    ) -> Result<()> {
+        match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control()?
+                .test_first_receiver_arm(fault),
+            NativeLearnerLifecycle::Cold(_) => {
+                Err(invalid("FIRST test never casts cold owner to Fresh"))
+            }
+        }
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_first_receiver_snapshot(
+        &self,
+    ) -> Result<serde_json::Value> {
+        match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control()?
+                .test_first_receiver_snapshot(),
+            NativeLearnerLifecycle::Cold(_) => {
+                Err(invalid("FIRST test never casts cold owner to Fresh"))
+            }
+        }
+    }
     pub fn start_fresh_metadata_only(
         root: &Path,
         cluster: crate::ClusterId,

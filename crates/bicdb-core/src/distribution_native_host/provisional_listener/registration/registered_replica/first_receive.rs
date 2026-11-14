@@ -1,6 +1,8 @@
 //! Serialized by the actual host owner's &mut borrow. Network ingress owns
 //! only a request and its authenticated peer, never a reconstructed host.
 use super::*;
+#[cfg(test)]
+mod acceptance;
 use crate::distribution_consensus::{MetadataReadParticipant, MetadataRecoveryRolePurpose};
 use crate::distribution_native_host::remote_first::{
     NativeFirstReceiveIngress, NativeFirstReceiveOperationV1 as Op, NativeFirstReceiveReplyV1,
@@ -360,6 +362,8 @@ impl NativeMetadataControlHost {
         )?;
         let frame = source.bind_step(actual)?;
         token.check()?;
+        #[cfg(test)]
+        let _native_cut = ingress.test_native_final_cut();
         ingress.mark_effect_entered();
         let result = match request.operation {
             Op::Transfer => {
@@ -469,6 +473,11 @@ impl NativeRegisteredReplicaAdmission {
             session_id: request.session,
             nonce: request.nonce,
         };
+        #[cfg(test)]
+        self.first_receive
+            .upgrade()
+            .ok_or_else(|| invalid("FIRST original queue ended"))?
+            .test_witness_started();
         let observed = backend.provider.witness_recovery_role(
             &peer,
             business,

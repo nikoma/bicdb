@@ -5,6 +5,9 @@ use crate::{ClusterNetworkTransportConfig, DistributionConfig, MetadataConsensus
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
+#[cfg(test)]
+mod first_acceptance;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NativeMetadataCollection {

@@ -26,14 +26,14 @@ The existing native row states `AttemptedUnknown` and `WalDurablePendingApply` r
 
 The CLI learner owner thread polls receive work. No periodic coordinator initiator, capacity scheduler or automatic partial-freeze loop is enabled. The coordinator entry is an internal finite component. Materialization does not establish global DECISION quorum, Open, ALL release, writer-domain Serving, cleanup or positive SDK/Strong availability after the selected range is closed.
 
-Production export retirement already exists in the source base, using a readonly Registered NEW export observation; that observation is not LocalNEW or a NEW vote. Later OLD retirement remains a fixture-only RAM custody transition. Source and discovery registries each retain an eight-session bound without terminal reclamation; changed same-range binding also requires genuine retirement/reclaim and stale-message fencing. The finite component does not remove those bounds or claim the planned 64-range 4-to-5 campaign. ALL original OLD recipients remain necessary; permanent unavailability replacement requires a separate lawful protocol.
+Production export retirement already exists in the source base, using a readonly Registered NEW export observation; that observation is not LocalNEW or a NEW vote. Later OLD retirement remains a fixture-only RAM custody transition. Source and discovery registries each retain an eight-session bound without terminal reclamation; changed same-range binding also requires genuine retirement/reclaim and stale-message fencing. The coordinator itself also retains an eight-operation map without completed-owner reclamation. The receiver admits one FIRST operation and requires its first/native attempt tables initially empty; a successful per-operation step bound is not a distinct-operation or repeated-range bound. The finite component does not remove those bounds or claim the planned 64-range 4-to-5 campaign. ALL original OLD recipients remain necessary; permanent unavailability replacement requires a separate lawful protocol.
 
 ## Evidence states and required acceptance
 
 | Claim and evidence scope | State |
 | --- | --- |
 | Standalone formatting and whitespace checks of the source leaf | Passed when recorded in its source receipt |
-| Real five-host finite FIRST success and donor independence | Not tested |
+| Real five-host-object finite FIRST success and donor independence | Not tested |
 | Lost Close/Start/Enroll reply continuation on actual TCP and same original owners | Not tested |
 | More than 512 actual accepted Steps, old/equal-sequence refusal after compaction | Not tested |
 | Actual original server token expiry/cancellation prevents that Step's effects | Not tested |
@@ -41,4 +41,19 @@ Production export retirement already exists in the source base, using a readonly
 | Full automatic relocation, Serving/release, permanent-failure healing, cold recovery and registry reclamation | Not tested; implementation incomplete |
 | Cause of the original PR203 failures or original physical experiment | Inconclusive |
 
-Acceptance must use five retained normal hosts/TCP, the real range-leader factory, a donor that is neither data nor metadata leader, and a sealed Fresh receiver. It must not use `remote_old_seed`, a local OLD quorum, manufactured MF, synthetic backend or a fabricated grant. Each prerequisite failure and actual original error must be retained before assertions. Original assertions and finite budgets remain unchanged. Interleaved R1 operations are not evidence of stalled-I/O isolation. No test is passed until the relevant normal repository CI actually executes it.
+Acceptance must use five retained normal host objects with distinct actual DB roots/TLS endpoints over real TCP in one Rust test process (not five independent processes, VMs or machines), the real range-leader factory, a donor that is neither data nor metadata leader, and a sealed Fresh receiver. It must not use `remote_old_seed`, a local OLD quorum, manufactured MF, synthetic backend or a fabricated grant. Each prerequisite failure and actual original error must be retained before assertions. Original assertions and finite budgets remain unchanged. Interleaved R1 operations are not evidence of stalled-I/O isolation. No test is passed until the relevant normal repository CI actually executes it.
+
+## Appended acceptance source inventory
+
+Seven new tests share the actual normal-host-object setup, and are all **not tested** until normal repository CI executes the eventual reviewed source:
+
+- finite materialization with a genuine range leader distinct from the metadata leader and a donor that is neither;
+- a successful Enroll's actual wire reply suppressed after its original result was retained, followed by fresh readonly observation of the same A;
+- cancellation and deadline expiry of the actual queued server token before owner-thread effects, readonly observation, consumed exact/changed-body refusal and a genuinely new Step after proven no effect;
+- actual donor SourceStart completion reply loss followed by fresh target-owned Describe and comparison of the retained donor binding/session/MF;
+- actual final-image native helper return followed by cancellation of the same original server token, retained CURRENT/archive/XID/custody, and refusal of an independently authenticated fresh next mutation;
+- 514 actual selected-range stock-SDK records imported with real bounded one-record row frames, proving more than 512 accepted steps only if executed; exact old/equal wire replays then use the actual source factory/transport and must refuse without another witness or native effect.
+
+The last case is a per-operation sequence-bound control, not an 8 GiB, eight-relocation, repeated-range or 64-range campaign. The new test harness stops admitting further Steps after 120 seconds (900 for its larger sequence case); an already entered call and cleanup retain their own original bounds, so this is not a wall-clock completion/RTO bound. the existing 5-second action, 1.5-second fixture network and 2-second SDK request budgets remain unchanged. These are distinct test-harness limits, not grants to extend any original request.
+
+The test-only placement setup wraps the existing pure allocation planner and actual host-owned native leader/MStore proposal, append and quorum-commit path. It returns DATA only and does not supply a public placement scheduler. The actual target remains on one serialized owner thread; diagnostic channels carry DATA only. Lost Close integration, a distinct genuine second coordinator factory/process, concurrent admission interleavings, effectful Enroll/row-unknown resolution and cold recovery remain additional open controls/dependencies. Existing OLD protocol behavior is reused, not established by these new tests. Diagnostic omissions and unavailable prerequisite cuts must remain explicit; no generic failure counts as intended-cut evidence.

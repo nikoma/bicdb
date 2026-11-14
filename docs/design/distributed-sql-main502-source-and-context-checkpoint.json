@@ -93,7 +93,8 @@
     "synchronous_result": "2passed/0failed; same expired scope refused QueryTimedOut before any TCP connection",
     "test_blob_sha256": "a7e9f0b65a5ea9db0c3cc699ff30eaca282add7353001cc1cc6349e24432fd80",
     "scope": "Identical public-SDK/loopback-TCP mock tests, not SQL or native database commits. This is an unmerged worker regression, not a claim that main502 SQL has this bug.",
-    "design_inference": "Future SQL local workers must inherit actual caller budgets/security/view context; peer SQL services must independently admit remote requests. A serialized deadline/role or a node certificate is not local execution authority."
+    "design_inference": "Future SQL local workers must inherit actual caller budgets/security/view context; peer SQL services must independently admit remote requests. A serialized deadline/role or a node certificate is not local execution authority.",
+    "synchronous_runtime_state": "unmerged 505 candidate; pairedtest-onlysuccessor is not a main release or deployment"
   },
   "production_contract_unchanged": true,
   "transparent_distributed_SQL_or_multi_range_atomicity_qualified": false

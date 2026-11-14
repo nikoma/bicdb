@@ -31,7 +31,7 @@ Execution context also needs an explicit worker boundary. Identical public-SDK
 and loopback TCP mock tests showed that an unmerged threaded event-client
 candidate dispatched APP from an already-expired caller query scope
 ([failed worker control](https://github.com/nikoma/bicdb/actions/runs/43532705713)),
-while the synchronous 505 runtime's test-only successor refused before TCP
+while the unmerged synchronous 505 candidate's test-only successor refused before TCP
 ([passing baseline](https://github.com/nikoma/bicdb/actions/runs/43532727697)).
 These tests do not execute SQL or native database commits. Their narrow result
 supports the following **design requirement**, not an implemented SQL capability:

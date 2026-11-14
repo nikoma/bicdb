@@ -215,6 +215,9 @@ impl Drop for NativeInitialDataHost {
         }
     }
 }
+/// How long a DATA listener start repeats a busy latch refusal. The holders
+/// are this node's own short metadata/service sections.
+const LISTENER_LATCH_WAIT: Duration = Duration::from_millis(250);
 impl NativeInitialDataHost {
     pub(super) fn start_hot_process(&self, process: &CancellationToken) -> Result<()> {
         process.check()?;
@@ -438,8 +441,15 @@ impl NativeInitialDataHost {
         let address: std::net::SocketAddr = network_address(&self.initial, parent)?
             .parse()
             .map_err(|_| invalid("initial DATA requires numeric local address"))?;
-        self.listener = Some(
-            crate::distribution_transport::start_cluster_initial_native_data_server(
+        // The control listener is already drained here: until this start
+        // succeeds the node has no ingress. The start takes the service and
+        // metadata latches without waiting, and this node's own metadata
+        // scheduler holds them for short moments. Repeat only that busy
+        // refusal, briefly and inside the caller's finite budget, instead of
+        // leaving the node unreachable until the next operator retry.
+        let started = Instant::now();
+        loop {
+            match crate::distribution_transport::start_cluster_initial_native_data_server(
                 address,
                 network.clone(),
                 self.initial.topology.clone(),
@@ -448,9 +458,20 @@ impl NativeInitialDataHost {
                 self.initial.provider.clone(),
                 runtime.clone(),
                 admission.clone(),
-            )?,
-        );
-        Ok(())
+            ) {
+                Ok(listener) => {
+                    self.listener = Some(listener);
+                    return Ok(());
+                }
+                Err(crate::BicDbError::Cluster(refusal))
+                    if refusal.contains("busy") && started.elapsed() < LISTENER_LATCH_WAIT =>
+                {
+                    parent.check()?;
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+                Err(error) => return Err(error),
+            }
+        }
     }
     /// The control listener is drained before the DATA listener starts, and
     /// that start is non-waiting. If it was refused (a busy latch), this node

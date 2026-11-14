@@ -234,6 +234,22 @@ impl ActualServiceNativeRegisteredJointNewEvidence {
     pub(crate) fn facts(&self) -> &NativeJointMaterializedFacts {
         &self.facts
     }
+    #[cfg(test)]
+    pub(crate) fn test_joint_issuance_clock(
+        &self,
+        entered: std::time::Instant,
+        returned: std::time::Instant,
+    ) -> serde_json::Value {
+        let request = self.own.original_request_cancellation();
+        serde_json::json!({"role":self.role.role().test_joint_issuance_clock(entered,returned),
+            "own_context":self.own.context_id(),"own_business":self.business,
+            "own_term":self.own.term(),"own_read_index":self.own.read_index(),
+            "own_remaining_us_at_enter":self.own.deadline().saturating_duration_since(entered).as_micros(),
+            "own_remaining_us_at_return":self.own.deadline().saturating_duration_since(returned).as_micros(),
+            "own_past_deadline_us_at_return":returned.saturating_duration_since(self.own.deadline()).as_micros(),
+            "own_caller_canceled_at_report":request.is_cancel_requested(),
+            "actual_mstore_point_retained":true,"clock_is_authority":false})
+    }
     pub(crate) fn require_issuance_current(&self) -> Result<()> {
         self.certificate.plan().require_role(self.role.role())?;
         self.role

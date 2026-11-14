@@ -345,10 +345,62 @@ pub(crate) struct NativeJointPreparedDecision {
     data: NativeJointDecisionData,
 }
 impl NativeJointMaterializedQuorums {
+    /// Bounded failure-only DATA. Original guards have returned before this
+    /// formatter runs. It performs no currentness check or protocol callback.
+    #[cfg(test)]
+    fn report_preparation_refusal(
+        &self,
+        stage: &'static str,
+        failed_member: Option<&ClusterNodeId>,
+        entered: std::time::Instant,
+        error: &BicDbError,
+    ) {
+        let returned = std::time::Instant::now();
+        let clocks: Vec<_> = self
+            .new
+            .iter()
+            .take(64)
+            .map(|(node, observation)| {
+                let bytes = node.as_str().as_bytes();
+                serde_json::json!({"member_bytes":&bytes[..bytes.len().min(128)],
+                "member_original_bytes":bytes.len(),"member_truncated":bytes.len()>128,
+                "failed_member":failed_member==Some(node),
+                "clock":observation.test_issuance_clock(entered,returned)})
+            })
+            .collect();
+        let report = serde_json::json!({"stage":stage,"elapsed_us":returned.duration_since(entered).as_micros(),
+            "members":clocks,"member_limit":64,"omitted_members":self.new.len().saturating_sub(64),
+            "actual_error_discriminant":format!("{:?}",std::mem::discriminant(error)),
+            "primary_error":"preserved by original Result propagation and caller unwrap",
+            "scope":"failure-only copied clocks; no CPU/IO/cause attribution or renewed authority"});
+        let _ = std::io::Write::write_fmt(
+            &mut std::io::stderr().lock(),
+            format_args!("NATIVE_DECISION_PREPARATION_REFUSAL {report}\n"),
+        );
+    }
     pub(crate) fn prepare_decision(self) -> Result<NativeJointPreparedDecision> {
-        self.require_current()?;
-        for obs in self.new.values() {
-            obs.require_live_issuance()?;
+        #[cfg(test)]
+        let entered = std::time::Instant::now();
+        let current = self.require_current();
+        #[cfg(test)]
+        if let Err(error) = &current {
+            self.report_preparation_refusal("initial_actual_current", None, entered, error);
+        }
+        current?;
+        for (_node, obs) in &self.new {
+            #[cfg(test)]
+            let entered = std::time::Instant::now();
+            let issued = obs.require_live_issuance();
+            #[cfg(test)]
+            if let Err(error) = &issued {
+                self.report_preparation_refusal(
+                    "member_live_issuance",
+                    Some(_node),
+                    entered,
+                    error,
+                );
+            }
+            issued?;
         }
         let plan = self.old.plan();
         let mut data = NativeJointDecisionData {

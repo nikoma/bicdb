@@ -906,6 +906,16 @@ impl ActualServiceNativeJointNewEvidence {
     pub(crate) fn facts(&self) -> &crate::distribution_range_handoff::NativeJointMaterializedFacts {
         &self.facts
     }
+    #[cfg(test)]
+    pub(crate) fn test_joint_issuance_clock(
+        &self,
+        entered: std::time::Instant,
+        returned: std::time::Instant,
+    ) -> serde_json::Value {
+        self.role
+            .role()
+            .test_joint_issuance_clock(entered, returned)
+    }
     pub(crate) fn require_issuance_current(&self) -> Result<()> {
         self.plan.require_role(self.role.role())
     }

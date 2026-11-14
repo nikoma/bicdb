@@ -76,6 +76,23 @@ impl NativeJointNewObservation {
             }
         }
     }
+    /// Called only after an actual preparation refusal, outside engine guards.
+    #[cfg(test)]
+    pub(super) fn test_issuance_clock(
+        &self,
+        entered: std::time::Instant,
+        returned: std::time::Instant,
+    ) -> serde_json::Value {
+        match self {
+            #[cfg(feature = "tls-replication")]
+            Self::Registered { actual } => serde_json::json!({"variant":"Registered",
+                "actual":actual.test_joint_issuance_clock(entered,returned)}),
+            Self::Survivor { role, .. } => serde_json::json!({"variant":"Survivor",
+                "actual":role.test_joint_issuance_clock(entered,returned)}),
+            Self::Target { actual, .. } => serde_json::json!({"variant":"Target",
+                "actual":actual.test_joint_issuance_clock(entered,returned)}),
+        }
+    }
     pub(super) fn require_live_issuance(&self) -> Result<()> {
         match self {
             #[cfg(feature = "tls-replication")]

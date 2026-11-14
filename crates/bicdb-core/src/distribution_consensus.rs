@@ -463,6 +463,14 @@ impl MetadataRecoveryRoleObservation {
             .checked_duration_since(Instant::now())
             .filter(|d| !d.is_zero())
     }
+    /// Copied test DATA only; does not check, clone or renew the request.
+    #[cfg(test)]
+    pub(crate) fn test_original_request_state(&self) -> (bool, Option<Instant>) {
+        (
+            self.original_request.is_cancel_requested(),
+            self.original_request.deadline(),
+        )
+    }
     pub(crate) fn require_live_request(&self, read_request: Uuid, challenge: Uuid) -> Result<()> {
         self.original_request.check()?;
         if self.request().read_request_id != read_request

@@ -15,6 +15,7 @@ use super::*;
 use crate::distribution_native_read::NativeStrongEventDispatcher;
 use crate::distribution_range_consensus::RangeWriteCoordinator;
 mod receive;
+pub(crate) use receive::NativeJoinedRemoteInstallPreflight;
 mod registered;
 pub(crate) use receive::{
     NativeJoinedRangeReceiveOrigin, NativeJoinedRangeReceivePreflight,

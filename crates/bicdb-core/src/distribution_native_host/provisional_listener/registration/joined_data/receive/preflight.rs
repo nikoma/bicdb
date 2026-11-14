@@ -33,6 +33,30 @@ impl NativeJoinedRangeReceivePreflight {
     pub(crate) fn scope(&self) -> &RecoveryFenceScope {
         &self.scope
     }
+    pub(crate) fn require_at_storage_point(
+        &self,
+        db: &BicDb,
+        store: &RangeWriteStore,
+        request: &NativeJoinedRangeReceiveRequest,
+        point: &crate::db::NativeJoinedReceiveStorageScope<'_>,
+    ) -> Result<()> {
+        point.require_request(request)?;
+        if !Arc::ptr_eq(&self.origin, request.origin_arc())
+            || !self
+                .scope
+                .same_session(&RecoveryFenceScope::from_role(request.role().role())?)
+            || point.native().birth_id() != self.native.birth_id()
+            || point.native().database_incarnation() != self.native.database_incarnation()
+        {
+            return Err(invalid(
+                "Joined selected preflight changed original borrowed request/native owner",
+            ));
+        }
+        point.require_completed_row_scan(&self.rows)?;
+        db.validate_range_image_bindings(&self.bindings)?;
+        point.require_install_safety(&self.safety)?;
+        self.catalogue.require_current(store, db, point)
+    }
     /// Fresh Role/OWN/member and actual runtime Frozen outside all engine
     /// guards, then a new physical scope. Unrelated ranges/B may advance.
     pub(crate) fn with_current<R>(

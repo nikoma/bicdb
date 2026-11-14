@@ -1,9 +1,11 @@
 //! Prepared target DATA from an actual Registered point and source frame.
 //! Rotation, native publication, rows and Serving require their own producers.
 use super::*;
+mod joined;
 use crate::db::NativeRegisteredNoDomainScope;
 use crate::distribution_native_host::NativeRegisteredSelectedRangeNoDomain;
 use crate::distribution_range_image::{canonical_range_image_catalog, NativeRemoteImageStep};
+pub(crate) use joined::NativeJoinedRemoteImageIntent;
 
 /// Non-deserializable prepared bytes, not an install fence or a row grant.
 /// The retained host attempt must keep the actual original source/target

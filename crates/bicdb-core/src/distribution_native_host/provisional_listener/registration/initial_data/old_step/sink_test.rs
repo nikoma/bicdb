@@ -108,3 +108,67 @@ pub(crate) fn before_native_old_wal(
         action.fired.store(true, Ordering::Release);
     }
 }
+
+// The actual RPC receiver runs on its hosted listener thread. This separate
+// exact-DB/range/session keyed hook crosses that thread without importing any
+// caller role or creating a permission. It cancels ONLY the receiver's own
+// original request after the actual native result has been retained.
+struct RemoteAfterNative {
+    database: std::sync::Weak<RwLock<BicDb>>,
+    range: crate::RangeId,
+    nonce: Uuid,
+    fired: Arc<AtomicBool>,
+}
+static REMOTE_AFTER_NATIVE: Mutex<Vec<RemoteAfterNative>> = Mutex::new(Vec::new());
+pub(crate) struct CancelRemoteOldAfterNativeWal {
+    fired: Arc<AtomicBool>,
+}
+impl CancelRemoteOldAfterNativeWal {
+    pub(crate) fn install(
+        database: &Arc<RwLock<BicDb>>,
+        range: crate::RangeId,
+        nonce: Uuid,
+    ) -> Self {
+        let fired = Arc::new(AtomicBool::new(false));
+        let mut held = REMOTE_AFTER_NATIVE.lock();
+        assert!(
+            !held.iter().any(|p| {
+                p.range == range && std::sync::Weak::ptr_eq(&p.database, &Arc::downgrade(database))
+            }),
+            "nested actual remote OLD after-native hook"
+        );
+        held.push(RemoteAfterNative {
+            database: Arc::downgrade(database),
+            range,
+            nonce,
+            fired: fired.clone(),
+        });
+        Self { fired }
+    }
+    pub(crate) fn fired(&self) -> bool {
+        self.fired.load(Ordering::Acquire)
+    }
+}
+impl Drop for CancelRemoteOldAfterNativeWal {
+    fn drop(&mut self) {
+        REMOTE_AFTER_NATIVE
+            .lock()
+            .retain(|p| !Arc::ptr_eq(&p.fired, &self.fired));
+    }
+}
+pub(crate) fn after_remote_native_old_wal(
+    database: &Arc<RwLock<BicDb>>,
+    role: &RecoveryRoleAdmission,
+    original_receiver: &CancellationToken,
+) {
+    let mut held = REMOTE_AFTER_NATIVE.lock();
+    if let Some(index) = held.iter().position(|p| {
+        p.range == role.current_range().id
+            && p.nonce == role.recovery_nonce()
+            && std::sync::Weak::ptr_eq(&p.database, &Arc::downgrade(database))
+    }) {
+        let hook = held.remove(index);
+        original_receiver.cancel();
+        hook.fired.store(true, Ordering::Release);
+    }
+}

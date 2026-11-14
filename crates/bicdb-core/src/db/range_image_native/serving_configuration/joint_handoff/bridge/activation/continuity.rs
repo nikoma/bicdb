@@ -4,7 +4,7 @@ use super::*;
 pub(crate) struct NativeJointHistoricalCutScope<'a> {
     database: &'a BicDb,
     native: &'a NativeJointServingBridgeReceipt,
-    journal: crate::db::range_image_native::NativeImageJournalGuard<'a>,
+    journal: NativeJointScopeJournal<'a>,
     contract: SourceRangeImageLineage,
     pending: Option<(u64, String)>,
 }
@@ -13,7 +13,24 @@ impl NativeJointServingBridgeReceipt {
         &'a self,
         database: &'a BicDb,
     ) -> Result<NativeJointHistoricalCutScope<'a>> {
-        let journal = database.try_native_image_journal()?;
+        self.historical_cut_scope_with_journal(
+            database,
+            NativeJointScopeJournal::Owned(database.try_native_image_journal()?),
+        )
+    }
+    pub(in crate::db::range_image_native) fn historical_cut_scope_under_journal<'a>(
+        &'a self,
+        database: &'a BicDb,
+        journal: &'a crate::db::range_image_native::NativeImageJournalGuard<'a>,
+    ) -> Result<NativeJointHistoricalCutScope<'a>> {
+        self.historical_cut_scope_with_journal(database, NativeJointScopeJournal::Borrowed(journal))
+    }
+    fn historical_cut_scope_with_journal<'a>(
+        &'a self,
+        database: &'a BicDb,
+        journal: NativeJointScopeJournal<'a>,
+    ) -> Result<NativeJointHistoricalCutScope<'a>> {
+        journal.require_database(database)?;
         self.record.validate()?;
         self.native.require_current(database)?;
         // Contract reader deliberately does NOT assert source visibility while

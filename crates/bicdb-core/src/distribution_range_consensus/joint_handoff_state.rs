@@ -4,6 +4,16 @@ use super::*;
 use crate::distribution_range_handoff::NativeJointHandoffPlan;
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 
+#[cfg(feature = "tls-replication")]
+mod registered_decision;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_decision::{
+    NativeRegisteredDecisionCatalogueAuthority, NativeRegisteredDecisionCataloguePublication,
+};
+
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_decision::{test_registered_decision_catalogue_cut, CatalogueCut};
+
 mod bridge;
 pub(crate) use bridge::NativeJointBridgeCatalogue;
 mod activation;
@@ -310,6 +320,43 @@ impl RangeWriteStore {
         physical: &crate::db::NativeJointOldPhysicalProof,
         controlled: &crate::distribution_range_mutation::ControlledFrozenMutationPermit,
     ) -> Result<NativeJointOldPromiseReceipt> {
+        let receipt = self.persist_native_joint_old_promise_before_final_check(
+            database, plan, role, physical, controlled,
+        )?;
+        receipt.require_current(self, plan)?;
+        Ok(receipt)
+    }
+    /// The retained slot belongs to the actual original DATA host. A completed
+    /// fsync result is recorded BEFORE subsequent fallible checks; an uncertain
+    /// persistence error still produces no durable receipt.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn persist_native_joint_old_promise_retained(
+        &mut self,
+        database: &crate::BicDb,
+        plan: &NativeJointHandoffPlan,
+        role: &RecoveryRoleAdmission,
+        physical: &crate::db::NativeJointOldPhysicalProof,
+        controlled: &crate::distribution_range_mutation::ControlledFrozenMutationPermit,
+        retained: &mut Option<Arc<NativeJointOldPromiseReceipt>>,
+    ) -> Result<Arc<NativeJointOldPromiseReceipt>> {
+        if retained.is_none() {
+            let actual = self.persist_native_joint_old_promise_before_final_check(
+                database, plan, role, physical, controlled,
+            )?;
+            *retained = Some(Arc::new(actual));
+        }
+        let receipt = retained.as_ref().unwrap();
+        receipt.require_current(self, plan)?;
+        Ok(receipt.clone())
+    }
+    fn persist_native_joint_old_promise_before_final_check(
+        &mut self,
+        database: &crate::BicDb,
+        plan: &NativeJointHandoffPlan,
+        role: &RecoveryRoleAdmission,
+        physical: &crate::db::NativeJointOldPhysicalProof,
+        controlled: &crate::distribution_range_mutation::ControlledFrozenMutationPermit,
+    ) -> Result<NativeJointOldPromiseReceipt> {
         physical.require_before_promise(database, self, plan, role, controlled)?;
         if !crate::format::native_joint_data_handoff_active(&self.root)?
             || physical.native_admission().writer_enforcement_version() != 1
@@ -394,7 +441,6 @@ impl RangeWriteStore {
             promise,
             history_sha256,
         };
-        receipt.require_current(self, plan)?;
         Ok(receipt)
     }
 }
@@ -477,7 +523,16 @@ impl RangeWriteStore {
         admission: &crate::distribution_range_handoff::NativeJointDecisionPublicationAdmission,
         receipt: &crate::db::NativeJointDecisionReceipt,
     ) -> Result<()> {
+        self.confirm_native_joint_decision_inner(database, admission, receipt)
+    }
+    fn confirm_native_joint_decision_inner(
+        &mut self,
+        database: &crate::BicDb,
+        admission: &crate::distribution_range_handoff::NativeJointDecisionPublicationAdmission,
+        receipt: &crate::db::NativeJointDecisionReceipt,
+    ) -> Result<()> {
         admission.require_live()?;
+        admission.require_native_metadata_point(database, self, receipt.native_admission())?;
         receipt.require_current(database)?;
         self.require_native_catalog_durability(database.data_path())?;
         self.require_native_writer_host_base()?;

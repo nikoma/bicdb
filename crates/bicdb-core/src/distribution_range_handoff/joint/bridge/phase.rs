@@ -2,6 +2,92 @@
 //! Original observations/deadlines are never mutated or made live again.
 use super::*;
 use std::time::{Duration, Instant};
+#[cfg(test)]
+mod collection_faults;
+
+/// Scalar-only, fixed-capacity instrumentation. It owns no native capability,
+/// cancellation token, lock, pin or metadata observation. Formatting happens
+/// only after the original operation returns an error and drops its guards.
+#[cfg(all(test, feature = "tls-replication"))]
+struct ActivationFailureTrace {
+    started: Instant,
+    stages: [Option<(&'static str, Instant)>; 24],
+    stage_count: usize,
+    phase_deadline: Option<Instant>,
+    caller_deadline: Option<Instant>,
+    query_deadline: Option<Instant>,
+    post_quorum: Option<(Uuid, u64, u64, Instant)>,
+}
+#[cfg(all(test, feature = "tls-replication"))]
+impl ActivationFailureTrace {
+    fn new(phase: &NativeJointPreparationPhaseQuorum) -> Self {
+        Self {
+            started: Instant::now(),
+            stages: [None; 24],
+            stage_count: 0,
+            phase_deadline: phase.cancellation.deadline(),
+            caller_deadline: phase.original.caller.deadline(),
+            query_deadline: crate::query_budget::test_current_deadline(),
+            post_quorum: None,
+        }
+    }
+    fn mark(&mut self, stage: &'static str) {
+        if let Some(slot) = self.stages.get_mut(self.stage_count) {
+            *slot = Some((stage, Instant::now()));
+        }
+        self.stage_count += 1;
+    }
+    fn report(&self, phase: &NativeJointPreparationPhaseQuorum, error: &crate::BicDbError) {
+        let ended = Instant::now();
+        let clock = |deadline: Option<Instant>| {
+            deadline.map(|deadline| serde_json::json!({
+                "remaining_at_entry_us":deadline.saturating_duration_since(self.started).as_micros(),
+                "expired_at_entry_us":self.started.saturating_duration_since(deadline).as_micros(),
+                "remaining_at_return_us":deadline.saturating_duration_since(ended).as_micros(),
+                "expired_at_return_us":ended.saturating_duration_since(deadline).as_micros(),
+            }))
+        };
+        let members = phase
+            .observations
+            .iter()
+            .take(64)
+            .map(|(node, member)| {
+                let (term, index, context) = member.committed.metadata_anchor();
+                serde_json::json!({"node":node.as_str().chars().take(128).collect::<String>(),
+                "node_id_truncated":node.as_str().chars().count()>128,
+                "term":term,"read_index":index,"context_id":context,
+                "deadline":clock(Some(member.committed.deadline()))})
+            })
+            .collect::<Vec<_>>();
+        let stages = self.stages.iter().flatten().map(|(stage, at)| {
+            serde_json::json!({"stage":stage,"since_entry_us":at.saturating_duration_since(self.started).as_micros()})
+        }).collect::<Vec<_>>();
+        let post_quorum = self.post_quorum.map(|(context, term, index, deadline)| {
+            serde_json::json!({"context_id":context,"term":term,"read_index":index,
+                "deadline":clock(Some(deadline))})
+        });
+        // No request check, actual service inspection or RPC occurs here.
+        // Missing producer/subcheck facts are explicitly not inferred.
+        let value = serde_json::json!({
+            "schema":"native-activation-failure-v1",
+            "error":error.to_string().chars().take(4096).collect::<String>(),
+            "error_truncated":error.to_string().chars().count()>4096,
+            "elapsed_us":ended.saturating_duration_since(self.started).as_micros(),
+            "phase_deadline":clock(self.phase_deadline),
+            "original_caller_deadline":clock(self.caller_deadline),
+            "thread_query_deadline":clock(self.query_deadline),
+            "phase_cancel_requested_at_report":phase.cancellation.is_cancel_requested(),
+            "original_caller_cancel_requested_at_report":phase.original.caller.is_cancel_requested(),
+            "original_collection_cancel_requested_at_report":phase.original.cancellation.is_cancel_requested(),
+            "members":members,"members_omitted":phase.observations.len().saturating_sub(64),
+            "post_quorum_metadata":post_quorum,"stages":stages,
+            "stages_omitted":self.stage_count.saturating_sub(self.stages.len()),
+            "producer_session_and_inner_subchecks":"not_observed",
+            "memory_observation_not_authority":true,
+        });
+        eprintln!("NATIVE_ACTIVATION_FAILURE {value}");
+    }
+}
 
 pub(crate) struct NativeJointPreparationPhaseRound {
     original: Arc<NativeJointPreparedServingQuorum>,
@@ -11,7 +97,7 @@ pub(crate) struct NativeJointPreparationPhaseRound {
 }
 pub(super) struct FreshPreparedMember {
     pub(super) committed: CommittedNativeJointDecisionObservation,
-    writer: Arc<crate::db::NativeWriterHostState>,
+    identity: crate::distribution_data::NativeJointPreparationCollectionIdentity,
 }
 pub(crate) struct NativeJointPreparationPhaseQuorum {
     original: Arc<NativeJointPreparedServingQuorum>,
@@ -94,20 +180,28 @@ impl NativeJointPreparationPhaseRound {
             budget,
             &self.cancellation,
         )?;
-        let (committed, writer) = {
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &old.service,
+            &metadata,
+            business,
+            &self.cancellation,
+        )?;
+        let (committed, identity) = {
             let service = old
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("fresh joint phase actual service busy"))?;
-            let committed = service.observe_committed_native_joint_decision(
+            let committed = old.actual.observe_fresh_committed_with_point(
+                &service,
                 metadata,
                 business,
                 self.original.data.old_range().id,
+                metadata_point,
             )?;
-            let writer = old
-                .actual
-                .require_current_under_fresh_phase(&service, &committed)?;
-            (committed, writer)
+            let identity = old
+                .borrow_fresh_collection(&service, &committed)?
+                .into_comparison_identity()?;
+            (committed, identity)
         };
         if committed.data() != &self.original.data {
             return Err(invalid(
@@ -116,8 +210,13 @@ impl NativeJointPreparationPhaseRound {
         }
         self.cancellation = self.cancellation.child_with_deadline(committed.deadline());
         self.cancellation.check()?;
-        self.observations
-            .insert(node.clone(), FreshPreparedMember { committed, writer });
+        self.observations.insert(
+            node.clone(),
+            FreshPreparedMember {
+                committed,
+                identity,
+            },
+        );
         Ok(())
     }
     pub(crate) fn finish(self) -> Result<NativeJointPreparationPhaseQuorum> {
@@ -163,9 +262,9 @@ impl NativeJointPreparationPhaseQuorum {
         self.original.require_original_caller()?;
         for (node, member) in &self.observations {
             member.committed.require_metadata_current()?;
-            self.original.observations[node]
-                .actual
-                .require_phase_writer_lifetime(&member.writer)?;
+            member
+                .identity
+                .require_actual_lifetime(&self.original.observations[node].actual)?;
         }
         Ok(())
     }
@@ -206,10 +305,8 @@ impl NativeJointPreparationPhaseQuorum {
             .observations
             .get(node)
             .ok_or_else(|| invalid("fresh joint phase omitted participant"))?;
-        let writer = observation
-            .actual
-            .require_current_under_fresh_phase(service, &fresh.committed)?;
-        if !Arc::ptr_eq(&writer, &fresh.writer) {
+        let writer = observation.require_fresh_phase_current(service, &fresh.committed)?;
+        if !fresh.identity.is_same_owner(&writer) {
             return Err(invalid(
                 "fresh joint writer registration/generation changed",
             ));
@@ -219,13 +316,13 @@ impl NativeJointPreparationPhaseQuorum {
     pub(super) fn require_local_publication_writer(
         &self,
         node: &ClusterNodeId,
-        actual: &Arc<crate::db::NativeWriterHostState>,
+        actual: &crate::db::NativeJointPhaseOwner,
     ) -> Result<()> {
         self.require_live()?;
         if self
             .observations
             .get(node)
-            .is_none_or(|member| !Arc::ptr_eq(&member.writer, actual))
+            .is_none_or(|member| !member.identity.is_same_owner(actual))
         {
             return Err(invalid(
                 "publication final scope actual writer registration changed",
@@ -240,7 +337,12 @@ impl NativeJointPreparationPhaseQuorum {
         }
         Ok(())
     }
-    fn release_read_pins(&self) -> Result<()> {
+    fn release_read_pins(
+        &self,
+        #[cfg(all(test, feature = "tls-replication"))] trace: &mut ActivationFailureTrace,
+    ) -> Result<()> {
+        #[cfg(all(test, feature = "tls-replication"))]
+        trace.mark("pin_release_require_live");
         self.require_live()?;
         let mut released = true;
         for old in self.original.observations.values() {
@@ -250,19 +352,27 @@ impl NativeJointPreparationPhaseQuorum {
             // None is a private monotone fact about THESE original objects.
             // It grants no quiescence: final publication checks the actual
             // Frozen/local point and all foreign members again.
+            #[cfg(all(test, feature = "tls-replication"))]
+            trace.mark("pins_already_released_require_live");
             return self.require_live();
         }
-        self.require_current()?;
+        #[cfg(all(test, feature = "tls-replication"))]
+        trace.mark("pin_release_before_collection_binding");
+        self.require_live()?;
+        #[cfg(all(test, feature = "tls-replication"))]
+        trace.mark("pin_release_actual_members");
         for (node, fresh) in &self.observations {
             let old = &self.original.observations[node];
             let service = old
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("fresh joint pin release service busy"))?;
-            old.actual
-                .release_read_pin_under_fresh_phase(&service, &fresh.committed)?;
+            old.borrow_fresh_collection(&service, &fresh.committed)?
+                .drain_owned_capture_pin()?;
         }
-        self.require_current()
+        #[cfg(all(test, feature = "tls-replication"))]
+        trace.mark("pin_release_after_collection_binding");
+        self.require_live()
     }
     #[cfg(feature = "tls-replication")]
     pub(crate) fn acquire_local_activation(
@@ -270,7 +380,32 @@ impl NativeJointPreparationPhaseQuorum {
         client: &crate::distribution_transport::TcpClusterRelocationTransport,
         metadata_leader: &ClusterNodeId,
     ) -> Result<NativeJointActivationAdmission> {
+        #[cfg(test)]
+        let mut trace = ActivationFailureTrace::new(self);
+        let result = self.acquire_local_activation_inner(
+            client,
+            metadata_leader,
+            #[cfg(test)]
+            &mut trace,
+        );
+        #[cfg(test)]
+        if let Err(error) = &result {
+            trace.report(self, error);
+        }
+        result
+    }
+    #[cfg(feature = "tls-replication")]
+    fn acquire_local_activation_inner(
+        self: &Arc<Self>,
+        client: &crate::distribution_transport::TcpClusterRelocationTransport,
+        metadata_leader: &ClusterNodeId,
+        #[cfg(test)] trace: &mut ActivationFailureTrace,
+    ) -> Result<NativeJointActivationAdmission> {
+        #[cfg(test)]
+        trace.mark("activation_require_live");
         self.require_live()?;
+        #[cfg(test)]
+        trace.mark("claim_single_activation");
         if self
             .activation_claimed
             .swap(true, std::sync::atomic::Ordering::AcqRel)
@@ -279,6 +414,8 @@ impl NativeJointPreparationPhaseQuorum {
                 "fresh joint phase already selected its single local publication attempt",
             ));
         }
+        #[cfg(test)]
+        trace.mark("bind_actual_local_participant");
         let actor = client.local_metadata_read_participant();
         let local = self
             .original
@@ -291,27 +428,59 @@ impl NativeJointPreparationPhaseQuorum {
         {
             return Err(invalid("fresh phase activation actual recipient changed"));
         }
-        // This operation checks ALL actual members before AND after pin release.
-        // Do not add an identical third sweep before this same operation.
-        self.release_read_pins()?;
+        // Permissionless collection/drain of the SAME owned pins. Complete
+        // physical F is mandatory at the unchanged scoped publication boundary.
+        self.release_read_pins(
+            #[cfg(test)]
+            trace,
+        )?;
         let business = Uuid::now_v7();
+        #[cfg(test)]
+        trace.mark("post_quorum_remaining_budget");
+        let budget = remaining(&self.cancellation)?;
+        #[cfg(test)]
+        trace.mark("post_quorum_metadata_rpc");
         let metadata = client.acquire_host_metadata_observation(
             metadata_leader,
             business,
-            remaining(&self.cancellation)?,
+            budget,
+            &self.cancellation,
+        )?;
+        #[cfg(test)]
+        {
+            trace.post_quorum = Some((
+                metadata.context_id(),
+                metadata.term(),
+                metadata.read_index(),
+                metadata.deadline(),
+            ));
+            trace.mark("capture_actual_metadata_point");
+        }
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &local.service,
+            &metadata,
+            business,
             &self.cancellation,
         )?;
         let fresh = {
+            #[cfg(test)]
+            trace.mark("lock_actual_local_service");
             let service = local
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("fresh phase post-quorum binding service busy"))?;
-            service.observe_committed_native_joint_decision(
+            #[cfg(test)]
+            trace.mark("observe_actual_fresh_committed");
+            local.actual.observe_fresh_committed_with_point(
+                &service,
                 metadata,
                 business,
                 self.original.data.old_range().id,
+                metadata_point,
             )?
         };
+        #[cfg(test)]
+        trace.mark("construct_activation_admission");
         let cancellation = self.cancellation.child_with_deadline(fresh.deadline());
         let result = NativeJointActivationAdmission {
             phase: Some(self.clone()),
@@ -321,6 +490,8 @@ impl NativeJointPreparationPhaseQuorum {
             fresh,
             cancellation,
         };
+        #[cfg(test)]
+        trace.mark("activation_final_require_live");
         result.require_live()?;
         Ok(result)
     }

@@ -1,0 +1,263 @@
+{
+  "corrections": [
+    {
+      "actual_underlying_path": "operator.rs390 / registration.rs796-811 -> initial_data.rs303-307 and1137; actual initial source binding exists",
+      "incorrect_preliminary_claim": "INITIAL production source process lifetime absent because explicit bind helper only called by fixtures",
+      "status": "corrected before delivery of final gap map; do not use superseded preliminary receipt",
+      "superseded_receipt_sha256": "19fb70863b4b07349704acb79427e283e55d456eaccc15c1f2a8bf7e07ae02ab"
+    }
+  ],
+  "experiment_revalidation": {
+    "can_current_normal_native_controller_execute_4_to_5": "NO: metadata enrollment only; missing native planner/worker/source lifetime attachment/Joined and remote final-phase adapters",
+    "do_not_provision_as_qualification_yet": true,
+    "generic_balanced_experiment": "Can exercise its existing generic deployment contract separately, but cannot substitute for native Joined durability/operational qualification or reuse native receiver by bypassing refusal. Original failed Azure experiment remains failed.",
+    "permitted_future_preflight": "On exact release binary start four ordinary native CLI processes and a fifth JoinFresh process. Before Azure capacity run require supported startup to create committed native relocation and recipient-owned work progress without fixture controls or in-process Arc handoffs; then complete two ranges onto same fifth host and prove R1 APP/Strong while R2 moves. Gate failure aborts capacity experiment before provisioning expensive data run.",
+    "physical_gate": "Only after complete convergence compare stable four-node vs five-node sustained successful read/write throughput at equal latency/error budget; relocation throughput separate. External durable ledger plus physical failure-domain/disk/network metadata required; actual VMs do not imply power-loss or hardware certification."
+  },
+  "minimum_genuine_acceptance": {
+    "controls": [
+      "Lost real Start reply reconciles same manifest/session/A via Describe.",
+      "Relevant metadata term/config/source identity invalidation refuses without granting R2; unrelated R1 APP remains correctly consistent.",
+      "Actual R2 native/row cancellation or apply/fsync uncertainty retains same txn/intent and does not allocate replacement.",
+      "Actual independent transport reply stall, separately blocked engine/disk IO, prove whether R1 continues; existing after-export transport component is not disk independence.",
+      "Cold restart and controller restart resumption are separate subsequent tests; no reconstructed RAM capability from DATA."
+    ],
+    "name": "same_joined_host_R1_served_then_R2_materialized_then_fully_served_original_SDK",
+    "precondition": "Five actual original native owners; two genuinely hash-selected populated ranges, original fixed gateway ClusterEventClient created before movement with unchanged two-second budgets. All intent/ACK/uncertain/failed/retried results ledgered with full payload hashes.",
+    "steps": [
+      "Complete real first move through Registered history/rows/final/base/catalogue, genuine NEW/DECISION/Open/ALL release/FIRST. Require original client full Strong old R1 payload, new R1 APP ACK, full Strong matching new value before starting R2.",
+      "Keep exact same Joined database/open/birth/Store/State/hook/coordinator. Create genuine R2 receive origin from current committed relocation and actual authenticated Start/Describe; drive real proposal/Installing/history/rows/scan/final/base/catalogue, preserve exact attempt/native xid/unknown custody. While R2 moves, continuously APP/full Strong R1 through same original client; no hints/manual shard routing/recreated SDK.",
+      "At first materialization milestone require real R2 materialized owner and NativeJoinedRemoteJointOwner with same A; actual Joined NEW observe checks certificate and independently fresh authority. Assert R2 ordinary APP/Strong still closed until actual decision/release.",
+      "After missing producers are implemented, use real Joined pin-handoff and native+catalogue DECISION; fresh prepare/activation/Open for ALL final members, target-specific A release, independent post-quorums; extend same writer domain. Then APP/full Strong both R1/R2 and reconcile every ACK; no pending relocation or dropped unknown outcome."
+    ],
+    "type": "test design, not implemented/executed"
+  },
+  "review": "read-only immutable Git source; no compile, execution, provisioning or qualification",
+  "schema": "bicdb-exact-source-operational-gap-map-v1",
+  "separate_gates": [
+    "Joined becoming later OLD/donor/source is distinct from receiving R2; another agent independently traces exact source admission.",
+    "Source export-retirement drops pins, not physical obsolete replica data cleanup. Native cleanup needs committed authority and restart-safe exact progress; generic cleanup is fenced.",
+    "Current RAM-retained A/pin/participant objects do not establish cold bootstrap/reconstruction or controller crash recovery. Stopped-store row preservation tests are narrower.",
+    "Ordinary PostgreSQL arbitrary SQL/cross-range joins/multi-range atomic transactions remain outside native point Event APP/Get contract. No normal pgwire SQL scale-out claim.",
+    "Source APIs, required alltargets/no-default-consumer checks and ongoing runtime CI are distinct evidence. This report imports no pending runtime result."
+  ],
+  "source": "d8115fedf13b0bd7107cfddd2664f2c6ea2f261f",
+  "source_files": [
+    {
+      "blob": "6b84d60c341dafde3b0cbc5e0861a1a17b84bcde",
+      "path": "crates/bicdb-cli/src/main.rs",
+      "sha256": "5c1eaf4f96c47d8e9c1a690919a9b9eff6a11bb7b20f2da77640fb07fca8b883"
+    },
+    {
+      "blob": "e729bc3d738263d97d49285683ee9df6ab8e98c4",
+      "path": "crates/bicdb-cli/src/native_metadata_command.rs",
+      "sha256": "9c36f303dd7f3d6bb94ef2d895773e2e5168995dd411354dcf92f50eb0b8a8bb"
+    },
+    {
+      "blob": "1935a1e824c9392161ce949ceb840b8405ad89cf",
+      "path": "crates/bicdb-pgwire/src/distribution_controller.rs",
+      "sha256": "5b7b37a7262a653ef95724152df89e1bdf5bd005e62d79e63105d6b2094c78ac"
+    },
+    {
+      "blob": "82dd26dabd5439f6b34fa3f074f2dbab211b3aa5",
+      "path": "crates/bicdb-pgwire/src/checkpoint_driver.rs",
+      "sha256": "059ad193367694b57d1be277e70f59c0b2b27e459edfe600c7b783fd06fa0486"
+    },
+    {
+      "blob": "9f43b09487dfa976928c5602208e4acec3435ac5",
+      "path": "crates/bicdb-core/src/distribution_native_host/operator.rs",
+      "sha256": "346d6d50f2d52ce7f5ef16fb789d28b24cb6b622fd8dc681ad732b7ee829e51c"
+    },
+    {
+      "blob": "58016ce64c05baf0e1940dc71ecb52269080c773",
+      "path": "crates/bicdb-core/src/distribution_native_host/operator_learner.rs",
+      "sha256": "b5531ae06a0769b0e787cce4ea9a6705bba9563134a9ce7ee01e1f9cc94d69ae"
+    },
+    {
+      "blob": "a5315e40041b22ac7233883ced804b02ae034c29",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration.rs",
+      "sha256": "2b037b4a6690355f74a9dd6c82a5e8328a02ee4a18c25023493f93b3d7d752ce"
+    },
+    {
+      "blob": "4531d952b90575dffb973e6247dfab270096939f",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/source_discovery.rs",
+      "sha256": "2a35b303d110dfce26dec3d761897e0167a9b4bf6c32a489a8e4d8ff4641d5b2"
+    },
+    {
+      "blob": "2615dcaf0a14b440100014f4e17c1b17aaa594ef",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/receive.rs",
+      "sha256": "0818580609185351ac59ec580e96268c70a3157237379a3cd6f652d1d8e06c19"
+    },
+    {
+      "blob": "ba00e39fd57b20cc6ca67b7502e5d07e1a62905e",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/receive/attempt.rs",
+      "sha256": "3d69fa763f5b4a84680186fffb11022b035c05422c23a2e6247035db8ca2decb"
+    },
+    {
+      "blob": "f03b8749a1eed2079bcab68f47cc89e7e1076e60",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/receive/materialized.rs",
+      "sha256": "aefa9fc5e063d771330a646599d291f5bd931c59bd3ccad3e8686828a144e878"
+    },
+    {
+      "blob": "e60c1fb85a03564f606d08f98fd631fcefb86d6f",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/receive/catalogue.rs",
+      "sha256": "2fab209680179eb4378be077d1782a23010cced0651b1d923e3bd9fdbf255617"
+    },
+    {
+      "blob": "eb7eeda7b0f0206ead66c5123de776c93aa77b5e",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/receive/joint_owner.rs",
+      "sha256": "0e7f3045200272a101745a08758fc91df48ec6b454cece9c404d7e51f576d045"
+    },
+    {
+      "blob": "3a0afed78fc66940348bbbed526cb421c6b202b3",
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff/joined_target.rs",
+      "sha256": "4b34f4c4a87eef2f996af82c316064fb7fa6e6acb95f76051ca6519b5e03e974"
+    },
+    {
+      "blob": "97a47a55df82a7607e1fc0695d6fd3fd945638aa",
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/joined_joint.rs",
+      "sha256": "0ff3859cd14f3da4910589d14bad97b22d5b802250d47e4b185192b794a7c9de"
+    },
+    {
+      "blob": "241ba0e86a98088fff0d981ef5fb85503c0e5d06",
+      "path": "crates/bicdb-core/src/distribution_range_image_install/joint_materialization.rs",
+      "sha256": "b3370462d446bacf8f304b3a8ba2cb53b0fc5cb6c7622066fde9d0f21ed4c5a7"
+    },
+    {
+      "blob": "0efce2657bd6b71565e8b52087bc442ad40f014f",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/materialized.rs",
+      "sha256": "c28b3ee86e1272e5ef7ad8b5a7e3415c1dfb12568e18333ae3d6d0c0ba69ab08"
+    },
+    {
+      "blob": "153ea1fe033304d851297039df6a25f00f7a05e0",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/decision.rs",
+      "sha256": "3a6a2f628bfe469265de9bc65ae0d86e2f42200c559c00a723c6c98486e205a2"
+    },
+    {
+      "blob": "3ed2ae3e4f92e476b16b5e6b6083f57b20f61c05",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/remote_new/participant.rs",
+      "sha256": "96a0165febcd118f2b637f62322e187430b00b410cd3f0510c26c1947474ec7e"
+    },
+    {
+      "blob": "3f6ff148b28d78e9b1442daf749cad599756cf08",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/remote_new/participant/decision.rs",
+      "sha256": "725183fe4dc4f414e0719e0cb61c3c1e9593daad8ce44690db004d637cb0f7e5"
+    },
+    {
+      "blob": "70c8bb31d720c97a93d6c9d936077316ea8d22af",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/publication/release_phase.rs",
+      "sha256": "ca070cf724041ab61dcef7b50ce0fc7d8511a9d61929b4e6947be92d305f066b"
+    },
+    {
+      "blob": "a6a138f58a2514c7819fd34a36efd2b6a5fa2eee",
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff/bridge/image_release.rs",
+      "sha256": "e0752cc0cda4d7a5094ecf5fd452064002b896aa613625a724039149087b02ec"
+    },
+    {
+      "blob": "c8efce42c5690b777bec9ae1086b085a0268e812",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/writer_data_domain.rs",
+      "sha256": "47d23d55e026238c6c9fb728a4e59c71b714723c1ccfd70e95f3d38c812eec42"
+    },
+    {
+      "blob": "1bb46e4d20c50f7a795399cdc54df796c3f4fa38",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/writer_data_domain.rs",
+      "sha256": "d71cf404766e87b41116cc3619ac744a1611199d5bd205c1db953cdcd69b6f85"
+    },
+    {
+      "blob": "4c2ab74390ff71b72f3950f03e04fac023ee9404",
+      "path": "crates/bicdb-core/src/distribution_transport.rs",
+      "sha256": "26d795e1f583b33430a54488c289eae321ae29448806ad2d1354b0afc16f33d5"
+    },
+    {
+      "blob": "cdf60803def1a7c61f4a3882e28ee40d02bb1710",
+      "path": "crates/bicdb-core/src/distribution_transport/initial_data_listener.rs",
+      "sha256": "16d4f4405357e3538f165bcc4c563212d8cd2ac2a7d134ec726ca109a8d201d5"
+    },
+    {
+      "blob": "a486f2d0312f998c47c84f8ba60efb3c0b34f2bf",
+      "path": "crates/bicdb-core/src/distribution_supervisor.rs",
+      "sha256": "51ca9ec5100e4c99f2afa32cc84f6a3353be5105a36b3bf9b6f977ea54f129c7"
+    },
+    {
+      "blob": "eb7e476f0fd5e28d93e0ce346ef922b1817c97bf",
+      "path": "crates/bicdb-core/src/distribution/native_joint_handoff.rs",
+      "sha256": "981efcba0216c67750e705ea99cc9b220b1ba14cfa8cb6d291158f5f88f3e19e"
+    }
+  ],
+  "source_version": "1.0.510-beta",
+  "stages": [
+    {
+      "actual": "Ordinary serve creates BalancedDistributionHostService and generic TransportClusterRelocationDriver. ClusterCommand::Join has actual remote/admin-assisted registration.",
+      "classification": "IMPLEMENTED_DISTINCT_MODE",
+      "first_missing_or_required": "No native protocol adapter. DistributionStore::require_legacy_relocation_mutation refuses native_joint_handoff_v1 and enforced-native membership/cleanup; native listener refuses generic snapshot/import/repair/cleanup. Do not replace native owner with generic DistributionStore.",
+      "id": "ordinary-controller",
+      "lines": "9412;64;1239",
+      "path": "crates/bicdb-cli/src/main.rs -> crates/bicdb-pgwire/src/distribution_controller.rs -> checkpoint_driver.rs"
+    },
+    {
+      "actual": "ServeFresh/JoinFresh create actual TLS/native birth/metadata owners, election/heartbeat, CONFIG learner enrollment/catch-up/promotion, optional Registered receiver. Real INITIAL Event APP/Strong path exists.",
+      "classification": "IMPLEMENTED_METADATA_ONLY",
+      "first_missing_or_required": "maintain_metadata calls maintain_joins only. No capacity/liveness-driven native range planning/work queue or phase driver is attached. Native metadata command starts no general SQL listener.",
+      "id": "native-node-add",
+      "lines": "operator280; learner525,547; CLI556,821",
+      "path": "crates/bicdb-core/src/distribution_native_host/operator.rs; operator_learner.rs; crates/bicdb-cli/src/native_metadata_command.rs"
+    },
+    {
+      "actual": "Actual authenticated Start/Describe retains exact donor capture/session and manifest; strict client creates authentic frame evidence. Normal INITIAL startup DOES bind actual original process: start_automatic_metadata/OpenInitialData -> retain_data_process(supervisor.lifecycle_cancellation) -> NativeInitialDataHost::start_hot_process -> sources.bind_original_process. Later data creation starts with the retained original process. This supersedes older expected-manifest bootstrap gap.",
+      "classification": "IMPLEMENTED_API_AND_INITIAL_PROCESS_LIFETIME_NOT_CONTROLLER_ATTACHED",
+      "first_missing_or_required": "Native normal operator still has no range-relocation worker to schedule genuine OLD closure, Start/Describe and target receive work. The explicit bind_initial_image_source_process helper having fixture-only callsites does NOT establish missing production source lifetime binding. Joined source registry/admission is separate, not inferred from INITIAL startup.",
+      "id": "source-start",
+      "lines": "source_discovery333; registration796-811; initial_data303-307,1137",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/source_discovery.rs; registration.rs"
+    },
+    {
+      "actual": "Distinct live Joined State/hook/coordinator/open origin, selected preflight/absence, original retained A, native proposal/Installing/history/rows/scan/final/base/catalogue and actual materialized owner exist. Other-range ordinary policy is not replaced by FIRST.",
+      "classification": "IMPLEMENTED_SOURCE_NO_CALLERS",
+      "first_missing_or_required": "These prepare/advance/adopt/materialize entrypoints have definitions but no runtime callers in this source. Need actual target-process requestor/queue calling them with authenticated frames and independently fresh local Role/OWN/current MStore. Existing fixtures still use Registered FIRST for the moved range.",
+      "id": "joined-receive",
+      "lines": "428;48,99,131,281;7;246",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/receive.rs; receive/attempt.rs; receive/catalogue.rs; receive/materialized.rs"
+    },
+    {
+      "actual": "ActualServiceNativeJoinedJointNewEvidence observes original materialized owner/A, actual remote OLD certificate, current native facts and fresh Role/OWN/MStore. Heterogeneous joined_target accessor and NativeJoinedJointExclusionScope exist.",
+      "classification": "IMPLEMENTED_SEALED_SOURCE",
+      "first_missing_or_required": "Evidence has no caller. NativeJointNewObservation only Registered/Survivor/Target, so no actual Joined vote consumer. Joined joint owner retains A but has no remote participant, pin-handoff intent/progress or DECISION attempt custody.",
+      "id": "joined-new-evidence",
+      "lines": "observe29; take87",
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff/joined_target.rs; distribution_native_host/provisional_listener/registration/joined_data/receive/joint_owner.rs"
+    },
+    {
+      "actual": "Remote NEW Materialize/Observe/PrepareDecision/PublishDecision exists for genuine original OLD and Registered owners; authenticated independent callbacks and retained pin transitions are real.",
+      "classification": "MISSING_JOINED_PRODUCER",
+      "first_missing_or_required": "OriginalParticipant has Old/Registered only. Transport dispatch chooses Initial or Registered, not Joined. Need genuine Joined participant/actual NEW pin handoff retaining all original A/native/materialized/source identities; do not cast into Registered/local Target or count copied facts.",
+      "id": "joined-new-wire",
+      "lines": "OriginalParticipant20;1745",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/remote_new/participant.rs; distribution_transport.rs"
+    },
+    {
+      "actual": "Existing Registered and OLD paths retain native attempts and exact catalogue candidate/unknown outcomes. Joined borrowed exclusion scope supplies physical identity only.",
+      "classification": "MISSING_JOINED_NATIVE_AND_CATALOGUE_PUBLISHER",
+      "first_missing_or_required": "Add actual Joined quorum-bound native publisher and protected catalogue decision sink using original State/A and actual NEW/OLD proof, retain exact xid/bytes/helper outcome before postchecks. Only then extend generic observation/publication dispatch coherently; no DTO admission. Joined existing base/final/catalogue floor is not a DECISION receipt.",
+      "id": "joined-decision",
+      "lines": "552-645;OriginalParticipant dispatch",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/decision.rs; joint/remote_new/participant/decision.rs"
+    },
+    {
+      "actual": "Genuine Closed domain can truthfully reuse actual installed State/Writer phase-owner after real decision; SAME-State Joined domain continuation exists. ALL final members and independent post-quorum are mandatory.",
+      "classification": "MISSING_JOINED_TARGET_RELEASE_AND_WIRE_PHASES",
+      "first_missing_or_required": "ReleaseOwner only Survivor/Image/Registered; added image target explicitly cannot use Survivor. Generic Image release explicitly rejects JoinedRemote A. Need original Joined target activation/Open/release owner consuming same A and actual released-generation evidence. NativeRemoteNew wire stops at PublishDecision; no dedicated native prepare/Open/release RPC variants. In-process foreign service Arcs are not a wire adapter.",
+      "id": "prepare-open-release",
+      "lines": "ReleaseOwner13;113,151;126,206",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/publication/release_phase.rs; distribution_data/native_joint_handoff/bridge/image_release.rs"
+    },
+    {
+      "actual": "Joined dispatch can begin/close/publish a new selected SAME-State DATA domain without replacing original range; Serving requires genuine post-ALL-release admission and fresh policy authority. Ordinary enrolled read quorum/recovery and every Strong own barrier remain mandatory.",
+      "classification": "NECESSARY_POLICY_IMPLEMENTED_NOT_END_TO_END",
+      "first_missing_or_required": "Cannot reach it from actual Joined DECISION/release producer yet. Need end-to-end R2 normal SDK APP/full Strong proof under unchanged original host/State/hook/coordinator. No permanent readiness bit.",
+      "id": "serving",
+      "lines": "38,90,138;122-207",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/writer_data_domain.rs; registration/writer_data_domain.rs"
+    }
+  ],
+  "verdict": "Native automatic 4-to-5 data relocation is not wired into normal operator processes at this source. Genuine Joined additional-range materialization and NEW evidence now exist; they do not yet compose into Joined NEW voting/pin handoff, native DECISION, catalogue decision, ALL-release and Serving. Generic balanced relocation is a distinct older deployment path and cannot supply native authority."
+}

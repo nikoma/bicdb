@@ -5,13 +5,81 @@ Initial audit of remote `main`: **1.0.455-beta**, commit
 This document and its required source-version bump do not change runtime behavior.
 Paths and symbols below refer to that revision unless an older revision is named.
 
-**The ultimate requirement is not met:** adding a node can trigger automatic
-range replica movement and leader balancing, but BicDB does not currently offer
+**The ultimate requirement is not met:** the legacy range/event controller can
+trigger automatic replica movement and leader balancing; the enforced native
+path still lacks its production relocation controller. BicDB does not currently offer
 transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Latest delivered source — 2026-11-14 UTC
+## Latest source and current recovery candidate — November 14, 2026 UTC
+
+Verified remote main is **1.0.510-beta**,
+`c063c1030dc3ea83773cddba3208b2c7ecad086a`. Its bounded recovery-worker cleanup
+is documented in [510's delivered contract](releases/1.0.510-beta.md). The
+preceding508 driver remains local and same-process, with no production caller
+and an unwritable movement interval. None of these source deliveries establishes
+automatic enforced-native relocation or physical qualification.
+
+The original511 candidate2ec5f754 failed one Core case; its other components
+passed. The original512 candidate1742776 passed compilation/Core/SQL/PG/Rails
+but its native job failed **280/43/one ignored**. Remaining workspace passed
+1051 Rust cases/six ignored plus84 Python tests. The full old workflow is
+terminal and fails solely on those43 native cases. The [complete per-case source/CI packet](evidence/native512-required-results-2026-11-14/README.md)
+retains actual identities, all43 failure sections, literal failure groups,
+clock limits and separate source-only reviews. Later assertions not reached by
+a failed prerequisite are not tested. Historical successes do not make either
+failed candidate green.
+
+The current512 follow-up imports main510 and current-main memo511
+(`dd61ccce453531fe4f1898810316e0dc36fbeea2`). It retains original handoff custody
+on local retries, distinguishes current empty hooks from retired identities,
+supplies actual fixture MStore points and uses an uncounted preparation candidate
+whose full original validation still precedes counting. Its [release scope](releases/1.0.512-beta.md)
+separates implemented source from unexecuted controls. Ten decision-scope errors
+remain without measured per-member attribution; two begin timeouts have measured
+OWN expiry but no demonstrated runtime fix. The eleven previous hot failures
+remain failed at their exact original source.
+
+Explicit [release capabilities](release-capabilities.md) distinguish the legacy
+automatic range/event controller from unsupported native automatic rebalancing,
+cold handoff and broker transactions. Native pending broker publishes refuse
+before Prepare/WAL; the packet's separate erratum corrects the earlier missed
+preflight without implying acknowledged local-only broker writes. Nonbroker
+sidecars require separate replication evidence. The failed Azure qualification,
+open SQL/controller/recovery gates and absent physical capacity gain are unchanged.
+
+## Historical recovery candidate — 510
+
+The [510 integration review](design/ha-recovery-integration-review-2026-11-13.md)
+records the assembled native range-recovery candidate, original failed cohorts,
+source defects and unexecuted successors. The delivered baseline at its cutoff
+is **1.0.506-beta**, `6c432f6aaf59ef88252a6a559d400b2946b1bc13`; all required
+checks passed for that documentation/evidence and CLI-prerequisite merge.
+Current main subsequently advanced to **1.0.507-beta**,
+`f69b242c9db3afe0d24e83520f94a853093d4b98`, with strong-read budget and
+lost-listener fixes. The recovery candidate was ported and renumbered510.
+Its earlier508 required-CI head failed compilation; the corrections and the
+current-main port require their own validation. The later d811 candidate passed
+workspace/all-target and no-default-Core consumer compilation, but failed two
+Core cases and aborted Oracle HR with a stack overflow. Its separate Rails
+check passed 20 tests and 100 assertions. The
+later native suite failed with 273 passes, 47 failures and one ignored case;
+SQL passed 2,681 tests with four ignored. Those native failures include repeated
+setup prerequisites and unresolved prepared-round timeouts, not 47 established
+independent production defects. The
+[runtime regression report](design/ha-runtime-regressions-2026-11-14.md) retains
+the exact source, complete terminal-component logs and prepared corrections.
+Those corrections have not executed. The
+[operational source audit](design/native-operational-gates-2026-11-14.md)
+distinguishes implemented initial source-process binding from missing native
+controller, Joined decision/release and repeated-movement integration.
+The candidate is not runtime-qualified, merged or deployed at this cutoff.
+Historical evidence below must not be reused as a test of
+that changed runtime. The failed Azure qualification and the open SQL,
+controller, repeated-movement and physical scaling gates remain unchanged.
+
+## Delivered-source checkpoint — 2026-11-14 UTC (505)
 
 The runtime evidence baseline for this documentation update is remote main
 **1.0.505-beta**, `e25b3ba194c6f3ad73e2f393b68b175fbf1edd92`.

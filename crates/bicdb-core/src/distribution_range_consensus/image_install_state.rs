@@ -5,6 +5,59 @@ use crate::distribution_range_image_scope::RangeImageSourcePurposeV1;
 
 pub(super) const IMAGE_INSTALL_RANGE_LOG_FORMAT: u32 = 5;
 pub(super) const MAX_INSTALL_INTENTS: usize = 65_536;
+/// A distinct refusal profile. Older readers must reject this format rather
+/// than silently dropping the Registered target's protected proposal pointer.
+pub(super) const REGISTERED_IMAGE_INSTALL_CATALOG_FORMAT: u32 = 17;
+
+/// Distinct existing-Joined refusal format; old readers must reject it.
+pub(super) const JOINED_IMAGE_INSTALL_CATALOG_FORMAT: u32 = 18;
+/// Integrity DATA only; never constructs a scope/lease/receipt.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct NativeJoinedRemoteProposalPointer {
+    pub(crate) attempt_id: Uuid,
+    pub(crate) native_page_xid: u64,
+    pub(crate) checksum_sha256: String,
+}
+impl NativeJoinedRemoteProposalPointer {
+    pub(crate) fn validate(&self) -> Result<()> {
+        if self.attempt_id.is_nil()
+            || self.native_page_xid == 0
+            || self.checksum_sha256.len() != 64
+            || !self.checksum_sha256.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err(range_write_error("damaged Joined native proposal pointer"));
+        }
+        Ok(())
+    }
+}
+
+/// Serializable integrity reference only. This can never construct a live
+/// Registered owner, receipt, native exclusion, install fence or row grant.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct NativeRegisteredRemoteProposalPointer {
+    pub(crate) attempt_id: Uuid,
+    pub(crate) native_page_xid: u64,
+    pub(crate) checksum_sha256: String,
+}
+impl NativeRegisteredRemoteProposalPointer {
+    pub(crate) fn validate(&self) -> Result<()> {
+        if self.attempt_id.is_nil()
+            || self.native_page_xid == 0
+            || self.checksum_sha256.len() != 64
+            || !self
+                .checksum_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err(range_write_error(
+                "damaged Registered native proposal pointer",
+            ));
+        }
+        Ok(())
+    }
+}
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) enum ImageInstallPurpose {
@@ -46,11 +99,46 @@ pub(super) struct ImageInstallIntent {
     pub(super) schema_sha256: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) protected_proposal: Option<super::NativeCurrentImageProposalPointer>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) registered_proposal: Option<NativeRegisteredRemoteProposalPointer>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) joined_proposal: Option<NativeJoinedRemoteProposalPointer>,
 }
 impl ImageInstallIntent {
     pub(super) fn validate(&self) -> Result<()> {
         if let Some(pointer) = &self.protected_proposal {
             pointer.validate()?;
+        }
+        if let Some(pointer) = &self.joined_proposal {
+            pointer.validate()?;
+            if self.protected_proposal.is_some()
+                || self.registered_proposal.is_some()
+                || pointer.attempt_id != self.attempt_id
+                || self.purpose != ImageInstallPurpose::RelocationLearner
+                || !matches!(
+                    self.source_purpose,
+                    RangeImageSourcePurposeV1::CommittedHandoff { .. }
+                )
+            {
+                return Err(range_write_error(
+                    "Joined proposal purpose/attempt mismatch",
+                ));
+            }
+        }
+        if let Some(pointer) = &self.registered_proposal {
+            pointer.validate()?;
+            if self.protected_proposal.is_some()
+                || pointer.attempt_id != self.attempt_id
+                || self.purpose != ImageInstallPurpose::RelocationLearner
+                || !matches!(
+                    self.source_purpose,
+                    RangeImageSourcePurposeV1::CommittedHandoff { .. }
+                )
+            {
+                return Err(range_write_error(
+                    "Registered install proposal purpose/attempt mismatch",
+                ));
+            }
         }
         let digest =
             |value: &str| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit());
@@ -114,6 +202,8 @@ impl ImageInstallIntent {
     pub(super) fn core_sha256(&self) -> Result<String> {
         let mut core = self.clone();
         core.protected_proposal = None;
+        core.registered_proposal = None;
+        core.joined_proposal = None;
         core.sha256()
     }
     pub(super) fn sha256(&self) -> Result<String> {
@@ -131,6 +221,34 @@ pub(super) fn validate_catalog_install_intents(catalog: &RangeWriteCatalog) -> R
     }
     for (range_id, intent) in &catalog.image_install_intents {
         intent.validate()?;
+        if catalog.format_version >= REGISTERED_IMAGE_INSTALL_CATALOG_FORMAT
+            && intent.purpose == ImageInstallPurpose::RelocationLearner
+            && intent.registered_proposal.is_none()
+            && (catalog.format_version < JOINED_IMAGE_INSTALL_CATALOG_FORMAT
+                || intent.joined_proposal.is_none())
+        {
+            return Err(range_write_error(
+                "Registered catalogue profile lost its learner proposal pointer",
+            ));
+        }
+        if intent.joined_proposal.is_some()
+            && (catalog.format_version < JOINED_IMAGE_INSTALL_CATALOG_FORMAT
+                || catalog.native_writer_enforcement_version != Some(1)
+                || catalog.native_abort_protocol.is_none())
+        {
+            return Err(range_write_error(
+                "Joined install lacks distinct reader format/custody",
+            ));
+        }
+        if intent.registered_proposal.is_some()
+            && (catalog.format_version < REGISTERED_IMAGE_INSTALL_CATALOG_FORMAT
+                || catalog.native_writer_enforcement_version != Some(1)
+                || catalog.native_abort_protocol.is_none())
+        {
+            return Err(range_write_error(
+                "Registered install lacks its native catalogue format/custody",
+            ));
+        }
         if catalog.format_version >= super::IMAGE_PROPOSAL_CATALOG_FORMAT
             && matches!(
                 intent.source_purpose,

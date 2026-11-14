@@ -1,0 +1,84 @@
+{
+  "schema": "bicdb-independent-source-review-v1",
+  "base": "1742776ab02957a053aded2ad4f665500d9325bf",
+  "scope": "READ ONLY exact frozen Git source; no Cargo/build/test/CI/push; owner commit occurred during final WIP inventory, final source pinned here",
+  "classification": "SOURCE REVIEW no confirmed blocker in inspected W1/W2 and related restoration paths; compilation/runtime/physical NOT TESTED",
+  "independent_exact_checks": {
+    "original_target_constructor_body_byte_exact_in_retained_constructor": true,
+    "retry_timed_out_function_byte_exact": true,
+    "original_fifth_fixture_body_byte_exact_except_new_module_declaration": true,
+    "REQUEST5s_PHASE4s_HOST10s_LEADERSHIP20s_PHASE_ATTEMPTS4_preserved": true,
+    "all_checks_repeated_against_frozen_Git_objects": true
+  },
+  "findings": [
+    "W1 genuine image/freeze pair is wrapped once at actual finalized result, retained on driver through actual target construction/round/preparation refusal, then clears only after original publication round assigned. Target constructor original native/plan/base/RH/schema/restore/service/physical checks byte-exact. No generic Frozen/Remote-to-local cast.",
+    "W2 borrowed retain_new_serving_owners validates actual whole original DECISION/quorums/native receipts, clones only genuine opaque original owners, retires read pins by Option.take idempotently. Partial lease-map creation failure drops temporary clones, original decision stays. Target/Registered currentness strict; generic consuming APIs delegate and retain their historical consuming/error behavior.",
+    "Actual prepared quorum retained in self.prepared BEFORE self.decision=None. Extra original image/frozen/decision refs drop before eventual release uniqueness gate. Original session and fresh per-step OWN/MStore acquisition/deadlines remain unchanged.",
+    "try_finish runs exact original finish predicates by borrow and returns(error,SAMEround); driver restores original publication+done set on Err. It cannot fabricate native receipt or new transaction. Compatibility finish still drops returned error-owner intentionally; only new retry path uses owner-returning API.",
+    "Image release owner Clone copies existing opaque Arc fields/Option, no constructor from DTO. Driver retains original while building continuation, stores complete continuation before clearing original, then drains prepared/published/closed refs before release. Retained clone is not held through unique release.",
+    "No new confirmed static borrow/privacy/import issue found. Test diagnostics use associated crate-visible actual service helper, actual native receipt/base xid getters; JSON/Arc allocation diagnostics convey DATA only. This is source review, not Rust typecheck."
+  ],
+  "actual_control_boundaries": [
+    {
+      "case": "AfterTargetNew",
+      "proof": "Initial drive reaches actual ImageVerified, has actual native base xid>0. Actual target NEW constructor returns before cut cancels real current caller. Original174 image.take occurs before same fallible round record/prepare and would lose completed-image custody on refusal: source counterfactual only, oldcontrol not executed."
+    },
+    {
+      "case": "BeforePreparationOwn",
+      "proof": "Initial drive reaches MembershipFinal with complete real native DECISION receipts and metadata stages. Actual borrowed lease collection then real current caller canceled before first actual OWN call. Original174 decision.take would leave no decision after local leases drop: source counterfactual, not measured old failure."
+    },
+    {
+      "case": "AfterFirstNativePreparation",
+      "proof": "Cut occurs only AFTER prepare_local_native_joint_serving returned. Underlying bridge.rs actual in_paged_transaction wrote native CURRENT+archive and returned before construction/readback checks. Test requires exactly1 present full CURRENT==archive/nonzero native page xid and identical full record/xid after fresh retry. Cancellation is real caller, session remains live. This is not storage power-loss or independent fsync certification."
+    }
+  ],
+  "assertions_and_limitations": [
+    "Actual primary drive Result saved before diagnostic reads/assertions; cut reach requires actual canceled caller/live original session; sameA/base/opaque Arc allocation identity, source cut count and DECISION body/receipt/xid compared; fresh SAME driver must reach Serving and existing original accept() APP/fullStrong plus original voter stop acceptance.",
+    "The additional publication-finish/release-constructor restoration windows are source-reviewed but no separate genuine fault-control runtime execution provided for them. Docs explicitly say so.",
+    "The3 new controls remain UNRUN. Original 174 failures unchanged. No any-error/cold-restart/normal-controller/cross-process/physical qualification claim.",
+    "Per-source old/native fact readers and known committed construction do not prove actual crash fsync semantics beyond their API contract. No engine/database reopening or fabricated status used by this review."
+  ],
+  "source": "33613e120d20b3024ee8c2569c6f908cb31de0cf",
+  "files": {
+    "crates/bicdb-core/src/db/range_image_native/serving_configuration/joint_handoff/bridge.rs": {
+      "blob": "f83ed5038233bc448a40361cbbdc4b8e67e72b1c",
+      "sha256": "3ecf1cfba8c46fa414584c86b1e6b463e532b2b31a938b2e2c83671f04c09928"
+    },
+    "crates/bicdb-core/src/db/range_image_native/serving_configuration/joint_handoff/decision.rs": {
+      "blob": "f717e45baa3d5c98e33c48a8fd91e050689f0cf4",
+      "sha256": "85e24ea11c7a694f5c7177fb0224c0cdaf0097358fed80b3cc2d904b17e43670"
+    },
+    "crates/bicdb-core/src/distribution_data/native_joint_handoff.rs": {
+      "blob": "9fdebdb55040878c8f77408804f59d6caa7d426b",
+      "sha256": "13bcdeeca9800603c74a6c1f2c86d539fa54f0ca332633bca8df051fa1bc0cf7"
+    },
+    "crates/bicdb-core/src/distribution_data/native_joint_handoff/bridge/image_release.rs": {
+      "blob": "ed3b95e23eb45af6f982f94eb16dcb3f0f2b0eb3",
+      "sha256": "4ee3096abc3bbf2947d013fc5cf16097cdb7c56095fb96881201221bceb7455c"
+    },
+    "crates/bicdb-core/src/distribution_data/native_joint_handoff/registered_target.rs": {
+      "blob": "10b84ec3b765563a7af82fcf7ebf82f85120cd7f",
+      "sha256": "5f5e0f9c111b79248c348789bd2e64841c7aad5194ca577b000b260ec48f4271"
+    },
+    "crates/bicdb-core/src/distribution_native_host/joined_data_handoff.rs": {
+      "blob": "1cc753d4f32af779f1577c093bd1e299ecbf9930",
+      "sha256": "f83f8d77292b1a15c2d257528b21b98420d96194b9c96394f7f08d978a20699b"
+    },
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/fifth_data_path_tests.rs": {
+      "blob": "63d8ae7eb5e27e45976d1483081f27177c4ee172",
+      "sha256": "1caf5a12fd91029396c3bdaf5a8fefb82adbb518986fd5a7ceb8927d2665636c"
+    },
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/fifth_data_path_tests/custody_retry_tests.rs": {
+      "blob": "8d54eec0428f6045b2da719941b7b27f68a0096f",
+      "sha256": "62d0510c19b325fb0be416f28459986c15edab2d4fe4bb4c4a7d78b5ae6ce93b"
+    },
+    "crates/bicdb-core/src/distribution_range_handoff/joint/decision.rs": {
+      "blob": "73dfb7b5689e8bc93336e4b0b10ef92be079a672",
+      "sha256": "1abee397ddb612ac85b2b08d59450fb996f25081c72d61b659ec40bb869f9e94"
+    },
+    "docs/design/native-driver-retained-custody-retry.md": {
+      "blob": "d31c6986172c861046af45b237b385bc92f58d48",
+      "sha256": "840de3c69684eca0387e08754ea6c1e9ff128872bdfa9f4444130eac499e4a7c"
+    }
+  }
+}

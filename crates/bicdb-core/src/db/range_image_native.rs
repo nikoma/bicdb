@@ -27,29 +27,112 @@ pub(crate) use initial_data::NativeInitialDataGenesis;
 mod history_stage;
 pub(crate) use history_stage::ClosedImageOriginalWriter;
 mod installed_anchor;
+#[cfg(feature = "tls-replication")]
+mod joined_remote_image;
+#[cfg(feature = "tls-replication")]
+mod joined_remote_proposal;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_remote_image::{
+    HistoricalJoinedFinalImage, NativeJoinedRemoteFinalImageReceipt,
+    NativeJoinedRemoteImageContext, NativeJoinedRemoteImageInstallation,
+    NativeJoinedRemoteImageOperation, NativeJoinedRemoteImageProgress,
+    NativeJoinedRemoteRowTransactionGrant,
+};
 mod native_read;
 mod registered_receiver_domain;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_remote_proposal::{
+    NativeJoinedRemoteProposalPointer, NativeJoinedRemoteProposalPublication,
+    NativeJoinedRemoteProposalReceipt,
+};
+#[cfg(feature = "tls-replication")]
+mod registered_remote_proposal;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_remote_proposal::test_fire_before_registered_remote_proposal_scope;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_remote_proposal::test_registered_remote_proposal_cut;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote_proposal::{
+    NativeRegisteredRemoteProposalPointer, NativeRegisteredRemoteProposalPublication,
+    NativeRegisteredRemoteProposalReceipt,
+};
+#[cfg(feature = "tls-replication")]
+mod registered_remote_image;
 mod writer_enrollment;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_remote_image::test_registered_remote_final_image_after_wal;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_remote_image::test_registered_remote_row_wal_cut;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote_image::{
+    HistoricalRegisteredFinalImage, NativeRegisteredRemoteFinalImagePointer,
+    NativeRegisteredRemoteFinalImageReceipt, NativeRegisteredRemoteHistoryProgress,
+    NativeRegisteredRemoteHistoryProof, NativeRegisteredRemoteImageContext,
+    NativeRegisteredRemoteImageInstallation, NativeRegisteredRemoteImageOperation,
+    NativeRegisteredRemoteImageProgress, NativeRegisteredRemoteRowProgress,
+    NativeRegisteredRemoteRowTransactionGrant, NativeRegisteredRemoteVerificationProgress,
+};
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeAssignedWriterInstallAttempt;
 #[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeFirstPolicyPublicationCandidate;
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeJoinedPublicationScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeJoinedReceiveStorageScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeJoinedRemoteRotationPoint;
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeJoinedRowAbsenceScan;
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeOriginalWriterIdentityBorrow;
+#[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredClosedPersistScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeRegisteredNoDomainScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeRegisteredRemoteAttemptScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeRegisteredRemoteMutationScope;
 pub(crate) use writer_enrollment::{
     InstalledNativeWriterHostGuard, NativeRegisteredReceiverHook, NativeWriterHostState,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::{
+    NativeClosedWriterDomain, NativeWriterClosedHistoricalReadScope, NativeWriterDataDomainPolicy,
+    NativeWriterDataDomainTransition, NativeWriterHistoricalPredecessor,
+    NativeWriterServingDomainPublication,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::{
+    NativeJoinedRemoteAttemptScope, NativeJoinedRemoteMutationScope,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::{
+    NativeRegisteredJointExclusionScope, NativeRegisteredJointIdentityBorrow,
 };
 mod serving_configuration;
 pub(crate) use native_read::{
     NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,
 };
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use serving_configuration::test_remote_joint_decision_cut;
+#[cfg(feature = "tls-replication")]
+pub(crate) use serving_configuration::NativeRegisteredJointDecisionAttempt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use serving_configuration::NativeRemoteJointDecisionAttempt;
 pub(crate) use serving_configuration::{
     NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,
     NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
     NativeJointDecisionReceipt, NativeJointHistoricalCutScope, NativeJointOldCloseReceipt,
-    NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
-    NativeJointServingBridgeReceipt, NativeJointServingPreparation, NativeReadyObserverReadScope,
-    NativeRecoveredServingReceipt,
+    NativeJointOldCloseRecordData, NativeJointOldPhysicalProof,
+    NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
+    NativeJointServingPreparation, NativeReadyObserverReadScope, NativeRecoveredServingReceipt,
 };
-use serving_configuration::{NativeJointServingDomain, NativeRecoveredServingConfiguration};
+use serving_configuration::{
+    NativeClosedWriterFact, NativeClosedWriterPoint, NativeJointServingDomain,
+    NativeRecoveredServingConfiguration,
+};
 #[cfg(test)]
 pub(crate) mod rf3_fixture;
 use certified_prefix::NativeCertifiedRangePrefix;
@@ -726,6 +809,9 @@ impl SourceRangeImageLineage {
         &self,
     ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
         self.base.restore_activation.as_ref()
+    }
+    pub(crate) fn physical_base_receipt_sha256(&self) -> &str {
+        &self.base.checksum_sha256
     }
     pub(crate) fn native_receipt_sha256(&self) -> &str {
         self.prefix
@@ -2268,3 +2354,14 @@ mod tests {
             .is_none());
     }
 }
+
+pub(crate) use writer_enrollment::{NativeJointPhaseOwner, NativeJointWriterDomain};
+
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use joined_remote_proposal::test_joined_remote_proposal_after_native_begin;
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeRemoteOldDecisionWriterScope;
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeJoinedJointExclusionScope;

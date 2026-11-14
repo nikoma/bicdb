@@ -421,12 +421,17 @@ impl MetadataConsensusStore {
         }
         Ok(())
     }
-    pub(super) fn demote_native_retired_metadata_actor(&mut self) {
+    pub(super) fn demote_native_retired_metadata_actor(&mut self) -> Result<()> {
         if self.native_owner.is_some() && self.require_native_metadata_actor_current(true).is_err()
         {
-            self.state.role = MetadataConsensusRole::Follower;
-            self.state.leader_id = None;
+            if self.state.role != MetadataConsensusRole::Follower || self.state.leader_id.is_some()
+            {
+                self.invalidate_authority_before_change()?;
+                self.state.role = MetadataConsensusRole::Follower;
+                self.state.leader_id = None;
+            }
         }
+        Ok(())
     }
     pub(super) fn require_native_metadata_owner_current(&self) -> Result<()> {
         if let Some(owner) = &self.native_owner {
@@ -528,6 +533,7 @@ impl MetadataConsensusStore {
             match_index: BTreeMap::new(),
             last_leader_contact_ms: unix_time_ms(),
             native_owner: Some(owner),
+            publication_version: super::publication_version::MetadataPublicationVersion::new(),
         };
         store.native_owner.as_ref().unwrap().require_actor(
             &store.state.committed_topology,
@@ -544,6 +550,7 @@ impl MetadataConsensusStore {
             .finish_native_metadata_store(&record, &topology)?;
         store.native_owner.as_mut().unwrap().registered_store_id = Some(record.store_id());
         cancellation.check()?;
+        store.finish_publication_version_initialization()?;
         Ok(store)
     }
     pub(crate) fn initialize_native_owned(
@@ -737,6 +744,7 @@ impl MetadataConsensusStore {
             match_index: BTreeMap::new(),
             last_leader_contact_ms: unix_time_ms(),
             native_owner: Some(owner),
+            publication_version: super::publication_version::MetadataPublicationVersion::new(),
         });
         // The new host retains the real owner as soon as its identity exists,
         // including failures during the first protected native publication.
@@ -772,6 +780,7 @@ impl MetadataConsensusStore {
             .finish_native_metadata_store(&prepared, &topology)?;
         store.native_owner.as_mut().unwrap().registered_store_id = Some(prepared.store_id());
         cancellation.check()?;
+        store.finish_publication_version_initialization()?;
         Ok(())
     }
 
@@ -872,11 +881,13 @@ impl MetadataConsensusStore {
             match_index: BTreeMap::new(),
             last_leader_contact_ms: unix_time_ms(),
             native_owner: Some(owner),
+            publication_version: super::publication_version::MetadataPublicationVersion::new(),
         });
         let store = retained.as_mut().unwrap();
         store.reset_match_indexes();
         store.persist()?;
         cancellation.check()?;
+        store.finish_publication_version_initialization()?;
         Ok(())
     }
 }

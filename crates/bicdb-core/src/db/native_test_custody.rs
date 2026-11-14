@@ -27,3 +27,14 @@ impl BicDb {
             .is_some())
     }
 }
+
+impl BicDb {
+    /// Evidence-only actual record projection, never an opaque receipt/grant.
+    pub(crate) fn test_native_old_close_record(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<Option<serde_json::Value>> {
+        let _journal = self.try_native_image_journal()?;
+        self.read_native_range_image_record(&format!("joint-handoff/old-close/current/{range}"))
+    }
+}

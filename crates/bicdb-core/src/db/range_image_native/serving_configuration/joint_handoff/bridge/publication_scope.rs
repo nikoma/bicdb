@@ -8,10 +8,12 @@ pub(crate) struct NativeJointPreparedPublicationScope<'a> {
     pub(super) store: &'a RangeWriteStore,
     pub(super) committed: &'a CommittedNativeJointDecisionObservation,
     pub(super) catalogue: &'a NativeJointBridgeCatalogue,
-    pub(super) image: Option<&'a NativeImageCatalogueFinalization>,
+    pub(super) image: Option<&'a dyn NativeJointImageMaterialization>,
     pub(super) frozen: &'a FrozenRangeMutationPermit,
     pub(super) journal: crate::db::range_image_native::NativeImageJournalGuard<'a>,
     lineage: SourceRangeImageLineage,
+    #[cfg(feature = "tls-replication")]
+    registered_identity: Option<crate::db::NativeRegisteredJointIdentityBorrow<'a>>,
 }
 impl NativeJointServingPreparation {
     pub(crate) fn publication_read_scope<'a>(
@@ -20,7 +22,7 @@ impl NativeJointServingPreparation {
         store: &'a RangeWriteStore,
         committed: &'a CommittedNativeJointDecisionObservation,
         catalogue: &'a NativeJointBridgeCatalogue,
-        image: Option<&'a NativeImageCatalogueFinalization>,
+        image: Option<&'a dyn NativeJointImageMaterialization>,
         frozen: &'a FrozenRangeMutationPermit,
     ) -> Result<NativeJointPreparedPublicationScope<'a>> {
         #[cfg(test)]
@@ -29,6 +31,11 @@ impl NativeJointServingPreparation {
             self.local_node_id(),
             committed.deadline(),
         );
+        #[cfg(feature = "tls-replication")]
+        let registered_identity = image
+            .and_then(|i| i.registered_target())
+            .map(|t| database.borrow_registered_joint_identity(t.clone()))
+            .transpose()?;
         let journal = database.try_native_image_journal()?;
         self.native.require_current(database)?;
         let lineage = database.current_native_range_source_lineage(self.record.range_id)?;
@@ -72,6 +79,8 @@ impl NativeJointServingPreparation {
             frozen,
             journal,
             lineage,
+            #[cfg(feature = "tls-replication")]
+            registered_identity,
         };
         scope.require_retained_history(&scope.lineage)?;
         #[cfg(test)]
@@ -88,6 +97,10 @@ impl NativeJointPreparedPublicationScope<'_> {
         committed: &CommittedNativeJointDecisionObservation,
     ) -> Result<()> {
         self.journal.require_database(self.database)?;
+        #[cfg(feature = "tls-replication")]
+        if let Some(original) = &self.registered_identity {
+            original.require_current(self.database, self.store)?;
+        }
         if committed.data() != self.committed.data()
             || committed.native_receipt().checksum_sha256()
                 != self.prepared.record.local_decision_sha256
@@ -104,11 +117,15 @@ impl NativeJointPreparedPublicationScope<'_> {
         &self,
         prepared: &NativeJointServingPreparation,
         catalogue: &NativeJointBridgeCatalogue,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
         store: &RangeWriteStore,
     ) -> Result<()> {
         self.journal.require_database(self.database)?;
+        #[cfg(feature = "tls-replication")]
+        if let Some(original) = &self.registered_identity {
+            original.require_current(self.database, self.store)?;
+        }
         if !std::ptr::eq(prepared, self.prepared)
             || !std::ptr::eq(catalogue, self.catalogue)
             || !std::ptr::eq(store, self.store)
@@ -131,6 +148,10 @@ impl NativeJointPreparedPublicationScope<'_> {
     /// map check, not a full 0..R export/ancestry proof.
     pub(super) fn require_retained_history(&self, actual: &SourceRangeImageLineage) -> Result<()> {
         self.journal.require_database(self.database)?;
+        #[cfg(feature = "tls-replication")]
+        if let Some(original) = &self.registered_identity {
+            original.require_current(self.database, self.store)?;
+        }
         for (index, expected) in self.catalogue.decisions() {
             self.committed.require_current_metadata_only()?;
             if *index == 0 || *index > actual.range_index() {
@@ -175,6 +196,10 @@ impl NativeJointPreparedPublicationScope<'_> {
         actual: &SourceRangeImageLineage,
     ) -> Result<()> {
         self.journal.require_database(self.database)?;
+        #[cfg(feature = "tls-replication")]
+        if let Some(original) = &self.registered_identity {
+            original.require_current(self.database, self.store)?;
+        }
         let before = &self.lineage;
         if actual.birth.birth_id != before.birth.birth_id
             || actual.birth.checksum_sha256 != before.birth.checksum_sha256

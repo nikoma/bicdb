@@ -104,6 +104,23 @@ HA; its declarations do not qualify native range handoff. Transparent SQL,
 general cross-range transactions/joins, physical scale certification and
 critical-workload admission retain their separate catalog limitations.
 
+The separate `native_automatic_range_rebalancing` and
+`native_range_cold_handoff_recovery` declarations are unsupported. A deployment
+requiring enforced native movement must request those exact capabilities; the
+legacy controller declaration cannot satisfy them. The native handoff driver's
+local participant handles and same-process retry custody do not supply a normal
+remote operator, restart reconstruction or physical qualification.
+
+`native_range_broker_transactions` is also unsupported. Born-native write
+admission rejects pending broker publishes before Prepare/application WAL,
+including broker-only and mixed row/broker transactions. This affects workflows
+and required mutation-audit paths that buffer broker messages. It does not mean
+that a native row acknowledgement included a locally committed, unreplicated
+broker publish. Record-audit and SyncOps WAL sidecars are distinct and still need
+their own replication/recovery evidence. The catalog lists the existing refusal
+test as a definition; it does not claim that this documentation update executed
+or qualified the test.
+
 The manifest has no database or key capability. It cannot bypass Cell admission,
 writer fencing, normal SQL authorization or the engine's unsupported-operation
 checks. Logical locality is an optimization; a placement tool must not advertise

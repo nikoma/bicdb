@@ -1,0 +1,2730 @@
+{
+  "run": 43572675143,
+  "source_head": "d8115fedf13b0bd7107cfddd2664f2c6ea2f261f",
+  "actual_checkout": "b38f461ffc2a6729abb7a441bf25951009bbd721",
+  "actual_tree": "be4b39ad95e86abac73d7c7ca889301d10d88c90",
+  "job": 132380251021,
+  "job_name": "bicdb-sql",
+  "conclusion": "success",
+  "job_steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-14T07:46:56Z",
+      "completed_at": "2026-11-14T07:46:58Z"
+    },
+    {
+      "name": "Initialize containers",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-14T07:46:58Z",
+      "completed_at": "2026-11-14T07:47:10Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-14T07:47:10Z",
+      "completed_at": "2026-11-14T07:47:15Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-14T07:47:15Z",
+      "completed_at": "2026-11-14T07:47:26Z"
+    },
+    {
+      "name": "Install test-target scanner",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-14T07:47:26Z",
+      "completed_at": "2026-11-14T07:47:39Z"
+    },
+    {
+      "name": "Run actions/setup-node@v4",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 6,
+      "started_at": "2026-11-14T07:47:39Z",
+      "completed_at": "2026-11-14T07:47:39Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-11-14T07:47:39Z",
+      "completed_at": "2026-11-14T07:48:00Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 8,
+      "started_at": "2026-11-14T07:48:00Z",
+      "completed_at": "2026-11-14T07:48:00Z"
+    },
+    {
+      "name": "cargo test -p bicdb-sql",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 9,
+      "started_at": "2026-11-14T07:48:00Z",
+      "completed_at": "2026-11-14T07:48:00Z"
+    },
+    {
+      "name": "cargo test bicdb-core without the serial native multi-node fixtures",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 10,
+      "started_at": "2026-11-14T07:48:00Z",
+      "completed_at": "2026-11-14T07:48:00Z"
+    },
+    {
+      "name": "cargo test bicdb-core native multi-node fixtures one at a time",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 11,
+      "started_at": "2026-11-14T07:48:00Z",
+      "completed_at": "2026-11-14T07:48:00Z"
+    },
+    {
+      "name": "cargo test bicdb-sql with bounded linked artifacts",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 12,
+      "started_at": "2026-11-14T07:48:00Z",
+      "completed_at": "2026-11-14T08:28:21Z"
+    },
+    {
+      "name": "cargo test remaining workspace with bounded linked artifacts",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 13,
+      "started_at": "2026-11-14T08:28:21Z",
+      "completed_at": "2026-11-14T08:28:21Z"
+    },
+    {
+      "name": "Cluster harness and offline queue contracts",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 14,
+      "started_at": "2026-11-14T08:28:21Z",
+      "completed_at": "2026-11-14T08:28:21Z"
+    },
+    {
+      "name": "Retain broad REST existing CLI journals and allowlisted diagnostics",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-14T08:28:21Z",
+      "completed_at": "2026-11-14T08:28:21Z"
+    },
+    {
+      "name": "Retain required CI memory pressure evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-14T08:28:21Z",
+      "completed_at": "2026-11-14T08:28:22Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 30,
+      "started_at": "2026-11-14T08:28:22Z",
+      "completed_at": "2026-11-14T08:28:22Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 31,
+      "started_at": "2026-11-14T08:28:22Z",
+      "completed_at": "2026-11-14T08:28:22Z"
+    },
+    {
+      "name": "Stop containers",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 32,
+      "started_at": "2026-11-14T08:28:22Z",
+      "completed_at": "2026-11-14T08:28:23Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 33,
+      "started_at": "2026-11-14T08:28:23Z",
+      "completed_at": "2026-11-14T08:28:23Z"
+    }
+  ],
+  "raw_bytes": 400777285,
+  "raw_sha256": "190716d2b80bc57534c0fc075cb63231f0abeececea5417e1ed6c6c63cb97750",
+  "gzip_bytes": 46360766,
+  "gzip_sha256": "f5dda5cce419cd210a95466ed72a7e1cdffc4100238d5eecdd31d9dc64216024",
+  "actual_checkout_lines": [
+    "2026-11-14T07:47:11.1475188Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +b38f461ffc2a6729abb7a441bf25951009bbd721:refs/remotes/pull/188/merge",
+    "2026-11-14T07:47:15.4921888Z HEAD is now at b38f461 Merge d8115fedf13b0bd7107cfddd2664f2c6ea2f261f into f69b242c9db3afe0d24e83520f94a853093d4b98"
+  ],
+  "targets": [
+    {
+      "target_context": "2026-11-14T07:54:02.1146122Z      Running unittests src/lib.rs (target/debug/deps/bicdb_sql-03922a45797dc53e)",
+      "log_line": "2026-11-14T07:56:10.8128310Z test result: ok. 923 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 128.69s",
+      "status": "ok",
+      "passed": 923,
+      "failed": 0,
+      "ignored": 4,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T07:58:32.2765946Z    Doc-tests bicdb_sql",
+      "log_line": "2026-11-14T07:58:35.4883020Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "status": "ok",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T07:58:39.5265436Z      Running tests/access_path_routing.rs (target/debug/deps/access_path_routing-4b0b3e1812a09257)",
+      "log_line": "2026-11-14T07:58:41.1728717Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.64s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T07:58:45.3944101Z      Running tests/aggregate_scan_cap.rs (target/debug/deps/aggregate_scan_cap-23580d096426d5d6)",
+      "log_line": "2026-11-14T07:58:45.6268467Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T07:58:49.9898454Z      Running tests/analyze_sampling.rs (target/debug/deps/analyze_sampling-9b28c61d068aabaf)",
+      "log_line": "2026-11-14T07:59:13.9732400Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 23.97s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T07:59:18.2996325Z      Running tests/array_storage.rs (target/debug/deps/array_storage-5ac680aa08d41736)",
+      "log_line": "2026-11-14T07:59:20.9612680Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.65s",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T07:59:25.3004034Z      Running tests/authorization_canary.rs (target/debug/deps/authorization_canary-3fa70ef07fe3edfc)",
+      "log_line": "2026-11-14T07:59:25.6249703Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T07:59:30.0482263Z      Running tests/base_types.rs (target/debug/deps/base_types-18d6db7bee4f188b)",
+      "log_line": "2026-11-14T07:59:30.2868861Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T07:59:34.5364384Z      Running tests/between_index_range.rs (target/debug/deps/between_index_range-839a571d6b6fb11c)",
+      "log_line": "2026-11-14T07:59:44.8616029Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.31s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T07:59:49.2563298Z      Running tests/binary_storage.rs (target/debug/deps/binary_storage-d854b900dd7b5831)",
+      "log_line": "2026-11-14T07:59:49.3835423Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T07:59:53.6794900Z      Running tests/bounded_fts.rs (target/debug/deps/bounded_fts-fa12e5c933220a7f)",
+      "log_line": "2026-11-14T07:59:57.0852662Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.39s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:00:01.5211437Z      Running tests/bounded_primary_key.rs (target/debug/deps/bounded_primary_key-86b517c3dc93713a)",
+      "log_line": "2026-11-14T08:00:01.8674216Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:00:06.3920659Z      Running tests/bounded_range.rs (target/debug/deps/bounded_range-4c58bb88fd74bc9e)",
+      "log_line": "2026-11-14T08:00:07.9076131Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.50s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:00:12.4926328Z      Running tests/broker_caller_provenance.rs (target/debug/deps/broker_caller_provenance-e58fe5a8ec57108a)",
+      "log_line": "2026-11-14T08:00:12.8956345Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:00:17.4789177Z      Running tests/broker_sql.rs (target/debug/deps/broker_sql-f2665d01159003a8)",
+      "log_line": "2026-11-14T08:00:17.6591996Z test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s",
+      "status": "ok",
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:00:21.8500003Z      Running tests/builtin_name_overloads.rs (target/debug/deps/builtin_name_overloads-e7db24a5cefc520d)",
+      "log_line": "2026-11-14T08:00:22.5023175Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s",
+      "status": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:00:27.0250313Z      Running tests/carrier_hub_compat.rs (target/debug/deps/carrier_hub_compat-e8ce5fdea936041e)",
+      "log_line": "2026-11-14T08:00:28.7338359Z test result: ok. 40 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.70s",
+      "status": "ok",
+      "passed": 40,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:00:32.8932608Z      Running tests/catalog_and_admin_authorization.rs (target/debug/deps/catalog_and_admin_authorization-d5a05792d6eaa90c)",
+      "log_line": "2026-11-14T08:00:33.3186461Z test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s",
+      "status": "ok",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:00:37.5749827Z      Running tests/catalog_default_and_index_columns.rs (target/debug/deps/catalog_default_and_index_columns-994793078cfe7570)",
+      "log_line": "2026-11-14T08:00:37.7200054Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+      "status": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:00:41.7283324Z      Running tests/catalog_default_dependencies.rs (target/debug/deps/catalog_default_dependencies-d9726cb1cc1c72f1)",
+      "log_line": "2026-11-14T08:00:42.1025077Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:00:46.2896113Z      Running tests/catalog_fk_read_admission.rs (target/debug/deps/catalog_fk_read_admission-324a8743f8a1979d)",
+      "log_line": "2026-11-14T08:00:46.7932910Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:00:50.9826011Z      Running tests/catalog_journal_visibility.rs (target/debug/deps/catalog_journal_visibility-b4357457974d4b70)",
+      "log_line": "2026-11-14T08:00:51.4016120Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:00:55.4517557Z      Running tests/catalog_projection.rs (target/debug/deps/catalog_projection-6e9c0d0b576f5e62)",
+      "log_line": "2026-11-14T08:00:55.8664464Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:01:00.0379977Z      Running tests/catalog_read_admission.rs (target/debug/deps/catalog_read_admission-2948ae956ea83ab2)",
+      "log_line": "2026-11-14T08:01:00.4496668Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:01:04.5619805Z      Running tests/catalog_read_owner.rs (target/debug/deps/catalog_read_owner-e55d9dbcad5cae21)",
+      "log_line": "2026-11-14T08:01:05.2537234Z test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s",
+      "status": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:01:09.3532062Z      Running tests/catalog_read_routine_transitions.rs (target/debug/deps/catalog_read_routine_transitions-9c32b1dee2c90379)",
+      "log_line": "2026-11-14T08:01:09.6544879Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:01:13.7620823Z      Running tests/catalog_scalar_predicates.rs (target/debug/deps/catalog_scalar_predicates-c2d8f8279c3afe12)",
+      "log_line": "2026-11-14T08:01:13.8754935Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:01:17.9450907Z      Running tests/catalog_type_spelling.rs (target/debug/deps/catalog_type_spelling-56a8c0514816578d)",
+      "log_line": "2026-11-14T08:01:18.2120333Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:01:22.6018436Z      Running tests/cell_rows.rs (target/debug/deps/cell_rows-63f760ef9e024954)",
+      "log_line": "2026-11-14T08:01:24.2948724Z test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.68s",
+      "status": "ok",
+      "passed": 17,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:01:28.3275904Z      Running tests/centralized_authz.rs (target/debug/deps/centralized_authz-c3fab31faa9c3ca7)",
+      "log_line": "2026-11-14T08:01:28.5576877Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:01:32.8054055Z      Running tests/cold_routine_compilation_stack.rs (target/debug/deps/cold_routine_compilation_stack-506179240d02c4b6)",
+      "log_line": "2026-11-14T08:01:33.8398040Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.02s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:01:37.8505921Z      Running tests/column_references.rs (target/debug/deps/column_references-50a974ca25fd8d92)",
+      "log_line": "2026-11-14T08:01:38.3011542Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:01:42.2793492Z      Running tests/comma_join_predicate.rs (target/debug/deps/comma_join_predicate-cb3a3130e94941b0)",
+      "log_line": "2026-11-14T08:01:42.7292041Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:01:46.8982974Z      Running tests/commit_outcome_resolution.rs (target/debug/deps/commit_outcome_resolution-f2f7c2d058287a8c)",
+      "log_line": "2026-11-14T08:01:47.3218978Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:01:51.5138394Z      Running tests/composite_text_in.rs (target/debug/deps/composite_text_in-e2646e7bd80130e2)",
+      "log_line": "2026-11-14T08:01:52.7031630Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:01:57.0337576Z      Running tests/composite_types.rs (target/debug/deps/composite_types-cc6b62bd044ccc16)",
+      "log_line": "2026-11-14T08:01:57.3839041Z test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s",
+      "status": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:02:01.4177376Z      Running tests/computed_calendar_intervals.rs (target/debug/deps/computed_calendar_intervals-1718a11dd29f48c6)",
+      "log_line": "2026-11-14T08:02:01.4477871Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:02:05.4759818Z      Running tests/concurrent_create_table.rs (target/debug/deps/concurrent_create_table-ef0c5fc9a9691bce)",
+      "log_line": "2026-11-14T08:02:05.9937005Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:02:10.0247569Z      Running tests/conflict_upsert_scaling.rs (target/debug/deps/conflict_upsert_scaling-1e8cde381e90dcfa)",
+      "log_line": "2026-11-14T08:02:13.0604996Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.02s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:02:17.3928363Z      Running tests/constraint_diagnostics.rs (target/debug/deps/constraint_diagnostics-2b5769f72f6cf6d8)",
+      "log_line": "2026-11-14T08:02:17.6483943Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s",
+      "status": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:02:21.8213210Z      Running tests/count_star_fast_path.rs (target/debug/deps/count_star_fast_path-e444fb8a6ca520ed)",
+      "log_line": "2026-11-14T08:02:24.2508837Z test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.42s",
+      "status": "ok",
+      "passed": 16,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:02:28.4314760Z      Running tests/cte_delete.rs (target/debug/deps/cte_delete-6e0212e760b0e9ed)",
+      "log_line": "2026-11-14T08:02:28.4690395Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:02:32.5684279Z      Running tests/cube_ddl.rs (target/debug/deps/cube_ddl-15de9da52b47e966)",
+      "log_line": "2026-11-14T08:02:33.7384444Z test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.16s",
+      "status": "ok",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:02:37.7582096Z      Running tests/cube_read_authorization.rs (target/debug/deps/cube_read_authorization-e78f895d1eaf74ef)",
+      "log_line": "2026-11-14T08:02:37.9759222Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:02:42.1929241Z      Running tests/current_catalog_context.rs (target/debug/deps/current_catalog_context-4e99c2ed0e57d87d)",
+      "log_line": "2026-11-14T08:02:42.2602599Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:02:46.3208646Z      Running tests/database_ddl_comments.rs (target/debug/deps/database_ddl_comments-b35b00bfea3b90bc)",
+      "log_line": "2026-11-14T08:02:46.5306642Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:02:50.6407125Z      Running tests/ddl_authorization_holes.rs (target/debug/deps/ddl_authorization_holes-bf6058d27662bc89)",
+      "log_line": "2026-11-14T08:02:51.0715398Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:02:55.2085753Z      Running tests/deferred_foreign_keys.rs (target/debug/deps/deferred_foreign_keys-270570cfb7f1b8eb)",
+      "log_line": "2026-11-14T08:02:55.8082752Z test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s",
+      "status": "ok",
+      "passed": 20,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:02:59.8656653Z      Running tests/deferred_trigger_rollback.rs (target/debug/deps/deferred_trigger_rollback-9dc403eb2740f732)",
+      "log_line": "2026-11-14T08:03:00.2792398Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:03:04.4221548Z      Running tests/domain_types.rs (target/debug/deps/domain_types-f2d1511d5a06e168)",
+      "log_line": "2026-11-14T08:03:04.6214859Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:03:08.6788096Z      Running tests/drop_constraint_indexes.rs (target/debug/deps/drop_constraint_indexes-c30726ac0ab44d63)",
+      "log_line": "2026-11-14T08:03:10.0404986Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.90s",
+      "status": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:03:13.7304502Z      Running tests/eager_relation_privileges.rs (target/debug/deps/eager_relation_privileges-21718d2d1c40cd1a)",
+      "log_line": "2026-11-14T08:03:14.6684723Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.93s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:03:18.8727841Z      Running tests/ehr_routine_results.rs (target/debug/deps/ehr_routine_results-14e497bd3c0397d2)",
+      "log_line": "2026-11-14T08:03:18.9540366Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:03:23.0480646Z      Running tests/element_polymorphic_routines.rs (target/debug/deps/element_polymorphic_routines-6eb8c6b9b931ec78)",
+      "log_line": "2026-11-14T08:03:23.8952625Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:03:27.8852842Z      Running tests/empty_aggregates.rs (target/debug/deps/empty_aggregates-d0333e2801767434)",
+      "log_line": "2026-11-14T08:03:27.9274189Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:03:32.0027687Z      Running tests/exact_decimal_storage.rs (target/debug/deps/exact_decimal_storage-93f66e4ddb2aef01)",
+      "log_line": "2026-11-14T08:03:32.0955197Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:03:36.0977195Z      Running tests/explain_authorization.rs (target/debug/deps/explain_authorization-025c7be0cc476210)",
+      "log_line": "2026-11-14T08:03:36.5384015Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:03:40.7399566Z      Running tests/explain_matches_execution.rs (target/debug/deps/explain_matches_execution-3195b48c7430bb33)",
+      "log_line": "2026-11-14T08:04:01.7584358Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.01s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:04:05.8785199Z      Running tests/exponent_operator.rs (target/debug/deps/exponent_operator-aaddc867c831a013)",
+      "log_line": "2026-11-14T08:04:05.9094638Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:04:08.6983006Z      Running tests/extension_unicode_comments.rs (target/debug/deps/extension_unicode_comments-717f0acd26b4d350)",
+      "log_line": "2026-11-14T08:04:08.7000934Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:04:13.4162914Z      Running tests/extensions.rs (target/debug/deps/extensions-313a2eddffe64820)",
+      "log_line": "2026-11-14T08:04:13.8733781Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:04:17.9215025Z      Running tests/external_sort_stream.rs (target/debug/deps/external_sort_stream-cac96c2e34a17c4e)",
+      "log_line": "2026-11-14T08:04:22.9964029Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.06s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:04:27.3423738Z      Running tests/flashback.rs (target/debug/deps/flashback-350ab77bb38ace86)",
+      "log_line": "2026-11-14T08:04:28.3024816Z test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.95s",
+      "status": "ok",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:04:32.4327400Z      Running tests/foreign_key_authorization.rs (target/debug/deps/foreign_key_authorization-b4415950a671e1fd)",
+      "log_line": "2026-11-14T08:04:32.8563795Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:04:37.0199182Z      Running tests/foreign_key_unchanged_updates.rs (target/debug/deps/foreign_key_unchanged_updates-1f52e617e223c12a)",
+      "log_line": "2026-11-14T08:04:37.0900482Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:04:41.2282113Z      Running tests/fts_block_postings.rs (target/debug/deps/fts_block_postings-886c76c27d8fb904)",
+      "log_line": "2026-11-14T08:04:48.8890119Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.65s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:04:53.8110272Z      Running tests/fts_direct_build.rs (target/debug/deps/fts_direct_build-328102f0d447f7b2)",
+      "log_line": "2026-11-14T08:08:34.6353228Z test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 220.81s",
+      "status": "ok",
+      "passed": 19,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:08:38.7370347Z      Running tests/fts_query_budgets.rs (target/debug/deps/fts_query_budgets-00be4d3f0b078c95)",
+      "log_line": "2026-11-14T08:08:39.6267460Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.88s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:08:43.7277442Z      Running tests/fts_transaction_candidates.rs (target/debug/deps/fts_transaction_candidates-5f04883256db2a0e)",
+      "log_line": "2026-11-14T08:08:45.0795924Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.34s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:08:49.2528947Z      Running tests/full_text_search.rs (target/debug/deps/full_text_search-a43087e52b5b5e73)",
+      "log_line": "2026-11-14T08:08:49.4728760Z test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s",
+      "status": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:08:53.4159521Z      Running tests/generate_subscripts_from.rs (target/debug/deps/generate_subscripts_from-1f435d076a524058)",
+      "log_line": "2026-11-14T08:08:53.4578476Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:08:57.5212021Z      Running tests/generated_boolean_filters.rs (target/debug/deps/generated_boolean_filters-7f052083b1b25846)",
+      "log_line": "2026-11-14T08:08:58.7125826Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:09:02.9156213Z      Running tests/geo_g10_temporal.rs (target/debug/deps/geo_g10_temporal-55dc90d2848a28ad)",
+      "log_line": "2026-11-14T08:09:03.1236505Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:09:07.2954712Z      Running tests/geo_g11_hardening.rs (target/debug/deps/geo_g11_hardening-04ea8ac996316cf2)",
+      "log_line": "2026-11-14T08:09:08.2202298Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.91s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:09:12.3192726Z      Running tests/geo_g1_wkb_multi.rs (target/debug/deps/geo_g1_wkb_multi-0173d00020443562)",
+      "log_line": "2026-11-14T08:09:12.5320624Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:09:16.6454311Z      Running tests/geo_g2_predicates.rs (target/debug/deps/geo_g2_predicates-15283b28f330d2d6)",
+      "log_line": "2026-11-14T08:09:16.9516989Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:09:20.9908414Z      Running tests/geo_g3_spatial_join.rs (target/debug/deps/geo_g3_spatial_join-81e9d9a9b2200916)",
+      "log_line": "2026-11-14T08:09:24.0546753Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.05s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:09:28.1172759Z      Running tests/geo_g4_h3.rs (target/debug/deps/geo_g4_h3-0ff4be62774d42e8)",
+      "log_line": "2026-11-14T08:09:28.4129553Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:09:32.5631849Z      Running tests/geo_g5_mvt.rs (target/debug/deps/geo_g5_mvt-1add07bb699e2b8c)",
+      "log_line": "2026-11-14T08:09:32.8686659Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:09:37.0208735Z      Running tests/geo_g6_geocoder.rs (target/debug/deps/geo_g6_geocoder-1a507899279170ac)",
+      "log_line": "2026-11-14T08:09:37.2781280Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:09:41.5269790Z      Running tests/geo_g7_travel_time.rs (target/debug/deps/geo_g7_travel_time-1146a691d7c61a6e)",
+      "log_line": "2026-11-14T08:09:41.7603056Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:09:46.0146356Z      Running tests/geo_g8_raster.rs (target/debug/deps/geo_g8_raster-b87f84f06e547754)",
+      "log_line": "2026-11-14T08:09:46.2261099Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:09:50.3008761Z      Running tests/geometric_indexes.rs (target/debug/deps/geometric_indexes-1a68398d97080b25)",
+      "log_line": "2026-11-14T08:09:50.6727882Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:09:54.7415053Z      Running tests/geometric_operations.rs (target/debug/deps/geometric_operations-fa5cb095775e9c08)",
+      "log_line": "2026-11-14T08:09:54.8063215Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:09:58.8655217Z      Running tests/geometric_point.rs (target/debug/deps/geometric_point-efe97867b09c614a)",
+      "log_line": "2026-11-14T08:09:59.0791300Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:10:03.1623531Z      Running tests/geometric_spatial_boundary.rs (target/debug/deps/geometric_spatial_boundary-030ff0aba39cf68c)",
+      "log_line": "2026-11-14T08:10:03.2653418Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:10:07.3223270Z      Running tests/geometric_transport.rs (target/debug/deps/geometric_transport-e2bd6dd8253f349d)",
+      "log_line": "2026-11-14T08:10:07.8086923Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:10:12.0505772Z      Running tests/geometric_types.rs (target/debug/deps/geometric_types-8e4b9de57d72978d)",
+      "log_line": "2026-11-14T08:10:12.1944637Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:10:16.3125710Z      Running tests/hammerdb_corrected_workload.rs (target/debug/deps/hammerdb_corrected_workload-0c47f766f73b1217)",
+      "log_line": "2026-11-14T08:10:16.9815534Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:10:21.2446476Z      Running tests/hash_index_range.rs (target/debug/deps/hash_index_range-0a32c8d13ae0d168)",
+      "log_line": "2026-11-14T08:10:21.4934494Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:10:25.8180837Z      Running tests/incident_observability.rs (target/debug/deps/incident_observability-64b138189a3f2df8)",
+      "log_line": "2026-11-14T08:10:26.4245607Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:10:30.5927156Z      Running tests/independent_commit_conflicts.rs (target/debug/deps/independent_commit_conflicts-7e9ea7a99c2e3de9)",
+      "log_line": "2026-11-14T08:10:30.6225386Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:10:34.8789167Z      Running tests/insight_union_projection.rs (target/debug/deps/insight_union_projection-687862133c08530d)",
+      "log_line": "2026-11-14T08:10:34.9317660Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:10:39.2110670Z      Running tests/integer_fractional_comparison.rs (target/debug/deps/integer_fractional_comparison-a3728a7c6184aa33)",
+      "log_line": "2026-11-14T08:10:39.6734880Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:10:43.7121119Z      Running tests/interval_parameters.rs (target/debug/deps/interval_parameters-80018d3cf6362213)",
+      "log_line": "2026-11-14T08:10:43.7444672Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:10:48.0432534Z      Running tests/intervention_regression.rs (target/debug/deps/intervention_regression-9862cb0c37dcd97e)",
+      "log_line": "2026-11-14T08:10:48.1475181Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:10:52.4490137Z      Running tests/join_authz_bypass.rs (target/debug/deps/join_authz_bypass-0f1e95004103eb12)",
+      "log_line": "2026-11-14T08:10:52.6837787Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:10:57.0328964Z      Running tests/join_memory_budget.rs (target/debug/deps/join_memory_budget-963f1208b6e0fb42)",
+      "log_line": "2026-11-14T08:10:57.5486369Z test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s",
+      "status": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:11:01.9661010Z      Running tests/json_key_partial_index.rs (target/debug/deps/json_key_partial_index-836e4bdbee07903d)",
+      "log_line": "2026-11-14T08:11:02.1572928Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:11:06.5403541Z      Running tests/json_storage.rs (target/debug/deps/json_storage-7551c2b5d88aebd6)",
+      "log_line": "2026-11-14T08:11:06.7403165Z test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s",
+      "status": "ok",
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:11:10.9493375Z      Running tests/json_wildcard_visibility.rs (target/debug/deps/json_wildcard_visibility-a2865c135df28cb1)",
+      "log_line": "2026-11-14T08:11:10.9987164Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:11:15.2144560Z      Running tests/jsonb_composite.rs (target/debug/deps/jsonb_composite-f2bd9f81daa6c8d1)",
+      "log_line": "2026-11-14T08:11:15.2565651Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:11:19.5119902Z      Running tests/jsonb_filter.rs (target/debug/deps/jsonb_filter-8213544af1e4e63e)",
+      "log_line": "2026-11-14T08:11:19.7168844Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:11:23.9803795Z      Running tests/jsonb_numeric_range.rs (target/debug/deps/jsonb_numeric_range-e0dbbb7c880a384a)",
+      "log_line": "2026-11-14T08:11:24.3514561Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:11:28.4817925Z      Running tests/jsonb_parameter_types.rs (target/debug/deps/jsonb_parameter_types-475e43aa7fa743d3)",
+      "log_line": "2026-11-14T08:11:28.5374478Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:11:32.7564905Z      Running tests/jsonb_primary_keys.rs (target/debug/deps/jsonb_primary_keys-f5ec1b3f644e3d6b)",
+      "log_line": "2026-11-14T08:11:32.9347771Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:11:37.3053237Z      Running tests/jsonb_srf.rs (target/debug/deps/jsonb_srf-1df276581e0aadba)",
+      "log_line": "2026-11-14T08:11:37.4914471Z test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s",
+      "status": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:11:41.7533313Z      Running tests/jsonpath.rs (target/debug/deps/jsonpath-3904625c0d346ac5)",
+      "log_line": "2026-11-14T08:11:41.8609252Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s",
+      "status": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:11:46.1262653Z      Running tests/key_inventory_memory.rs (target/debug/deps/key_inventory_memory-23ed957cbeb6a77e)",
+      "log_line": "2026-11-14T08:11:47.9138690Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.78s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:11:52.2279538Z      Running tests/lateral_plpgsql_sources.rs (target/debug/deps/lateral_plpgsql_sources-724b88379416b5b1)",
+      "log_line": "2026-11-14T08:11:52.3121387Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:11:56.6271513Z      Running tests/lateral_routine_sources.rs (target/debug/deps/lateral_routine_sources-b94c5d19aca2d3ff)",
+      "log_line": "2026-11-14T08:11:56.9272155Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:12:01.1385274Z      Running tests/lean_l1_vacuum.rs (target/debug/deps/lean_l1_vacuum-ef322eb22d7e1cb0)",
+      "log_line": "2026-11-14T08:12:01.5443682Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:12:05.8458522Z      Running tests/lean_l2_space_report.rs (target/debug/deps/lean_l2_space_report-adaf2a7c99b913cd)",
+      "log_line": "2026-11-14T08:12:06.1726739Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:12:10.3595750Z      Running tests/lean_l3_hole_punch.rs (target/debug/deps/lean_l3_hole_punch-a10f5027a8f72261)",
+      "log_line": "2026-11-14T08:12:11.0512026Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:12:15.2612768Z      Running tests/lean_l4_fold_hygiene.rs (target/debug/deps/lean_l4_fold_hygiene-6d332d67d6ec6bfb)",
+      "log_line": "2026-11-14T08:12:15.9586683Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:12:20.2701282Z      Running tests/lean_l7_value_compression.rs (target/debug/deps/lean_l7_value_compression-54358f29c4c1381f)",
+      "log_line": "2026-11-14T08:12:21.6035082Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.32s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:12:26.0334180Z      Running tests/legacy_public_view_names.rs (target/debug/deps/legacy_public_view_names-c16c85ebaf0115fe)",
+      "log_line": "2026-11-14T08:12:26.4069532Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:12:30.7765566Z      Running tests/locking_projection.rs (target/debug/deps/locking_projection-a8d8f8d59a63addc)",
+      "log_line": "2026-11-14T08:12:30.9636551Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:12:35.2679326Z      Running tests/mutation_authority.rs (target/debug/deps/mutation_authority-2f4474fbb6b849d2)",
+      "log_line": "2026-11-14T08:12:35.3118153Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:12:39.5342520Z      Running tests/native_field_sql_null.rs (target/debug/deps/native_field_sql_null-918b5b3708ca5d70)",
+      "log_line": "2026-11-14T08:12:39.6678247Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:12:43.9624451Z      Running tests/nested_join_pair_budget.rs (target/debug/deps/nested_join_pair_budget-d4d56c007b7943e3)",
+      "log_line": "2026-11-14T08:12:46.2112624Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.23s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:12:50.6742377Z      Running tests/network_cidr.rs (target/debug/deps/network_cidr-15c0905853789191)",
+      "log_line": "2026-11-14T08:12:50.9644880Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:12:55.4900683Z      Running tests/network_indexes.rs (target/debug/deps/network_indexes-7066e3da6288c9a7)",
+      "log_line": "2026-11-14T08:12:55.6310400Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:12:59.9564589Z      Running tests/network_inet.rs (target/debug/deps/network_inet-24b0f61a83be5e4e)",
+      "log_line": "2026-11-14T08:13:00.0491313Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:13:04.2317911Z      Running tests/network_mac.rs (target/debug/deps/network_mac-8009ef89f6757d64)",
+      "log_line": "2026-11-14T08:13:04.3357465Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:13:08.7126526Z      Running tests/network_operations.rs (target/debug/deps/network_operations-ccf3ed1067ab9a6b)",
+      "log_line": "2026-11-14T08:13:08.7700819Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:13:12.9505748Z      Running tests/no_context_no_authority.rs (target/debug/deps/no_context_no_authority-84bc5e029b9e315c)",
+      "log_line": "2026-11-14T08:13:13.2015702Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:13:17.5932435Z      Running tests/null_typed_arithmetic.rs (target/debug/deps/null_typed_arithmetic-6d28d495be6fa5c4)",
+      "log_line": "2026-11-14T08:13:17.6412314Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:13:22.0765918Z      Running tests/numeric_power_sql.rs (target/debug/deps/numeric_power_sql-6852a8a9f6a847d9)",
+      "log_line": "2026-11-14T08:13:22.1346491Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:13:26.4417521Z      Running tests/numeric_round_scale.rs (target/debug/deps/numeric_round_scale-19133408285c1fba)",
+      "log_line": "2026-11-14T08:13:26.4644919Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:13:30.7548137Z      Running tests/object_ddl_authorization.rs (target/debug/deps/object_ddl_authorization-20f150ac3b2f7cd5)",
+      "log_line": "2026-11-14T08:13:31.1413248Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:13:35.4872964Z      Running tests/observability_views.rs (target/debug/deps/observability_views-0e01483b9c6f5dc2)",
+      "log_line": "2026-11-14T08:13:35.5381527Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:13:40.0296573Z      Running tests/oid_aliases.rs (target/debug/deps/oid_aliases-48554e15f4807484)",
+      "log_line": "2026-11-14T08:13:40.2477288Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:13:44.5802072Z      Running tests/oid_semantics.rs (target/debug/deps/oid_semantics-dbb1707f95a5adcb)",
+      "log_line": "2026-11-14T08:13:44.6833725Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:13:49.1492186Z      Running tests/oracle_application_sql.rs (target/debug/deps/oracle_application_sql-ef57e7a3e76d1717)",
+      "log_line": "2026-11-14T08:13:49.6084028Z test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s",
+      "status": "ok",
+      "passed": 23,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:13:53.9758241Z      Running tests/oracle_invalid_routine_lifecycle.rs (target/debug/deps/oracle_invalid_routine_lifecycle-a05c10eca416a5f4)",
+      "log_line": "2026-11-14T08:13:54.4035533Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:13:58.7847999Z      Running tests/oracle_national_columns.rs (target/debug/deps/oracle_national_columns-211b6e45b0e24761)",
+      "log_line": "2026-11-14T08:13:59.9975947Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.20s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:14:04.4320247Z      Running tests/oracle_partitioning.rs (target/debug/deps/oracle_partitioning-4505a17458f01742)",
+      "log_line": "2026-11-14T08:14:04.5692638Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:14:08.9941087Z      Running tests/oracle_simple_case_profile.rs (target/debug/deps/oracle_simple_case_profile-0ede8bb806c95c01)",
+      "log_line": "2026-11-14T08:14:09.8045945Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:14:14.1607748Z      Running tests/owner_privilege_metadata.rs (target/debug/deps/owner_privilege_metadata-7b59dcf2578fef10)",
+      "log_line": "2026-11-14T08:14:14.5797038Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:14:18.9141978Z      Running tests/ownership_authorization.rs (target/debug/deps/ownership_authorization-426f677ae96a3ac5)",
+      "log_line": "2026-11-14T08:14:19.3312786Z test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s",
+      "status": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:14:23.6465857Z      Running tests/paged_analyze_statistics.rs (target/debug/deps/paged_analyze_statistics-699b26656f84a794)",
+      "log_line": "2026-11-14T08:14:30.1922719Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.54s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:14:34.3401608Z      Running tests/paged_fts_scan.rs (target/debug/deps/paged_fts_scan-1c7c0a13a77326d0)",
+      "log_line": "2026-11-14T08:14:34.9317753Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:14:38.9965912Z      Running tests/paged_streaming_scan.rs (target/debug/deps/paged_streaming_scan-4f421701e912aa55)",
+      "log_line": "2026-11-14T08:14:44.7283142Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.72s",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:14:49.0660112Z      Running tests/parser_tree_depth.rs (target/debug/deps/parser_tree_depth-01932625926dbe5e)",
+      "log_line": "2026-11-14T08:14:52.2208243Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.14s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:14:56.4271394Z      Running tests/partition_admission.rs (target/debug/deps/partition_admission-581a0152c1cfacb7)",
+      "log_line": "2026-11-14T08:14:56.6904462Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:15:00.8225887Z      Running tests/partition_bounds.rs (target/debug/deps/partition_bounds-a70140403cc5e5f1)",
+      "log_line": "2026-11-14T08:15:02.3022768Z test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.47s",
+      "status": "ok",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:15:06.3079341Z      Running tests/partition_catalog_descriptors.rs (target/debug/deps/partition_catalog_descriptors-801f2807133cc20f)",
+      "log_line": "2026-11-14T08:15:06.7237941Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:15:11.0313065Z      Running tests/partition_child_schema.rs (target/debug/deps/partition_child_schema-78d059539a15fdc2)",
+      "log_line": "2026-11-14T08:15:12.3610628Z test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.32s",
+      "status": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:15:16.5526656Z      Running tests/partition_copy.rs (target/debug/deps/partition_copy-6cc781080d2f8cc7)",
+      "log_line": "2026-11-14T08:15:17.0311965Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:15:21.0981205Z      Running tests/partition_execution.rs (target/debug/deps/partition_execution-4713a9e07d25ae17)",
+      "log_line": "2026-11-14T08:15:22.0951197Z test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s",
+      "status": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:15:26.2512538Z      Running tests/partition_generated.rs (target/debug/deps/partition_generated-ed6da433f4c24838)",
+      "log_line": "2026-11-14T08:15:27.7553621Z test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.49s",
+      "status": "ok",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:15:31.7893317Z      Running tests/partition_hash.rs (target/debug/deps/partition_hash-9201f664a1743a26)",
+      "log_line": "2026-11-14T08:15:39.8756944Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.08s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:15:44.0409296Z      Running tests/partition_native_authority.rs (target/debug/deps/partition_native_authority-eeebf716433099c9)",
+      "log_line": "2026-11-14T08:15:44.5482434Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:15:48.7389286Z      Running tests/partition_replication_reader.rs (target/debug/deps/partition_replication_reader-a137f45a7c9ad3c9)",
+      "log_line": "2026-11-14T08:15:49.3082982Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:15:53.3571268Z      Running tests/partition_row_locks.rs (target/debug/deps/partition_row_locks-87caf106024de660)",
+      "log_line": "2026-11-14T08:15:53.9795064Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:15:58.1692829Z      Running tests/partition_schema_changes.rs (target/debug/deps/partition_schema_changes-0ed25113c86ba383)",
+      "log_line": "2026-11-14T08:15:58.8539405Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:16:02.9371407Z      Running tests/partition_statement_batches.rs (target/debug/deps/partition_statement_batches-90a88b05ceffa65a)",
+      "log_line": "2026-11-14T08:16:03.2203515Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:16:07.3677359Z      Running tests/partition_trigger_catalog.rs (target/debug/deps/partition_trigger_catalog-d4309166bccf2979)",
+      "log_line": "2026-11-14T08:16:07.9102737Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:16:12.0875803Z      Running tests/partition_trigger_events.rs (target/debug/deps/partition_trigger_events-f42763ecd4f4ca5a)",
+      "log_line": "2026-11-14T08:16:12.6098141Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:16:16.8019720Z      Running tests/partition_trigger_lifecycle.rs (target/debug/deps/partition_trigger_lifecycle-2646462faa9d5e0a)",
+      "log_line": "2026-11-14T08:16:17.7981209Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:16:21.8966319Z      Running tests/partition_trigger_visibility.rs (target/debug/deps/partition_trigger_visibility-38b4979b312f216e)",
+      "log_line": "2026-11-14T08:16:24.6406986Z test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.73s",
+      "status": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:16:29.1234963Z      Running tests/partition_upsert.rs (target/debug/deps/partition_upsert-5998e53f2888abae)",
+      "log_line": "2026-11-14T08:16:30.0108930Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:16:34.3403248Z      Running tests/pg_dump_identity_restore.rs (target/debug/deps/pg_dump_identity_restore-bf1374aefe64869f)",
+      "log_line": "2026-11-14T08:16:34.5733381Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:16:39.0088451Z      Running tests/pg_dump_schema_qualified_restore.rs (target/debug/deps/pg_dump_schema_qualified_restore-a7d7c40f68b61f85)",
+      "log_line": "2026-11-14T08:16:40.2290011Z test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.21s",
+      "status": "ok",
+      "passed": 27,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:16:44.4984925Z      Running tests/pg_lsn.rs (target/debug/deps/pg_lsn-1e8a5c9bb8cc511a)",
+      "log_line": "2026-11-14T08:16:44.6910808Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:16:48.9099451Z      Running tests/pg_snapshot.rs (target/debug/deps/pg_snapshot-8d523e7b4823dbdf)",
+      "log_line": "2026-11-14T08:16:49.3835544Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:16:54.2026992Z      Running tests/pg_wewobo_compat.rs (target/debug/deps/pg_wewobo_compat-2b248053504c4dbf)",
+      "log_line": "2026-11-14T08:17:50.5434197Z test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 56.33s",
+      "status": "ok",
+      "passed": 60,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:17:54.7466387Z      Running tests/pk_in_list_lookup.rs (target/debug/deps/pk_in_list_lookup-b04039766e274fa9)",
+      "log_line": "2026-11-14T08:17:56.0216122Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.26s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:18:00.2024340Z      Running tests/plan_diagnostics.rs (target/debug/deps/plan_diagnostics-d09d6dcdca3b44a5)",
+      "log_line": "2026-11-14T08:18:04.1050178Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.89s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:18:08.6982376Z      Running tests/platform_correctness_audit.rs (target/debug/deps/platform_correctness_audit-a41d45544e0ed37f)",
+      "log_line": "2026-11-14T08:18:09.8686557Z test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.16s",
+      "status": "ok",
+      "passed": 25,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:18:14.1212155Z      Running tests/plpgsql_temporal_comparison.rs (target/debug/deps/plpgsql_temporal_comparison-0963e854651150e9)",
+      "log_line": "2026-11-14T08:18:14.1966635Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:18:18.2341019Z      Running tests/postgres_dynamic_execute.rs (target/debug/deps/postgres_dynamic_execute-d95edbc3c530ba80)",
+      "log_line": "2026-11-14T08:18:18.5743286Z test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s",
+      "status": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:18:22.7843489Z      Running tests/predicate_contradiction.rs (target/debug/deps/predicate_contradiction-61cc4aa21e6c6d30)",
+      "log_line": "2026-11-14T08:18:23.1939284Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:18:27.2494873Z      Running tests/predicate_projection.rs (target/debug/deps/predicate_projection-343c7844954609ad)",
+      "log_line": "2026-11-14T08:18:27.3493120Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:18:31.3437824Z      Running tests/prepared_typed_join.rs (target/debug/deps/prepared_typed_join-d8e93d9b0629666f)",
+      "log_line": "2026-11-14T08:18:31.4249778Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:18:35.5029960Z      Running tests/primary_key_index_compatibility.rs (target/debug/deps/primary_key_index_compatibility-3964fc49724a5ca8)",
+      "log_line": "2026-11-14T08:18:37.0012330Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.49s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:18:41.1356876Z      Running tests/projection_admin.rs (target/debug/deps/projection_admin-af52b1b07652c59f)",
+      "log_line": "2026-11-14T08:18:41.4598130Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:18:45.6607682Z      Running tests/projection_pushdown.rs (target/debug/deps/projection_pushdown-1ca25fad19a58d9d)",
+      "log_line": "2026-11-14T08:18:46.2801136Z test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s",
+      "status": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:18:50.5055810Z      Running tests/projection_query_surface.rs (target/debug/deps/projection_query_surface-aa9ba885c86c176b)",
+      "log_line": "2026-11-14T08:18:50.5372644Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:18:54.5743503Z      Running tests/projection_rollup_sql.rs (target/debug/deps/projection_rollup_sql-c1572823149c1945)",
+      "log_line": "2026-11-14T08:18:55.4509126Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.86s",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:18:59.4135301Z      Running tests/pseudo_types.rs (target/debug/deps/pseudo_types-8063dbe4cba58cfd)",
+      "log_line": "2026-11-14T08:18:59.4620319Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:19:03.6379859Z      Running tests/public_schema.rs (target/debug/deps/public_schema-2ee96ab75b665dc8)",
+      "log_line": "2026-11-14T08:19:03.8907115Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:19:08.0576569Z      Running tests/query_crash_hardening.rs (target/debug/deps/query_crash_hardening-a04796a3c95f46bb)",
+      "log_line": "2026-11-14T08:19:11.4922991Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.42s",
+      "status": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:19:15.7094707Z      Running tests/query_rule_results.rs (target/debug/deps/query_rule_results-d0ee28f521db4510)",
+      "log_line": "2026-11-14T08:19:15.9697880Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:19:20.3120827Z      Running tests/quoted_public_storage_names.rs (target/debug/deps/quoted_public_storage_names-17bfc810e51bda5f)",
+      "log_line": "2026-11-14T08:19:20.6201420Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:19:24.8072683Z      Running tests/raise_notice.rs (target/debug/deps/raise_notice-723eb270eb5b0a26)",
+      "log_line": "2026-11-14T08:19:24.8683174Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+      "status": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:19:28.9601241Z      Running tests/ranked_fts_topk.rs (target/debug/deps/ranked_fts_topk-23763e77675abad4)",
+      "log_line": "2026-11-14T08:19:59.6061183Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.64s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:20:03.7645606Z      Running tests/raw_ddl_authorization.rs (target/debug/deps/raw_ddl_authorization-6be8c223f74eeddf)",
+      "log_line": "2026-11-14T08:20:04.0875951Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:20:08.1872633Z      Running tests/raw_ddl_batches.rs (target/debug/deps/raw_ddl_batches-376fd4972496a520)",
+      "log_line": "2026-11-14T08:20:08.2622230Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:20:12.3168515Z      Running tests/read_committed_lock_refresh.rs (target/debug/deps/read_committed_lock_refresh-85274c0811506737)",
+      "log_line": "2026-11-14T08:20:13.7593876Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.43s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:20:18.0572068Z      Running tests/read_committed_upsert_grants.rs (target/debug/deps/read_committed_upsert_grants-a6a828e0da5f55ea)",
+      "log_line": "2026-11-14T08:20:18.7807942Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:20:22.8296525Z      Running tests/read_committed_upsert_primary.rs (target/debug/deps/read_committed_upsert_primary-5a8d63a6912e51d5)",
+      "log_line": "2026-11-14T08:20:23.3074963Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:20:27.5559580Z      Running tests/read_committed_upsert_signed_arbiters.rs (target/debug/deps/read_committed_upsert_signed_arbiters-be9bf072a0f0ec38)",
+      "log_line": "2026-11-14T08:20:30.4621926Z test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.90s",
+      "status": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:20:34.8206704Z      Running tests/read_only_transactions.rs (target/debug/deps/read_only_transactions-72f1d120ba580d25)",
+      "log_line": "2026-11-14T08:20:34.8969638Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:20:39.1082765Z      Running tests/record_conflicts_sql.rs (target/debug/deps/record_conflicts_sql-2692fbebc2ef181b)",
+      "log_line": "2026-11-14T08:20:39.1862641Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:20:43.2960748Z      Running tests/recursive_query_stack.rs (target/debug/deps/recursive_query_stack-dd2a4099e7fa818e)",
+      "log_line": "2026-11-14T08:20:43.4327654Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:20:47.5851492Z      Running tests/recycle_bin.rs (target/debug/deps/recycle_bin-d4766786f478bbd4)",
+      "log_line": "2026-11-14T08:20:48.3177089Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:20:52.6712302Z      Running tests/recycle_bin_recovery.rs (target/debug/deps/recycle_bin_recovery-b53d084963ef886c)",
+      "log_line": "2026-11-14T08:20:53.6881027Z test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.01s",
+      "status": "ok",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:20:57.8003378Z      Running tests/regclass_search_path.rs (target/debug/deps/regclass_search_path-08e9adddafbc31f1)",
+      "log_line": "2026-11-14T08:20:58.3827550Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:21:02.5556971Z      Running tests/regexp_split_to_table.rs (target/debug/deps/regexp_split_to_table-5becce9bc7e28152)",
+      "log_line": "2026-11-14T08:21:02.5822623Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:21:06.5778882Z      Running tests/rename_default_privileges.rs (target/debug/deps/rename_default_privileges-d6e814a3e914e411)",
+      "log_line": "2026-11-14T08:21:07.5615064Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.97s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:21:11.5248499Z      Running tests/rename_name_reuse.rs (target/debug/deps/rename_name_reuse-d7bb5ee7d1f43a36)",
+      "log_line": "2026-11-14T08:21:13.4077576Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.87s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:21:17.4041061Z      Running tests/rename_pending_composites.rs (target/debug/deps/rename_pending_composites-1e6a01ee11cae323)",
+      "log_line": "2026-11-14T08:21:18.4125230Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.00s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:21:22.4332532Z      Running tests/rename_routine_header_dependencies.rs (target/debug/deps/rename_routine_header_dependencies-b574fa72872c51de)",
+      "log_line": "2026-11-14T08:21:23.3269630Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.88s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:21:27.4627211Z      Running tests/rename_routine_row_types.rs (target/debug/deps/rename_routine_row_types-57229799a405600d)",
+      "log_line": "2026-11-14T08:21:28.5673392Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.09s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:21:32.6781049Z      Running tests/rename_unrelated_transactions.rs (target/debug/deps/rename_unrelated_transactions-5111eb43e4102482)",
+      "log_line": "2026-11-14T08:21:33.2659021Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:21:37.4317969Z      Running tests/renamed_foreign_keys.rs (target/debug/deps/renamed_foreign_keys-4260818017ccff60)",
+      "log_line": "2026-11-14T08:21:37.5900124Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:21:41.7429706Z      Running tests/renamed_table_triggers.rs (target/debug/deps/renamed_table_triggers-35c779aa8f6606e1)",
+      "log_line": "2026-11-14T08:21:42.2683233Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:21:46.4299713Z      Running tests/rls_boolean_depth.rs (target/debug/deps/rls_boolean_depth-d32af473c418a04c)",
+      "log_line": "2026-11-14T08:21:46.5264079Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:21:50.4994225Z      Running tests/rls_explain_counts.rs (target/debug/deps/rls_explain_counts-a984b8965263b5da)",
+      "log_line": "2026-11-14T08:21:52.4607022Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.95s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:21:56.5344094Z      Running tests/rls_index_candidates.rs (target/debug/deps/rls_index_candidates-f137ba82cfc8d25a)",
+      "log_line": "2026-11-14T08:21:58.0168440Z test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.47s",
+      "status": "ok",
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:22:01.9286405Z      Running tests/rls_policy_typing.rs (target/debug/deps/rls_policy_typing-b04e2487a572fe38)",
+      "log_line": "2026-11-14T08:22:02.4917102Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:22:06.6178631Z      Running tests/rls_write_path.rs (target/debug/deps/rls_write_path-fd13e0f52e137230)",
+      "log_line": "2026-11-14T08:22:07.1366434Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:22:11.2910764Z      Running tests/role_drop_dependencies.rs (target/debug/deps/role_drop_dependencies-8dc7c69eb101ceec)",
+      "log_line": "2026-11-14T08:22:12.1132100Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.81s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:22:16.1713043Z      Running tests/rollback_index_admission.rs (target/debug/deps/rollback_index_admission-dc29c31fc22549f9)",
+      "log_line": "2026-11-14T08:22:16.6259427Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:22:20.5104267Z      Running tests/routine_aggregate_into.rs (target/debug/deps/routine_aggregate_into-c24222f10141e4ae)",
+      "log_line": "2026-11-14T08:22:20.5782044Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:22:24.5302033Z      Running tests/routine_assignment_types.rs (target/debug/deps/routine_assignment_types-f7e72ad6539afee4)",
+      "log_line": "2026-11-14T08:22:24.5872914Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:22:28.6595373Z      Running tests/routine_compiler_directives.rs (target/debug/deps/routine_compiler_directives-63c276568a4482ca)",
+      "log_line": "2026-11-14T08:22:28.9363235Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:22:32.9976840Z      Running tests/routine_cte_case_types.rs (target/debug/deps/routine_cte_case_types-5ba210b4b35d3c23)",
+      "log_line": "2026-11-14T08:22:33.2992444Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:22:37.3469712Z      Running tests/routine_expression_stack.rs (target/debug/deps/routine_expression_stack-5c263373712d1586)",
+      "log_line": "2026-11-14T08:22:37.4907491Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:22:41.6622281Z      Running tests/routine_header_metadata.rs (target/debug/deps/routine_header_metadata-529e577bcae2e12c)",
+      "log_line": "2026-11-14T08:22:42.1653509Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:22:46.2417162Z      Running tests/routine_interval_arguments.rs (target/debug/deps/routine_interval_arguments-dd8fa2925568759d)",
+      "log_line": "2026-11-14T08:22:46.2753553Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:22:50.4047961Z      Running tests/routine_named_exception_conditions.rs (target/debug/deps/routine_named_exception_conditions-0e83f033102a3bad)",
+      "log_line": "2026-11-14T08:22:50.7521619Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:22:54.8789960Z      Running tests/routine_owner_execution_identity.rs (target/debug/deps/routine_owner_execution_identity-3f50a7e6feafcd51)",
+      "log_line": "2026-11-14T08:22:55.2137669Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:22:59.2553831Z      Running tests/routine_pattern_context.rs (target/debug/deps/routine_pattern_context-1e98ffd2812a5e14)",
+      "log_line": "2026-11-14T08:22:59.2972934Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:23:03.2660198Z      Running tests/routine_privilege_lists.rs (target/debug/deps/routine_privilege_lists-277f56dfb182a962)",
+      "log_line": "2026-11-14T08:23:03.3706245Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+      "status": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:23:07.3846249Z      Running tests/routine_row_transaction_identity.rs (target/debug/deps/routine_row_transaction_identity-68ed0700c114aac4)",
+      "log_line": "2026-11-14T08:23:07.4655911Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:23:11.4544800Z      Running tests/routine_table_emission.rs (target/debug/deps/routine_table_emission-50c5aa968c1cc45c)",
+      "log_line": "2026-11-14T08:23:11.7035842Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:23:15.7567840Z      Running tests/routine_time_zone.rs (target/debug/deps/routine_time_zone-e3e857c0893a3c3e)",
+      "log_line": "2026-11-14T08:23:15.8002252Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:23:19.8375976Z      Running tests/routing_authorization.rs (target/debug/deps/routing_authorization-2429219e7f155158)",
+      "log_line": "2026-11-14T08:23:20.1960982Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:23:24.2544719Z      Running tests/schema_create_privilege.rs (target/debug/deps/schema_create_privilege-2017354950e1cbef)",
+      "log_line": "2026-11-14T08:23:24.7103295Z test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s",
+      "status": "ok",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:23:29.1559595Z      Running tests/schema_table_rename.rs (target/debug/deps/schema_table_rename-698ba83bd92ed751)",
+      "log_line": "2026-11-14T08:23:30.4177865Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.25s",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:23:34.6443300Z      Running tests/select_row_locks.rs (target/debug/deps/select_row_locks-f34fbdfaa02c885d)",
+      "log_line": "2026-11-14T08:23:34.8091643Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:23:38.8943494Z      Running tests/selective_outer_join_filters.rs (target/debug/deps/selective_outer_join_filters-d1a47e9aad0a6cbe)",
+      "log_line": "2026-11-14T08:23:43.5968889Z test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.69s",
+      "status": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:23:47.8930184Z      Running tests/server_paged_sql.rs (target/debug/deps/server_paged_sql-036b34d44061eae5)",
+      "log_line": "2026-11-14T08:23:48.6945058Z test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s",
+      "status": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:23:52.8058894Z      Running tests/session_statement_snapshots.rs (target/debug/deps/session_statement_snapshots-6a427b42c0c707cc)",
+      "log_line": "2026-11-14T08:23:53.6172060Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s",
+      "status": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:23:57.7406436Z      Running tests/set_role_admin_function_bypass.rs (target/debug/deps/set_role_admin_function_bypass-998bf6fdb9805db6)",
+      "log_line": "2026-11-14T08:23:57.9489955Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:24:01.9908945Z      Running tests/set_role_drops_privilege.rs (target/debug/deps/set_role_drops_privilege-9974abd9b9b751a6)",
+      "log_line": "2026-11-14T08:24:02.2017144Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:24:06.3319197Z      Running tests/shared_foreign_key_references.rs (target/debug/deps/shared_foreign_key_references-d402cb411c86975c)",
+      "log_line": "2026-11-14T08:24:07.3195502Z test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.98s",
+      "status": "ok",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:24:11.4290845Z      Running tests/shared_sequences.rs (target/debug/deps/shared_sequences-3e44baaadd048fa9)",
+      "log_line": "2026-11-14T08:24:11.7193516Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:24:15.8917719Z      Running tests/sis_compatibility.rs (target/debug/deps/sis_compatibility-c9678c38847815aa)",
+      "log_line": "2026-11-14T08:24:15.9465980Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:24:19.8713270Z      Running tests/skip_locked_join.rs (target/debug/deps/skip_locked_join-4009f45daf22eb5f)",
+      "log_line": "2026-11-14T08:24:19.9598184Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:24:24.0626514Z      Running tests/small_regressions.rs (target/debug/deps/small_regressions-42db40364d9c07da)",
+      "log_line": "2026-11-14T08:24:24.3102184Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:24:28.4049672Z      Running tests/spatial_pack_sql.rs (target/debug/deps/spatial_pack_sql-4b5ccd37e3550f0d)",
+      "log_line": "2026-11-14T08:24:28.6806488Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:24:32.7499494Z      Running tests/special_value_storage.rs (target/debug/deps/special_value_storage-d8a5cdfe6773b775)",
+      "log_line": "2026-11-14T08:24:32.9094350Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:24:39.9287214Z      Running tests/sql/main.rs (target/debug/deps/sql-fff0a5db4d64d26a)",
+      "log_line": "2026-11-14T08:25:27.1098122Z test result: ok. 419 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 47.17s",
+      "status": "ok",
+      "passed": 419,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:25:31.1008703Z      Running tests/sql_text_identifiers.rs (target/debug/deps/sql_text_identifiers-5da8fce8c7b4520d)",
+      "log_line": "2026-11-14T08:25:31.2217797Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:25:35.2360664Z      Running tests/sql_text_round_trip.rs (target/debug/deps/sql_text_round_trip-176f5af15180453f)",
+      "log_line": "2026-11-14T08:25:35.3012623Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:25:39.3304631Z      Running tests/streaming_aggregates.rs (target/debug/deps/streaming_aggregates-10b655119d6d66d5)",
+      "log_line": "2026-11-14T08:25:44.5727580Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.23s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:25:48.8922759Z      Running tests/streaming_grouping.rs (target/debug/deps/streaming_grouping-cf807bbd3ac3fe57)",
+      "log_line": "2026-11-14T08:25:52.1564388Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.25s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:25:56.2309701Z      Running tests/streaming_rls_guard.rs (target/debug/deps/streaming_rls_guard-72b757c060cec056)",
+      "log_line": "2026-11-14T08:25:57.0698384Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:26:01.2417347Z      Running tests/table_rename_views.rs (target/debug/deps/table_rename_views-35b6261ce008915d)",
+      "log_line": "2026-11-14T08:26:05.8851055Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.63s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:26:10.0062209Z      Running tests/table_row_routines.rs (target/debug/deps/table_row_routines-b34d5e3b2163f1cd)",
+      "log_line": "2026-11-14T08:26:10.4642539Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:26:14.6951153Z      Running tests/temporal_mutation_predicates.rs (target/debug/deps/temporal_mutation_predicates-92033b126ecfd63f)",
+      "log_line": "2026-11-14T08:26:14.7904217Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:26:18.9480670Z      Running tests/temporal_storage.rs (target/debug/deps/temporal_storage-3089abe41fa1c73e)",
+      "log_line": "2026-11-14T08:26:19.1107649Z test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s",
+      "status": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:26:23.2027506Z      Running tests/timezone_catalog_hash.rs (target/debug/deps/timezone_catalog_hash-dbec700dd9a4a119)",
+      "log_line": "2026-11-14T08:26:23.2848305Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:26:27.4234098Z      Running tests/topk_order_by.rs (target/debug/deps/topk_order_by-0399d958b2452d65)",
+      "log_line": "2026-11-14T08:26:27.6358576Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:26:31.7257043Z      Running tests/transaction_system_types.rs (target/debug/deps/transaction_system_types-6e6c504d3e152875)",
+      "log_line": "2026-11-14T08:26:31.8779433Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:26:35.9363608Z      Running tests/transaction_uniqueness.rs (target/debug/deps/transaction_uniqueness-a6f9ebd55995a209)",
+      "log_line": "2026-11-14T08:26:35.9816905Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:26:39.9805547Z      Running tests/trigger_authorization.rs (target/debug/deps/trigger_authorization-5c3ced2e79b61c3b)",
+      "log_line": "2026-11-14T08:26:40.2927181Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:26:44.4627083Z      Running tests/trusted_identity_triggers.rs (target/debug/deps/trusted_identity_triggers-2483e968f09c8b17)",
+      "log_line": "2026-11-14T08:26:44.7497964Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:26:48.8683609Z      Running tests/type_consistency.rs (target/debug/deps/type_consistency-ad7f952c672b7e08)",
+      "log_line": "2026-11-14T08:26:49.1914699Z test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s",
+      "status": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:26:53.3822915Z      Running tests/type_durability.rs (target/debug/deps/type_durability-cbe52a2ed3b7b8d9)",
+      "log_line": "2026-11-14T08:26:55.5751271Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.18s",
+      "status": "ok",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:26:59.6538361Z      Running tests/typed_catalog_comparisons.rs (target/debug/deps/typed_catalog_comparisons-d2812ffb3c4d1286)",
+      "log_line": "2026-11-14T08:26:59.8550794Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:27:04.0125653Z      Running tests/typed_comparison.rs (target/debug/deps/typed_comparison-8615d32775211e64)",
+      "log_line": "2026-11-14T08:27:04.1140723Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:27:08.2766513Z      Running tests/typed_comparison_boundaries.rs (target/debug/deps/typed_comparison_boundaries-9fac188b59a6fc3c)",
+      "log_line": "2026-11-14T08:27:08.3445110Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:27:12.6087038Z      Running tests/typed_comparison_matrix.rs (target/debug/deps/typed_comparison_matrix-088e5037be46a5ea)",
+      "log_line": "2026-11-14T08:27:17.6199800Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.00s",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:27:21.6419944Z      Running tests/typed_scalar_storage.rs (target/debug/deps/typed_scalar_storage-a91a103d2d8b282e)",
+      "log_line": "2026-11-14T08:27:21.7918218Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:27:25.8572156Z      Running tests/typed_storage_migration.rs (target/debug/deps/typed_storage_migration-13d00ab6c82f1a69)",
+      "log_line": "2026-11-14T08:27:25.9543236Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:27:30.0344213Z      Running tests/unique_update_order.rs (target/debug/deps/unique_update_order-1f59b599618cdeaf)",
+      "log_line": "2026-11-14T08:27:30.6898669Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:27:34.8153151Z      Running tests/user_defined_ranges.rs (target/debug/deps/user_defined_ranges-3ba68574447b8a53)",
+      "log_line": "2026-11-14T08:27:35.0088398Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:27:39.0503379Z      Running tests/user_type_management.rs (target/debug/deps/user_type_management-2160b72e8c8cb7fd)",
+      "log_line": "2026-11-14T08:27:39.3632023Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s",
+      "status": "ok",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:27:43.5145131Z      Running tests/user_type_oid_durability.rs (target/debug/deps/user_type_oid_durability-48355b16c7940f44)",
+      "log_line": "2026-11-14T08:27:45.2703736Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.75s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:27:49.3078182Z      Running tests/uuid_storage.rs (target/debug/deps/uuid_storage-7366c784cee368fd)",
+      "log_line": "2026-11-14T08:27:49.5296686Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:27:53.6323485Z      Running tests/version_identity.rs (target/debug/deps/version_identity-bbcbe8d902faad58)",
+      "log_line": "2026-11-14T08:27:53.6603866Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "status": "ok",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:27:57.7537337Z      Running tests/view_column_lineage.rs (target/debug/deps/view_column_lineage-35441b0094917305)",
+      "log_line": "2026-11-14T08:27:57.8916745Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+      "status": "ok",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:28:01.9997332Z      Running tests/view_dependencies.rs (target/debug/deps/view_dependencies-ed904852e4036ea9)",
+      "log_line": "2026-11-14T08:28:02.7366811Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s",
+      "status": "ok",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:28:06.8051881Z      Running tests/view_owner_execution_identity.rs (target/debug/deps/view_owner_execution_identity-56d268bf4228b3ec)",
+      "log_line": "2026-11-14T08:28:07.2287439Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s",
+      "status": "ok",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:28:11.3379915Z      Running tests/wildcard_projection.rs (target/debug/deps/wildcard_projection-bf9013df6bfefdb5)",
+      "log_line": "2026-11-14T08:28:11.5402592Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s",
+      "status": "ok",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:28:15.6479133Z      Running tests/write_path_authorization.rs (target/debug/deps/write_path_authorization-3efb11fd4ac8775d)",
+      "log_line": "2026-11-14T08:28:16.0009672Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s",
+      "status": "ok",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    },
+    {
+      "target_context": "2026-11-14T08:28:20.2792546Z      Running tests/xml.rs (target/debug/deps/xml-6aa02aef3a2285ab)",
+      "log_line": "2026-11-14T08:28:20.4369757Z test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s",
+      "status": "ok",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0
+    }
+  ],
+  "target_result_blocks": 282,
+  "unique_canonical_target_contexts": 282,
+  "repeated_contexts": {},
+  "passed": 2681,
+  "failed": 0,
+  "ignored": 4,
+  "compiler_errors": [],
+  "limits": [
+    "Exact510 SQL suite only; does not supersede Core assertions/PG stack abort or qualify unfinished native/REST.",
+    "No physical scale/HA/SQL cross-range application qualification implied."
+  ]
+}

@@ -45,6 +45,13 @@ impl ClusterServiceOpenGuard {
         self.require_live()?;
         self.metadata_ingress.register(metadata, slot)
     }
+    pub(super) fn actual_joint_metadata_registration(
+        &self,
+        slot: Uuid,
+    ) -> Result<Option<Arc<super::NativeMetadataIngressRegistration>>> {
+        self.require_live()?;
+        self.metadata_ingress.actual_joint_registration(slot)
+    }
     pub(crate) fn has_live_metadata_ingress(
         &self,
         metadata: &Arc<Mutex<crate::distribution_consensus::MetadataConsensusStore>>,
@@ -119,6 +126,7 @@ pub(super) struct ServiceStoragePolicy {
     database_incarnation: String,
     directory: Option<std::sync::Weak<bicdb_page::DirectoryLock>>,
     native_format_at_open: bool,
+    native_metadata_format_at_open: bool,
     writer_enforcement_version: u32,
 }
 impl ServiceStoragePolicy {
@@ -129,9 +137,16 @@ impl ServiceStoragePolicy {
             database_incarnation: database.incarnation_id().into(),
             directory: database.native_service_directory_lifetime(),
             writer_enforcement_version: database.actual_native_writer_enforcement_version()?,
+            native_metadata_format_at_open: crate::format::native_metadata_store_active(
+                database.data_path(),
+            )?,
             native_format_at_open: database.native_range_image_birth_present()
                 || crate::format::range_image_install_active(database.data_path())?,
         })
+    }
+    pub(super) fn requires_owned_metadata_point(&self) -> Result<bool> {
+        self.actual_open.require_live()?;
+        Ok(self.native_metadata_format_at_open)
     }
     pub(super) fn native_writer_enforcement_version(&self) -> Result<u32> {
         self.actual_open.require_live()?;

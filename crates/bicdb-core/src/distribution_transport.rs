@@ -126,6 +126,8 @@ pub(crate) use native_abort::{
     AuthenticatedNativeAbortCandidateReply, AuthenticatedNativeAbortPromiseReply,
 };
 pub(crate) use native_image_source::AuthenticatedNativeRemoteImageSourceFrame;
+#[cfg(test)]
+pub(crate) mod native_image_response_stall;
 pub(crate) use native_old::AuthenticatedNativeRemoteOldFrame;
 
 const FRAME_HEADER_BYTES: usize = 4;
@@ -1624,11 +1626,15 @@ fn handle_cluster_data_connection(
             })?;
             let parent =
                 CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
-            return source
+            let actual = source
                 .observe_remote_image_source_frame(target, &request, &parent)
-                .map(|actual| {
-                    ClusterDataResponse::NativeRemoteImageSourceFrame(actual.into_reply())
-                });
+                .map(|actual| actual.into_reply())?;
+            // Test-only hold of an ACTUAL authenticated Rows reply, after the
+            // original handler released its session/engine guards. No reply,
+            // authority or progress is invented by the transport fault.
+            #[cfg(test)]
+            native_image_response_stall::hold_actual_rows_reply(&actual, &parent)?;
+            return Ok(ClusterDataResponse::NativeRemoteImageSourceFrame(actual));
         }
         if let ClusterDataRequest::NativeSourceDiscovery { request } = request.request {
             let donor = initial_data.ok_or_else(|| {

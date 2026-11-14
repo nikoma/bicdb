@@ -1641,8 +1641,12 @@ impl MetadataConsensusStore {
         budget: Duration,
         local: &MetadataReadParticipant,
     ) -> Result<MetadataReadContext> {
-        self.publication_version.require_ready()?;
         self.require_native_metadata_actor_current(true)?;
+        // Preserve the actual missing-owner refusal even if a cached legacy
+        // store's rejected protected transition also poisoned its local gate.
+        // A valid owner must still prove the unchanged ready version before
+        // any positive read context is produced.
+        self.publication_version.require_ready()?;
         let started = Instant::now();
         if read_request_id.is_nil() || budget.is_zero() || budget > Duration::from_secs(300) {
             return Err(metadata_error("read authority request/budget is invalid"));

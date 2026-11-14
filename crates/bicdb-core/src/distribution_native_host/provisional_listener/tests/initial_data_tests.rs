@@ -304,6 +304,55 @@ fn native_initial_data_actual_tls_cancel_partial_quorum_then_nonempty_is_not_new
 }
 
 #[test]
+fn native_initial_data_actual_tls_lost_listener_is_restored_while_leader_is_unknown() {
+    let (_f, mut controls, _configs) = actual_initial_metadata_controls();
+    // Partial startup: the control listener is drained, the DATA listener is
+    // up, nothing is published.
+    assert!(controls[0].open_initial_data(&budget(2000)).is_err());
+    let listening = |control: &NativeMetadataControlHost| {
+        control
+            .initial_data_status(&budget(1000))
+            .unwrap()
+            .unwrap()
+            .receiver_listening
+    };
+    assert!(listening(&controls[0]));
+    // What a refused non-waiting DATA listener start leaves behind: no
+    // ingress at all, and the leadership its paused scheduler gave up.
+    controls[0]
+        .test_lose_initial_data_listener_and_relinquish(&budget(5000))
+        .unwrap();
+    assert!(!listening(&controls[0]));
+    // The same owner's finite retries must give the node its ingress back
+    // although no metadata leader is known to it. Requiring the leader first
+    // left the node unreachable, so it could never learn one.
+    let until = Instant::now() + Duration::from_secs(10);
+    loop {
+        let retried = controls[0].open_initial_data(&budget(2000));
+        if listening(&controls[0]) {
+            if let Err(error) = retried {
+                let error = error.to_string();
+                assert!(
+                    error.contains("current metadata leader unknown for DATA open"),
+                    "{error}"
+                );
+            }
+            break;
+        }
+        assert!(
+            Instant::now() < until,
+            "lost DATA listener was not restored: {:?}",
+            retried.err().map(|error| error.to_string())
+        );
+    }
+    let pending = controls[0]
+        .initial_data_status(&budget(1000))
+        .unwrap()
+        .unwrap();
+    assert!(pending.writer_policy_current && !pending.dispatcher_published);
+}
+
+#[test]
 fn native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root() {
     for mode in 0..3 {
         let (f, mut controls, configs) = actual_initial_metadata_controls();

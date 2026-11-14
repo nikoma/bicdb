@@ -501,6 +501,7 @@ fn receipt_from_final(
     let mut receipt = NativeInstalledRangeImageReceipt {
         format_version: REGISTERED_INSTALL_FORMAT,
         registered_final_image: Some(fact.pointer()),
+        joined_final_image: None,
         cluster_id: mf.cluster_id.clone(),
         bootstrap_id: mf.bootstrap_id,
         target_node_id: mf.target_id.clone(),

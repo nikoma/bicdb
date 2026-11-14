@@ -8,8 +8,12 @@ use crate::distribution_range_consensus::{NativeJoinedRemoteInstallingFence, Ran
 use crate::distribution_range_image::{
     NativeRemoteImageSourcePayloadV1, RangeImageHistoryCursorV1,
 };
+mod final_publication;
 mod rows;
 mod verification;
+pub(crate) use final_publication::{
+    HistoricalJoinedFinalImage, NativeJoinedRemoteFinalImageReceipt,
+};
 pub(crate) use rows::{NativeJoinedRemoteRowProgress, NativeJoinedRemoteRowTransactionGrant};
 pub(crate) use verification::NativeJoinedRemoteVerificationProgress;
 
@@ -57,6 +61,19 @@ impl<'a> NativeJoinedRemoteImageContext<'a> {
         result.require_current(db)?;
         Ok(result)
     }
+    pub(crate) fn native_scope(&self) -> &NativeJoinedRemoteMutationScope<'_> {
+        self.scope
+    }
+    pub(crate) fn actual_request(
+        &self,
+    ) -> &crate::distribution_native_host::NativeJoinedRangeReceiveRequest {
+        self.point.request()
+    }
+    pub(crate) fn actual_frame(
+        &self,
+    ) -> &crate::distribution_range_image::NativeRemoteImageStep<'_> {
+        self.point.frame()
+    }
     pub(crate) fn require_current(&self, db: &BicDb) -> Result<()> {
         self.point.require_live()?;
         self.scope.require_store(db, self.store)?;
@@ -80,12 +97,20 @@ pub(crate) enum NativeJoinedRemoteImageOperation {
     ApplyRows,
     BeginVerification,
     VerifyTarget { max_scanned_records: usize },
+    PublishFinal,
+    PublishNativeBase,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) enum NativeJoinedRemoteImageProgress {
     History(NativeJoinedRemoteHistoryProgress),
     Rows(NativeJoinedRemoteRowProgress),
     Verification(NativeJoinedRemoteVerificationProgress),
+    FinalImage(NativeJoinedRemoteFinalImagePointer),
+    NativeBase {
+        range_index: u64,
+        native_page_xid: u64,
+        checksum_sha256: String,
+    },
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -196,6 +221,8 @@ pub(crate) struct NativeJoinedRemoteImageInstallation {
     rows: Option<rows::RetainedRemoteRows>,
     verification: Option<verification::JoinedTargetVerifier>,
     scan_pending: Option<verification::JoinedTargetScanReadPoint>,
+    final_publication: Option<final_publication::JoinedFinalPublication>,
+    base_publication: Option<crate::db::range_image_install::JoinedRemoteBasePublication>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct NativeJoinedRemoteHistoryProgress {
@@ -262,6 +289,12 @@ impl NativeJoinedRemoteImageInstallation {
             NativeJoinedRemoteImageOperation::BeginVerification => self
                 .begin_verification(db, context)
                 .map(NativeJoinedRemoteImageProgress::Verification),
+            NativeJoinedRemoteImageOperation::PublishNativeBase => {
+                self.publish_native_base(db, context)
+            }
+            NativeJoinedRemoteImageOperation::PublishFinal => self
+                .publish_final_image(db, context)
+                .map(NativeJoinedRemoteImageProgress::FinalImage),
             NativeJoinedRemoteImageOperation::VerifyTarget { .. } => Err(invalid(
                 "Joined physical target scan requires actual unlocked host read-point path",
             )),
@@ -274,7 +307,9 @@ impl NativeJoinedRemoteImageInstallation {
             "candidate_framed":p.bytes.is_some()})),"rows":self.rows.as_ref().map(|r|r.test_state()),
             "verification":self.verification.as_ref().map(|v|v.test_state()),
             "pending_read_point":self.scan_pending.as_ref().map(|p|p.test_state()),
-            "native_base_published":false,"Serving":false})
+            "final_publication":self.final_publication.as_ref().map(|p|p.test_state()),
+            "native_base":self.base_publication.as_ref().map(|b|b.test_state()),
+            "native_base_published":self.verified_base().is_some(),"Serving":false})
     }
 }
 impl NativeJoinedRemoteImageInstallation {
@@ -315,6 +350,8 @@ impl NativeJoinedRemoteImageInstallation {
             rows: None,
             verification: None,
             scan_pending: None,
+            final_publication: None,
+            base_publication: None,
         })
     }
     fn require_owner(
@@ -627,5 +664,47 @@ impl BicDb {
             return Err(invalid("Joined history key/A mismatch"));
         }
         Ok(header)
+    }
+}
+
+impl NativeJoinedRemoteImageInstallation {
+    pub(crate) fn verified_base(&self) -> Option<&NativeInstalledRangeImageBase> {
+        self.base_publication
+            .as_ref()
+            .and_then(|b| b.verified_base())
+    }
+    pub(crate) fn base_boundary(
+        &self,
+    ) -> Option<&Arc<crate::db::range_image_install::JoinedRemoteBaseBoundary>> {
+        self.base_publication.as_ref().and_then(|b| b.boundary())
+    }
+    fn publish_native_base(
+        &mut self,
+        db: &BicDb,
+        context: &NativeJoinedRemoteImageContext<'_>,
+    ) -> Result<NativeJoinedRemoteImageProgress> {
+        self.require_owner(db, context)?;
+        let final_image = self.final_image_receipt().cloned().ok_or_else(|| {
+            invalid("Joined native base requires actual committed original final image")
+        })?;
+        if self.base_publication.is_none() {
+            self.base_publication = Some(
+                crate::db::range_image_install::JoinedRemoteBasePublication::retain(
+                    db,
+                    context,
+                    final_image,
+                )?,
+            );
+        }
+        let publication = self.base_publication.as_mut().unwrap();
+        publication.advance(db, context)?;
+        let base = publication
+            .verified_base()
+            .ok_or_else(|| invalid("Joined base final readback not verified"))?;
+        Ok(NativeJoinedRemoteImageProgress::NativeBase {
+            range_index: base.range_index(),
+            native_page_xid: base.native_page_xid(),
+            checksum_sha256: base.native_receipt_sha256().to_owned(),
+        })
     }
 }

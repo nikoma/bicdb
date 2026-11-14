@@ -297,3 +297,63 @@ Also, auto_checkpoint_if_due returns immediately for ServerPaged. The earlier
 success/live-request checkpoint guard is defensive contract hardening; it did
 not fix a confirmed live checkpoint-I/O defect in this Joined deployment mode
 and establishes no measured recovery benefit.
+
+
+## Distinct Joined final publication source
+
+A subsequent source-only batch adds PublishFinal and a distinct
+NativeJoinedRemoteFinalImagePointer/Receipt. It consumes the original host's
+actual complete audited history, archived committed row header, authenticated
+Finished seal and separately published independent target verifier. The protected
+v3 record additionally binds the original writer-policy hash, exact Joined
+proposal/Installing intent, original DB/open/Store/birth/A, namespaces, target
+watermarks/image generations/index definitions and metadata request lower bounds.
+CURRENT and immutable archive share one actual native transaction.
+
+The owner records the actual issued native xid as the first closure operation,
+then an unframed native state before any fallible scope/checksum/encoding. It
+retains exact candidate bytes before either put and actual commit return before
+postchecks. Unframed, aborted and uncertain attempts cannot create a replacement
+transaction. Readback checks the same original bytes, committed native xid,
+complete history endpoints/row archive and still-current actual context. Final
+receipt publication prepares allocations and native checks before the short
+selected-current plus metadata-version gates, performs only the in-memory state
+swap there, and drops old owners after both gates. This is physical evidence,
+not a serialized capability or a new range writer/read grant.
+
+This batch is uncompiled/unexecuted. It deliberately does not add profile-3
+native base, selected catalogue adoption, materialized-owner handoff, NEW/dual
+decision/Open/ALL release, APP/Strong Serving or cold recovery. No source-defined
+publication result substitutes for those actual producers or their acceptance
+controls. Registered FIRST final/base files remain byte-identical.
+
+## Same-original Joined native base source
+
+The next source-only batch adds a distinct installed-receipt profile 3 with an
+unconditional Joined final-pointer DATA field. Profiles 1 and 2 still require
+exactly their previous pointer shape; mixed, absent or unknown profile pointers
+refuse. The new optional field is omitted for all old-profile serialization.
+A Joined historical-final reader validates actual native CURRENT/archive,
+committed xid, birth, complete immutable history endpoints and archived row
+header. It grants no old A, resumed owner, mutation or Serving permission.
+Common installed-current and integrity readers explicitly dispatch this profile;
+a build without its actual Joined history reader refuses it.
+
+PublishNativeBase uses the original host-retained Joined image and actual
+final receipt. Before its first begin, the selected native safety preimage must
+still be absent under the held actual journal. It stores the issued xid before
+fallible framing and the complete exact base candidate/bytes before the first
+put; native base CURRENT and immutable archive share the same transaction.
+Unframed, aborted and uncertain attempts remain owned and cannot allocate a new
+transaction. After a base appears, continuation accepts only that same retained
+candidate and refuses any unowned selected prefix, pending command or genesis.
+It never treats the original absence proof as permission to ignore new debt.
+
+The common base readback independently checks profile-3 immutable provenance
+and actual committed xid. Publication of the original owner's verified-base
+observation uses the actual selected-current and metadata-version short guards;
+old observers drop after the guards. The original writer-State/hook stays the
+same and unrelated ranges are not replaced. Selected catalogue adoption and
+materialized owner, NEW/dual decision/Open/ALL release, actual APP/Strong on the
+new range and cold continuation are still absent. This is uncompiled source,
+not an actual successful base operation or acceptance result.

@@ -85,7 +85,9 @@ mod integrity_reservations;
 mod pitr_maintenance;
 mod range_image_final_pointer;
 mod range_image_install;
-pub(crate) use range_image_final_pointer::NativeRegisteredRemoteFinalImagePointer;
+pub(crate) use range_image_final_pointer::{
+    NativeJoinedRemoteFinalImagePointer, NativeRegisteredRemoteFinalImagePointer,
+};
 mod range_image_proposal;
 #[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use range_image_install::test_registered_remote_base_after_wal;
@@ -36305,6 +36307,7 @@ pub(crate) use range_image_native::test_joined_remote_proposal_after_native_begi
 
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::{
-    NativeJoinedRemoteImageContext, NativeJoinedRemoteImageInstallation,
-    NativeJoinedRemoteImageOperation, NativeJoinedRemoteImageProgress,
+    NativeJoinedRemoteFinalImageReceipt, NativeJoinedRemoteImageContext,
+    NativeJoinedRemoteImageInstallation, NativeJoinedRemoteImageOperation,
+    NativeJoinedRemoteImageProgress,
 };

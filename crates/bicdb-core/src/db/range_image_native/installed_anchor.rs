@@ -198,7 +198,7 @@ impl BicDb {
         &self,
         base: &NativeInstalledRangeImageBase,
     ) -> Result<()> {
-        if base.has_registered_history_publication() {
+        if base.has_registered_history_publication() || base.has_joined_history_publication() {
             return self.validate_registered_installed_base_history(base);
         }
         self.validate_published_native_history_binding(
@@ -220,7 +220,7 @@ impl BicDb {
         &self,
         base: &NativeInstalledRangeImageIntegrity,
     ) -> Result<()> {
-        if base.has_registered_history_publication() {
+        if base.has_registered_history_publication() || base.has_joined_history_publication() {
             return self.validate_registered_installed_integrity_history(base);
         }
         self.validate_published_native_history_binding(

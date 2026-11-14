@@ -11,6 +11,11 @@ use crate::distribution_range_mutation::FrozenRangeMutationPermit;
 
 const INSTALL_FORMAT: u32 = 1;
 const REGISTERED_INSTALL_FORMAT: u32 = 2;
+const JOINED_INSTALL_FORMAT: u32 = 3;
+#[cfg(feature = "tls-replication")]
+mod joined_remote;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_remote::{JoinedRemoteBaseBoundary, JoinedRemoteBasePublication};
 #[cfg(feature = "tls-replication")]
 mod registered_remote;
 #[cfg(all(test, feature = "tls-replication"))]
@@ -49,6 +54,8 @@ struct NativeInstalledRangeImageReceipt {
     // history validator must refuse this profile, never interpret it as local.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     registered_final_image: Option<crate::db::NativeRegisteredRemoteFinalImagePointer>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    joined_final_image: Option<crate::db::NativeJoinedRemoteFinalImagePointer>,
     cluster_id: ClusterId,
     bootstrap_id: Uuid,
     target_node_id: ClusterNodeId,
@@ -101,8 +108,14 @@ impl NativeInstalledRangeImageReceipt {
         let digest =
             |value: &str| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit());
         if !matches!(
-            (self.format_version, self.registered_final_image.as_ref()),
-            (INSTALL_FORMAT, None) | (REGISTERED_INSTALL_FORMAT, Some(_))
+            (
+                self.format_version,
+                self.registered_final_image.as_ref(),
+                self.joined_final_image.as_ref()
+            ),
+            (INSTALL_FORMAT, None, None)
+                | (REGISTERED_INSTALL_FORMAT, Some(_), None)
+                | (JOINED_INSTALL_FORMAT, None, Some(_))
         ) || self.bootstrap_id.is_nil()
             || self.birth_id.is_nil()
             || self.attempt_id.is_nil()
@@ -149,6 +162,14 @@ impl NativeInstalledRangeImageReceipt {
                 return Err(invalid("Registered installed profile/purpose mismatch"));
             }
         }
+        if let Some(pointer) = &self.joined_final_image {
+            pointer.validate()?;
+            if pointer.attempt_id != self.attempt_id
+                || self.purpose != ImageInstallPurpose::RelocationLearner
+            {
+                return Err(invalid("Joined installed profile/purpose mismatch"));
+            }
+        }
         Ok(())
     }
 }
@@ -173,6 +194,9 @@ pub(crate) struct NativeInstalledRangeImageIntegrity {
     database_incarnation: String,
 }
 impl NativeInstalledRangeImageIntegrity {
+    pub(super) fn has_joined_history_publication(&self) -> bool {
+        self.receipt.joined_final_image.is_some()
+    }
     pub(super) fn has_registered_history_publication(&self) -> bool {
         self.receipt.registered_final_image.is_some()
     }
@@ -421,6 +445,9 @@ impl TargetNativeImageSnapshotBound {
     }
 }
 impl NativeInstalledRangeImageBase {
+    pub(super) fn has_joined_history_publication(&self) -> bool {
+        self.receipt.joined_final_image.is_some()
+    }
     pub(super) fn has_registered_history_publication(&self) -> bool {
         self.receipt.registered_final_image.is_some()
     }
@@ -587,6 +614,14 @@ impl BicDb {
         &self,
         receipt: &NativeInstalledRangeImageReceipt,
     ) -> Result<()> {
+        if receipt.joined_final_image.is_some() {
+            #[cfg(feature = "tls-replication")]
+            return self.validate_joined_installed_history(receipt);
+            #[cfg(not(feature = "tls-replication"))]
+            return Err(invalid(
+                "Joined installed history reader unavailable in this build",
+            ));
+        }
         if receipt.registered_final_image.is_none() {
             return Ok(());
         }
@@ -1165,6 +1200,7 @@ impl BicDb {
                 let mut receipt = NativeInstalledRangeImageReceipt {
                     format_version: INSTALL_FORMAT,
                     registered_final_image: None,
+                    joined_final_image: None,
                     cluster_id: fence.cluster_id().clone(),
                     bootstrap_id: fence.bootstrap_id(),
                     target_node_id: admission.local_node_id().clone(),

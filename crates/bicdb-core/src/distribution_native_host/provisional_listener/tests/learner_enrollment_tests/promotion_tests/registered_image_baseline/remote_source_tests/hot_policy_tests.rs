@@ -827,7 +827,23 @@ pub(in super::super) fn exercise(
         })
         .unwrap();
     }
-    let published = Arc::new(publication.finish().unwrap());
+    // Aggregate under its own complete phase, as the product driver does
+    // (`NativeJoinedDataHandoff::open_and_serve`): the last member's phase is
+    // spent by that member's own publication and cannot also carry the full
+    // revalidation of every member that aggregation requires.
+    let published = {
+        let mut phase = prepared
+            .begin_fresh_preparation_phase(Duration::from_secs(4))
+            .unwrap();
+        for member in data.new_members().keys() {
+            let i = (0..5).find(|i| node(*i) == *member).unwrap();
+            phase
+                .acquire_actual_member(&all_clients[i], &node(0))
+                .unwrap();
+        }
+        let phase = Arc::new(phase.finish().unwrap());
+        Arc::new(publication.finish_with_fresh_phase(phase).unwrap())
+    };
     let mut activations = BTreeMap::new();
     let mut release_owner = None;
     for local in data.new_members().keys() {

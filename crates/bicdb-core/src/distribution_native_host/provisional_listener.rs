@@ -209,22 +209,49 @@ impl NativeProvisionalHost {
         parent: &CancellationToken,
     ) -> Result<super::initial_preparation::NativeInitialConsensusPermit> {
         let token = parent.child_with_deadline(std::time::Instant::now() + Duration::from_secs(5));
+        #[cfg(test)]
+        let passive = crate::native_passive_diagnostics::current();
         let mut observations = Vec::new();
         for member in self.seed.plan.topology.nodes.keys() {
             token.check()?;
-            observations.push(self.transport.acquire_initial_preparation(
+            #[cfg(test)]
+            let started = std::time::Instant::now();
+            #[cfg(test)]
+            if let Some(d) = &passive {
+                d.record("initial_config_recipient_begin", serde_json::json!({"preparing_host":self.seed.spec.node_id,
+                    "recipient":member,"recipient_address":self.seed.plan.topology.nodes[member].address,
+                    "configured_io_timeout_ms":self.network.io_timeout_ms,
+                    "completed_recipient_count":observations.len(),"original_parent_deadline":d.deadline(parent.deadline()),
+                    "effective_deadline":d.deadline(token.deadline())}));
+            }
+            let result = self.transport.acquire_initial_preparation(
                 member,
                 &self.seed.plan,
                 Some(configuration.topology.clone()),
                 &token,
-            )?);
+            );
+            #[cfg(test)]
+            if let Some(d) = &passive {
+                d.record("initial_config_recipient_return", serde_json::json!({"preparing_host":self.seed.spec.node_id,
+                    "recipient":member,"elapsed_us":started.elapsed().as_micros(),"result_ok":result.is_ok(),
+                    "actual_error_chain":result.as_ref().err().map(|e|crate::native_passive_diagnostics::error_chain(e)),
+                    "effective_deadline":d.deadline(token.deadline()),"completed_recipient_count_before_this_result":observations.len()}));
+            }
+            observations.push(result?);
         }
-        super::initial_preparation::NativeInitialConsensusPermit::from_observations(
+        let result = super::initial_preparation::NativeInitialConsensusPermit::from_observations(
             &self.seed,
             configuration,
             observations,
             &token,
-        )
+        );
+        #[cfg(test)]
+        if let Some(d) = &passive {
+            d.record("initial_config_permit_return", serde_json::json!({"preparing_host":self.seed.spec.node_id,
+                "result_ok":result.is_ok(),"actual_error_chain":result.as_ref().err().map(|e|crate::native_passive_diagnostics::error_chain(e)),
+                "effective_deadline":d.deadline(token.deadline())}));
+        }
+        result
     }
     pub(crate) fn finish_initial_consensus(
         &mut self,

@@ -96,20 +96,37 @@ enum Fault {
     Archive,
 }
 fn fault(fault: Fault) {
+    let _passive = crate::native_passive_diagnostics::CaseGuard::selected();
+    crate::native_passive_diagnostics::record(
+        "normal_damage_recovery_prerequisite_begin",
+        serde_json::json!({}),
+    );
     let (fixture, range) = normal_recovered();
+    crate::native_passive_diagnostics::record(
+        "normal_damage_recovery_prerequisite_return",
+        serde_json::json!({"range":range.id,"epoch":range.epoch,"leader":range.leader}),
+    );
     let before = snapshot_at(&fixture, &range, 1);
     let parent = token();
     let business = Uuid::now_v7();
-    let metadata = fixture.clients[&range.leader]
-        .acquire_metadata_read_observation(
-            &node("n1"),
-            business,
-            range.id,
-            range.epoch,
-            Duration::from_secs(5),
-            &parent,
-        )
-        .unwrap();
+    crate::native_passive_diagnostics::record(
+        "normal_damage_fresh_metadata_begin",
+        serde_json::json!({"range":range.id,"epoch":range.epoch,"business":business,"metadata_leader":"n1"}),
+    );
+    let metadata = fixture.clients[&range.leader].acquire_metadata_read_observation(
+        &node("n1"),
+        business,
+        range.id,
+        range.epoch,
+        Duration::from_secs(5),
+        &parent,
+    );
+    crate::native_passive_diagnostics::record(
+        "normal_damage_fresh_metadata_return",
+        serde_json::json!({"business":business,
+        "result_ok":metadata.is_ok(),"actual_error_chain":metadata.as_ref().err().map(|e|crate::native_passive_diagnostics::error_chain(e))}),
+    );
+    let metadata = metadata.unwrap();
     let original_metadata_deadline = metadata.deadline();
     let actual_round =
         NativeReadQuorumRound::begin(metadata, business, Uuid::now_v7(), &range.leader, &parent)
@@ -131,6 +148,10 @@ fn fault(fault: Fault) {
             }
             // The fault helper proves ACTUAL NormalRecovery current==archive
             // before its one native WAL deletion and proves the other survived.
+            crate::native_passive_diagnostics::record(
+                "normal_damage_actual_injection_reached",
+                serde_json::json!({"archive":matches!(fault,Fault::Archive)}),
+            );
             actual_reached.store(true, Ordering::Release);
             Ok(())
         },

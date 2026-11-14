@@ -88,6 +88,8 @@ pub struct MetadataReadProvider {
     limits: MetadataReadProviderLimits,
     inflight: Arc<AtomicUsize>,
     listener_database: std::sync::OnceLock<crate::distribution_data::ClusterServiceOpenGuard>,
+    #[cfg(test)]
+    passive_capture: Option<crate::native_passive_diagnostics::Handle>,
 }
 
 struct ContextPermit(Arc<AtomicUsize>);
@@ -126,6 +128,8 @@ struct ProbeJob {
     destination: ClusterNodeId,
     request: MetadataReadProbeRequest,
     deadline: Instant,
+    #[cfg(test)]
+    passive: Option<PassiveProbe>,
 }
 struct Candidate {
     destination: ClusterNodeId,
@@ -133,6 +137,39 @@ struct Candidate {
     attempts: usize,
 }
 
+#[cfg(test)]
+#[derive(Clone)]
+struct PassiveAcquisition {
+    capture: crate::native_passive_diagnostics::Handle,
+    acquisition_id: uuid::Uuid,
+    read_request_id: uuid::Uuid,
+    started: Instant,
+}
+#[cfg(test)]
+impl PassiveAcquisition {
+    fn record(&self, stage: &str, data: serde_json::Value) {
+        self.capture.record(stage, serde_json::json!({"acquisition_id":self.acquisition_id,
+            "read_request_id":self.read_request_id,"acquisition_elapsed_us":self.started.elapsed().as_micros(),
+            "observation":data}));
+    }
+}
+#[cfg(test)]
+struct PassiveProbe {
+    acquisition: PassiveAcquisition,
+    voter: ClusterNodeId,
+    attempt: usize,
+    next_index: u64,
+    queued: Instant,
+    deadline: Instant,
+}
+#[cfg(test)]
+impl PassiveProbe {
+    fn record(&self, stage: &str, data: serde_json::Value) {
+        self.acquisition.record(stage, serde_json::json!({"voter":self.voter,
+            "attempt":self.attempt,"next_index":self.next_index,"queue_elapsed_us":self.queued.elapsed().as_micros(),
+            "actual_attempt_deadline":self.acquisition.capture.deadline(Some(self.deadline)),"observation":data}));
+    }
+}
 impl MetadataReadProvider {
     pub(crate) fn bind_listener_database(
         &self,
@@ -202,6 +239,8 @@ impl MetadataReadProvider {
             limits,
             inflight: Arc::new(AtomicUsize::new(0)),
             listener_database: std::sync::OnceLock::new(),
+            #[cfg(test)]
+            passive_capture: crate::native_passive_diagnostics::current(),
         })
     }
 
@@ -243,6 +282,8 @@ impl MetadataReadProvider {
             destination: candidate.destination.clone(),
             request,
             deadline,
+            #[cfg(test)]
+            passive: None,
         })
     }
 
@@ -357,6 +398,49 @@ impl MetadataReadProvider {
         admission: ReadAdmission<'_>,
         parent: &CancellationToken,
     ) -> Result<MetadataReadAuthority> {
+        #[cfg(test)]
+        let diagnostic = self
+            .passive_capture
+            .clone()
+            .map(|capture| PassiveAcquisition {
+                capture,
+                acquisition_id: request.acquisition_id,
+                read_request_id: request.read_request_id,
+                started: Instant::now(),
+            });
+        #[cfg(test)]
+        if let Some(d) = &diagnostic {
+            d.record("metadata_acquire_begin", serde_json::json!({"caller":caller.node_id(),
+                "range_id":request.range_id,"range_epoch":request.range_epoch,"requested_budget_ms":request.budget_ms,
+                "original_parent_deadline":d.capture.deadline(parent.deadline()),
+                "max_attempts_per_voter":self.limits.max_attempts_per_voter,"workers":self.limits.workers_per_context}));
+        }
+        #[cfg(test)]
+        let result =
+            self.acquire_authority_inner(caller, request, admission, parent, diagnostic.as_ref());
+        #[cfg(not(test))]
+        let result = self.acquire_authority_inner(caller, request, admission, parent);
+        #[cfg(test)]
+        if let Some(d) = &diagnostic {
+            d.record("metadata_acquire_return", serde_json::json!({"result_ok":result.is_ok(),
+                "actual_error_chain":result.as_ref().err().map(|e|crate::native_passive_diagnostics::error_chain(e)),
+                "returned_term":result.as_ref().ok().map(|a|a.term()),
+                "returned_read_index":result.as_ref().ok().map(|a|a.read_index()),
+                "returned_deadline":result.as_ref().ok().map(|a|d.capture.deadline(Some(a.deadline()))),
+                "terminal_is_original_result":true}));
+        }
+        result
+    }
+    // Original protocol body. Diagnostic observations never supply a result,
+    // retry, deadline, acknowledgement or acceptance decision to this method.
+    fn acquire_authority_inner(
+        &self,
+        caller: &MetadataReadParticipant,
+        request: MetadataReadAcquireRequest,
+        admission: ReadAdmission<'_>,
+        parent: &CancellationToken,
+        #[cfg(test)] diagnostic: Option<&PassiveAcquisition>,
+    ) -> Result<MetadataReadAuthority> {
         request.validate()?;
         parent.check()?;
         self.inflight
@@ -385,6 +469,15 @@ impl MetadataReadProvider {
             context.restrict_deadline(token.deadline().unwrap());
             (context, range)
         };
+        #[cfg(test)]
+        if let Some(d) = diagnostic {
+            d.record(
+                "metadata_context_begun",
+                serde_json::json!({"actual_context":context.test_passive_data(),
+                "actual_context_deadline":d.capture.deadline(Some(context.deadline())),
+                "effective_parent_deadline":d.capture.deadline(token.deadline())}),
+            );
+        }
         let voters = context.remote_voters();
         if voters.len() + 1 > self.limits.max_voters {
             return Err(acquisition_error(
@@ -422,8 +515,23 @@ impl MetadataReadProvider {
                                     break;
                                 }
                                 let attempt = token.child_with_deadline(job.deadline);
+                                #[cfg(test)]
+                                if let Some(d) = &job.passive {
+                                    d.record("metadata_probe_worker_start", serde_json::json!({
+                                        "original_worker_parent_deadline":d.acquisition.capture.deadline(token.deadline()),
+                                        "effective_deadline":d.acquisition.capture.deadline(attempt.deadline())}));
+                                }
+                                #[cfg(test)]
+                                let passive_transport_started = Instant::now();
                                 let result =
                                     transport.probe(&job.destination, job.request, &attempt);
+                                #[cfg(test)]
+                                if let Some(d) = &job.passive {
+                                    d.record("metadata_probe_actual_return", serde_json::json!({"result_ok":result.is_ok(),
+                                        "actual_transport_elapsed_us":passive_transport_started.elapsed().as_micros(),
+                                        "actual_error_chain":result.as_ref().err().map(|e|crate::native_passive_diagnostics::error_chain(e)),
+                                        "actual_ack":result.as_ref().ok().map(|a|a.test_passive_data())}));
+                                }
                                 if results.send((job.destination, result)).is_err() {
                                     break;
                                 }
@@ -478,6 +586,26 @@ impl MetadataReadProvider {
                 }
                 let attempt_deadline = (Instant::now() + slice).min(context.deadline());
                 let job = self.prepare_job(&context, &candidate, &token, attempt_deadline)?;
+                #[cfg(test)]
+                let job = {
+                    let mut job = job;
+                    if let Some(d) = diagnostic {
+                        let probe = PassiveProbe {
+                            acquisition: d.clone(),
+                            voter: candidate.destination.clone(),
+                            attempt: candidate.attempts + 1,
+                            next_index: candidate.next_index,
+                            queued: Instant::now(),
+                            deadline: attempt_deadline,
+                        };
+                        probe.record("metadata_probe_dispatch", serde_json::json!({"dispatch_scope":"bounded_worker_queue_intent_not_wire",
+                            "slice_us":slice.as_micros(),
+                            "context_remaining_us":remaining.as_micros(),"queued_voters":queued,"waves":waves,
+                            "actual_context":context.test_passive_data()}));
+                        job.passive = Some(probe);
+                    }
+                    job
+                };
                 candidate.attempts += 1;
                 jobs_tx
                     .try_send(job)
@@ -485,6 +613,15 @@ impl MetadataReadProvider {
                 outstanding.insert(candidate.destination.clone(), candidate);
             }
             if outstanding.is_empty() {
+                #[cfg(test)]
+                if let Some(d) = diagnostic {
+                    d.record(
+                        "metadata_probe_attempts_exhausted",
+                        serde_json::json!({"actual_context":context.test_passive_data(),
+                        "remaining_candidates":candidates.len(),"outstanding":outstanding.len(),
+                        "context_deadline":d.capture.deadline(Some(context.deadline()))}),
+                    );
+                }
                 return Err(acquisition_error(
                     "fresh joint quorum unavailable within bounded probe attempts",
                 ));
@@ -497,7 +634,16 @@ impl MetadataReadProvider {
                     let retry = if let Ok(ack) = result {
                         let accepted = self
                             .lock_consensus(&token)?
-                            .record_read_authority_ack(&mut context, &ack)?;
+                            .record_read_authority_ack(&mut context, &ack);
+                        #[cfg(test)]
+                        if let Some(d) = diagnostic {
+                            d.record("metadata_probe_ack_acceptance", serde_json::json!({"voter":voter,
+                                "attempt":candidate.attempts,"acceptance_ok":accepted.is_ok(),
+                                "accepted":accepted.as_ref().ok(),
+                                "actual_error_chain":accepted.as_ref().err().map(|e|crate::native_passive_diagnostics::error_chain(e)),
+                                "actual_ack":ack.test_passive_data(),"actual_context":context.test_passive_data()}));
+                        }
+                        let accepted = accepted?;
                         if !accepted {
                             candidate.next_index = ack
                                 .conflict_index()
@@ -509,6 +655,13 @@ impl MetadataReadProvider {
                     } else {
                         true
                     };
+                    #[cfg(test)]
+                    if let Some(d) = diagnostic {
+                        d.record("metadata_probe_collector_result", serde_json::json!({"voter":voter,
+                            "attempt":candidate.attempts,"next_index":candidate.next_index,"retry_required":retry,
+                            "requeued":retry && candidate.attempts<self.limits.max_attempts_per_voter,
+                            "context_deadline":d.capture.deadline(Some(context.deadline()))}));
+                    }
                     if retry && candidate.attempts < self.limits.max_attempts_per_voter {
                         // Retries join the tail behind all not-yet-tried voters.
                         candidates.push_back(candidate);

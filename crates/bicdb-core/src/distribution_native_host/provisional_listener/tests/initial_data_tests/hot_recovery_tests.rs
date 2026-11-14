@@ -193,6 +193,7 @@ fn native_hot_recovery_cancel_waiter_preserves_actual_other_owner() {
 }
 #[test]
 fn native_hot_recovery_finite_open_never_starts_process_worker() {
+    let _passive = crate::native_passive_diagnostics::CaseGuard::selected();
     let (_f, mut controls, _) = opened();
     assert!(controls.iter().all(|c| !c.test_hot_worker_started()));
     let canceled = budget(5000);
@@ -368,6 +369,7 @@ fn native_hot_recovery_original_writer_replacement_refuses_without_reserving_or_
 }
 #[test]
 fn native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation() {
+    let _passive = crate::native_passive_diagnostics::CaseGuard::selected();
     let (f, mut controls, configs) = opened();
     let (coordinator, host, runtime, _) = controls[0].test_hot_recovery_bindings().unwrap();
     let bootstrap = crate::TcpClusterBootstrapClient::new(

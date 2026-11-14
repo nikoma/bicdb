@@ -1058,6 +1058,14 @@ pub struct MetadataReadAck {
 }
 
 impl MetadataReadAck {
+    /// Diagnostic DATA only, from this actual returned ACK; never a vote constructor.
+    #[cfg(test)]
+    pub(crate) fn test_passive_data(&self) -> serde_json::Value {
+        serde_json::json!({"voter":self.participant.node_id,"context_id":self.response.context_id,
+            "read_request_id":self.response.read_request_id,"read_index":self.response.read_index,
+            "append_term":self.response.append.term,"append_success":self.response.append.success,
+            "match_index":self.response.append.match_index,"conflict_index":self.conflict_index()})
+    }
     pub fn voter_id(&self) -> &ClusterNodeId {
         &self.participant.node_id
     }
@@ -1139,6 +1147,15 @@ pub struct MetadataReadContext {
 }
 
 impl MetadataReadContext {
+    /// Copies only observational fields; it does not serialize or renew the context.
+    #[cfg(test)]
+    pub(crate) fn test_passive_data(&self) -> serde_json::Value {
+        serde_json::json!({"context_id":self.context_id,"read_request_id":self.read_request_id,
+            "leader":self.leader_id,"term":self.term,"read_index":self.read_index,
+            "old_voters":self.quorums.old.keys().collect::<Vec<_>>(),
+            "new_voters":self.quorums.new.keys().collect::<Vec<_>>(),
+            "fresh_old":self.fresh_old,"fresh_new":self.fresh_new})
+    }
     pub(crate) fn restrict_deadline(&mut self, deadline: Instant) {
         self.deadline = self.deadline.min(deadline);
     }

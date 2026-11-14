@@ -45,6 +45,8 @@ mod distribution_metadata_read_provider;
 mod distribution_native_admission;
 mod distribution_native_apply;
 mod distribution_native_host;
+#[cfg(test)]
+mod native_passive_diagnostics;
 #[cfg(feature = "tls-replication")]
 pub use distribution_native_host::{
     NativeInitialDataRangeStatus, NativeInitialDataStatus, NativeMetadataBootstrapPlan,

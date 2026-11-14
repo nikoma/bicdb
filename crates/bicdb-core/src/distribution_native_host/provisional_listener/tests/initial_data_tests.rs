@@ -120,16 +120,38 @@ fn actual_initial_metadata_controls() -> (
     Vec<NativeMetadataControlHost>,
     Vec<DistributionConfig>,
 ) {
+    crate::native_passive_diagnostics::record("initial_fixture_begin", serde_json::json!({}));
     let mut f = Fixture::new();
-    let configuration = f.hosts[0]
-        .observe_initial_configuration(&budget(5000))
-        .unwrap();
+    crate::native_passive_diagnostics::record(
+        "initial_fixture_return",
+        serde_json::json!({"result_ok":true,
+        "actual_bootstrap":f.plan.topology.range_image_bootstrap_id}),
+    );
+    let configuration = {
+        let parent = budget(5000);
+        crate::native_passive_diagnostics::record(
+            "initial_configuration_observe_begin",
+            serde_json::json!({"host_index":0}),
+        );
+        let result = f.hosts[0].observe_initial_configuration(&parent);
+        crate::native_passive_diagnostics::record(
+            "initial_configuration_observe_return",
+            serde_json::json!({"host_index":0,
+            "result_ok":result.is_ok(),"actual_error_chain":result.as_ref().err().map(|e|crate::native_passive_diagnostics::error_chain(e))}),
+        );
+        result.unwrap()
+    };
     let permits = f
         .hosts
         .iter()
-        .map(|host| {
-            host.prepare_common_initial_configuration(&configuration, &budget(5000))
-                .unwrap()
+        .enumerate()
+        .map(|(host_index, host)| {
+            let parent = budget(5000);
+            crate::native_passive_diagnostics::record("initial_preparing_host_begin", serde_json::json!({"host_index":host_index}));
+            let result = host.prepare_common_initial_configuration(&configuration, &parent);
+            crate::native_passive_diagnostics::record("initial_preparing_host_return", serde_json::json!({"host_index":host_index,
+                "result_ok":result.is_ok(),"actual_error_chain":result.as_ref().err().map(|e|crate::native_passive_diagnostics::error_chain(e))}));
+            result.unwrap()
         })
         .collect::<Vec<_>>();
     let launches = f
@@ -305,7 +327,13 @@ fn native_initial_data_actual_tls_cancel_partial_quorum_then_nonempty_is_not_new
 
 #[test]
 fn native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root() {
+    let passive = crate::native_passive_diagnostics::CaseGuard::selected();
     for mode in 0..3 {
+        passive.mode(mode);
+        crate::native_passive_diagnostics::record(
+            "lifecycle_mode_begin",
+            serde_json::json!({"mode":mode}),
+        );
         let (f, mut controls, configs) = actual_initial_metadata_controls();
         let until = Instant::now() + Duration::from_secs(20);
         let mut ready = [false; 3];
@@ -336,8 +364,37 @@ fn native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens
             .unwrap();
         let key = "actual-before-owner-drop";
         let expected = serde_json::json!({"preserved":"ACK through the actually opened DATA owner", "mode":mode});
-        assert!(gateway.append("items", key, expected.clone()).unwrap());
-        assert_eq!(gateway.get_strong("items", key).unwrap(), Some(expected));
+        let logical_id = Uuid::now_v7();
+        crate::native_passive_diagnostics::record(
+            "lifecycle_append_intent",
+            serde_json::json!({"logical_id":logical_id,
+            "namespace":"items","key":key,"expected_full_value":expected,
+            "expected_payload_sha256":crate::native_passive_diagnostics::payload_sha256(&expected),
+            "configured_request_budget_ms":2000,"diagnostic_id_is_not_protocol_id":true,
+            "raw_SDK_frames_recorded":false,"internal_APP_retry_trace":"not captured"}),
+        );
+        let appended = gateway.append("items", key, expected.clone());
+        crate::native_passive_diagnostics::record(
+            "lifecycle_append_actual_return",
+            serde_json::json!({"logical_id":logical_id,
+            "acknowledged":appended.is_ok(),"inserted":appended.as_ref().ok(),"uncertain_write_effect":appended.is_err(),
+            "actual_error_chain":appended.as_ref().err().map(|e|crate::native_passive_diagnostics::error_chain(e))}),
+        );
+        assert!(appended.unwrap());
+        let strong_id = Uuid::now_v7();
+        crate::native_passive_diagnostics::record(
+            "lifecycle_strong_intent",
+            serde_json::json!({"logical_id":strong_id,"preceding_append_id":logical_id,
+            "namespace":"items","key":key,"requested_consistency":"Strong","configured_request_budget_ms":2000}),
+        );
+        let actual = gateway.get_strong("items", key);
+        crate::native_passive_diagnostics::record(
+            "lifecycle_strong_actual_return",
+            serde_json::json!({"logical_id":strong_id,"preceding_append_id":logical_id,
+            "success":actual.is_ok(),"present":actual.as_ref().ok().map(Option::is_some),"full_value":actual.as_ref().ok(),
+            "actual_error_chain":actual.as_ref().err().map(|e|crate::native_passive_diagnostics::error_chain(e))}),
+        );
+        assert_eq!(actual.unwrap(), Some(expected));
         let id = crate::cluster_event_record_id("items", key).unwrap();
         let selected = current_topology
             .range_for_key(crate::CLUSTER_EVENTS_COLLECTION, &id)
@@ -400,6 +457,16 @@ fn native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens
                     .native_metadata_owner_open_lifetime()
             })
             .collect::<Vec<_>>();
+        crate::native_passive_diagnostics::record(
+            "lifecycle_materialization_complete",
+            serde_json::json!({"mode":mode,
+            "actual_three_replica_points":materialized.iter().map(|p|serde_json::json!({"R":p.1,"H0":p.2,"H":p.3})).collect::<Vec<_>>()}),
+        );
+        crate::native_passive_diagnostics::record(
+            "lifecycle_fault_or_drop_branch_entered",
+            serde_json::json!({"mode":mode,
+            "branch":if mode==1 {"canceled_explicit_stop"} else if mode==2 {"durability_fence"} else {"drop_without_stop"}}),
+        );
         if mode == 1 {
             let canceled = budget(1000);
             canceled.cancel();
@@ -423,6 +490,10 @@ fn native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens
         drop(gateway);
         drop(bootstrap);
         // Neither mode0 nor mode1 obtains a successful explicit stop receipt.
+        crate::native_passive_diagnostics::record(
+            "lifecycle_drop_original_controls_begin",
+            serde_json::json!({"mode":mode}),
+        );
         drop(controls);
         let Fixture {
             hosts,
@@ -438,13 +509,26 @@ fn native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens
             assert!(Instant::now() < until, "opened DATA hook retained its actual DB/directory after all external owners ended, mode={mode}");
             std::thread::sleep(Duration::from_millis(5));
         }
+        crate::native_passive_diagnostics::record(
+            "lifecycle_original_weak_owners_ended",
+            serde_json::json!({"mode":mode}),
+        );
         if mode != 2 {
             for i in 0..3 {
                 // Strict native open of the SAME storage root: no factory
                 // recreation, empty replacement catalogue, reset or policy
                 // restoration. Native metadata voting cold-start is separate.
-                let (database, _factory) =
-                    BicDb::open_range_image_database(&roots[i], db_config(), &specs[i]).unwrap();
+                crate::native_passive_diagnostics::record(
+                    "lifecycle_same_root_reopen_begin",
+                    serde_json::json!({"mode":mode,"node_index":i}),
+                );
+                let reopened = BicDb::open_range_image_database(&roots[i], db_config(), &specs[i]);
+                crate::native_passive_diagnostics::record(
+                    "lifecycle_same_root_reopen_return",
+                    serde_json::json!({"mode":mode,"node_index":i,
+                    "result_ok":reopened.is_ok(),"actual_error_chain":reopened.as_ref().err().map(|e|crate::native_passive_diagnostics::error_chain(e))}),
+                );
+                let (database, _factory) = reopened.unwrap();
                 assert_eq!(
                     database
                         .native_recovery_admission(
@@ -473,6 +557,10 @@ fn native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens
                 assert_eq!(native.logical_history_sha256(), materialized[i].3);
             }
         }
+        crate::native_passive_diagnostics::record(
+            "lifecycle_mode_all_original_assertions_complete",
+            serde_json::json!({"mode":mode}),
+        );
         drop(_root);
     }
 }

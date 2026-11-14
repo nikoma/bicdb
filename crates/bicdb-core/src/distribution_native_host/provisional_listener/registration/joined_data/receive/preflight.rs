@@ -81,15 +81,14 @@ impl NativeJoinedRangeReceivePreflight {
             ));
         }
         let result = {
-            let service = self
-                .origin
-                .parts
-                .backend
+            let backend = self.origin.backend()?;
+            let factory = self.origin.factory()?;
+            let service = backend
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("Joined receive preflight actual service busy"))?;
             let database = service.database();
-            if !Arc::ptr_eq(&database, &self.origin.parts.factory.database) {
+            if !Arc::ptr_eq(&database, &factory.database) {
                 return Err(invalid("Joined receive preflight actual DB owner changed"));
             }
             let db = database
@@ -137,15 +136,14 @@ impl NativeJoinedRangeReceiveRequest {
         self.require_row_absence_complete(rows, frozen)?;
         let scope = RecoveryFenceScope::from_role(self.role.role())?;
         let (native, bindings, catalogue, safety) = {
-            let service = self
-                .origin
-                .parts
-                .backend
+            let backend = self.origin.backend()?;
+            let factory = self.origin.factory()?;
+            let service = backend
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("Joined selected preflight actual service busy"))?;
             let database = service.database();
-            if !Arc::ptr_eq(&database, &self.origin.parts.factory.database) {
+            if !Arc::ptr_eq(&database, &factory.database) {
                 return Err(invalid("Joined selected preflight actual DB owner changed"));
             }
             let db = database

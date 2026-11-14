@@ -7,22 +7,56 @@ mod preflight;
 use crate::distribution_consensus::{
     HostMetadataReadObservation, NativeOwnedMetadataMemberObservation,
 };
+use crate::distribution_data::{ClusterServiceOpenGuard, RangeWriteServiceSlotGuard};
 use crate::distribution_range_consensus::RangeWriteStore;
 use crate::distribution_range_recovery::HandoffRoleAdmission;
 pub(crate) use install::NativeJoinedRemoteInstallPreflight;
 pub(crate) use preflight::NativeJoinedRangeReceivePreflight;
 
 pub(crate) struct NativeJoinedRangeReceiveOrigin {
-    parts: registered_replica::RegisteredAssignedParts,
-    original: Arc<NativeRegisteredRemoteJointOwner>,
+    // Runtime retains this origin through its real pending A. No strong edge
+    // may lead back to runtime/service/host, including through FIRST release.
+    backend: std::sync::Weak<NativeMetadataControlBackend>,
+    factory: std::sync::Weak<NativeUnassignedLearnerFactory>,
+    runtime: std::sync::Weak<RangeRecoveryRuntime>,
+    original: std::sync::Weak<NativeRegisteredRemoteJointOwner>,
+    database: ClusterServiceOpenGuard,
+    store: RangeWriteServiceSlotGuard,
+    node_id: ClusterNodeId,
+    incarnation: u64,
     coordinator: std::sync::Weak<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
     guard: Arc<crate::db::InstalledNativeWriterHostGuard>,
-    admission: Arc<NativeInitialDataAdmission>,
+    admission: std::sync::Weak<NativeInitialDataAdmission>,
     life: std::sync::Weak<AtomicBool>,
     metadata_store: Uuid,
     range: crate::RangeId,
 }
 impl NativeJoinedRangeReceiveOrigin {
+    fn backend(&self) -> Result<Arc<NativeMetadataControlBackend>> {
+        self.backend
+            .upgrade()
+            .ok_or_else(|| invalid("Joined receive original backend ended"))
+    }
+    fn factory(&self) -> Result<Arc<NativeUnassignedLearnerFactory>> {
+        self.factory
+            .upgrade()
+            .ok_or_else(|| invalid("Joined receive original factory ended"))
+    }
+    fn runtime(&self) -> Result<Arc<RangeRecoveryRuntime>> {
+        self.runtime
+            .upgrade()
+            .ok_or_else(|| invalid("Joined receive original runtime ended"))
+    }
+    fn admission(&self) -> Result<Arc<NativeInitialDataAdmission>> {
+        self.admission
+            .upgrade()
+            .ok_or_else(|| invalid("Joined receive original admission ended"))
+    }
+    fn original(&self) -> Result<Arc<NativeRegisteredRemoteJointOwner>> {
+        self.original
+            .upgrade()
+            .ok_or_else(|| invalid("Joined receive original FIRST owner ended"))
+    }
     pub(crate) fn range_id(&self) -> crate::RangeId {
         self.range
     }
@@ -39,36 +73,36 @@ impl NativeJoinedRangeReceiveOrigin {
         {
             return Err(invalid("additional-range original Joined owner ended"));
         }
-        self.original.require_first_policy_attempt_lifetime()?;
-        self.parts.database.require_live()?;
-        self.parts.store.require_live()
+        // This is only an ended-owner refusal, not an authority or usable
+        // owner grant. Never upgrade/drop a potentially final complex owner
+        // under a publication guard. The actual lexical physical point holds
+        // the checked State/hook/open; full owner checks run before that gate.
+        if self.original.strong_count() == 0 {
+            return Err(invalid("Joined receive original FIRST owner ended"));
+        }
+        self.database.require_live()?;
+        self.store.require_live()
     }
     pub(crate) fn require_live(&self) -> Result<()> {
-        if !self
-            .life
-            .upgrade()
-            .is_some_and(|v| v.load(Ordering::Acquire))
-        {
-            return Err(invalid("additional-range original Joined owner ended"));
-        }
-        self.original.require_first_policy_attempt_lifetime()?;
-        self.parts.database.require_live()?;
-        self.parts.store.require_live()?;
-        self.admission
-            .require_listener(&self.parts.backend.service, &self.parts.runtime)
+        self.require_live_memory()?;
+        self.original()?.require_first_policy_attempt_lifetime()?;
+        let backend = self.backend()?;
+        let runtime = self.runtime()?;
+        self.admission()?
+            .require_listener(&backend.service, &runtime)
     }
     pub(crate) fn require_database_store(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
         self.require_live()?;
-        self.parts.database.require_database(db)?;
+        self.database.require_database(db)?;
         db.require_joined_publication_storage_health()?;
-        if self.parts.store.id() != store.native_writer_store_open_id() {
+        if self.store.id() != store.native_writer_store_open_id() {
             return Err(invalid(
                 "additional-range Joined original Store slot changed",
             ));
         }
         let writer = store.native_writer_host_state()?;
         if self
-            .original
+            .original()?
             .terminal_writer()
             .is_none_or(|old| !Arc::ptr_eq(old, &writer))
         {
@@ -99,14 +133,14 @@ impl NativeJoinedRangeReceiveOrigin {
         let selected = role.role().current_range();
         let movement = role.committed_relocation();
         if selected.id != self.range
-            || role.role().local_node_id() != &self.parts.backend.node_id
-            || role.role().local_member_incarnation() != self.parts.factory.spec.member_incarnation
-            || movement.target != self.parts.backend.node_id
+            || role.role().local_node_id() != &self.node_id
+            || role.role().local_member_incarnation() != self.incarnation
+            || movement.target != self.node_id
             || movement.phase != crate::RelocationPhase::LearnerAllocated
             || movement.promoted_epoch.is_some()
             || !selected.replicas.iter().any(|r| {
                 r.id == movement.target_replica_id
-                    && r.node_id == self.parts.backend.node_id
+                    && r.node_id == self.node_id
                     && r.role == crate::RangeReplicaRole::Learner
             })
         {
@@ -116,8 +150,9 @@ impl NativeJoinedRangeReceiveOrigin {
         }
         let phase = parent.child_with_deadline(role.role().deadline().min(own.deadline()));
         let member = {
-            let metadata = self.parts.backend.lock_metadata(&phase)?;
-            metadata.require_listener_database(&self.parts.database)?;
+            let backend = self.backend()?;
+            let metadata = backend.lock_metadata(&phase)?;
+            metadata.require_listener_database(&self.database)?;
             metadata.observe_owned_native_metadata_member(&own, business, &phase)?
         };
         if member.store_id() != self.metadata_store {
@@ -174,15 +209,14 @@ impl NativeJoinedRangeReceiveRequest {
         self.require_live()?;
         let scope =
             crate::distribution_range_consensus::RecoveryFenceScope::from_role(self.role.role())?;
-        let actual = self.origin.parts.runtime.source_capture_freeze(&scope)?;
+        let actual = self.origin.runtime()?.source_capture_freeze(&scope)?;
         if !Arc::ptr_eq(&actual, frozen) {
             return Err(invalid(
                 "Joined selected scan lost actual original runtime Frozen",
             ));
         }
-        self.origin
-            .parts
-            .factory
+        let factory = self.origin.factory()?;
+        factory
             .database
             .try_read()
             .ok_or_else(|| invalid("Joined selected scan actual DB busy before freeze check"))?
@@ -199,10 +233,8 @@ impl NativeJoinedRangeReceiveRequest {
         self.require_metadata_current()?;
         self.require_original_frozen(frozen)?;
         let scan = {
-            let db = self
-                .origin
-                .parts
-                .factory
+            let factory = self.origin.factory()?;
+            let db = factory
                 .database
                 .try_read()
                 .ok_or_else(|| invalid("Joined selected scan DB busy at begin"))?;
@@ -220,10 +252,8 @@ impl NativeJoinedRangeReceiveRequest {
         self.require_metadata_current()?;
         self.require_original_frozen(frozen)?;
         let result = {
-            let db = self
-                .origin
-                .parts
-                .factory
+            let factory = self.origin.factory()?;
+            let db = factory
                 .database
                 .try_read()
                 .ok_or_else(|| invalid("Joined selected scan DB busy at advance"))?;
@@ -244,10 +274,8 @@ impl NativeJoinedRangeReceiveRequest {
         self.require_metadata_current()?;
         self.require_original_frozen(frozen)?;
         {
-            let db = self
-                .origin
-                .parts
-                .factory
+            let factory = self.origin.factory()?;
+            let db = factory
                 .database
                 .try_read()
                 .ok_or_else(|| invalid("Joined selected scan DB busy at completion check"))?;
@@ -281,8 +309,9 @@ impl NativeJoinedRangeReceiveRequest {
     /// metadata lease; later sinks still need actual native epoch/quorum fences.
     pub(crate) fn require_metadata_current(&self) -> Result<()> {
         self.require_live()?;
-        let metadata = self.origin.parts.backend.lock_metadata(&self.phase)?;
-        metadata.require_listener_database(&self.origin.parts.database)?;
+        let backend = self.origin.backend()?;
+        let metadata = backend.lock_metadata(&self.phase)?;
+        metadata.require_listener_database(&self.origin.database)?;
         self.member.require_current(&metadata)?;
         self.require_live()
     }
@@ -313,11 +342,17 @@ impl NativeJoinedDataHost {
         let original = self.registered.as_ref().unwrap();
         let enrollment = self.enrollment.as_ref().unwrap();
         let origin = Arc::new(NativeJoinedRangeReceiveOrigin {
-            parts: self.parts.clone(),
-            original: original.registered_owner(),
+            backend: Arc::downgrade(&self.parts.backend),
+            factory: Arc::downgrade(&self.parts.factory),
+            runtime: Arc::downgrade(&self.parts.runtime),
+            original: Arc::downgrade(&original.registered_owner()),
+            database: self.parts.database.clone(),
+            store: self.parts.store.clone(),
+            node_id: self.parts.backend.node_id.clone(),
+            incarnation: self.parts.factory.spec.member_incarnation,
             coordinator: Arc::downgrade(&enrollment.coordinator),
             guard: enrollment.guard.clone(),
-            admission: self.admission.as_ref().unwrap().clone(),
+            admission: Arc::downgrade(self.admission.as_ref().unwrap()),
             life: Arc::downgrade(&self.life),
             metadata_store,
             range,

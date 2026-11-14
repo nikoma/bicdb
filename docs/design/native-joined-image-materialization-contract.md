@@ -297,3 +297,32 @@ Also, auto_checkpoint_if_due returns immediately for ServerPaged. The earlier
 success/live-request checkpoint guard is defensive contract hardening; it did
 not fix a confirmed live checkpoint-I/O defect in this Joined deployment mode
 and establishes no measured recovery benefit.
+
+
+## Distinct Joined final publication source
+
+A subsequent source-only batch adds PublishFinal and a distinct
+NativeJoinedRemoteFinalImagePointer/Receipt. It consumes the original host's
+actual complete audited history, archived committed row header, authenticated
+Finished seal and separately published independent target verifier. The protected
+v3 record additionally binds the original writer-policy hash, exact Joined
+proposal/Installing intent, original DB/open/Store/birth/A, namespaces, target
+watermarks/image generations/index definitions and metadata request lower bounds.
+CURRENT and immutable archive share one actual native transaction.
+
+The owner records the actual issued native xid as the first closure operation,
+then an unframed native state before any fallible scope/checksum/encoding. It
+retains exact candidate bytes before either put and actual commit return before
+postchecks. Unframed, aborted and uncertain attempts cannot create a replacement
+transaction. Readback checks the same original bytes, committed native xid,
+complete history endpoints/row archive and still-current actual context. Final
+receipt publication prepares allocations and native checks before the short
+selected-current plus metadata-version gates, performs only the in-memory state
+swap there, and drops old owners after both gates. This is physical evidence,
+not a serialized capability or a new range writer/read grant.
+
+This batch is uncompiled/unexecuted. It deliberately does not add profile-3
+native base, selected catalogue adoption, materialized-owner handoff, NEW/dual
+decision/Open/ALL release, APP/Strong Serving or cold recovery. No source-defined
+publication result substitutes for those actual producers or their acceptance
+controls. Registered FIRST final/base files remain byte-identical.

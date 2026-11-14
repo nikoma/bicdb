@@ -8,8 +8,12 @@ use crate::distribution_range_consensus::{NativeJoinedRemoteInstallingFence, Ran
 use crate::distribution_range_image::{
     NativeRemoteImageSourcePayloadV1, RangeImageHistoryCursorV1,
 };
+mod final_publication;
 mod rows;
 mod verification;
+pub(crate) use final_publication::{
+    NativeJoinedRemoteFinalImagePointer, NativeJoinedRemoteFinalImageReceipt,
+};
 pub(crate) use rows::{NativeJoinedRemoteRowProgress, NativeJoinedRemoteRowTransactionGrant};
 pub(crate) use verification::NativeJoinedRemoteVerificationProgress;
 
@@ -80,12 +84,14 @@ pub(crate) enum NativeJoinedRemoteImageOperation {
     ApplyRows,
     BeginVerification,
     VerifyTarget { max_scanned_records: usize },
+    PublishFinal,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) enum NativeJoinedRemoteImageProgress {
     History(NativeJoinedRemoteHistoryProgress),
     Rows(NativeJoinedRemoteRowProgress),
     Verification(NativeJoinedRemoteVerificationProgress),
+    FinalImage(NativeJoinedRemoteFinalImagePointer),
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -196,6 +202,7 @@ pub(crate) struct NativeJoinedRemoteImageInstallation {
     rows: Option<rows::RetainedRemoteRows>,
     verification: Option<verification::JoinedTargetVerifier>,
     scan_pending: Option<verification::JoinedTargetScanReadPoint>,
+    final_publication: Option<final_publication::JoinedFinalPublication>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct NativeJoinedRemoteHistoryProgress {
@@ -262,6 +269,9 @@ impl NativeJoinedRemoteImageInstallation {
             NativeJoinedRemoteImageOperation::BeginVerification => self
                 .begin_verification(db, context)
                 .map(NativeJoinedRemoteImageProgress::Verification),
+            NativeJoinedRemoteImageOperation::PublishFinal => self
+                .publish_final_image(db, context)
+                .map(NativeJoinedRemoteImageProgress::FinalImage),
             NativeJoinedRemoteImageOperation::VerifyTarget { .. } => Err(invalid(
                 "Joined physical target scan requires actual unlocked host read-point path",
             )),
@@ -274,6 +284,7 @@ impl NativeJoinedRemoteImageInstallation {
             "candidate_framed":p.bytes.is_some()})),"rows":self.rows.as_ref().map(|r|r.test_state()),
             "verification":self.verification.as_ref().map(|v|v.test_state()),
             "pending_read_point":self.scan_pending.as_ref().map(|p|p.test_state()),
+            "final_publication":self.final_publication.as_ref().map(|p|p.test_state()),
             "native_base_published":false,"Serving":false})
     }
 }
@@ -315,6 +326,7 @@ impl NativeJoinedRemoteImageInstallation {
             rows: None,
             verification: None,
             scan_pending: None,
+            final_publication: None,
         })
     }
     fn require_owner(

@@ -315,7 +315,7 @@ pub fn run() -> Result<i32> {
                     ).map_err(|error| boundary_failure("explicit_sdk_ack_record", id,
                       json!({"sdk_return":"Ok","reply":reply,"sdk_elapsed_ns":sdk_elapsed_ns,
                         "explicit_ack_record_durability":"uncertain; SDK success remains in required ACK corpus"}), &error))?;
-                    acknowledged.insert(id.as_str());
+                    acknowledged.insert(id);
                     (
                         "acknowledged",
                         json!({"sdk_reply":reply,"durable_ack_receipt":ack}),

@@ -80,6 +80,10 @@ impl NativeRegisteredReplicaAdmission {
                     .upgrade()
                     .ok_or_else(|| invalid("FIRST original factory ended"))?,
             )?;
+        self.first_receive
+            .upgrade()
+            .ok_or_else(|| invalid("FIRST original queue ended"))?
+            .deny_consumed_sequence(&request)?;
         self.admit_first_from_actual_peer(peer, request, parent)
     }
     #[cfg(test)]

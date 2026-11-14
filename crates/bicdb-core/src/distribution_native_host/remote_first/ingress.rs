@@ -100,6 +100,25 @@ impl NativeFirstReceiveQueue {
             }),
         }
     }
+    /// Denial only, after real TLS and sealed Fresh-owner checks. This neither
+    /// admits nor returns a saved reply. The final current/binding/sequence
+    /// checks below still run after the actual fresh Role/OWN admission.
+    pub(in crate::distribution_native_host) fn deny_consumed_sequence(
+        &self,
+        request: &NativeFirstReceiveRequestV1,
+    ) -> Result<()> {
+        request.require_shape()?;
+        let state = self
+            .state
+            .try_lock()
+            .ok_or_else(|| invalid("FIRST ingress busy"))?;
+        if request.sequence <= state.admitted {
+            return Err(invalid(
+                "FIRST request sequence already consumed; original deadline is not renewed",
+            ));
+        }
+        Ok(())
+    }
     /// Only the actual receiver's before-latch admission supplies these sealed
     /// Role/OWN/current-MStore objects. No decoder or MF constructs them.
     #[allow(clippy::too_many_arguments)]

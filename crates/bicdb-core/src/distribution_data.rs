@@ -62,6 +62,8 @@ pub(crate) use native_joint_metadata::{
 };
 mod native_joint_handoff;
 #[cfg(feature = "tls-replication")]
+pub(crate) use native_joint_handoff::ActualServiceNativeJoinedJointNewEvidence;
+#[cfg(feature = "tls-replication")]
 pub(crate) use native_joint_handoff::ActualServiceNativeRegisteredJointNewEvidence;
 #[cfg(feature = "tls-replication")]
 pub(crate) use native_joint_handoff::NativeJointOldRetainedOutcome;

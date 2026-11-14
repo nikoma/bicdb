@@ -8,6 +8,10 @@ use crate::distribution_range_mutation::{FrozenRangeMutationPermit, SourceCaptur
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 
 #[cfg(feature = "tls-replication")]
+mod joined_target;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_target::ActualServiceNativeJoinedJointNewEvidence;
+#[cfg(feature = "tls-replication")]
 mod registered_target;
 #[cfg(feature = "tls-replication")]
 mod remote_decision;

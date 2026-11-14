@@ -73,6 +73,7 @@ struct RowPending {
     // removing this original pending step; errors retain it with the debt.
     _wal_retention: super::super::super::native_wal_apply::NativeWalRetentionPin,
     intent: RowIntent,
+    intent_bytes: Option<Vec<u8>>,
     step: RangeImageStepV1,
     transaction: Option<Transaction>,
     transaction_build_attempted: bool,
@@ -81,7 +82,13 @@ struct RowPending {
     content: sha2::Sha256,
     next: RowHeader,
     intent_commit_returned: Option<u64>,
-    progress_attempt: Option<(RowHeader, Option<u64>)>,
+    progress_issued_xid: Option<u64>,
+    progress_attempt: Option<RowProgressAttempt>,
+}
+struct RowProgressAttempt {
+    header: RowHeader,
+    bytes: Option<Vec<u8>>,
+    commit_returned: Option<u64>,
 }
 pub(super) struct RetainedRemoteRows {
     header: RowHeader,
@@ -411,7 +418,12 @@ impl RetainedRemoteRows {
             "consumed_transaction_identity_and_payload_retained":pending.transaction.is_none() && pending.intent.logical_txid.is_some(),
             "original_shared_WAL_pin_retained":true,"intent_commit_returned":pending.intent_commit_returned,
             "logical_outcome":match logical { LogicalOutcome::NotAttempted=>"not_attempted",LogicalOutcome::AttemptedUnknown=>"unknown",LogicalOutcome::WalDurablePendingApply(_)=>"wal_durable_pending_apply",LogicalOutcome::AppliedKnown(_)=>"applied_known",LogicalOutcome::NoRows=>"no_rows_in_actual_step"},
-            "logical_sequence":match logical { LogicalOutcome::WalDurablePendingApply(sequence)|LogicalOutcome::AppliedKnown(sequence)=>Some(sequence),_=>None },"progress_attempt":pending.progress_attempt})})})
+            "logical_sequence":match logical { LogicalOutcome::WalDurablePendingApply(sequence)|LogicalOutcome::AppliedKnown(sequence)=>Some(sequence),_=>None },
+            "intent_bytes_sha256":pending.intent_bytes.as_ref().map(|b|hex::encode(sha2::Sha256::digest(b))),
+            "progress_issued_xid":pending.progress_issued_xid,
+            "progress_attempt":pending.progress_attempt.as_ref().map(|p|serde_json::json!({
+                "header":p.header,"commit_returned":p.commit_returned,
+                "candidate_bytes_sha256":p.bytes.as_ref().map(|b|hex::encode(sha2::Sha256::digest(b)))}))})})})
     }
     fn apply(
         &mut self,
@@ -519,6 +531,7 @@ impl RetainedRemoteRows {
             self.pending = Some(RowPending {
                 _wal_retention: wal_retention,
                 intent,
+                intent_bytes: None,
                 step: step.clone(),
                 transaction: None,
                 transaction_build_attempted: false,
@@ -527,6 +540,7 @@ impl RetainedRemoteRows {
                 content,
                 next,
                 intent_commit_returned: None,
+                progress_issued_xid: None,
                 progress_attempt: None,
             });
         }
@@ -586,7 +600,10 @@ impl RetainedRemoteRows {
                 context.require_current(db)?;
                 pending.intent.checksum_sha256 = pending.intent.checksum()?;
                 pending.intent.validate()?;
-                let bytes = bounded_json(&pending.intent, MAX_NATIVE_RECEIPT_BYTES)?;
+                pending.intent_bytes =
+                    Some(bounded_json(&pending.intent, MAX_NATIVE_RECEIPT_BYTES)?);
+                // Exact intent bytes remain owned before index insertion's
+                // first native put as well as the following intent put.
                 registered_row_retention::insert(
                     paged,
                     xid,
@@ -599,7 +616,7 @@ impl RetainedRemoteRows {
                     .put(
                         xid,
                         &native_key(&intent_key(pending.intent.attempt, pending.intent.step)),
-                        &bytes,
+                        pending.intent_bytes.as_ref().unwrap(),
                     )
                     .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
                 context.require_current(db)
@@ -609,7 +626,14 @@ impl RetainedRemoteRows {
             }
             result?.ok_or_else(|| invalid("Joined row intent has no page store"))?;
         }
-        if db.read_joined_remote_row_intent(&pending.intent)? != pending.intent {
+        let intended_bytes = pending.intent_bytes.as_ref().ok_or_else(|| {
+            invalid("Joined issued row-intent xid has no framed candidate; retain original outcome")
+        })?;
+        let actual_intent = db.read_joined_remote_row_intent(&pending.intent)?;
+        if actual_intent != pending.intent
+            || bounded_json(&actual_intent, MAX_NATIVE_RECEIPT_BYTES)?.as_slice()
+                != intended_bytes.as_slice()
+        {
             return Err(invalid("Joined row native intent exact outcome unproven"));
         }
         // The intent and its restrictive index must have the SAME committed
@@ -684,15 +708,25 @@ impl RetainedRemoteRows {
         }
         context.require_current(db)?;
         if pending.progress_attempt.is_none() {
+            if pending.progress_issued_xid.is_some() {
+                return Err(invalid("Joined original progress native xid retained without candidate; no replacement"));
+            }
             let result = db.in_paged_transaction(|paged, xid| {
+                pending.progress_issued_xid = Some(xid);
                 // Original native begin is owned before context/framing.
-                pending.progress_attempt = Some((pending.next.clone(), None));
-                pending.progress_attempt.as_mut().unwrap().0.native_xid = xid;
+                pending.progress_attempt = Some(RowProgressAttempt {
+                    header: pending.next.clone(),
+                    bytes: None,
+                    commit_returned: None,
+                });
+                let candidate = pending.progress_attempt.as_mut().unwrap();
+                candidate.header.native_xid = xid;
                 context.require_current(db)?;
-                let mut next = pending.progress_attempt.as_ref().unwrap().0.clone();
-                next.checksum_sha256 = next.checksum()?;
-                next.validate()?;
-                pending.progress_attempt = Some((next.clone(), None));
+                candidate.header.checksum_sha256 = candidate.header.checksum()?;
+                candidate.header.validate()?;
+                candidate.bytes = Some(bounded_json(&candidate.header, MAX_NATIVE_RECEIPT_BYTES)?);
+                // Both exact header and encoded bytes precede even the first
+                // index-clear/native put. A failure retains this candidate.
                 registered_row_retention::require_exact(
                     paged,
                     db.incarnation_id(),
@@ -703,23 +737,36 @@ impl RetainedRemoteRows {
                     .store()
                     .put(
                         xid,
-                        &native_key(&row_key(next.attempt)),
-                        &bounded_json(&next, MAX_NATIVE_RECEIPT_BYTES)?,
+                        &native_key(&row_key(candidate.header.attempt)),
+                        candidate.bytes.as_ref().unwrap(),
                     )
                     .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
                 context.require_current(db)
             });
             if let Ok(Some(xid)) = &result {
-                pending.progress_attempt.as_mut().unwrap().1 = Some(*xid);
+                pending.progress_attempt.as_mut().unwrap().commit_returned = Some(*xid);
             }
             result?.ok_or_else(|| invalid("Joined row progress has no page store"))?;
         }
-        let (attempted, _) = pending.progress_attempt.as_ref().unwrap();
+        let candidate = pending.progress_attempt.as_ref().unwrap();
+        let attempted = &candidate.header;
+        if pending.progress_issued_xid != Some(attempted.native_xid) {
+            return Err(invalid(
+                "Joined progress candidate changed original issued native xid",
+            ));
+        }
+        let attempted_bytes = candidate.bytes.as_ref().ok_or_else(|| {
+            invalid(
+                "Joined issued row-progress xid has no framed candidate; retain original outcome",
+            )
+        })?;
         let actual: RowHeader = db
             .read_native_range_image_record(&row_key(attempted.attempt))?
             .ok_or_else(|| invalid("Joined row progress attempted result absent"))?;
         actual.validate()?;
         if &actual != attempted
+            || bounded_json(&actual, MAX_NATIVE_RECEIPT_BYTES)?.as_slice()
+                != attempted_bytes.as_slice()
             || db
                 .paged_records
                 .as_ref()

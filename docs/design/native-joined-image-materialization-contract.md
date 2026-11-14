@@ -242,3 +242,13 @@ remains retained. A consumed unknown operation cannot be reissued or replaced
 by a new Transaction. AppliedKnown can advance only the same protected row
 progress after actual checks. Recovery of consumed uncertainty remains an
 explicit separate gate; this wording is not evidence of such a resolver.
+
+
+A source-review successor retains encoded intent bytes before inserting even
+the first pending-index native record, and retains the issued progress xid,
+header and exact encoded candidate before clearing that index. An incomplete
+framing state cannot allocate another progress transaction. Exact readback
+must match the retained bytes/headers before debt and its WAL pin are released.
+Optional checkpoint maintenance begins only after successful operation,
+postchecks and a still-live parent/source request. It cannot preempt a kernel
+I/O already in flight; bounded physical I/O progress remains unqualified.

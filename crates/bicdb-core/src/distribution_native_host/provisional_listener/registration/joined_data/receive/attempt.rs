@@ -340,25 +340,33 @@ impl NativeMetadataControlHost {
             .require_metadata_current(request)
             .and_then(|()| lease.require_retained())
             .and_then(|()| point.require_live());
-        // Checkpoint can need admission.write; never execute while the real
-        // admission/hook/journal/service guards or row Controlled claim live.
-        let database = backend.service.try_lock().map(|service| service.database());
-        if let Some(database) = database {
-            if let Some(db) = database.try_read() {
-                db.auto_checkpoint_if_due();
-            }
-        }
-        match result {
+        let progress = match result {
             Err(primary) => {
                 let _ = post;
-                Err(primary)
+                return Err(primary);
             }
             Ok(progress) => {
                 post?;
                 parent.check()?;
-                Ok(progress)
+                point.require_live()?;
+                progress
+            }
+        };
+        // Only a successful, still-live call may start OPTIONAL checkpoint
+        // IO. Admission/hook/journal/service/Controlled guards have dropped.
+        // Cancellation cannot preempt IO already inside a kernel/fsync call;
+        // that physical liveness limitation remains a separate test gate.
+        let database = backend.service.try_lock().map(|service| service.database());
+        if let Some(database) = database {
+            if let Some(db) = database.try_read() {
+                parent.check()?;
+                point.require_live()?;
+                db.auto_checkpoint_if_due();
             }
         }
+        parent.check()?;
+        point.require_live()?;
+        Ok(progress)
     }
     #[cfg(test)]
     pub(crate) fn test_joined_remote_image_state(

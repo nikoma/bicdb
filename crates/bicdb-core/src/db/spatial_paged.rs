@@ -2309,7 +2309,11 @@ impl BicDb {
     /// is NOT fsync'd here; the caller must call `tx_log_handle().write_durable(
     /// seq)` (after releasing the database write lock, so concurrent commits
     /// pipeline and coalesce) before acknowledging the commit.
-    pub(crate) fn validate_native_commit_validators(&self, tx: &Transaction) -> Result<()> {
+    pub(crate) fn validate_native_commit_validators(
+        &self,
+        tx: &Transaction,
+        exclusive: Option<&parking_lot::RwLockWriteGuard<'_, ()>>,
+    ) -> Result<()> {
         // Current durable policy wins over a captured pre-publication invocation.
         let issuers = tx.native_write_issuers.lock();
         let mut published_ids = BTreeSet::new();
@@ -2345,9 +2349,9 @@ impl BicDb {
         }
         drop(issuers);
         // The pass and tx overlay are lexical. Share raw materializations only
-        // when existing admission excludes other committers; the invariant-only
-        // mutex does not exclude non-invariant writers. No gate is changed.
-        let invariant_snapshot = NativeInvariantRelationSnapshot::new(self, tx);
+        // when the exact borrowed Serializable admission excludes committers
+        // and raw capability issuance. The invariant-only mutex is insufficient.
+        let invariant_snapshot = NativeInvariantRelationSnapshot::new(self, tx, exclusive);
         for validator in tx.native_commit_validators() {
             match validator {
                 NativeCommitValidator::AppendOnly { relation } => {
@@ -2669,7 +2673,7 @@ impl BicDb {
         // through record apply. Transactions carrying them therefore share the
         // global commit boundary above; ordinary transactions retain the
         // disjoint-write concurrent path.
-        self.validate_native_commit_validators(tx)?;
+        self.validate_native_commit_validators(tx, _serializable_exclusive.as_ref())?;
         timer.lap(&commit_trace::CONFLICT);
         // Resolve each mutation's record locator for validation. Existing records
         // (updates/deletes) resolve now; brand-new records are still unallocated

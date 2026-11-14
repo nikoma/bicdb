@@ -8566,13 +8566,14 @@ fn resulting_records_for_relation(
 mod invariant_relation_snapshot_tests;
 
 /// Raw relations shared only within one stable commit-validation pass.
-/// Sharing requires the existing serializable admission or forced global
-/// writer gate. The ordinary invariant-only mutex does not exclude writers
-/// without invariants. Policy, tenant and expression results are NOT cached.
+/// Sharing borrows this database's actual exclusive Serializable admission.
+/// Issuing any raw paged writer permanently disables sharing for that open.
+/// Policy, tenant and expression results are NOT cached.
 
-struct NativeInvariantRelationSnapshot<'a> {
+struct NativeInvariantRelationSnapshot<'a, 'lock> {
     db: &'a BicDb,
     tx: &'a Transaction,
+    _exclusive: Option<&'a parking_lot::RwLockWriteGuard<'lock, ()>>,
     share_relations: bool,
     cache_limit: usize,
     relations: std::cell::RefCell<BTreeMap<String, CachedInvariantRelation>>,
@@ -8581,13 +8582,31 @@ struct CachedInvariantRelation {
     records: Arc<[Record]>,
     estimated_bytes: usize,
 }
-impl<'a> NativeInvariantRelationSnapshot<'a> {
-    fn new(db: &'a BicDb, tx: &'a Transaction) -> Self {
+impl<'a, 'lock> NativeInvariantRelationSnapshot<'a, 'lock> {
+    fn new(
+        db: &'a BicDb,
+        tx: &'a Transaction,
+        exclusive: Option<&'a parking_lot::RwLockWriteGuard<'lock, ()>>,
+    ) -> Self {
+        // Inspect issuance ONLY under the actual same-DB exclusive admission.
+        // The borrowed guard cannot end while this lexical pass remains alive.
+        // RC, including forced-global RC, always uses original fresh scans.
+        let share_relations = tx.isolation == TransactionIsolation::Serializable
+            && exclusive.is_some_and(|guard| {
+                std::ptr::eq(
+                    parking_lot::RwLockWriteGuard::rwlock(guard),
+                    &db.serializable_commit_admission,
+                )
+            })
+            && db
+                .paged_records
+                .as_ref()
+                .is_none_or(|paged| !paged.raw_row_capability_issued());
         Self {
             db,
             tx,
-            share_relations: tx.isolation == TransactionIsolation::Serializable
-                || global_commit_lock_enabled(),
+            _exclusive: exclusive,
+            share_relations,
             cache_limit: crate::query_budget::limit(16 * 1024 * 1024),
             relations: Default::default(),
         }
@@ -8777,7 +8796,7 @@ fn compare_native_invariant_values(
 }
 
 fn evaluate_native_invariant_expression(
-    snapshot: &NativeInvariantRelationSnapshot<'_>,
+    snapshot: &NativeInvariantRelationSnapshot<'_, '_>,
     subject_relation: &str,
     subject: &Record,
     bindings: &BTreeMap<String, &Record>,
@@ -9235,7 +9254,7 @@ fn evaluate_native_invariant_expression(
 }
 
 fn validate_carrier_invariant(
-    snapshot: &NativeInvariantRelationSnapshot<'_>,
+    snapshot: &NativeInvariantRelationSnapshot<'_, '_>,
     definition: &NativeInvariantDefinition,
 ) -> Result<()> {
     let tx = snapshot.tx;

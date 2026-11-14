@@ -235,6 +235,33 @@ impl NativeJointHandoffPlan {
         }
         Ok(())
     }
+    /// After the native bridge of THIS plan's decision is published, a
+    /// member's lineage reports the successor configuration, so the exact
+    /// predecessor can no longer be re-read. Accept either the untouched
+    /// predecessor or exactly this plan's own published successor; any other
+    /// configuration, or a successor of another plan, is refused.
+    pub(crate) fn require_old_or_own_successor_native_configuration(
+        &self,
+        lineage: &crate::db::SourceRangeImageLineage,
+    ) -> Result<()> {
+        let Some(successor_plan) = lineage.native_joint_successor_plan_sha256()? else {
+            return self.require_old_native_configuration(lineage);
+        };
+        if successor_plan != self.checksum_sha256()?
+            || canonical_range(lineage.native_write_range()?)
+                != canonical_range(&self.data.activation_range)
+            || lineage.cluster_id() != &self.data.cluster_id
+            || lineage.bootstrap_id() != self.data.bootstrap_id
+            || lineage.schema_sha256() != self.data.schema_sha256
+            || lineage.restore_activation() != self.data.restore_activation.as_ref()
+            || lineage.native_write_members()? != self.data.new_members
+        {
+            return Err(invalid(
+                "joint old native lineage carries another plan's successor configuration",
+            ));
+        }
+        Ok(())
+    }
     pub(crate) fn require_actual_native(
         &self,
         native: &crate::db::NativeRecoveryAdmission,

@@ -351,6 +351,16 @@ impl NativeInitialDataHost {
         &self,
         range: crate::RangeId,
     ) -> Result<Arc<crate::distribution_range_handoff::NativeJointOldObservation>> {
+        let actual = self.retained_old_source_identity(range)?;
+        actual.require_current()?;
+        Ok(actual)
+    }
+    /// Original owner/writer/plan identity only. The caller must still
+    /// revalidate the observation for its own point in the handoff.
+    fn retained_old_source_identity(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<Arc<crate::distribution_range_handoff::NativeJointOldObservation>> {
         self.admission_for_old_step()?.require_live()?;
         let entries = self
             .old_closures
@@ -376,7 +386,6 @@ impl NativeInitialDataHost {
                 "actual OLD donor changed original local identity/scope",
             ));
         }
-        actual.require_current()?;
         Ok(actual)
     }
     pub(in crate::distribution_native_host::provisional_listener::registration) fn close_initial_old(
@@ -503,7 +512,8 @@ impl NativeMetadataControlHost {
             .data
             .as_ref()
             .ok_or_else(|| invalid("actual INITIAL survivor absent"))?;
-        let actual = initial.retained_actual_old_source(range)?;
+        // The phase revalidates this observation for the post-open point.
+        let actual = initial.retained_old_source_identity(range)?;
         phase.require_actual_old_owner_retirement(&actual)?;
         let mut entries = initial
             .old_closures

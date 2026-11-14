@@ -227,6 +227,9 @@ impl NativeJointServingDomain {
     pub(in crate::db::range_image_native) fn decision_sha256(&self) -> &str {
         self.record.decision.checksum_sha256()
     }
+    pub(in crate::db::range_image_native) fn plan_sha256(&self) -> Result<String> {
+        self.record.decision.plan_sha256()
+    }
     pub(in crate::db::range_image_native) fn native_bridge_sha256(&self) -> &str {
         &self.record.checksum_sha256
     }

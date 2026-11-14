@@ -319,6 +319,22 @@ impl NativeRemoteOldCutCertificate {
         }
         Ok(())
     }
+    /// Retirement-only: the selected source may already carry this plan's
+    /// published joint successor. Returns the recorded materialized facts.
+    pub(crate) fn require_current_after_joint_open(
+        &self,
+    ) -> Result<&BTreeMap<ClusterNodeId, NativeJointMaterializedFacts>> {
+        self.source.require_current_after_joint_open()?;
+        if self.peers.len() != self.plan.old_members().len()
+            || self.facts.len() != self.peers.len()
+            || self.constraints.len() != self.peers.len()
+        {
+            return Err(invalid(
+                "remote OLD certificate lost its actual recorded member set",
+            ));
+        }
+        Ok(&self.facts)
+    }
     pub(crate) fn checksum_sha256(&self) -> Result<String> {
         self.require_current()?;
         Ok(self.digest.clone())

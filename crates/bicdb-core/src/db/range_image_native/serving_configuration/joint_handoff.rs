@@ -317,6 +317,28 @@ impl NativeJointOldCloseReceipt {
         promise: &crate::distribution_range_consensus::NativeJointOldPromiseReceipt,
         store: &RangeWriteStore,
     ) -> Result<()> {
+        self.require_closed_fact(database, plan, promise, store, false)
+    }
+    /// Custody retirement after every final member is Open: the same exact
+    /// close record, promise and physical prefix, with the configuration
+    /// allowed to be this plan's own published successor.
+    pub(crate) fn require_closed_fact_after_joint_open(
+        &self,
+        database: &BicDb,
+        plan: &NativeJointHandoffPlan,
+        promise: &crate::distribution_range_consensus::NativeJointOldPromiseReceipt,
+        store: &RangeWriteStore,
+    ) -> Result<()> {
+        self.require_closed_fact(database, plan, promise, store, true)
+    }
+    fn require_closed_fact(
+        &self,
+        database: &BicDb,
+        plan: &NativeJointHandoffPlan,
+        promise: &crate::distribution_range_consensus::NativeJointOldPromiseReceipt,
+        store: &RangeWriteStore,
+        after_joint_open: bool,
+    ) -> Result<()> {
         plan.require_actual_native(&self.native)?;
         self.native.require_current(database)?;
         promise.require_current(store, plan)?;
@@ -334,7 +356,11 @@ impl NativeJointOldCloseReceipt {
             ));
         }
         let lineage = database.current_native_range_source_lineage(plan.old_range().id)?;
-        plan.require_old_native_configuration(&lineage)?;
+        if after_joint_open {
+            plan.require_old_or_own_successor_native_configuration(&lineage)?;
+        } else {
+            plan.require_old_native_configuration(&lineage)?;
+        }
         if lineage.range_index() != actual.range_index
             || lineage.native_receipt_sha256() != actual.native_prefix_sha256
             || lineage.logical_genesis_sha256() != actual.logical_genesis_sha256

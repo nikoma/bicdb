@@ -392,10 +392,9 @@ impl NativeJointReleasePhaseQuorum {
         old: &Arc<NativeRemoteOldCutCertificate>,
     ) -> Result<()> {
         self.require_live()?;
-        old.require_current()?;
+        let facts = old.require_current_after_joint_open()?;
         if self.continuation.data.plan_sha256()? != old.plan().checksum_sha256()?
-            || self.continuation.data.old_materialized_facts()
-                != &old.source_image_materialized_facts()?
+            || self.continuation.data.old_materialized_facts() != facts
         {
             return Err(invalid(
                 "joint retirement changed actual remote OLD obligations",
@@ -411,7 +410,7 @@ impl NativeJointReleasePhaseQuorum {
         old: &Arc<NativeJointOldObservation>,
     ) -> Result<()> {
         self.require_live()?;
-        old.require_current()?;
+        old.require_current_after_joint_open()?;
         if !self
             .continuation
             .data

@@ -782,6 +782,14 @@ impl SourceRangeImageLineage {
         }
         self.members_for_native_range(self.native_write_range()?)
     }
+    /// Plan of the joint decision whose native bridge is published on this
+    /// lineage, if any. Identity DATA only; it grants nothing.
+    pub(crate) fn native_joint_successor_plan_sha256(&self) -> Result<Option<String>> {
+        self.joint
+            .as_ref()
+            .map(|joint| joint.plan_sha256())
+            .transpose()
+    }
     pub(crate) fn base_range_index(&self) -> u64 {
         self.base.range_index
     }

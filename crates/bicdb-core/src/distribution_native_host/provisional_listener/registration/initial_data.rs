@@ -340,23 +340,10 @@ impl NativeInitialDataHost {
             .unwrap()
             .require_service(&self.initial.service)?;
         self.old_listener.take();
-        if self.listener.is_none() {
-            let address: std::net::SocketAddr = network_address(&self.initial, parent)?
-                .parse()
-                .map_err(|_| invalid("initial DATA requires numeric local address"))?;
-            self.listener = Some(
-                crate::distribution_transport::start_cluster_initial_native_data_server(
-                    address,
-                    network.clone(),
-                    self.initial.topology.clone(),
-                    self.initial.service.clone(),
-                    self.initial.metadata.clone(),
-                    self.initial.provider.clone(),
-                    runtime.clone(),
-                    admission.clone(),
-                )?,
-            );
-        }
+        self.start_listener(network, parent)?;
+        let enrollment = self.enrollment.as_ref().unwrap();
+        let runtime = self.runtime.as_ref().unwrap();
+        let admission = self.admission.as_ref().unwrap();
         parent.check()?;
         // Replica protocol is available now; APP remains explicitly closed
         // until all LOCAL leader ranges pass actual cancellable readiness.
@@ -391,6 +378,69 @@ impl NativeInitialDataHost {
         // Do not revoke an earlier successful publication on a later retry.
         self.published.store(true, Ordering::Release);
         Ok(())
+    }
+    /// Start the immutable DATA listener from the retained original runtime
+    /// and admission. Finite and non-waiting: a busy latch is an error the
+    /// same owner retries.
+    fn start_listener(
+        &mut self,
+        network: &ClusterNetworkTransportConfig,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        if self.listener.is_some() {
+            return Ok(());
+        }
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or_else(|| invalid("initial DATA listener has no actual runtime"))?;
+        let admission = self
+            .admission
+            .as_ref()
+            .ok_or_else(|| invalid("initial DATA listener has no actual admission"))?;
+        let address: std::net::SocketAddr = network_address(&self.initial, parent)?
+            .parse()
+            .map_err(|_| invalid("initial DATA requires numeric local address"))?;
+        self.listener = Some(
+            crate::distribution_transport::start_cluster_initial_native_data_server(
+                address,
+                network.clone(),
+                self.initial.topology.clone(),
+                self.initial.service.clone(),
+                self.initial.metadata.clone(),
+                self.initial.provider.clone(),
+                runtime.clone(),
+                admission.clone(),
+            )?,
+        );
+        Ok(())
+    }
+    /// The control listener is drained before the DATA listener starts, and
+    /// that start is non-waiting. If it was refused (a busy latch), this node
+    /// has NO ingress: its metadata scheduler pauses and relinquishes, it can
+    /// no longer hear the leader the others elect, and a DATA open that first
+    /// requires a known leader could then never reach the listener start
+    /// again. Restoring the lost ingress therefore precedes, and does not
+    /// depend on, the leader lookup. It grants nothing: the listener and its
+    /// per-request admission are exactly those of the ordinary transition.
+    fn restore_lost_listener(
+        &mut self,
+        network: &ClusterNetworkTransportConfig,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        let Some(drained) = self.drained.as_ref() else {
+            return Ok(());
+        };
+        if self.stopping || self.listener.is_some() {
+            return Ok(());
+        }
+        drained.require_service(&self.initial.service)?;
+        self.admission
+            .as_ref()
+            .ok_or_else(|| invalid("initial DATA listener has no actual admission"))?
+            .require_live()?;
+        self.start_listener(network, parent)
     }
     pub(super) fn bind_image_source_process(&self, process: &CancellationToken) -> Result<()> {
         process.check()?;
@@ -677,6 +727,13 @@ impl NativeMetadataControlHost {
             })?;
             self.data = Some(NativeInitialDataHost::new(initial, listener)?);
         }
+        // Before anything that needs the cluster: a node whose listener
+        // start was refused after its control listener was drained must get
+        // its ingress back even while it knows no metadata leader.
+        self.data
+            .as_mut()
+            .unwrap()
+            .restore_lost_listener(&self.network, parent)?;
         let leader = self
             .controller
             .as_ref()
@@ -855,6 +912,31 @@ impl NativeMetadataControlHost {
 
 #[cfg(test)]
 impl NativeMetadataControlHost {
+    /// Reproduce exactly the state a refused DATA listener start leaves
+    /// behind: control listener drained, no DATA listener, and the paused
+    /// metadata scheduler's relinquished leadership.
+    pub(crate) fn test_lose_initial_data_listener_and_relinquish(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let data = self
+            .data
+            .as_mut()
+            .ok_or_else(|| invalid("test needs actual DATA owner"))?;
+        if data.drained.is_none() {
+            return Err(invalid("test needs the drained control listener"));
+        }
+        let mut listener = data
+            .listener
+            .take()
+            .ok_or_else(|| invalid("test needs the running DATA listener"))?;
+        listener.stop_and_drain(parent)?;
+        drop(listener);
+        data.initial
+            .lock_initial_metadata(parent)?
+            .relinquish_leadership()?;
+        Ok(())
+    }
     pub(crate) fn test_hot_recovery_bindings(
         &self,
     ) -> Result<(

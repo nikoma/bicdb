@@ -209,12 +209,15 @@ fn raw_invariant_active_memo_refuses_late_raw_issuance_without_waiting() {
     let (_root, db) = paged_database();
     let mut tx = db.begin_transaction().unwrap();
     tx.isolation = TransactionIsolation::Serializable;
-    let exclusive = db.serializable_commit_admission.write();
-    let snapshot = NativeInvariantRelationSnapshot::new(&db, &tx, Some(&exclusive));
-    assert!(snapshot.share_relations);
-    let first = snapshot.records("roots").unwrap();
-    assert!(Arc::ptr_eq(&first, &snapshot.records("roots").unwrap()));
     std::thread::scope(|scope| {
+        // Construct the guard and its borrower in this lexical scope. Moving
+        // a guard into a closure while capturing its outside borrower is
+        // invalid; the production lifetime relationship stays unchanged.
+        let exclusive = db.serializable_commit_admission.write();
+        let snapshot = NativeInvariantRelationSnapshot::new(&db, &tx, Some(&exclusive));
+        assert!(snapshot.share_relations);
+        let first = snapshot.records("roots").unwrap();
+        assert!(Arc::ptr_eq(&first, &snapshot.records("roots").unwrap()));
         let (send, receive) = std::sync::mpsc::channel();
         let database = &db;
         let issuer = scope.spawn(move || {

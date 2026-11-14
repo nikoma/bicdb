@@ -37,6 +37,8 @@ struct Five {
     planning_roots: Vec<tempfile::TempDir>,
     /// Fail the image transfer once, after this many copied steps.
     fail_transfer_after: Option<usize>,
+    /// The fifth member was stopped: its metadata store no longer applies.
+    target_stopped: bool,
 }
 
 fn index_of(id: &ClusterNodeId) -> usize {
@@ -178,6 +180,7 @@ fn start_five(name: &str) -> Five {
         configs,
         planning_roots: Vec::new(),
         fail_transfer_after: None,
+        target_stopped: false,
     }
 }
 
@@ -208,7 +211,10 @@ fn commit_topology(five: &Five, candidate: ClusterTopology) {
     let until = Instant::now() + Duration::from_secs(20);
     loop {
         five.controls[0].heartbeat(&budget(5000)).unwrap();
-        let applied = five.metadata.iter().all(|actual| {
+        let applied = five.metadata.iter().enumerate().all(|(i, actual)| {
+            if i == 4 && five.target_stopped {
+                return true;
+            }
             let store = actual.lock();
             store.status().commit_index >= entry.index && store.committed_topology() == &candidate
         });
@@ -217,7 +223,7 @@ fn commit_topology(five: &Five, candidate: ClusterTopology) {
         }
         assert!(
             Instant::now() < until,
-            "committed configuration did not reach all five metadata stores"
+            "committed configuration did not reach every running metadata store"
         );
         std::thread::sleep(Duration::from_millis(20));
     }
@@ -343,13 +349,6 @@ impl NativeJoinedDataHandoffHosts for Five {
         parent: &CancellationToken,
     ) -> Result<()> {
         self.controls[index_of(id)].refresh_initial_data_policy(parent)
-    }
-    fn recover_owner_leadership(
-        &mut self,
-        id: &ClusterNodeId,
-        parent: &CancellationToken,
-    ) -> Result<usize> {
-        self.controls[index_of(id)].recover_initial_data_leadership(parent)
     }
     fn transfer_progress(&mut self, copied_steps: usize) -> Result<()> {
         if self.fail_transfer_after == Some(copied_steps) {
@@ -500,6 +499,15 @@ fn prepare(five: &mut Five) -> Scenario {
 /// The committed relocation of the scenario's range onto the fifth member.
 fn relocation(five: &Five, scenario: &Scenario) -> RangeRelocation {
     committed(five)
+        .relocations
+        .values()
+        .find(|plan| plan.range_id == scenario.original.id && plan.target == node(4))
+        .unwrap()
+        .clone()
+}
+
+fn relocation_after(topology: ClusterTopology, scenario: &Scenario) -> RangeRelocation {
+    topology
         .relocations
         .values()
         .find(|plan| plan.range_id == scenario.original.id && plan.target == node(4))
@@ -704,6 +712,74 @@ fn native_fifth_data_path_unavailable_target_leaves_range_writable_on_original_f
     });
 }
 
+/// Drive to the committed learner allocation and check the interval the
+/// abort exists for: the range is outside every original owner's policy.
+fn allocate_only(five: &mut Five, scenario: &mut Scenario) -> ClusterTopology {
+    let parent = CancellationToken::uncancelable();
+    assert_eq!(
+        scenario
+            .handoff
+            .drive_until(&mut *five, Some(Stage::LearnerAllocated), &parent)
+            .unwrap(),
+        Stage::LearnerAllocated
+    );
+    let pending = committed(five);
+    let range = pending.range_by_id(scenario.original.id).unwrap().clone();
+    assert_eq!(range.epoch, scenario.original.epoch + 1);
+    assert!(range
+        .replicas
+        .iter()
+        .any(|r| r.node_id == node(4) && r.role == RangeReplicaRole::Learner));
+    assert_eq!(
+        relocation(five, scenario).phase,
+        RelocationPhase::LearnerAllocated
+    );
+    scenario.mark("learner allocation committed");
+    assert_unwritable_and_intact(five, scenario, "after-allocation");
+    pending
+}
+
+/// After the abort the committed range is the original descriptor again, no
+/// relocation is left, and the original voters acknowledge new writes that
+/// are Strong-readable. Returns the committed configuration after the abort.
+fn assert_aborted_to_original_voters(five: &mut Five, scenario: &mut Scenario) -> ClusterTopology {
+    let aborted = committed(five);
+    assert_eq!(
+        aborted.range_by_id(scenario.original.id).unwrap(),
+        &scenario.original,
+        "the abort must commit the original range descriptor again"
+    );
+    assert!(aborted
+        .relocations
+        .values()
+        .all(|plan| plan.range_id != scenario.original.id));
+    assert_eq!(aborted.nodes, scenario.current.nodes);
+    let client = gateway(five, &aborted, 5);
+    for n in 0..2 {
+        let key = key_for(&aborted, scenario.original.id, &format!("after-abort-{n}"));
+        let value = serde_json::json!({"fifth_data_path":"acknowledged after abort","n":n});
+        append_until_acknowledged(&client, &key, &value);
+        assert_eq!(strong_until_served(&client, &key).as_ref(), Some(&value));
+        let holders = scenario
+            .old_voters
+            .iter()
+            .filter(|i| stored(five, **i, &key).as_ref() == Some(&value))
+            .count();
+        assert!(holders >= 2, "abort write is not on an original majority");
+        assert_eq!(
+            stored(five, 4, &key),
+            None,
+            "the fifth member holds no row of the aborted range"
+        );
+        scenario.acknowledged.push((key, value));
+    }
+    for (key, value) in &scenario.acknowledged {
+        assert_eq!(strong_until_served(&client, key).as_ref(), Some(value));
+    }
+    scenario.mark("writes acknowledged by the original voters");
+    aborted
+}
+
 /// The target fails after the learner allocation committed and before any
 /// source cut. The abort returns the range to its original voters: a new
 /// write is acknowledged by them and is Strong-readable.
@@ -712,62 +788,53 @@ fn native_fifth_data_path_target_stopped_after_allocation_aborts_to_original_vot
     run("fifth-data-path-abort", |five| {
         let parent = CancellationToken::uncancelable();
         let mut scenario = prepare(five);
-        assert_eq!(
-            scenario
-                .handoff
-                .drive_until(&mut *five, Some(Stage::LearnerAllocated), &parent)
-                .unwrap(),
-            Stage::LearnerAllocated
-        );
-        let pending = committed(five);
-        let range = pending.range_by_id(scenario.original.id).unwrap().clone();
-        assert_eq!(range.epoch, scenario.original.epoch + 1);
-        assert!(range
-            .replicas
-            .iter()
-            .any(|r| r.node_id == node(4) && r.role == RangeReplicaRole::Learner));
-        assert_eq!(
-            relocation(five, &scenario).phase,
-            RelocationPhase::LearnerAllocated
-        );
-        scenario.mark("learner allocation committed");
-        // The gap this closes: the committed allocation alone leaves the
-        // range outside every original owner's installed policy.
-        assert_unwritable_and_intact(five, &scenario, "after-allocation");
+        allocate_only(five, &mut scenario);
         five.host.stop_owned_metadata(&budget(10_000)).unwrap();
+        five.target_stopped = true;
         scenario.mark("target stopped");
         assert!(!scenario.handoff.cut_attempted());
-        let recovered = scenario
+        scenario
             .handoff
             .abort_before_cut(&mut *five, &parent)
             .unwrap();
-        assert!(recovered >= 1, "the original leader must recover its range");
         scenario.mark("aborted to the original voters");
-        // The abort changes no committed configuration.
-        assert_eq!(committed(five), pending);
-        let client = gateway(five, &pending, 5);
-        for n in 0..2 {
-            let key = key_for(&pending, range.id, &format!("after-abort-{n}"));
-            let value = serde_json::json!({"fifth_data_path":"acknowledged after abort","n":n});
-            append_until_acknowledged(&client, &key, &value);
-            assert_eq!(strong_until_served(&client, &key).as_ref(), Some(&value));
-            let holders = scenario
-                .old_voters
-                .iter()
-                .filter(|i| stored(five, **i, &key).as_ref() == Some(&value))
-                .count();
-            assert!(holders >= 2, "abort write is not on an original majority");
-            assert_eq!(
-                stored(five, 4, &key),
-                None,
-                "the stopped fifth member cannot hold a post-abort row"
-            );
-            scenario.acknowledged.push((key, value));
-        }
-        for (key, value) in &scenario.acknowledged {
-            assert_eq!(strong_until_served(&client, key).as_ref(), Some(value));
-        }
-        scenario.mark("writes acknowledged by the original voters");
+        let aborted = assert_aborted_to_original_voters(five, &mut scenario);
+        // Nothing is left to abort, and a repeated abort changes nothing.
+        let repeated = scenario
+            .handoff
+            .abort_before_cut(&mut *five, &parent)
+            .unwrap_err();
+        assert!(repeated
+            .to_string()
+            .contains("no committed learner allocation"));
+        assert_eq!(committed(five), aborted);
+    });
+}
+
+/// The abort leaves nothing behind: the same driver starts a new learner
+/// allocation afterwards and completes the path, and the rows acknowledged by
+/// the original voters after the abort are part of the shipped image.
+#[test]
+fn native_fifth_data_path_abort_then_new_handoff_completes() {
+    run("fifth-data-path-abort-retry", |five| {
+        let parent = CancellationToken::uncancelable();
+        let mut scenario = prepare(five);
+        let first = relocation_after(allocate_only(five, &mut scenario), &scenario);
+        scenario
+            .handoff
+            .abort_before_cut(&mut *five, &parent)
+            .unwrap();
+        scenario.mark("aborted to the original voters");
+        assert_aborted_to_original_voters(five, &mut scenario);
+        assert_eq!(
+            scenario.handoff.drive(&mut *five, &parent).unwrap(),
+            Stage::Serving
+        );
+        let second = relocation(five, &scenario);
+        assert_ne!(second.id, first.id, "the new handoff is a new relocation");
+        assert_ne!(second.handoff_session, first.handoff_session);
+        scenario.mark("new handoff completed after the abort");
+        accept(five, &mut scenario);
     });
 }
 

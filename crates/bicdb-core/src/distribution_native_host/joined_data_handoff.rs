@@ -7,14 +7,19 @@
 //!
 //! Boundary between abort and resume. A source close records a permanent
 //! handoff promise on the old voter and advances that voter's durable range
-//! epoch to the activation epoch. From the first attempted close the only
-//! continuation is to finish this same handoff, so `abort_before_cut` is
-//! refused once this driver started a source round. Before that point no old
-//! voter holds a promise: the old voters re-enroll their policy at the
-//! committed learner-allocation epoch and the old leader recovers leadership
-//! through the ordinary coordinator recovery. That recovery reads every
-//! voter's durable progress and refuses a voter already fenced beyond the
-//! epoch, so a mistaken abort after a cut fails closed.
+//! epoch to the activation epoch. Once any old voter holds that promise the
+//! only continuation is to finish this same handoff. Before it, the committed
+//! learner allocation is the only change: no old voter, and not the target,
+//! holds durable state of the new range epoch. `abort_before_cut` therefore
+//! commits the original range descriptor again (the original voters at the
+//! epoch the allocation expected, the relocation removed) through the real
+//! metadata consensus. The original owners' installed policy, recovered
+//! leadership and native configuration are those of exactly that descriptor,
+//! so nothing is re-enrolled and no permission is created. The abort is
+//! refused when this driver started a source round, when the committed
+//! relocation is past its bare learner allocation, or when any old voter's
+//! durable range log is already beyond the expected epoch. Metadata consensus
+//! itself refuses to erase a relocation that carries a joint decision.
 //!
 //! Custody. The joint machinery issues live owners (range freezes, the closed
 //! OLD quorum, the finalized target image, the durable decision, the serving
@@ -63,7 +68,7 @@ const REQUEST: Duration = Duration::from_secs(5);
 const PHASE: Duration = Duration::from_secs(4);
 /// Budget of one bounded host operation (policy publication, socket change).
 const HOST_OPERATION: Duration = Duration::from_secs(10);
-/// Budget of one leadership recovery.
+/// Budget of the target's leadership recovery and ingress publication.
 const LEADERSHIP: Duration = Duration::from_secs(20);
 /// A timed-out fresh phase or publication is repeated this many times.
 const PHASE_ATTEMPTS: usize = 4;
@@ -173,11 +178,6 @@ pub(crate) trait NativeJoinedDataHandoffHosts {
         node: &ClusterNodeId,
         parent: &CancellationToken,
     ) -> Result<()>;
-    fn recover_owner_leadership(
-        &mut self,
-        node: &ClusterNodeId,
-        parent: &CancellationToken,
-    ) -> Result<usize>;
     /// Called after every copied image step. An error stops this call and
     /// leaves the partial install on the target for a later restart.
     fn transfer_progress(&mut self, _copied_steps: usize) -> Result<()> {
@@ -371,19 +371,16 @@ impl NativeJoinedDataHandoff {
         })
     }
 
-    /// Return the range to its original voters. Allowed only while no source
-    /// round was started by this driver and the committed relocation is still
-    /// the bare learner allocation. The old voters re-enroll their policy at
-    /// the allocation epoch and the old leader recovers leadership; the
-    /// target keeps a policy that does not cover the range and holds no
-    /// image. The committed learner allocation itself is left in place.
+    /// Return the range to its original voters by committing the original
+    /// range descriptor again. See the module documentation for the boundary.
+    /// A later `drive` starts a new learner allocation.
     pub(crate) fn abort_before_cut(
         &mut self,
         hosts: &mut dyn NativeJoinedDataHandoffHosts,
         parent: &CancellationToken,
-    ) -> Result<usize> {
+    ) -> Result<()> {
         parent.check()?;
-        if self.cut_attempted {
+        if self.cut_attempted || !self.runtimes.is_empty() {
             return Err(handoff_error(
                 "a source round was started and a permanent handoff promise may exist; the handoff can only be resumed",
             ));
@@ -395,20 +392,63 @@ impl NativeJoinedDataHandoff {
             .ok_or_else(|| handoff_error("no committed learner allocation to abort"))?;
         if relocation.native_joint_handoff_v1.is_some()
             || relocation.phase != RelocationPhase::LearnerAllocated
+            || relocation.learner_epoch != range.epoch
+            || relocation.expected_epoch.checked_add(1) != Some(range.epoch)
+            || range
+                .replicas
+                .iter()
+                .filter(|replica| {
+                    replica.id == relocation.target_replica_id
+                        && replica.node_id == relocation.target
+                        && replica.role == RangeReplicaRole::Learner
+                })
+                .count()
+                != 1
         {
             return Err(handoff_error(
-                "the committed relocation is past its learner allocation; the handoff can only be resumed",
+                "the committed relocation is past its bare learner allocation; the handoff can only be resumed",
             ));
         }
-        for node in hosts.data_owners()? {
-            hosts
-                .refresh_owner_policy(&node, &bounded(parent, HOST_OPERATION))
-                .map_err(|error| stage_error("abort policy re-enrollment", error))?;
+        // Durable truth, independent of this object's memory: a source close
+        // advances the old voter's range log to the activation epoch, and any
+        // command of the allocation epoch advances it past the expected one.
+        // Every old voter must be read; an unreadable voter refuses the abort.
+        for replica in &range.replicas {
+            if replica.role != RangeReplicaRole::Voter {
+                continue;
+            }
+            let progress = hosts
+                .member(&replica.node_id)?
+                .service
+                .try_lock_for(Duration::from_secs(1))
+                .ok_or_else(|| handoff_error("old voter service busy during abort"))?
+                .range_write_progress(range.id);
+            if progress.current_epoch > relocation.expected_epoch {
+                return Err(handoff_error(format!(
+                    "old voter {} already holds durable state beyond the expected epoch; the handoff can only be resumed",
+                    replica.node_id
+                )));
+            }
         }
-        let recovered = hosts
-            .recover_owner_leadership(&range.leader, &bounded(parent, LEADERSHIP))
-            .map_err(|error| stage_error("abort leadership recovery", error))?;
-        Ok(recovered)
+        let mut candidate = topology.clone();
+        candidate.relocations.remove(&relocation.id);
+        let descriptor = candidate
+            .ranges
+            .values_mut()
+            .find(|descriptor| descriptor.id == self.range)
+            .ok_or_else(|| handoff_error("range absent from committed metadata"))?;
+        descriptor
+            .replicas
+            .retain(|replica| replica.id != relocation.target_replica_id);
+        descriptor.epoch = relocation.expected_epoch;
+        candidate.generation += 1;
+        candidate.validate()?;
+        hosts
+            .commit_topology(candidate, parent)
+            .map_err(|error| stage_error("abort commit", error))?;
+        self.plan = None;
+        self.closed = None;
+        Ok(())
     }
 
     /// Advance until `until` is complete, or to completion. Every stage is
@@ -786,11 +826,12 @@ impl NativeJoinedDataHandoff {
             &session,
         )?;
         let handoff = handoff_role(parent)?;
-        service.lock().finalize_native_range_image_catalogue(
+        let finalized = service.lock().finalize_native_range_image_catalogue(
             adopted,
             &NativeImageInstallRole::CommittedHandoff(&handoff),
             &session,
-        )
+        );
+        finalized
     }
 
     /// Materialize the new set on the same cut and publish the complete

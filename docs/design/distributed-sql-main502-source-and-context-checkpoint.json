@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-11-14T00:40:41.631030+00:00",
+  "main": {
+    "version": "1.0.502-beta",
+    "sha": "629857f5eaaeee5f5a9124d505406d8cd6a29535"
+  },
+  "unmerged_native_composition": "3b4bef4eecbdf1e770bba2428cd860fda89e7dba",
+  "classification": "source/design review only; no SQL build/runtime/physical test executed",
+  "source_pins": [
+    {
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "sha256": "f1bae040c48b7aa97fda0d1d59e25c194173d395d35044c731bd40e801d62de9",
+      "git_blob": "2b5eb58f812ac2352ad80ec87601f1d865bdd6ab",
+      "same_in_unmerged_native_composition": true
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/query_exec.rs",
+      "sha256": "5ce7b5fd977387e88cd9942f7d148be24b1053fa073f1369cbc0b2cf959f87d0",
+      "git_blob": "5b8d412d85bd16e34dfdff0c05f6c032678ba8d0",
+      "same_in_unmerged_native_composition": true
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/server_cluster.rs",
+      "sha256": "7840c1c93d88e980c49f7e51fb97978b8dac5dd95201cfd41a9993aa44201b2f",
+      "git_blob": "ae2b588f426f2f03173e571eab12e7974730f3dd",
+      "same_in_unmerged_native_composition": true
+    },
+    {
+      "path": "crates/bicdb-sql/src/session.rs",
+      "sha256": "86d1f7ebf6b1b4ca0aac15d701088b2b9b07e742994ad0f2c350228b89902886",
+      "git_blob": "8d64c1dd11a6ef44f9ba2162e692e3fce163ff64",
+      "same_in_unmerged_native_composition": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "sha256": "3f4ba08a2694662a163f7ddb7cd41b2ac88f5c1539ac18483d4eb69caedbaa44",
+      "git_blob": "2c9390f0b0f75789160df64129f9da2b142767ec",
+      "same_in_unmerged_native_composition": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "sha256": "c3c2b3aff37423cfafafb54d3892d4c1989b26602c27b3aa566e2297cb80603b",
+      "git_blob": "8bad54d896c4e727f5696b9f0442a4d49aaa7d93",
+      "same_in_unmerged_native_composition": false
+    },
+    {
+      "path": "crates/bicdb-core/src/db/record_read_snapshot.rs",
+      "sha256": "abf6b52158b64bb940a050100f97386a33ce4ae82a648e75eac0742e87f231f7",
+      "git_blob": "2154cc5e975538b2f7dc7ff6aaa322719d713746",
+      "same_in_unmerged_native_composition": true
+    },
+    {
+      "path": "crates/bicdb-core/src/query_budget.rs",
+      "sha256": "23e01d6e1e82de338624128fbde21a456d6754a709b311f7c587fa8750e1969e",
+      "git_blob": "09e076d8766d19ec3fa97145e5fa941c0b87e028",
+      "same_in_unmerged_native_composition": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_events.rs",
+      "sha256": "1a7d2fcef974e75b72392e7bf28fac1c07f57a87c81e5d947ae1a69627ba6079",
+      "git_blob": "2b74233b982cf253112824bdd76d1052bf69967e",
+      "same_in_unmerged_native_composition": true
+    }
+  ],
+  "facts": [
+    {
+      "status": "implemented",
+      "scope": "local only",
+      "claim": "PGwire uses local BicDb/SqlSession and local statement/transaction snapshots. Cluster planning methods are explicit helpers; source inspection does not establish transparent SQL forwarding."
+    },
+    {
+      "status": "not implemented by inspected source",
+      "claim": "Only the cfg(test) RecordingCommitProtocol implementation was found. Generic execute_distributed_transaction has no production decision registry, participant-intent recovery/enumeration or ordinary SQL integration."
+    },
+    {
+      "status": "implemented limitation",
+      "claim": "Final-row admission remains range-local. The generic distributed transaction helper aborts only acknowledged prepared prefix after failed Prepare; an uncertain failed recipient requires the separately designed all-enlisted recovery contract."
+    },
+    {
+      "status": "not established",
+      "claim": "A per-range native Strong read and one-range fifth-member handoff do not supply one common SQL snapshot, general distributed joins or atomic multi-range business writes."
+    }
+  ],
+  "independent_context_counterexample": {
+    "worker_source": "b18fb02685de53a90529adff3eb429e5f0957aad",
+    "worker_test_only_source": "560d8a873e65a7931226a0e38fc460f38c058ae6",
+    "worker_run": 43532705713,
+    "worker_result": "1passed/1failed; already-expired caller QueryMemoryScope dispatched APP and received mock success",
+    "synchronous_runtime": "01308fb09512f02e0c61b740fc339382e44b3521",
+    "synchronous_test_only_source": "8ec10012cf7aa9f746bc503fca104de1e896f418",
+    "synchronous_run": 43532727697,
+    "synchronous_result": "2passed/0failed; same expired scope refused QueryTimedOut before any TCP connection",
+    "test_blob_sha256": "a7e9f0b65a5ea9db0c3cc699ff30eaca282add7353001cc1cc6349e24432fd80",
+    "scope": "Identical public-SDK/loopback-TCP mock tests, not SQL or native database commits. This is an unmerged worker regression, not a claim that main502 SQL has this bug.",
+    "design_inference": "Future SQL local workers must inherit actual caller budgets/security/view context; peer SQL services must independently admit remote requests. A serialized deadline/role or a node certificate is not local execution authority."
+  },
+  "production_contract_unchanged": true,
+  "transparent_distributed_SQL_or_multi_range_atomicity_qualified": false
+}

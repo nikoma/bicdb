@@ -1,0 +1,188 @@
+{
+  "id": 132380250996,
+  "run_id": 43572675143,
+  "workflow_name": "tests",
+  "head_branch": "integrate/native-ha-next-main",
+  "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43572675143",
+  "run_attempt": 1,
+  "node_id": "CR_kwDOUimcAs8AAAAe0npTdA",
+  "head_sha": "d8115fedf13b0bd7107cfddd2664f2c6ea2f261f",
+  "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132380250996",
+  "html_url": "https://github.com/nikoma/bicdb/actions/runs/43572675143/job/132380250996",
+  "status": "completed",
+  "conclusion": "failure",
+  "created_at": "2026-11-14T07:46:54Z",
+  "started_at": "2026-11-14T07:46:55Z",
+  "completed_at": "2026-11-14T07:54:40Z",
+  "name": "bicdb-pgwire",
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-14T07:46:56Z",
+      "completed_at": "2026-11-14T07:46:57Z"
+    },
+    {
+      "name": "Initialize containers",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-14T07:46:57Z",
+      "completed_at": "2026-11-14T07:47:09Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-14T07:47:09Z",
+      "completed_at": "2026-11-14T07:47:13Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-14T07:47:13Z",
+      "completed_at": "2026-11-14T07:47:20Z"
+    },
+    {
+      "name": "Install test-target scanner",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-14T07:47:20Z",
+      "completed_at": "2026-11-14T07:47:28Z"
+    },
+    {
+      "name": "Run actions/setup-node@v4",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 6,
+      "started_at": "2026-11-14T07:47:28Z",
+      "completed_at": "2026-11-14T07:47:28Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-11-14T07:47:28Z",
+      "completed_at": "2026-11-14T07:47:48Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 8,
+      "started_at": "2026-11-14T07:47:48Z",
+      "completed_at": "2026-11-14T07:47:48Z"
+    },
+    {
+      "name": "cargo test -p bicdb-pgwire",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 9,
+      "started_at": "2026-11-14T07:47:48Z",
+      "completed_at": "2026-11-14T07:54:37Z"
+    },
+    {
+      "name": "cargo test bicdb-core without the serial native multi-node fixtures",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 10,
+      "started_at": "2026-11-14T07:54:37Z",
+      "completed_at": "2026-11-14T07:54:37Z"
+    },
+    {
+      "name": "cargo test bicdb-core native multi-node fixtures one at a time",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 11,
+      "started_at": "2026-11-14T07:54:37Z",
+      "completed_at": "2026-11-14T07:54:37Z"
+    },
+    {
+      "name": "cargo test bicdb-sql with bounded linked artifacts",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 12,
+      "started_at": "2026-11-14T07:54:37Z",
+      "completed_at": "2026-11-14T07:54:37Z"
+    },
+    {
+      "name": "cargo test remaining workspace with bounded linked artifacts",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 13,
+      "started_at": "2026-11-14T07:54:37Z",
+      "completed_at": "2026-11-14T07:54:37Z"
+    },
+    {
+      "name": "Cluster harness and offline queue contracts",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 14,
+      "started_at": "2026-11-14T07:54:37Z",
+      "completed_at": "2026-11-14T07:54:37Z"
+    },
+    {
+      "name": "Retain broad REST existing CLI journals and allowlisted diagnostics",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 15,
+      "started_at": "2026-11-14T07:54:37Z",
+      "completed_at": "2026-11-14T07:54:37Z"
+    },
+    {
+      "name": "Retain required CI memory pressure evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-14T07:54:37Z",
+      "completed_at": "2026-11-14T07:54:38Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 30,
+      "started_at": "2026-11-14T07:54:38Z",
+      "completed_at": "2026-11-14T07:54:38Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 31,
+      "started_at": "2026-11-14T07:54:38Z",
+      "completed_at": "2026-11-14T07:54:38Z"
+    },
+    {
+      "name": "Stop containers",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 32,
+      "started_at": "2026-11-14T07:54:38Z",
+      "completed_at": "2026-11-14T07:54:38Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 33,
+      "started_at": "2026-11-14T07:54:38Z",
+      "completed_at": "2026-11-14T07:54:38Z"
+    }
+  ],
+  "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132380250996",
+  "labels": [
+    "ubuntu-latest"
+  ],
+  "runner_id": 1000025377,
+  "runner_name": "GitHub Actions 1000025377",
+  "runner_group_id": 0,
+  "runner_group_name": "GitHub Actions"
+}

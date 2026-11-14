@@ -1,0 +1,90 @@
+{
+  "schema": "bicdb-required-ci-terminal-components-v1",
+  "captured_at_utc": "2026-11-14T08:27:31.519142+00:00",
+  "run": 43572675143,
+  "source_commit": "d8115fedf13b0bd7107cfddd2664f2c6ea2f261f",
+  "source_version": "1.0.510-beta",
+  "tested_checkout": "b38f461ffc2a6729abb7a441bf25951009bbd721",
+  "tested_tree": "be4b39ad95e86abac73d7c7ca889301d10d88c90",
+  "tree_equality": "GitHub commit API confirms actual checkout tree equals exact local source tree; both parents retained in GitHub metadata",
+  "source_proof": {
+    "path": "tested-checkout-github-commit.json",
+    "sha256": "4625507aa81a593cbc5b05dcea03d4e729fc493d92c212abb1f05aed4139edf3"
+  },
+  "logs": [
+    {
+      "job_id": 132380234279,
+      "name": "Community-only workspace compiles, tests included",
+      "conclusion": "success",
+      "path": "job-132380234279.log.gz",
+      "bytes": 366918,
+      "sha256": "894489e086d17fc977d472bae767f10ed5a348ad51075a3aabecbfe1adb93b04",
+      "uncompressed_bytes": 3117838,
+      "uncompressed_sha256": "abbc974297b9ef83445827d4d08d96c52de364cbea38c2128fe349d5558f5800",
+      "metadata": {
+        "path": "job-132380234279-index.json",
+        "sha256": "d90a6b8d0184fd9fa7ba1c6efb06e35346879978c706a8dfe8b1a64a415702a6"
+      }
+    },
+    {
+      "job_id": 132380251018,
+      "name": "bicdb-core",
+      "conclusion": "failure",
+      "path": "job-132380251018.log.gz",
+      "bytes": 393705,
+      "sha256": "4c489b81cb7bf11eb378f094e1d0a22ee10f8352db96012ef9ba30960ae02547",
+      "uncompressed_bytes": 3183842,
+      "uncompressed_sha256": "4533358a9e1b50668f02b7853b0f4e786eb79940276993657f7a09ff52e8b2b1",
+      "metadata": {
+        "path": "job-132380251018-index.json",
+        "sha256": "f307e062e0fe104a791ffd496c70b0c96c41a0a7d8b22f870c9eb53bf0a99070"
+      }
+    },
+    {
+      "job_id": 132380250996,
+      "name": "bicdb-pgwire",
+      "conclusion": "failure",
+      "path": "job-132380250996.log.gz",
+      "bytes": 197422,
+      "sha256": "260086277f6eb6c3615df25dac03122138dbe5c596046e4395c14107897ec69d",
+      "uncompressed_bytes": 1574603,
+      "uncompressed_sha256": "413912c1bc536b535646ac88fbae7d70d7928f4e74102e54db9b3913a605bf00",
+      "metadata": {
+        "path": "job-132380250996-index.json",
+        "sha256": "4b1d19c0c22c4677bdff7af73c3c69b2b11027403ae42136acf049f5c4f9b33b"
+      }
+    }
+  ],
+  "original_pgwire_inventory": {
+    "path": "ha510-pgwire-oracle-stack-abort-capture.json",
+    "sha256": "729d96f2948475811d70d104811cab6b08b78689fb2e0717026ba90a620a56ba"
+  },
+  "classification": {
+    "compilation": "PASSED: existing workspace/all-target and no-default-Core consumer checks",
+    "core": "FAILED:914passed/2failed/8ignored; separately printed1-pass child is not added to parentcount",
+    "pgwire": "FAILED:14completedtargets227passed/0failed/1ignored; Oracle15thtarget33completedpasses/17withoutcompletion before stackoverflowSIGABRT6",
+    "oracle_crashing_case_and_frame": "INCONCLUSIVE; lastpass does not identify crashingcase",
+    "prepared_correction_runtime": "NOT TESTED",
+    "native_sql_rest": "not included: live at capture, no terminalresult asserted",
+    "physical_ha_scaleout": "NOT TESTED by these CIjobs; originalAzure qualification remainsFAILED"
+  },
+  "limits": "These are three terminal components of an unfinished workflow, not a complete CI pass. No Rust build or test was started by capture. Full raw bytes preserved without changing earlierfailed outcomes.",
+  "pgwire_pressure_artifact": {
+    "id": 14105341259,
+    "path": "pgwire-pressure-14105341259.zip",
+    "bytes": 5253,
+    "sha256": "025e8ac0bdb9fd49778ff33a76db75c8aaad46d06069b6934392547380eecdb7",
+    "zip_crc": "passed",
+    "members": [
+      {
+        "path": "pgwire.jsonl",
+        "bytes": 52004
+      }
+    ],
+    "metadata": {
+      "path": "pgwire-pressure-github-artifact.json",
+      "sha256": "d3bce4ee8832b133c1dbfdd0b787801d9bfa669c6f85570db4404471a0d4de81"
+    },
+    "scope": "existing required job guard evidence; no 100ms-level causal attribution"
+  }
+}

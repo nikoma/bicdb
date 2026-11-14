@@ -8,11 +8,18 @@ complete tree `be4b39ad95e86abac73d7c7ca889301d10d88c90` as that candidate.
 Workspace/all-target and separate no-default-Core consumer compilation passed.
 The runtime failures below prevent describing the assembled candidate as green.
 
+The [terminal-component archive](../evidence/native510-required-terminal-components-2026-11-14/manifest.json)
+retains the complete compressed build, Core and PGwire logs, original job
+metadata, PGwire case inventory, memory-guard artifact and exact GitHub checkout
+metadata. Gzip contents and stored hashes were verified. The actual checkout's
+entire tree matches d811; this archive makes no claim about unfinished jobs.
+
 ## Oracle HR process stack overflow
 
 **Failed runtime acceptance; exact crashing case and frame inconclusive.**
-PGwire job 132380250996 completed thirteen targets with 227 passes and one
-ignored case. Its Oracle HR target started 50 cases and recorded 33 individual
+PGwire job 132380250996 completed fourteen targets with 227 passes and one
+ignored case; thirteen targets had passes and one was ignored-only. Its Oracle
+HR target started 50 cases and recorded 33 individual
 passes before a Tokio worker stack overflow and SIGABRT 6. The other 17 cases
 have no completion record; they are not 17 demonstrated assertion failures.
 The last passing case does not identify the crashing case. Cargo exited 101;

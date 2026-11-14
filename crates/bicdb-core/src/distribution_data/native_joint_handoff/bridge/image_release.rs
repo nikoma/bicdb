@@ -123,6 +123,11 @@ impl NativeJointImageReleaseOwner {
             }
             let actual = Arc::get_mut(frozen)
                 .ok_or_else(|| data_error("fresh joint image owner changed"))?;
+            if actual.requires_joined_remote_release() {
+                return Err(data_error(
+                    "Joined actual A requires its original joint activation/release producer",
+                ));
+            }
             if actual.requires_registered_remote_release() {
                 return Err(data_error(
                     "Registered remote image release protocol is not implemented",
@@ -198,6 +203,11 @@ impl NativeJointImageReleaseOwner {
             self.activation.require_live()?;
             let actual = Arc::get_mut(frozen)
                 .ok_or_else(|| data_error("joint image lease acquired another owner"))?;
+            if actual.requires_joined_remote_release() {
+                return Err(data_error(
+                    "Joined actual A requires its original joint activation/release producer",
+                ));
+            }
             if actual.requires_registered_remote_release() {
                 return Err(data_error(
                     "Registered remote image release protocol is not implemented",

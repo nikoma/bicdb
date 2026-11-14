@@ -16,6 +16,8 @@ use std::sync::Arc;
 mod completed_materialize;
 mod current_image_replacement;
 mod current_image_resume;
+#[cfg(feature = "tls-replication")]
+mod joined_remote_transfer;
 mod native_abort;
 mod native_activation;
 #[cfg(test)]
@@ -30,6 +32,8 @@ mod normal_apply;
 mod participants;
 #[cfg(feature = "tls-replication")]
 mod registered_closed;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_remote_transfer::JoinedRemoteImageInstallFreeze;
 #[cfg(feature = "tls-replication")]
 mod registered_remote_transfer;
 #[cfg(all(test, feature = "tls-replication"))]
@@ -64,6 +68,8 @@ struct Sessions {
     #[cfg(feature = "tls-replication")]
     registered_remote:
         BTreeMap<RangeId, Arc<registered_remote_transfer::RegisteredRemoteFreezeCustody>>,
+    #[cfg(feature = "tls-replication")]
+    joined_remote: BTreeMap<RangeId, Arc<joined_remote_transfer::JoinedRemoteFreezeCustody>>,
 }
 
 #[cfg(test)]

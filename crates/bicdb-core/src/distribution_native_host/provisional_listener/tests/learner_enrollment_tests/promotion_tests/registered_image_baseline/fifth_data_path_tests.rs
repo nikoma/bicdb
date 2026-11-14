@@ -1093,13 +1093,17 @@ fn native_fifth_data_path_transfer_failure_after_source_cut_resumes_to_completio
                 "session never transferred",
                 "no retained dropped-transfer preflight",
             ),
-            ("lease still held", "image freeze is still leased"),
+            // A held lease keeps the runtime's range reservation, which
+            // refuses before the session is even inspected.
+            ("lease still held", "recovery context/range is busy"),
             ("dropped attempt reused", "attempt is not new"),
             (
                 "foreign session",
                 "does not bind the independently fresh role",
             ),
-            ("lease still held", "image freeze is still leased"),
+            // A held lease keeps the runtime's range reservation, which
+            // refuses before the session is even inspected.
+            ("lease still held", "recovery context/range is busy"),
         ];
         assert_eq!(probes.len(), expected.len());
         for ((label, refusal), (expected_label, expected_refusal)) in probes.iter().zip(expected) {

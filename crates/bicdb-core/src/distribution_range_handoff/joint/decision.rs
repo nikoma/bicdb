@@ -6,6 +6,11 @@ use crate::distribution_range_recovery::RecoveryRoleAdmission;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+#[cfg(feature = "tls-replication")]
+mod registered_catalogue_retry;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_catalogue_retry::NativeRegisteredDecisionCatalogueRetry;
+
 const MAX_DECISION_BYTES: usize = 2 * 1024 * 1024;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -502,6 +507,19 @@ impl NativeJointDecisionPublicationRound {
     ) -> Result<()> {
         parent.check()?;
         role.require_own_host_metadata(&own, business)?;
+        // Re-fsync only an actual retained catalogue candidate before strict
+        // normal quorum/durability authorization. Never rebuild a NEW vote.
+        if let Some(NativeJointNewObservation::Registered { actual }) =
+            self.prepared.quorums.new.get(role.local_node_id())
+        {
+            actual.reconcile_retained_decision_catalogue(
+                &self.prepared,
+                &role,
+                &own,
+                business,
+                parent,
+            )?;
+        }
         let mut admission = self.prepared.authorize_local_publication(role)?;
         let node = admission.role().local_node_id().clone();
         let service = match self.prepared.quorums.new.get(&node) {

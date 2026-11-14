@@ -46,12 +46,22 @@ impl NativeRegisteredRemoteCatalogueMaterialization {
         db: &crate::BicDb,
         physical: &NativeInstalledRangeImageBase,
     ) -> Result<()> {
+        self.require_identity_point(store, db, physical)?;
+        store.require_durable_recovery_catalog()
+    }
+    /// Necessary original physical identity only. This does not assert
+    /// catalogue durability or grant a read/write/NEW observation.
+    pub(crate) fn require_identity_point(
+        &self,
+        store: &RangeWriteStore,
+        db: &crate::BicDb,
+        physical: &NativeInstalledRangeImageBase,
+    ) -> Result<()> {
         self.preflight.require_original_process()?;
         self.preflight.native().require_current(db)?;
         physical.require_current(db, self.preflight.native())?;
         db.validate_range_image_bindings(self.preflight.bindings())?;
         store.require_actual_abort_catalogue(db)?;
-        store.require_durable_recovery_catalog()?;
         let log = store
             .catalog
             .ranges

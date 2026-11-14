@@ -100,6 +100,11 @@ pub(super) enum SourceCase {
     TargetHotDecisionTermBeforePut,
     TargetHotDecisionTermAfterCommit,
     TargetHotFirstPolicyTermBeforeHook,
+    TargetHotDecisionCatalogueBeforeMemory,
+    TargetHotDecisionCatalogueRenameFailed,
+    TargetHotDecisionCatalogueReadbackFailed,
+    TargetHotDecisionCataloguePostCanceled,
+    TargetHotDecisionCataloguePostTerm,
 }
 pub(super) fn uses_original_sdk_rpc_observer(case: SourceCase) -> bool {
     hot_policy_tests::is_hot_policy(case)

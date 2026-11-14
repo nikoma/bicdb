@@ -138,6 +138,81 @@ impl ActualServiceNativeRegisteredJointNewEvidence {
         evidence.require_issuance_current()?;
         Ok(evidence)
     }
+    /// Pointer identity constraint only; never a current NEW/metadata grant.
+    pub(crate) fn require_catalogue_retry_target(
+        &self,
+        target: &crate::distribution_native_host::NativeRegisteredRemoteJointTarget,
+    ) -> Result<()> {
+        if !std::ptr::eq(self.owner.target().as_ref(), target) {
+            return Err(data_error(
+                "Registered catalogue retry changed original NEW target owner",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn reconcile_retained_decision_catalogue(
+        &self,
+        prepared: &crate::distribution_range_handoff::NativeJointPreparedDecision,
+        role: &crate::distribution_range_recovery::RecoveryRoleAdmission,
+        own: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        let Some(retained) = self.owner.existing_decision_attempt()? else {
+            return Ok(());
+        };
+        {
+            let attempt = retained
+                .try_lock()
+                .ok_or_else(|| data_error("Registered decision custody active"))?;
+            if !attempt.has_retained_catalogue() {
+                return Ok(());
+            }
+        }
+        // All other real owners and the selected original owner are checked
+        // OUTSIDE service/DB/journal scopes. This admission permits no native Tx.
+        let retry = prepared.authorize_registered_catalogue_retry(self, role, own, business)?;
+        let metadata = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            self.service(),
+            own,
+            business,
+            parent,
+        )?
+        .ok_or_else(|| {
+            data_error("Registered catalogue retry has no actual current MStore point")
+        })?;
+        metadata.require_external_current()?;
+        let frozen = self.owner.retained_freeze()?;
+        let mut attempt = retained
+            .try_lock()
+            .ok_or_else(|| data_error("Registered decision custody active"))?;
+        let mut service = self
+            .service()
+            .try_lock()
+            .ok_or_else(|| data_error("Registered catalogue retry service busy"))?;
+        let database_arc = service.db.clone();
+        let database = checked_database_read(&database_arc, &service.storage_policy)?;
+        if self
+            .pin
+            .try_lock()
+            .ok_or_else(|| data_error("Registered NEW pin busy"))?
+            .is_some()
+        {
+            return Err(data_error(
+                "Registered catalogue retry requires original NEW pin drained",
+            ));
+        }
+        database.reconcile_registered_joint_decision_catalogue(
+            self.owner.original_target_arc(),
+            frozen.try_as_frozen()?,
+            parent,
+            service.range_writes.current_mut(),
+            &retry,
+            &metadata,
+            &mut attempt,
+        )
+    }
     pub(crate) fn require_remote_source_retirement(
         &self,
         manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,

@@ -39,6 +39,14 @@ impl NativeRegisteredJointExclusionScope<'_> {
         self.target.require_original_point(db, self.frozen)?;
         self.caller.check()
     }
+    /// Necessary actual borrowed hook/journal/A/physical identity only; a
+    /// retained exact publication and fresh metadata must supply every mutation.
+    pub(crate) fn require_identity_point(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
+        self.require_original(db)?;
+        self.target
+            .require_materialized_identity_point(db, store, self.frozen)?;
+        self.require_original(db)
+    }
     pub(crate) fn require_current(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
         self.require_original(db)?;
         self.target

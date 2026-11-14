@@ -270,14 +270,14 @@ jobs:
               raise SystemExit('The requested Core filter selected no tests')
           print(f'Selected {count} Core library tests; ignored tests remain identified by the execution result')
           PY
-      - name: Execute selected Core library tests
+      - name: Execute selected Core native library tests serially
         shell: bash
         run: |
           set -euo pipefail
           export BICDB_TEST_EVIDENCE_ROOT="$RUNNER_TEMP/native-core-evidence/fault-state"
           export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
           mkdir -p "$BICDB_TEST_EVIDENCE_ROOT"
-          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=4 --show-output \
+          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=1 --show-output \
             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/tests.log"
       - name: Retain focused source, log and opted-in fault-state evidence
         if: always()

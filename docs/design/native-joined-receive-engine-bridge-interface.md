@@ -138,3 +138,32 @@ No SOURCE/INITIAL bindings are created. Future Joined donor duties, cold
 reconstruction, controller integration, disk-stall progress and physical scale
 qualification remain separate. The complete two-populated-range acceptance is
 not executed or implemented by this interface note.
+
+### Pending runtime custody has no host ownership backedge
+
+The runtime owns the actual preflight and transferred A strongly. The retained
+receive origin consequently stores weak references to the actual runtime,
+backend, factory, admission, original FIRST continuation and coordinator. It
+copies the actual database-open and Store-slot guards, node/incarnation DATA,
+and retains the installed writer guard. It does not retain
+`RegisteredAssignedParts`. In particular the FIRST continuation can indirectly
+retain an image release lease/runtime and must remain weak here. The host keeps
+its original strong owners; no runtime-owned custody is weakened.
+
+Full physical operations upgrade those exact weak owners and retain each local
+Arc while borrowing its locks. `service()` returns
+`Result<Arc<Mutex<ClusterDataNodeService>>>`; consumers must bind the returned
+Arc before locking it. These upgrades do not create replacements or extend an
+expired request.
+
+The final memory-only refusal path checks the actual Joined lifetime, copied
+open/slot witnesses and whether the original weak FIRST owner has ended. That
+weak-count check is only an additional refusal, never proof of authority. It
+must not upgrade/drop a possible final complex owner under the publication
+guard. The lexical physical point still owns the checked State/hook/native
+journal/DB/service guards and the sink independently requires the fresh request,
+actual local metadata version and unique original N.
+
+This source ownership correction has not independently exercised host teardown,
+row import, second-range activation or stalled disk I/O. Those remain runtime
+acceptance gates.

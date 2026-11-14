@@ -12,8 +12,8 @@ pub(crate) struct NativeJoinedRemoteInstallPreflight {
     readonly_plan: crate::distribution_range_handoff::NativeJointReadOnlyPlanIdentity,
 }
 impl NativeJoinedRemoteInstallPreflight {
-    pub(crate) fn service(&self) -> &Arc<Mutex<ClusterDataNodeService>> {
-        &self.selected.origin().parts.backend.service
+    pub(crate) fn service(&self) -> Result<Arc<Mutex<ClusterDataNodeService>>> {
+        Ok(self.selected.origin().backend()?.service.clone())
     }
     pub(crate) fn readonly_plan(
         &self,
@@ -58,14 +58,14 @@ impl NativeJoinedRemoteInstallPreflight {
     pub(crate) fn require_runtime(&self, runtime: &Arc<RangeRecoveryRuntime>) -> Result<()> {
         let origin = self.selected.origin();
         origin.require_live()?;
-        if !Arc::ptr_eq(&origin.parts.runtime, runtime) {
+        if !Arc::ptr_eq(&origin.runtime()?, runtime) {
             return Err(invalid(
                 "Joined install preflight changed actual original runtime",
             ));
         }
         origin
-            .admission
-            .require_listener(&origin.parts.backend.service, runtime)
+            .admission()?
+            .require_listener(&origin.backend()?.service, runtime)
     }
     pub(crate) fn require_request(
         &self,
@@ -118,11 +118,13 @@ impl NativeJoinedRemoteInstallPreflight {
         self.require_request(request, frame)?;
         request.require_original_frozen(&temporary_n)?;
         let origin = self.selected.origin();
-        let service = origin.parts.backend.service.try_lock().ok_or_else(|| {
+        let backend = origin.backend()?;
+        let factory = origin.factory()?;
+        let service = backend.service.try_lock().ok_or_else(|| {
             invalid("Joined rotation actual service busy before physical prepare")
         })?;
         let database = service.database();
-        if !Arc::ptr_eq(&database, &origin.parts.factory.database) {
+        if !Arc::ptr_eq(&database, &factory.database) {
             return Err(invalid("Joined rotation changed actual DB owner"));
         }
         let db = database
@@ -154,14 +156,14 @@ impl NativeJoinedRemoteInstallPreflight {
     ) -> Result<()> {
         self.require_request(request, frame)?;
         let origin = self.selected.origin();
-        let service = origin
-            .parts
-            .backend
+        let backend = origin.backend()?;
+        let factory = origin.factory()?;
+        let service = backend
             .service
             .try_lock()
             .ok_or_else(|| invalid("Joined install original service busy before rotation"))?;
         let database = service.database();
-        if !Arc::ptr_eq(&database, &origin.parts.factory.database) {
+        if !Arc::ptr_eq(&database, &factory.database) {
             return Err(invalid("Joined install changed actual DB before rotation"));
         }
         let db = database

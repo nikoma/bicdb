@@ -47,6 +47,8 @@ pub(crate) use native_prefix::test_validate_ordinary_native_intent;
 mod native_image_ready;
 #[cfg(feature = "tls-replication")]
 mod registered_no_domain;
+#[cfg(feature = "tls-replication")]
+pub(crate) use image_install_fence::NativeJoinedRemoteImageIntent;
 #[cfg(all(test, feature = "tls-replication"))]
 pub(crate) use native_image_base::test_registered_remote_adoption_after_fsync;
 pub(crate) use native_image_base::NativeImageCatalogueAdoptionReceipt;

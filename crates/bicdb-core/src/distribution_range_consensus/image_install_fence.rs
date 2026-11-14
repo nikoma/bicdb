@@ -15,6 +15,8 @@ use super::image_install_state::{ImageInstallIntent, MAX_INSTALL_INTENTS};
 #[cfg(feature = "tls-replication")]
 mod registered_remote;
 #[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote::NativeJoinedRemoteImageIntent;
+#[cfg(feature = "tls-replication")]
 pub(crate) use registered_remote::NativeRegisteredRemoteImageIntent;
 #[cfg(feature = "tls-replication")]
 mod registered_installing;

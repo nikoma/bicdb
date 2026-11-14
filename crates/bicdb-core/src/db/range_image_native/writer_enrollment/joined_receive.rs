@@ -18,6 +18,18 @@ impl NativeJoinedReceiveStorageScope<'_> {
     pub(crate) fn role(&self) -> &crate::distribution_range_recovery::RecoveryRoleAdmission {
         self.request.role().role()
     }
+    pub(crate) fn require_request(&self, request: &NativeJoinedRangeReceiveRequest) -> Result<()> {
+        self.require_database(self.db)?;
+        if !std::ptr::eq(self.request, request) {
+            return Err(invalid(
+                "Joined storage point is not the actual caller's borrowed request",
+            ));
+        }
+        request.require_live()
+    }
+    pub(crate) fn frozen(&self) -> &FrozenRangeMutationPermit {
+        self.frozen
+    }
     pub(crate) fn native(&self) -> &NativeRecoveryAdmission {
         self.native
     }

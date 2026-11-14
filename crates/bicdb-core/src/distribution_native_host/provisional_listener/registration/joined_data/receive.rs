@@ -2,12 +2,14 @@
 //! blank FIRST receiver, selected NoDomain proof, image or serving permission.
 //! Every later operation must supply its own actual Role/OWN/native evidence.
 use super::*;
+mod install;
 mod preflight;
 use crate::distribution_consensus::{
     HostMetadataReadObservation, NativeOwnedMetadataMemberObservation,
 };
 use crate::distribution_range_consensus::RangeWriteStore;
 use crate::distribution_range_recovery::HandoffRoleAdmission;
+pub(crate) use install::NativeJoinedRemoteInstallPreflight;
 pub(crate) use preflight::NativeJoinedRangeReceivePreflight;
 
 pub(crate) struct NativeJoinedRangeReceiveOrigin {
@@ -134,6 +136,14 @@ pub(crate) struct NativeJoinedRangeReceiveRequest {
 impl NativeJoinedRangeReceiveRequest {
     pub(crate) fn origin(&self) -> &NativeJoinedRangeReceiveOrigin {
         &self.origin
+    }
+    pub(crate) fn plan(&self) -> Result<crate::distribution_range_handoff::NativeJointHandoffPlan> {
+        self.require_live()?;
+        crate::distribution_range_handoff::NativeJointHandoffPlan::from_actual_role_and_own(
+            self.role.role(),
+            &self.own,
+            self.business,
+        )
     }
     pub(crate) fn role(&self) -> &HandoffRoleAdmission {
         &self.role

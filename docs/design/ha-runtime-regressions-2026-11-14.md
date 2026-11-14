@@ -93,7 +93,13 @@ snapshot/append regressions. **Correction untested.**
 The separate Rails run 43572675090 passed 20 tests/100 assertions with no failures,
 errors or skips. That is useful ordinary-application compatibility evidence;
 it does not supersede the failed Oracle target or validate distributed movement.
-Native, SQL and remaining-workspace results must retain their own actual final
+The later SQL job 132380251021 passed 2,681 tests with four ignored and no
+failures across 282 distinct target contexts. The archive includes its exact
+per-target receipt and hashes; its full 400,777,285-byte log is retained in the
+independent local capture, not duplicated in the repository. That SQL result
+does not establish transparent distributed SQL.
+
+Native and remaining-workspace results must retain their own actual final
 counts. Earlier 508 compiler failures and the failed Azure qualification remain
 unchanged. Corrected-source execution, cold recovery, native operator/controller
 integration, Joined quorum/release, and physical expansion remain open gates.

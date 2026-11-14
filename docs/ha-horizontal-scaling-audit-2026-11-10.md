@@ -22,11 +22,22 @@ Current main subsequently advanced to **1.0.507-beta**,
 `f69b242c9db3afe0d24e83520f94a853093d4b98`, with strong-read budget and
 lost-listener fixes. The recovery candidate was ported and renumbered510.
 Its earlier508 required-CI head failed compilation; the corrections and the
-current-main port require their own validation. It is not runtime-qualified, merged or deployed at this cutoff. Historical evidence below must not be reused as a test of
+current-main port require their own validation. The later d811 candidate passed
+workspace/all-target and no-default-Core consumer compilation, but failed two
+Core cases and aborted Oracle HR with a stack overflow. Its separate Rails
+check passed 20 tests and 100 assertions. The
+[runtime regression report](design/ha-runtime-regressions-2026-11-14.md) retains
+the exact source, complete terminal-component logs and prepared corrections.
+Those corrections have not executed. The
+[operational source audit](design/native-operational-gates-2026-11-14.md)
+distinguishes implemented initial source-process binding from missing native
+controller, Joined decision/release and repeated-movement integration.
+The candidate is not runtime-qualified, merged or deployed at this cutoff.
+Historical evidence below must not be reused as a test of
 that changed runtime. The failed Azure qualification and the open SQL,
 controller, repeated-movement and physical scaling gates remain unchanged.
 
-## Latest delivered source — 2026-11-14 UTC
+## Delivered-source checkpoint — 2026-11-14 UTC (505)
 
 The runtime evidence baseline for this documentation update is remote main
 **1.0.505-beta**, `e25b3ba194c6f3ad73e2f393b68b175fbf1edd92`.

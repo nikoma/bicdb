@@ -86,5 +86,20 @@
       "sha256": "d3bce4ee8832b133c1dbfdd0b787801d9bfa669c6f85570db4404471a0d4de81"
     },
     "scope": "existing required job guard evidence; no 100ms-level causal attribution"
+  },
+  "later_sql_terminal_capture": {
+    "job_id": 132380251021,
+    "conclusion": "success",
+    "receipt": {
+      "path": "ha510-sql-terminal-success-capture.json",
+      "bytes": 122890,
+      "sha256": "5e33bc94f718d3a2b8e910d9ede0199a8f202556a25f12f37a3e8c16c76ac294"
+    },
+    "canonical_target_contexts": 282,
+    "passed": 2681,
+    "failed": 0,
+    "ignored": 4,
+    "raw_log_retention": "Complete 400777285B log retained losslessly in independent local capture; this repository entry contains the exact-source per-target receipt and raw/compressed hashes, not the 46360766B gzip itself.",
+    "scope": "SQL regression suite only; failedCore/PG and pendingNative/REST remain independent"
   }
 }

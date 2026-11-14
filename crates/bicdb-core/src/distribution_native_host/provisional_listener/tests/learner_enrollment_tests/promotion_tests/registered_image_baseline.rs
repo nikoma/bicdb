@@ -208,7 +208,17 @@ fn run_registered_image_baseline_with_placement_and_source(
         Some(remote_source_tests::SourceCase::TwoRangeSourceReplyStall)
     );
     let single_range_move = hot_policy || two_range_stall;
-    let mut f = EnrollmentFixture::new();
+    // A host metadata observation lives no longer than the serving
+    // connection's I/O deadline, and a fresh preparation phase narrows itself
+    // to its members' observations. The hot-policy cases run a complete phase
+    // (every member twice, then activation and publication) inside one such
+    // window, so they need the product's four-second phase bound rather than
+    // the 1.5 s default of this fixture.
+    let mut f = if hot_policy {
+        EnrollmentFixture::with_spares_and_io_timeout(1, 4000)
+    } else {
+        EnrollmentFixture::new()
+    };
     let (factory, mut host) = f.factory("actual-registered-fifth-image-target");
     assert!(factory.spec.initial_ranges.is_empty());
     let token = CancellationToken::uncancelable();

@@ -232,3 +232,13 @@ range can remain unavailable until the genuine later activation/release;
 unrelated R1 availability and bounded selected unavailability still require
 measurement. No transparent online elastic scaling follows from this source
 copy path alone.
+
+
+The row commit consumes the original Transaction object. After a failed
+consuming call, retained custody is its exact original TxID/mutation hash,
+source step/payload, indexed intent, inner logical outcome and shared WAL pin;
+it is not the Rust Transaction object. Before invocation the object itself
+remains retained. A consumed unknown operation cannot be reissued or replaced
+by a new Transaction. AppliedKnown can advance only the same protected row
+progress after actual checks. Recovery of consumed uncertainty remains an
+explicit separate gate; this wording is not evidence of such a resolver.

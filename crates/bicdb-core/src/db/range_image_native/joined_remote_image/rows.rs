@@ -407,7 +407,9 @@ impl RetainedRemoteRows {
         serde_json::json!({"progress":self.header,"pending":self.pending.as_ref().map(|pending|{
             let logical=*pending.logical.lock();
             serde_json::json!({
-            "intent":pending.intent,"actual_transaction_retained":pending.transaction.is_some(),"intent_commit_returned":pending.intent_commit_returned,
+            "intent":pending.intent,"actual_transaction_retained":pending.transaction.is_some(),
+            "consumed_transaction_identity_and_payload_retained":pending.transaction.is_none() && pending.intent.logical_txid.is_some(),
+            "original_shared_WAL_pin_retained":true,"intent_commit_returned":pending.intent_commit_returned,
             "logical_outcome":match logical { LogicalOutcome::NotAttempted=>"not_attempted",LogicalOutcome::AttemptedUnknown=>"unknown",LogicalOutcome::WalDurablePendingApply(_)=>"wal_durable_pending_apply",LogicalOutcome::AppliedKnown(_)=>"applied_known",LogicalOutcome::NoRows=>"no_rows_in_actual_step"},
             "logical_sequence":match logical { LogicalOutcome::WalDurablePendingApply(sequence)|LogicalOutcome::AppliedKnown(sequence)=>Some(sequence),_=>None },"progress_attempt":pending.progress_attempt})})})
     }
@@ -675,8 +677,8 @@ impl RetainedRemoteRows {
         }
         let logical = *pending.logical.lock();
         match logical {
-            LogicalOutcome::AttemptedUnknown=>return Err(invalid("Joined row logical WAL outcome unknown; original Tx/payload retained, no new transaction permitted")),
-            LogicalOutcome::WalDurablePendingApply(_)=>return Err(invalid("Joined row logical WAL is durable but apply/materialization is incomplete; original Tx retained without row progress")),
+            LogicalOutcome::AttemptedUnknown=>return Err(invalid("Joined row logical WAL outcome unknown; consumed transaction identity/payload/WAL pin retained, no replacement transaction permitted")),
+            LogicalOutcome::WalDurablePendingApply(_)=>return Err(invalid("Joined row logical WAL is durable but apply/materialization is incomplete; consumed transaction identity/payload/WAL pin retained without row progress")),
             LogicalOutcome::AppliedKnown(sequence)=>pending.next.last_actual_target_b=Some(sequence),
             LogicalOutcome::NoRows=>{},LogicalOutcome::NotAttempted=>return Err(invalid("Joined row operation not attempted")),
         }

@@ -99,6 +99,12 @@ it cannot quietly replace its snapshot and resume with a different answer.
 
 ## 3. A precise common read cut for scans and joins
 
+The [clock-free locking alternative](distributed-sql-locking-consistency-alternative.md)
+defines a separate proposal that avoids a cluster-wide decision order for
+serializable execution. It does not replace the prefix protocol below or supply
+PostgreSQL fixed MVCC snapshots merely by adding locks. Neither is implemented
+or qualified by that design review.
+
 Use the report's conservative initial choice: one quorum-replicated SQL
 transaction/decision domain with a monotonic terminal decision order `S`.
 Every write that can affect distributed SQL, including single-range fast paths,

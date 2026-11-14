@@ -16,8 +16,10 @@ Two actual callers needed changes:
    its genuine recipient Role and business ID, acquires HostOWN through the
    recipient's actual transport, and calls the existing
    `publish_actual_owned_member`. The request is a child of the original drive
-   caller capped by the **same original Role deadline**. The driver session
-   remains lifetime custody, not a substitute for current authority.
+   caller linked to the **original driver session** and capped by the **same
+   original Role deadline**. Both actual cancellation ancestries and their
+   earliest deadline remain effective. The session is lifetime custody, not a
+   substitute for current authority.
 2. Initial serving preparation used the observer that supplies no local
    metadata point. It now captures the actual attached current-MStore point
    with the same HostOWN/business/request, **before** taking the service lock,
@@ -30,6 +32,15 @@ body and retained publication round are unchanged. Errors still propagate;
 unknown outcomes do not become success or allocate a replacement transaction.
 The existing original Role, OWN, native WAL/catalogue and final publication
 checks remain mandatory. Neither adapter serializes or manufactures authority.
+
+The follow-up to `c388dd37f61096a99b026e0582af1b2830e20df2` restores explicit
+session ancestry at this new OWN/publication boundary. `self.session` remains
+stored on the driver, and the source capture retains its cancellation token
+while that capture exists. That does not prove every later prepared quorum or
+finalized image retains the same token: the finalized image is a physical fact,
+not a session-authority token. The combined request therefore checks both real
+parents directly rather than relying on indirect custody. This only tightens
+cancellation; it adds no deadline, retry or authority renewal.
 
 The removed manual fifth-member fixture at
 `cea9269680f792c3060043878a32c547ff2e3ab8` was also inspected. Its initial

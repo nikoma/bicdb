@@ -1,7 +1,7 @@
 {
   "base": "d9327c386495389b95407fe88ed3c92f028f92e5",
   "changes": [
-    "Existing DECISION retry: genuine recipient Role +same business +recipient actual HostOWN, capped original Role/drive deadline; existing owned publication captures real attached MStore.",
+    "Existing DECISION retry: genuine recipient Role +same business +recipient HostOWN, capped original Role deadline and BOTH actual original session/drive-parent cancellation ancestries via child_linked_to; existing owned publisher captures real attached MStore.",
     "Initial serving preparation: capture actual point before service.lock and use existing with_point observer with same fresh Own/business/caller."
   ],
   "checks": [
@@ -12,6 +12,12 @@
   "classification": "Narrow production caller adaptation; source-only/uncompiled/unrun",
   "delivered_main508": "f50acde6b0a2e923b92b31ab4b24d96f0dea5d6e",
   "delivered_main508_tree": "e08ecb3168ac9329998d5ce4cfd9ea6932e2091b",
+  "followup": {
+    "cause": "New OWN/publication token previously retained drive parent+Role deadline but not explicit original session ancestry. Driver retains session and capture retains cancellation only while alive; later physical/quorum custody is not a proof of identical session lineage.",
+    "change": "Restore actual session clone before mutable publication borrow, child_linked_to(session) then original Role deadline. Actual both-parent cancellation and earliest deadlines; no retries/authority widening.",
+    "original_leaf": "Preserved unchanged in Git; this child corrects new request ancestry.",
+    "parent": "c388dd37f61096a99b026e0582af1b2830e20df2"
+  },
   "manual_comparison": "Previous manual fixture used ordinary re-enrollment/legacy Image Recovery. Earlier Role+OWN fixture loop adapted here into new product caller. No Closed/with_point producer existed there to copy; do not manufacture it.",
   "not_run": [
     "Cargo",
@@ -36,7 +42,7 @@
       "base_blob": "a52ea73992af9ba4df7a081f494f8acbc9908adb",
       "base_sha256": "967870074c8aa9de143cf0219ae39d1aa1ff43f2d8e835c57363290ececa7700",
       "path": "crates/bicdb-core/src/distribution_native_host/joined_data_handoff.rs",
-      "working_sha256": "3678a104bed61ba26ee6904f1f26a9ef46b818c23b0750c9d095e24c878f4eb3"
+      "working_sha256": "97db1a8d8dc0e4eb5a53633922c9456bd81ff30f1a9e490fabe503fbf1463dc6"
     },
     {
       "base_blob": "153ea1fe033304d851297039df6a25f00f7a05e0",
@@ -91,6 +97,12 @@
       "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/fifth_data_path_tests.rs",
       "sha256": "e96fbfc38fc1a2f0325001e073845e078ef277f6e90cc03c4da0d0f69c075a55",
       "source": "cea9269680f792c3060043878a32c547ff2e3ab8"
+    },
+    {
+      "blob": "a75e4a11b118e0863fb1edb4aee99bc95b89cf3b",
+      "path": "crates/bicdb-core/src/cancellation.rs",
+      "sha256": "895417caffda2fcbc7b7391b46912073231cb93d30d1c0067d89744c18ddea29",
+      "source": "c388dd37f61096a99b026e0582af1b2830e20df2"
     }
   ],
   "source_version": "1.0.510-beta unchanged",

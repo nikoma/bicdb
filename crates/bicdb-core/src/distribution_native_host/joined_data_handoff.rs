@@ -1004,6 +1004,7 @@ impl NativeJoinedDataHandoff {
             .ok_or_else(|| handoff_error("plan custody absent before decision publication"))?;
         let mut publishers = plan.old_members().keys().cloned().collect::<Vec<_>>();
         publishers.push(self.target.clone());
+        let session = self.session.clone();
         let (publication, done) = self.publishing.as_mut().unwrap();
         for node in publishers {
             if done.contains(&node) {
@@ -1014,8 +1015,10 @@ impl NativeJoinedDataHandoff {
                 let business = role.business_request_id();
                 // This request cannot renew the original Role. Use the actual
                 // recipient transport and keep its OWN/publication under the
-                // same Role deadline and the original drive caller.
-                let token = parent.child_with_deadline(role.deadline());
+                // same Role deadline, original session and drive caller.
+                let token = parent
+                    .child_linked_to(&session)
+                    .child_with_deadline(role.deadline());
                 let own = members
                     .get(&node)?
                     .client

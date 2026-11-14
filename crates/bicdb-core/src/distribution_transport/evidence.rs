@@ -3,6 +3,7 @@ use super::*;
 use std::error::Error;
 use std::io;
 use std::sync::atomic::AtomicU8;
+use std::sync::OnceLock;
 
 /// Exact evidence from the existing client path. Frame bytes include the four
 /// byte length header. Payloads may contain application data; keep journals private.
@@ -46,11 +47,26 @@ impl Default for ClusterRpcEvidenceLimits {
         }
     }
 }
+enum FailureCause {
+    Message(String),
+    CallbackUnwound,
+}
+impl FailureCause {
+    fn detail(&self) -> String {
+        match self {
+            Self::Message(detail) => detail.clone(),
+            Self::CallbackUnwound => {
+                "evidence sink callback unwound; observed dispatch is fenced".into()
+            }
+        }
+    }
+}
 pub(super) struct Observer {
     sink: Arc<dyn ClusterRpcEvidenceObserver>,
     limits: ClusterRpcEvidenceLimits,
     counts: Mutex<(u64, u64)>,
     failed: AtomicU8,
+    first_failure: OnceLock<FailureCause>,
 }
 impl Observer {
     pub(super) fn new(
@@ -71,22 +87,52 @@ impl Observer {
             limits,
             counts: Mutex::new((0, 0)),
             failed: AtomicU8::new(0),
+            first_failure: OnceLock::new(),
         }))
     }
     pub(super) fn require_current(&self) -> Result<()> {
         let failed = self.failed.load(Ordering::Acquire);
         if failed != 0 {
-            return Err(BicDbError::RpcEvidenceFailure { may_have_dispatched: failed == 2, detail: "evidence observer failed or reached its bound; future observed dispatch is fenced".into() });
+            return Err(BicDbError::RpcEvidenceFailure {
+                may_have_dispatched: failed == 2,
+                detail: self
+                    .first_failure
+                    .get()
+                    .expect("failure cause published before observer fence")
+                    .detail(),
+            });
         }
         Ok(())
     }
-    fn fail(&self, dispatched: bool, detail: impl std::fmt::Display) -> BicDbError {
-        // An uncertainty discovered concurrently must never be downgraded.
+    pub(super) fn require_call_entry(&self) -> Result<()> {
+        self.require_current()?;
+        let key = Arc::as_ptr(&self.sink) as *const () as usize;
+        let parent_dispatched = ACTIVE_SINKS.with(|active| active.borrow().get(&key).copied());
+        if let Some(dispatched) = parent_dispatched {
+            return Err(self.fail(
+                dispatched,
+                "same-thread evidence sink reentry before worker dispatch",
+            ));
+        }
+        Ok(())
+    }
+    fn publish_failure(&self, dispatched: bool, cause: FailureCause) {
+        // No formatting or sink IO under OnceLock's initialization lock.
+        // Publish the first ACTUAL cause before exposing the fence to peers.
+        let _ = self.first_failure.set(cause);
         self.failed
             .fetch_max(if dispatched { 2 } else { 1 }, Ordering::AcqRel);
+    }
+    fn fail(&self, dispatched: bool, detail: impl std::fmt::Display) -> BicDbError {
+        let cause = FailureCause::Message(detail.to_string());
+        self.publish_failure(dispatched, cause);
         BicDbError::RpcEvidenceFailure {
             may_have_dispatched: self.failed.load(Ordering::Acquire) == 2,
-            detail: detail.to_string(),
+            detail: self
+                .first_failure
+                .get()
+                .expect("failure cause published before observer fence")
+                .detail(),
         }
     }
     fn record(
@@ -98,7 +144,7 @@ impl Observer {
         self.require_current()
             .map_err(|error| self.fail(record.may_have_dispatched, error))?;
         let key = Arc::as_ptr(&self.sink) as *const () as usize;
-        let _callback = CallbackScope::enter(key).ok_or_else(|| {
+        let _callback = CallbackScope::enter(key, record.may_have_dispatched).ok_or_else(|| {
             self.fail(
                 record.may_have_dispatched,
                 "same-thread evidence sink reentry; observed dispatch is fenced",
@@ -180,15 +226,17 @@ impl Observer {
     }
 }
 std::thread_local! {
-    static ACTIVE_SINKS: std::cell::RefCell<BTreeSet<usize>> = std::cell::RefCell::new(BTreeSet::new());
+    static ACTIVE_SINKS: std::cell::RefCell<BTreeMap<usize, bool>> = std::cell::RefCell::new(BTreeMap::new());
 }
 struct CallbackScope {
     key: usize,
 }
 impl CallbackScope {
-    fn enter(key: usize) -> Option<Self> {
+    fn enter(key: usize, dispatched: bool) -> Option<Self> {
         ACTIVE_SINKS.with(|active| {
-            if active.borrow_mut().insert(key) {
+            let mut active = active.borrow_mut();
+            if let std::collections::btree_map::Entry::Vacant(entry) = active.entry(key) {
+                entry.insert(dispatched);
                 Some(Self { key })
             } else {
                 None
@@ -212,8 +260,7 @@ impl Drop for FenceOnUnwind<'_> {
     fn drop(&mut self) {
         if self.armed {
             self.observer
-                .failed
-                .fetch_max(if self.dispatched { 2 } else { 1 }, Ordering::AcqRel);
+                .publish_failure(self.dispatched, FailureCause::CallbackUnwound);
         }
     }
 }

@@ -2,14 +2,76 @@
 use crate::{BicDbError, Result};
 use std::cell::RefCell;
 use std::marker::PhantomData;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct Budget {
     limit: usize,
     peak: usize,
+    shared_peak: Option<Arc<AtomicUsize>>,
     deadline: Option<std::time::Instant>,
 }
 thread_local! { static BUDGETS: RefCell<Vec<Budget>> = const { RefCell::new(Vec::new()) }; }
+
+impl Budget {
+    fn peak(&self) -> usize {
+        self.shared_peak.as_ref().map_or(self.peak, |shared| {
+            self.peak.max(shared.load(Ordering::Acquire))
+        })
+    }
+}
+
+/// Local numeric execution context, never database or distributed authority.
+/// Capturing shares only peak counters; guards remain on their own threads.
+#[derive(Clone)]
+pub(crate) struct QueryBudgetContext {
+    budgets: Vec<Budget>,
+}
+impl QueryBudgetContext {
+    pub(crate) fn capture() -> Self {
+        BUDGETS.with(|stack| {
+            let mut stack = stack.borrow_mut();
+            for budget in stack.iter_mut() {
+                let peak = budget.peak;
+                budget
+                    .shared_peak
+                    .get_or_insert_with(|| Arc::new(AtomicUsize::new(peak)));
+            }
+            Self {
+                budgets: stack.clone(),
+            }
+        })
+    }
+    pub(crate) fn deadline(&self) -> Option<std::time::Instant> {
+        self.budgets
+            .iter()
+            .filter_map(|budget| budget.deadline)
+            .min()
+    }
+    pub(crate) fn install(&self) -> InstalledQueryBudgetContext {
+        let base = BUDGETS.with(|stack| {
+            let mut stack = stack.borrow_mut();
+            let base = stack.len();
+            stack.extend(self.budgets.iter().cloned());
+            base
+        });
+        InstalledQueryBudgetContext {
+            base,
+            _thread: PhantomData,
+        }
+    }
+}
+
+pub(crate) struct InstalledQueryBudgetContext {
+    base: usize,
+    _thread: PhantomData<*mut ()>,
+}
+impl Drop for InstalledQueryBudgetContext {
+    fn drop(&mut self) {
+        BUDGETS.with(|stack| stack.borrow_mut().truncate(self.base));
+    }
+}
 
 /// Nested statements inherit the tightest envelope. The guard cannot move to
 /// another thread; workers must explicitly install their own envelope.
@@ -22,6 +84,7 @@ impl QueryMemoryScope {
             budgets.borrow_mut().push(Budget {
                 limit,
                 peak: 0,
+                shared_peak: None,
                 deadline: None,
             })
         });
@@ -35,7 +98,7 @@ impl QueryMemoryScope {
         scope
     }
     pub fn peak_bytes(&self) -> usize {
-        BUDGETS.with(|b| b.borrow().last().map_or(0, |b| b.peak))
+        BUDGETS.with(|b| b.borrow().last().map_or(0, Budget::peak))
     }
 }
 impl Drop for QueryMemoryScope {
@@ -61,6 +124,9 @@ pub fn observe(bytes: usize) {
     BUDGETS.with(|budgets| {
         for budget in budgets.borrow_mut().iter_mut() {
             budget.peak = budget.peak.max(bytes);
+            if let Some(shared) = &budget.shared_peak {
+                shared.fetch_max(bytes, Ordering::AcqRel);
+            }
         }
     });
 }
@@ -75,11 +141,12 @@ pub fn check() -> Result<()> {
         if let Some(budget) = budgets
             .borrow()
             .iter()
-            .find(|b| b.limit > 0 && b.peak > b.limit)
+            .find(|b| b.limit > 0 && b.peak() > b.limit)
         {
             Err(BicDbError::QueryMemoryLimit(format!(
                 "query materialized {} bytes; limit is {}",
-                budget.peak, budget.limit
+                budget.peak(),
+                budget.limit
             )))
         } else {
             Ok(())
@@ -131,3 +198,6 @@ pub fn parse_duration(value: &str) -> Option<std::time::Duration> {
     }
     std::time::Duration::try_from_secs_f64(seconds).ok()
 }
+
+#[cfg(test)]
+mod worker_context_tests;

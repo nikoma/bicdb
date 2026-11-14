@@ -1,0 +1,16 @@
+{
+  "README.md": "8f6d7f4e70c877395f34ccce0eb5bc9a048560c0e0f2349cf48edadd27eb2f8c",
+  "capture-verification.json": "675758a8076e97ec5b598cef51acc66b2ec8523f249c0f22e664124aaabcde90",
+  "core-job.log.gz": "a6212df6b87a35442eeb2989239e64ad7567af14c3e164ccd75804eb8c13cec2",
+  "core-log-direct-fetch.json": "42842fe280599a48621444a946568637002c5f7db135b368a311d0a99443ef1d",
+  "core-log-initial-fetch.json": "0166147d40292e7c93a26de58c0c8bee121f07c4fe82bcc9e1355424cb6add08",
+  "evidence.json": "1de41d82a2a20bae52fac4edc4fa495b30a4c82dd875dd4c5bca6f296cd7f492",
+  "focused-core-evidence.zip": "9ead8d3d2f9f3f92fe97979b80ab3f348569f653d6e23fad37b3f59b8f8dd1c2",
+  "github-artifacts.json": "148ab093df799f4c4559df2d2c61963b7ddfc20e8e65550c83ab3cdb65cf3fa8",
+  "github-run.json": "3bdfcd159430effe8243795b67bf1127d6cc0ec6c536df14bc637a915e96804e",
+  "request.json": "38033efd2bedc33b479869949e6c3cc9972970455ec9df49e3ad8ca60acc27c9",
+  "source-change.patch.gz": "d013c33a55d583034a4ce75ad552b5bb1d247ea9b5874ad3565dc2c96cb7527d",
+  "validation.json": "51ac8a93452c40fdc54251ec4d7ffb96e4964dc881191b819f37907b2a2fce06",
+  "verify.py": "56d7bcdb3d405e9b3466cb05566420348d628b27dc5a1c6923b1468dad00bf2b",
+  "workspace-job.log.gz": "586023e07f19269da6d812fb93735c73f9376938787cd2d50c5d53efc7a0cf61"
+}

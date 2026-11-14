@@ -1,0 +1,21 @@
+{
+  "run": 43528329600,
+  "source": "8352e3d6bcf30ca5d03576a0ef70f98cc4244fec",
+  "artifact": 14085989657,
+  "sha256": "9ead8d3d2f9f3f92fe97979b80ab3f348569f653d6e23fad37b3f59b8f8dd1c2",
+  "bytes": 42672,
+  "members": [
+    "source-revision.txt",
+    "selected-tests.log",
+    "tests.log",
+    "rustc.txt"
+  ],
+  "custody_present": false,
+  "test_result": [
+    "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1081 filtered out; finished in 2.67s"
+  ],
+  "selected_count": 12,
+  "all_six_new_regressions_selected_and_passed": true,
+  "qualified": false,
+  "scope": "SDK unit and loopback TCP mock routing/error tests only"
+}

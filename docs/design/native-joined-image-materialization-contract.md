@@ -2,9 +2,11 @@
 
 Source reviewed: `818a8f4cd125505bbb2981d7b55608eb5a663a7e` and its inherited
 corrected transfer branch `d47d4edf2ace1e6b7dda4c36978525c34584eefa`.
-This is the implementation contract for the remaining A engine, not implemented
-history/row/base/catalogue capability or qualification evidence. The a78
-composition's compile/fence run does not execute these future operations.
+This contract was written before the history/row successor. That successor now
+adds actual source paths for Joined history and row apply, with private original
+A scope and transaction grant. It remains uncompiled/unexecuted at freeze;
+base/final/catalogue materialization is still absent. The a78 composition's
+compile/fence run does not execute the new history/row operations.
 
 ## Existing producers that must remain distinct
 
@@ -190,3 +192,43 @@ Actual stalled selected disk I/O, second Joined activation/replacement,
 Joined becoming a future donor, cold self-healing, and multi-host automatic
 scale-out/throughput remain separate acceptance gates. A source-defined test,
 passing primitive control, or complete physical copy cannot close them.
+
+
+## Actual history/row source successor
+
+The separate Joined module now supplies BeginHistory, AppendHistory,
+AuditHistory and ApplyRows through the original host's retained attempt.
+Installing/proposal/current original A and fresh source/request checks precede
+its distinct private context. FIRST context and grant files remain unchanged.
+The Joined native scope permits only its actual controlled claim while keeping
+real admission/hook/journal guards; its weak transaction lifetime dies before
+those guards drop. No ordinary selected-range writer policy is installed.
+
+The exact history generation and pending native header/entries are retained
+before native begin. Issued native xids are recorded before fallible framing.
+Rows retain the actual logical Transaction immediately after allocation and
+before staging writes; incomplete staging stays owned, not silently reset.
+The same actual WAL pin spans intent, logical apply and protected progress.
+Intent/index insert and header/index removal share their native transactions.
+A shared restrictive v1 index DATA key is used deliberately; no Registered
+scope, proposal pointer or row grant is constructed from it. A distinct Joined
+image feature and the existing index reader fence precede these writes.
+
+The actual logical commit body now has separate Joined grant validation and
+WalDurablePendingApply/AppliedKnown custody callbacks. Mixed import provenance
+is refused. It suppresses recursive admission acquisition only after that
+actual Joined grant validates, and does not globally skip require_range.
+Native/logical import commits remain separate from external APP ACKs.
+
+This batch has no verified target scan, final image, profile-3 base, selected
+catalogue adoption, NEW/decision/Open/release or new DATA-range permission.
+There is no runtime pass, second-range progress, cold repair or physical claim.
+The next fixture must use these genuine host methods and original SDK, not a
+constructed context or test-only Ready grant.
+
+The current source image is copied under the real selected OLD/A exclusion.
+It does not add online source writes/catch-up during the bulk copy. The moved
+range can remain unavailable until the genuine later activation/release;
+unrelated R1 availability and bounded selected unavailability still require
+measurement. No transparent online elastic scaling follows from this source
+copy path alone.

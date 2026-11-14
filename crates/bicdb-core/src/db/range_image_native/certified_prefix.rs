@@ -527,11 +527,22 @@ impl BicDb {
         if self.read_native_birth()?.is_none() {
             return Ok(());
         }
+        #[cfg(feature = "tls-replication")]
+        if transaction.native_joined_remote_row_grant.is_some()
+            && (transaction.native_image_row_grant.is_some()
+                || transaction.native_registered_remote_row_grant.is_some())
+        {
+            return Err(invalid("Joined native mutation has mixed grant provenance"));
+        }
         if let Some(grant) = &transaction.native_image_row_grant {
             return grant.require_current(self, transaction);
         }
         #[cfg(feature = "tls-replication")]
         if let Some(grant) = &transaction.native_registered_remote_row_grant {
+            return grant.require_current(self, transaction);
+        }
+        #[cfg(feature = "tls-replication")]
+        if let Some(grant) = &transaction.native_joined_remote_row_grant {
             return grant.require_current(self, transaction);
         }
         let actual_hash =

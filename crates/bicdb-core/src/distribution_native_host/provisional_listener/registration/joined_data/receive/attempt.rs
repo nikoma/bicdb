@@ -12,6 +12,7 @@ pub(in super::super) struct NativeJoinedRemoteInstallAttempt {
     lease: Option<JoinedRemoteImageInstallFreeze>,
     proposal: Option<crate::db::NativeJoinedRemoteProposalPublication>,
     installing: Option<NativeJoinedRemoteInstallingPublication>,
+    image: Option<crate::db::NativeJoinedRemoteImageInstallation>,
 }
 impl NativeJoinedRangeReceiveOrigin {
     fn require_host(&self, host: &NativeJoinedDataHost) -> Result<()> {
@@ -71,6 +72,7 @@ impl NativeMetadataControlHost {
                     lease: None,
                     proposal: None,
                     installing: None,
+                    image: None,
                 });
         if attempt.lease.is_none() {
             let lease =
@@ -180,5 +182,194 @@ impl NativeMetadataControlHost {
                 Ok(fence)
             }
         }
+    }
+}
+
+/// Borrowed real host attempt, not a Manifest/DTO constructor.
+pub(crate) struct NativeJoinedRemoteImagePoint<'a> {
+    preflight: &'a Arc<NativeJoinedRemoteInstallPreflight>,
+    lease: &'a JoinedRemoteImageInstallFreeze,
+    request: &'a NativeJoinedRangeReceiveRequest,
+    frame: &'a NativeRemoteImageStep<'a>,
+}
+impl NativeJoinedRemoteImagePoint<'_> {
+    pub(crate) fn preflight(&self) -> &NativeJoinedRemoteInstallPreflight {
+        self.preflight
+    }
+    pub(crate) fn preflight_arc(&self) -> &Arc<NativeJoinedRemoteInstallPreflight> {
+        self.preflight
+    }
+    pub(crate) fn frame(&self) -> &NativeRemoteImageStep<'_> {
+        self.frame
+    }
+    pub(crate) fn request(&self) -> &NativeJoinedRangeReceiveRequest {
+        self.request
+    }
+    pub(crate) fn require_live(&self) -> Result<()> {
+        self.preflight.require_request(self.request, self.frame)?;
+        if !Arc::ptr_eq(self.preflight, self.lease.preflight())
+            || self.lease.try_as_frozen()?.owner() != self.preflight.attempt_id()
+        {
+            return Err(invalid("Joined image point changed exact retained A"));
+        }
+        Ok(())
+    }
+    pub(crate) fn retain_transaction_request(
+        &self,
+    ) -> Result<NativeJoinedRemoteTransactionRequest> {
+        self.require_live()?;
+        Ok(NativeJoinedRemoteTransactionRequest {
+            preflight: self.preflight.clone(),
+            role: self.request.role.role().retain_original(),
+            own: self.request.own.clone(),
+            member: self.request.member.clone(),
+            business: self.request.business,
+            phase: self.request.phase.clone(),
+            source_request: self.frame.retain_original_request_cancellation()?,
+        })
+    }
+}
+/// Same actual finite request observations; no serializable constructor,
+/// deadline renewal, ordinary writer scope or independent phase permission.
+pub(crate) struct NativeJoinedRemoteTransactionRequest {
+    preflight: Arc<NativeJoinedRemoteInstallPreflight>,
+    role: Arc<crate::distribution_range_recovery::RecoveryRoleAdmission>,
+    own: Arc<HostMetadataReadObservation>,
+    member: Arc<NativeOwnedMetadataMemberObservation>,
+    business: Uuid,
+    phase: CancellationToken,
+    source_request: CancellationToken,
+}
+impl NativeJoinedRemoteTransactionRequest {
+    pub(crate) fn preflight(&self) -> &NativeJoinedRemoteInstallPreflight {
+        &self.preflight
+    }
+    pub(crate) fn require_current(&self, db: &BicDb) -> Result<()> {
+        self.phase.check()?;
+        self.source_request.check()?;
+        self.role.require_live_request()?;
+        self.role
+            .require_own_host_metadata(&self.own, self.business)?;
+        self.preflight.require_original_process()?;
+        self.preflight
+            .selected()
+            .origin()
+            .database
+            .require_database(db)?;
+        self.preflight.native().require_current(db)?;
+        db.validate_range_image_bindings(self.preflight.bindings())?;
+        self.member.require_database_point(db)?;
+        self.member.publication_version().require_current_memory()?;
+        self.phase.check()?;
+        self.source_request.check()
+    }
+}
+
+impl NativeMetadataControlHost {
+    pub(crate) fn advance_joined_remote_image(
+        &mut self,
+        request: &NativeJoinedRangeReceiveRequest,
+        frame: &NativeRemoteImageStep<'_>,
+        parent: &CancellationToken,
+        operation: crate::db::NativeJoinedRemoteImageOperation,
+    ) -> Result<crate::db::NativeJoinedRemoteImageProgress> {
+        parent.check()?;
+        let host = self.joined_receive_host_mut()?;
+        request.origin().require_host(host)?;
+        let backend = host.parts.backend.clone();
+        let factory = host.parts.factory.clone();
+        let attempt = host
+            .remote_attempts
+            .get_mut(&request.origin().range_id())
+            .ok_or_else(|| invalid("Joined original image attempt absent"))?;
+        let preflight = attempt.preflight.clone();
+        let lease = attempt
+            .lease
+            .as_ref()
+            .ok_or_else(|| invalid("Joined image actual A absent"))?;
+        lease.require_retained()?;
+        preflight.require_metadata_current(request)?;
+        let fence = attempt
+            .installing
+            .as_ref()
+            .and_then(|p| p.fence())
+            .cloned()
+            .ok_or_else(|| invalid("Joined image requires actual durable selected Installing"))?;
+        let point = NativeJoinedRemoteImagePoint {
+            preflight: &preflight,
+            lease,
+            request,
+            frame,
+        };
+        point.require_live()?;
+        let result = {
+            let _original = preflight.selected().origin().original()?;
+            let _admission = preflight.selected().origin().admission()?;
+            let service = backend
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("Joined image actual service busy"))?;
+            let database = service.database();
+            if !Arc::ptr_eq(&database, &factory.database) {
+                return Err(invalid("Joined image actual DB owner changed"));
+            }
+            let db = database
+                .try_read()
+                .ok_or_else(|| invalid("Joined image actual DB busy"))?;
+            db.with_joined_remote_mutation_scope(&preflight, request, frame, lease, |scope| {
+                service.with_writer_data_domain_store(&db, |store| {
+                    let context = crate::db::NativeJoinedRemoteImageContext::new(
+                        &db, store, &point, scope, &fence,
+                    )?;
+                    if attempt.image.is_none() {
+                        // Exact generation/row pending owner is stored before
+                        // any native/logical transaction can be issued.
+                        attempt.image = Some(
+                            crate::db::NativeJoinedRemoteImageInstallation::retain(&context)?,
+                        );
+                    }
+                    attempt
+                        .image
+                        .as_mut()
+                        .unwrap()
+                        .advance(&db, &context, operation)
+                })
+            })
+        };
+        let post = preflight
+            .require_metadata_current(request)
+            .and_then(|()| lease.require_retained())
+            .and_then(|()| point.require_live());
+        // Checkpoint can need admission.write; never execute while the real
+        // admission/hook/journal/service guards or row Controlled claim live.
+        let database = backend.service.try_lock().map(|service| service.database());
+        if let Some(database) = database {
+            if let Some(db) = database.try_read() {
+                db.auto_checkpoint_if_due();
+            }
+        }
+        match result {
+            Err(primary) => {
+                let _ = post;
+                Err(primary)
+            }
+            Ok(progress) => {
+                post?;
+                parent.check()?;
+                Ok(progress)
+            }
+        }
+    }
+    #[cfg(test)]
+    pub(crate) fn test_joined_remote_image_state(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        self.joined
+            .as_ref()
+            .and_then(|host| host.remote_attempts.get(&range))
+            .and_then(|attempt| attempt.image.as_ref())
+            .map(|image| image.test_state())
+            .ok_or_else(|| invalid("Joined actual original image owner absent"))
     }
 }

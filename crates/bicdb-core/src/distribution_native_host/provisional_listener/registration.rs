@@ -878,3 +878,5 @@ impl NativeMetadataControlHost {
         Ok(())
     }
 }
+
+pub(crate) use joined_data::{NativeJoinedRemoteImagePoint, NativeJoinedRemoteTransactionRequest};

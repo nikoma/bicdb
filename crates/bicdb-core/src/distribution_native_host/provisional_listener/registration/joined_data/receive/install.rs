@@ -265,6 +265,11 @@ impl NativeJoinedRangeReceiveRequest {
         let plan_sha256 = plan.checksum_sha256()?;
         let readonly_plan = plan.into_readonly_identity()?;
         let attempt = source.manifest().target_attempt;
+        if self.origin.original()?.target().manifest().target_attempt == attempt {
+            return Err(invalid(
+                "additional Joined image cannot reuse original FIRST attempt identity",
+            ));
+        }
         let intent = selected.with_current(self, frozen, |db, store, point| {
             let intent = store.prepare_joined_remote_image_intent(
                 db,

@@ -57,8 +57,8 @@ impl NativeJoinedRemoteInstallingFence {
         }
         Ok(())
     }
-    fn read_disk_current(&self, store: &RangeWriteStore) -> Result<()> {
-        let path = store.root.join(DEFAULT_RANGE_WRITE_LOG);
+    fn read_disk_catalogue(root: &Path) -> Result<RangeWriteCatalog> {
+        let path = root.join(DEFAULT_RANGE_WRITE_LOG);
         // One descriptor and a bounded reader: a concurrent replacement or
         // growth cannot cause fs::read to allocate an unbounded file first.
         use std::io::Read;
@@ -84,7 +84,10 @@ impl NativeJoinedRemoteInstallingFence {
             ));
         }
         let envelope: RangeWriteEnvelope = serde_json::from_slice(&bytes)?;
-        let actual = envelope.verify()?;
+        envelope.verify()
+    }
+    fn read_disk_current(&self, store: &RangeWriteStore) -> Result<()> {
+        let actual = Self::read_disk_catalogue(&store.root)?;
         // Compare disk against CURRENT memory, not an old full-catalogue
         // snapshot. Other ranges may advance through their actual writers.
         if actual != store.catalog
@@ -99,6 +102,42 @@ impl NativeJoinedRemoteInstallingFence {
             ));
         }
         Ok(())
+    }
+    pub(crate) fn require_mutation_database_binding(
+        &self,
+        db: &crate::BicDb,
+        preflight: &NativeJoinedRemoteInstallPreflight,
+        receipt: &NativeJoinedRemoteProposalReceipt,
+    ) -> Result<()> {
+        preflight.require_original_process()?;
+        preflight.native().require_current(db)?;
+        db.validate_range_image_bindings(preflight.bindings())?;
+        let actual = Self::read_disk_catalogue(db.data_path())?;
+        if !std::ptr::eq(self.preflight.as_ref(), preflight)
+            || self.database_open != db.incarnation_id()
+            || db.native_abort_catalogue_store_id()? != Some(self.catalogue)
+            || self.store_open != preflight.selected().catalogue().store_open_id()
+            || actual.image_install_intents.get(&self.intent.range.id) != Some(&self.intent)
+            || receipt.pointer() != *self.protected_proposal()
+            || receipt.intent_sha256() != self.intent.core_sha256()?
+            || receipt.intent_bytes() != preflight.intent().canonical_intent_bytes()?
+        {
+            return Err(range_write_error("Joined row Installing binding changed"));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_mutation_current(
+        &self,
+        store: &RangeWriteStore,
+        db: &crate::BicDb,
+        scope: &crate::db::NativeJoinedRemoteMutationScope<'_>,
+        receipt: &NativeJoinedRemoteProposalReceipt,
+    ) -> Result<()> {
+        scope.require_store(db, store)?;
+        receipt.require_mutation_current(db, store, scope)?;
+        self.require_mutation_database_binding(db, scope.preflight(), receipt)?;
+        self.read_disk_current(store)?;
+        scope.require_store(db, store)
     }
     pub(crate) fn require_current(
         &self,

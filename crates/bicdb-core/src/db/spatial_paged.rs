@@ -2607,8 +2607,24 @@ impl BicDb {
             .is_some();
         #[cfg(not(feature = "tls-replication"))]
         let registered_guarded = false;
+        #[cfg(feature = "tls-replication")]
+        let joined_guarded = tx
+            .native_joined_remote_row_grant
+            .as_ref()
+            .map(|grant| grant.require_current(self, tx))
+            .transpose()?
+            .is_some();
+        #[cfg(not(feature = "tls-replication"))]
+        let joined_guarded = false;
+        if registered_guarded && joined_guarded {
+            return Err(BicDbError::Cluster(
+                "mixed actual Registered/Joined import grants".into(),
+            ));
+        }
+
         let _serializable_shared = (tx.isolation != TransactionIsolation::Serializable
-            && !registered_guarded)
+            && !registered_guarded
+            && !joined_guarded)
             .then(|| self.serializable_commit_admission.read());
         let _serializable_exclusive = (tx.isolation == TransactionIsolation::Serializable)
             .then(|| self.serializable_commit_admission.write());
@@ -2935,6 +2951,10 @@ impl BicDb {
         if let Some(grant) = &tx.native_registered_remote_row_grant {
             grant.retain_wal_durable(commit_seq);
         }
+        #[cfg(feature = "tls-replication")]
+        if let Some(grant) = &tx.native_joined_remote_row_grant {
+            grant.retain_wal_durable(commit_seq);
+        }
         bicdb_page::test_faults::crash_point("commit.after_txlog_durable");
         timer.lap(&commit_trace::WAL_ENCODE);
         let deferred = self
@@ -3072,6 +3092,10 @@ impl BicDb {
         tx.committed_seq = Some(commit_seq);
         #[cfg(feature = "tls-replication")]
         if let Some(grant) = &tx.native_registered_remote_row_grant {
+            grant.retain_applied_known(commit_seq);
+        }
+        #[cfg(feature = "tls-replication")]
+        if let Some(grant) = &tx.native_joined_remote_row_grant {
             grant.retain_applied_known(commit_seq);
         }
         postgres_commit.map(|attempt| attempt.committed(tx));

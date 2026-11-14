@@ -40,7 +40,7 @@ impl NativeJoinedRemoteAttemptScope<'_> {
     pub(crate) fn original_writer_sha256(&self) -> &str {
         &self.request.origin().guard().state.record.checksum_sha256
     }
-    pub(crate) fn require_database(&self, db: &BicDb) -> Result<()> {
+    fn require_database_identity(&self, db: &BicDb) -> Result<()> {
         self.preflight.require_request(self.request, self.frame)?;
         if !std::ptr::eq(db, self.db)
             || !Arc::ptr_eq(self.preflight, self.lease.preflight())
@@ -68,12 +68,17 @@ impl NativeJoinedRemoteAttemptScope<'_> {
             return Err(invalid("Joined native attempt replaced original writer"));
         }
         db.range_mutation_gate()
-            .validate_quiescent_frozen(self.range_id(), self.frozen()?)?;
+            .validate_frozen(self.range_id(), self.frozen()?)?;
         self.request
             .member()
             .publication_version()
             .require_current_memory()?;
         self.preflight.require_request(self.request, self.frame)
+    }
+    pub(crate) fn require_database(&self, db: &BicDb) -> Result<()> {
+        self.require_database_identity(db)?;
+        db.range_mutation_gate()
+            .validate_quiescent_frozen(self.range_id(), self.frozen()?)
     }
     /// Exact actual owners only. A retained catalogue continuation separately
     /// proves/refsyncs its own original candidate before clearing uncertainty.
@@ -145,6 +150,125 @@ impl BicDb {
         scope.require_database(self)?;
         let result = operation(&scope);
         let post = scope.require_database(self);
+        match result {
+            Err(primary) => {
+                let _ = post;
+                Err(primary)
+            }
+            Ok(value) => {
+                post?;
+                Ok(value)
+            }
+        }
+    }
+}
+
+/// Same original A physical guards, distinct controlled-row context. Only its
+/// lexical constructor can produce the weak row-transaction lifetime witness.
+pub(crate) struct NativeJoinedRemoteMutationScope<'a> {
+    // Drop this lifetime BEFORE the actual admission/hook/journal guards.
+    lifetime: Arc<()>,
+    original: NativeJoinedRemoteAttemptScope<'a>,
+}
+pub(in crate::db::range_image_native) struct JoinedRemoteMutationScopeLiveness {
+    scope: std::sync::Weak<()>,
+    database_open: String,
+    attempt: Uuid,
+    range: RangeId,
+}
+impl JoinedRemoteMutationScopeLiveness {
+    pub(in crate::db::range_image_native) fn require_current(
+        &self,
+        db: &BicDb,
+        attempt: Uuid,
+        range: RangeId,
+    ) -> Result<()> {
+        if self.scope.upgrade().is_none()
+            || self.database_open != db.incarnation_id()
+            || self.attempt != attempt
+            || self.range != range
+        {
+            return Err(invalid(
+                "Joined row transaction outlived actual guarded scope",
+            ));
+        }
+        db.require_joined_publication_storage_health()
+    }
+}
+impl NativeJoinedRemoteMutationScope<'_> {
+    pub(crate) fn range_id(&self) -> RangeId {
+        self.original.range_id()
+    }
+    pub(crate) fn attempt_id(&self) -> Uuid {
+        self.original.attempt_id()
+    }
+    pub(crate) fn native(&self) -> &NativeRecoveryAdmission {
+        self.original.native()
+    }
+    pub(crate) fn preflight(&self) -> &Arc<NativeJoinedRemoteInstallPreflight> {
+        self.original.preflight()
+    }
+    pub(crate) fn request(&self) -> &NativeJoinedRangeReceiveRequest {
+        self.original.request()
+    }
+    pub(crate) fn frozen(&self) -> Result<&FrozenRangeMutationPermit> {
+        self.original.frozen()
+    }
+    pub(crate) fn original_writer_sha256(&self) -> &str {
+        self.original.original_writer_sha256()
+    }
+    pub(crate) fn require_database(&self, db: &BicDb) -> Result<()> {
+        self.original.require_database_identity(db)
+    }
+    pub(crate) fn require_store(&self, db: &BicDb, store: &RangeWriteStore) -> Result<()> {
+        self.require_database(db)?;
+        self.preflight().require_original_writer(db, store)?;
+        db.require_native_writer_catalogue_custody(store)?;
+        self.require_database(db)
+    }
+    pub(in crate::db::range_image_native) fn retained_scope_liveness(
+        &self,
+    ) -> JoinedRemoteMutationScopeLiveness {
+        JoinedRemoteMutationScopeLiveness {
+            scope: Arc::downgrade(&self.lifetime),
+            database_open: self.original.db.incarnation_id().into(),
+            attempt: self.attempt_id(),
+            range: self.range_id(),
+        }
+    }
+}
+impl BicDb {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn with_joined_remote_mutation_scope<'a, R>(
+        &'a self,
+        preflight: &'a Arc<NativeJoinedRemoteInstallPreflight>,
+        request: &'a NativeJoinedRangeReceiveRequest,
+        frame: &'a NativeRemoteImageStep<'a>,
+        lease: &'a JoinedRemoteImageInstallFreeze,
+        operation: impl for<'scope> FnOnce(&'scope NativeJoinedRemoteMutationScope<'a>) -> Result<R>,
+    ) -> Result<R> {
+        let scope = NativeJoinedRemoteMutationScope {
+            lifetime: Arc::new(()),
+            original: NativeJoinedRemoteAttemptScope {
+                db: self,
+                preflight,
+                request,
+                frame,
+                lease,
+                _admission: self
+                    .serializable_commit_admission
+                    .try_read()
+                    .ok_or_else(|| invalid("Joined mutation original admission busy"))?,
+                hook: self
+                    .commit_admission
+                    .try_read()
+                    .ok_or_else(|| invalid("Joined mutation original hook busy"))?,
+                journal: self.try_native_image_journal()?,
+            },
+        };
+        scope.original.require_database(self)?;
+        let result = operation(&scope);
+        let post = scope.original.require_database(self);
         match result {
             Err(primary) => {
                 let _ = post;

@@ -4,6 +4,7 @@
 use super::*;
 mod attempt;
 pub(super) use attempt::NativeJoinedRemoteInstallAttempt;
+pub(crate) use attempt::{NativeJoinedRemoteImagePoint, NativeJoinedRemoteTransactionRequest};
 mod install;
 mod preflight;
 use crate::distribution_consensus::{
@@ -163,9 +164,9 @@ impl NativeJoinedRangeReceiveOrigin {
         let request = NativeJoinedRangeReceiveRequest {
             origin: self.clone(),
             role,
-            own,
+            own: Arc::new(own),
             business,
-            member,
+            member: Arc::new(member),
             parent: parent.clone(),
             phase,
         };
@@ -178,9 +179,9 @@ impl NativeJoinedRangeReceiveOrigin {
 pub(crate) struct NativeJoinedRangeReceiveRequest {
     origin: Arc<NativeJoinedRangeReceiveOrigin>,
     role: HandoffRoleAdmission,
-    own: HostMetadataReadObservation,
+    own: Arc<HostMetadataReadObservation>,
     business: Uuid,
-    member: NativeOwnedMetadataMemberObservation,
+    member: Arc<NativeOwnedMetadataMemberObservation>,
     parent: CancellationToken,
     phase: CancellationToken,
 }

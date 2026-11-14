@@ -222,7 +222,8 @@ fn scan(
     Ok((entries, total))
 }
 fn fenced(root: &Path) -> Result<bool> {
-    let image = format::native_registered_remote_image_active(root)?;
+    let image = format::native_registered_remote_image_active(root)?
+        || format::native_joined_remote_image_active(root)?;
     let indexed = format::native_registered_row_wal_index_active(root)?;
     if image != indexed {
         return Err(refusal(

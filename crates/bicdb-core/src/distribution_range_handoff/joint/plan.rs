@@ -192,6 +192,26 @@ impl NativeJointHandoffPlan {
             .get(node)
             .ok_or_else(|| invalid("source image participant birth absent from actual OLD scope"))
     }
+    /// Necessary comparison DATA only. Actual writer/native/Role+OWN guards
+    /// independently prove whether the original local owner matches it.
+    pub(crate) fn old_native_predecessor_data(&self) -> Result<RangeDescriptor> {
+        self.data.validate()?;
+        let mut expected = self.data.old_range.clone();
+        expected.replicas.retain(|r| r.node_id != self.data.target);
+        expected.epoch = expected
+            .epoch
+            .checked_sub(1)
+            .ok_or_else(|| invalid("joint expected native epoch underflow"))?;
+        Ok(expected)
+    }
+    pub(crate) fn constraint_schema_sha256(&self) -> &str {
+        &self.data.schema_sha256
+    }
+    pub(crate) fn constraint_restore_activation(
+        &self,
+    ) -> Option<&crate::distribution_consensus::MetadataRestoreActivation> {
+        self.data.restore_activation.as_ref()
+    }
     pub(crate) fn require_old_native_configuration(
         &self,
         lineage: &crate::db::SourceRangeImageLineage,
@@ -227,6 +247,11 @@ impl NativeJointHandoffPlan {
     pub(crate) fn old_range(&self) -> &RangeDescriptor {
         &self.data.old_range
     }
+    /// Placement DATA only. The retiring replica is not the image donor or
+    /// authenticated mutation initiator.
+    pub(crate) fn retiring_source(&self) -> &ClusterNodeId {
+        &self.data.old_source
+    }
     pub(crate) fn activation_range(&self) -> &RangeDescriptor {
         &self.data.activation_range
     }
@@ -261,5 +286,140 @@ impl NativeJointHandoffPlan {
 impl NativeJointHandoffPlan {
     pub(crate) fn matches_capture_range(&self, range: &RangeDescriptor) -> bool {
         canonical_range(range) == self.data.old_range
+    }
+}
+
+/// Historical identity from an ACTUAL original role/OWN step. No Role, expired
+/// parent or live plan grant survives here; fresh OWN only permits observation.
+#[cfg(feature = "tls-replication")]
+pub(crate) struct NativeJointReadOnlyPlanIdentity {
+    data: NativeJointScopeData,
+    minimum_term: u64,
+    minimum_index: u64,
+}
+#[cfg(feature = "tls-replication")]
+impl NativeJointHandoffPlan {
+    pub(crate) fn into_readonly_identity(self) -> Result<NativeJointReadOnlyPlanIdentity> {
+        self.require_live()?;
+        Ok(NativeJointReadOnlyPlanIdentity {
+            data: self.data,
+            minimum_term: self.metadata_term,
+            minimum_index: self.metadata_read_index,
+        })
+    }
+}
+#[cfg(feature = "tls-replication")]
+impl NativeJointReadOnlyPlanIdentity {
+    pub(crate) fn checksum_sha256(&self) -> Result<String> {
+        self.data.checksum()
+    }
+    pub(crate) fn require_manifest(
+        &self,
+        manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
+    ) -> Result<()> {
+        self.data.validate()?;
+        manifest.require_shape()?;
+        let scope = self.data.checksum()?;
+        if manifest.cluster_id != self.data.cluster_id
+            || manifest.bootstrap_id != self.data.bootstrap_id
+            || manifest.relocation_id != self.data.promise.relocation_id
+            || manifest.plan_id != self.data.promise.plan_id
+            || manifest.handoff_session != self.data.promise.session_id
+            || manifest.nonce != self.data.promise.nonce
+            || canonical_range(&manifest.capture_range) != self.data.old_range
+            || canonical_range(&manifest.activation_range) != self.data.activation_range
+            || manifest.old_members != self.data.old_members
+            || manifest.new_members != self.data.new_members
+            || manifest.target_id != self.data.target
+            || manifest.restore != self.data.restore_activation
+            || manifest.schema_sha256 != self.data.schema_sha256
+            || manifest
+                .actual_old_closures
+                .get(&manifest.source_id)
+                .is_none_or(|fact| fact.scope_sha256 != scope)
+        {
+            return Err(invalid(
+                "Registered readonly NEW changed original actual plan/MF provenance",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_fresh_target_own(
+        &self,
+        own: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+    ) -> Result<()> {
+        self.data.validate()?;
+        own.require_live_request(business)?;
+        let topology = own.committed_topology(business)?;
+        let range = topology
+            .range_by_id(self.data.old_range.id)
+            .ok_or_else(|| invalid("Registered readonly NEW current range absent"))?;
+        let relocation = topology
+            .relocations
+            .get(&self.data.promise.relocation_id)
+            .ok_or_else(|| invalid("Registered readonly NEW Pending plan absent"))?;
+        let handoff = relocation
+            .handoff_session
+            .as_ref()
+            .ok_or_else(|| invalid("Registered readonly NEW Pending session absent"))?;
+        if own.requester_node_id() != &self.data.target
+            || self
+                .data
+                .enrolled_births
+                .get(&self.data.target)
+                .is_none_or(|b| own.requester_incarnation() != b.node_incarnation())
+            || !self.data.new_members.contains_key(&self.data.target)
+            || own.term() < self.minimum_term
+            || own.read_index() < self.minimum_index
+            || topology.cluster_id != self.data.cluster_id
+            || topology.range_image_bootstrap_id != Some(self.data.bootstrap_id)
+            || own.restore_activation(business)? != self.data.restore_activation.as_ref()
+            || canonical_range(range) != self.data.old_range
+            || relocation.plan_id != self.data.promise.plan_id
+            || relocation.source.as_ref() != Some(&self.data.old_source)
+            || relocation.target != self.data.target
+            || relocation.range_id != range.id
+            || relocation.learner_epoch != range.epoch
+            || handoff.session_id != self.data.promise.session_id
+            || handoff.nonce != self.data.promise.nonce
+            || !matches!(
+                relocation.phase,
+                crate::distribution::RelocationPhase::LearnerAllocated
+                    | crate::distribution::RelocationPhase::SnapshotCopying
+                    | crate::distribution::RelocationPhase::CatchingUp
+                    | crate::distribution::RelocationPhase::ReadyToPromote
+            )
+        {
+            return Err(invalid(
+                "Registered readonly NEW fresh OWN changed original Pending identity",
+            ));
+        }
+        for (id, identity) in self
+            .data
+            .old_members
+            .iter()
+            .chain(self.data.new_members.iter())
+        {
+            let member = topology
+                .nodes
+                .get(id)
+                .ok_or_else(|| invalid("Registered readonly NEW participant absent"))?;
+            if member.lifecycle != crate::distribution::ClusterNodeLifecycle::Active
+                || member.incarnation != identity.incarnation
+                || member.tls_certificate_sha256 != identity.tls_certificate_sha256
+                || member.pending_tls_certificate_sha256 != identity.pending_tls_certificate_sha256
+                || member.native_store_birth_v1.as_ref() != self.data.enrolled_births.get(id)
+                || member
+                    .labels
+                    .get(crate::distribution::SCHEMA_COMPATIBILITY_NODE_LABEL)
+                    != Some(&self.data.schema_sha256)
+            {
+                return Err(invalid(
+                    "Registered readonly NEW changed actual member/birth/pin/schema",
+                ));
+            }
+        }
+        own.require_live_request(business)
     }
 }

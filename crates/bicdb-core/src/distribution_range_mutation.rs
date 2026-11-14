@@ -110,6 +110,10 @@ impl NativeRangeReadStamp {
     }
 }
 impl RangeServingGeneration {
+    pub(crate) fn id(&self) -> Result<Uuid> {
+        self.require_current()?;
+        Ok(self.generation)
+    }
     pub(crate) fn require_current(&self) -> Result<()> {
         let inner = self
             .inner
@@ -197,7 +201,70 @@ pub(crate) enum RangeMutationAuthority<'a> {
     Controlled(&'a ControlledFrozenMutationPermit),
 }
 
+/// Borrowed actual local gate slots for one concrete final arm. Captured
+/// BEFORE metadata publication guard, never a quorum or Serving grant.
+pub(crate) struct NativeRangeArmPublicationBorrow<'a> {
+    _ranges: parking_lot::MutexGuard<'a, BTreeMap<RangeId, RangeState>>,
+    _generations: parking_lot::MutexGuard<'a, BTreeMap<RangeId, (Uuid, Weak<AtomicBool>)>>,
+}
 impl RangeMutationGate {
+    /// Memory-only diagnostic of the ACTUAL gate; never a permit, reset or
+    /// serving admission. Used to distinguish Option removal from pin release.
+    #[cfg(test)]
+    pub(crate) fn test_source_capture_pin_state(
+        &self,
+        range: RangeId,
+    ) -> Result<serde_json::Value> {
+        let ranges = self
+            .inner
+            .ranges
+            .try_lock()
+            .ok_or_else(|| invalid("capture-pin diagnostic gate busy"))?;
+        Ok(match ranges.get(&range) {
+            Some(state) => {
+                serde_json::json!({"capture_pin":state.capture_pin,"frozen":state.frozen,
+                "frozen_owner_dropped":state.frozen_owner_dropped,"poisoned":state.poisoned,
+                "active":state.active.len(),"controlled":state.controlled.len()})
+            }
+            None => serde_json::Value::Null,
+        })
+    }
+    pub(crate) fn borrow_native_arm_publication<'a>(
+        &'a self,
+        range: RangeId,
+        generation: &RangeServingGeneration,
+        already_armed: bool,
+    ) -> Result<NativeRangeArmPublicationBorrow<'a>> {
+        if range != generation.range_id
+            || !Weak::ptr_eq(&generation.inner, &Arc::downgrade(&self.inner))
+        {
+            return Err(invalid("native arm changed actual local gate/generation"));
+        }
+        let ranges = self
+            .inner
+            .ranges
+            .try_lock()
+            .ok_or_else(|| invalid("native arm range slots busy"))?;
+        if !already_armed {
+            require_readable_gate(&self.inner, ranges.get(&range))?;
+        }
+        let generations = self
+            .inner
+            .serving_generations
+            .try_lock()
+            .ok_or_else(|| invalid("native arm generation slots busy"))?;
+        if !generation.live.load(Ordering::Acquire)
+            || generations
+                .get(&range)
+                .is_none_or(|(id, _)| *id != generation.generation)
+        {
+            return Err(invalid("native arm generation invalidated"));
+        }
+        Ok(NativeRangeArmPublicationBorrow {
+            _ranges: ranges,
+            _generations: generations,
+        })
+    }
     // Called only under ranges, by actual mutator admission. Retain stamps
     // after idle RangeState removal to prevent None -> writer -> None ABA.
     // Reads never allocate. Exhaustion refuses new mutation identities.

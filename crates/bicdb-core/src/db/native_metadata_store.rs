@@ -256,11 +256,22 @@ impl BicDb {
         topology: &ClusterTopology,
         node: &ClusterNodeId,
     ) -> Result<NativeMetadataStoreRecord> {
+        let _journal = self.try_native_image_journal()?;
+        self.read_native_metadata_store_point(topology, node)
+    }
+    /// Read-only immutable ownership constraint for callers that already hold
+    /// the native journal, including historical-cut and native-WAL callbacks.
+    /// This acquires no journal or MStore and conveys no metadata authority.
+    pub(crate) fn read_native_metadata_store_point(
+        &self,
+        topology: &ClusterTopology,
+        node: &ClusterNodeId,
+    ) -> Result<NativeMetadataStoreRecord> {
+        self.check_recovery_state()?;
         let actual = self.metadata_native_admission(topology, node)?;
         if !crate::format::native_metadata_store_active(&self.path)? {
             return Err(invalid("metadata ownership reader fence absent"));
         }
-        let _journal = self.try_native_image_journal()?;
         let record: NativeMetadataStoreRecord = self
             .read_native_range_image_record(KEY)?
             .ok_or_else(|| invalid("protected store initialization missing"))?;

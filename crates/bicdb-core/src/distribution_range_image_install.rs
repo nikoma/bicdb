@@ -29,6 +29,8 @@ const MAX_RECORDS: usize = 16_384;
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 const MAX_STEP_BYTES: usize = 9 * 1024 * 1024;
 
+mod joint_materialization;
+pub(crate) use joint_materialization::NativeJointImageMaterialization;
 mod finalized_recovery;
 pub(crate) use finalized_recovery::FinalizedNativeRecoveryImage;
 
@@ -53,6 +55,8 @@ fn options() -> RangeSnapshotOptions {
 pub(crate) enum NativeImageInstallFreeze {
     Standalone(FrozenRangeMutationPermit),
     Recovery(crate::distribution_range_recovery::RecoveryImageInstallFreeze),
+    #[cfg(feature = "tls-replication")]
+    RegisteredRemote(crate::distribution_range_recovery::RegisteredRemoteImageInstallFreeze),
 }
 impl From<FrozenRangeMutationPermit> for NativeImageInstallFreeze {
     fn from(frozen: FrozenRangeMutationPermit) -> Self {
@@ -67,16 +71,28 @@ impl From<crate::distribution_range_recovery::RecoveryImageInstallFreeze>
     }
 }
 impl NativeImageInstallFreeze {
+    /// Refusal discriminator only, never a release or serving grant.
+    pub(crate) fn requires_registered_remote_release(&self) -> bool {
+        match self {
+            #[cfg(feature = "tls-replication")]
+            Self::RegisteredRemote(_) => true,
+            _ => false,
+        }
+    }
     pub(crate) fn try_as_frozen(&self) -> Result<&FrozenRangeMutationPermit> {
         match self {
             Self::Standalone(f) => Ok(f),
             Self::Recovery(lease) => lease.try_as_frozen(),
+            #[cfg(feature = "tls-replication")]
+            Self::RegisteredRemote(lease) => lease.try_as_frozen(),
         }
     }
     pub(crate) fn as_frozen(&self) -> &FrozenRangeMutationPermit {
         match self {
             Self::Standalone(frozen) => frozen,
             Self::Recovery(lease) => lease.as_frozen(),
+            #[cfg(feature = "tls-replication")]
+            Self::RegisteredRemote(lease) => lease.as_frozen(),
         }
     }
     fn require_install_start(
@@ -87,6 +103,12 @@ impl NativeImageInstallFreeze {
         source: &TentativeNativeRangeImageSourceAuthorization<'_>,
         role: &NativeImageInstallRole<'_>,
     ) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        if let Self::RegisteredRemote(_) = self {
+            return Err(invalid(
+                "Registered remote freeze requires its distinct Installing/history/row producer",
+            ));
+        }
         if let Self::Recovery(lease) = self {
             lease.preflight().require_install_start(
                 store,

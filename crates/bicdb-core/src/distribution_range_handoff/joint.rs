@@ -9,15 +9,31 @@ mod scope;
 use scope::{canonical_range, NativeJointScopeData};
 mod plan;
 pub(crate) use plan::NativeJointHandoffPlan;
+#[cfg(feature = "tls-replication")]
+pub(crate) use plan::NativeJointReadOnlyPlanIdentity;
 
 mod closed;
 pub(crate) use closed::NativeJointOldObservation;
 
 mod old_quorum;
+#[cfg(feature = "tls-replication")]
+mod remote_old;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_old::{
+    NativeRemoteOldOperationV1, NativeRemoteOldReplyV1, NativeRemoteOldRequestV1,
+};
+#[cfg(feature = "tls-replication")]
+mod remote_old_collect;
 pub(crate) use old_quorum::{
     NativeJointOldClosedQuorum, NativeJointOldImageProof, NativeJointOldRound,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_old_collect::{
+    NativeRemoteOldCutCertificate, NativeRemoteOldImageProof, NativeRemoteOldRound,
+};
 
+mod decision_owners;
+use decision_owners::NativeJointOldDecisionOwners;
 mod materialized;
 pub(crate) use materialized::{
     NativeJointMaterializedFacts, NativeJointMaterializedQuorums, NativeJointNewObservation,
@@ -43,7 +59,7 @@ pub(crate) use bridge::{
     NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
     NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
     NativeJointPublishedServingQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
-    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound,
+    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
     NativeJointServingPublicationRound,
 };
 

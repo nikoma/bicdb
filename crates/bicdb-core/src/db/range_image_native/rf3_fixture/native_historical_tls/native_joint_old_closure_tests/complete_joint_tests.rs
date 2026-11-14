@@ -23,6 +23,8 @@ mod open_adversarial_tests;
 mod original_release_writer_tests;
 #[path = "complete_joint_tests/post_joint_no_data_tests.rs"]
 mod post_joint_no_data_tests;
+#[path = "complete_joint_tests/writer_data_domain_fact_tests.rs"]
+mod writer_data_domain_fact_tests;
 use crate::distribution_range_consensus::{
     ImageInstallPurpose, NativeImageInstallRole, RecoveryFenceScope,
 };
@@ -352,6 +354,7 @@ fn install_actual_target(
 
 #[derive(Debug, PartialEq, Eq)]
 enum JointTestOutcome {
+    WriterDataDomainFactsOnly,
     ClosedC1ImageContractChecked,
     ClosedPolicyTransitionStillUnsupported,
     FullHandoffAckAndStrong,
@@ -395,6 +398,7 @@ fn native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogu
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum JointFullContinuation {
+    WriterDataDomainFacts(bool),
     ClosedC1Image(closed_c1_image_tests::Control),
     ClosedPolicyBaseline,
     OriginalTerminalControls,
@@ -471,6 +475,10 @@ fn run_complete_joint_with_controls(
         .local_namespace_identity("items")
         .unwrap();
     let original_policies = (continuation == JointFullContinuation::ClosedPolicyBaseline
+        || matches!(
+            continuation,
+            JointFullContinuation::WriterDataDomainFacts(_)
+        )
         || matches!(continuation, JointFullContinuation::ClosedC1Image(_)))
     .then(|| closed_policy_baseline_tests::capture(&fixture, &old));
     let relocation = if original_policies.is_some() {
@@ -594,6 +602,18 @@ fn run_complete_joint_with_controls(
     let old_h = decision.data().logical_history_sha256().to_owned();
     for stage in 0..3 {
         commit_joint_stage(&mut fixture, &decision, stage);
+    }
+    if let JointFullContinuation::WriterDataDomainFacts(foreign) = continuation {
+        writer_data_domain_fact_tests::exercise(
+            &fixture,
+            &old,
+            decision,
+            original_policies.unwrap(),
+            acknowledged.as_ref(),
+            &parent,
+            foreign,
+        );
+        return JointTestOutcome::WriterDataDomainFactsOnly;
     }
     if let Some(original) = original_policies {
         closed_policy_baseline_tests::exercise(

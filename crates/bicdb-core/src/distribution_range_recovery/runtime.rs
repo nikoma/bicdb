@@ -31,6 +31,12 @@ mod participants;
 #[cfg(feature = "tls-replication")]
 mod registered_closed;
 #[cfg(feature = "tls-replication")]
+mod registered_remote_transfer;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_remote_transfer::test_before_registered_remote_rotation;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote_transfer::RegisteredRemoteImageInstallFreeze;
+#[cfg(feature = "tls-replication")]
 mod strong_point_read;
 
 const MAX_CONTEXTS: usize = 4;
@@ -55,6 +61,9 @@ struct Sessions {
     replacing: BTreeMap<RangeId, current_image_replacement::InstallingReplacementSession>,
     active: BTreeSet<RangeId>,
     contexts: usize,
+    #[cfg(feature = "tls-replication")]
+    registered_remote:
+        BTreeMap<RangeId, Arc<registered_remote_transfer::RegisteredRemoteFreezeCustody>>,
 }
 
 #[cfg(test)]

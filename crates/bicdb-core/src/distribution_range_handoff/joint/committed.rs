@@ -4,29 +4,36 @@
 use super::*;
 use crate::distribution_consensus::HostMetadataReadObservation;
 use crate::distribution_data::ActualServiceNativeJointCommittedEvidence;
+use std::sync::Arc;
 
 pub(crate) struct CommittedNativeJointDecisionObservation {
     native: crate::db::NativeJointDecisionReceipt,
     metadata: HostMetadataReadObservation,
     business: Uuid,
     database_incarnation: String,
+    metadata_point: Option<Arc<crate::distribution_data::ActualNativeJointMetadataPoint>>,
 }
 impl CommittedNativeJointDecisionObservation {
     pub(crate) fn from_actual_service(
         evidence: ActualServiceNativeJointCommittedEvidence,
     ) -> Result<Self> {
-        let (native, metadata, business, database_incarnation) = evidence.into_parts();
+        let (native, metadata, business, database_incarnation, metadata_point) =
+            evidence.into_parts();
         let result = Self {
             native,
             metadata,
             business,
             database_incarnation,
+            metadata_point,
         };
         result.require_metadata_current()?;
         Ok(result)
     }
     pub(super) fn require_metadata_current(&self) -> Result<()> {
         self.metadata.require_live_request(self.business)?;
+        if let Some(point) = &self.metadata_point {
+            point.require_request(&self.metadata, self.business)?;
+        }
         let data = self.native.data();
         let topology = self.metadata.committed_topology(self.business)?;
         data.require_metadata_domain(topology, self.metadata.restore_activation(self.business)?)?;
@@ -122,6 +129,33 @@ impl CommittedNativeJointDecisionObservation {
         }
         self.native.require_current(database)
     }
+    pub(crate) fn require_native_publication_metadata(
+        &self,
+        db: &crate::BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<()> {
+        self.require_metadata_current()?;
+        match &self.metadata_point {
+            Some(point) => point.require_native_store_point(db, store),
+            None if self.native.native_metadata_initialization_version() == 0 => Ok(()),
+            None => Err(invalid("protected native joint publication requires an actual current-MStore version captured outside engine locks")),
+        }
+    }
+    pub(crate) fn require_publication_request_memory(&self) -> Result<()> {
+        self.metadata.require_live_request(self.business)
+    }
+    pub(crate) fn native_publication_guard(
+        &self,
+    ) -> Result<Option<crate::distribution_data::ActualNativeJointMetadataPublicationGuard<'_>>>
+    {
+        match &self.metadata_point {
+            Some(point) => point.try_publication_guard().map(Some),
+            None if self.native.native_metadata_initialization_version() == 0 => Ok(None),
+            None => Err(invalid(
+                "protected native joint publication has no actual local metadata version gate",
+            )),
+        }
+    }
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
         self.native.data()
     }
@@ -137,5 +171,10 @@ impl CommittedNativeJointDecisionObservation {
     }
     pub(crate) fn deadline(&self) -> std::time::Instant {
         self.metadata.deadline()
+    }
+    pub(crate) fn writer_domain_metadata_audit(&self) -> Result<serde_json::Value> {
+        self.require_metadata_current()?;
+        self.metadata
+            .joint_writer_domain_audit(self.business, self.data())
     }
 }

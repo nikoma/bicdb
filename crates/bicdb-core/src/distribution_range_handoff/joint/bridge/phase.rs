@@ -11,7 +11,7 @@ pub(crate) struct NativeJointPreparationPhaseRound {
 }
 pub(super) struct FreshPreparedMember {
     pub(super) committed: CommittedNativeJointDecisionObservation,
-    writer: Arc<crate::db::NativeWriterHostState>,
+    writer: crate::db::NativeJointPhaseOwner,
 }
 pub(crate) struct NativeJointPreparationPhaseQuorum {
     original: Arc<NativeJointPreparedServingQuorum>,
@@ -94,15 +94,23 @@ impl NativeJointPreparationPhaseRound {
             budget,
             &self.cancellation,
         )?;
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &old.service,
+            &metadata,
+            business,
+            &self.cancellation,
+        )?;
         let (committed, writer) = {
             let service = old
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("fresh joint phase actual service busy"))?;
-            let committed = service.observe_committed_native_joint_decision(
+            let committed = old.actual.observe_fresh_committed_with_point(
+                &service,
                 metadata,
                 business,
                 self.original.data.old_range().id,
+                metadata_point,
             )?;
             let writer = old
                 .actual
@@ -209,7 +217,7 @@ impl NativeJointPreparationPhaseQuorum {
         let writer = observation
             .actual
             .require_current_under_fresh_phase(service, &fresh.committed)?;
-        if !Arc::ptr_eq(&writer, &fresh.writer) {
+        if !writer.same_actual(&fresh.writer) {
             return Err(invalid(
                 "fresh joint writer registration/generation changed",
             ));
@@ -219,13 +227,13 @@ impl NativeJointPreparationPhaseQuorum {
     pub(super) fn require_local_publication_writer(
         &self,
         node: &ClusterNodeId,
-        actual: &Arc<crate::db::NativeWriterHostState>,
+        actual: &crate::db::NativeJointPhaseOwner,
     ) -> Result<()> {
         self.require_live()?;
         if self
             .observations
             .get(node)
-            .is_none_or(|member| !Arc::ptr_eq(&member.writer, actual))
+            .is_none_or(|member| !member.writer.same_actual(actual))
         {
             return Err(invalid(
                 "publication final scope actual writer registration changed",
@@ -301,15 +309,23 @@ impl NativeJointPreparationPhaseQuorum {
             remaining(&self.cancellation)?,
             &self.cancellation,
         )?;
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &local.service,
+            &metadata,
+            business,
+            &self.cancellation,
+        )?;
         let fresh = {
             let service = local
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("fresh phase post-quorum binding service busy"))?;
-            service.observe_committed_native_joint_decision(
+            local.actual.observe_fresh_committed_with_point(
+                &service,
                 metadata,
                 business,
                 self.original.data.old_range().id,
+                metadata_point,
             )?
         };
         let cancellation = self.cancellation.child_with_deadline(fresh.deadline());

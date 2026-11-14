@@ -91,6 +91,10 @@ pub(crate) use native_ready::{
     NativeReadyObservation, NativeReadyPhysicalDomain, NativeReadyReply, NativeReadyRequest,
 };
 mod runtime;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use runtime::test_before_registered_remote_rotation;
+#[cfg(feature = "tls-replication")]
+pub(crate) use runtime::RegisteredRemoteImageInstallFreeze;
 pub(crate) use runtime::{RangeRecoveryRuntime, RecoveryImageInstallFreeze};
 mod quorum;
 pub(crate) use quorum::{FreshRangeRecoveryAuthority, RecoveryFenceQuorumRound};

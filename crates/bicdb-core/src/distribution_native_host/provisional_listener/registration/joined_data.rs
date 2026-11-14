@@ -14,6 +14,7 @@
 use super::*;
 use crate::distribution_native_read::NativeStrongEventDispatcher;
 use crate::distribution_range_consensus::RangeWriteCoordinator;
+mod registered;
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct NativeJoinedDataStatus {
@@ -21,6 +22,9 @@ pub struct NativeJoinedDataStatus {
     pub writer_policy_installed: bool,
     pub dispatcher_published: bool,
     pub stopping: bool,
+    /// Observational range/epoch/watermarks; no shared future Strong-ready bit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub registered_range: Option<serde_json::Value>,
 }
 
 pub(super) struct NativeJoinedDataHost {
@@ -32,6 +36,10 @@ pub(super) struct NativeJoinedDataHost {
     life: Arc<AtomicBool>,
     published: Arc<AtomicBool>,
     stopping: bool,
+    // Distinct original-A provenance. Its exact FIRST attempt/guard/coordinator
+    // stays owned through all subsequent failures; no generic re-enrollment.
+    registered: Option<assigned_data::NativeRegisteredJoinedDataTransfer>,
+    selected_range: Option<crate::RangeDescriptor>,
 }
 impl Drop for NativeJoinedDataHost {
     fn drop(&mut self) {
@@ -42,6 +50,12 @@ impl Drop for NativeJoinedDataHost {
         }
         if let Some(listener) = &self.listener {
             listener.request_shutdown();
+        }
+        if let Some(registered) = self.registered.take() {
+            // Reuse the original pre-hook cleanup worker. It retains the exact
+            // attempt until actual listener/dispatcher/runtime workers drain;
+            // dropping an RPC or host cannot retire a live worker's hook.
+            registered.defer_joined_cleanup(self.listener.take(), self.dispatcher.take());
         }
     }
 }
@@ -61,7 +75,34 @@ impl NativeJoinedDataHost {
             life: Arc::new(AtomicBool::new(true)),
             published: Arc::new(AtomicBool::new(false)),
             stopping: false,
+            registered: None,
+            selected_range: None,
         })
+    }
+    /// Infallible owner retention immediately after the source moved its real
+    /// custody. Every fallible validation/drain happened before transfer.
+    fn from_registered_first_policy(
+        transfer: assigned_data::NativeRegisteredJoinedDataTransfer,
+    ) -> Self {
+        let (context, term, index) = transfer.metadata_anchor;
+        Self {
+            parts: transfer.parts.clone(),
+            enrollment: Some(NativeInitialWriterEnrollment {
+                coordinator: transfer.coordinator.clone(),
+                guard: transfer.guard.clone(),
+                metadata_context_id: context,
+                metadata_term: term,
+                metadata_read_index: index,
+            }),
+            dispatcher: None,
+            admission: None,
+            listener: None,
+            life: Arc::new(AtomicBool::new(true)),
+            published: Arc::new(AtomicBool::new(false)),
+            stopping: false,
+            selected_range: Some(transfer.range.clone()),
+            registered: Some(transfer),
+        }
     }
     pub(super) fn is_running(&self) -> bool {
         !self.stopping && self.listener.is_some()
@@ -72,6 +113,9 @@ impl NativeJoinedDataHost {
     /// and is reopened only by `publish`.
     fn enroll(&mut self, parent: &CancellationToken) -> Result<()> {
         parent.check()?;
+        if self.registered.is_some() {
+            return Err(invalid("original Registered Joined must keep its exact FIRST writer; generic policy re-enrollment refused"));
+        }
         if self.stopping {
             return Err(invalid("stopping joined DATA owner cannot enroll"));
         }
@@ -184,17 +228,34 @@ impl NativeJoinedDataHost {
             .enrollment
             .as_ref()
             .ok_or_else(|| invalid("joined DATA writer policy is not installed"))?;
-        let range = self
-            .parts
-            .backend
-            .topology
-            .try_read()
-            .ok_or_else(|| invalid("joined DATA routing busy"))?
-            .ranges
-            .values()
-            .next()
-            .cloned()
-            .ok_or_else(|| invalid("joined DATA has no committed range"))?;
+        let range = if let Some(selected) = &self.selected_range {
+            let actual = self
+                .parts
+                .backend
+                .topology
+                .try_read()
+                .ok_or_else(|| invalid("Registered Joined selected routing busy"))?;
+            let current = actual
+                .range_by_id(selected.id)
+                .ok_or_else(|| invalid("Registered Joined selected range disappeared"))?;
+            if crate::distribution_native_read::canonical_range(current)
+                != crate::distribution_native_read::canonical_range(selected)
+            {
+                return Err(invalid("Registered Joined selected domain changed"));
+            }
+            selected.clone()
+        } else {
+            self.parts
+                .backend
+                .topology
+                .try_read()
+                .ok_or_else(|| invalid("joined DATA routing busy"))?
+                .ranges
+                .values()
+                .next()
+                .cloned()
+                .ok_or_else(|| invalid("joined DATA has no committed range"))?
+        };
         let (writer, root) = {
             let service = self
                 .parts
@@ -210,6 +271,7 @@ impl NativeJoinedDataHost {
                 self.admission = Some(Arc::new(NativeInitialDataAdmission::for_joined_owner(
                     &self.parts.backend.service,
                     &self.parts.runtime,
+                    self.parts.database.clone(),
                     writer,
                     root,
                     self.parts.store.clone(),
@@ -261,6 +323,9 @@ impl NativeJoinedDataHost {
     /// and Strong ingress. Every request still proves its own authority.
     fn publish(&mut self, parent: &CancellationToken) -> Result<usize> {
         parent.check()?;
+        if self.registered.is_some() {
+            return self.publish_registered(parent);
+        }
         if self.stopping {
             return Err(invalid("stopping joined DATA owner cannot publish"));
         }
@@ -293,6 +358,7 @@ impl NativeJoinedDataHost {
             writer_policy_installed: self.enrollment.is_some(),
             dispatcher_published: self.published.load(Ordering::Acquire),
             stopping: self.stopping,
+            registered_range: self.registered_range_status(),
         }
     }
     pub(super) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
@@ -332,6 +398,57 @@ impl NativeJoinedDataHost {
     }
 }
 impl NativeMetadataControlHost {
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_registered_first_policy_evidence(
+        &self,
+    ) -> Result<serde_json::Value> {
+        if let Some(assigned) = &self.assigned {
+            return assigned.test_first_policy_evidence();
+        }
+        self.joined
+            .as_ref()
+            .and_then(|joined| joined.registered.as_ref())
+            .ok_or_else(|| invalid("actual Registered FIRST custody absent"))?
+            .test_first_policy_evidence()
+    }
+    /// Continue the exact Registered FIRST owner. Unlike open_joined_data this
+    /// never enrolls or replaces a writer; every later failure leaves Joined
+    /// custody retained and APP closed until genuine publication succeeds.
+    pub(in crate::distribution_native_host) fn open_registered_joined_data(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        if self.data.is_some() {
+            return Err(invalid("INITIAL cannot become original Registered Joined"));
+        }
+        if self.joined.is_none() {
+            let assigned = self
+                .assigned
+                .as_mut()
+                .ok_or_else(|| invalid("original Registered FIRST owner absent"))?;
+            let drained = assigned.prepare_registered_joined_transfer(parent)?;
+            let transfer = assigned.take_registered_joined_transfer(drained)?;
+            // Infallible owner retention BEFORE any later bind/recovery call.
+            self.joined = Some(NativeJoinedDataHost::from_registered_first_policy(transfer));
+            drop(self.assigned.take()); // Source now owns no policy/attempt.
+        }
+        let joined = self.joined.as_mut().unwrap();
+        let original = joined
+            .registered
+            .as_ref()
+            .ok_or_else(|| invalid("foreign Joined cannot become original Registered Joined"))?;
+        original.require_original_lifetime()?;
+        original
+            .drained
+            .require_service(&joined.parts.backend.service)?;
+        original.drained.require_store(joined.parts.store.id())?;
+        self.replica
+            .as_mut()
+            .ok_or_else(|| invalid("original Registered receiver custody absent"))?
+            .drain_for_assigned(parent)?;
+        joined.bind(&self.network, parent)
+    }
     /// Install the ordinary host writer policy on this Registered member at
     /// the current committed configuration and replace its replica-only
     /// socket with a DATA socket. Application ingress remains closed.

@@ -28,6 +28,28 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
         coordinator.require_schema_compatibility = true;
         Ok(coordinator)
     }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn new_registered_serving_schema_fenced(
+        cluster: ClusterId,
+        local: ClusterNodeId,
+        topology: Arc<RwLock<ClusterTopology>>,
+        service: Arc<Mutex<ClusterDataNodeService>>,
+        transport: Arc<TcpClusterRelocationTransport>,
+        origin: &crate::distribution_native_host::NativeRegisteredServingDataPolicyOrigin,
+    ) -> Result<Self> {
+        origin.require_live()?;
+        let mut coordinator = Self::with_repair_limits_scheduling(
+            cluster,
+            local,
+            topology,
+            service,
+            transport,
+            RangeWriteRepairLimits::default(),
+            true,
+        )?;
+        coordinator.require_schema_compatibility = true;
+        Ok(coordinator)
+    }
     pub(crate) fn new_initial_schema_fenced(
         cluster: ClusterId,
         local: ClusterNodeId,

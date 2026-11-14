@@ -27,6 +27,8 @@ mod native_wal_backings;
 mod sql_partition_execution;
 pub use sql_partition_execution::CollectionCacheStamp;
 mod native_wal_apply;
+pub(crate) mod registered_row_retention;
+pub(crate) mod registered_row_wal_inspection;
 #[cfg(test)]
 mod snapshot_reader_tests;
 pub use deferred_materialize::DeferredMaterializeStats;
@@ -81,12 +83,20 @@ mod index_build;
 use index_binding::load_btree_bindings;
 mod integrity_reservations;
 mod pitr_maintenance;
+mod range_image_final_pointer;
 mod range_image_install;
+pub(crate) use range_image_final_pointer::NativeRegisteredRemoteFinalImagePointer;
 mod range_image_proposal;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use range_image_install::test_registered_remote_base_after_wal;
 pub(crate) use range_image_install::{
     NativeInstalledRangeImageBase, NativeInstalledRangeImageIntegrity,
     NativeTargetImageVerificationProgress, NativeTargetImageVerifier,
     TargetNativeImageSnapshotBound,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_install::{
+    RegisteredRemoteBaseBoundary, RegisteredRemoteBasePublication,
 };
 pub(crate) use range_image_proposal::{
     NativeCurrentImageProposalReceipt, ProtectedCurrentImagePreimageV1,
@@ -116,11 +126,31 @@ pub(crate) use range_image_native::abort_history::NativeNoEffectIntentRecord;
 pub(crate) use range_image_native::rf3_fixture::{
     ActualNativeRf3Fixture, ActualNativeRf3RpcObservation,
 };
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use range_image_native::test_fire_before_registered_remote_proposal_scope;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use range_image_native::test_registered_remote_final_image_after_wal;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use range_image_native::test_registered_remote_proposal_cut;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use range_image_native::test_registered_remote_row_wal_cut;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeAssignedWriterInstallAttempt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeFirstPolicyPublicationCandidate;
 pub(crate) use range_image_native::NativeInitialDataGenesis;
 #[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeJoinedPublicationScope;
+#[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRegisteredClosedPersistScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeRegisteredJointDecisionAttempt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeRegisteredNoDomainScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeRegisteredRemoteAttemptScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeRegisteredRemoteMutationScope;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
 pub(crate) use range_image_native::{
     FreshNativeCatalogueBootstrap, FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard,
@@ -133,6 +163,14 @@ pub(crate) use range_image_native::{
     NativeWriterHostState, RangeImageBirthMember, RangeImageBirthSpec, SourceRangeImageLineage,
     StagedNativeHistoryProof,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::{
+    HistoricalRegisteredFinalImage, NativeRegisteredRemoteFinalImageReceipt,
+    NativeRegisteredRemoteHistoryProgress, NativeRegisteredRemoteHistoryProof,
+    NativeRegisteredRemoteImageContext, NativeRegisteredRemoteImageInstallation,
+    NativeRegisteredRemoteImageOperation, NativeRegisteredRemoteImageProgress,
+    NativeRegisteredRemoteRowProgress, NativeRegisteredRemoteVerificationProgress,
+};
 pub(crate) use range_image_native::{
     NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,
     NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
@@ -140,12 +178,26 @@ pub(crate) use range_image_native::{
     NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
     NativeJointServingBridgeReceipt, NativeJointServingPreparation, NativeReadyObserverReadScope,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::{
+    NativeClosedWriterDomain, NativeWriterDataDomainPolicy, NativeWriterDataDomainTransition,
+    NativeWriterServingDomainPublication,
+};
 #[cfg(test)]
 pub(crate) use range_image_native::{
     NativeOriginAppSpan, NativeOriginFaultArm, NativeOriginFaultProbe,
 };
 pub(crate) use range_image_native::{
     NativeRangeReadPhysical, NativeReadLocalDbSequence, NativeServingObservationScope,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::{
+    NativeRegisteredJointExclusionScope, NativeRegisteredJointIdentityBorrow,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::{
+    NativeRegisteredRemoteProposalPointer, NativeRegisteredRemoteProposalPublication,
+    NativeRegisteredRemoteProposalReceipt,
 };
 mod range_image_bindings;
 pub(crate) use range_image_bindings::RangeImageDbBindings;
@@ -9641,6 +9693,9 @@ pub struct Transaction {
     /// crate and therefore cannot be selected by SQL, pgwire, or extensions.
     bypass_commit_admission: bool,
     native_image_row_grant: Option<range_image_native::NativeImageTransactionGrant>,
+    #[cfg(feature = "tls-replication")]
+    native_registered_remote_row_grant:
+        Option<range_image_native::NativeRegisteredRemoteRowTransactionGrant>,
     range_mutation_claim: Option<crate::distribution_range_mutation::RangeMutationClaim>,
     database_mutation_permit: Option<crate::distribution_range_mutation::DatabaseMutationPermit>,
     native_wal_retention: Option<native_wal_apply::NativeWalRetentionPin>,
@@ -10720,6 +10775,10 @@ impl BicDb {
         } else {
             None
         };
+        // Actual native WAL/transaction outcomes are recovered now. Preserve
+        // outstanding Registered row evidence BEFORE the generic logical WAL
+        // scanner (which can repair tails), row/outbox replay and open reset.
+        registered_row_retention::require_no_outstanding(&path, paged_records.as_deref())?;
         let mut fts_generations =
             load_fts_generation_catalog(&path.join(DEFAULT_FTS_GENERATION_CATALOG))?;
         // Recovery exports can explicitly omit secondary index definitions.
@@ -19310,6 +19369,27 @@ impl Transaction {
         self.finalize_committed_memory_jobs()?;
         unsafe { db.as_ref() }.auto_checkpoint_if_due();
         Ok(commit_seq)
+    }
+
+    /// The actual Registered import caller holds original admission/hook
+    /// guards. Its private grant is mandatory, and durable success is retained
+    /// before finalizers. Auto-checkpoint must run only after those guards drop.
+    #[cfg(feature = "tls-replication")]
+    fn commit_registered_remote_image_with_sequence(mut self) -> Result<u64> {
+        let db = self.db;
+        let database = unsafe { db.as_ref() };
+        self.native_registered_remote_row_grant
+            .as_ref()
+            .ok_or_else(|| {
+                BicDbError::Cluster("Registered row commit requires actual private grant".into())
+            })?
+            .require_current(database, &self)?;
+        let sequence = database.commit_transaction(&mut self)?;
+        database.tx_log.write_durable(sequence)?;
+        self.finalize_commit_admission()?;
+        self.finalize_committed_broker_outbox();
+        self.finalize_committed_memory_jobs()?;
+        Ok(sequence)
     }
 
     /// Checkpoint the range command as locally applied only after the caller's
@@ -36159,3 +36239,5 @@ mod analyze_sampling_tests {
 #[cfg(test)]
 #[path = "db/distribution_event_retry_tests.rs"]
 mod distribution_event_retry_tests;
+
+pub(crate) use range_image_native::{NativeJointPhaseOwner, NativeJointWriterDomain};

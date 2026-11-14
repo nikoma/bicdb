@@ -6,6 +6,37 @@ impl BicDb {
         native: &NativeRecoveryAdmission,
     ) -> Result<()> {
         let journal = self.try_native_image_journal()?;
+        self.require_original_registered_receiver_domain_with_journal(native, &journal)
+    }
+    pub(super) fn require_original_registered_receiver_domain_with_journal(
+        &self,
+        native: &NativeRecoveryAdmission,
+        journal: &NativeImageJournalGuard<'_>,
+    ) -> Result<()> {
+        self.require_original_registered_receiver_birth_with_journal(native, journal)?;
+        // This is the complete protected native namespace, not user rows and
+        // not the lossy prefix diagnostic. Any unknown/historical native fact
+        // is conservative refusal, including a durable invalidation marker.
+        self.require_original_registered_receiver_inventory()
+    }
+    pub(super) fn require_original_registered_receiver_birth_with_journal(
+        &self,
+        native: &NativeRecoveryAdmission,
+        journal: &NativeImageJournalGuard<'_>,
+    ) -> Result<()> {
+        self.require_original_registered_receiver_birth_open_with_journal(native, journal)?;
+        if self.current_commit_seq() != 0 {
+            return Err(invalid("Registered no-domain boundary is no longer B0"));
+        }
+        Ok(())
+    }
+    /// The actual original Registered birth/open, without interpreting a later
+    /// copied-row visibility sequence as a native range floor or new birth.
+    pub(super) fn require_original_registered_receiver_birth_open_with_journal(
+        &self,
+        native: &NativeRecoveryAdmission,
+        journal: &NativeImageJournalGuard<'_>,
+    ) -> Result<()> {
         journal.require_database(self)?;
         native.require_current(self)?;
         let birth = self
@@ -22,15 +53,23 @@ impl BicDb {
             || ready.birth_id != birth.birth_id
             || ready.birth_sha256 != birth.checksum_sha256
             || !ready.genesis_sha256.is_empty()
-            || self.current_commit_seq() != 0
         {
             return Err(invalid(
                 "registered receiver is not the original no-INITIAL-range/native domain",
             ));
         }
-        // This is the complete protected native namespace, not user rows and
-        // not the lossy prefix diagnostic. Any unknown/historical native fact
-        // is conservative refusal, including a durable invalidation marker.
+        self.check_recovery_state()
+    }
+    fn require_original_registered_receiver_inventory(&self) -> Result<()> {
+        self.require_registered_receiver_inventory_with_extra_keys(&[])
+    }
+    pub(super) fn require_registered_receiver_inventory_with_extra_keys(
+        &self,
+        extra: &[String],
+    ) -> Result<()> {
+        if extra.len() > 2 {
+            return Err(invalid("Registered proposal inventory bound exceeded"));
+        }
         let paged = self
             .paged_records
             .as_ref()
@@ -41,12 +80,16 @@ impl BicDb {
             .store()
             .scan_from(&snapshot, &namespace)
             .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
-        let expected = [
+        let mut expected = vec![
             BIRTH_KEY,
             READY_KEY,
             "metadata-store:initialized",
             "abort-range-catalogue:identity",
-        ];
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+        expected.extend(extra.iter().cloned());
         let mut found = BTreeSet::new();
         for entry in cursor {
             let (key, value) = entry.map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
@@ -60,7 +103,7 @@ impl BicDb {
             }
             let key = std::str::from_utf8(&key[namespace.len()..])
                 .map_err(|_| invalid("registered receiver native record key malformed"))?;
-            if !expected.contains(&key) {
+            if !expected.iter().any(|expected| expected == key) {
                 return Err(invalid("registered receiver has an existing native domain/invalidation/install/history record; continuation unsupported"));
             }
             if found.len() >= expected.len() || !found.insert(key.to_owned()) {
@@ -69,7 +112,7 @@ impl BicDb {
                 ));
             }
         }
-        if found.len() != expected.len() || expected.iter().any(|k| !found.contains(*k)) {
+        if found.len() != expected.len() || expected.iter().any(|k| !found.contains(k)) {
             return Err(invalid("registered receiver lost original native birth/READY/Registered/catalogue record custody"));
         }
         // Native identity/checksum and namespace checks for these known

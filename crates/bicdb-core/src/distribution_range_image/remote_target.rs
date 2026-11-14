@@ -9,7 +9,11 @@ use crate::distribution_transport::AuthenticatedNativeRemoteImageSourceFrame;
 /// can construct this value. Historical issuance survives request expiry;
 /// it asserts neither continuous remote liveness nor target write authority.
 pub(crate) struct NativeRemoteImageFact {
-    actual_manifest: AuthenticatedNativeRemoteImageSourceFrame,
+    actual_manifest: ActualManifestIssuance,
+}
+enum ActualManifestIssuance {
+    Frame(AuthenticatedNativeRemoteImageSourceFrame),
+    Discovery(crate::distribution_transport::AuthenticatedNativeSourceDiscovery),
 }
 impl NativeRemoteImageFact {
     pub(crate) fn from_actual_manifest(
@@ -34,16 +38,31 @@ impl NativeRemoteImageFact {
         }
         actual.require_request_live()?;
         Ok(Self {
-            actual_manifest: actual,
+            actual_manifest: ActualManifestIssuance::Frame(actual),
+        })
+    }
+
+    /// Only the strict actual Start/Describe transport exchange constructs a
+    /// discovered fact. No fabricated old Manifest request/frame is created.
+    pub(crate) fn from_actual_discovery(
+        actual: crate::distribution_transport::AuthenticatedNativeSourceDiscovery,
+    ) -> Result<Self> {
+        actual.require_request_live()?;
+        actual.reply().manifest.require_shape()?;
+        Ok(Self {
+            actual_manifest: ActualManifestIssuance::Discovery(actual),
         })
     }
 
     /// Immutable historical data only. This is not an alternate constructor
     /// for local lineage, OLD quorum, NativeRecoveryAdmission or an image grant.
     pub(crate) fn manifest(&self) -> &NativeRemoteImageManifestV1 {
-        match &self.actual_manifest.reply().payload {
-            NativeRemoteImageSourcePayloadV1::Manifest(manifest) => manifest,
-            _ => unreachable!("private constructor requires Manifest"),
+        match &self.actual_manifest {
+            ActualManifestIssuance::Frame(actual) => match &actual.reply().payload {
+                NativeRemoteImageSourcePayloadV1::Manifest(manifest) => manifest,
+                _ => unreachable!("private constructor requires Manifest"),
+            },
+            ActualManifestIssuance::Discovery(actual) => &actual.reply().manifest,
         }
     }
 
@@ -89,6 +108,19 @@ pub(crate) struct NativeRemoteImageStep<'source> {
     actual: AuthenticatedNativeRemoteImageSourceFrame,
 }
 impl NativeRemoteImageStep<'_> {
+    /// Test-only forensic liveness, including an already expired original
+    /// request. Never reissues a frame or makes it valid for a target action.
+    #[cfg(test)]
+    pub(crate) fn test_original_request_cancellation(&self) -> CancellationToken {
+        self.actual.test_original_request_cancellation()
+    }
+    /// Preserve the original authenticated request's exact cancellation and
+    /// deadline through one private synchronous row transaction. This is only
+    /// liveness DATA; it is neither a renewed request nor target authority.
+    pub(crate) fn retain_original_request_cancellation(&self) -> Result<CancellationToken> {
+        self.require_request_live()?;
+        self.actual.retain_original_request_cancellation()
+    }
     pub(crate) fn require_request_live(&self) -> Result<()> {
         self.actual.require_request_live()
     }

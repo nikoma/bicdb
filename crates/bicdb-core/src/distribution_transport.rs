@@ -91,6 +91,11 @@ pub(crate) mod metadata_append;
 mod native_abort;
 mod native_activation;
 mod native_image_source;
+mod native_source_discovery;
+mod native_source_export;
+pub(crate) use native_source_discovery::AuthenticatedNativeSourceDiscovery;
+pub(crate) use native_source_export::AuthenticatedRegisteredExportNew;
+mod native_old;
 use crate::distribution_native_host::{
     NativeInitialBirthOfferRequest, NativeInitialBirthOfferResponse,
     NativeInitialPreparationRequest, NativeInitialPreparationResponse, NativeLearnerBirthRequest,
@@ -123,6 +128,7 @@ pub(crate) use native_abort::{
     AuthenticatedNativeAbortCandidateReply, AuthenticatedNativeAbortPromiseReply,
 };
 pub(crate) use native_image_source::AuthenticatedNativeRemoteImageSourceFrame;
+pub(crate) use native_old::AuthenticatedNativeRemoteOldFrame;
 
 const FRAME_HEADER_BYTES: usize = 4;
 
@@ -276,6 +282,18 @@ enum ClusterDataRequest {
     Ping,
     NativeRemoteImageSourceFrame {
         request: crate::distribution_range_image::NativeRemoteImageSourceRequestV1,
+    },
+    NativeSourceDiscovery {
+        request: crate::distribution_range_image::NativeSourceDiscoveryRequestV1,
+    },
+    NativeRemoteOld {
+        request: crate::distribution_range_handoff::NativeRemoteOldRequestV1,
+    },
+    NativeObserveRegisteredExportNew {
+        request: crate::distribution_range_image::NativeObserveRegisteredNewRequestV1,
+    },
+    NativeSourceExportRetirement {
+        request: crate::distribution_range_image::NativeSourceExportRequestV1,
     },
     ApplicationEvent(crate::ClusterEventRequest),
     NativeEventGet(crate::distribution_native_read::NativeEventGetRequest),
@@ -524,7 +542,12 @@ impl ClusterDataRequest {
     fn range_id_for_schema_fence(&self) -> Option<RangeId> {
         match self {
             Self::ApplicationEvent(request) => Some(request.range_id),
-            Self::NativeEventGet(_) | Self::NativeRemoteImageSourceFrame { .. } => None,
+            Self::NativeEventGet(_)
+            | Self::NativeRemoteImageSourceFrame { .. }
+            | Self::NativeRemoteOld { .. }
+            | Self::NativeObserveRegisteredExportNew { .. }
+            | Self::NativeSourceExportRetirement { .. }
+            | Self::NativeSourceDiscovery { .. } => None,
             Self::ExportSchemaBundle { range_id, .. } => Some(*range_id),
             Self::InstallSchemaBundle { .. }
             | Self::StageSignedSchemaBundle { .. }
@@ -617,6 +640,10 @@ impl ClusterDataRequest {
                 | Self::RecertifyNativeOrigin { .. }
                 | Self::MaterializeNativeCompleted { .. }
                 | Self::NativeRemoteImageSourceFrame { .. }
+                | Self::NativeRemoteOld { .. }
+                | Self::NativeObserveRegisteredExportNew { .. }
+                | Self::NativeSourceExportRetirement { .. }
+                | Self::NativeSourceDiscovery { .. }
         )
     }
 }
@@ -625,6 +652,12 @@ impl ClusterDataRequest {
 enum ClusterDataResponse {
     Pong,
     NativeRemoteImageSourceFrame(crate::distribution_range_image::NativeRemoteImageSourceReplyV1),
+    NativeRemoteOld(crate::distribution_range_handoff::NativeRemoteOldReplyV1),
+    NativeSourceDiscovery(crate::distribution_range_image::NativeSourceDiscoveryReplyV1),
+    NativeObserveRegisteredExportNew(
+        crate::distribution_range_image::NativeRegisteredNewExportReplyV1,
+    ),
+    NativeSourceExportRetirement(crate::distribution_range_image::NativeSourceExportReplyV1),
     ApplicationEvent(crate::ClusterEventResponse),
     NativeEventGet(crate::distribution_native_read::NativeEventGetReply),
     Ack,
@@ -1613,6 +1646,65 @@ fn handle_cluster_data_connection(
                     ClusterDataResponse::NativeRemoteImageSourceFrame(actual.into_reply())
                 });
         }
+        if let ClusterDataRequest::NativeObserveRegisteredExportNew { request } = request.request {
+            let target = registered_replica.ok_or_else(|| {
+                transport_error("readonly export NEW requires actual immutable Registered target")
+            })?;
+            let peer = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("readonly export NEW requires authenticated donor")
+            })?;
+            let parent =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return target
+                .observe_registered_export_new(peer, &request, &parent)
+                .map(ClusterDataResponse::NativeObserveRegisteredExportNew);
+        }
+        if let ClusterDataRequest::NativeSourceExportRetirement { request } = request.request {
+            let donor = initial_data.ok_or_else(|| {
+                transport_error("export retirement requires original INITIAL donor")
+            })?;
+            let peer = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("export retirement requires authenticated original target")
+            })?;
+            let parent =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            let reply = donor.retire_remote_source_export(peer, &request, &parent)?;
+            #[cfg(test)]
+            if donor.test_take_source_export_reply_loss() {
+                suppress_actual_completion_reply.set(true);
+            }
+            return Ok(ClusterDataResponse::NativeSourceExportRetirement(reply));
+        }
+        if let ClusterDataRequest::NativeSourceDiscovery { request } = request.request {
+            let donor = initial_data.ok_or_else(|| {
+                transport_error("source discovery requires actual INITIAL donor owner")
+            })?;
+            let peer = authenticated_caller
+                .as_ref()
+                .ok_or_else(|| transport_error("source discovery requires authenticated target"))?;
+            let parent =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            let actual = donor.discover_remote_image_source(peer, &request, &parent)?;
+            #[cfg(test)]
+            if donor.test_take_source_discovery_reply_loss() {
+                suppress_actual_completion_reply.set(true);
+            }
+            return Ok(ClusterDataResponse::NativeSourceDiscovery(
+                actual.into_reply(),
+            ));
+        }
+        if let ClusterDataRequest::NativeRemoteOld { request } = request.request {
+            let source = initial_data
+                .ok_or_else(|| transport_error("remote OLD requires actual INITIAL DATA owner"))?;
+            let peer = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("remote OLD requires actual authenticated caller")
+            })?;
+            let parent =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            return source
+                .observe_remote_old(peer, &request, &parent)
+                .map(|actual| ClusterDataResponse::NativeRemoteOld(actual.into_reply()));
+        }
         if let ClusterDataRequest::HostMetadataReadAcquire { request } = request.request {
             let provider = metadata_read_provider
                 .ok_or_else(|| transport_error("fresh host metadata provider is not active"))?;
@@ -2432,6 +2524,16 @@ fn dispatch_cluster_data_request(
         ClusterDataRequest::Ping => Ok(ClusterDataResponse::Pong),
         ClusterDataRequest::NativeRemoteImageSourceFrame { .. } => Err(transport_error(
             "source image frames require their actual before-latch owner",
+        )),
+        ClusterDataRequest::NativeObserveRegisteredExportNew { .. }
+        | ClusterDataRequest::NativeSourceExportRetirement { .. } => Err(transport_error(
+            "export retirement requires its actual before-latch owner",
+        )),
+        ClusterDataRequest::NativeSourceDiscovery { .. } => Err(transport_error(
+            "source discovery requires actual before-latch donor owner",
+        )),
+        ClusterDataRequest::NativeRemoteOld { .. } => Err(transport_error(
+            "native OLD requires its actual before-latch owner",
         )),
         ClusterDataRequest::NativeEventGet(_) => Err(transport_error(
             "typed Get requires the before-latch dispatcher",
@@ -5391,6 +5493,10 @@ impl TcpClusterRelocationTransport {
             || matches!(
                 &request,
                 ClusterDataRequest::NativeRemoteImageSourceFrame { .. }
+                    | ClusterDataRequest::NativeRemoteOld { .. }
+                    | ClusterDataRequest::NativeObserveRegisteredExportNew { .. }
+                    | ClusterDataRequest::NativeSourceExportRetirement { .. }
+                    | ClusterDataRequest::NativeSourceDiscovery { .. }
                     | ClusterDataRequest::MetadataReadProbe { .. }
                     | ClusterDataRequest::MetadataReadAcquire { .. }
                     | ClusterDataRequest::HostMetadataReadAcquire { .. }

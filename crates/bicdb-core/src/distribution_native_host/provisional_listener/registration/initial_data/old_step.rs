@@ -1,6 +1,9 @@
 //! Actual source-owner admission for ONLY OLD refusal/closure. Purpose/plan
 //! DATA alone is insufficient. No APP/Strong/image-row/Serving grant.
 use super::*;
+mod constraint_step;
+mod remote_old;
+pub(crate) use constraint_step::NativeInitialOldConstraintStep;
 #[cfg(test)]
 mod sink_test;
 use crate::distribution_consensus::{
@@ -10,12 +13,16 @@ use crate::distribution_range_consensus::RangeWriteStore;
 use crate::distribution_range_handoff::NativeJointHandoffPlan;
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 #[cfg(test)]
-pub(crate) use sink_test::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
+pub(crate) use sink_test::{
+    after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
+    CancelRemoteOldAfterNativeWal,
+};
 
 const METADATA_LOCK_POLL: std::time::Duration = std::time::Duration::from_millis(5);
 
 pub(crate) struct NativeInitialOldStep<'request> {
     admission: &'request NativeInitialDataAdmission,
+    writer: Arc<crate::db::NativeWriterHostState>,
     service: Arc<Mutex<ClusterDataNodeService>>,
     runtime: Arc<RangeRecoveryRuntime>,
     metadata: Arc<Mutex<MetadataConsensusStore>>,
@@ -27,6 +34,7 @@ pub(crate) struct NativeInitialOldStep<'request> {
     business: Uuid,
     member: NativeOwnedMetadataMemberObservation,
     parent: &'request CancellationToken,
+    hosted_process: Option<Arc<crate::distribution_range_image::NativeRemoteImageSourceRegistry>>,
     _local: std::marker::PhantomData<std::rc::Rc<()>>,
 }
 impl NativeInitialDataAdmission {
@@ -40,6 +48,41 @@ impl NativeInitialDataAdmission {
         own: HostMetadataReadObservation,
         business: Uuid,
         parent: &'request CancellationToken,
+    ) -> Result<NativeInitialOldStep<'request>> {
+        self.observe_initial_old_step_with_process(metadata, role, own, business, parent, None)
+    }
+    fn observe_hosted_initial_old_step<'request>(
+        &'request self,
+        metadata: Arc<Mutex<MetadataConsensusStore>>,
+        role: Arc<RecoveryRoleAdmission>,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        parent: &'request CancellationToken,
+    ) -> Result<NativeInitialOldStep<'request>> {
+        let process = self
+            .image_sources
+            .upgrade()
+            .ok_or_else(|| invalid("actual OLD hosted process owner ended"))?;
+        process.require_original_process()?;
+        self.observe_initial_old_step_with_process(
+            metadata,
+            role,
+            own,
+            business,
+            parent,
+            Some(process),
+        )
+    }
+    fn observe_initial_old_step_with_process<'request>(
+        &'request self,
+        metadata: Arc<Mutex<MetadataConsensusStore>>,
+        role: Arc<RecoveryRoleAdmission>,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        parent: &'request CancellationToken,
+        hosted_process: Option<
+            Arc<crate::distribution_range_image::NativeRemoteImageSourceRegistry>,
+        >,
     ) -> Result<NativeInitialOldStep<'request>> {
         parent.check()?;
         role.require_own_host_metadata(&own, business)?;
@@ -84,6 +127,7 @@ impl NativeInitialDataAdmission {
             &role, &own, business,
         )?);
         let step = NativeInitialOldStep {
+            writer: self.writer(),
             admission: self,
             service,
             runtime,
@@ -96,6 +140,7 @@ impl NativeInitialDataAdmission {
             business,
             member,
             parent,
+            hosted_process,
             _local: std::marker::PhantomData,
         };
         {
@@ -130,6 +175,14 @@ impl NativeInitialOldStep<'_> {
     }
     pub(crate) fn require_live(&self) -> Result<()> {
         self.parent.check()?;
+        if !Arc::ptr_eq(&self.writer, &self.admission.writer()) {
+            return Err(invalid(
+                "OLD step original writer snapshot replaced by policy refresh",
+            ));
+        }
+        if let Some(process) = &self.hosted_process {
+            process.require_original_process()?;
+        }
         self.role
             .require_own_host_metadata(&self.own, self.business)?;
         self.admission
@@ -173,10 +226,11 @@ impl NativeInitialOldStep<'_> {
         self.member.require_database(database)?;
         let actual = database.current_native_range_source_lineage(plan.old_range().id)?;
         plan.require_old_native_configuration(&actual)?;
-        let writer = self.admission.writer();
-        writer.require_store(database.data_path(), self.slot.id())?;
-        writer.require_database(database, actual.native_write_range()?)?;
-        if !Arc::ptr_eq(&store.native_writer_host_state()?, &writer) {
+        self.writer
+            .require_store(database.data_path(), self.slot.id())?;
+        self.writer
+            .require_database(database, actual.native_write_range()?)?;
+        if !Arc::ptr_eq(&store.native_writer_host_state()?, &self.writer) {
             return Err(invalid("OLD step original actual writer replaced"));
         }
         database.require_native_writer_catalogue_custody(store)?;
@@ -187,11 +241,52 @@ impl NativeInitialOldStep<'_> {
 /// Retained BEFORE any real freeze/write and kept in the actual DATA host.
 /// An uncertain producer never removes this owner or invents an observation.
 pub(super) struct RetainedInitialOld {
+    writer: Arc<crate::db::NativeWriterHostState>,
     plan_sha256: String,
+    plan: Arc<NativeJointHandoffPlan>,
     runtime: Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>,
     actual: Option<Arc<crate::distribution_range_handoff::NativeJointOldObservation>>,
+    constraints: Option<crate::distribution_data::NativeJointIrrevocableFacts>,
+    constraint_owner: Option<Arc<crate::distribution_data::ActualServiceNativeJointConstraints>>,
+    // Distinct actual durable outcomes, retained before postchecks. Cleared
+    // only after the SAME produced observation is stored in `actual`.
+    outcome: Option<crate::distribution_data::NativeJointOldRetainedOutcome>,
 }
+pub(super) type RetainedInitialOldTable =
+    Mutex<BTreeMap<crate::RangeId, Arc<Mutex<RetainedInitialOld>>>>;
 impl NativeInitialDataHost {
+    pub(super) fn retained_actual_old_source(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<Arc<crate::distribution_range_handoff::NativeJointOldObservation>> {
+        self.admission_for_old_step()?.require_live()?;
+        let entries = self
+            .old_closures
+            .try_lock()
+            .ok_or_else(|| invalid("actual OLD donor table busy"))?;
+        let owner = entries
+            .get(&range)
+            .ok_or_else(|| invalid("actual OLD donor has no retained local closure"))?;
+        let owner = owner
+            .try_lock()
+            .ok_or_else(|| invalid("actual OLD donor closure still active"))?;
+        if !Arc::ptr_eq(&owner.writer, &self.admission_for_old_step()?.writer()) {
+            return Err(invalid("retained OLD source original writer replaced"));
+        }
+        let actual = owner
+            .actual
+            .clone()
+            .ok_or_else(|| invalid("actual OLD donor outcome remains uncertain"))?;
+        if actual.node_id() != &self.initial.seed.spec.node_id
+            || actual.plan().checksum_sha256()? != owner.plan_sha256
+        {
+            return Err(invalid(
+                "actual OLD donor changed original local identity/scope",
+            ));
+        }
+        actual.require_current()?;
+        Ok(actual)
+    }
     pub(in crate::distribution_native_host::provisional_listener::registration) fn close_initial_old(
         &self,
         runtime: Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>,
@@ -225,9 +320,14 @@ impl NativeInitialDataHost {
                     ));
                 }
                 let owner = Arc::new(Mutex::new(RetainedInitialOld {
+                    writer: step.writer.clone(),
                     plan_sha256: digest.clone(),
+                    plan: step.plan().clone(),
                     runtime: runtime.clone(),
                     actual: None,
+                    constraints: None,
+                    constraint_owner: None,
+                    outcome: None,
                 }));
                 owners.insert(range, owner.clone());
                 owner
@@ -236,7 +336,10 @@ impl NativeInitialDataHost {
         let mut owner = retained
             .try_lock()
             .ok_or_else(|| invalid("actual OLD operation already active"))?;
-        if owner.plan_sha256 != digest || !Arc::ptr_eq(&owner.runtime, &runtime) {
+        if owner.plan_sha256 != digest
+            || !Arc::ptr_eq(&owner.runtime, &runtime)
+            || !Arc::ptr_eq(&owner.writer, &step.writer)
+        {
             return Err(invalid(
                 "OLD continuation changed original plan/runtime owner",
             ));
@@ -252,6 +355,123 @@ impl NativeInitialDataHost {
         drop(owner);
         step.require_metadata_current()?;
         step.require_live()?;
+        Ok(actual)
+    }
+}
+
+impl NativeMetadataControlHost {
+    /// Independently retained ACTUAL native recipient objects. The remote OLD
+    /// certificate remains a separate authority and must match these exactly.
+    pub(crate) fn retained_initial_old_joint_owners(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<(
+        Arc<crate::distribution_range_handoff::NativeJointOldObservation>,
+        Arc<crate::distribution_range_handoff::NativeJointHandoffRuntime>,
+    )> {
+        let initial = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("actual INITIAL old recipient owner absent"))?;
+        let actual = initial.retained_actual_old_source(range)?;
+        let entries = initial
+            .old_closures
+            .try_lock()
+            .ok_or_else(|| invalid("actual OLD recipient table busy"))?;
+        let retained = entries
+            .get(&range)
+            .ok_or_else(|| invalid("actual OLD recipient entry absent"))?
+            .try_lock()
+            .ok_or_else(|| invalid("actual OLD recipient entry busy"))?;
+        if retained
+            .actual
+            .as_ref()
+            .is_none_or(|old| !Arc::ptr_eq(old, &actual))
+        {
+            return Err(invalid("actual OLD recipient identity changed"));
+        }
+        Ok((actual, retained.runtime.clone()))
+    }
+    /// Only final OLD survivors may retire their obsolete observation-table
+    /// references. Actual runtime/NEW owners remain retained; retired sources
+    /// keep their original CLOSED runtime until a separate cleanup protocol.
+    pub(crate) fn retire_initial_old_observation_after_joint_open(
+        &self,
+        range: crate::RangeId,
+        phase: &crate::distribution_range_handoff::NativeJointReleasePhaseQuorum,
+    ) -> Result<()> {
+        let initial = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("actual INITIAL survivor absent"))?;
+        let actual = initial.retained_actual_old_source(range)?;
+        phase.require_actual_old_owner_retirement(&actual)?;
+        let mut entries = initial
+            .old_closures
+            .try_lock()
+            .ok_or_else(|| invalid("actual survivor OLD table busy"))?;
+        let retained = entries
+            .get(&range)
+            .ok_or_else(|| invalid("actual survivor OLD entry missing"))?;
+        let entry = retained
+            .try_lock()
+            .ok_or_else(|| invalid("actual survivor OLD entry active"))?;
+        if entry
+            .actual
+            .as_ref()
+            .is_none_or(|old| !Arc::ptr_eq(old, &actual))
+            || entry.outcome.is_some()
+        {
+            return Err(invalid(
+                "cannot retire an uncertain/replaced OLD native outcome",
+            ));
+        }
+        drop(entry);
+        entries.remove(&range);
+        Ok(())
+    }
+}
+
+impl NativeInitialDataAdmission {
+    pub(super) fn retained_actual_old_source(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<Arc<crate::distribution_range_handoff::NativeJointOldObservation>> {
+        self.require_live()?;
+        let table = self
+            .old_closures
+            .upgrade()
+            .ok_or_else(|| invalid("actual OLD donor table ended"))?;
+        let entries = table
+            .try_lock()
+            .ok_or_else(|| invalid("actual OLD donor table busy"))?;
+        let owner = entries
+            .get(&range)
+            .ok_or_else(|| invalid("actual OLD donor has no retained local closure"))?;
+        let owner = owner
+            .try_lock()
+            .ok_or_else(|| invalid("actual OLD donor closure still active"))?;
+        if !Arc::ptr_eq(&owner.writer, &self.writer()) {
+            return Err(invalid("retained OLD source original writer replaced"));
+        }
+        let actual = owner
+            .actual
+            .clone()
+            .ok_or_else(|| invalid("actual OLD donor outcome remains uncertain"))?;
+        if actual.node_id()
+            != self
+                .old_transport
+                .upgrade()
+                .ok_or_else(|| invalid("actual OLD donor transport ended"))?
+                .local_metadata_read_participant()
+                .node_id()
+            || actual.plan().checksum_sha256()? != owner.plan_sha256
+        {
+            return Err(invalid(
+                "actual OLD donor changed original local identity/scope",
+            ));
+        }
+        actual.require_current()?;
         Ok(actual)
     }
 }

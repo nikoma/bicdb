@@ -30,8 +30,13 @@ struct ArchivedJointRefusal {
     binding: NativeCurrentJointBinding,
 }
 pub(super) fn validate_current_joint_catalog(catalog: &RangeWriteCatalog) -> Result<()> {
-    if (catalog.format_version >= CURRENT_JOINT_CATALOG_FORMAT)
-        != catalog.current_joint_recoveries.is_some()
+    // The separate Registered-install profile can preserve an actual format15
+    // catalogue's absence of joint state. Presence still validates every joint
+    // prerequisite below; upgrading refusal format must never invent a map.
+    if (catalog.format_version == CURRENT_JOINT_CATALOG_FORMAT
+        && catalog.current_joint_recoveries.is_none())
+        || (catalog.format_version < CURRENT_JOINT_CATALOG_FORMAT
+            && catalog.current_joint_recoveries.is_some())
     {
         return Err(range_write_error(
             "current joint recovery format/map is missing or unsupported",

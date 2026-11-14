@@ -2,9 +2,13 @@
 //! publisher can write it. Reading bytes yields a historical local WAL fact,
 //! never reconstructed quorums or permission to release a freeze.
 use super::*;
+#[cfg(feature = "tls-replication")]
+mod registered;
 use crate::distribution_range_handoff::{
     NativeJointDecisionData, NativeJointDecisionPublicationAdmission,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered::NativeRegisteredJointDecisionAttempt;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -85,6 +89,12 @@ pub(crate) struct NativeJointDecisionReceipt {
     record: NativeJointDecisionRecord,
 }
 impl NativeJointDecisionReceipt {
+    pub(crate) fn native_admission(&self) -> &NativeRecoveryAdmission {
+        &self.native
+    }
+    pub(crate) fn native_metadata_initialization_version(&self) -> u32 {
+        self.native.metadata_initialization_version()
+    }
     pub(crate) fn native_database_incarnation(&self) -> &str {
         self.native.database_incarnation()
     }
@@ -140,6 +150,22 @@ impl NativeJointDecisionReceipt {
     }
 }
 impl BicDb {
+    /// Actual protected CURRENT read, not a checksum/DTO authority constructor.
+    pub(in crate::db::range_image_native) fn read_current_native_joint_writer_decision(
+        &self,
+        native: &NativeRecoveryAdmission,
+        range: RangeId,
+    ) -> Result<NativeJointDecisionReceipt> {
+        native.require_current(self)?;
+        let actual: NativeJointDecisionRecord = self
+            .read_native_range_image_record(&key(range))?
+            .ok_or_else(|| {
+            invalid("writer DATA transition lacks actual protected joint decision")
+        })?;
+        actual.validate()?;
+        self.read_native_joint_decision(native, range, actual.decision.checksum_sha256())
+    }
+
     pub(crate) fn persist_native_joint_decision_from_old(
         &self,
         admission: &NativeJointDecisionPublicationAdmission,
@@ -216,6 +242,7 @@ impl BicDb {
     ) -> Result<NativeJointDecisionReceipt> {
         admission.require_live()?;
         native.require_current(self)?;
+        admission.require_native_metadata_point(self, store, native)?;
         admission.data().require_actual_native(native)?;
         store.require_native_catalog_durability(self.data_path())?;
         store.require_native_writer_host_base()?;
@@ -270,6 +297,7 @@ impl BicDb {
         } else {
             self.in_paged_transaction(|paged, xid| {
                 admission.require_live()?;
+                admission.require_native_metadata_point(self, store, native)?;
                 record.native_page_xid = xid;
                 record.checksum_sha256 = record.checksum()?;
                 record.validate()?;
@@ -300,6 +328,10 @@ impl BicDb {
         };
         result.require_current(self)?;
         admission.require_live()?;
+        let _physical_journal = self.try_native_image_journal()?;
+        result.require_current(self)?;
+        admission.require_native_metadata_point(self, store, native)?;
+        let _version = admission.native_publication_guard(native)?;
         Ok(result)
     }
     /// Actual protected record reader. Expected checksum binds a committed

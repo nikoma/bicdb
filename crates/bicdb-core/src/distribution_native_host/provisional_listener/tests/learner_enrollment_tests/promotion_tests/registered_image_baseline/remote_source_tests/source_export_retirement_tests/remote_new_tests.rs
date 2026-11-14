@@ -155,20 +155,47 @@ pub(super) fn exercise(
     journal: &[serde_json::Value],
 ) {
     assert!(is_case(case));
+    // Metadata leader n0 is the destination, not necessarily the range
+    // authority that must originate this actual range-scoped acquisition.
+    let selected = pending.range_by_id(mf.capture_range.id).unwrap();
+    assert_eq!(selected.epoch, mf.capture_range.epoch);
+    assert_eq!(selected.leader, mf.capture_range.leader);
+    let leader_index = clients
+        .iter()
+        .position(|client| client.local_metadata_read_participant().node_id() == &selected.leader)
+        .expect("actual selected range leader has its original transport");
     let collection = budget(5000);
     let phase_id = Uuid::now_v7();
     let business = Uuid::now_v7();
     // A genuine fresh metadata read produces scope, never a local OLD quorum.
-    let observed = clients[0]
-        .acquire_metadata_read_observation(
-            &node(0),
-            business,
-            mf.capture_range.id,
-            mf.capture_range.epoch,
-            Duration::from_secs(5),
-            &collection,
-        )
-        .unwrap();
+    let acquired = clients[leader_index].acquire_metadata_read_observation(
+        &node(0),
+        business,
+        mf.capture_range.id,
+        mf.capture_range.epoch,
+        Duration::from_secs(5),
+        &collection,
+    );
+    if let Err(primary) = &acquired {
+        let mut diagnostic_errors = Vec::new();
+        evidence_after(
+            &output.join("remote-new-range-authority-acquisition-failure.json"),
+            &serde_json::json!({
+                "case":format!("{case:?}"),"metadata_destination":node(0),
+                "actual_requester":clients[leader_index].local_metadata_read_participant().node_id(),
+                "selected_range":selected,"source_capture_range":mf.capture_range,
+                "business":business,"actual_error":primary.to_string(),
+                "request_retry_count":0,"acknowledged":acknowledged,
+                "source_frame_journal":journal,
+                "participant_materialization_not_started":true,
+            }),
+            &mut diagnostic_errors,
+        );
+        for error in diagnostic_errors {
+            eprintln!("REMOTE_NEW_ACQUISITION_DIAGNOSTIC_ERROR {error}; primary={primary}");
+        }
+    }
+    let observed = acquired.unwrap();
     let read_round = NativeJointOldRound::begin(observed, business, mf.relocation_id).unwrap();
     let plan = read_round.plan();
     drop(read_round);

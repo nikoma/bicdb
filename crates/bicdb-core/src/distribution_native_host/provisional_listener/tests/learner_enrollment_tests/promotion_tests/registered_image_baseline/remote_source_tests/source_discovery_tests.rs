@@ -132,10 +132,25 @@ pub(super) fn exercise(
             .test_send_source_discovery_request(&request, &parent)
             .err()
             .expect("actual metadata-leader peer is not the target");
+        let mut diagnostic_errors = Vec::new();
+        evidence_after(
+            &output.join("source-discovery-wrong-actor-before-assertions.json"),
+            &serde_json::json!({
+                "request":request,"actual_wrong_actor":clients[0].local_metadata_read_participant().node_id(),
+                "expected_target":request.target_id,"actual_error":error.to_string(),
+                "native_before":native_before,"state_before":before,
+            }),
+            &mut diagnostic_errors,
+        );
+        for diagnostic in diagnostic_errors {
+            eprintln!(
+                "SOURCE_DISCOVERY_WRONG_ACTOR_DIAGNOSTIC_ERROR {diagnostic}; primary={error}"
+            );
+        }
         assert!(
             error
                 .to_string()
-                .contains("actual donor/target identity differs"),
+                .contains("source discovery target identity differs"),
             "{error}"
         );
         assert!(controls[source]

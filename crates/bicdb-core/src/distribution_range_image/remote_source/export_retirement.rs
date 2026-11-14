@@ -4,6 +4,10 @@ use super::*;
 use crate::db::NativeRegisteredRemoteFinalImagePointer;
 #[cfg(test)]
 mod callback_liveness;
+#[cfg(test)]
+mod work_diagnostics;
+#[cfg(test)]
+pub(super) use work_diagnostics::ExportWorkDiagnostics;
 
 #[derive(Default)]
 pub(super) struct RetainedExportRetirement {

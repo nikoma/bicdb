@@ -19,6 +19,20 @@ impl NativeInitialDataAdmission {
         request: &NativeSourceExportRequestV1,
         parent: &CancellationToken,
     ) -> Result<NativeSourceExportReplyV1> {
+        // FIRST local, hence dropped LAST after source/session/claim guards.
+        // This is test-only observation, never protocol authority.
+        #[cfg(test)]
+        let _original_work = self
+            .image_sources
+            .upgrade()
+            .ok_or_else(|| invalid("original work registry ended"))
+            .and_then(|registry| registry.test_enter_original_export_work(request, parent));
+        #[cfg(test)]
+        if let Err(diagnostic) = &_original_work {
+            // An observation failure cannot replace the original API result.
+            // The diagnostic waiter still fails if its exact entry is absent.
+            eprintln!("S2_ORIGINAL_WORK_ENTRY_EVIDENCE_ERROR {diagnostic}");
+        }
         let token = request.cancellation(parent)?;
         // Translation is comparison DATA only. Describe cannot create a
         // missing S2 attempt; the original exact MF/session is checked below.
@@ -142,6 +156,18 @@ impl NativeInitialDataAdmission {
 }
 #[cfg(test)]
 impl NativeMetadataControlHost {
+    pub(crate) fn test_source_export_original_work_status(
+        &self,
+        request: &NativeSourceExportRequestV1,
+    ) -> Result<serde_json::Value> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual donor absent"))?
+            .image_sources
+            .as_ref()
+            .ok_or_else(|| invalid("original donor registry absent"))?
+            .test_original_export_work_status(request)
+    }
     pub(crate) fn test_arm_source_export_callback_request(&self, expire: bool) -> Result<()> {
         self.data
             .as_ref()

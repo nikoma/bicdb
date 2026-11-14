@@ -5591,6 +5591,12 @@ impl TcpClusterRelocationTransport {
                 observed.exchange_error(error)?;
             }
         }
+        // A real evidence failure is already a non-success outcome. Preserve
+        // its typed dispatch status and original cause before caller cancellation
+        // can replace it; this exception never admits a late decoded SUCCESS.
+        if matches!(&exchange, Err(BicDbError::RpcEvidenceFailure { .. })) {
+            return Err(exchange.err().expect("checked actual evidence failure"));
+        }
         // Preserve caller cancellation semantics and reject late decoded
         // responses. Socket progress does not renew the whole RPC budget.
         if let Err(error) = cancellation.check() {

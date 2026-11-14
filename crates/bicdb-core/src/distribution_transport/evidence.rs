@@ -3,6 +3,7 @@ use super::*;
 use std::error::Error;
 use std::io;
 use std::sync::atomic::AtomicU8;
+use std::sync::OnceLock;
 
 /// Exact evidence from the existing client path. Frame bytes include the four
 /// byte length header. Payloads may contain application data; keep journals private.
@@ -46,11 +47,26 @@ impl Default for ClusterRpcEvidenceLimits {
         }
     }
 }
+enum FailureCause {
+    Message(String),
+    CallbackUnwound,
+}
+impl FailureCause {
+    fn detail(&self) -> String {
+        match self {
+            Self::Message(detail) => detail.clone(),
+            Self::CallbackUnwound => {
+                "evidence sink callback unwound; observed dispatch is fenced".into()
+            }
+        }
+    }
+}
 pub(super) struct Observer {
     sink: Arc<dyn ClusterRpcEvidenceObserver>,
     limits: ClusterRpcEvidenceLimits,
     counts: Mutex<(u64, u64)>,
     failed: AtomicU8,
+    first_failure: OnceLock<FailureCause>,
 }
 impl Observer {
     pub(super) fn new(
@@ -71,12 +87,20 @@ impl Observer {
             limits,
             counts: Mutex::new((0, 0)),
             failed: AtomicU8::new(0),
+            first_failure: OnceLock::new(),
         }))
     }
     pub(super) fn require_current(&self) -> Result<()> {
         let failed = self.failed.load(Ordering::Acquire);
         if failed != 0 {
-            return Err(BicDbError::RpcEvidenceFailure { may_have_dispatched: failed == 2, detail: "evidence observer failed or reached its bound; future observed dispatch is fenced".into() });
+            return Err(BicDbError::RpcEvidenceFailure {
+                may_have_dispatched: failed == 2,
+                detail: self
+                    .first_failure
+                    .get()
+                    .expect("failure cause published before observer fence")
+                    .detail(),
+            });
         }
         Ok(())
     }
@@ -92,13 +116,23 @@ impl Observer {
         }
         Ok(())
     }
-    fn fail(&self, dispatched: bool, detail: impl std::fmt::Display) -> BicDbError {
-        // An uncertainty discovered concurrently must never be downgraded.
+    fn publish_failure(&self, dispatched: bool, cause: FailureCause) {
+        // No formatting or sink IO under OnceLock's initialization lock.
+        // Publish the first ACTUAL cause before exposing the fence to peers.
+        let _ = self.first_failure.set(cause);
         self.failed
             .fetch_max(if dispatched { 2 } else { 1 }, Ordering::AcqRel);
+    }
+    fn fail(&self, dispatched: bool, detail: impl std::fmt::Display) -> BicDbError {
+        let cause = FailureCause::Message(detail.to_string());
+        self.publish_failure(dispatched, cause);
         BicDbError::RpcEvidenceFailure {
             may_have_dispatched: self.failed.load(Ordering::Acquire) == 2,
-            detail: detail.to_string(),
+            detail: self
+                .first_failure
+                .get()
+                .expect("failure cause published before observer fence")
+                .detail(),
         }
     }
     fn record(
@@ -226,8 +260,7 @@ impl Drop for FenceOnUnwind<'_> {
     fn drop(&mut self) {
         if self.armed {
             self.observer
-                .failed
-                .fetch_max(if self.dispatched { 2 } else { 1 }, Ordering::AcqRel);
+                .publish_failure(self.dispatched, FailureCause::CallbackUnwound);
         }
     }
 }

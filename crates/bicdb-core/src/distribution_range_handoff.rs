@@ -22,11 +22,11 @@ pub(crate) use joint::{
     NativeJointOldImageProof, NativeJointOldObservation, NativeJointOldRound,
     NativeJointOpenAdmission, NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound,
     NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound,
-    NativeJointPreparedDecision, NativeJointPreparedServingObservation,
-    NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
-    NativeJointPreparedServingVoteData, NativeJointPublishedServingQuorum,
-    NativeJointReleaseAdmission, NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum,
-    NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
+    NativeJointPreparedDecision, NativeJointPreparedServingCandidate,
+    NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
+    NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
+    NativeJointPublishedServingQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
+    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
     NativeJointServingPublicationRound,
 };
 #[cfg(test)]

@@ -30,7 +30,7 @@ use crate::distribution_range_consensus::{
 };
 use crate::distribution_range_handoff::{
     NativeJointDurableDecision, NativeJointNewObservation, NativeJointNewRound,
-    NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
+    NativeJointPreparedServingCandidate, NativeJointPreparedServingQuorum,
     NativeJointPreparedServingRound,
 };
 use crate::distribution_range_image::RangeImageCapture;
@@ -687,17 +687,17 @@ fn run_complete_joint_with_controls(
                 .prepare_local_native_joint_serving(committed, lease, &parent)
                 .unwrap()
         };
-        let observation =
-            NativeJointPreparedServingObservation::from_actual_service(actual, service).unwrap();
+        let candidate = NativeJointPreparedServingCandidate::from_actual_service(actual, service);
         eprintln!(
             "ACTUAL_JOINT_PHASE prepare-complete node={local} elapsed_ms={}",
             preparation_started.elapsed().as_millis()
         );
         if let Some(round) = &mut prepared_round {
-            round.record(observation).unwrap();
+            round.record_candidate(candidate).unwrap();
         } else {
-            prepared_round =
-                Some(NativeJointPreparedServingRound::begin(observation, &round_parent).unwrap());
+            prepared_round = Some(
+                NativeJointPreparedServingRound::begin_candidate(candidate, &round_parent).unwrap(),
+            );
         }
     }
     let prepared = Arc::new(prepared_round.unwrap().finish().unwrap());

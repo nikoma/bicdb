@@ -455,4 +455,55 @@ impl BicDb {
         )?;
         Ok(Some(serde_json::json!({"record":record,"archive":archive})))
     }
+
+    /// Deliberate real native-WAL corruption for the count-boundary negative.
+    /// The actual preparation binds the original DB; output is DATA, no grant.
+    pub(crate) fn test_remove_joint_preparation_archive(
+        &self,
+        receipt: &NativeJointServingPreparation,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        parent.check()?;
+        receipt.native.require_current(self)?;
+        receipt.record.validate()?;
+        let _journal = self.try_native_image_journal()?;
+        let key = preparation_key(receipt.record.range_id);
+        let archive_key =
+            preparation_history_key(receipt.record.range_id, &receipt.record.checksum_sha256);
+        let current: NativeJointServingPreparationRecord = self
+            .read_native_range_image_record(&key)?
+            .ok_or_else(|| invalid("preparation fault original current absent"))?;
+        let archive: NativeJointServingPreparationRecord = self
+            .read_native_range_image_record(&archive_key)?
+            .ok_or_else(|| invalid("preparation fault original archive absent"))?;
+        if current != receipt.record || archive != receipt.record {
+            return Err(invalid("preparation fault changed actual original record"));
+        }
+        let xid = self
+            .in_paged_transaction(|paged, xid| {
+                parent.check()?;
+                paged
+                    .store()
+                    .delete(xid, &native_key(&archive_key))
+                    .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
+                Ok(())
+            })?
+            .ok_or_else(|| invalid("preparation fault actual page store absent"))?;
+        let after: NativeJointServingPreparationRecord = self
+            .read_native_range_image_record(&key)?
+            .ok_or_else(|| invalid("preparation fault unexpectedly removed current"))?;
+        let absent = self
+            .read_native_range_image_record::<NativeJointServingPreparationRecord>(&archive_key)?
+            .is_none();
+        if after != current || !absent {
+            return Err(invalid(
+                "preparation fault exact pointer/archive result differs",
+            ));
+        }
+        parent.check()?;
+        Ok(
+            serde_json::json!({"original_current":current,"removed_archive":archive,
+            "actual_fault_xid":xid,"actual_archive_absent":absent,"grant":false}),
+        )
+    }
 }

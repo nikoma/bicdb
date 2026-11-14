@@ -48,7 +48,7 @@ use crate::distribution_range_handoff::{
     NativeJointDecisionPublicationRound, NativeJointDurableDecision, NativeJointHandoffPlan,
     NativeJointHandoffRuntime, NativeJointNewObservation, NativeJointNewRound,
     NativeJointOldClosedQuorum, NativeJointOldObservation, NativeJointOldRound,
-    NativeJointPreparationPhaseQuorum, NativeJointPreparedServingObservation,
+    NativeJointPreparationPhaseQuorum, NativeJointPreparedServingCandidate,
     NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
     NativeJointPublishedServingQuorum, NativeJointReleaseContinuation,
 };
@@ -1268,16 +1268,15 @@ impl NativeJoinedDataHandoff {
                         detail,
                     );
                 }
-                let observation =
-                    NativeJointPreparedServingObservation::from_actual_service(actual, service)
-                        .map_err(|error| stage_error("serving preparation", error))?;
+                let candidate =
+                    NativeJointPreparedServingCandidate::from_actual_service(actual, service);
                 if let Some(round) = &mut round {
                     round
-                        .record(observation)
+                        .record_candidate(candidate)
                         .map_err(|error| stage_error("serving preparation", error))?;
                 } else {
                     round = Some(
-                        NativeJointPreparedServingRound::begin(observation, &session)
+                        NativeJointPreparedServingRound::begin_candidate(candidate, &session)
                             .map_err(|error| stage_error("serving preparation", error))?,
                     );
                 }

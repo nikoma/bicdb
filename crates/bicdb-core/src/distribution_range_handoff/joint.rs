@@ -69,10 +69,11 @@ mod bridge;
 pub(crate) use bridge::{
     NativeJointActivationAdmission, NativeJointOpenAdmission, NativeJointOpenPhaseQuorum,
     NativeJointOpenPhaseRound, NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound,
-    NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
-    NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
-    NativeJointPublishedServingQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
-    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
+    NativeJointPreparedServingCandidate, NativeJointPreparedServingObservation,
+    NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
+    NativeJointPreparedServingVoteData, NativeJointPublishedServingQuorum,
+    NativeJointReleaseAdmission, NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum,
+    NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
     NativeJointServingPublicationRound,
 };
 

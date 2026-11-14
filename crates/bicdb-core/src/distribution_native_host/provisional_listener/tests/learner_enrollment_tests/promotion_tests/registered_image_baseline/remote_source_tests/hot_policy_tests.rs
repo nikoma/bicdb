@@ -7,11 +7,14 @@ use crate::distribution_data::{
 };
 use crate::distribution_range_handoff::{
     NativeJointDurableDecision, NativeJointNewObservation, NativeJointNewRound,
-    NativeJointPreparedServingObservation, NativeJointPreparedServingRound,
+    NativeJointPreparedServingCandidate, NativeJointPreparedServingRound,
 };
 
+mod prepared_candidate_tests;
+
 pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
-    source_export_retirement_tests::is_case(case)
+    prepared_candidate_tests::is_case(case)
+        || source_export_retirement_tests::is_case(case)
         || catalogue_tests::is_catalogue_control(case)
         || matches!(
             case,
@@ -131,8 +134,8 @@ fn report_preparation_failure(
         "observe_return",
         "prepare_enter",
         "prepare_return",
-        "wrapper_enter",
-        "wrapper_return",
+        "uncounted_candidate_enter",
+        "uncounted_candidate_return",
         "round_enter",
         "round_return",
     ];
@@ -710,19 +713,32 @@ pub(in super::super) fn exercise(
             };
             preparation_step!(6, 7, "prepare_local_joint_serving", prepare()).unwrap()
         };
-        let observation = preparation_step!(
-            8,
-            9,
-            "prepared_observation_wrapper",
-            NativeJointPreparedServingObservation::from_actual_service(actual, service)
-        )
-        .unwrap();
+        if prepared_candidate_tests::is_case(case) {
+            assert!(
+                prepared.is_none(),
+                "negative must reach the first actual count"
+            );
+            prepared_candidate_tests::exercise(
+                case,
+                actual,
+                service,
+                services,
+                &request,
+                process,
+                output,
+                acknowledged,
+            );
+            return;
+        }
+        marks[8] = Some(Instant::now());
+        let candidate = NativeJointPreparedServingCandidate::from_actual_service(actual, service);
+        marks[9] = Some(Instant::now());
         match &mut prepared {
             Some(round) => preparation_step!(
                 10,
                 11,
                 "record_prepared_observation",
-                round.record(observation)
+                round.record_candidate(candidate)
             )
             .unwrap(),
             None => {
@@ -731,7 +747,7 @@ pub(in super::super) fn exercise(
                         10,
                         11,
                         "begin_prepared_round",
-                        NativeJointPreparedServingRound::begin(observation, process)
+                        NativeJointPreparedServingRound::begin_candidate(candidate, process)
                     )
                     .unwrap(),
                 )

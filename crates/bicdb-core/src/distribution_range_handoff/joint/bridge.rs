@@ -17,6 +17,22 @@ pub(crate) use publication::{
     NativeJointServingPublicationRound,
 };
 
+/// An uncounted bundle of genuine actual evidence and an untrusted service
+/// association. Construction performs no validation and grants nothing.
+/// Only a round's complete original record validation may count it.
+pub(crate) struct NativeJointPreparedServingCandidate {
+    actual: ActualServiceNativeJointPreparedEvidence,
+    service: Arc<Mutex<ClusterDataNodeService>>,
+}
+impl NativeJointPreparedServingCandidate {
+    pub(crate) fn from_actual_service(
+        actual: ActualServiceNativeJointPreparedEvidence,
+        service: Arc<Mutex<ClusterDataNodeService>>,
+    ) -> Self {
+        Self { actual, service }
+    }
+}
+
 pub(crate) struct NativeJointPreparedServingObservation {
     actual: ActualServiceNativeJointPreparedEvidence,
     service: Arc<Mutex<ClusterDataNodeService>>,
@@ -66,11 +82,25 @@ impl NativeJointPreparedServingRound {
         first: NativeJointPreparedServingObservation,
         parent: &crate::CancellationToken,
     ) -> Result<Self> {
+        Self::begin_candidate(
+            NativeJointPreparedServingCandidate {
+                actual: first.actual,
+                service: first.service,
+            },
+            parent,
+        )
+    }
+    /// The candidate remains uncounted until record performs the unchanged
+    /// complete actual service/native/MStore and original deadline checks.
+    pub(crate) fn begin_candidate(
+        first: NativeJointPreparedServingCandidate,
+        parent: &crate::CancellationToken,
+    ) -> Result<Self> {
         let cancellation = parent.child_with_deadline(first.actual.committed().deadline());
         cancellation.check()?;
         let mut round = Self {
             caller: parent.child(),
-            data: first.data().clone(),
+            data: first.actual.committed().data().clone(),
             observations: BTreeMap::new(),
             cancellation,
             poisoned: false,
@@ -79,12 +109,23 @@ impl NativeJointPreparedServingRound {
         // counting this actual observation, under its original deadline and
         // publication guard. There is no admission between construction and
         // that check; repeating it here spends the same bounded authority twice.
-        round.record(first)?;
+        round.record_candidate(first)?;
         Ok(round)
     }
     #[cfg(test)]
     pub(crate) fn test_collection_deadline(&self) -> Option<std::time::Instant> {
         self.cancellation.deadline()
+    }
+    /// No checked observation escapes: the private container is passed
+    /// directly to the original full record boundary before insertion.
+    pub(crate) fn record_candidate(
+        &mut self,
+        candidate: NativeJointPreparedServingCandidate,
+    ) -> Result<()> {
+        self.record(NativeJointPreparedServingObservation {
+            actual: candidate.actual,
+            service: candidate.service,
+        })
     }
     pub(crate) fn record(
         &mut self,

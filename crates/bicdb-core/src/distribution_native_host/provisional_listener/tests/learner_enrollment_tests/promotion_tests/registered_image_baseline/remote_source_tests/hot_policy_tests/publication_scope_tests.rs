@@ -120,7 +120,7 @@ pub(super) fn exercise(
         for key in ["foreign_service_error", "other_actual_preparation_error"] {
             assert_eq!(
                 component[key],
-                "cluster error: fresh publication substituted original service/preparation"
+                "cluster error: native joint data handoff: fresh publication substituted original service/preparation"
             );
         }
         for key in ["native_next_xid", "native_next_lsn"] {

@@ -1,0 +1,104 @@
+{
+  "qualifier_source": "6dd0313c7e41a276960c725978927fcfcc7cdd94",
+  "runtime_source": "0c9602c570083b2c5f26a4d98ac6ba2f9a672fb6",
+  "core_tree_equal": "091a94aac3f7f3ab8deb56710b0ee55c5dacdcc6",
+  "workflow_exact_source": "521243e597c2d833be840773acac728a85161969",
+  "ref": "qual/event-first-cause-corrected-0c960",
+  "inputs": {
+    "core_filter": "event_client_"
+  },
+  "expected_count": 37,
+  "expected_filters": [
+    "event_client_",
+    "actual_rpc_evidence_"
+  ],
+  "thread_count": 1,
+  "version": "1.0.505-beta unchanged/unmerged",
+  "static_checks": [
+    "YAMLparse",
+    "22bashblocks",
+    "37fixedexpectednames",
+    "version29unchanged",
+    "diffcheck",
+    "exactCoretree",
+    "exactworkflow+guardbytes",
+    "remotequalrefverified",
+    "noexistingqualrun"
+  ],
+  "changed_paths_only": [
+    ".github/workflows/tests.yml",
+    "scripts/qualification/guard-build-memory.py"
+  ],
+  "guard_sha256": "1fc9b018175b95de49ad59738f37209e76427f05a890aeae24d55bdcb59736c7",
+  "dispatch_count": 1,
+  "created_at_utc": "2026-11-14T01:49:07.151641+00:00",
+  "post_attempted": true,
+  "old_run": 43542004108,
+  "old_compile_failure": "workspace1322844567352E0308;Core132284483732stilllive;donotcancel;0executedruntime",
+  "no_main_or_foreign_mutation": true,
+  "new_fix_reason": "Confirmed test type correction, not blind rerun",
+  "status": "in_progress",
+  "post_attempted_at_utc": "2026-11-14T01:49:22.830304+00:00",
+  "post_returncode": 0,
+  "post_returned_at_utc": "2026-11-14T01:49:24.054889+00:00",
+  "run_id": 43542846413,
+  "run_url": "https://github.com/nikoma/bicdb/actions/runs/43542846413",
+  "verified_source": "6dd0313c7e41a276960c725978927fcfcc7cdd94",
+  "last_verified_at_utc": "2026-11-14T01:49:48.034821+00:00",
+  "jobs": [
+    {
+      "id": 132287134415,
+      "name": "Validate focused test selectors",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 132287134652,
+      "name": "Licensing invariants",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 132287134672,
+      "name": "Formatting",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 132287134700,
+      "name": "Public repository has no private dependencies",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 132287134837,
+      "name": "Community-only workspace compiles, tests included",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 132287156501,
+      "name": "Focused Core library (event_client_)",
+      "status": "in_progress",
+      "conclusion": null
+    },
+    {
+      "id": 132287158009,
+      "name": "Focused CLI integration (${{ inputs.cli_target }})",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 132287158032,
+      "name": "Focused PGwire library (${{ inputs.pgwire_filter }})",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 132287158237,
+      "name": "matrix.suite.name",
+      "status": "completed",
+      "conclusion": "skipped"
+    }
+  ]
+}

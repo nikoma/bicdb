@@ -1,0 +1,340 @@
+{
+  "source": "6dd0313c7e41a276960c725978927fcfcc7cdd94",
+  "run": 43542846413,
+  "job": {
+    "id": 132287156501,
+    "run_id": 43542846413,
+    "workflow_name": "tests",
+    "head_branch": "qual/event-first-cause-corrected-0c960",
+    "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43542846413",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOUimcAs8AAAAezO3RFQ",
+    "head_sha": "6dd0313c7e41a276960c725978927fcfcc7cdd94",
+    "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132287156501",
+    "html_url": "https://github.com/nikoma/bicdb/actions/runs/43542846413/job/132287156501",
+    "status": "completed",
+    "conclusion": "success",
+    "created_at": "2026-11-14T01:49:29Z",
+    "started_at": "2026-11-14T01:49:31Z",
+    "completed_at": "2026-11-14T02:01:45Z",
+    "name": "Focused Core library (event_client_)",
+    "steps": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 1,
+        "started_at": "2026-11-14T01:49:32Z",
+        "completed_at": "2026-11-14T01:49:33Z"
+      },
+      {
+        "name": "Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 2,
+        "started_at": "2026-11-14T01:49:33Z",
+        "completed_at": "2026-11-14T01:49:38Z"
+      },
+      {
+        "name": "Run dtolnay/rust-toolchain@stable",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 3,
+        "started_at": "2026-11-14T01:49:38Z",
+        "completed_at": "2026-11-14T01:49:49Z"
+      },
+      {
+        "name": "Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 4,
+        "started_at": "2026-11-14T01:49:49Z",
+        "completed_at": "2026-11-14T01:49:59Z"
+      },
+      {
+        "name": "Build projection chaos helper",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 5,
+        "started_at": "2026-11-14T01:49:59Z",
+        "completed_at": "2026-11-14T01:59:31Z"
+      },
+      {
+        "name": "Record source and list selected Core library tests",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 6,
+        "started_at": "2026-11-14T01:59:31Z",
+        "completed_at": "2026-11-14T02:01:13Z"
+      },
+      {
+        "name": "Execute client and RPC-evidence first-cause cases serially",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 7,
+        "started_at": "2026-11-14T02:01:13Z",
+        "completed_at": "2026-11-14T02:01:26Z"
+      },
+      {
+        "name": "Retain focused source, log and opted-in fault-state evidence",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 8,
+        "started_at": "2026-11-14T02:01:26Z",
+        "completed_at": "2026-11-14T02:01:27Z"
+      },
+      {
+        "name": "Post Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 15,
+        "started_at": "2026-11-14T02:01:27Z",
+        "completed_at": "2026-11-14T02:01:43Z"
+      },
+      {
+        "name": "Post Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 16,
+        "started_at": "2026-11-14T02:01:43Z",
+        "completed_at": "2026-11-14T02:01:43Z"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 17,
+        "started_at": "2026-11-14T02:01:43Z",
+        "completed_at": "2026-11-14T02:01:43Z"
+      }
+    ],
+    "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132287156501",
+    "labels": [
+      "ubuntu-latest"
+    ],
+    "runner_id": 1000024977,
+    "runner_name": "GitHub Actions 1000024977",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  },
+  "raw_bytes": 1747282,
+  "raw_sha256": "b4722caf297116a6bc1ce5414ec9c38f0b436b18d0f61439e1dcb2f1dbc7d001",
+  "gzip_sha256": "7b173149152c0bf374217b13d1968e585fe303316f200d02f23728eacb44cc7c",
+  "summaries": [
+    "2026-11-14T02:01:26.2346723Z test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 1075 filtered out; finished in 12.48s"
+  ],
+  "failure_lines": [
+    {
+      "line": 17354,
+      "text": "2026-11-14T02:01:26.2298949Z thread 'distribution_transport::evidence::tests::first_cause_tests::actual_rpc_evidence_first_cause_unwind_publishes_cause_before_future_fence' (9369) panicked at crates/bicdb-core/src/distribution_transport/evidence/tests/first_cause_tests.rs:205:9:"
+    }
+  ],
+  "failure_contexts": [
+    {
+      "line": 17354,
+      "remaining": 0,
+      "lines": [
+        "2026-11-14T02:01:26.2297756Z ---- distribution_transport::evidence::tests::first_cause_tests::actual_rpc_evidence_first_cause_unwind_publishes_cause_before_future_fence stdout ----",
+        "2026-11-14T02:01:26.2298251Z",
+        "2026-11-14T02:01:26.2298949Z thread 'distribution_transport::evidence::tests::first_cause_tests::actual_rpc_evidence_first_cause_unwind_publishes_cause_before_future_fence' (9369) panicked at crates/bicdb-core/src/distribution_transport/evidence/tests/first_cause_tests.rs:205:9:",
+        "2026-11-14T02:01:26.2299872Z unit observer callback unwinds after actual journal persistence",
+        "2026-11-14T02:01:26.2300299Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "2026-11-14T02:01:26.2301176Z actual_rpc_evidence_unwind_first_cause {\"caught_unwind\":true,\"future_fence\":\"Err(RpcEvidenceFailure { may_have_dispatched: false, detail: \\\"evidence sink callback unwound; observed dispatch is fenced\\\" })\",\"next_request_id\":1}",
+        "2026-11-14T02:01:26.2301848Z",
+        "2026-11-14T02:01:26.2302286Z ---- distribution_transport::evidence::tests::first_cause_tests::actual_rpc_evidence_first_cause_wins_over_original_cancellation_without_admitting_success stdout ----",
+        "2026-11-14T02:01:26.2304848Z actual_rpc_evidence_first_cause_priority {\"future_fence\":\"Err(RpcEvidenceFailure { may_have_dispatched: false, detail: \\\"actual invoked callback failure before dispatch\\\" })\",\"next_request_id\":1,\"parent_canceled\":true,\"phase\":\"invoked\",\"records\":[{\"address\":null,\"attempt_id\":\"01a1d7c9-c19f-71b3-8ffe-ef0859dc63c0\",\"bytes_written\":0,\"caller\":\"n0\",\"destination\":\"n0\",\"elapsed_ns\":604,\"error_chain\":[],\"journal_sequence\":1,\"may_have_dispatched\":false,\"operation\":\"ping\",\"phase\":\"invoked\",\"phase_unix_ns\":1794621686175219376,\"raw_frame\":null,\"request_id\":null,\"topology_generation\":null}],\"result\":\"Err(RpcEvidenceFailure { may_have_dispatched: false, detail: \\\"actual invoked callback failure before dispatch\\\" })\"}",
+        "2026-11-14T02:01:26.2312403Z actual_rpc_evidence_first_cause_priority {\"future_fence\":\"Err(RpcEvidenceFailure { may_have_dispatched: true, detail: \\\"actual response callback failure before original cancellation override\\\" })\",\"next_request_id\":2,\"parent_canceled\":true,\"phase\":\"response_frame_before_decode\",\"records\":[{\"address\":null,\"attempt_id\":\"01a1d7c9-c1ab-7d40-b21f-d209dec4e957\",\"bytes_written\":0,\"caller\":\"n0\",\"destination\":\"n0\",\"elapsed_ns\":561,\"error_chain\":[],\"journal_sequence\":1,\"may_have_dispatched\":false,\"operation\":\"ping\",\"phase\":\"invoked\",\"phase_unix_ns\":1794621686187774775,\"raw_frame\":null,\"request_id\":null,\"topology_generation\":null},{\"address\":\"127.0.0.1:38191\",\"attempt_id\":\"01a1d7c9-c1ab-7d40-b21f-d209dec4e957\",\"bytes_written\":0,\"caller\":\"n0\",\"destination\":\"n0\",\"elapsed_ns\":596623,\"error_chain\":[],\"journal_sequence\":2,\"may_have_dispatched\":false,\"operation\":\"ping\",\"phase\":\"request_frame_before_dispatch\",\"phase_unix_ns\":1794621686188370755,\"raw_frame\":[0,0,0,139,123,34,112,114,111,116,111,99,111,108,95,118,101,114,115,105,111,110,34,58,51,48,44,34,99,108,117,115,116,101,114,95,105,100,34,58,34,97,99,116,117,97,108,45,114,112,99,45,101,118,105,100,101,110,99,101,34,44,34,99,97,108,108,101,114,95,110,111,100,101,95,105,100,34,58,34,110,48,34,44,34,100,101,115,116,105,110,97,116,105,111,110,95,110,111,100,101,95,105,100,34,58,34,110,48,34,44,34,114,101,113,117,101,115,116,95,105,100,34,58,49,44,34,114,101,113,117,101,115,116,34,58,34,80,105,110,103,34,125],\"request_id\":1,\"topology_generation\":1},{\"address\":\"127.0.0.1:38191\",\"attempt_id\":\"01a1d7c9-c1ab-7d40-b21f-d209dec4e957\",\"bytes_written\":143,\"caller\":\"n0\",\"destination\":\"n0\",\"elapsed_ns\":11071483,\"error_chain\":[],\"journal_sequence\":3,\"may_have_dispatched\":true,\"operation\":\"ping\",\"phase\":\"response_frame_before_decode\",\"phase_unix_ns\":1794621686198845593,\"raw_frame\":[0,0,0,120,123,34,112,114,111,116,111,99,111,108,95,118,101,114,115,105,111,110,34,58,51,48,44,34,99,108,117,115,116,101,114,95,105,100,34,58,34,97,99,116,117,97,108,45,114,112,99,45,101,118,105,100,101,110,99,101,34,44,34,115,111,117,114,99,101,95,110,111,100,101,95,105,100,34,58,34,110,48,34,44,34,114,101,113,117,101,115,116,95,105,100,34,58,49,44,34,114,101,115,112,111,110,115,101,34,58,123,34,79,107,34,58,34,80,111,110,103,34,125,125],\"request_id\":1,\"topology_generation\":1}],\"result\":\"Err(RpcEvidenceFailure { may_have_dispatched: true, detail: \\\"actual response callback failure before original cancellation override\\\" })\"}",
+        "2026-11-14T02:01:26.2318426Z",
+        "2026-11-14T02:01:26.2318430Z",
+        "2026-11-14T02:01:26.2318523Z successes:"
+      ]
+    }
+  ],
+  "observed_test_start_lines": [
+    {
+      "line": 17285,
+      "test": "distribution_events::client::error_retention_tests::event_client_no_operation_keeps_discovery_error",
+      "suffix": "ok"
+    },
+    {
+      "line": 17286,
+      "test": "distribution_events::client::error_retention_tests::event_client_unknown_write_survives_later_refusal_and_refresh_or_deadline",
+      "suffix": "ok"
+    },
+    {
+      "line": 17287,
+      "test": "distribution_events::client::inflight_tests::event_client_out_of_order_worker_unknown_survives_later_refusal_and_cleanup",
+      "suffix": "ok"
+    },
+    {
+      "line": 17288,
+      "test": "distribution_events::client::inflight_tests::event_client_typed_same_operation_response_keeps_all_worker_outcomes_until_cleanup",
+      "suffix": "ok"
+    },
+    {
+      "line": 17289,
+      "test": "distribution_transport::event_client_retry_tests::a_known_follower_can_supply_committed_route_discovery",
+      "suffix": "ok"
+    },
+    {
+      "line": 17290,
+      "test": "distribution_transport::event_client_retry_tests::a_leader_still_committing_past_the_attempt_slice_answers_the_same_request",
+      "suffix": "ok"
+    },
+    {
+      "line": 17291,
+      "test": "distribution_transport::event_client_retry_tests::an_exhausted_request_budget_is_not_reported_as_unreachable_members",
+      "suffix": "ok"
+    },
+    {
+      "line": 17292,
+      "test": "distribution_transport::event_client_retry_tests::caller_query_budget_tests::event_client_caller_query_budget_expired_refuses_before_tcp_dispatch",
+      "suffix": "ok"
+    },
+    {
+      "line": 17293,
+      "test": "distribution_transport::event_client_retry_tests::caller_query_budget_tests::event_client_caller_query_budget_live_scope_accepts_actual_mock_ack",
+      "suffix": "ok"
+    },
+    {
+      "line": 17294,
+      "test": "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_append_preserves_actual_error_when_route_discovery_fails",
+      "suffix": "ok"
+    },
+    {
+      "line": 17295,
+      "test": "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_append_preserves_primary_when_conflicting_discovery_stops_retry",
+      "suffix": "ok"
+    },
+    {
+      "line": 17296,
+      "test": "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_get_preserves_actual_error_when_route_discovery_exhausts_deadline",
+      "suffix": "ok"
+    },
+    {
+      "line": 17297,
+      "test": "distribution_transport::event_client_retry_tests::error_preservation_tests::event_client_refresh_without_operation_keeps_no_member_error",
+      "suffix": "ok"
+    },
+    {
+      "line": 17298,
+      "test": "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_different_sink_nested_request_is_allowed_without_global_callback_lock",
+      "suffix": "ok"
+    },
+    {
+      "line": 17299,
+      "test": "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_nested_caller_deadline_expires_during_actual_mock_reply",
+      "suffix": "ok"
+    },
+    {
+      "line": 17300,
+      "test": "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_same_sink_reentry_after_response_preserves_parent_dispatch_uncertainty",
+      "suffix": "ok"
+    },
+    {
+      "line": 17301,
+      "test": "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_same_sink_reentry_before_dispatch_refuses_child_and_parent_without_io",
+      "suffix": "ok"
+    },
+    {
+      "line": 17302,
+      "test": "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_sibling_cleanup_evidence_failure_cannot_hide_behind_actual_mock_ack",
+      "suffix": "ok"
+    },
+    {
+      "line": 17303,
+      "test": "distribution_transport::event_client_retry_tests::inflight_budget_tests::event_client_worker_memory_envelope_updates_original_caller_peak_and_refuses_io",
+      "suffix": "ok"
+    },
+    {
+      "line": 17304,
+      "test": "distribution_transport::event_client_retry_tests::legacy_metadata_controllers_remain_usable_for_discovery",
+      "suffix": "ok"
+    },
+    {
+      "line": 17305,
+      "test": "distribution_transport::event_client_retry_tests::permanently_silent_old_leader_refreshes_from_another_member",
+      "suffix": "ok"
+    },
+    {
+      "line": 17306,
+      "test": "distribution_transport::event_client_retry_tests::silent_discovery_member_cannot_exhaust_the_retry_budget",
+      "suffix": "ok"
+    },
+    {
+      "line": 17307,
+      "test": "distribution_transport::event_client_retry_tests::silent_event_route_leaves_budget_for_discovery_and_retry",
+      "suffix": "ok"
+    },
+    {
+      "line": 17308,
+      "test": "distribution_transport::event_client_retry_tests::transient_topology_refresh_does_not_abort_an_event_request",
+      "suffix": "ok"
+    },
+    {
+      "line": 17309,
+      "test": "distribution_transport::evidence::tests::actual_rpc_evidence_complete_record_quota_fences_without_truncation",
+      "suffix": "ok"
+    },
+    {
+      "line": 17310,
+      "test": "distribution_transport::evidence::tests::actual_rpc_evidence_large_complete_frame_byte_quota_refuses_before_dispatch",
+      "suffix": "ok"
+    },
+    {
+      "line": 17311,
+      "test": "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_canceled_before_dispatch_records_original_cancellation",
+      "suffix": "ok"
+    },
+    {
+      "line": 17312,
+      "test": "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_exact_frames_and_discovery_errors_survive_fallback",
+      "suffix": "ok"
+    },
+    {
+      "line": 17313,
+      "test": "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_parallel_requests_share_journal_without_false_reentrancy",
+      "suffix": "ok"
+    },
+    {
+      "line": 17314,
+      "test": "distribution_transport::evidence::tests::actual_rpc_evidence_mtls_response_retained_before_original_cancellation_override",
+      "suffix": "ok"
+    },
+    {
+      "line": 17315,
+      "test": "distribution_transport::evidence::tests::actual_rpc_evidence_post_response_sync_failure_returns_unknown_and_never_rearms",
+      "suffix": "ok"
+    },
+    {
+      "line": 17316,
+      "test": "distribution_transport::evidence::tests::actual_rpc_evidence_pre_dispatch_sync_failure_fences_without_application_mutation",
+      "suffix": "ok"
+    },
+    {
+      "line": 17317,
+      "test": "distribution_transport::evidence::tests::actual_rpc_evidence_same_thread_reentry_refuses_without_dispatch",
+      "suffix": "ok"
+    },
+    {
+      "line": 17318,
+      "test": "distribution_transport::evidence::tests::first_cause_tests::actual_rpc_evidence_first_cause_survives_concurrent_fence_before_primary_worker_report",
+      "suffix": "ok"
+    },
+    {
+      "line": 17319,
+      "test": "distribution_transport::evidence::tests::first_cause_tests::actual_rpc_evidence_first_cause_unwind_publishes_cause_before_future_fence",
+      "suffix": "ok"
+    },
+    {
+      "line": 17320,
+      "test": "distribution_transport::evidence::tests::first_cause_tests::actual_rpc_evidence_first_cause_wins_over_original_cancellation_without_admitting_success",
+      "suffix": "ok"
+    },
+    {
+      "line": 17321,
+      "test": "query_budget::worker_context_tests::event_client_query_budget_context_keeps_tight_nested_deadline_and_shared_peak",
+      "suffix": "ok"
+    }
+  ]
+}

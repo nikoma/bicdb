@@ -16,6 +16,7 @@ pub(in super::super) struct NativeJoinedRemoteInstallAttempt {
     pub(super) catalogue:
         Option<crate::distribution_range_consensus::NativeJoinedRemoteCataloguePublication>,
     pub(super) materialized: Option<Arc<super::materialized::NativeJoinedRemoteMaterializedOwner>>,
+    pub(super) joint: Option<Arc<super::joint_owner::NativeJoinedRemoteJointOwner>>,
 }
 impl NativeJoinedRangeReceiveOrigin {
     pub(super) fn require_host(&self, host: &NativeJoinedDataHost) -> Result<()> {
@@ -78,7 +79,13 @@ impl NativeMetadataControlHost {
                     image: None,
                     catalogue: None,
                     materialized: None,
+                    joint: None,
                 });
+        if attempt.joint.is_some() {
+            return Err(invalid(
+                "Joined original A belongs to its retained joint continuation",
+            ));
+        }
         if attempt.lease.is_none() {
             let lease =
                 runtime.transfer_joined_remote_install(preflight, request, frame, parent)?;

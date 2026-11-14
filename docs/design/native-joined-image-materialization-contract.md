@@ -428,3 +428,26 @@ failure/retry, and separately stall genuine selected disk I/O. The earlier
 after-export transport hold cannot substitute for that disk or second-movement
 gate. Root's forthcoming joint/Serving consumer cannot use this source note or
 any historical manifest/certificate DTO as authority.
+
+## Same-attempt joint custody transfer
+
+The host's `take_joined_remote_joint_target` accepts its exact retained
+`NativeJoinedRemoteMaterializedOwner` plus an independently fresh joint plan,
+Role, OWN and actual protected metadata-store point. It does not accept the
+snapshot request as renewed joint authority. The complete plan, target birth,
+original writer State, installed physical base and selected catalogue floor are
+checked before moving the actual `JoinedRemoteImageInstallFreeze` view.
+
+This is a custody transfer, not a NEW vote or decision. The original runtime
+continues retaining the same A. The host retains the new joint owner immediately
+before any fallible postcheck. If the final current-A/version/deadline check
+fails, the explicit retry uses that exact owner and lease; it cannot create a
+new A or return to snapshot preparation. Allocations and physical checks run
+outside the final short publication guards. Metadata-store revalidation runs
+outside engine guards.
+
+This source step does not yet provide the Joined NEW observation, native
+DECISION publisher, Open/release adapter or final selected Serving policy. It
+cannot produce APP or Strong permission. The custody path and its retry behavior
+remain uncompiled and unexecuted until the combined required CI and actual
+fixture exercise them; formatting checks do not qualify the path.

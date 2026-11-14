@@ -16,8 +16,8 @@ use crate::distribution_native_read::NativeStrongEventDispatcher;
 use crate::distribution_range_consensus::RangeWriteCoordinator;
 mod receive;
 pub(crate) use receive::NativeJoinedRemoteInstallPreflight;
-pub(crate) use receive::NativeJoinedRemoteMaterializedOwner;
 pub(crate) use receive::{NativeJoinedRemoteImagePoint, NativeJoinedRemoteTransactionRequest};
+pub(crate) use receive::{NativeJoinedRemoteJointOwner, NativeJoinedRemoteMaterializedOwner};
 mod registered;
 pub(crate) use receive::{
     NativeJoinedRangeReceiveOrigin, NativeJoinedRangeReceivePreflight,

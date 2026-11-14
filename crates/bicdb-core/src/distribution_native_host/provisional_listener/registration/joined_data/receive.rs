@@ -4,9 +4,11 @@
 use super::*;
 mod attempt;
 mod catalogue;
+mod joint_owner;
 mod materialized;
 pub(super) use attempt::NativeJoinedRemoteInstallAttempt;
 pub(crate) use attempt::{NativeJoinedRemoteImagePoint, NativeJoinedRemoteTransactionRequest};
+pub(crate) use joint_owner::NativeJoinedRemoteJointOwner;
 pub(crate) use materialized::NativeJoinedRemoteMaterializedOwner;
 mod install;
 mod preflight;

@@ -18,20 +18,22 @@ pub(crate) struct NativeJoinedRemoteRotationPoint<'a> {
     _journal: NativeImageJournalGuard<'a>,
 }
 impl NativeJoinedRemoteRotationPoint<'_> {
-    /// Only atomics/deadlines/private current gate identity. Actual native,
-    /// policy/schema/canonical/hash checks are tied to the still-held physical
-    /// guards. No MStore lock, filesystem/native read, serialization or callback.
-    pub(crate) fn require_current_memory(
+    /// The real gate latch was acquired without waiting BEFORE final liveness
+    /// checks. Identity validation uses that exact borrow without relocking it.
+    pub(crate) fn require_owner_publication_memory(
         &self,
-        actual_n: &FrozenRangeMutationPermit,
+        publication: &crate::distribution_range_mutation::FrozenRangeOwnerPublication<'_>,
     ) -> Result<()> {
+        self.frozen.require_in_owner_publication(publication)?;
+        self.require_authority_memory()
+    }
+    fn require_authority_memory(&self) -> Result<()> {
         self.request.require_request_memory()?;
         self.frame.require_request_live()?;
         self.request
             .member()
             .publication_version()
             .require_current_memory()?;
-        self.frozen.require_same_current(actual_n)?;
         if !std::ptr::eq(self.preflight.source().as_ref(), self.frame.source())
             || !self.registration.is_active()
             || self.registration.generation() != self.writer.record.generation

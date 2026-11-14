@@ -39,8 +39,8 @@ the original fresh scans, even after the original handle was dropped.
 
 This is an explicit behavior change to the hidden, unstable raw-handle API.
 It is source-only until peer review and execution, with no build authorization
-or performance claim. Normal application code in this repository does not call
-the raw getter; its eight current references are the definition and tests.
+or performance claim. At source505, normal application code in this repository does not call
+the raw getter; its eight references are the definition and tests.
 
 Counterexamples required before any production claim:
 

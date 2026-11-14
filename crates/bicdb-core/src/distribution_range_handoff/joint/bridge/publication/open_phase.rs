@@ -125,7 +125,7 @@ impl NativeJointOpenPhaseRound {
                 self.original.data().old_range().id,
                 metadata_point,
             )?;
-            let writer = old.actual.require_current_under_open_phase(
+            let writer = old.require_open_phase_current(
                 &service,
                 &committed,
                 self.original.receipts[node].clone(),
@@ -209,7 +209,7 @@ impl NativeJointOpenPhaseQuorum {
             .members
             .get(node)
             .ok_or_else(|| invalid("fresh open omitted participant"))?;
-        let writer = original.actual.require_current_under_open_phase(
+        let writer = original.require_open_phase_current(
             service,
             &member.committed,
             self.original.receipts[node].clone(),
@@ -236,7 +236,7 @@ impl NativeJointOpenPhaseQuorum {
             .members
             .get(node)
             .ok_or_else(|| invalid("fresh open local scope missing member"))?;
-        let writer = original.actual.require_local_open_scope(
+        let writer = original.require_local_open_scope(
             scope,
             store,
             &member.committed,

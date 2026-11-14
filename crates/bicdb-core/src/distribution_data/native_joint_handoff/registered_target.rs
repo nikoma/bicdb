@@ -490,6 +490,7 @@ impl ClusterDataNodeService {
         lease: NativeJointServingLease,
         parent: &CancellationToken,
     ) -> Result<super::ActualServiceNativeJointPreparedEvidence> {
+        let preparation_origin = super::bridge::preparation_origin::PreparingOrigin::begin(parent);
         parent.check()?;
         let NativeJointServingLease::Registered { owner, .. } = &lease else {
             return Err(data_error(
@@ -529,7 +530,9 @@ impl ClusterDataNodeService {
             .try_source_capture_read_pin(committed.data().old_range().id, lease.try_frozen()?)?;
         let identity = domain.phase_owner();
         drop(database);
+        let origin = preparation_origin.seal(&prepared, &committed);
         let evidence = super::bridge::ActualServiceNativeJointPreparedEvidence {
+            origin,
             committed,
             prepared,
             catalogue,

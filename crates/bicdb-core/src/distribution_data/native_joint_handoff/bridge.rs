@@ -8,8 +8,10 @@ use crate::distribution_range_image_install::{
 };
 
 mod image_release;
+pub(super) mod preparation_origin;
 mod release;
 pub(crate) use image_release::NativeJointImageReleaseOwner;
+use preparation_origin::{CompletedPreparationOrigin, PreparedHistory, PreparingOrigin};
 pub(crate) use release::{ActualServiceNativeJointReleaseEvidence, NativeJointReleaseOwnerView};
 
 /// Keep the actual owner alive, including an installer's nonextractable
@@ -65,6 +67,7 @@ impl NativeJointServingLease {
     }
 }
 pub(crate) struct ActualServiceNativeJointPreparedEvidence {
+    pub(super) origin: CompletedPreparationOrigin,
     pub(super) committed: CommittedNativeJointDecisionObservation,
     pub(super) prepared: crate::db::NativeJointServingPreparation,
     pub(super) catalogue: NativeJointBridgeCatalogue,
@@ -76,6 +79,18 @@ pub(crate) struct ActualServiceNativeJointPreparedEvidence {
     pub(super) pin: parking_lot::Mutex<Option<SourceCaptureReadPin>>,
 }
 impl ActualServiceNativeJointPreparedEvidence {
+    pub(crate) fn require_original_preparation_session(&self) -> Result<()> {
+        self.origin.require_session()
+    }
+    pub(crate) fn bound_preparation_request(
+        &self,
+        parent: &CancellationToken,
+    ) -> CancellationToken {
+        self.origin.bound_request(parent)
+    }
+    pub(crate) fn preparation_memory_lifetime(&self) -> crate::cancellation::CancellationLifetime {
+        self.origin.memory_lifetime()
+    }
     pub(crate) fn require_original_writer_lifetime(&self) -> Result<()> {
         self.writer_domain.require_lifetime(
             self.catalogue.database_root(),
@@ -182,6 +197,22 @@ impl ActualServiceNativeJointPreparedEvidence {
         service: &ClusterDataNodeService,
         fresh: &CommittedNativeJointDecisionObservation,
     ) -> Result<crate::db::NativeJointPhaseOwner> {
+        self.require_current_under_phase_history(service, fresh, PreparedHistory::OriginalRequest)
+    }
+    pub(crate) fn require_current_under_preparation_custody(
+        &self,
+        service: &ClusterDataNodeService,
+        fresh: &CommittedNativeJointDecisionObservation,
+        custody: &crate::distribution_range_handoff::NativeJointPreparationCustody,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
+        self.require_current_under_phase_history(service, fresh, PreparedHistory::Custody(custody))
+    }
+    fn require_current_under_phase_history(
+        &self,
+        service: &ClusterDataNodeService,
+        fresh: &CommittedNativeJointDecisionObservation,
+        history: PreparedHistory<'_>,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
         self.writer_domain.require_current(
@@ -190,7 +221,7 @@ impl ActualServiceNativeJointPreparedEvidence {
             fresh.data().activation_range(),
         )?;
         self.require_original_phase_owner(&database, &service.range_writes)?;
-        self.committed.require_durable_fact_current(&database)?;
+        history.require_current(self, &database)?;
         fresh.require_current(&database)?;
         let old = self.committed.metadata_anchor();
         let current = fresh.metadata_anchor();
@@ -238,6 +269,34 @@ impl ActualServiceNativeJointPreparedEvidence {
         fresh: &CommittedNativeJointDecisionObservation,
         bridge: Arc<crate::db::NativeJointServingBridgeReceipt>,
     ) -> Result<crate::db::NativeJointPhaseOwner> {
+        self.require_current_under_open_history(
+            service,
+            fresh,
+            bridge,
+            PreparedHistory::OriginalRequest,
+        )
+    }
+    pub(crate) fn require_current_under_open_preparation_custody(
+        &self,
+        service: &ClusterDataNodeService,
+        fresh: &CommittedNativeJointDecisionObservation,
+        bridge: Arc<crate::db::NativeJointServingBridgeReceipt>,
+        custody: &crate::distribution_range_handoff::NativeJointPreparationCustody,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
+        self.require_current_under_open_history(
+            service,
+            fresh,
+            bridge,
+            PreparedHistory::Custody(custody),
+        )
+    }
+    fn require_current_under_open_history(
+        &self,
+        service: &ClusterDataNodeService,
+        fresh: &CommittedNativeJointDecisionObservation,
+        bridge: Arc<crate::db::NativeJointServingBridgeReceipt>,
+        history: PreparedHistory<'_>,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
         #[cfg(test)]
         let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::from_deadline(
             "open-actual-service-current",
@@ -265,8 +324,13 @@ impl ActualServiceNativeJointPreparedEvidence {
             native_trace.complete();
             drop(native_trace);
         }
-        let writer =
-            self.require_local_open_scope(&scope, &service.range_writes, fresh, bridge.clone())?;
+        let writer = self.require_local_open_scope_history(
+            &scope,
+            &service.range_writes,
+            fresh,
+            bridge.clone(),
+            history,
+        )?;
         #[cfg(test)]
         trace.complete();
         Ok(writer)
@@ -280,9 +344,40 @@ impl ActualServiceNativeJointPreparedEvidence {
         fresh: &CommittedNativeJointDecisionObservation,
         bridge: Arc<crate::db::NativeJointServingBridgeReceipt>,
     ) -> Result<crate::db::NativeJointPhaseOwner> {
+        self.require_local_open_scope_history(
+            scope,
+            store,
+            fresh,
+            bridge,
+            PreparedHistory::OriginalRequest,
+        )
+    }
+    pub(crate) fn require_local_open_scope_with_preparation_custody(
+        &self,
+        scope: &crate::db::NativeJointBridgeReadScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        fresh: &CommittedNativeJointDecisionObservation,
+        bridge: Arc<crate::db::NativeJointServingBridgeReceipt>,
+        custody: &crate::distribution_range_handoff::NativeJointPreparationCustody,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
+        self.require_local_open_scope_history(
+            scope,
+            store,
+            fresh,
+            bridge,
+            PreparedHistory::Custody(custody),
+        )
+    }
+    fn require_local_open_scope_history(
+        &self,
+        scope: &crate::db::NativeJointBridgeReadScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        fresh: &CommittedNativeJointDecisionObservation,
+        bridge: Arc<crate::db::NativeJointServingBridgeReceipt>,
+        history: PreparedHistory<'_>,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
         self.require_original_phase_owner(scope.database(), store)?;
-        self.committed
-            .require_historical_audit_with_native_read_scope(scope)?;
+        history.require_open_scope(self, scope)?;
         fresh.require_current_with_native_read_scope(scope)?;
         let old = self.committed.metadata_anchor();
         let current = fresh.metadata_anchor();
@@ -349,9 +444,36 @@ impl ActualServiceNativeJointPreparedEvidence {
         store: &crate::distribution_range_consensus::RangeWriteStore,
         fresh: &CommittedNativeJointDecisionObservation,
     ) -> Result<crate::db::NativeJointPhaseOwner> {
+        self.require_local_publication_scope_history(
+            scope,
+            store,
+            fresh,
+            PreparedHistory::OriginalRequest,
+        )
+    }
+    pub(crate) fn require_local_publication_scope_with_preparation_custody(
+        &self,
+        scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        fresh: &CommittedNativeJointDecisionObservation,
+        custody: &crate::distribution_range_handoff::NativeJointPreparationCustody,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
+        self.require_local_publication_scope_history(
+            scope,
+            store,
+            fresh,
+            PreparedHistory::Custody(custody),
+        )
+    }
+    fn require_local_publication_scope_history(
+        &self,
+        scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        fresh: &CommittedNativeJointDecisionObservation,
+        history: PreparedHistory<'_>,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
         self.require_original_phase_owner(scope.database(), store)?;
-        self.committed
-            .require_historical_audit_with_publication_scope(scope)?;
+        history.require_publication_scope(self, scope)?;
         fresh.require_current_with_publication_scope(scope)?;
         scope.require_owned_preparation(
             &self.prepared,
@@ -395,6 +517,22 @@ impl ActualServiceNativeJointPreparedEvidence {
             .ok_or_else(|| data_error("fresh joint phase pin busy"))?
             .take();
         self.require_current_under_fresh_phase(service, fresh)?;
+        Ok(())
+    }
+    pub(crate) fn release_read_pin_under_preparation_custody(
+        &self,
+        service: &ClusterDataNodeService,
+        fresh: &CommittedNativeJointDecisionObservation,
+        custody: &crate::distribution_range_handoff::NativeJointPreparationCustody,
+    ) -> Result<()> {
+        self.require_current_under_preparation_custody(service, fresh, custody)?;
+        let dropped = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| data_error("custody phase pin busy"))?
+            .take();
+        drop(dropped);
+        self.require_current_under_preparation_custody(service, fresh, custody)?;
         Ok(())
     }
     /// This Option is monotone: construction installs Some exactly once;
@@ -701,6 +839,7 @@ impl ClusterDataNodeService {
         lease: NativeJointServingLease,
         parent: &CancellationToken,
     ) -> Result<ActualServiceNativeJointPreparedEvidence> {
+        let preparation_origin = PreparingOrigin::begin(parent);
         parent.check()?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
@@ -745,7 +884,9 @@ impl ClusterDataNodeService {
             .range_mutation_gate()
             .try_source_capture_read_pin(committed.data().old_range().id, lease.frozen())?;
         drop(database);
+        let origin = preparation_origin.seal(&prepared, &committed);
         let evidence = ActualServiceNativeJointPreparedEvidence {
+            origin,
             committed,
             prepared,
             catalogue,
@@ -896,6 +1037,7 @@ impl ClusterDataNodeService {
         lease: NativeJointServingLease,
         parent: &CancellationToken,
     ) -> Result<ActualServiceNativeJointPreparedEvidence> {
+        let preparation_origin = PreparingOrigin::begin(parent);
         parent.check()?;
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
@@ -942,7 +1084,9 @@ impl ClusterDataNodeService {
             .range_mutation_gate()
             .try_source_capture_read_pin(committed.data().old_range().id, lease.try_frozen()?)?;
         drop(database);
+        let origin = preparation_origin.seal(&prepared, &committed);
         let evidence = ActualServiceNativeJointPreparedEvidence {
+            origin,
             committed,
             prepared,
             catalogue,

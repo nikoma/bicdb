@@ -36,6 +36,7 @@ struct ReleaseMember {
 pub(crate) struct NativeJointReleaseContinuation {
     caller: crate::CancellationToken,
     original_cancel: crate::CancellationToken,
+    preparation_lifetimes: Vec<crate::cancellation::CancellationLifetime>,
     data: NativeJointDecisionData,
     members: BTreeMap<ClusterNodeId, ReleaseMember>,
 }
@@ -189,6 +190,17 @@ impl NativeJointPublishedServingQuorum {
         Ok(NativeJointReleaseContinuation {
             caller: self.prepared.caller.child(),
             original_cancel: self.prepared.cancellation.child(),
+            preparation_lifetimes: self
+                .prepared
+                .observations
+                .values()
+                .filter_map(|observation| {
+                    observation
+                        .custody
+                        .as_ref()
+                        .map(|custody| custody.producer_memory_lifetime())
+                })
+                .collect(),
             data: self.data().clone(),
             members,
         })
@@ -197,6 +209,9 @@ impl NativeJointPublishedServingQuorum {
 impl NativeJointReleaseContinuation {
     fn require_original(&self) -> Result<()> {
         self.caller.check()?;
+        for lifetime in &self.preparation_lifetimes {
+            lifetime.check()?;
+        }
         for member in self.members.values() {
             member
                 .writer

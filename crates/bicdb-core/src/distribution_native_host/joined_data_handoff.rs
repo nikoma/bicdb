@@ -48,7 +48,7 @@ use crate::distribution_range_handoff::{
     NativeJointDecisionPublicationRound, NativeJointDurableDecision, NativeJointHandoffPlan,
     NativeJointHandoffRuntime, NativeJointNewObservation, NativeJointNewRound,
     NativeJointOldClosedQuorum, NativeJointOldObservation, NativeJointOldRound,
-    NativeJointPreparationPhaseQuorum, NativeJointPreparedServingCandidate,
+    NativeJointPreparationCustody, NativeJointPreparationPhaseQuorum,
     NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
     NativeJointPublishedServingQuorum, NativeJointReleaseContinuation,
 };
@@ -272,6 +272,7 @@ pub(crate) struct NativeJoinedDataHandoff {
     publishing: Option<(NativeJointDecisionPublicationRound, BTreeSet<ClusterNodeId>)>,
     decision: Option<NativeJointDurableDecision>,
     policies_installed: bool,
+    preparation_custody: BTreeMap<ClusterNodeId, Arc<NativeJointPreparationCustody>>,
     prepared: Option<Arc<NativeJointPreparedServingQuorum>>,
     published: Option<Arc<NativeJointPublishedServingQuorum>>,
     activations: BTreeMap<ClusterNodeId, Arc<NativeJointCatalogueActivationReceipt>>,
@@ -316,6 +317,7 @@ impl NativeJoinedDataHandoff {
             publishing: None,
             decision: None,
             policies_installed: false,
+            preparation_custody: BTreeMap::new(),
             prepared: None,
             published: None,
             activations: BTreeMap::new(),
@@ -351,6 +353,8 @@ impl NativeJoinedDataHandoff {
         });
         serde_json::json!({"image":image,"decision":self.decision.as_ref().map(|d|d.test_preparation_custody()),
             "prepared_retained":self.prepared.is_some(),"publishing_retained":self.publishing.is_some(),
+            "native_preparation_custody_nodes":self.preparation_custody.keys().collect::<Vec<_>>(),
+            "native_preparation_custody":self.preparation_custody.iter().map(|(id,c)|(id.clone(),c.test_evidence())).collect::<BTreeMap<_,_>>(),
             "session_canceled":self.session.is_cancel_requested(),"last_attempt":self.last_attempt,
             "source_cut_rounds":self.cut_round_starts,"publication_rounds":self.publication_starts,
             "trace":self.custody_trace})
@@ -1219,7 +1223,6 @@ impl NativeJoinedDataHandoff {
             let decision = self.decision.as_ref().ok_or_else(|| {
                 handoff_error("durable decision custody absent before serving preparation")
             })?;
-            let mut round: Option<NativeJointPreparedServingRound> = None;
             let owners = decision
                 .retain_new_serving_owners()
                 .map_err(|error| stage_error("serving owners", error))?;
@@ -1232,6 +1235,9 @@ impl NativeJoinedDataHandoff {
                 );
             }
             for (local, (service, lease)) in owners {
+                if self.preparation_custody.contains_key(&local) {
+                    continue;
+                }
                 let business = Uuid::now_v7();
                 let token = bounded(parent, REQUEST);
                 let fresh = members
@@ -1257,18 +1263,42 @@ impl NativeJoinedDataHandoff {
                         .prepare_local_native_joint_serving(committed, lease, &session)
                         .map_err(|error| stage_error("serving preparation", error))?
                 };
+                // Native facts/State/A/pin enter retained custody BEFORE any
+                // later callback, fresh metadata request or count can fail.
+                self.preparation_custody.insert(
+                    local.clone(),
+                    NativeJointPreparationCustody::retain(actual, service),
+                );
                 #[cfg(test)]
                 if self.custody_cut == Some(TestHandoffCustodyCut::AfterFirstNativePreparation) {
+                    let retained = self.preparation_custody[&local].test_evidence();
                     let detail = serde_json::json!({"actual_node":local,
-                        "actual_preparation_checksum":actual.prepared().checksum_sha256()});
+                        "actual_preparation_checksum":retained["native_preparation_sha256"],
+                        "retained_custody":retained});
                     self.test_custody_cut(
                         TestHandoffCustodyCut::AfterFirstNativePreparation,
                         parent,
                         detail,
                     );
                 }
-                let candidate =
-                    NativeJointPreparedServingCandidate::from_actual_service(actual, service);
+            }
+            // Physical preparation never spends an earlier member's OWN
+            // lifetime. Only this DISTINCT fresh collection counts anything.
+            if self
+                .preparation_custody
+                .keys()
+                .ne(plan.new_members().keys())
+            {
+                return Err(handoff_error(
+                    "retained preparations changed complete NEW participant set",
+                ));
+            }
+            let collection = bounded(parent, PHASE).child_linked_to(&session);
+            let mut round: Option<NativeJointPreparedServingRound> = None;
+            for (local, custody) in &self.preparation_custody {
+                let candidate = custody
+                    .fresh_candidate(&members.get(local)?.client, &leader, &collection)
+                    .map_err(|error| stage_error("fresh preparation observation", error))?;
                 if let Some(round) = &mut round {
                     round
                         .record_candidate(candidate)
@@ -1285,6 +1315,9 @@ impl NativeJoinedDataHandoff {
                 .finish()
                 .map_err(|error| stage_error("serving preparation quorum", error))?;
             self.prepared = Some(Arc::new(prepared));
+            // The complete successor owns the SAME actual objects; these
+            // extra RAM references must not survive into unique release.
+            self.preparation_custody.clear();
             #[cfg(test)]
             if self.custody_trace_enabled {
                 self.custody_trace.push(serde_json::json!({"point":"complete_prepared_quorum_retained",

@@ -7,14 +7,17 @@ use crate::distribution_data::{
 };
 use crate::distribution_range_handoff::{
     NativeJointDurableDecision, NativeJointNewObservation, NativeJointNewRound,
-    NativeJointPreparedServingCandidate, NativeJointPreparedServingRound,
+    NativeJointPreparationCustody, NativeJointPreparedServingCandidate,
+    NativeJointPreparedServingRound,
 };
 
+mod fresh_collection_tests;
 mod new_decision_round_tests;
 mod prepared_candidate_tests;
 
 pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
     prepared_candidate_tests::is_case(case)
+        || fresh_collection_tests::is_case(case)
         || new_decision_round_tests::is_case(case)
         || source_export_retirement_tests::is_case(case)
         || catalogue_tests::is_catalogue_control(case)
@@ -618,7 +621,9 @@ pub(in super::super) fn exercise(
     }
     let current = metadata[0].lock().committed_topology().clone();
     assert_eq!(current.range_by_id(untouched.id), Some(&untouched));
-    let mut prepared: Option<NativeJointPreparedServingRound> = None;
+    let preparation_session = process.child();
+    let mut preparation_custody = Vec::new();
+    let mut original_round: Option<NativeJointPreparedServingRound> = None;
     let mut closed_control_ran = false;
     for (local, (service, lease)) in decision.into_new_serving_owners().unwrap() {
         let i = (0..5).find(|i| node(*i) == local).unwrap();
@@ -667,7 +672,7 @@ pub(in super::super) fn exercise(
         };
         let request = budget(5000);
         let request_deadline = request.deadline();
-        let round_deadline = prepared
+        let round_deadline = original_round
             .as_ref()
             .and_then(NativeJointPreparedServingRound::test_collection_deadline);
         let mut marks: [Option<Instant>; 12] = [None; 12];
@@ -720,15 +725,22 @@ pub(in super::super) fn exercise(
             .unwrap();
             let prepare = || match closed {
                 Some(closed) => actual.prepare_local_joint_serving_with_closed_writer(
-                    closed, committed, lease, process,
+                    closed,
+                    committed,
+                    lease,
+                    &preparation_session,
                 ),
-                None => actual.prepare_local_registered_joint_serving(committed, lease, process),
+                None => actual.prepare_local_registered_joint_serving(
+                    committed,
+                    lease,
+                    &preparation_session,
+                ),
             };
             preparation_step!(6, 7, "prepare_local_joint_serving", prepare()).unwrap()
         };
         if prepared_candidate_tests::is_case(case) {
             assert!(
-                prepared.is_none(),
+                preparation_custody.is_empty(),
                 "negative must reach the first actual count"
             );
             prepared_candidate_tests::exercise(
@@ -743,28 +755,28 @@ pub(in super::super) fn exercise(
             );
             return;
         }
-        marks[8] = Some(Instant::now());
-        let candidate = NativeJointPreparedServingCandidate::from_actual_service(actual, service);
-        marks[9] = Some(Instant::now());
-        match &mut prepared {
-            Some(round) => preparation_step!(
-                10,
-                11,
-                "record_prepared_observation",
-                round.record_candidate(candidate)
-            )
-            .unwrap(),
-            None => {
-                prepared = Some(
-                    preparation_step!(
-                        10,
-                        11,
-                        "begin_prepared_round",
-                        NativeJointPreparedServingRound::begin_candidate(candidate, process)
-                    )
-                    .unwrap(),
-                )
+        // Retain the SAME native preparation before any later count/callback.
+        let retained = NativeJointPreparationCustody::retain(actual, service);
+        preparation_custody.push(retained.clone());
+        if matches!(case, SourceCase::TargetPreparedFreshExpired) && original_round.is_none() {
+            let first = NativeJointPreparedServingRound::begin_candidate(
+                retained.test_original_candidate(),
+                &preparation_session,
+            );
+            let saved = evidence(
+                &output.join("fresh-preparation-original-round-begin.json"),
+                &serde_json::json!({
+                "returned_success":first.is_ok(),"error":first.as_ref().err().map(ToString::to_string),
+                "custody":retained.test_evidence(),"scope":"actual original strict round; no deadline extension"}),
+            );
+            if let Err(error) = saved {
+                if let Err(primary) = &first {
+                    eprintln!("FRESH_PREPARATION_DIAGNOSTIC_FAILED {error}; primary={primary:?}");
+                } else {
+                    panic!("original round evidence failed: {error}");
+                }
             }
+            original_round = Some(first.unwrap());
         }
     }
     if matches!(
@@ -778,7 +790,22 @@ pub(in super::super) fn exercise(
             "genuine original survivor CLOSED cut must be exercised"
         );
     }
-    let prepared = Arc::new(prepared.unwrap().finish().unwrap());
+    let prepared = fresh_collection_tests::collect(
+        case,
+        &preparation_custody,
+        original_round,
+        &all_clients,
+        services,
+        metadata,
+        &preparation_session,
+        output,
+        acknowledged,
+    );
+    let Some(prepared) = prepared else {
+        return;
+    };
+    let prepared = Arc::new(prepared);
+    drop(preparation_custody);
     let mut publication = prepared.resume_native_publication().unwrap();
     for local in data.new_members().keys() {
         let mut phase = prepared

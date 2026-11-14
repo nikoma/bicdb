@@ -142,6 +142,44 @@ impl Default for CancellationToken {
     }
 }
 
+/// Necessary liveness constraints only. This retains neither wait admission
+/// nor any caller-owned resource, exposes no cancel/deadline mutation, and
+/// cannot be used as operation or database authority.
+pub(crate) struct CancellationLifetime {
+    cancel_requested: Arc<AtomicBool>,
+    upstream_cancel_requests: Arc<[Arc<AtomicBool>]>,
+    deadline: Option<Instant>,
+}
+impl CancellationToken {
+    pub(crate) fn retain_memory_lifetime(&self) -> CancellationLifetime {
+        CancellationLifetime {
+            cancel_requested: self.cancel_requested.clone(),
+            upstream_cancel_requests: self.upstream_cancel_requests.clone(),
+            deadline: self.deadline,
+        }
+    }
+}
+impl CancellationLifetime {
+    pub(crate) fn check(&self) -> Result<()> {
+        crate::query_budget::check()?;
+        if self.cancel_requested.load(Ordering::SeqCst)
+            || self
+                .upstream_cancel_requests
+                .iter()
+                .any(|request| request.load(Ordering::SeqCst))
+        {
+            return Err(BicDbError::QueryCanceled);
+        }
+        if self
+            .deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
+        {
+            return Err(BicDbError::QueryTimedOut);
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod linked_read_phase_tests {
     use super::*;

@@ -127,6 +127,22 @@ fn exercise(cut: Cut) {
                 after["trace"][0]["detail"]["actual_preparation_checksum"],
                 record["record"]["checksum_sha256"]
             );
+            // Actual finite drive request ended AFTER the native fact, while
+            // the producer-sealed original preparation Session remains live.
+            // A subsequent current collection must use that fact/owner, never
+            // renew the canceled OWN or repeat native preparation.
+            let retained = &after["native_preparation_custody"]
+                [record["record"]["local_node_id"].as_str().unwrap()];
+            assert_eq!(retained["original_request"]["cancel_requested"], true);
+            assert!(retained["original_session_error"].is_null());
+            assert_eq!(
+                retained["original_request"]["context_id"],
+                record["record"]["metadata_context_id"]
+            );
+            assert_eq!(
+                retained["native_preparation_sha256"],
+                record["record"]["checksum_sha256"]
+            );
         } else {
             assert!(present.is_empty());
         }

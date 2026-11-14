@@ -112,9 +112,7 @@ impl NativeJointPreparationPhaseRound {
                 self.original.data.old_range().id,
                 metadata_point,
             )?;
-            let writer = old
-                .actual
-                .require_current_under_fresh_phase(&service, &committed)?;
+            let writer = old.require_fresh_phase_current(&service, &committed)?;
             (committed, writer)
         };
         if committed.data() != &self.original.data {
@@ -214,9 +212,7 @@ impl NativeJointPreparationPhaseQuorum {
             .observations
             .get(node)
             .ok_or_else(|| invalid("fresh joint phase omitted participant"))?;
-        let writer = observation
-            .actual
-            .require_current_under_fresh_phase(service, &fresh.committed)?;
+        let writer = observation.require_fresh_phase_current(service, &fresh.committed)?;
         if !writer.same_actual(&fresh.writer) {
             return Err(invalid(
                 "fresh joint writer registration/generation changed",
@@ -267,8 +263,7 @@ impl NativeJointPreparationPhaseQuorum {
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("fresh joint pin release service busy"))?;
-            old.actual
-                .release_read_pin_under_fresh_phase(&service, &fresh.committed)?;
+            old.release_fresh_pin(&service, &fresh.committed)?;
         }
         self.require_current()
     }

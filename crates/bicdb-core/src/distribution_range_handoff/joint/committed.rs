@@ -148,6 +148,16 @@ impl CommittedNativeJointDecisionObservation {
         }
         self.native.require_current(database)
     }
+    /// Necessary captured-open equality only. This neither makes an old
+    /// metadata request live nor validates a protected record/current grant.
+    pub(crate) fn require_captured_native_open_identity(&self) -> Result<()> {
+        if self.native.native_database_incarnation() != self.database_incarnation {
+            return Err(invalid(
+                "committed joint observation actual DB-open binding changed",
+            ));
+        }
+        Ok(())
+    }
     /// The actual service producer alone can retain this owner. Native/metadata
     /// records cannot construct it; ordinary/Installed observations keep None.
     pub(crate) fn closed_writer_domain(&self) -> Option<&crate::db::NativeJointWriterDomain> {
@@ -195,6 +205,35 @@ impl CommittedNativeJointDecisionObservation {
     }
     pub(crate) fn deadline(&self) -> std::time::Instant {
         self.metadata.deadline()
+    }
+    #[cfg(test)]
+    pub(crate) fn test_request_memory(&self) -> serde_json::Value {
+        let now = std::time::Instant::now();
+        serde_json::json!({"context_id":self.metadata.context_id(),
+            "term":self.metadata.term(),"read_index":self.metadata.read_index(),
+            "requester":self.metadata.requester_node_id(),
+            "cancel_requested":self.metadata.test_original_request_cancellation().is_cancel_requested(),
+            "remaining_us":self.deadline().saturating_duration_since(now).as_micros(),
+            "past_deadline_us":now.saturating_duration_since(self.deadline()).as_micros(),
+            "memory_observation_not_authority":true})
+    }
+    /// A cfg(test) read-only memory probe survives consumption, without
+    /// exposing the actual cancelable request or any metadata permission.
+    #[cfg(test)]
+    pub(crate) fn test_request_memory_probe(&self) -> Box<dyn Fn() -> serde_json::Value> {
+        let token = self.metadata.test_original_request_cancellation();
+        let context = self.metadata.context_id();
+        let term = self.metadata.term();
+        let index = self.metadata.read_index();
+        let deadline = self.deadline();
+        Box::new(move || {
+            let now = std::time::Instant::now();
+            serde_json::json!({"context_id":context,"term":term,"read_index":index,
+                "cancel_requested":token.is_cancel_requested(),
+                "remaining_us":deadline.saturating_duration_since(now).as_micros(),
+                "past_deadline_us":now.saturating_duration_since(deadline).as_micros(),
+                "memory_observation_not_authority":true})
+        })
     }
     pub(crate) fn writer_domain_metadata_audit(&self) -> Result<serde_json::Value> {
         self.require_metadata_current()?;

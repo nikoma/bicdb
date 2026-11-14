@@ -1,0 +1,64 @@
+{
+  "run": 43532727697,
+  "source": "8ec10012cf7aa9f746bc503fca104de1e896f418",
+  "run_conclusion": "success",
+  "core_job": 132254221204,
+  "core_conclusion": "success",
+  "workspace_job": 132254159409,
+  "workspace_alltargets_and_consumer": "passed",
+  "selected_count": 2,
+  "selected_tests": [
+    "distribution_transport::event_client_retry_tests::caller_query_budget_tests::event_client_caller_query_budget_expired_refuses_before_tcp_dispatch",
+    "distribution_transport::event_client_retry_tests::caller_query_budget_tests::event_client_caller_query_budget_live_scope_accepts_actual_mock_ack"
+  ],
+  "test_result": "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1096 filtered out; finished in 1.00s",
+  "actual_observations_before_assertions": [
+    {
+      "accepted_tcp_connections": 1,
+      "application_frames": 1,
+      "expired_scope": false,
+      "result": "Ok(true)"
+    },
+    {
+      "accepted_tcp_connections": 0,
+      "application_frames": 0,
+      "expired_scope": true,
+      "result": "Err(QueryTimedOut)"
+    }
+  ],
+  "regression_classification": "PASSED synchronous baseline: expired caller scope refused before TCP/frame; live scope accepted actual mock ACK",
+  "artifact_id": 14088981350,
+  "artifact_bytes": 42176,
+  "artifact_sha256": "31b2b0629ff60b41eb52767de37820a7676a178bbdfeb51c136cbeff461599ff",
+  "github_digest_matches": true,
+  "members": {
+    "rustc.txt": {
+      "bytes": 196,
+      "sha256": "f64c55ed9f210d80a9b248206104a47175faf5ec94a093e4ad132549209089fc"
+    },
+    "source-revision.txt": {
+      "bytes": 41,
+      "sha256": "c9446e1fa5cad5da0a4a49a7f09be44992dd1ada9caa6245208205a16de04925"
+    },
+    "selected-tests.log": {
+      "bytes": 252038,
+      "sha256": "e3f27a0a5b61fc6c18bcae6cfefababbdde7eedd1118c8457a1c129889ba7738"
+    },
+    "tests.log": {
+      "bytes": 252983,
+      "sha256": "0995941bcdd21114f719628f80808c8318a4e2b08f48bbd177529338a17b971a"
+    }
+  },
+  "custody_present": false,
+  "original_four_text_artifact_included_not_projection": true,
+  "scope": "SDK public entrypoint with real plaintext loopback TCP and mock ACK; no actual engine commit or HA/physical/production qualification",
+  "source_or_test_retry": false,
+  "file_hashes": {
+    "core-job.log": "a656e7e8ccba9973625ca5405841848d9ec731e2d88b140fd6fb6779a24316a2",
+    "workspace-job.log": "c087d773602d60cd06880e68bd1160c094c3e3cba1cbb14f3e1f1bfcf84058e6",
+    "request.json": "61e770dd054c633564cb146ddb736267dd5ee7fd688ddd7246be6c6cc1ca47ba",
+    "run-terminal.json": "1de10e5f950ba504b43b2c17a0888e7dea0ab2682455fa660bc3e2affd87351f",
+    "jobs-terminal.json": "97674ebea56ffeeb2869ba30d4eda54e1e40a9d02c6b0cc3f202044b49574605",
+    "artifacts.json": "6c50312cd544f838a37c5a9734e3de80c70cdc64e6597a5d5d09d5625eafa1ba"
+  }
+}

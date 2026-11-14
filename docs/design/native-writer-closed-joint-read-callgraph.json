@@ -8,7 +8,7 @@
       "stage": "writer CLOSED native audit",
       "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/data_domains/closed.rs",
       "entry": "advance_closed_with_store",
-      "source_sha256": "23b0823ad0c8ad17ac376e9ad31e5eb5d1809b9961d1a90a3f8c66c73443c69a",
+      "source_sha256": "f5c4611b0f6823b80ae3f7723ef70bd07ff221df893eb71bf0f66a918b1cf983",
       "boundary": "Transition-only typed historical scope; Uncertain requires exact native CURRENT/archive; actual helper outcome/bytes retained"
     },
     {
@@ -111,5 +111,6 @@
     "APP, Strong, ordinary recovery/Ready and selected Serving guards are unchanged.",
     "Synchronous service/journal/native IO does not establish independent-other-range progress or bounded kernel IO.",
     "No original failure is reclassified; actual new control execution remains pending."
-  ]
+  ],
+  "source_review_successor_reason": "bounded formatter now stops prefix retention after the first truncation while streaming all later chunks into SHA256; split-chunk UTF8 regression added, not executed"
 }

@@ -50,7 +50,7 @@ struct ClosedHelperError {
     full_sha256: String,
 }
 impl ClosedHelperError {
-    fn retain(error: &BicDbError) -> Self {
+    fn retain(error: &impl std::fmt::Display) -> Self {
         use std::fmt::Write;
         struct Bounded {
             prefix: String,
@@ -60,6 +60,11 @@ impl ClosedHelperError {
         impl std::fmt::Write for Bounded {
             fn write_str(&mut self, text: &str) -> std::fmt::Result {
                 self.hash.update(text.as_bytes());
+                // Once any formatter chunk is truncated, later chunks must
+                // still hash but cannot be appended after omitted characters.
+                if !self.complete {
+                    return Ok(());
+                }
                 let mut end = (4096 - self.prefix.len()).min(text.len());
                 while !text.is_char_boundary(end) {
                     end -= 1;
@@ -815,6 +820,40 @@ mod closed_test_cut {
     }
     pub(super) fn take() -> Option<Cut> {
         CUT.with(|slot| slot.borrow_mut().take())
+    }
+    #[test]
+    fn writer_closed_helper_error_split_utf8_keeps_exact_prefix_and_complete_hash() {
+        use sha2::Digest;
+        struct Split<'a>(&'a [&'a str]);
+        impl std::fmt::Display for Split<'_> {
+            fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                for chunk in self.0 {
+                    formatter.write_str(chunk)?;
+                }
+                Ok(())
+            }
+        }
+        let leading = "x".repeat(4095);
+        // The multibyte chunk cannot fit the last byte. The later ASCII
+        // suffix must not fill that byte after the omitted character.
+        let chunks = [leading.as_str(), "é", "later-ascii"];
+        let retained = super::ClosedHelperError::retain(&Split(&chunks));
+        let full = chunks.concat();
+        assert_eq!(retained.prefix, leading);
+        assert!(full.starts_with(&retained.prefix));
+        assert!(!retained.complete);
+        assert_eq!(
+            retained.full_sha256,
+            hex::encode(sha2::Sha256::digest(full.as_bytes()))
+        );
+        let short = ["before ", "é", " after"];
+        let retained = super::ClosedHelperError::retain(&Split(&short));
+        assert_eq!(retained.prefix, short.concat());
+        assert!(retained.complete);
+        assert_eq!(
+            retained.full_sha256,
+            hex::encode(sha2::Sha256::digest(short.concat().as_bytes()))
+        );
     }
 }
 #[cfg(test)]

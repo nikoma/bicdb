@@ -4,12 +4,12 @@
 use super::*;
 use crate::distribution_data::ActualNativeJointMetadataPoint;
 use crate::distribution_range_handoff::NativeJointHandoffPlan;
-use crate::distribution_range_recovery::JoinedRemoteImageInstallFreeze;
+use crate::distribution_range_image_install::NativeImageInstallFreeze;
 
 pub(crate) struct NativeJoinedRemoteJointOwner {
     target: Arc<NativeJoinedRemoteMaterializedOwner>,
     service: Arc<Mutex<ClusterDataNodeService>>,
-    frozen: Mutex<Option<Arc<JoinedRemoteImageInstallFreeze>>>,
+    frozen: Mutex<Option<Arc<NativeImageInstallFreeze>>>,
 }
 impl NativeJoinedRemoteJointOwner {
     pub(crate) fn target(&self) -> &Arc<NativeJoinedRemoteMaterializedOwner> {
@@ -18,7 +18,18 @@ impl NativeJoinedRemoteJointOwner {
     pub(crate) fn service(&self) -> &Arc<Mutex<ClusterDataNodeService>> {
         &self.service
     }
-    pub(crate) fn retained_freeze(&self) -> Result<Arc<JoinedRemoteImageInstallFreeze>> {
+    /// The lease only retains original image/exclusion custody. The actual
+    /// CLOSED producer must independently verify its protected decision and
+    /// fresh metadata before publishing any selected writer-domain fact.
+    pub(crate) fn closed_publication_lease(
+        self: &Arc<Self>,
+    ) -> Result<crate::distribution_data::NativeJointServingLease> {
+        Ok(crate::distribution_data::NativeJointServingLease::Joined {
+            owner: self.clone(),
+            frozen: self.retained_freeze()?,
+        })
+    }
+    pub(crate) fn retained_freeze(&self) -> Result<Arc<NativeImageInstallFreeze>> {
         let frozen = self
             .frozen
             .try_lock()
@@ -28,7 +39,10 @@ impl NativeJoinedRemoteJointOwner {
             .ok_or_else(|| invalid("Joined joint original A moved to release continuation"))?;
         // Runtime checks run AFTER dropping the owner mutex, outside engine
         // guards. The Arc is the same lease view, never a new permit.
-        self.target.require_original_lease(&frozen)?;
+        let NativeImageInstallFreeze::JoinedRemote(actual) = frozen.as_ref() else {
+            return Err(invalid("Joined joint custody changed actual lease kind"));
+        };
+        self.target.require_original_lease(actual)?;
         Ok(frozen)
     }
     fn require_same_target(&self, target: &Arc<NativeJoinedRemoteMaterializedOwner>) -> Result<()> {
@@ -42,6 +56,31 @@ impl NativeJoinedRemoteJointOwner {
 }
 
 impl NativeMetadataControlHost {
+    /// Recover SAME host continuation custody after an uncertain API return.
+    /// No snapshot request is renewed and no phase authority is returned.
+    pub(crate) fn joined_remote_joint_owner(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<Arc<NativeJoinedRemoteJointOwner>> {
+        if self.data.is_some() || self.assigned.is_some() || self.replica.is_some() {
+            return Err(invalid(
+                "Joined joint lookup requires exclusive Joined DATA owner",
+            ));
+        }
+        let host = self
+            .joined
+            .as_ref()
+            .ok_or_else(|| invalid("Joined joint original host ended"))?;
+        host.require_writer_data_owner()?;
+        let owner = host
+            .remote_attempts
+            .get(&range)
+            .and_then(|attempt| attempt.joint.as_ref())
+            .cloned()
+            .ok_or_else(|| invalid("Joined joint original continuation absent"))?;
+        owner.target.require_lifetime()?;
+        Ok(owner)
+    }
     /// Use independently fresh joint Role/OWN/current-MStore authority; the
     /// snapshot caller's finite request is deliberately not an input here.
     #[allow(clippy::too_many_arguments)]
@@ -99,7 +138,12 @@ impl NativeMetadataControlHost {
             None => None,
         };
         let original_a = match &retained {
-            Some(frozen) => frozen.as_ref(),
+            Some(frozen) => {
+                let NativeImageInstallFreeze::JoinedRemote(actual) = frozen.as_ref() else {
+                    return Err(invalid("Joined joint retry changed actual lease kind"));
+                };
+                actual
+            }
             None => attempt
                 .lease
                 .as_ref()
@@ -131,7 +175,9 @@ impl NativeMetadataControlHost {
         let owner = match existing {
             Some(owner) => owner,
             None => {
-                let frozen = Arc::new(attempt.lease.take().expect("checked original Joined A"));
+                let frozen = Arc::new(NativeImageInstallFreeze::JoinedRemote(
+                    attempt.lease.take().expect("checked original Joined A"),
+                ));
                 let owner = Arc::new(NativeJoinedRemoteJointOwner {
                     target: target.clone(),
                     service: service.clone(),

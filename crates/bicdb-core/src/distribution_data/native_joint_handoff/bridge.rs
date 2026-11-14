@@ -22,6 +22,11 @@ pub(crate) enum NativeJointServingLease {
         owner: Arc<crate::distribution_native_host::NativeRegisteredRemoteJointOwner>,
         frozen: Arc<NativeImageInstallFreeze>,
     },
+    #[cfg(feature = "tls-replication")]
+    Joined {
+        owner: Arc<crate::distribution_native_host::NativeJoinedRemoteJointOwner>,
+        frozen: Arc<NativeImageInstallFreeze>,
+    },
     Image {
         image: Arc<NativeImageCatalogueFinalization>,
         frozen: Arc<NativeImageInstallFreeze>,
@@ -34,6 +39,8 @@ impl NativeJointServingLease {
             Self::Image { frozen, .. } => frozen.as_frozen(),
             #[cfg(feature = "tls-replication")]
             Self::Registered { frozen, .. } => frozen.as_frozen(),
+            #[cfg(feature = "tls-replication")]
+            Self::Joined { frozen, .. } => frozen.as_frozen(),
         }
     }
     pub(crate) fn try_frozen(&self) -> Result<&FrozenRangeMutationPermit> {
@@ -42,6 +49,8 @@ impl NativeJointServingLease {
             Self::Image { frozen, .. } => frozen.try_as_frozen(),
             #[cfg(feature = "tls-replication")]
             Self::Registered { frozen, .. } => frozen.try_as_frozen(),
+            #[cfg(feature = "tls-replication")]
+            Self::Joined { frozen, .. } => frozen.try_as_frozen(),
         }
     }
     pub(crate) fn image(&self) -> Option<&dyn NativeJointImageMaterialization> {
@@ -50,6 +59,8 @@ impl NativeJointServingLease {
             Self::Image { image, .. } => Some(image.as_ref()),
             #[cfg(feature = "tls-replication")]
             Self::Registered { owner, .. } => Some(owner.target()),
+            #[cfg(feature = "tls-replication")]
+            Self::Joined { owner, .. } => Some(owner.target()),
         }
     }
 }

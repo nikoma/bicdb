@@ -107,6 +107,55 @@ fn own(
         business,
     )
 }
+fn report_preparation_failure(
+    local: &ClusterNodeId,
+    operation: &str,
+    error: &crate::BicDbError,
+    marks: &[Option<Instant>; 12],
+    request_deadline: Option<Instant>,
+    own_deadline: Option<Instant>,
+    round_deadline: Option<Instant>,
+) {
+    let round_origin = if round_deadline.is_some() {
+        "existing_round"
+    } else {
+        "first_OWN_fallback; no_round_created_yet"
+    };
+    let round_deadline = round_deadline.or(own_deadline);
+    let names = [
+        "own_enter",
+        "own_return",
+        "point_enter",
+        "point_return",
+        "observe_enter",
+        "observe_return",
+        "prepare_enter",
+        "prepare_return",
+        "wrapper_enter",
+        "wrapper_return",
+        "round_enter",
+        "round_return",
+    ];
+    let origin = marks[0].unwrap();
+    let stages: Vec<_> = names.iter().zip(marks).filter_map(|(name, at)| {
+        at.map(|at| serde_json::json!({
+            "stage":name,"elapsed_us":at.duration_since(origin).as_micros(),
+            "request_remaining_us":request_deadline.map(|d|d.saturating_duration_since(at).as_micros()),
+            "own_remaining_us":own_deadline.map(|d|d.saturating_duration_since(at).as_micros()),
+            "round_remaining_us":round_deadline.map(|d|d.saturating_duration_since(at).as_micros()),
+            "round_past_deadline_us":round_deadline.map(|d|at.saturating_duration_since(d).as_micros()),
+        }))
+    }).collect();
+    eprintln!(
+        "NATIVE_PREPARATION_FAILURE {}",
+        serde_json::json!({
+            "local_node":local,"operation":operation,"primary_error":error.to_string(),
+            "stages":stages,"original_request_budget_ms":5000,
+            "round_deadline_origin":round_origin,
+            "scope":"failure-only wall-clock observations; no I/O or scheduler attribution",
+        })
+    );
+}
 fn commit_candidate(
     controls: &[NativeMetadataControlHost],
     metadata: &[Arc<Mutex<crate::MetadataConsensusStore>>],
@@ -601,9 +650,41 @@ pub(in super::super) fn exercise(
             lease
         };
         let request = budget(5000);
+        let request_deadline = request.deadline();
+        let round_deadline = prepared
+            .as_ref()
+            .and_then(NativeJointPreparedServingRound::test_collection_deadline);
+        let mut marks: [Option<Instant>; 12] = [None; 12];
+        marks[0] = Some(Instant::now());
         let (mq, business) = own(client, &request);
-        let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
-            &service, &mq, business, &request,
+        marks[1] = Some(Instant::now());
+        let own_deadline = Some(mq.deadline());
+        macro_rules! preparation_step {
+            ($enter:expr, $returned:expr, $operation:expr, $call:expr) => {{
+                marks[$enter] = Some(Instant::now());
+                let result = $call;
+                marks[$returned] = Some(Instant::now());
+                if let Err(error) = &result {
+                    report_preparation_failure(
+                        &local,
+                        $operation,
+                        error,
+                        &marks,
+                        request_deadline,
+                        own_deadline,
+                        round_deadline,
+                    );
+                }
+                result
+            }};
+        }
+        let point = preparation_step!(
+            2,
+            3,
+            "capture_actual_joint_metadata_point",
+            ClusterDataNodeService::capture_actual_joint_metadata_point(
+                &service, &mq, business, &request,
+            )
         )
         .unwrap();
         let actual = {
@@ -612,26 +693,48 @@ pub(in super::super) fn exercise(
                 Some(closed) => crate::db::NativeJointWriterDomain::Closed(closed.clone()),
                 None => crate::db::NativeJointWriterDomain::Registered(Arc::downgrade(&original)),
             };
-            let committed = actual
-                .observe_joint_decision_with_writer_domain_and_point(
+            let committed = preparation_step!(
+                4,
+                5,
+                "observe_joint_decision",
+                actual.observe_joint_decision_with_writer_domain_and_point(
                     &domain, mq, business, selected, point,
                 )
-                .unwrap();
-            match closed {
+            )
+            .unwrap();
+            let prepare = || match closed {
                 Some(closed) => actual.prepare_local_joint_serving_with_closed_writer(
                     closed, committed, lease, process,
                 ),
                 None => actual.prepare_local_registered_joint_serving(committed, lease, process),
-            }
-            .unwrap()
+            };
+            preparation_step!(6, 7, "prepare_local_joint_serving", prepare()).unwrap()
         };
-        let observation =
-            NativeJointPreparedServingObservation::from_actual_service(actual, service).unwrap();
+        let observation = preparation_step!(
+            8,
+            9,
+            "prepared_observation_wrapper",
+            NativeJointPreparedServingObservation::from_actual_service(actual, service)
+        )
+        .unwrap();
         match &mut prepared {
-            Some(round) => round.record(observation).unwrap(),
+            Some(round) => preparation_step!(
+                10,
+                11,
+                "record_prepared_observation",
+                round.record(observation)
+            )
+            .unwrap(),
             None => {
-                prepared =
-                    Some(NativeJointPreparedServingRound::begin(observation, process).unwrap())
+                prepared = Some(
+                    preparation_step!(
+                        10,
+                        11,
+                        "begin_prepared_round",
+                        NativeJointPreparedServingRound::begin(observation, process)
+                    )
+                    .unwrap(),
+                )
             }
         }
     }

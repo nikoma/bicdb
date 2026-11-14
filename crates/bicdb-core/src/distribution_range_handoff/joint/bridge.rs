@@ -66,7 +66,6 @@ impl NativeJointPreparedServingRound {
         first: NativeJointPreparedServingObservation,
         parent: &crate::CancellationToken,
     ) -> Result<Self> {
-        first.require_current()?;
         let cancellation = parent.child_with_deadline(first.actual.committed().deadline());
         cancellation.check()?;
         let mut round = Self {
@@ -76,8 +75,16 @@ impl NativeJointPreparedServingRound {
             cancellation,
             poisoned: false,
         };
+        // record performs the complete current service/native check before
+        // counting this actual observation, under its original deadline and
+        // publication guard. There is no admission between construction and
+        // that check; repeating it here spends the same bounded authority twice.
         round.record(first)?;
         Ok(round)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_collection_deadline(&self) -> Option<std::time::Instant> {
+        self.cancellation.deadline()
     }
     pub(crate) fn record(
         &mut self,

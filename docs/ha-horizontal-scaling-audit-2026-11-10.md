@@ -28,7 +28,9 @@ separates original failures, diagnostic passes, the exact-source native repeat,
 corrected client controls and missing cross-process/multi-range producers.
 The newer native handoff prototypes remain separate source branches. The
 source-record successor executed82 cases with74 passes/eight failures at
-Registered DECISION catalogue publication. A diagnostic successor executed all15
+Registered DECISION catalogue publication. Its catalogue successor executed87
+cases with79 passes/eight failures at a later writer-policy boundary; five new
+catalogue fault controls passed. A diagnostic successor executed all15
 export-reference controls successfully, including actual original-handler
 completion after timeout; its result does not settle the earlier14/1 failure.
 The [checkpoint follow-up](ha-qualification-checkpoint-2026-11-13.md#follow-up-captured-november-14-2026)

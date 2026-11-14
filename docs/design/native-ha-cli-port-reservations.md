@@ -71,8 +71,8 @@ qualify physical fault recovery.
 The original failed run is **failed** at fixture/election availability; its
 acknowledged-write reconciliation is **not tested** and its exact collision
 owner is **inconclusive**. The reserved-endpoint correction and two added
-controls are **not tested** until their own hosted run completes. A source
-review or successful formatting check is not execution evidence.
+controls **passed** in their separate hosted run below. A source review or
+successful formatting check alone is not execution evidence.
 
 On an isolated build/test host, the integration target is reproducible with
 `CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo test -p bicdb-cli --test ha_failover_cli --locked -- --test-threads=4 --show-output`.
@@ -83,3 +83,14 @@ the exact selected replication listener through the real child's startup.
 It must report child exit before any HA fault or loss assertion. The separate
 `held_endpoint_reservations_exclude_parallel_ha_groups` control retains twelve
 real endpoints across parallel fixtures and verifies their exclusivity.
+
+Source composition `92ae9313644ea8471d4a5f48309d9a2ce0e6fbe2` was tested
+through workflow-only qualifier `c600c43124807bb64cac74c20d234cd6f965690c`,
+[run43561913082](https://github.com/nikoma/bicdb/actions/runs/43561913082),
+CLI job132347292620: four passed/zero failed/zero ignored in16.07s, using
+four Rust test threads. Both original cases and both new controls executed;
+workspace all-target and nondefault consumer compilation passed separately.
+The occupied-listener case caught the intended actual child startup refusal.
+It does not turn the earlier failed fixture into a healthy-group election or
+acknowledged-data-loss result. This remains hosted process evidence, with no
+physical failover or production qualification claim.

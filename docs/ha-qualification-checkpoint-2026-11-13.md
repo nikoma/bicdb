@@ -165,6 +165,7 @@ transport-component public projections above are included and portable.
 The original03:51 UTC checkpoint above is retained. This follow-up records
 subsequent terminal results; it does not change the earlier executions or
 qualify the source prototypes as delivered main.
+The following table has a05:30 UTC cutoff; later terminal results follow it.
 
 | Exact source and run | Disposition | Actual evidence and remaining boundary |
 | --- | --- | --- |
@@ -194,3 +195,18 @@ The full74 diagnostic artifact14098125992 is retained privately, SHA256
 These later results are summaries with linked CI and private custody, not new
 self-contained public evidence packets. No physical RPO/RTO, sustained
 five-node throughput comparison, deployment or production admission follows.
+
+### Qualifications completed by05:47 UTC
+
+| Exact source and run | Disposition | Actual evidence and next smallest test |
+| --- | --- | --- |
+| Catalogue successor `a5911ec99d0564c011d916309bda64b6ae62a9dc`; qualifier `7bfff72259b7cfbb752c6be11499d997ed6f326d`, [run43561072006](https://github.com/nikoma/bicdb/actions/runs/43561072006), Core job132344668960 | Failed, with five additional controls passed |87 executed:79 passed/eight failed, zero ignored,984.43s. The original82 cases remain and all five additional catalogue-cut controls passed. Workspace all-target/consumer checks passed. Eight original cases now stop later at `hot_policy_tests.rs:548`: seven return `selected writer DATA policy publication is CLOSED or unresolved`; the early-release case returns `writer DATA actual MStore busy`. These are separate conditions under investigation. Later named APP/Strong/policy-expiry cuts are not established by these failures. Next isolate the exact typed joint-policy observation and the busy metadata acquisition independently, preserving ordinary CLOSED-policy APP/Strong refusals. |
+| CLI fixture composition `92ae9313644ea8471d4a5f48309d9a2ce0e6fbe2`; qualifier `c600c43124807bb64cac74c20d234cd6f965690c`, [run43561913082](https://github.com/nikoma/bicdb/actions/runs/43561913082), CLI job132347292620 | Passed, four hosted process controls only | Exact four selected/executed cases passed, zero failures/ignored,16.07s, with four test threads. Both original kill/switchover assertions remain; held-endpoint and real occupied-replication startup controls passed. Workspace all-target/consumer checks passed. The injected startup error is an expected caught refusal, not an ignored failing test. No physical fault or independent-host RPO/RTO/scaling claim follows. The original PR185 failure remains failed. |
+
+Root independently retained the complete raw logs. The87-case log is24,068,103
+bytes, SHA256 `00f11fef7c1b548fc377bf403270e597609f94a7d05957ab749deac33a09aa9c`.
+The CLI log is2,211,715 bytes, SHA256
+`69e246df8ccf51b3bd6696e4bae87720344e427465d25050a0c91ca244cb6410`.
+The87-case native artifact14100474583 remains private custody; CLI artifact
+14100704172 contains source/log evidence, with no raw database custody.
+These summaries do not replace complete native operation reconciliation.

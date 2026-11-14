@@ -132,6 +132,25 @@ impl ActualServiceNativeJointPreparedEvidence {
         self.require_original_writer_lifetime()?;
         Ok(self.writer.clone())
     }
+    fn require_original_phase_owner_with_publication_scope(
+        &self,
+        scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
+        self.require_original_writer_lifetime()?;
+        self.writer_domain.require_current_with_publication_scope(
+            scope,
+            store,
+            self.committed.data().activation_range(),
+        )?;
+        if !self.writer.same_actual(&self.writer_domain.phase_owner()) {
+            return Err(data_error(
+                "joint preparation changed original actual phase owner",
+            ));
+        }
+        self.require_original_writer_lifetime()?;
+        Ok(self.writer.clone())
+    }
     pub(crate) fn original_phase_owner_for_continuation(
         &self,
     ) -> Result<(crate::db::NativeJointPhaseOwner, std::path::PathBuf)> {
@@ -476,7 +495,7 @@ impl ActualServiceNativeJointPreparedEvidence {
         fresh: &CommittedNativeJointDecisionObservation,
         history: PreparedHistory<'_>,
     ) -> Result<crate::db::NativeJointPhaseOwner> {
-        self.require_original_phase_owner(scope.database(), store)?;
+        self.require_original_phase_owner_with_publication_scope(scope, store)?;
         history.require_publication_scope(self, scope)?;
         fresh.require_current_with_publication_scope(scope)?;
         scope.require_owned_preparation(
@@ -496,7 +515,7 @@ impl ActualServiceNativeJointPreparedEvidence {
                 "publication requires original actual read pins released",
             ));
         }
-        self.require_original_phase_owner(scope.database(), store)
+        self.require_original_phase_owner_with_publication_scope(scope, store)
     }
     pub(crate) fn require_phase_writer_lifetime(
         &self,

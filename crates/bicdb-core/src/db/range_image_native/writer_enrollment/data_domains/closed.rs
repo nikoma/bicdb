@@ -284,6 +284,70 @@ impl NativeClosedWriterDomain {
         db.range_mutation_gate()
             .validate_quiescent_frozen(data.old_range().id, frozen)
     }
+    pub(in crate::db::range_image_native) fn require_publication_identity(
+        &self,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        data: &NativeJointDecisionData,
+        frozen: &crate::distribution_range_mutation::FrozenRangeMutationPermit,
+    ) -> Result<()> {
+        if self.data() != data
+            || self
+                .survivor_frozen
+                .as_ref()
+                .is_none_or(|original| !std::ptr::eq(original.as_ptr(), frozen))
+            || self.slot.id() != store.native_writer_store_open_id()
+            || !Arc::ptr_eq(&self.writer, &store.native_writer_host_state()?)
+            || frozen.owner() != data.promise().session_id
+            || !data
+                .old_members()
+                .contains_key(&self.writer.record.facts.local_node_id)
+        {
+            return Err(invalid(
+                "CLOSED historical catalogue changed original owner/decision/Store/freeze",
+            ));
+        }
+        Ok(())
+    }
+    pub(in crate::db::range_image_native) fn require_current_for_publication(
+        &self,
+        scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        range: &RangeDescriptor,
+    ) -> Result<()> {
+        let db = scope.database();
+        // Only an original no-image OLD survivor has this comparison binding.
+        // A real installed-image CLOSED owner keeps its original full path;
+        // absence of this optional optimization is never a new refusal.
+        if self.survivor_frozen.is_none()
+            || !self
+                .data()
+                .old_members()
+                .contains_key(&self.writer.record.facts.local_node_id)
+        {
+            return self.require_current_for_store(db, store, range);
+        }
+        scope.require_closed_source_lineage(db, store, self)?;
+        if crate::distribution_native_read::canonical_range(range) != *self.range() {
+            return Err(invalid("CLOSED writer changed its selected range"));
+        }
+        self.require_lifetime()?;
+        self.open.require_database(db)?;
+        self.writer.require_original_identity_database(db)?;
+        self.writer.require_verified_registry_database(db)?;
+        self.record.validate(&self.writer.record)?;
+        require_closed_record_current_inner(
+            db,
+            &self.writer,
+            &self.record,
+            Some((self, scope, store)),
+        )?;
+        self.require_lifetime()?;
+        store.require_closed_writer_promise(
+            self.data(),
+            &self.record.local.local_promise,
+            self.record.local.old_close_sha256.as_deref(),
+        )
+    }
     pub(crate) fn require_current_for_store(
         &self,
         db: &BicDb,

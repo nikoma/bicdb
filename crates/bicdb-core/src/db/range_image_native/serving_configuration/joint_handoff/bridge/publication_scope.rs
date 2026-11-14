@@ -38,7 +38,8 @@ impl NativeJointServingPreparation {
             .transpose()?;
         let journal = database.try_native_image_journal()?;
         self.native.require_current(database)?;
-        let lineage = database.current_native_range_source_lineage(self.record.range_id)?;
+        let lineage = database
+            .current_native_range_source_lineage_under_journal(self.record.range_id, &journal)?;
         // No Controlled permit is held yet. In particular this preflight must
         // never count its own metadata callback as an undrained foreign writer.
         catalogue.require_current(store, database, committed, image, frozen)?;
@@ -141,6 +142,35 @@ impl NativeJointPreparedPublicationScope<'_> {
             ));
         }
         Ok(())
+    }
+    /// A comparison borrow of this scope's already validated physical point.
+    /// Only the exact original CLOSED owner can use it, while THIS journal,
+    /// store, preparation and Frozen remain borrowed. This is not a role or
+    /// writer grant; callers still reread every protected CLOSED audit record.
+    #[cfg(feature = "tls-replication")]
+    pub(in crate::db::range_image_native) fn require_closed_source_lineage(
+        &self,
+        database: &BicDb,
+        store: &RangeWriteStore,
+        domain: &crate::db::NativeClosedWriterDomain,
+    ) -> Result<&SourceRangeImageLineage> {
+        self.journal.require_database(database)?;
+        if !std::ptr::eq(database, self.database)
+            || !std::ptr::eq(store, self.store)
+            || match self.committed.closed_writer_domain() {
+                Some(crate::db::NativeJointWriterDomain::Closed(original)) => {
+                    !std::ptr::eq(original.as_ref(), domain)
+                }
+                _ => true,
+            }
+        {
+            return Err(invalid(
+                "publication scope changed original CLOSED owner/database",
+            ));
+        }
+        self.require_committed_identity(self.committed)?;
+        domain.require_publication_identity(self.store, self.committed.data(), self.frozen)?;
+        Ok(&self.lineage)
     }
     /// Re-read EVERY captured retained resolution, even if the native head
     /// and catalogue digest are unchanged. No numeric head can substitute for

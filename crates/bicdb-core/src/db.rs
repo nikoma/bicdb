@@ -8570,6 +8570,7 @@ struct NativeInvariantRelationSnapshot<'a> {
     db: &'a BicDb,
     tx: &'a Transaction,
     share_relations: bool,
+    cached_bytes: std::cell::Cell<usize>,
     relations: std::cell::RefCell<BTreeMap<String, Arc<[Record]>>>,
 }
 impl<'a> NativeInvariantRelationSnapshot<'a> {
@@ -8579,10 +8580,12 @@ impl<'a> NativeInvariantRelationSnapshot<'a> {
             tx,
             share_relations: tx.isolation == TransactionIsolation::Serializable
                 || global_commit_lock_enabled(),
+            cached_bytes: Default::default(),
             relations: Default::default(),
         }
     }
     fn records(&self, relation: &str) -> Result<Arc<[Record]>> {
+        crate::query_budget::check()?;
         if !self.share_relations {
             return Ok(resulting_records_for_relation(self.db, self.tx, relation)?.into());
         }
@@ -8593,6 +8596,14 @@ impl<'a> NativeInvariantRelationSnapshot<'a> {
         // Do not retain failures, predicates or principals in this raw cache.
         let records: Arc<[Record]> =
             resulting_records_for_relation(self.db, self.tx, relation)?.into();
+        // Existing scan accounting covers only this relation. The memo keeps
+        // all prior raw relations alive too: include that retained residency in
+        // the existing cooperative estimator before inserting another cache.
+        let mut retained = self.cached_bytes.get();
+        for record in records.iter() {
+            crate::query_budget::retain_record(&mut retained, record)?;
+        }
+        self.cached_bytes.set(retained);
         self.relations
             .borrow_mut()
             .insert(relation.to_owned(), Arc::clone(&records));
@@ -9065,6 +9076,7 @@ fn evaluate_native_invariant_expression(
             let mut found = false;
             let records = snapshot.records(relation)?;
             for record in records.iter() {
+                crate::query_budget::check()?;
                 let eligible = record_invariant_field(record, &publication.tenant_field)
                     .as_str()
                     .and_then(|tenant| Uuid::parse_str(tenant).ok())
@@ -9098,6 +9110,7 @@ fn evaluate_native_invariant_expression(
             let records = snapshot.records(relation)?;
             let mut found = false;
             for record in records.iter() {
+                crate::query_budget::check()?;
                 if relation == subject_relation && record.id == subject.id {
                     continue;
                 }
@@ -9141,6 +9154,7 @@ fn evaluate_native_invariant_expression(
                 _ => Value::from(0),
             };
             for record in records.iter() {
+                crate::query_budget::check()?;
                 let mut nested = bindings.clone();
                 nested.insert(binding.clone(), record);
                 if evaluate_native_invariant_expression(
@@ -9239,6 +9253,7 @@ fn validate_carrier_invariant(
     }
     let subjects = snapshot.records(&definition.subject_relation)?;
     for subject in subjects.iter() {
+        crate::query_budget::check()?;
         if published
             && !tx.writes.iter().any(|write| {
                 write.collection == definition.subject_relation && write.record_id == subject.id

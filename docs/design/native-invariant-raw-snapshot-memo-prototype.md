@@ -40,9 +40,14 @@ Counterexamples required before any production claim:
   policy resolution, including a revoked publication; only raw rows are cached.
 - Inspect competing native-import/replication paths and actual serializable
   admission coverage before treating that deployment as a stable snapshot.
-- Cached full relations remain alive to pass end. Existing per-scan query memory
-  accounting does not establish a bound on their combined residency; this
-  memory tradeoff requires separate validation before production use.
+- Cached full relations remain alive to pass end. The prototype applies the
+  existing cooperative record-memory estimator to the combined cached rows
+  before inserting a new relation; cache hits and record/subject iterations
+  still check the original query budget/deadline. This is not hard RSS
+  reservation, and an execution with no active memory limit has no new bound.
+  Combined-residency accounting, inherited scope/peak behavior and deadline
+  refusal require validation before production use. A budget refusal remains
+  before durable commit and must not be described as rollback of a later write.
 
 Existing commit trace attributes native validators to CONFLICT, not VALIDATE,
 and emits only every50000 commits. The observed growing ERP mutation latency

@@ -817,6 +817,9 @@ pub(in super::super) fn exercise(
     drop(preparation_custody);
     let mut publication = prepared.resume_native_publication().unwrap();
     for local in data.new_members().keys() {
+        if collection_binding_tests::is_case(case) && *local != node(4) {
+            continue; // new faults target the genuine Registered fifth member
+        }
         let mut phase = prepared
             .begin_fresh_preparation_phase(Duration::from_secs(4))
             .unwrap();
@@ -839,6 +842,7 @@ pub(in super::super) fn exercise(
                 &mut publication,
                 &producer_session,
                 &preparation_session,
+                &original,
                 services,
                 metadata,
                 process,

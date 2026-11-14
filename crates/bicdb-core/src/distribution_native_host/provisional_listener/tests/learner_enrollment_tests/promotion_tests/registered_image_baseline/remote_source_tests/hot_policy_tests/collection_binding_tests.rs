@@ -61,6 +61,7 @@ pub(super) fn exercise(
     publication: &mut NativeJointServingPublicationRound,
     producer: &CancellationToken,
     aggregate: &CancellationToken,
+    registered: &Arc<crate::distribution_native_host::NativeRegisteredRemoteJointOwner>,
     services: &[Arc<Mutex<ClusterDataNodeService>>],
     metadata: &[Arc<Mutex<crate::MetadataConsensusStore>>],
     process: &CancellationToken,
@@ -75,6 +76,7 @@ pub(super) fn exercise(
         publication,
         producer,
         aggregate,
+        registered,
         services,
         metadata,
         process,
@@ -186,6 +188,7 @@ fn run(
     publication: &mut NativeJointServingPublicationRound,
     producer: &CancellationToken,
     aggregate: &CancellationToken,
+    registered: &Arc<crate::distribution_native_host::NativeRegisteredRemoteJointOwner>,
     services: &[Arc<Mutex<ClusterDataNodeService>>],
     metadata: &[Arc<Mutex<crate::MetadataConsensusStore>>],
     process: &CancellationToken,
@@ -196,14 +199,44 @@ fn run(
     let i = (0..services.len())
         .find(|i| node(*i) == local)
         .ok_or_else(|| invalid("actual publication member absent"))?;
+    if local != node(4)
+        || !admission.data().new_members().contains_key(&local)
+        || !Arc::ptr_eq(registered.service(), &services[i])
+        || registered.target().native().local_node_id() != &local
+        || admission.local_preparation().native_database_incarnation()
+            != registered.target().native().database_incarnation()
+    {
+        return Err(invalid(
+            "post-collection fault requires SAME actual Registered target owner/open",
+        ));
+    }
+    let original_a = registered.retained_freeze()?.try_as_frozen()?.owner();
     aggregate.check()?;
     producer.check()?;
     process.check()?;
     admission.require_live()?;
     let before_fault = phase.test_prepublication_snapshot()?;
+    if before_fault["members"][local.as_str()]["frozen_owner"] != serde_json::to_value(original_a)?
+    {
+        return Err(invalid(
+            "post-collection fault changed original Registered A",
+        ));
+    }
+    events.push(
+        serde_json::json!({"stage":"actual_registered_target_origin_bound",
+        "member":local,"original_a":original_a,
+        "native_database_incarnation":registered.target().native().database_incarnation(),
+        "actual_registered_service_same_arc":true}),
+    );
     events.push(serde_json::json!({"stage":"full_collection_and_drain_before_fault", "actual":before_fault}));
     let controlled = if matches!(case, SourceCase::TargetCollectionControlledWriter) {
-        let held = phase.test_hold_post_collection_controlled(&local)?;
+        events.push(
+            serde_json::json!({"stage":"genuine_controlled_admission_intent", "member":local}),
+        );
+        let held = phase.test_hold_post_collection_controlled(&local);
+        events.push(serde_json::json!({"stage":"genuine_controlled_admission_returned", "success":held.is_ok(),
+            "error":held.as_ref().err().map(ToString::to_string)}));
+        let held = held?;
         events.push(
             serde_json::json!({"stage":"genuine_controlled_admission_acquired", "member":local}),
         );
@@ -224,7 +257,12 @@ fn run(
             } else {
                 local.clone()
             };
-            let damage = phase.test_remove_post_collection_archive(&selected, process)?;
+            events.push(serde_json::json!({"stage":"actual_native_archive_delete_intent", "member":selected}));
+            let damage = phase.test_remove_post_collection_archive(&selected, process);
+            events.push(serde_json::json!({"stage":"actual_native_archive_delete_returned", "member":selected,
+                "success":damage.is_ok(),"error":damage.as_ref().err().map(ToString::to_string),
+                "actual_receipt":damage.as_ref().ok(),"no_returned_receipt_is_not_proof_of_no_effect":true}));
+            let damage = damage?;
             if damage["original_current"] != damage["removed_archive"]
                 || damage["actual_archive_absent"] != true
                 || damage["actual_controlled_admission_validated_before_and_after"] != true
@@ -234,6 +272,7 @@ fn run(
             events.push(serde_json::json!({"stage":"actual_native_archive_deleted", "member":selected, "damage":damage}));
         }
         SourceCase::TargetCollectionProducerCanceled => {
+            events.push(serde_json::json!({"stage":"actual_sealed_producer_cancel_intent"}));
             producer.cancel();
             events.push(serde_json::json!({"stage":"actual_sealed_producer_session_canceled", "producer_canceled":producer.is_cancel_requested(),
                 "aggregate_live":aggregate.check().is_ok(),"phase_and_own":phase.test_prepublication_snapshot()?}));
@@ -242,6 +281,7 @@ fn run(
             let original = services[i]
                 .lock()
                 .native_replica_listener_store_open_guard();
+            events.push(serde_json::json!({"stage":"actual_store_replacement_intent", "original_id":original.id()}));
             let replacement = crate::RangeWriteStore::open(
                 output.join("post-collection-store"),
                 admission.data().cluster_id().clone(),
@@ -267,8 +307,15 @@ fn run(
                 .current_term
                 .checked_add(1)
                 .ok_or_else(|| invalid("actual term overflow"))?;
-            let changed = store.observe_remote_term(term)?;
-            let after = store.test_actual_publication_version_evidence()?;
+            events.push(serde_json::json!({"stage":"actual_local_mstore_term_intent", "before":before,"requested_term":term}));
+            let changed = store.observe_remote_term(term);
+            let after = store.test_actual_publication_version_evidence();
+            events.push(serde_json::json!({"stage":"actual_local_mstore_term_returned", "requested_term":term,
+                "changed":changed.as_ref().ok(),"mutation_error":changed.as_ref().err().map(ToString::to_string),
+                "actual_after":after.as_ref().ok(),"readback_error":after.as_ref().err().map(ToString::to_string),
+                "no_returned_receipt_is_not_proof_of_no_effect":true}));
+            let changed = changed?;
+            let after = after?;
             events.push(serde_json::json!({"stage":"actual_local_mstore_term_advanced", "before":before,"after":after,"requested_term":term,"changed":changed}));
             if !changed {
                 return Err(invalid("actual MStore did not advance"));

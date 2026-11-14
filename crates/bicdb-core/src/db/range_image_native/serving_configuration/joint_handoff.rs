@@ -483,6 +483,9 @@ impl BicDb {
     }
 }
 
+mod old_record_data;
+pub(crate) use old_record_data::NativeJointOldCloseRecordData;
+
 mod decision;
 pub(crate) use decision::NativeJointDecisionReceipt;
 #[cfg(feature = "tls-replication")]

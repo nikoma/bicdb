@@ -140,6 +140,18 @@ impl TcpClusterRelocationTransport {
                 "remote OLD Close returned no actual closed fact",
             ));
         }
+        match (&reply.closed, &reply.closed_native_record) {
+            (Some(facts), Some(record)) => {
+                record.require_materialized_facts(facts)?;
+                record.require_plan(plan)?;
+            }
+            (None, None) => {}
+            _ => {
+                return Err(transport_error(
+                    "remote OLD closed fact/exact native record presence differs",
+                ))
+            }
+        }
         token.check()?;
         own.require_live_request(request.business)?;
         Ok(AuthenticatedNativeRemoteOldFrame {

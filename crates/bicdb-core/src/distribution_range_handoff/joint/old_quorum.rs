@@ -342,6 +342,15 @@ impl NativeJointOldClosedQuorum {
     }
     /// Historical projection from the actual retained OLD quorum only. A
     /// decoded map cannot reconstruct that quorum or any source permission.
+    pub(crate) fn selected_source_close_record(
+        &self,
+    ) -> Result<crate::db::NativeJointOldCloseRecordData> {
+        self.require_current()?;
+        self.observations
+            .get(&self.selected_source)
+            .ok_or_else(|| invalid("local OLD selected original owner missing"))?
+            .actual_close_record_data()
+    }
     pub(crate) fn source_image_materialized_facts(
         &self,
     ) -> Result<BTreeMap<ClusterNodeId, super::materialized::NativeJointMaterializedFacts>> {

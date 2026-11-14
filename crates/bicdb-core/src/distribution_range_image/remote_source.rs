@@ -65,6 +65,8 @@ pub(crate) struct NativeRemoteImageManifestV1 {
     pub h0: String,
     pub h: String,
     pub source_native_receipt: String,
+    pub source_physical_base_receipt: String,
+    pub source_old_close_record: crate::db::NativeJointOldCloseRecordData,
     pub old_config_sha256: String,
     pub new_config_sha256: String,
     pub old_quorum_sha256: String,
@@ -74,6 +76,7 @@ pub(crate) struct NativeRemoteImageManifestV1 {
 }
 impl NativeRemoteImageManifestV1 {
     pub(crate) fn checksum(&self) -> Result<String> {
+        self.source_old_close_record.require_byte_bound()?;
         let mut value = self.clone();
         value.checksum_sha256.clear();
         Ok(hex::encode(Sha256::digest(bounded_json(
@@ -111,6 +114,7 @@ impl NativeRemoteImageManifestV1 {
                 "invalid remote image manifest DATA; not a source/target grant",
             ));
         }
+        self.source_old_close_record.require_source_manifest(self)?;
         Ok(())
     }
 }
@@ -253,6 +257,15 @@ impl ActualSourceOld {
             Self::RetiredJoint { .. } => {
                 Err(invalid("retired source has no materialization authority"))
             }
+        }
+    }
+    fn selected_source_close_record(&self) -> Result<crate::db::NativeJointOldCloseRecordData> {
+        match self {
+            Self::Local(x) => x.selected_source_close_record(),
+            Self::Remote(x) => Ok(x.selected_source_close_record()?.clone()),
+            Self::RetiredJoint { .. } => Err(invalid(
+                "retired source cannot issue original OLD record DATA",
+            )),
         }
     }
     fn begin_capture_with_initial_wait(
@@ -465,6 +478,8 @@ impl NativeRemoteImageSourceSession {
             h0: capture.lineage.logical_genesis_sha256().into(),
             h: capture.lineage.logical_history_sha256().into(),
             source_native_receipt: capture.lineage.native_receipt_sha256().into(),
+            source_physical_base_receipt: capture.lineage.physical_base_receipt_sha256().into(),
+            source_old_close_record: self.old.selected_source_close_record()?,
             old_config_sha256: capture.cut.old_config_sha256().into(),
             new_config_sha256: capture.cut.new_config_sha256().into(),
             old_quorum_sha256: self.old.checksum_sha256()?,

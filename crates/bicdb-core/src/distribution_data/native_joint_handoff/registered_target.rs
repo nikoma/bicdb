@@ -40,6 +40,22 @@ impl ActualServiceNativeRegisteredJointNewEvidence {
         .ok_or_else(|| {
             data_error("Registered NEW requires actual current-MStore metadata point")
         })?;
+        // Actual source revalidation may acquire donor guards; do it before
+        // holding the target service/DB. DATA validation below grants nothing.
+        let original_record = certificate.selected_source_close_record()?;
+        if original_record != &owner.target().manifest().source_old_close_record
+            || owner.target().manifest().old_quorum_sha256 != certificate.checksum_sha256()?
+        {
+            return Err(data_error(
+                "Registered NEW source record differs from original authenticated OLD/MF",
+            ));
+        }
+        original_record.require_source_manifest(owner.target().manifest())?;
+        original_record.require_source_seal(owner.target().source_seal())?;
+        let source_facts = certificate.source_image_materialized_facts()?;
+        let source = source_facts
+            .get(certificate.selected_source_id())
+            .ok_or_else(|| data_error("Registered NEW actual source absent"))?;
         let frozen = owner.retained_freeze()?;
         let service = owner
             .service()
@@ -58,10 +74,6 @@ impl ActualServiceNativeRegisteredJointNewEvidence {
         )?;
         let base = target.base();
         let seal = target.source_seal();
-        let source_facts = certificate.source_image_materialized_facts()?;
-        let source = source_facts
-            .get(certificate.selected_source_id())
-            .ok_or_else(|| data_error("Registered NEW actual source absent"))?;
         if service.node_id != *target.native().local_node_id()
             || service.node_id != role.committed_relocation().target
             || !plan.new_members().contains_key(&service.node_id)
@@ -73,7 +85,7 @@ impl ActualServiceNativeRegisteredJointNewEvidence {
             || base.intended_activation_range() != plan.activation_range()
             || base.intended_activation_members() != plan.new_members()
             || seal.source_id != *certificate.selected_source_id()
-            || seal.source_native_receipt_sha256 != source.native_receipt_sha256
+            || seal.source_native_receipt_sha256 != base.source_native_receipt_sha256()
             || seal.range_index != source.range_index
             || seal.logical_genesis_sha256 != source.logical_genesis_sha256
             || seal.logical_history_sha256 != source.logical_history_sha256

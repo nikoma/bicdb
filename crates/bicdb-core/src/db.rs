@@ -175,8 +175,9 @@ pub(crate) use range_image_native::{
     NativeActivationDecisionReceipt, NativeActivationReadScope, NativeCompletionReadScope,
     NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
     NativeJointDecisionReceipt, NativeJointHistoricalCutScope, NativeJointOldCloseReceipt,
-    NativeJointOldPhysicalProof, NativeJointPreparedPublicationScope,
-    NativeJointServingBridgeReceipt, NativeJointServingPreparation, NativeReadyObserverReadScope,
+    NativeJointOldCloseRecordData, NativeJointOldPhysicalProof,
+    NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
+    NativeJointServingPreparation, NativeReadyObserverReadScope,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::{

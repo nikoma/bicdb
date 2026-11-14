@@ -271,6 +271,12 @@ pub(crate) struct NativeJoinedDataHandoff {
     recovered: Option<usize>,
     /// Records per copied image step.
     image_batch_records: usize,
+    /// The attempt of the last image lease taken from the target runtime.
+    last_attempt: Option<Uuid>,
+    /// Refusals of `restart_dropped_image_transfer` observed in the states
+    /// the install passes through, when a test asked for them.
+    #[cfg(test)]
+    restart_probes: Option<Vec<(&'static str, String)>>,
 }
 
 impl NativeJoinedDataHandoff {
@@ -297,7 +303,50 @@ impl NativeJoinedDataHandoff {
             released: BTreeSet::new(),
             recovered: None,
             image_batch_records: 256,
+            last_attempt: None,
+            #[cfg(test)]
+            restart_probes: None,
         }
+    }
+    /// Ask the target runtime to restart a dropped transfer in every state in
+    /// which it must refuse, and record what it answered.
+    #[cfg(test)]
+    pub(crate) fn test_probe_restart_refusals(mut self) -> Self {
+        self.restart_probes = Some(Vec::new());
+        self
+    }
+    #[cfg(test)]
+    pub(crate) fn test_restart_probes(&self) -> &[(&'static str, String)] {
+        self.restart_probes.as_deref().unwrap_or(&[])
+    }
+    #[cfg(test)]
+    fn probe_restart(
+        &mut self,
+        label: &'static str,
+        runtime: &Arc<RangeRecoveryRuntime>,
+        scope: &RecoveryFenceScope,
+        source: &crate::distribution_range_image::TentativeNativeRangeImageSourceAuthorization<'_>,
+        role: &NativeImageInstallRole<'_>,
+        attempt: Uuid,
+    ) {
+        let Some(log) = self.restart_probes.as_mut() else {
+            return;
+        };
+        let outcome = runtime.restart_dropped_image_transfer(
+            scope,
+            source,
+            role,
+            ImageInstallPurpose::RelocationLearner,
+            attempt,
+            &self.session,
+        );
+        log.push((
+            label,
+            match outcome {
+                Ok(_) => "ACCEPTED".to_string(),
+                Err(error) => error.to_string(),
+            },
+        ));
     }
     /// Bound the records of one copied image step (1..=256).
     pub(crate) fn with_image_batch_records(mut self, records: usize) -> Self {
@@ -673,6 +722,21 @@ impl NativeJoinedDataHandoff {
         };
         let initial = members.role(plan, &target, parent)?;
         let scope = RecoveryFenceScope::from_role(&initial)?;
+        #[cfg(test)]
+        {
+            if !self.target_fenced {
+                let handoff = handoff_role(parent)?;
+                let source = capture.authorize_target_install()?;
+                self.probe_restart(
+                    "no recovery session",
+                    &runtime,
+                    &scope,
+                    &source,
+                    &NativeImageInstallRole::CommittedHandoff(&handoff),
+                    Uuid::now_v7(),
+                );
+            }
+        }
         if !self.target_fenced {
             runtime.fence_epoch(
                 &members.actor,
@@ -688,6 +752,40 @@ impl NativeJoinedDataHandoff {
         let image_role = NativeImageInstallRole::CommittedHandoff(&handoff);
         let attempt = Uuid::now_v7();
         let source = capture.authorize_target_install()?;
+        #[cfg(test)]
+        {
+            if self.target_leased {
+                if let Some(dropped) = self.last_attempt {
+                    self.probe_restart(
+                        "dropped attempt reused",
+                        &runtime,
+                        &scope,
+                        &source,
+                        &image_role,
+                        dropped,
+                    );
+                }
+                let mut foreign = scope.clone();
+                foreign.recovery_nonce = Uuid::now_v7();
+                self.probe_restart(
+                    "foreign session",
+                    &runtime,
+                    &foreign,
+                    &source,
+                    &image_role,
+                    Uuid::now_v7(),
+                );
+            } else {
+                self.probe_restart(
+                    "session never transferred",
+                    &runtime,
+                    &scope,
+                    &source,
+                    &image_role,
+                    Uuid::now_v7(),
+                );
+            }
+        }
         let lease = if self.target_leased {
             runtime.restart_dropped_image_transfer(
                 &scope,
@@ -708,6 +806,7 @@ impl NativeJoinedDataHandoff {
             )?
         };
         self.target_leased = true;
+        self.last_attempt = Some(attempt);
         let mut install: NativeRangeImageInstaller =
             service.lock().begin_native_range_image_install(
                 &source,
@@ -717,6 +816,15 @@ impl NativeJoinedDataHandoff {
                 attempt,
                 &session,
             )?;
+        #[cfg(test)]
+        self.probe_restart(
+            "lease still held",
+            &runtime,
+            &scope,
+            &source,
+            &image_role,
+            Uuid::now_v7(),
+        );
         drop(source);
         loop {
             let cursor = capture.history_cursor().clone();

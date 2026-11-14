@@ -20,7 +20,9 @@ use crate::distribution_native_host::joined_data_handoff::{
     NativeJoinedDataHandoff, NativeJoinedDataHandoffHosts, NativeJoinedDataHandoffStage as Stage,
     NativeJoinedDataMember, NativeJoinedDataPlanningView,
 };
-use crate::distribution_range_handoff::{NativeJointHandoffRuntime, NativeJointOldObservation};
+use crate::distribution_range_handoff::{
+    NativeJointHandoffPlan, NativeJointHandoffRuntime, NativeJointOldObservation,
+};
 
 type Transport = Arc<TcpClusterRelocationTransport>;
 
@@ -811,29 +813,214 @@ fn native_fifth_data_path_target_stopped_after_allocation_aborts_to_original_vot
     });
 }
 
-/// The abort leaves nothing behind: the same driver starts a new learner
-/// allocation afterwards and completes the path, and the rows acknowledged by
-/// the original voters after the abort are part of the shipped image.
+/// One fresh committed-handoff role of `recipient` for exactly the given
+/// relocation identity, witnessed by the recipient's own metadata provider.
+#[allow(clippy::too_many_arguments)]
+fn witness_handoff_role(
+    five: &Five,
+    range: &crate::RangeDescriptor,
+    recipient: usize,
+    relocation_id: RelocationId,
+    plan_id: &str,
+    session_id: Uuid,
+    nonce: Uuid,
+) -> Result<RecoveryRoleAdmission> {
+    let actor = five.clients[index_of(&range.leader)].local_metadata_read_participant();
+    let client = if recipient == 4 {
+        five.host.joined_data_handoff_parts()?.1
+    } else {
+        five.clients[recipient].clone()
+    };
+    let provider = MetadataReadProvider::new(five.metadata[recipient].clone(), client)?;
+    let business = Uuid::now_v7();
+    let challenge = Uuid::now_v7();
+    let purpose = crate::distribution_consensus::MetadataRecoveryRolePurpose::CommittedHandoff {
+        relocation_id,
+        plan_id: plan_id.into(),
+        session_id,
+        nonce,
+    };
+    let observed = provider.witness_recovery_role(
+        &actor,
+        business,
+        range.id,
+        range.epoch,
+        nonce,
+        challenge,
+        purpose.clone(),
+        &budget(5000),
+    )?;
+    RecoveryRoleAdmission::from_witness(
+        observed,
+        &actor,
+        &node(recipient),
+        business,
+        range.id,
+        range.epoch,
+        nonce,
+        challenge,
+        &purpose,
+    )
+}
+
+fn handoff_role(
+    five: &Five,
+    plan: &RangeRelocation,
+    range: &crate::RangeDescriptor,
+    recipient: usize,
+) -> Result<RecoveryRoleAdmission> {
+    let session = plan.handoff_session.as_ref().unwrap();
+    witness_handoff_role(
+        five,
+        range,
+        recipient,
+        plan.id,
+        &plan.plan_id,
+        session.session_id,
+        session.nonce,
+    )
+}
+
+/// The abort leaves nothing behind, and the range epoch it gives back is safe
+/// to mint again. The same driver starts a new learner allocation afterwards:
+/// the range reaches the same epoch a second time with a different learner
+/// replica, relocation and session. Nothing retained from the first attempt
+/// is accepted: not a request issued before the abort and delivered after it,
+/// not a fresh role for the first identity, not the first identity mixed with
+/// the new relocation, not on an old voter and not on the aborted target. A
+/// client that still holds the first allocation's descriptor recovers. The
+/// path then completes, and the rows acknowledged after the abort are part of
+/// the shipped image.
 #[test]
 fn native_fifth_data_path_abort_then_new_handoff_completes() {
     run("fifth-data-path-abort-retry", |five| {
         let parent = CancellationToken::uncancelable();
         let mut scenario = prepare(five);
-        let first = relocation_after(allocate_only(five, &mut scenario), &scenario);
+        let pending1 = allocate_only(five, &mut scenario);
+        let first = relocation_after(pending1.clone(), &scenario);
+        let range1 = pending1.range_by_id(scenario.original.id).unwrap().clone();
+        let session1 = first.handoff_session.clone().unwrap();
+        let stale_client = gateway(five, &pending1, 5);
+        let voter = *scenario
+            .old_voters
+            .iter()
+            .find(|i| **i != scenario.old_leader)
+            .unwrap();
+        // A real first-attempt source close request, issued before the abort
+        // and delivered after it: the old voter's role, its own metadata
+        // observation and the plan they form.
+        let role1 = handoff_role(five, &first, &range1, voter).unwrap();
+        let own_business = Uuid::now_v7();
+        let own1 = five.clients[voter]
+            .acquire_host_metadata_observation(
+                &node(0),
+                own_business,
+                Duration::from_secs(5),
+                &budget(5000),
+            )
+            .unwrap();
+        let plan1 =
+            NativeJointHandoffPlan::from_actual_role_and_own(&role1, &own1, own_business).unwrap();
+        assert!(handoff_role(five, &first, &range1, 4).is_ok());
+
         scenario
             .handoff
             .abort_before_cut(&mut *five, &parent)
             .unwrap();
         scenario.mark("aborted to the original voters");
+
+        let runtime =
+            Arc::new(NativeJointHandoffRuntime::new(five.services[voter].clone()).unwrap());
+        let delayed = five.controls[voter]
+            .close_initial_old_step(
+                runtime.clone(),
+                Arc::new(role1),
+                own1,
+                own_business,
+                &budget(5000),
+            )
+            .err()
+            .expect("a source close issued before the abort was accepted after it");
+        eprintln!("FIFTH_DATA_PATH delayed first-attempt close refused: {delayed}");
+        drop(runtime);
+        assert!(
+            five.services[voter]
+                .lock()
+                .range_write_progress(scenario.original.id)
+                .current_epoch
+                <= scenario.original.epoch,
+            "the refused close must not have fenced the old voter"
+        );
+        // No fresh role exists for the aborted identity, at either epoch, on
+        // an old voter or on the aborted target.
+        for recipient in [voter, 4] {
+            assert!(handoff_role(five, &first, &range1, recipient).is_err());
+            assert!(handoff_role(five, &first, &scenario.original, recipient).is_err());
+        }
         assert_aborted_to_original_voters(five, &mut scenario);
+        // The client that cached the first allocation's descriptor recovers.
+        let aborted = committed(five);
+        let key = key_for(&aborted, scenario.original.id, "stale-client-after-abort");
+        let value = serde_json::json!({"fifth_data_path":"stale client after abort"});
+        append_until_acknowledged(&stale_client, &key, &value);
+        assert_eq!(
+            strong_until_served(&stale_client, &key).as_ref(),
+            Some(&value)
+        );
+        scenario.acknowledged.push((key, value));
+        scenario.mark("stale client recovered after the abort");
+
+        // The new handoff mints the same range epoch again.
+        assert_eq!(
+            scenario
+                .handoff
+                .drive_until(&mut *five, Some(Stage::LearnerAllocated), &parent)
+                .unwrap(),
+            Stage::LearnerAllocated
+        );
+        let pending2 = committed(five);
+        let second = relocation(five, &scenario);
+        let range2 = pending2.range_by_id(scenario.original.id).unwrap().clone();
+        let session2 = second.handoff_session.clone().unwrap();
+        assert_eq!(range2.epoch, range1.epoch, "the epoch is minted again");
+        assert_eq!(range2.leader, range1.leader);
+        assert_ne!(range2, range1, "the two descriptors of that epoch differ");
+        assert_ne!(second.id, first.id, "the new handoff is a new relocation");
+        assert_ne!(second.target_replica_id, first.target_replica_id);
+        assert_ne!(session2.session_id, session1.session_id);
+        assert_ne!(session2.nonce, session1.nonce);
+        assert!(pending2.generation > pending1.generation);
+        for recipient in [voter, 4] {
+            // The first identity, and the first session under the new
+            // relocation, are refused by the metadata witness.
+            assert!(handoff_role(five, &first, &range2, recipient).is_err());
+            assert!(witness_handoff_role(
+                five,
+                &range2,
+                recipient,
+                second.id,
+                &second.plan_id,
+                session1.session_id,
+                session1.nonce,
+            )
+            .is_err());
+        }
+        // A current role of the new handoff exists and the first attempt's
+        // retained plan refuses it.
+        let role2 = handoff_role(five, &second, &range2, voter).unwrap();
+        let mismatch = plan1.require_role(&role2).unwrap_err();
+        eprintln!("FIFTH_DATA_PATH first plan refuses the new handoff's role: {mismatch}");
+        drop(role2);
+        scenario.mark("first attempt refused at the re-minted epoch");
+
         assert_eq!(
             scenario.handoff.drive(&mut *five, &parent).unwrap(),
             Stage::Serving
         );
-        let second = relocation(five, &scenario);
-        assert_ne!(second.id, first.id, "the new handoff is a new relocation");
-        assert_ne!(second.handoff_session, first.handoff_session);
         scenario.mark("new handoff completed after the abort");
+        // The same stale client follows the range to its new leader.
+        let (key, value) = scenario.acknowledged[0].clone();
+        assert_eq!(strong_until_served(&stale_client, &key), Some(value));
         accept(five, &mut scenario);
     });
 }
@@ -847,6 +1034,9 @@ fn native_fifth_data_path_transfer_failure_after_source_cut_resumes_to_completio
     run("fifth-data-path-resume", |five| {
         let parent = CancellationToken::uncancelable();
         let mut scenario = prepare(five);
+        scenario.handoff = NativeJoinedDataHandoff::new(scenario.original.id, node(4))
+            .with_image_batch_records(1)
+            .test_probe_restart_refusals();
         five.fail_transfer_after = Some(1);
         let failed = scenario.handoff.drive(&mut *five, &parent).unwrap_err();
         eprintln!("FIFTH_DATA_PATH transfer failed after source cut: {failed}");
@@ -893,6 +1083,32 @@ fn native_fifth_data_path_transfer_failure_after_source_cut_resumes_to_completio
             Stage::Serving
         );
         scenario.mark("resumed to completion");
+        // In every state the install passed through, the runtime refused to
+        // restart a transfer that was not a dropped one of this session.
+        let probes = scenario.handoff.test_restart_probes().to_vec();
+        eprintln!("FIFTH_DATA_PATH restart refusals: {probes:?}");
+        let expected = [
+            ("no recovery session", "no dropped image recovery session"),
+            (
+                "session never transferred",
+                "no retained dropped-transfer preflight",
+            ),
+            ("lease still held", "image freeze is still leased"),
+            ("dropped attempt reused", "attempt is not new"),
+            (
+                "foreign session",
+                "does not bind the independently fresh role",
+            ),
+            ("lease still held", "image freeze is still leased"),
+        ];
+        assert_eq!(probes.len(), expected.len());
+        for ((label, refusal), (expected_label, expected_refusal)) in probes.iter().zip(expected) {
+            assert_eq!(*label, expected_label);
+            assert!(
+                refusal.contains(expected_refusal),
+                "{label}: unexpected answer {refusal}"
+            );
+        }
         accept(five, &mut scenario);
     });
 }

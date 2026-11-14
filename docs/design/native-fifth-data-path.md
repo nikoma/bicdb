@@ -92,6 +92,57 @@ prepared entry on the leader that generic recovery will not resolve. Making
 followers accept ordinary replication at that epoch would change a native
 refusal, so it is not done here.
 
+### The abort gives the range epoch back; minting it again is safe
+
+The abort returns the range from the allocation epoch `e+1` to `e`, so a later
+handoff commits `e+1` a second time. The two descriptors of that epoch are
+not the same descriptor, and nothing that consumes a range epoch accepts one
+for the other:
+
+- **Identity beyond (range, epoch).** The abort keeps the relocation and
+  replica counters advanced, so the second allocation has a new relocation
+  id, a new learner replica id (hence a different descriptor and
+  configuration digest) and a new random session id and nonce. Every handoff
+  operation on an old voter or on the target runs under a role that the
+  metadata leader witnesses freshly for exactly (relocation id, plan id,
+  session id, nonce) against the committed relocation; the plan checksum, the
+  recovery fence scope, the durable promise, the joint session and the image
+  install intent all carry that session and nonce. A role for the aborted
+  identity cannot be witnessed after the abort, at either epoch, and the
+  first session under the new relocation is refused too.
+- **A request issued before the abort and delivered after it.** A role lives
+  five seconds. The source close re-checks at every persistence boundary that
+  the voter's own metadata store is still at the commit index and committed
+  configuration it was issued against, so a voter that applied the abort
+  refuses the close and records nothing.
+- **Durable state keyed by epoch.** Before the first promise no member holds
+  durable state of `e+1`: the old voters' range logs stay at `e` (the abort
+  requires that of every old voter), and the target is fenced and receives
+  its install only after a closed old majority, which is after promises
+  exist. A promise, a recovery fence or an install intent left by another
+  session at the same epoch is refused, never adopted: each compares session,
+  nonce or configuration digest, not the epoch alone.
+- **State keyed by the voter configuration only.** The installed writer
+  policy and the leader's recovered-epoch mark are keyed by (range, epoch,
+  leader, voters), which is identical for both descriptors and carries no
+  relocation authority. The driver does not create either at `e+1` before
+  the cut.
+- **Clients and routing.** Clients and member transports replace their
+  configuration by metadata generation, which only grows; no consumer
+  refuses a lower range epoch at a higher generation. A client that cached
+  the first `e+1` descriptor is refused by the leader, refreshes, and
+  continues at `e` and later at the new leader.
+
+Not covered: a second collector that starts a source round concurrently with
+the abort. An old voter that has not yet applied the abort could then record
+a promise for the removed relocation. It would be refused by every later
+handoff (different session) and that voter would need repair. One driver per
+range is assumed.
+
+`native_fifth_data_path_abort_then_new_handoff_completes` exercises the
+points above on the same target; the fixture has one spare member, so a
+second handoff onto a different target is not exercised.
+
 **Resume (steps 3 to 9).** The driver is run again. Each run derives its
 position from the committed metadata (the relocation phase and the staged
 joint record) and from the custody it retains, and continues from there:
@@ -172,14 +223,24 @@ wait for a committed configuration are fixture wiring.
   again, no relocation is left, new writes are acknowledged on a majority of
   the original voters and every acknowledged row is Strong-readable.
 - `native_fifth_data_path_abort_then_new_handoff_completes` aborts with the
-  fifth member running, writes on the original voters, and runs the driver
-  again: a new relocation completes with the acceptance, including the rows
-  written after the abort.
+  fifth member running and writes on the original voters. A source close
+  issued before the abort and delivered after it is refused and fences
+  nothing; no role can be witnessed for the aborted identity; a client holding
+  the first allocation's descriptor writes and reads again. The driver then
+  allocates again: the same epoch carries a different descriptor, relocation
+  and session, the first identity and the first session under the new
+  relocation are refused on an old voter and on the target, and the first
+  attempt's plan refuses a role of the new one. The new relocation completes
+  with the acceptance, including the rows written after the abort.
 - `native_fifth_data_path_transfer_failure_after_source_cut_resumes_to_completion`
   fails the transfer after the source cut and the first copied step. In that
   state every acknowledged row is on every old voter, a write is refused and
-  the abort is refused. Running the driver again closes the source again,
-  replaces the target's partial install and completes with the acceptance.
+  the abort is refused, with and without the driver's custody. Running the
+  driver again closes the source again, replaces the target's partial install
+  and completes with the acceptance. Along the way the target runtime is
+  asked to restart a transfer in each state where it must refuse (no
+  session, a session that never transferred, a lease still held, the dropped
+  attempt's own id, a scope of another session) and refuses each.
 - `native_fifth_data_path_interrupted_driver_reruns_to_completion` lets the
   driver return after the joint decision, after the certification and after
   the union membership, checks each time that the range refuses writes and

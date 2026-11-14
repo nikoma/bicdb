@@ -216,3 +216,17 @@ These diagnostics add evidence I/O inside the same existing network budgets;
 they do not establish performance or physical RPO/RTO results. The composed
 source and all seventeen selected fixture variants remain uncompiled and
 unexecuted at this freeze.
+
+
+The SDK journal has separate `original-sdk-rpc-before-app.json` and post-call
+index boundaries. Actual attachment, file byte counts before/after reads,
+parse/sequence completeness and each recorded frame's exact four-byte length
+header, declared/actual size and hash are reported. Gaps, malformed/partial
+frames and unstable files produce explicit evidence errors. A zero-record
+journal is an observation at that boundary and does not prove no attempt.
+The focused CI workflow uploads full fault artifacts to this public GitHub
+repository under its existing artifact access policy, including fixture
+custody and raw frames; local access permissions do not make that upstream
+capture confidential. Committed documentation projections must exclude all
+keys, custody contents and raw frame files, retaining only permitted logical
+reports and hashes. These fixtures use synthetic data and test credentials.

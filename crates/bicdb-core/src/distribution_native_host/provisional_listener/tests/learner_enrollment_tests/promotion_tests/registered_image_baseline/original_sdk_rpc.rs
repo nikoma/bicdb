@@ -58,7 +58,27 @@ impl Journal {
                 ));
             }
             let bytes = std::fs::read(entry.path())?;
+            let length_after = entry.metadata()?.len();
+            let stable = length == bytes.len() as u64 && length_after == length;
             let decoded = serde_json::from_slice::<serde_json::Value>(&bytes);
+            let (frame, frame_error) = match decoded.as_ref().ok().map(|v| &v["raw_frame"]) {
+                None | Some(serde_json::Value::Null) => (None, None),
+                Some(raw) => match serde_json::from_value::<Vec<u8>>(raw.clone()) {
+                    Err(error) => (None, Some(error.to_string())),
+                    Ok(raw) => {
+                        let header = raw.get(..4).map(|h| <[u8; 4]>::try_from(h).unwrap());
+                        let declared = header.map(u32::from_be_bytes);
+                        let exact =
+                            declared.is_some_and(|n| raw.len().checked_sub(4) == Some(n as usize));
+                        (Some(serde_json::json!({"actual_frame_bytes":raw.len(),
+                            "sha256":hex::encode(Sha256::digest(&raw)),
+                            "actual_length_header":header,"declared_payload_bytes":declared,
+                            "complete_length_framing":exact})),
+                            (!exact).then(||"actual recorded frame is partial or has mismatched length header".into()))
+                    }
+                },
+            };
+            complete &= stable && frame_error.is_none();
             complete &= decoded.as_ref().is_ok_and(|record| {
                 record["journal_sequence"].as_u64() == Some(records.len() as u64 + 1)
                     && name
@@ -69,6 +89,9 @@ impl Journal {
             });
             records.push(serde_json::json!({"file":name,"bytes":bytes.len(),
                 "sha256":hex::encode(Sha256::digest(&bytes)),
+                "file_bytes_before_read":length,"file_bytes_after_read":length_after,
+                "file_byte_count_stable":stable,"raw_frame_header_and_hash":frame,
+                "raw_frame_evidence_error":frame_error,
                 "attempt_id":decoded.as_ref().ok().map(|v|&v["attempt_id"]),
                 "journal_sequence":decoded.as_ref().ok().map(|v|&v["journal_sequence"]),
                 "phase":decoded.as_ref().ok().map(|v|&v["phase"]),
@@ -81,13 +104,15 @@ impl Journal {
                 "error_chain":decoded.as_ref().ok().map(|v|&v["error_chain"]),
                 "decode_error":decoded.as_ref().err().map(ToString::to_string)}));
         }
-        Ok(
-            serde_json::json!({"enabled_before_first_source_append":true,
+        Ok(serde_json::json!({"configured_for_original_sdk":true,
+            "attached_before_first_source_append":self.attached.load(std::sync::atomic::Ordering::Acquire),
+            "complete_record_decode_and_contiguous_sequence":complete,
+            "evidence_error":(!complete).then_some("malformed, gapped, partial or unstable actual journal records"),
+            "zero_records_do_not_prove_no_attempt":true,
             "configured_original_sdk_request_timeout_ms":2000,"max_records":LIMITS.max_records,
             "max_bytes":LIMITS.max_bytes,"actual_record_count":records.len(),"actual_bytes":total,
             "records":records,"raw_frame_bytes_retained":true,"native_phase_rpcs_in_this_observer":false,
-            "sdk_retry_or_error_selection_modified":false,"is_qualification":false}),
-        )
+            "sdk_retry_or_error_selection_modified":false,"is_qualification":false}))
     }
 }
 impl crate::ClusterRpcEvidenceObserver for Journal {

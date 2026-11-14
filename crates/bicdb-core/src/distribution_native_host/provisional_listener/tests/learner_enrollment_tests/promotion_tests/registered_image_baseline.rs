@@ -392,6 +392,10 @@ fn run_registered_image_baseline_with_placement_and_source(
                     .with_rpc_evidence_observer(journal.clone(), original_sdk_rpc::LIMITS)
                     .unwrap();
                 journal.mark_attached_before_first_append();
+                let before = journal.snapshot().unwrap();
+                evidence(&output.join("original-sdk-rpc-before-app.json"),&serde_json::json!({
+                    "capture_phase":"before_first_source_append_invocation","actual_observer":before,
+                    "zero_records_are_only_observation_at_this_boundary":true})).unwrap();
                 observed
             }
             None => gateway,
@@ -866,6 +870,7 @@ fn run_registered_image_baseline_with_placement_and_source(
         evidence_after(
             &output.join("original-sdk-rpc-index.json"),
             &serde_json::json!({
+            "capture_phase":"after_original_sdk_calls_returned_or_test_unwound",
             "actual_observer":sdk_rpc_capture,"observer_snapshot_error":sdk_rpc_error,
             "new_sdk_production_fix_included":false}),
             &mut evidence_errors,

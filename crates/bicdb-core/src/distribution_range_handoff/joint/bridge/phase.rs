@@ -348,8 +348,14 @@ impl NativeJointPreparationPhaseQuorum {
             return self.require_live();
         }
         #[cfg(all(test, feature = "tls-replication"))]
-        trace.mark("pin_release_before_full_sweep");
-        self.require_current()?;
+        trace.mark("pin_release_before_members");
+        // Each member's release below validates that member completely, under
+        // its own service lock, immediately before and immediately after its
+        // pin is taken. A separate full sweep on either side repeated those
+        // same checks and, at five members, did not fit one metadata window.
+        // A release that stops part-way is already a handled state: the pin
+        // is monotone and grants no quiescence.
+        self.require_live()?;
         #[cfg(all(test, feature = "tls-replication"))]
         trace.mark("pin_release_actual_members");
         for (node, fresh) in &self.observations {
@@ -361,8 +367,8 @@ impl NativeJointPreparationPhaseQuorum {
             old.release_fresh_pin(&service, &fresh.committed)?;
         }
         #[cfg(all(test, feature = "tls-replication"))]
-        trace.mark("pin_release_after_full_sweep");
-        self.require_current()
+        trace.mark("pin_release_after_members");
+        self.require_live()
     }
     #[cfg(feature = "tls-replication")]
     pub(crate) fn acquire_local_activation(
@@ -418,8 +424,8 @@ impl NativeJointPreparationPhaseQuorum {
         {
             return Err(invalid("fresh phase activation actual recipient changed"));
         }
-        // This operation checks ALL actual members before AND after pin release.
-        // Do not add an identical third sweep before this same operation.
+        // This operation checks EVERY actual member before AND after its own
+        // pin release. Do not add a further identical sweep around it.
         self.release_read_pins(
             #[cfg(test)]
             trace,

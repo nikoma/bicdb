@@ -251,3 +251,6 @@ impl NativeJointPreparedPublicationScope<'_> {
         Ok(())
     }
 }
+
+#[cfg(all(test, feature = "tls-replication"))]
+pub(super) mod test_controls;

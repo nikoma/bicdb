@@ -11,7 +11,11 @@ mod assigned_install;
 #[cfg(feature = "tls-replication")]
 mod joined_publication;
 #[cfg(feature = "tls-replication")]
+mod joined_receive;
+#[cfg(feature = "tls-replication")]
 pub(crate) use joined_publication::NativeJoinedPublicationScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_receive::NativeJoinedReceiveStorageScope;
 #[cfg(feature = "tls-replication")]
 mod data_domains;
 #[cfg(feature = "tls-replication")]

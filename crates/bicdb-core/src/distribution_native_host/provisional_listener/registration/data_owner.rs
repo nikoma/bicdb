@@ -5,12 +5,15 @@ use super::*;
 #[derive(Clone)]
 pub(crate) enum NativeDataOwnerAdmission {
     Initial(Arc<NativeInitialDataAdmission>),
+    // Same necessary DATA lifetime checks, distinct from INITIAL genesis or
+    // source hosting. Only the actual Joined host supplies this adapter.
+    Joined(Arc<NativeInitialDataAdmission>),
     Assigned(Arc<NativeAssignedDataAdmission>),
 }
 impl NativeDataOwnerAdmission {
     pub(crate) fn require_live(&self) -> Result<()> {
         match self {
-            Self::Initial(a) => a.require_live(),
+            Self::Initial(a) | Self::Joined(a) => a.require_live(),
             Self::Assigned(a) => a.require_live(),
         }
     }
@@ -20,7 +23,7 @@ impl NativeDataOwnerAdmission {
         runtime: &Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>,
     ) -> Result<()> {
         match self {
-            Self::Initial(a) => a.require_listener(service, runtime),
+            Self::Initial(a) | Self::Joined(a) => a.require_listener(service, runtime),
             Self::Assigned(a) => a.require_listener(service, runtime),
         }
     }
@@ -30,7 +33,7 @@ impl NativeDataOwnerAdmission {
         store: Uuid,
     ) -> Result<()> {
         match self {
-            Self::Initial(a) => a.require_routing_service(service, store),
+            Self::Initial(a) | Self::Joined(a) => a.require_routing_service(service, store),
             Self::Assigned(a) => a.require_routing_service(service, store),
         }
     }

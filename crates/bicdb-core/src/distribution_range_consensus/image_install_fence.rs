@@ -12,6 +12,27 @@ use crate::distribution_range_recovery::{HandoffRoleAdmission, RecoveryRoleAdmis
 
 use super::image_install_state::{ImageInstallIntent, MAX_INSTALL_INTENTS};
 
+#[cfg(feature = "tls-replication")]
+mod registered_remote;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote::NativeJoinedRemoteImageIntent;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote::NativeRegisteredRemoteImageIntent;
+#[cfg(feature = "tls-replication")]
+mod joined_installing;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_installing::{
+    NativeJoinedRemoteInstallingFence, NativeJoinedRemoteInstallingPublication,
+};
+#[cfg(feature = "tls-replication")]
+mod registered_installing;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use registered_installing::test_registered_remote_installing_after_fsync;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_installing::{
+    NativeRegisteredRemoteInstallingFence, NativeRegisteredRemoteInstallingPublication,
+};
+
 fn canonical_range(range: &RangeDescriptor) -> RangeDescriptor {
     let mut range = range.clone();
     range.approximate_bytes = 0;
@@ -1130,6 +1151,17 @@ impl RangeWriteStore {
         attempt_id: Uuid,
         expected_freeze_owner: Uuid,
     ) -> Result<ImageInstallIntent> {
+        if self.catalog.format_version >= super::REGISTERED_IMAGE_INSTALL_CATALOG_FORMAT
+            || self
+                .catalog
+                .image_install_intents
+                .get(&source.cut().range().id)
+                .is_some_and(|intent| intent.registered_proposal.is_some())
+        {
+            return Err(range_write_error(
+                "generic local image installer cannot replace a Registered remote attempt",
+            ));
+        }
         source.require_current()?;
         let cut = source.cut();
         role.require_scope(&cut.purpose(), cut.session_id(), cut.nonce())?;
@@ -1231,6 +1263,8 @@ impl RangeWriteStore {
             restore_activation: current.restore_activation().cloned(),
             schema_sha256: source.bindings().schema_sha256().to_string(),
             protected_proposal: None,
+            registered_proposal: None,
+            joined_proposal: None,
         };
         intent.validate()?;
         Ok(intent)
@@ -1270,6 +1304,16 @@ impl RangeWriteStore {
         role: &NativeImageInstallRole<'_>,
         frozen: &FrozenRangeMutationPermit,
     ) -> Result<()> {
+        if fence.intent.joined_proposal.is_some() {
+            return Err(range_write_error(
+                "Joined Installing requires actual original Joined scope",
+            ));
+        }
+        if fence.intent.registered_proposal.is_some() {
+            return Err(range_write_error(
+                "Registered remote Installing requires its original distinct owner and scope",
+            ));
+        }
         fence.require_live_role(role)?;
         admission.require_current(database)?;
         if let Some(pointer) = &fence.intent.protected_proposal {
@@ -1406,6 +1450,8 @@ mod tests {
             restore_activation: None,
             schema_sha256: "f".repeat(64),
             protected_proposal: None,
+            registered_proposal: None,
+            joined_proposal: None,
         }
     }
     fn store(root: &Path) -> RangeWriteStore {
@@ -1577,5 +1623,47 @@ mod tests {
         assert!(store(root.path())
             .require_no_image_install(range().id)
             .is_err());
+    }
+    #[test]
+    fn joined_intent_v2_refuses_first_format_and_mixed_pointer_provenance() {
+        // Integrity DTO test only: creates no actual native owner, lease,
+        // metadata Role, Installing fence, row grant or Serving permission.
+        let root = tempfile::tempdir().unwrap();
+        let mut catalog = store(root.path()).catalog;
+        let first = intent(7);
+        let first_bytes = serde_json::to_vec(&first).unwrap();
+        assert!(!String::from_utf8(first_bytes)
+            .unwrap()
+            .contains("joined_proposal"));
+        let mut joined = first.clone();
+        joined.joined_proposal = Some(super::super::NativeJoinedRemoteProposalPointer {
+            attempt_id: joined.attempt_id,
+            native_page_xid: 91,
+            checksum_sha256: "1".repeat(64),
+        });
+        joined.validate().unwrap();
+        assert_eq!(joined.core_sha256().unwrap(), first.core_sha256().unwrap());
+        catalog
+            .image_install_intents
+            .insert(joined.range.id, joined.clone());
+        catalog.native_writer_enforcement_version = Some(1);
+        catalog.native_abort_protocol = Some(
+            serde_json::from_value(serde_json::json!({
+                "store_id":Uuid::now_v7(),"ranges":{},
+            }))
+            .unwrap(),
+        );
+        catalog.format_version = super::super::REGISTERED_IMAGE_INSTALL_CATALOG_FORMAT;
+        assert!(
+            super::super::image_install_state::validate_catalog_install_intents(&catalog).is_err()
+        );
+        catalog.format_version = super::super::JOINED_IMAGE_INSTALL_CATALOG_FORMAT;
+        super::super::image_install_state::validate_catalog_install_intents(&catalog).unwrap();
+        joined.registered_proposal = Some(super::super::NativeRegisteredRemoteProposalPointer {
+            attempt_id: joined.attempt_id,
+            native_page_xid: 91,
+            checksum_sha256: "2".repeat(64),
+        });
+        assert!(joined.validate().is_err());
     }
 }

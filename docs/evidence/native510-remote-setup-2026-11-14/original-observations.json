@@ -1,0 +1,136 @@
+{
+  "failed_source": "d8115fedf13b0bd7107cfddd2664f2c6ea2f261f",
+  "run": 43572675143,
+  "job": 132380250977,
+  "complete_job_result": {
+    "passed": 273,
+    "failed": 47,
+    "ignored": 1,
+    "filtered": 924,
+    "elapsed_seconds": 2239.32
+  },
+  "raw_log": {
+    "filename": "job-132380250977.log.gz",
+    "decompressed_bytes": 12766010,
+    "decompressed_sha256": "07463b09c7df9ed59fe828d1813aaa81b65798cff5be6980f0d2b78dac568e3f"
+  },
+  "bounded_scope": {
+    "remote_new_and_decision_setup_failures": 13,
+    "wrong_actor_assertion_failure": 1,
+    "other_failures_not_explained_by_this_leaf": 33
+  },
+  "failures": [
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_wrong_actor_before_capture",
+      "panic_location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_discovery_tests.rs:135:9:",
+      "actual_error": "cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native host bootstrap: source discovery target identity differs",
+      "observed_status": "failed",
+      "requested_phase_control": "not reached for NEW/DECISION setup failures; discovery refused wrong actor before capture",
+      "raw_excerpt_recovered_after_interleaved_error_line": false
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_cancel_after_take_retains_exact_progress",
+      "panic_location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+      "observed_status": "failed",
+      "requested_phase_control": "not reached for NEW/DECISION setup failures; discovery refused wrong actor before capture",
+      "raw_excerpt_recovered_after_interleaved_error_line": false
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_cancel_before_take_same_phase_fresh_retry",
+      "panic_location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+      "observed_status": "failed",
+      "requested_phase_control": "not reached for NEW/DECISION setup failures; discovery refused wrong actor before capture",
+      "raw_excerpt_recovered_after_interleaved_error_line": false
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_changed_valid_quorum_cannot_replace_intent",
+      "panic_location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+      "observed_status": "failed",
+      "requested_phase_control": "not reached for NEW/DECISION setup failures; discovery refused wrong actor before capture",
+      "raw_excerpt_recovered_after_interleaved_error_line": false
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_materialization_independent_fetch_all_pin_owners",
+      "panic_location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+      "observed_status": "failed",
+      "requested_phase_control": "not reached for NEW/DECISION setup failures; discovery refused wrong actor before capture",
+      "raw_excerpt_recovered_after_interleaved_error_line": false
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_wrong_fact_digest_refuses_before_pin_take",
+      "panic_location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+      "observed_status": "failed",
+      "requested_phase_control": "not reached for NEW/DECISION setup failures; discovery refused wrong actor before capture",
+      "raw_excerpt_recovered_after_interleaved_error_line": false
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_commit_sync_unknown_never_replaces_xid",
+      "panic_location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+      "observed_status": "failed",
+      "requested_phase_control": "not reached for NEW/DECISION setup failures; discovery refused wrong actor before capture",
+      "raw_excerpt_recovered_after_interleaved_error_line": false
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_donor_provenance_and_native_target_record",
+      "panic_location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+      "observed_status": "failed",
+      "requested_phase_control": "not reached for NEW/DECISION setup failures; discovery refused wrong actor before capture",
+      "raw_excerpt_recovered_after_interleaved_error_line": false
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_postcommit_cancel_reconciles_same_xid",
+      "panic_location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+      "observed_status": "failed",
+      "requested_phase_control": "not reached for NEW/DECISION setup failures; discovery refused wrong actor before capture",
+      "raw_excerpt_recovered_after_interleaved_error_line": true
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_preput_abort_retains_original_attempt",
+      "panic_location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+      "observed_status": "failed",
+      "requested_phase_control": "not reached for NEW/DECISION setup failures; discovery refused wrong actor before capture",
+      "raw_excerpt_recovered_after_interleaved_error_line": false
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_nonleader_donor_independent_self_callback",
+      "panic_location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+      "observed_status": "failed",
+      "requested_phase_control": "not reached for NEW/DECISION setup failures; discovery refused wrong actor before capture",
+      "raw_excerpt_recovered_after_interleaved_error_line": false
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_observer_and_capture_ingress_refusals",
+      "panic_location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+      "observed_status": "failed",
+      "requested_phase_control": "not reached for NEW/DECISION setup failures; discovery refused wrong actor before capture",
+      "raw_excerpt_recovered_after_interleaved_error_line": false
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_retiree_postcommit_cancel_same_xid",
+      "panic_location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+      "observed_status": "failed",
+      "requested_phase_control": "not reached for NEW/DECISION setup failures; discovery refused wrong actor before capture",
+      "raw_excerpt_recovered_after_interleaved_error_line": false
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_survivor_native_body_and_same_xid",
+      "panic_location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+      "actual_error": "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+      "observed_status": "failed",
+      "requested_phase_control": "not reached for NEW/DECISION setup failures; discovery refused wrong actor before capture",
+      "raw_excerpt_recovered_after_interleaved_error_line": false
+    }
+  ]
+}

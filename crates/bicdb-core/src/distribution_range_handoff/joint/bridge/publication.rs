@@ -6,7 +6,7 @@ mod release_phase;
 pub(crate) use open_phase::{NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound};
 pub(crate) use release_phase::{
     NativeJointReleaseAdmission, NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum,
-    NativeJointReleasePhaseRound,
+    NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
 };
 
 pub(crate) struct NativeJointServingPublicationRound {
@@ -110,9 +110,14 @@ impl NativeJointServingPublicationRound {
                 "native bridge publication changed decision or local native history",
             ));
         }
-        self.phase = admission.phase.clone();
-        self.pending.remove(&node);
-        self.receipts.insert(node, Arc::new(receipt));
+        let retired = {
+            let _version = admission.committed().native_publication_guard()?;
+            let old_phase = std::mem::replace(&mut self.phase, admission.phase.clone());
+            self.pending.remove(&node);
+            let old_receipt = self.receipts.insert(node, Arc::new(receipt));
+            (old_phase, old_receipt)
+        };
+        drop(retired);
         Ok(())
     }
     /// Actual native producer succeeds, then the test loses its reply before
@@ -156,7 +161,10 @@ impl NativeJointServingPublicationRound {
                 .try_lock()
                 .ok_or_else(|| invalid("publication finish service busy"))?;
             phase.require_member_with_service(node, &service)?;
-            service.require_actual_native_joint_bridge(receipt)?;
+            service.require_joint_bridge_with_writer_domain(
+                receipt,
+                self.prepared.observations[node].actual.writer_domain(),
+            )?;
         }
         phase.require_live()?;
         Ok(NativeJointPublishedServingQuorum {
@@ -229,7 +237,10 @@ impl NativeJointPublishedServingQuorum {
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("native bridge majority service busy"))?;
-            service.require_actual_native_joint_bridge(receipt)?;
+            service.require_joint_bridge_with_writer_domain(
+                receipt,
+                self.prepared.observations[node].actual.writer_domain(),
+            )?;
         }
         Ok(())
     }
@@ -276,15 +287,23 @@ impl NativeJointPublishedServingQuorum {
             remaining,
             &cancellation,
         )?;
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &local.service,
+            &metadata,
+            business,
+            &cancellation,
+        )?;
         let fresh = {
             let service = local
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("joint open metadata service busy"))?;
-            service.observe_committed_native_joint_decision(
+            local.actual.observe_fresh_committed_with_point(
+                &service,
                 metadata,
                 business,
                 self.data().old_range().id,
+                metadata_point,
             )?
         };
         let cancellation = cancellation.child_with_deadline(fresh.deadline());
@@ -314,6 +333,23 @@ pub(crate) struct NativeJointOpenAdmission {
     cancellation: crate::CancellationToken,
 }
 impl NativeJointOpenAdmission {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn retain_registered_release_owner(
+        &self,
+        activation: Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>,
+    ) -> Result<crate::distribution_native_host::NativeRegisteredRemoteJointReleaseOwner> {
+        self.require_live()?;
+        if activation.native().data() != self.data()
+            || activation.native_bridge_sha256() != self.receipt.checksum_sha256()
+        {
+            return Err(invalid(
+                "Registered release changed original actual Open activation",
+            ));
+        }
+        self.local
+            .actual
+            .retain_registered_release_owner(self.local.service.clone(), activation)
+    }
     /// Retain only the actual image target lease for proof-authorized final
     /// release after all preparation/publication owners have drained.
     pub(crate) fn retain_image_release_owner(
@@ -372,15 +408,32 @@ impl NativeJointOpenAdmission {
     pub(crate) fn cancellation(&self) -> &crate::CancellationToken {
         &self.cancellation
     }
-    pub(crate) fn original_writer_for_activation(
+    pub(crate) fn original_writer_domain_for_activation(
         &self,
         database: &crate::BicDb,
         store: &crate::distribution_range_consensus::RangeWriteStore,
-    ) -> Result<(Arc<crate::db::NativeWriterHostState>, std::path::PathBuf)> {
+    ) -> Result<crate::db::NativeJointWriterDomain> {
         self.require_live()?;
-        let actual = self.local.actual.require_original_writer(database, store)?;
-        let (original, root) = self.local.actual.original_writer_for_continuation()?;
-        if !Arc::ptr_eq(&actual, &original) {
+        self.local
+            .actual
+            .require_original_phase_owner(database, store)?;
+        let domain = self.local.actual.writer_domain().clone();
+        domain.require_current(database, store, self.data().activation_range())?;
+        self.require_live()?;
+        Ok(domain)
+    }
+    pub(crate) fn original_phase_owner_for_activation(
+        &self,
+        database: &crate::BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<(crate::db::NativeJointPhaseOwner, std::path::PathBuf)> {
+        self.require_live()?;
+        let actual = self
+            .local
+            .actual
+            .require_original_phase_owner(database, store)?;
+        let (original, root) = self.local.actual.original_phase_owner_for_continuation()?;
+        if !actual.same_actual(&original) {
             return Err(invalid("joint activation changed preparation writer"));
         }
         self.require_live()?;
@@ -421,7 +474,12 @@ impl NativeJointOpenAdmission {
                 if let Some(phase) = &self.open_phase {
                     phase.require_member_with_service(node, &service)?;
                 } else {
-                    service.require_actual_native_joint_bridge(receipt)?;
+                    service.require_joint_bridge_with_writer_domain(
+                        receipt,
+                        self.quorum.prepared.observations[node]
+                            .actual
+                            .writer_domain(),
+                    )?;
                 }
             }
         }

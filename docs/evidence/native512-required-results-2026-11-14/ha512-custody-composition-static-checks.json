@@ -1,0 +1,55 @@
+{
+  "source": "82f540c244e10ccb5e97323eeab9ef37d3cffd76",
+  "base": "1742776ab02957a053aded2ad4f665500d9325bf",
+  "checked_at_utc": "2026-11-14T10:47:52.063764+00:00",
+  "scope": "composed W1/W2 source and18fixture correction; no compile/runtime execution",
+  "full_workspace_fmt": "passed cargo fmt --all -- --check exit0",
+  "version_identity": "passed29packages1.0.512-beta0trackedchanges",
+  "diff_check": "passed",
+  "exact_unchanged_protected_source_blobs": [
+    {
+      "path": "crates/bicdb-core/src/distribution_data.rs",
+      "blob": "083811a126ff444ed8802cb4e6c2acb12f5a6fbd"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/current_joint_recovery.rs",
+      "blob": "86e78b986079f68ab6ae9db4dfcf3342f4a78299"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/native_ready_catalog.rs",
+      "blob": "b40d9117aa0791867c1b7286264963ca6be12dd1"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/recovery_state.rs",
+      "blob": "f6a65b93770d95c85ebcb402ae61df072e5dd795"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_recovery.rs",
+      "blob": "e23855b8b173ccd033ffa42ece2d5ff3045f9c0c"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_recovery/quorum.rs",
+      "blob": "098092ffc55e6b473bf06182a39c1e233bbf8883"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_recovery/runtime.rs",
+      "blob": "4f22384a4340260125983075fc093f8a32b466db"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests/post_joint_no_data_tests.rs",
+      "blob": "b2de9fe6a93e7281ee9c801c74745add0ea2ca38"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport.rs",
+      "blob": "4c2ab74390ff71b72f3950f03e04fac023ee9404"
+    }
+  ],
+  "historical_trace_parity_command": {
+    "result": "failed comparison with an inapplicable baseline",
+    "reason": "Script strips marked trace blocks from candidate only; supplied174baseline already contains those same marked blocks. It is a historical uninstrumented-source comparator, not an incremental guard. Direct actual base/head Git blobs above are identical.",
+    "failed_path": "crates/bicdb-core/src/distribution_data.rs",
+    "runtime_test": false
+  },
+  "typecheck": "not run",
+  "production_qualified": false
+}

@@ -13,6 +13,9 @@ pub(super) struct AssignedCleanup {
     attempt: Option<NativeAssignedWriterInstallAttempt>,
     listener: Option<ClusterDataServerHandle>,
     _image: Option<NativeJointServingLease>,
+    _registered: Option<RegisteredServingPolicy>,
+    writer_data_domains: super::super::writer_data_domain::NativeHostWriterDataDomains,
+    dispatcher: Option<Arc<crate::distribution_native_read::NativeStrongEventDispatcher>>,
 }
 impl AssignedCleanup {
     pub(super) fn take(owner: &mut NativeAssignedDataHost) -> Self {
@@ -22,6 +25,25 @@ impl AssignedCleanup {
             attempt: owner.attempt.take(),
             listener: owner.listener.take(),
             _image: owner.image.take(),
+            _registered: owner.registered.take(),
+            writer_data_domains: std::mem::take(&mut owner.writer_data_domains),
+            dispatcher: None,
+        }
+    }
+    pub(super) fn from_registered_joined(
+        transfer: super::NativeRegisteredJoinedDataTransfer,
+        listener: Option<ClusterDataServerHandle>,
+        dispatcher: Option<Arc<crate::distribution_native_read::NativeStrongEventDispatcher>>,
+    ) -> Self {
+        Self {
+            parts: transfer.parts,
+            coordinator: Some(transfer.coordinator),
+            attempt: Some(transfer.attempt),
+            listener,
+            dispatcher,
+            _image: None,
+            _registered: Some(transfer.registered),
+            writer_data_domains: transfer.writer_data_domains,
         }
     }
     pub(super) fn quarantine(self) {
@@ -29,11 +51,17 @@ impl AssignedCleanup {
         let _ = Box::leak(Box::new(self));
     }
     fn try_finish(&mut self) -> bool {
+        if self.dispatcher.as_ref().is_some_and(|dispatcher| {
+            !dispatcher.try_clear_for_cleanup() || dispatcher.active_workers() != 0
+        }) {
+            return false;
+        }
         if self
             .listener
             .as_mut()
             .is_some_and(|l| !l.poll_shutdown_drained_for_cleanup())
             || !matches!(self.parts.runtime.active_contexts(), Ok(0))
+            || self.writer_data_domains.unresolved()
         {
             return false;
         }

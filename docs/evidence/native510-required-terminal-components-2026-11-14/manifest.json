@@ -1,0 +1,164 @@
+{
+  "schema": "bicdb-required-ci-terminal-components-v1",
+  "captured_at_utc": "2026-11-14T08:27:31.519142+00:00",
+  "run": 43572675143,
+  "source_commit": "d8115fedf13b0bd7107cfddd2664f2c6ea2f261f",
+  "source_version": "1.0.510-beta",
+  "tested_checkout": "b38f461ffc2a6729abb7a441bf25951009bbd721",
+  "tested_tree": "be4b39ad95e86abac73d7c7ca889301d10d88c90",
+  "tree_equality": "GitHub commit API confirms actual checkout tree equals exact local source tree; both parents retained in GitHub metadata",
+  "source_proof": {
+    "path": "tested-checkout-github-commit.json",
+    "sha256": "4625507aa81a593cbc5b05dcea03d4e729fc493d92c212abb1f05aed4139edf3"
+  },
+  "logs": [
+    {
+      "job_id": 132380234279,
+      "name": "Community-only workspace compiles, tests included",
+      "conclusion": "success",
+      "path": "job-132380234279.log.gz",
+      "bytes": 366918,
+      "sha256": "894489e086d17fc977d472bae767f10ed5a348ad51075a3aabecbfe1adb93b04",
+      "uncompressed_bytes": 3117838,
+      "uncompressed_sha256": "abbc974297b9ef83445827d4d08d96c52de364cbea38c2128fe349d5558f5800",
+      "metadata": {
+        "path": "job-132380234279-index.json",
+        "sha256": "d90a6b8d0184fd9fa7ba1c6efb06e35346879978c706a8dfe8b1a64a415702a6"
+      }
+    },
+    {
+      "job_id": 132380251018,
+      "name": "bicdb-core",
+      "conclusion": "failure",
+      "path": "job-132380251018.log.gz",
+      "bytes": 393705,
+      "sha256": "4c489b81cb7bf11eb378f094e1d0a22ee10f8352db96012ef9ba30960ae02547",
+      "uncompressed_bytes": 3183842,
+      "uncompressed_sha256": "4533358a9e1b50668f02b7853b0f4e786eb79940276993657f7a09ff52e8b2b1",
+      "metadata": {
+        "path": "job-132380251018-index.json",
+        "sha256": "f307e062e0fe104a791ffd496c70b0c96c41a0a7d8b22f870c9eb53bf0a99070"
+      }
+    },
+    {
+      "job_id": 132380250996,
+      "name": "bicdb-pgwire",
+      "conclusion": "failure",
+      "path": "job-132380250996.log.gz",
+      "bytes": 197422,
+      "sha256": "260086277f6eb6c3615df25dac03122138dbe5c596046e4395c14107897ec69d",
+      "uncompressed_bytes": 1574603,
+      "uncompressed_sha256": "413912c1bc536b535646ac88fbae7d70d7928f4e74102e54db9b3913a605bf00",
+      "metadata": {
+        "path": "job-132380250996-index.json",
+        "sha256": "4b1d19c0c22c4677bdff7af73c3c69b2b11027403ae42136acf049f5c4f9b33b"
+      }
+    }
+  ],
+  "original_pgwire_inventory": {
+    "path": "ha510-pgwire-oracle-stack-abort-capture.json",
+    "sha256": "729d96f2948475811d70d104811cab6b08b78689fb2e0717026ba90a620a56ba"
+  },
+  "classification": {
+    "compilation": "PASSED: existing workspace/all-target and no-default-Core consumer checks",
+    "core": "FAILED:914passed/2failed/8ignored; separately printed1-pass child is not added to parentcount",
+    "pgwire": "FAILED:14completedtargets227passed/0failed/1ignored; Oracle15thtarget33completedpasses/17withoutcompletion before stackoverflowSIGABRT6",
+    "oracle_crashing_case_and_frame": "INCONCLUSIVE; lastpass does not identify crashingcase",
+    "prepared_correction_runtime": "NOT TESTED",
+    "native_sql_rest": "not included: live at capture, no terminalresult asserted",
+    "physical_ha_scaleout": "NOT TESTED by these CIjobs; originalAzure qualification remainsFAILED"
+  },
+  "limits": "These are three terminal components of an unfinished workflow, not a complete CI pass. No Rust build or test was started by capture. Full raw bytes preserved without changing earlierfailed outcomes.",
+  "pgwire_pressure_artifact": {
+    "id": 14105341259,
+    "path": "pgwire-pressure-14105341259.zip",
+    "bytes": 5253,
+    "sha256": "025e8ac0bdb9fd49778ff33a76db75c8aaad46d06069b6934392547380eecdb7",
+    "zip_crc": "passed",
+    "members": [
+      {
+        "path": "pgwire.jsonl",
+        "bytes": 52004
+      }
+    ],
+    "metadata": {
+      "path": "pgwire-pressure-github-artifact.json",
+      "sha256": "d3bce4ee8832b133c1dbfdd0b787801d9bfa669c6f85570db4404471a0d4de81"
+    },
+    "scope": "existing required job guard evidence; no 100ms-level causal attribution"
+  },
+  "later_sql_terminal_capture": {
+    "job_id": 132380251021,
+    "conclusion": "success",
+    "receipt": {
+      "path": "ha510-sql-terminal-success-capture.json",
+      "bytes": 122890,
+      "sha256": "5e33bc94f718d3a2b8e910d9ede0199a8f202556a25f12f37a3e8c16c76ac294"
+    },
+    "canonical_target_contexts": 282,
+    "passed": 2681,
+    "failed": 0,
+    "ignored": 4,
+    "raw_log_retention": "Complete 400777285B log retained losslessly in independent local capture; this repository entry contains the exact-source per-target receipt and raw/compressed hashes, not the 46360766B gzip itself.",
+    "scope": "SQL regression suite only; failedCore/PG and pendingNative/REST remain independent"
+  },
+  "later_native_terminal_capture": {
+    "job_id": 132380250977,
+    "conclusion": "failure",
+    "passed": 273,
+    "failed": 47,
+    "ignored": 1,
+    "filtered_out": 924,
+    "files": [
+      {
+        "path": "job-132380250977.log.gz",
+        "bytes": 1770356,
+        "sha256": "76f0766c46fd823d5291397bd7d7416d24c8a742e879d0dc15f7211c16325a62"
+      },
+      {
+        "path": "job-132380250977-index.json",
+        "bytes": 5702,
+        "sha256": "8410084a020060e19aedf0f0df3530fe735b1472d2ae73864752e94daa43455c"
+      },
+      {
+        "path": "ha510-native-47-failures-terminal-capture.json",
+        "bytes": 174404,
+        "sha256": "2d31d23fcc8012f5979df0ad67d4bf99effc411d20dbfab3541aa3ac42ccab37"
+      },
+      {
+        "path": "ha510-native-terminal-pressure-capture.json",
+        "bytes": 2499,
+        "sha256": "6f2af393528e279f6a9cc5acff1cc0a568774706de4649c2120b3e8923092a8f"
+      },
+      {
+        "path": "early-native-pressure-14106765738.zip",
+        "bytes": 22648,
+        "sha256": "e701813e42f270158182803a15bc6522100a031b5c68b9c27870f830a918b3ef"
+      }
+    ],
+    "raw_bytes": 12766010,
+    "raw_sha256": "07463b09c7df9ed59fe828d1813aaa81b65798cff5be6980f0d2b78dac568e3f",
+    "groups_by_observed_error_location_only": {
+      "protected_DECISION_missing_actual_OWN_current_MStore": 22,
+      "range_metadata_requester_authority": 13,
+      "prepared_round_QueryTimedOut": 11,
+      "source_discovery_error_contract": 1
+    },
+    "causal_limit": "Repeated observed error/location groups are not47 independently established product defects. Setup failures did not reach their named downstream fault cuts. Prepared corrections remain unexecuted.",
+    "pressure_scope": "No low-memory or monitor interruption recorded; timing samples do not attribute100ms-scale scheduling or I/O causes.",
+    "remaining_jobs": "Remaining-workspace still live at capture; no terminal result asserted."
+  },
+  "prepared_round_source_review": {
+    "path": "d811-hot631-prepared-round-redundancy-independent-source-review.json",
+    "bytes": 16651,
+    "sha256": "6e7712add83ca64ece45f674cdf9a601bf598b111eedfe8928bb23054f4d6fa1",
+    "scope": "source support for removing only duplicate begin check; no runtime/timeout-fix claim"
+  },
+  "prepared_round_correction_source_receipt": {
+    "path": "ha510-hot631-correction-source-preservation.json",
+    "bytes": 1718,
+    "sha256": "1c94c36dd5d476bf9a441aa8b739f06f0018f0678d9dc36cfec2c81de8b05624",
+    "source_commit": "addebe38819a56c8302e6241faddaf949d4e9723",
+    "classification": "source/static checks only; no runtime timeoutfix claim"
+  }
+}

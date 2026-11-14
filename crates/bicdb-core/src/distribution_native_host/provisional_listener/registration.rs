@@ -11,6 +11,7 @@ use std::time::Instant;
 
 mod assigned_data;
 mod initial_data;
+mod remote_new_metadata;
 pub(crate) use assigned_data::NativeAssignedDataAdmission;
 use assigned_data::NativeAssignedDataHost;
 mod data_owner;
@@ -18,18 +19,35 @@ mod joined_data;
 pub(crate) use data_owner::NativeDataOwnerAdmission;
 use joined_data::NativeJoinedDataHost;
 pub use joined_data::NativeJoinedDataStatus;
+pub(crate) use joined_data::NativeJoinedRemoteInstallPreflight;
+pub(crate) use joined_data::{
+    NativeJoinedRangeReceiveOrigin, NativeJoinedRangeReceivePreflight,
+    NativeJoinedRangeReceiveRequest,
+};
+pub(crate) use joined_data::{NativeJoinedRemoteJointOwner, NativeJoinedRemoteMaterializedOwner};
 mod registered_replica;
+mod writer_data_domain;
 use registered_replica::NativeRegisteredReplicaReceiver;
 pub use registered_replica::NativeRegisteredReplicaReceiverStatus;
 pub(crate) use registered_replica::{
     NativeAssignedDataPolicyOrigin, NativeAssignedRegisteredClosedFence,
-    NativeRegisteredReplicaAdmission,
+    NativeRegisteredRemoteImageStep, NativeRegisteredRemoteInstallPreflight,
+    NativeRegisteredRemoteJointOwner, NativeRegisteredRemoteJointReleaseOwner,
+    NativeRegisteredRemoteJointTarget, NativeRegisteredRemoteProposalPoint,
+    NativeRegisteredRemoteTransactionRequest, NativeRegisteredRemoteTransferRequest,
+    NativeRegisteredReplicaAdmission, NativeRegisteredSelectedRangeNoDomain,
+    NativeRegisteredServingDataPolicyOrigin,
 };
 mod maintenance;
 use initial_data::NativeInitialDataHost;
 #[cfg(test)]
-pub(crate) use initial_data::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
-pub(crate) use initial_data::{NativeInitialDataAdmission, NativeInitialOldStep};
+pub(crate) use initial_data::{
+    after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
+    CancelRemoteOldAfterNativeWal,
+};
+pub(crate) use initial_data::{
+    NativeInitialDataAdmission, NativeInitialOldConstraintStep, NativeInitialOldStep,
+};
 pub use initial_data::{NativeInitialDataRangeStatus, NativeInitialDataStatus};
 mod schema_export;
 pub(crate) use maintenance::NativeMetadataMaintenanceReport;
@@ -588,6 +606,43 @@ impl NativeMetadataControlHost {
             .ok_or_else(|| invalid("actual initial DATA owner absent"))?
             .bind_image_source_process(process)
     }
+    pub(crate) fn collect_initial_remote_old_at_actual_donor(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteOldCutCertificate> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual initial donor absent"))?
+            .collect_remote_old_at_actual_donor(range, parent)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_collect_initial_remote_old_at_actual_donor(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+        after_fetch: impl FnOnce(
+            &HostMetadataReadObservation,
+            Uuid,
+            &[crate::distribution_transport::AuthenticatedNativeRemoteOldFrame],
+        ) -> Result<()>,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteOldCutCertificate> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual initial donor absent"))?
+            .test_collect_remote_old_at_actual_donor(range, parent, after_fetch)
+    }
+    pub(crate) fn retain_initial_image_from_remote_old(
+        &self,
+        old: &mut Option<crate::distribution_range_handoff::NativeRemoteOldCutCertificate>,
+        attempt: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_image::NativeRetainedRemoteImageSource> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual initial donor absent"))?
+            .retain_remote_image_from_remote_old(old, attempt, parent)
+    }
     pub(crate) fn retain_initial_remote_image_source(
         &self,
         old: &mut Option<crate::distribution_range_handoff::NativeJointOldClosedQuorum>,
@@ -825,3 +880,5 @@ impl NativeMetadataControlHost {
         Ok(())
     }
 }
+
+pub(crate) use joined_data::{NativeJoinedRemoteImagePoint, NativeJoinedRemoteTransactionRequest};

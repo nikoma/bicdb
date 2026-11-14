@@ -1,0 +1,40 @@
+{
+  "schema": "bicdb-source-audit-archive-v1",
+  "source_commit": "d8115fedf13b0bd7107cfddd2664f2c6ea2f261f",
+  "source_version": "1.0.510-beta",
+  "classification": "source inspection; no runtime or physical qualification",
+  "correction": "Initial production source-process binding exists. Searching only the fixture bind helper had produced an incorrect preliminary claim, explicitly withdrawn in the corrected report.",
+  "files": [
+    {
+      "path": "d811-native-operator-joined-r2-operational-gap-map-corrected.json",
+      "bytes": 21171,
+      "sha256": "a6648d06f7c57ac111cc7ceb5e3cc013eef2f0b36a177eef29ee9dd10889815c"
+    },
+    {
+      "path": "joined-repeated-source-d811-readonly-gap-map.json",
+      "bytes": 8889,
+      "sha256": "9c0cf709670d2ce49bee519be73a77089c625aac2e6c641b2ebd65077b1a9acb"
+    }
+  ],
+  "errata": [
+    {
+      "report": "d811-native-operator-joined-r2-operational-gap-map-corrected.json",
+      "field": "experiment_revalidation.can_current_normal_native_controller_execute_4_to_5",
+      "incorrect_phrase": "source lifetime attachment",
+      "corrected_missing_boundary": "native relocation scheduling and Joined source/phase adapters",
+      "reason": "Initial production source lifetime attachment is implemented; only the Joined source/phase adapter gap remains. The original report is preserved byte-for-byte."
+    }
+  ],
+  "peer_review": {
+    "path": "d811-operational-gap-peer-review-and-doc-matrix.json",
+    "bytes": 10538,
+    "sha256": "cc74c693a847cd85a1feba8b049f65f8be179fd5a595c4d870cd9706a82e867e",
+    "scope": "independent source/document review; all 39 source hashes revalidated; no runtime execution"
+  },
+  "root_validation": {
+    "reports_verified": 2,
+    "source_file_pins_verified": 39,
+    "edited_prose_local_link_check": "passed",
+    "scope": "source hashes and document links only; no runtime or production qualification"
+  }
+}

@@ -1,0 +1,2266 @@
+{
+  "run": 43580010702,
+  "job": 132402546382,
+  "job_name": "rest of workspace",
+  "source_head": "2ec5f7545b5bb3706b2e229151a17c2569103bfe",
+  "actual_checkout": "62d4f066af62945747ead2c0c9fa43fb10c30ae0",
+  "actual_checkout_tree": "87e34c5d45cf423914af4bdd500464279c0d6a15",
+  "conclusion": "success",
+  "raw_bytes": 114421689,
+  "raw_sha256": "5e234a85b4a9ae8aa0137acf155d0e8abe2ac9db39fe458c4146aeda43a84298",
+  "gzip_bytes": 11402637,
+  "gzip_sha256": "69c8693625b73252453f585ad2e7edea84d2d87b5995a7e169beeae013005977",
+  "actual_target_execution_count": 127,
+  "targets": [
+    {
+      "target_context": "2026-11-14T09:20:57.1777453Z      Running unittests src/lib.rs (target/debug/deps/bicdb_lua-13baa1498d4466d1)",
+      "header_line": 870,
+      "expected_running_count": 0,
+      "running_line": 872,
+      "result": {
+        "result_line": 874,
+        "log_line": "2026-11-14T09:20:57.1789190Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:20:57.8007146Z      Running tests/runtime.rs (target/debug/deps/runtime-4cafe3d3327b061e)",
+      "header_line": 948,
+      "expected_running_count": 3,
+      "running_line": 950,
+      "result": {
+        "result_line": 955,
+        "log_line": "2026-11-14T09:20:57.8446860Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.04
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:20:58.2801656Z      Running tests/workflow.rs (target/debug/deps/workflow-7a3ca9af7f737ed2)",
+      "header_line": 1029,
+      "expected_running_count": 2,
+      "running_line": 1031,
+      "result": {
+        "result_line": 1035,
+        "log_line": "2026-11-14T09:20:58.2824988Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:20:58.5108507Z    Doc-tests bicdb_lua",
+      "header_line": 1077,
+      "expected_running_count": 0,
+      "running_line": 1109,
+      "result": {
+        "result_line": 1111,
+        "log_line": "2026-11-14T09:20:58.5225720Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:21:12.1359878Z      Running unittests src/lib.rs (target/debug/deps/bicdb_page-b831fa98707f7437)",
+      "header_line": 1253,
+      "expected_running_count": 340,
+      "running_line": 1255,
+      "result": {
+        "result_line": 1599,
+        "log_line": "2026-11-14T09:22:01.6082932Z test result: ok. 340 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 49.47s",
+        "passed": 340,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 49.47
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:07.0209918Z      Running unittests src/bin/kill-writer.rs (target/debug/deps/kill_writer-59ad19930c565c8f)",
+      "header_line": 1724,
+      "expected_running_count": 0,
+      "running_line": 1726,
+      "result": {
+        "result_line": 1728,
+        "log_line": "2026-11-14T09:22:07.0221982Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:07.5618361Z      Running tests/bounded_checkpoint.rs (target/debug/deps/bounded_checkpoint-9841d96d0c2e121b)",
+      "header_line": 1854,
+      "expected_running_count": 7,
+      "running_line": 1856,
+      "result": {
+        "result_line": 1865,
+        "log_line": "2026-11-14T09:22:07.8013864Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s",
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.24
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:08.1932896Z      Running tests/concurrent_commits.rs (target/debug/deps/concurrent_commits-81e25c79bba9f35a)",
+      "header_line": 1991,
+      "expected_running_count": 3,
+      "running_line": 1993,
+      "result": {
+        "result_line": 1998,
+        "log_line": "2026-11-14T09:22:08.6384292Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.44
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:08.9882699Z      Running tests/concurrent_open.rs (target/debug/deps/concurrent_open-fae3e85f76af86fd)",
+      "header_line": 2124,
+      "expected_running_count": 3,
+      "running_line": 2126,
+      "result": {
+        "result_line": 2131,
+        "log_line": "2026-11-14T09:22:08.9935263Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:09.4084198Z      Running tests/crash_matrix.rs (target/debug/deps/crash_matrix-e0644292e882bbf9)",
+      "header_line": 2257,
+      "expected_running_count": 13,
+      "running_line": 2259,
+      "result": {
+        "result_line": 2274,
+        "log_line": "2026-11-14T09:22:09.5114898Z test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s",
+        "passed": 13,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.1
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:09.9666556Z      Running tests/extent_segments.rs (target/debug/deps/extent_segments-702f9f7a06d3ac95)",
+      "header_line": 2400,
+      "expected_running_count": 7,
+      "running_line": 2402,
+      "result": {
+        "result_line": 2411,
+        "log_line": "2026-11-14T09:22:10.2267864Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s",
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.26
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:10.6761855Z      Running tests/fail_closed_io.rs (target/debug/deps/fail_closed_io-d147097436dabb20)",
+      "header_line": 2537,
+      "expected_running_count": 10,
+      "running_line": 2539,
+      "result": {
+        "result_line": 2566,
+        "log_line": "2026-11-14T09:22:11.3567247Z test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s",
+        "passed": 10,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.68
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:11.9404543Z      Running tests/gap1_no_steal.rs (target/debug/deps/gap1_no_steal-6710faf16dcf93f3)",
+      "header_line": 2692,
+      "expected_running_count": 19,
+      "running_line": 2694,
+      "result": {
+        "result_line": 2732,
+        "log_line": "2026-11-14T09:22:12.7256644Z test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s",
+        "passed": 19,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.78
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:13.1418373Z      Running tests/heap_free_space.rs (target/debug/deps/heap_free_space-b4f2cdd57c193be7)",
+      "header_line": 2858,
+      "expected_running_count": 2,
+      "running_line": 2860,
+      "result": {
+        "result_line": 2864,
+        "log_line": "2026-11-14T09:22:17.9583027Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.82s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 4.82
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:18.3329646Z      Running tests/kill_recovery.rs (target/debug/deps/kill_recovery-a350389ac6918600)",
+      "header_line": 2990,
+      "expected_running_count": 3,
+      "running_line": 2992,
+      "result": {
+        "result_line": 2997,
+        "log_line": "2026-11-14T09:22:18.4213663Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.09
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:18.7611969Z      Running tests/large_offsets.rs (target/debug/deps/large_offsets-8eaf6e7929c333a5)",
+      "header_line": 3123,
+      "expected_running_count": 6,
+      "running_line": 3125,
+      "result": {
+        "result_line": 3133,
+        "log_line": "2026-11-14T09:22:18.7635788Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:19.1268504Z      Running tests/legacy_meta.rs (target/debug/deps/legacy_meta-9a7f660315875ec4)",
+      "header_line": 3259,
+      "expected_running_count": 3,
+      "running_line": 3261,
+      "result": {
+        "result_line": 3266,
+        "log_line": "2026-11-14T09:22:19.1356204Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.01
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:19.5007289Z      Running tests/page_backup.rs (target/debug/deps/page_backup-8e30e0c884ddcc91)",
+      "header_line": 3392,
+      "expected_running_count": 5,
+      "running_line": 3394,
+      "result": {
+        "result_line": 3401,
+        "log_line": "2026-11-14T09:22:19.5109121Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.01
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:19.9215930Z      Running tests/page_reclamation.rs (target/debug/deps/page_reclamation-5b496411500bfacb)",
+      "header_line": 3527,
+      "expected_running_count": 7,
+      "running_line": 3529,
+      "result": {
+        "result_line": 3538,
+        "log_line": "2026-11-14T09:22:20.1234534Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s",
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.2
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:20.6162416Z      Running tests/recovery_semantics.rs (target/debug/deps/recovery_semantics-9b9b12d4f532a37d)",
+      "header_line": 3664,
+      "expected_running_count": 7,
+      "running_line": 3666,
+      "result": {
+        "result_line": 3675,
+        "log_line": "2026-11-14T09:22:20.7898809Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s",
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.17
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:21.1459427Z      Running tests/session_durability.rs (target/debug/deps/session_durability-5b8a04adcfeffd74)",
+      "header_line": 3801,
+      "expected_running_count": 3,
+      "running_line": 3803,
+      "result": {
+        "result_line": 3808,
+        "log_line": "2026-11-14T09:22:21.2864404Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.14
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:21.6823886Z      Running tests/structural_cuts_experimental.rs (target/debug/deps/structural_cuts_experimental-df93b59cf1c643ae)",
+      "header_line": 3934,
+      "expected_running_count": 4,
+      "running_line": 3936,
+      "result": {
+        "result_line": 4009,
+        "log_line": "2026-11-14T09:22:23.6193533Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.94s",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 1.94
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:23.9831885Z      Running tests/tid_hints.rs (target/debug/deps/tid_hints-3ddf93853b32a0ac)",
+      "header_line": 4135,
+      "expected_running_count": 6,
+      "running_line": 4137,
+      "result": {
+        "result_line": 4145,
+        "log_line": "2026-11-14T09:22:24.0697584Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.09
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:24.4567196Z      Running tests/vacuum_dangling_links.rs (target/debug/deps/vacuum_dangling_links-ce6831623d425f05)",
+      "header_line": 4271,
+      "expected_running_count": 2,
+      "running_line": 4273,
+      "result": {
+        "result_line": 4277,
+        "log_line": "2026-11-14T09:22:24.5056800Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.05
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:22:25.4878765Z      Running tests/verify_store.rs (target/debug/deps/verify_store-9c69e13dc57da84c)",
+      "header_line": 4412,
+      "expected_running_count": 20,
+      "running_line": 4414,
+      "result": {
+        "result_line": 4437,
+        "log_line": "2026-11-14T09:25:04.0706752Z test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 158.58s",
+        "passed": 20,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 158.58
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:25:04.5358253Z      Running tests/wal_horizon_check.rs (target/debug/deps/wal_horizon_check-e63c8e528542546a)",
+      "header_line": 4577,
+      "expected_running_count": 7,
+      "running_line": 4579,
+      "result": {
+        "result_line": 4588,
+        "log_line": "2026-11-14T09:25:04.5701739Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.03
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:25:05.0473676Z      Running tests/wal_reset_ordering.rs (target/debug/deps/wal_reset_ordering-0ec80eb98832dcc5)",
+      "header_line": 4714,
+      "expected_running_count": 9,
+      "running_line": 4716,
+      "result": {
+        "result_line": 4732,
+        "log_line": "2026-11-14T09:25:05.1393608Z test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+        "passed": 9,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.09
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:25:05.5325511Z      Running tests/wal_segments.rs (target/debug/deps/wal_segments-cbc4cc973719f80f)",
+      "header_line": 4858,
+      "expected_running_count": 3,
+      "running_line": 4860,
+      "result": {
+        "result_line": 4865,
+        "log_line": "2026-11-14T09:25:05.6155388Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.08
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:25:05.8962128Z    Doc-tests bicdb_page",
+      "header_line": 4988,
+      "expected_running_count": 0,
+      "running_line": 4990,
+      "result": {
+        "result_line": 4992,
+        "log_line": "2026-11-14T09:25:06.4306651Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:25:51.7171141Z      Running unittests src/lib.rs (target/debug/deps/bicdb_script-664e41a86c1139f0)",
+      "header_line": 5197,
+      "expected_running_count": 0,
+      "running_line": 5199,
+      "result": {
+        "result_line": 5201,
+        "log_line": "2026-11-14T09:25:51.7184021Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:25:52.5926670Z      Running tests/runtime.rs (target/debug/deps/runtime-4efea1ac7a4c0f65)",
+      "header_line": 5339,
+      "expected_running_count": 4,
+      "running_line": 5341,
+      "result": {
+        "result_line": 5347,
+        "log_line": "2026-11-14T09:25:52.6278022Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.03
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:25:52.8510232Z    Doc-tests bicdb_script",
+      "header_line": 5390,
+      "expected_running_count": 0,
+      "running_line": 5485,
+      "result": {
+        "result_line": 5487,
+        "log_line": "2026-11-14T09:25:52.8912356Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:27:27.4220483Z      Running unittests src/lib.rs (target/debug/deps/bicdb_workflow-4e9f8d5094fed70d)",
+      "header_line": 19878,
+      "expected_running_count": 0,
+      "running_line": 19880,
+      "result": {
+        "result_line": 19882,
+        "log_line": "2026-11-14T09:27:27.4234110Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:27:28.8881969Z      Running tests/durable_versions.rs (target/debug/deps/durable_versions-3757b20a978586f7)",
+      "header_line": 34194,
+      "expected_running_count": 1,
+      "running_line": 34196,
+      "result": {
+        "result_line": 34199,
+        "log_line": "2026-11-14T09:27:29.0217239Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.13
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:27:29.6707258Z    Doc-tests bicdb_workflow",
+      "header_line": 48399,
+      "expected_running_count": 0,
+      "running_line": 48511,
+      "result": {
+        "result_line": 48513,
+        "log_line": "2026-11-14T09:27:29.6977565Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:29:26.2186454Z      Running unittests src/lib.rs (target/debug/deps/bicdb_extension-36f0b9ffa28b4078)",
+      "header_line": 48820,
+      "expected_running_count": 53,
+      "running_line": 48822,
+      "result": {
+        "result_line": 48877,
+        "log_line": "2026-11-14T09:29:26.2854574Z test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+        "passed": 53,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.06
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:29:39.7452547Z      Running tests/abi_compatibility_corpus.rs (target/debug/deps/abi_compatibility_corpus-d2bacbf64910efea)",
+      "header_line": 49120,
+      "expected_running_count": 2,
+      "running_line": 49122,
+      "result": {
+        "result_line": 49126,
+        "log_line": "2026-11-14T09:29:39.7476359Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:29:40.0812303Z    Doc-tests bicdb_extension",
+      "header_line": 49367,
+      "expected_running_count": 0,
+      "running_line": 49369,
+      "result": {
+        "result_line": 49371,
+        "log_line": "2026-11-14T09:29:41.1720447Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:31:27.2669745Z      Running unittests src/lib.rs (target/debug/deps/bicdb_sync-87e367ab7461157e)",
+      "header_line": 55676,
+      "expected_running_count": 2,
+      "running_line": 55678,
+      "result": {
+        "result_line": 55682,
+        "log_line": "2026-11-14T09:31:27.2687679Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:31:29.1806703Z      Running tests/lan_mesh.rs (target/debug/deps/lan_mesh-a468af561beff76a)",
+      "header_line": 61931,
+      "expected_running_count": 4,
+      "running_line": 61933,
+      "result": {
+        "result_line": 61939,
+        "log_line": "2026-11-14T09:31:30.5464867Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.36s",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 1.36
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:31:31.7371545Z      Running tests/mesh_session.rs (target/debug/deps/mesh_session-faf1fdef02d153fb)",
+      "header_line": 68188,
+      "expected_running_count": 7,
+      "running_line": 68190,
+      "result": {
+        "result_line": 68199,
+        "log_line": "2026-11-14T09:31:31.9692893Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s",
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.23
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:31:32.9417478Z      Running tests/offline_roundtrip.rs (target/debug/deps/offline_roundtrip-8bf6f43821bcc209)",
+      "header_line": 74448,
+      "expected_running_count": 2,
+      "running_line": 74450,
+      "result": {
+        "result_line": 74454,
+        "log_line": "2026-11-14T09:31:35.8403831Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.90s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 2.9
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:31:36.3969962Z    Doc-tests bicdb_sync",
+      "header_line": 80697,
+      "expected_running_count": 0,
+      "running_line": 80703,
+      "result": {
+        "result_line": 80705,
+        "log_line": "2026-11-14T09:31:36.3978273Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:36:52.9172757Z      Running unittests src/lib.rs (target/debug/deps/bicdb_resp-b4a59db6ac6f50a3)",
+      "header_line": 87865,
+      "expected_running_count": 9,
+      "running_line": 87867,
+      "result": {
+        "result_line": 87878,
+        "log_line": "2026-11-14T09:36:53.0168234Z test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+        "passed": 9,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.09
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:36:59.1660852Z      Running tests/hotview.rs (target/debug/deps/hotview-37163897d65b18c1)",
+      "header_line": 94963,
+      "expected_running_count": 9,
+      "running_line": 94965,
+      "result": {
+        "result_line": 94976,
+        "log_line": "2026-11-14T09:36:59.6505238Z test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s",
+        "passed": 9,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.47
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:37:03.7284704Z      Running tests/resp.rs (target/debug/deps/resp-958236c37b442d71)",
+      "header_line": 102061,
+      "expected_running_count": 19,
+      "running_line": 102063,
+      "result": {
+        "result_line": 102084,
+        "log_line": "2026-11-14T09:37:04.6527231Z test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.91s",
+        "passed": 19,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.91
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:37:05.3195220Z    Doc-tests bicdb_resp",
+      "header_line": 109167,
+      "expected_running_count": 0,
+      "running_line": 109169,
+      "result": {
+        "result_line": 109171,
+        "log_line": "2026-11-14T09:37:05.3195610Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:41:20.1173377Z      Running unittests src/lib.rs (target/debug/deps/bicdb_wasm-821d59964f9f4159)",
+      "header_line": 124179,
+      "expected_running_count": 9,
+      "running_line": 124181,
+      "result": {
+        "result_line": 124192,
+        "log_line": "2026-11-14T09:41:20.3305868Z test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s",
+        "passed": 9,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.2
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:41:23.8204352Z    Doc-tests bicdb_wasm",
+      "header_line": 139123,
+      "expected_running_count": 0,
+      "running_line": 139125,
+      "result": {
+        "result_line": 139127,
+        "log_line": "2026-11-14T09:41:23.8670730Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:46:25.9769173Z      Running unittests src/lib.rs (target/debug/deps/bicdb_analytics-3bbcf07ecb95e2a3)",
+      "header_line": 145655,
+      "expected_running_count": 0,
+      "running_line": 145657,
+      "result": {
+        "result_line": 145659,
+        "log_line": "2026-11-14T09:46:25.9780991Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:46:28.5883502Z      Running tests/analytics.rs (target/debug/deps/analytics-79b892520c566b38)",
+      "header_line": 152051,
+      "expected_running_count": 8,
+      "running_line": 152053,
+      "result": {
+        "result_line": 152063,
+        "log_line": "2026-11-14T09:46:28.6320025Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+        "passed": 8,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.04
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:46:29.2338130Z    Doc-tests bicdb_analytics",
+      "header_line": 158449,
+      "expected_running_count": 0,
+      "running_line": 158455,
+      "result": {
+        "result_line": 158457,
+        "log_line": "2026-11-14T09:46:29.2352958Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:55:24.9862471Z      Running unittests src/lib.rs (target/debug/deps/bicdb_bench-3bda7925f491ac26)",
+      "header_line": 166106,
+      "expected_running_count": 7,
+      "running_line": 166108,
+      "result": {
+        "result_line": 166117,
+        "log_line": "2026-11-14T09:55:26.2420194Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.25s",
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 1.25
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:55:30.3530479Z      Running unittests src/bin/plan-regret.rs (target/debug/deps/plan_regret-0d8865ad70ee6aa7)",
+      "header_line": 173616,
+      "expected_running_count": 0,
+      "running_line": 173618,
+      "result": {
+        "result_line": 173620,
+        "log_line": "2026-11-14T09:55:30.3548727Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:55:39.5710378Z      Running tests/reporting.rs (target/debug/deps/reporting-f62557201cc72254)",
+      "header_line": 181120,
+      "expected_running_count": 14,
+      "running_line": 181122,
+      "result": {
+        "result_line": 181138,
+        "log_line": "2026-11-14T09:55:43.4266065Z test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.84s",
+        "passed": 14,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 3.84
+      }
+    },
+    {
+      "target_context": "2026-11-14T09:55:44.2701324Z    Doc-tests bicdb_bench",
+      "header_line": 188635,
+      "expected_running_count": 0,
+      "running_line": 188637,
+      "result": {
+        "result_line": 188639,
+        "log_line": "2026-11-14T09:55:44.2701799Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:02:50.7564722Z      Running unittests src/lib.rs (target/debug/deps/bicdb_app_runtime-fe7f05a9e39ac219)",
+      "header_line": 196599,
+      "expected_running_count": 160,
+      "running_line": 196601,
+      "result": {
+        "result_line": 196763,
+        "log_line": "2026-11-14T10:02:54.0694947Z test result: ok. 159 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.30s",
+        "passed": 159,
+        "failed": 0,
+        "ignored": 1,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 3.3
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:03:10.7607525Z    Doc-tests bicdb_app_runtime",
+      "header_line": 204537,
+      "expected_running_count": 0,
+      "running_line": 204539,
+      "result": {
+        "result_line": 204541,
+        "log_line": "2026-11-14T10:03:11.4637335Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:09:06.9246853Z      Running unittests src/lib.rs (target/debug/deps/bicdb_cell-1ebe002a70888b56)",
+      "header_line": 212484,
+      "expected_running_count": 40,
+      "running_line": 212486,
+      "result": {
+        "result_line": 212530,
+        "log_line": "2026-11-14T10:09:31.4105419Z test result: ok. 40 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.47s",
+        "passed": 40,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 24.47
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:09:36.9204116Z      Running unittests src/main.rs (target/debug/deps/bicdb_cell-d3a0060ce4bb2245)",
+      "header_line": 220361,
+      "expected_running_count": 0,
+      "running_line": 220363,
+      "result": {
+        "result_line": 220365,
+        "log_line": "2026-11-14T10:09:36.9226266Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:09:42.8589379Z      Running tests/cli.rs (target/debug/deps/cli-156e8ca1f899fb7c)",
+      "header_line": 228197,
+      "expected_running_count": 2,
+      "running_line": 228199,
+      "result": {
+        "result_line": 228203,
+        "log_line": "2026-11-14T10:09:42.9084193Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.05
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:09:43.6804359Z    Doc-tests bicdb_cell",
+      "header_line": 235910,
+      "expected_running_count": 0,
+      "running_line": 236034,
+      "result": {
+        "result_line": 236036,
+        "log_line": "2026-11-14T10:09:43.7118815Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:09:49.5228300Z      Running unittests src/lib.rs (target/debug/deps/bicdb_cell_admission-610a5fa393a3ce0d)",
+      "header_line": 236111,
+      "expected_running_count": 5,
+      "running_line": 236113,
+      "result": {
+        "result_line": 236120,
+        "log_line": "2026-11-14T10:09:50.3918360Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s",
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.87
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:09:51.2222164Z    Doc-tests bicdb_cell_admission",
+      "header_line": 236184,
+      "expected_running_count": 0,
+      "running_line": 236186,
+      "result": {
+        "result_line": 236188,
+        "log_line": "2026-11-14T10:09:51.3195091Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:10:57.1532830Z      Running unittests src/lib.rs (target/debug/deps/bicdb_cell_device-385e930d16cda443)",
+      "header_line": 250429,
+      "expected_running_count": 2,
+      "running_line": 250431,
+      "result": {
+        "result_line": 250435,
+        "log_line": "2026-11-14T10:10:57.9417028Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.79
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:10:59.7631313Z    Doc-tests bicdb_cell_device",
+      "header_line": 264666,
+      "expected_running_count": 0,
+      "running_line": 264668,
+      "result": {
+        "result_line": 264670,
+        "log_line": "2026-11-14T10:10:59.9234920Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:12:03.9357316Z      Running unittests src/lib.rs (target/debug/deps/bicdb_cell_grant-f16fcc659beacbd0)",
+      "header_line": 278949,
+      "expected_running_count": 5,
+      "running_line": 278951,
+      "result": {
+        "result_line": 278958,
+        "log_line": "2026-11-14T10:12:04.5696754Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s",
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.63
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:12:06.0308104Z    Doc-tests bicdb_cell_grant",
+      "header_line": 293212,
+      "expected_running_count": 0,
+      "running_line": 293214,
+      "result": {
+        "result_line": 293216,
+        "log_line": "2026-11-14T10:12:06.1545032Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:13:19.9131718Z      Running unittests src/lib.rs (target/debug/deps/bicdb_cell_ha-a7e261987849eeec)",
+      "header_line": 299474,
+      "expected_running_count": 8,
+      "running_line": 299476,
+      "result": {
+        "result_line": 299486,
+        "log_line": "2026-11-14T10:13:20.0022901Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+        "passed": 8,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.09
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:13:21.3086840Z    Doc-tests bicdb_cell_ha",
+      "header_line": 305738,
+      "expected_running_count": 0,
+      "running_line": 305740,
+      "result": {
+        "result_line": 305742,
+        "log_line": "2026-11-14T10:13:21.4407672Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:13:22.8713576Z      Running unittests src/lib.rs (target/debug/deps/bicdb_fleet-2ce07e99de7b4ae3)",
+      "header_line": 305823,
+      "expected_running_count": 6,
+      "running_line": 305825,
+      "result": {
+        "result_line": 305833,
+        "log_line": "2026-11-14T10:13:22.9824733Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.11
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:13:24.1503150Z    Doc-tests bicdb_fleet",
+      "header_line": 305913,
+      "expected_running_count": 0,
+      "running_line": 305915,
+      "result": {
+        "result_line": 305917,
+        "log_line": "2026-11-14T10:13:24.2589214Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:13:27.8329423Z      Running unittests src/lib.rs (target/debug/deps/bicdb_blob_s3-2e34d5109b1f51b7)",
+      "header_line": 313692,
+      "expected_running_count": 5,
+      "running_line": 313694,
+      "result": {
+        "result_line": 313701,
+        "log_line": "2026-11-14T10:13:28.0479659Z test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.21s",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 1,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.21
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:13:29.2126965Z    Doc-tests bicdb_blob_s3",
+      "header_line": 321476,
+      "expected_running_count": 0,
+      "running_line": 321478,
+      "result": {
+        "result_line": 321480,
+        "log_line": "2026-11-14T10:13:29.2837193Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:13:36.0077403Z      Running unittests src/lib.rs (target/debug/deps/bicdb_provider_redis-33811610288da097)",
+      "header_line": 329275,
+      "expected_running_count": 3,
+      "running_line": 329277,
+      "result": {
+        "result_line": 329282,
+        "log_line": "2026-11-14T10:13:36.0098853Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:13:37.0417733Z    Doc-tests bicdb_provider_redis",
+      "header_line": 337074,
+      "expected_running_count": 0,
+      "running_line": 337076,
+      "result": {
+        "result_line": 337078,
+        "log_line": "2026-11-14T10:13:37.1016605Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:14:04.0178104Z      Running unittests src/lib.rs (target/debug/deps/bicdb_provider_email-fea7dbec6115d675)",
+      "header_line": 344888,
+      "expected_running_count": 2,
+      "running_line": 344890,
+      "result": {
+        "result_line": 344894,
+        "log_line": "2026-11-14T10:14:04.0195868Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:14:05.1115645Z    Doc-tests bicdb_provider_email",
+      "header_line": 352689,
+      "expected_running_count": 0,
+      "running_line": 352691,
+      "result": {
+        "result_line": 352693,
+        "log_line": "2026-11-14T10:14:05.1731851Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:14:13.4750321Z      Running unittests src/lib.rs (target/debug/deps/bicdb_provider_grpc-c4e15e21b0d009ba)",
+      "header_line": 360506,
+      "expected_running_count": 3,
+      "running_line": 360508,
+      "result": {
+        "result_line": 360513,
+        "log_line": "2026-11-14T10:14:13.5624803Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.09
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:14:15.0209162Z    Doc-tests bicdb_provider_grpc",
+      "header_line": 368309,
+      "expected_running_count": 0,
+      "running_line": 368311,
+      "result": {
+        "result_line": 368313,
+        "log_line": "2026-11-14T10:14:15.0891900Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:14:18.3085168Z      Running unittests src/lib.rs (target/debug/deps/bicdb_provider_tokenizer-dbc01fef46208ba6)",
+      "header_line": 376088,
+      "expected_running_count": 1,
+      "running_line": 376090,
+      "result": {
+        "result_line": 376093,
+        "log_line": "2026-11-14T10:14:18.3168952Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.01
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:14:19.2877773Z    Doc-tests bicdb_provider_tokenizer",
+      "header_line": 383868,
+      "expected_running_count": 0,
+      "running_line": 383870,
+      "result": {
+        "result_line": 383872,
+        "log_line": "2026-11-14T10:14:19.3455144Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:14:22.3325471Z      Running unittests src/lib.rs (target/debug/deps/bicdb_provider_embeddings-da59198447505d80)",
+      "header_line": 391647,
+      "expected_running_count": 1,
+      "running_line": 391649,
+      "result": {
+        "result_line": 391652,
+        "log_line": "2026-11-14T10:14:22.3346949Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:14:23.2800689Z    Doc-tests bicdb_provider_embeddings",
+      "header_line": 399427,
+      "expected_running_count": 0,
+      "running_line": 399429,
+      "result": {
+        "result_line": 399431,
+        "log_line": "2026-11-14T10:14:23.3376591Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:14:26.6349207Z      Running unittests src/lib.rs (target/debug/deps/bicdb_provider_llm-ac8d50e2fc04e0d8)",
+      "header_line": 407206,
+      "expected_running_count": 6,
+      "running_line": 407208,
+      "result": {
+        "result_line": 407216,
+        "log_line": "2026-11-14T10:14:26.6395209Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:14:27.8165103Z    Doc-tests bicdb_provider_llm",
+      "header_line": 414991,
+      "expected_running_count": 0,
+      "running_line": 414993,
+      "result": {
+        "result_line": 414995,
+        "log_line": "2026-11-14T10:14:27.8856061Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:25:10.6665088Z      Running unittests src/main.rs (target/debug/deps/bicdb-6ded1429adc13b5b)",
+      "header_line": 423496,
+      "expected_running_count": 29,
+      "running_line": 423498,
+      "result": {
+        "result_line": 423529,
+        "log_line": "2026-11-14T10:25:11.2911420Z test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s",
+        "passed": 29,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.61
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:25:28.4012349Z      Running tests/app_package_cli.rs (target/debug/deps/app_package_cli-3a05845605e018b4)",
+      "header_line": 431794,
+      "expected_running_count": 2,
+      "running_line": 431796,
+      "result": {
+        "result_line": 431803,
+        "log_line": "2026-11-14T10:25:28.8224815Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.42
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:25:30.1016650Z      Running tests/backup_online_cli.rs (target/debug/deps/backup_online_cli-d38e382bd5298ee6)",
+      "header_line": 440068,
+      "expected_running_count": 1,
+      "running_line": 440070,
+      "result": {
+        "result_line": 440073,
+        "log_line": "2026-11-14T10:25:34.7839232Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.68s",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 4.68
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:25:35.7068744Z      Running tests/branch_cli.rs (target/debug/deps/branch_cli-bb5246f2563464c1)",
+      "header_line": 447769,
+      "expected_running_count": 1,
+      "running_line": 448340,
+      "result": {
+        "result_line": 448343,
+        "log_line": "2026-11-14T10:25:36.3286866Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.83
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:25:37.3828820Z      Running tests/cell_mode_cli.rs (target/debug/deps/cell_mode_cli-acdf89fe2b3f7dc1)",
+      "header_line": 456605,
+      "expected_running_count": 3,
+      "running_line": 456610,
+      "result": {
+        "result_line": 456615,
+        "log_line": "2026-11-14T10:25:37.3834543Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.06
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:25:38.3717884Z      Running tests/export_cli.rs (target/debug/deps/export_cli-af52a734d42a9a39)",
+      "header_line": 464880,
+      "expected_running_count": 4,
+      "running_line": 464882,
+      "result": {
+        "result_line": 464888,
+        "log_line": "2026-11-14T10:25:39.0438172Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.67
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:25:42.4284910Z      Running tests/ha_failover_cli.rs (target/debug/deps/ha_failover_cli-353efa5bc6ff6463)",
+      "header_line": 473153,
+      "expected_running_count": 4,
+      "running_line": 473155,
+      "result": {
+        "result_line": 473161,
+        "log_line": "2026-11-14T10:25:57.5460096Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.12s",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 15.12
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:25:59.6916948Z      Running tests/native_metadata_operator_cli.rs (target/debug/deps/native_metadata_operator_cli-7b3d64416ab209d8)",
+      "header_line": 481426,
+      "expected_running_count": 6,
+      "running_line": 481428,
+      "result": {
+        "result_line": 481436,
+        "log_line": "2026-11-14T10:27:46.5241094Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 106.83s",
+        "passed": 6,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 106.83
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:27:50.6315979Z      Running tests/operator_cli.rs (target/debug/deps/operator_cli-373afbf5c94c6a92)",
+      "header_line": 489701,
+      "expected_running_count": 2,
+      "running_line": 489703,
+      "result": {
+        "result_line": 489707,
+        "log_line": "2026-11-14T10:27:50.9718073Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.33
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:27:51.9904288Z      Running tests/optional_bench_cli.rs (target/debug/deps/optional_bench_cli-c0926c0976f94f23)",
+      "header_line": 497969,
+      "expected_running_count": 1,
+      "running_line": 497974,
+      "result": {
+        "result_line": 497977,
+        "log_line": "2026-11-14T10:27:51.9909545Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.11
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:27:52.7025476Z      Running tests/oracle_assessment.rs (target/debug/deps/oracle_assessment-9d3beabee52d0b85)",
+      "header_line": 505738,
+      "expected_running_count": 2,
+      "running_line": 506244,
+      "result": {
+        "result_line": 506248,
+        "log_line": "2026-11-14T10:27:52.8323999Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.15
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:27:56.8773823Z      Running tests/oracle_profile_cli.rs (target/debug/deps/oracle_profile_cli-697e03eda766b849)",
+      "header_line": 514513,
+      "expected_running_count": 1,
+      "running_line": 514515,
+      "result": {
+        "result_line": 514518,
+        "log_line": "2026-11-14T10:27:57.0426973Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.15
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:28:00.0460032Z      Running tests/package_preverify_size_security.rs (target/debug/deps/package_preverify_size_security-e440171c491af5d9)",
+      "header_line": 522783,
+      "expected_running_count": 2,
+      "running_line": 522785,
+      "result": {
+        "result_line": 522789,
+        "log_line": "2026-11-14T10:28:00.3895892Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.34
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:28:26.4280640Z      Running tests/paged_recovery_cli.rs (target/debug/deps/paged_recovery_cli-0d40d42beebd9c4c)",
+      "header_line": 531085,
+      "expected_running_count": 5,
+      "running_line": 531087,
+      "result": {
+        "result_line": 531094,
+        "log_line": "2026-11-14T10:29:22.8958774Z test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 56.47s",
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 56.47
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:29:26.1592278Z      Running tests/server_configuration_cli.rs (target/debug/deps/server_configuration_cli-38649059609c509c)",
+      "header_line": 539359,
+      "expected_running_count": 3,
+      "running_line": 539361,
+      "result": {
+        "result_line": 539366,
+        "log_line": "2026-11-14T10:29:27.7266468Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.57s",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 1.57
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:29:28.6315537Z      Running tests/server_options_cli.rs (target/debug/deps/server_options_cli-21d13bf22a56f23d)",
+      "header_line": 547070,
+      "expected_running_count": 2,
+      "running_line": 547633,
+      "result": {
+        "result_line": 547637,
+        "log_line": "2026-11-14T10:29:28.7966097Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.19
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:29:30.0148444Z      Running tests/spatial_cli.rs (target/debug/deps/spatial_cli-5d34a32033d7d665)",
+      "header_line": 555902,
+      "expected_running_count": 8,
+      "running_line": 555904,
+      "result": {
+        "result_line": 555914,
+        "log_line": "2026-11-14T10:29:30.6821242Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s",
+        "passed": 8,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.66
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:29:32.1331044Z      Running tests/store_migrate_meta_cli.rs (target/debug/deps/store_migrate_meta_cli-cbc66b1406a3151e)",
+      "header_line": 564179,
+      "expected_running_count": 2,
+      "running_line": 564181,
+      "result": {
+        "result_line": 564185,
+        "log_line": "2026-11-14T10:29:32.5719193Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.44
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:29:36.7619199Z      Running tests/store_migrate_mode_cli.rs (target/debug/deps/store_migrate_mode_cli-a2087f1d0aaa79c3)",
+      "header_line": 572450,
+      "expected_running_count": 2,
+      "running_line": 572452,
+      "result": {
+        "result_line": 572456,
+        "log_line": "2026-11-14T10:29:37.6946594Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.92s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.92
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:29:39.1233655Z      Running tests/store_segment_cli.rs (target/debug/deps/store_segment_cli-dd570fc7169349fb)",
+      "header_line": 580721,
+      "expected_running_count": 1,
+      "running_line": 580723,
+      "result": {
+        "result_line": 580726,
+        "log_line": "2026-11-14T10:29:39.6294010Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.5
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:29:40.6040360Z      Running tests/tui_cli.rs (target/debug/deps/tui_cli-c2bb288f22aa3835)",
+      "header_line": 588549,
+      "expected_running_count": 1,
+      "running_line": 588993,
+      "result": {
+        "result_line": 588996,
+        "log_line": "2026-11-14T10:29:40.7202878Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.04
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:29:41.3420005Z      Running tests/user_password_env.rs (target/debug/deps/user_password_env-71c1b8ffd1b5706e)",
+      "header_line": 596724,
+      "expected_running_count": 4,
+      "running_line": 597263,
+      "result": {
+        "result_line": 597269,
+        "log_line": "2026-11-14T10:29:41.7823209Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.68
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:29:46.1686696Z      Running tests/verify_store_cli.rs (target/debug/deps/verify_store_cli-c44d3b4a75db3329)",
+      "header_line": 605534,
+      "expected_running_count": 2,
+      "running_line": 605536,
+      "result": {
+        "result_line": 605540,
+        "log_line": "2026-11-14T10:29:48.8360870Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.66s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 2.66
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:34:36.8390794Z      Running unittests src/lib.rs (target/debug/deps/bicdb_app_host-d2011a00fd47e45c)",
+      "header_line": 612871,
+      "expected_running_count": 8,
+      "running_line": 612873,
+      "result": {
+        "result_line": 612883,
+        "log_line": "2026-11-14T10:34:40.9219066Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.07s",
+        "passed": 8,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 4.07
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:34:52.7118687Z      Running unittests src/main.rs (target/debug/deps/bic-1bca2fb5a5c3fc30)",
+      "header_line": 620155,
+      "expected_running_count": 0,
+      "running_line": 620157,
+      "result": {
+        "result_line": 620159,
+        "log_line": "2026-11-14T10:34:52.7130438Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:35:00.0367922Z      Running tests/database.rs (target/debug/deps/database-ee741ab2caa8bfec)",
+      "header_line": 627432,
+      "expected_running_count": 13,
+      "running_line": 627434,
+      "result": {
+        "result_line": 627449,
+        "log_line": "2026-11-14T10:35:04.4870165Z test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.44s",
+        "passed": 13,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 4.44
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:35:09.0069415Z      Running tests/deployment.rs (target/debug/deps/deployment-869583a66fc7a064)",
+      "header_line": 634720,
+      "expected_running_count": 13,
+      "running_line": 634724,
+      "result": {
+        "result_line": 634747,
+        "log_line": "2026-11-14T10:35:21.9880130Z test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.97s",
+        "passed": 13,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 12.97
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:35:26.0674770Z      Running tests/events.rs (target/debug/deps/events-900f3d87ce983838)",
+      "header_line": 642020,
+      "expected_running_count": 2,
+      "running_line": 642022,
+      "result": {
+        "result_line": 642026,
+        "log_line": "2026-11-14T10:35:28.9124420Z test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.83s",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 1,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 2.83
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:35:31.5988838Z      Running tests/fleet.rs (target/debug/deps/fleet-dd4067e88744fcc6)",
+      "header_line": 649299,
+      "expected_running_count": 3,
+      "running_line": 649301,
+      "result": {
+        "result_line": 649309,
+        "log_line": "2026-11-14T10:35:43.1361202Z test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 11.54s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 1,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 11.54
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:35:46.8710761Z      Running tests/live.rs (target/debug/deps/live-a1e81625379e49e9)",
+      "header_line": 656582,
+      "expected_running_count": 2,
+      "running_line": 656584,
+      "result": {
+        "result_line": 656588,
+        "log_line": "2026-11-14T10:35:47.1189001Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.24
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:35:49.7164113Z      Running tests/microvm.rs (target/debug/deps/microvm-6e34aaa6441bc1ea)",
+      "header_line": 663861,
+      "expected_running_count": 1,
+      "running_line": 663863,
+      "result": {
+        "result_line": 663866,
+        "log_line": "2026-11-14T10:35:49.7187756Z test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 1,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:35:53.4027831Z      Running tests/preview.rs (target/debug/deps/preview-7e6541ce34c5405f)",
+      "header_line": 671139,
+      "expected_running_count": 4,
+      "running_line": 671141,
+      "result": {
+        "result_line": 671147,
+        "log_line": "2026-11-14T10:35:53.9309831Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.52
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:35:56.6623545Z      Running tests/private_runtime.rs (target/debug/deps/private_runtime-c89d87991dc2ccc5)",
+      "header_line": 678420,
+      "expected_running_count": 4,
+      "running_line": 678422,
+      "result": {
+        "result_line": 678428,
+        "log_line": "2026-11-14T10:35:58.9741995Z test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.31s",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 1,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 2.31
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:36:02.8435022Z      Running tests/recovery.rs (target/debug/deps/recovery-3e643b49525c9618)",
+      "header_line": 685701,
+      "expected_running_count": 2,
+      "running_line": 685703,
+      "result": {
+        "result_line": 685707,
+        "log_line": "2026-11-14T10:36:05.9426369Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.09s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 3.09
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:36:09.8899693Z      Running tests/replicated_state.rs (target/debug/deps/replicated_state-c71970a27ad16662)",
+      "header_line": 692980,
+      "expected_running_count": 4,
+      "running_line": 692982,
+      "result": {
+        "result_line": 692988,
+        "log_line": "2026-11-14T10:36:19.6128069Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.71s",
+        "passed": 4,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 9.71
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:36:23.9295696Z      Running tests/sql_listener.rs (target/debug/deps/sql_listener-3fad6616da9df5bc)",
+      "header_line": 700261,
+      "expected_running_count": 2,
+      "running_line": 700263,
+      "result": {
+        "result_line": 700267,
+        "log_line": "2026-11-14T10:36:27.2410368Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.30s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 3.3
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:36:29.8734480Z      Running tests/state_config.rs (target/debug/deps/state_config-a65421e584b95c34)",
+      "header_line": 707540,
+      "expected_running_count": 2,
+      "running_line": 707542,
+      "result": {
+        "result_line": 707546,
+        "log_line": "2026-11-14T10:36:29.8771365Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:36:34.6531094Z      Running tests/state_failover.rs (target/debug/deps/state_failover-75daf028f1d827d8)",
+      "header_line": 714819,
+      "expected_running_count": 13,
+      "running_line": 714821,
+      "result": {
+        "result_line": 714837,
+        "log_line": "2026-11-14T10:38:54.9769211Z test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 140.31s",
+        "passed": 13,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 140.31
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:38:58.6907543Z      Running tests/sync.rs (target/debug/deps/sync-d3817878c1156dda)",
+      "header_line": 722110,
+      "expected_running_count": 3,
+      "running_line": 722112,
+      "result": {
+        "result_line": 722117,
+        "log_line": "2026-11-14T10:38:59.3303473Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.63
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:39:00.0908002Z    Doc-tests bicdb_app_host",
+      "header_line": 729387,
+      "expected_running_count": 0,
+      "running_line": 729389,
+      "result": {
+        "result_line": 729391,
+        "log_line": "2026-11-14T10:39:00.2062819Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    },
+    {
+      "target_context": "2026-11-14T10:43:50.6146841Z      Running unittests src/main.rs (target/debug/deps/bicdb_website_host_example-f87e38cb0b3ac52f)",
+      "header_line": 736545,
+      "expected_running_count": 0,
+      "running_line": 736547,
+      "result": {
+        "result_line": 736549,
+        "log_line": "2026-11-14T10:43:50.6161141Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0,
+        "measured": 0,
+        "filtered": 0,
+        "elapsed_seconds": 0.0
+      }
+    }
+  ],
+  "passed": 1051,
+  "failed": 0,
+  "ignored": 6,
+  "nested_child_results_nonadditive": [],
+  "uncompleted_child_log_contexts_nonadditive": [
+    {
+      "nested_child": true,
+      "expected_running_count": 1,
+      "running_line": 212492,
+      "parent_target": "2026-11-14T10:09:06.9246853Z      Running unittests src/lib.rs (target/debug/deps/bicdb_cell-1ebe002a70888b56)",
+      "no_final_result_before_enclosing_result_line": 212530,
+      "classification": "Uncompleted child log context; no termination cause inferred; nonadditive"
+    }
+  ],
+  "classifier_sha256": "4216a8549f1936f7f7d747d59dfca76c6e3923c5f51869555797c6d9b78630a2",
+  "additional_python_results": [
+    {
+      "line": 736574,
+      "log_line": "2026-11-14T10:43:53.4531206Z Ran 47 tests in 1.376s"
+    },
+    {
+      "line": 736576,
+      "log_line": "2026-11-14T10:43:53.4531662Z OK"
+    },
+    {
+      "line": 736579,
+      "log_line": "2026-11-14T10:43:53.5165482Z Ran 3 tests in 0.010s"
+    },
+    {
+      "line": 736581,
+      "log_line": "2026-11-14T10:43:53.5165927Z OK"
+    },
+    {
+      "line": 736584,
+      "log_line": "2026-11-14T10:43:53.6154517Z Ran 34 tests in 0.016s"
+    },
+    {
+      "line": 736586,
+      "log_line": "2026-11-14T10:43:53.7091821Z OK"
+    }
+  ],
+  "compiler_errors": [],
+  "job_steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-11-14T09:19:42Z",
+      "completed_at": "2026-11-14T09:19:43Z"
+    },
+    {
+      "name": "Initialize containers",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-11-14T09:19:43Z",
+      "completed_at": "2026-11-14T09:19:55Z"
+    },
+    {
+      "name": "Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-11-14T09:19:55Z",
+      "completed_at": "2026-11-14T09:20:02Z"
+    },
+    {
+      "name": "Run dtolnay/rust-toolchain@stable",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-11-14T09:20:02Z",
+      "completed_at": "2026-11-14T09:20:11Z"
+    },
+    {
+      "name": "Install test-target scanner",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-11-14T09:20:11Z",
+      "completed_at": "2026-11-14T09:20:23Z"
+    },
+    {
+      "name": "Run actions/setup-node@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 6,
+      "started_at": "2026-11-14T09:20:23Z",
+      "completed_at": "2026-11-14T09:20:23Z"
+    },
+    {
+      "name": "Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 7,
+      "started_at": "2026-11-14T09:20:23Z",
+      "completed_at": "2026-11-14T09:20:44Z"
+    },
+    {
+      "name": "Build projection chaos helper",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 8,
+      "started_at": "2026-11-14T09:20:44Z",
+      "completed_at": "2026-11-14T09:20:44Z"
+    },
+    {
+      "name": "cargo test --workspace --exclude bicdb-core --exclude bicdb-sql --exclude bicdb-pgwire",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 9,
+      "started_at": "2026-11-14T09:20:44Z",
+      "completed_at": "2026-11-14T09:20:44Z"
+    },
+    {
+      "name": "cargo test bicdb-core without the serial native multi-node fixtures",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 10,
+      "started_at": "2026-11-14T09:20:44Z",
+      "completed_at": "2026-11-14T09:20:44Z"
+    },
+    {
+      "name": "cargo test bicdb-core native multi-node fixtures one at a time",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 11,
+      "started_at": "2026-11-14T09:20:44Z",
+      "completed_at": "2026-11-14T09:20:44Z"
+    },
+    {
+      "name": "cargo test bicdb-sql with bounded linked artifacts",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 12,
+      "started_at": "2026-11-14T09:20:44Z",
+      "completed_at": "2026-11-14T09:20:44Z"
+    },
+    {
+      "name": "cargo test remaining workspace with bounded linked artifacts",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 13,
+      "started_at": "2026-11-14T09:20:44Z",
+      "completed_at": "2026-11-14T10:43:51Z"
+    },
+    {
+      "name": "Cluster harness and offline queue contracts",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 14,
+      "started_at": "2026-11-14T10:43:51Z",
+      "completed_at": "2026-11-14T10:43:53Z"
+    },
+    {
+      "name": "Retain broad REST existing CLI journals and allowlisted diagnostics",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 15,
+      "started_at": "2026-11-14T10:43:53Z",
+      "completed_at": "2026-11-14T10:43:54Z"
+    },
+    {
+      "name": "Retain required CI memory pressure evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 16,
+      "started_at": "2026-11-14T10:43:54Z",
+      "completed_at": "2026-11-14T10:43:55Z"
+    },
+    {
+      "name": "Post Run Swatinem/rust-cache@v2",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 29,
+      "started_at": "2026-11-14T10:43:55Z",
+      "completed_at": "2026-11-14T10:43:55Z"
+    },
+    {
+      "name": "Post Run actions/setup-node@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 30,
+      "started_at": "2026-11-14T10:43:55Z",
+      "completed_at": "2026-11-14T10:43:55Z"
+    },
+    {
+      "name": "Post Run actions/checkout@v4",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 31,
+      "started_at": "2026-11-14T10:43:55Z",
+      "completed_at": "2026-11-14T10:43:56Z"
+    },
+    {
+      "name": "Stop containers",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 32,
+      "started_at": "2026-11-14T10:43:56Z",
+      "completed_at": "2026-11-14T10:44:00Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 33,
+      "started_at": "2026-11-14T10:44:00Z",
+      "completed_at": "2026-11-14T10:44:00Z"
+    }
+  ],
+  "association_method": "FIFO Cargo headers plus stdout running-N/result-N, nested execution stack; each completion checked against original running count, supports stderr next-header before previous stdout result.",
+  "limits": [
+    "Exact source/job only; no substitution for other source or unfinished jobs.",
+    "No per-operation external-ledger reconciliation/physicalHA/scaling/RPO/RTO/production qualification implied by jobPASS.",
+    "Target executions are distinct from unique test identity counts; nested child results explicitly nonadditive."
+  ]
+}

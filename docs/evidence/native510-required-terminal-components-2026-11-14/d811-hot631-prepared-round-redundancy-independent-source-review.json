@@ -1,0 +1,178 @@
+{
+  "exact_source_callgraph": [
+    {
+      "boundary": "Construct actual native preparation/catalogue, retain original lease/read pin and finish producer require_current. Keep unchanged.",
+      "path": "distribution_data/native_joint_handoff/bridge.rs:945 or registered_target.rs:503",
+      "step": "actual preparation producer"
+    },
+    {
+      "boundary": "Construct observation then full require_current while acquiring original service. Three callsites total, all fixtures, immediately passed to begin/record. Keep unchanged for initial minimal optimization.",
+      "path": "distribution_range_handoff/joint/bridge.rs:25",
+      "step": "from_actual_service"
+    },
+    {
+      "boundary": "first.require_current then only derive original-deadline child, check cancellation, clone immutable data, construct empty round and call record(first). Duplicate full read has no distinct count/publication effect.",
+      "path": "distribution_range_handoff/joint/bridge.rs:65",
+      "step": "Round.begin"
+    },
+    {
+      "boundary": "Must retain self cancellation check, full observation.require_current, exact decision/native/member/history/duplicate tests, min original observation deadline, then original metadata version guard BEFORE insertion. No counted positive observation on failure.",
+      "path": "distribution_range_handoff/joint/bridge.rs:104",
+      "step": "Round.record_inner"
+    },
+    {
+      "boundary": "Keep all original deadline checks and complete current sweeps at actual publication/fresh phase/activation/Open/release. No earlier physical result becomes a cached current permission.",
+      "path": "bridge.rs:finish/require_live/require_current; bridge/phase.rs; bridge/publication.rs; publication/open_phase.rs",
+      "step": "quorum and phase consumers"
+    }
+  ],
+  "held_redesign": {
+    "caution": "Simply deleting strict constructor validation while leaving its verified-observation contract/name is broader than the minimal approved change.",
+    "needed_genuine_negative_controls": [
+      "Real existing complete-joint fixture creates actual native prepared evidence on A, pairs uncounted candidate with genuine different service B, then actual begin/record must reject before counting. Keep original OWN/caller live through rejection, preserve real native candidate/owner; capture exact error and count/poison evidence. No manufactured witness or decoded receipt.",
+      "Actual version/owner change after candidate construction but before record must reject at record despite prior native preparation; do not memoize producer validation."
+    ],
+    "proposal": "Distinct uncounted Candidate retaining actual sealed evidence+service; private verified Observation created only by unchanged full require_current before record count. An uncounted carrier cannot confer quorum/publication/native permission.",
+    "status": "NOT APPROVED OR IMPLEMENTED in current batch; root explicitly holds four\u2192two redesign"
+  },
+  "minimal_safe_optimization": {
+    "change": "Remove ONLY first.require_current from Round.begin. Preserve every line in record/record_inner and all later phase/publication sweeps.",
+    "failure_lifetime": "If cancellation/read/identity fails, record returns Err and poisons the temporary round before it escapes; same real lease/pin object is retained/dropped under unchanged ownership semantics. No widened deadline or reconstructed proof.",
+    "reason": "begin always delegates same exact owned first observation to record before returning any round. Pre-record work is memory/immutable-data/cancellation construction only, no IO/mutation/count/grant. record performs identical full service/native/MStore validation before its first insert.",
+    "scope": "Saves one first-member duplicate check (four\u2192three); subsequent members unchanged. No promise it resolves original11 timeouts.",
+    "status": "SOURCE SUPPORTED; NOT IMPLEMENTED OR QUALIFIED BY THIS REVIEW"
+  },
+  "minimum_next_existing_fixture_diagnostics": [
+    "Capture elapsed acquisition time and parent deadline remaining at HostOWN call entry, actual OWN deadline remaining at return and first native binding; context ID/term/index/node. Original request five-second ceiling is not proof five seconds remain.",
+    "Capture actual point acquisition, committed observation/native preparation, wrapper construction, Round.begin/record entry/exit and round earliest-member deadline, with original errors preserved.",
+    "Use bounded memory records; emit after original call/outside service/engine/MStore guards so diagnostic IO does not consume measured live proof windows. Record gaps/incomplete capture instead of claiming all source time explained.",
+    "Retain same tests, assertions, per-call deadlines, thread configuration and retry policy. Only existing required repository CI; no ad-hoc Rust job."
+  ],
+  "observed_not_inferred": {
+    "meaning": "Four complete checks for first member n2, two for next member n3 precede original shared record timeout. No measurement of original OWN acquire start/return or accepted context budget in this projection. Do not attribute all available-window loss to validation or assert a fixed TTL cap.",
+    "partial_control_limit": "Case overall remains FAIL. Some CLOSED controls execute earlier than shared preparation failure; later named policy/Open cuts may not have been reached. No wholesale all-controls-NOT-TESTED claim.",
+    "prepared_service_current_trace": [
+      "ACTUAL_JOINT_COMPONENT begin stage=prepared-service-current node=n2 remaining_ms=Some(950) canceled=unknown",
+      "ACTUAL_JOINT_COMPONENT end stage=prepared-service-current node=n2 elapsed_us=177801 remaining_ms=Some(772) canceled=None completed=true query_budget_active=false query_budget_error=None",
+      "ACTUAL_JOINT_COMPONENT begin stage=prepared-service-current node=n2 remaining_ms=Some(772) canceled=unknown",
+      "ACTUAL_JOINT_COMPONENT end stage=prepared-service-current node=n2 elapsed_us=177596 remaining_ms=Some(594) canceled=None completed=true query_budget_active=false query_budget_error=None",
+      "ACTUAL_JOINT_COMPONENT begin stage=prepared-service-current node=n2 remaining_ms=Some(594) canceled=unknown",
+      "ACTUAL_JOINT_COMPONENT end stage=prepared-service-current node=n2 elapsed_us=176643 remaining_ms=Some(418) canceled=None completed=true query_budget_active=false query_budget_error=None",
+      "ACTUAL_JOINT_COMPONENT begin stage=prepared-service-current node=n2 remaining_ms=Some(418) canceled=unknown",
+      "ACTUAL_JOINT_COMPONENT end stage=prepared-service-current node=n2 elapsed_us=177786 remaining_ms=Some(240) canceled=None completed=true query_budget_active=false query_budget_error=None",
+      "ACTUAL_JOINT_COMPONENT begin stage=prepared-service-current node=n3 remaining_ms=Some(937) canceled=unknown",
+      "ACTUAL_JOINT_COMPONENT end stage=prepared-service-current node=n3 elapsed_us=177992 remaining_ms=Some(759) canceled=None completed=true query_budget_active=false query_budget_error=None",
+      "ACTUAL_JOINT_COMPONENT begin stage=prepared-service-current node=n3 remaining_ms=Some(759) canceled=unknown",
+      "ACTUAL_JOINT_COMPONENT end stage=prepared-service-current node=n3 elapsed_us=178035 remaining_ms=Some(581) canceled=None completed=true query_budget_active=false query_budget_error=None"
+    ],
+    "representative_case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_contention_same_own_progress"
+  },
+  "original_11_failures": [
+    {
+      "actual_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_contention_same_own_progress"
+    },
+    {
+      "actual_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_wait_expired_own_refuses"
+    },
+    {
+      "actual_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_tests::native_registered_fifth_remote_hot_closed_audit_native_reply_lost_same_attempt_retry"
+    },
+    {
+      "actual_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_first_policy_real_caller_expiry_fresh_same_xid"
+    },
+    {
+      "actual_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready"
+    },
+    {
+      "actual_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt"
+    },
+    {
+      "actual_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_original_client_ack_and_full_strong"
+    },
+    {
+      "actual_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_policy_readback_refuses_hook"
+    },
+    {
+      "actual_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy"
+    },
+    {
+      "actual_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses"
+    },
+    {
+      "actual_error": "called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_lost_committed_decision_reply_same_native_attempt"
+    }
+  ],
+  "original_failure_source": {
+    "failure_blocks_sha256": "fd6479a130fb3ff9285bf54032da575571ee8f1fa6228e1cf911736265102da9",
+    "job": 132380250977,
+    "raw_log_sha256": "07463b09c7df9ed59fe828d1813aaa81b65798cff5be6980f0d2b78dac568e3f",
+    "run": 43572675143
+  },
+  "review_scope": "read-only source safety/lifetime review; no implementation/build/tests/CI",
+  "schema": "bicdb-prepared-round-redundancy-independent-review-v1",
+  "source": "d8115fedf13b0bd7107cfddd2664f2c6ea2f261f",
+  "source_files": [
+    {
+      "blob": "4efa7831545c5ff7ce8b96d0f4dee0e7e99c906d",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge.rs",
+      "sha256": "079dd33d1bc906d00df22e2b9a7157a6352a0f0248ccaaeae0aa01871563a327"
+    },
+    {
+      "blob": "68f9cfe9171681a4509070d662e7a87a4824a434",
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff/bridge.rs",
+      "sha256": "e66905bd553ee314cfd911212b0af8659e403b3a149b14be53e7bb7529657734"
+    },
+    {
+      "blob": "27388693ab82b5e4274a0f17b7c23b4fb71fcad4",
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff/registered_target.rs",
+      "sha256": "0396cb2e901e168a9621a6055ab2235cd7da226926603b5ba03cc2d89ecb4ebf"
+    },
+    {
+      "blob": "228c86c9c623b709f2fc6fcb795d1a6776ca7f39",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/phase.rs",
+      "sha256": "29c52663a89963c287d78efa5f260d4335da9d60b945a9b82aa83a19379f0693"
+    },
+    {
+      "blob": "51ab89b47e35c8662ed34ef0f2767251b0ddaa3b",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/publication.rs",
+      "sha256": "64a8dfcdecfe19b1709aee8c36d35f3faa88c6e2000cc9fddd431bbf1946bfd3"
+    },
+    {
+      "blob": "8d9264b89fa5852336d335cd000d27a21bbc9281",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/publication/open_phase.rs",
+      "sha256": "b49098edbeb9175701b1d345788fbe4009ff2a0b0e7a9dfe73d4cf1f9e056a0b"
+    },
+    {
+      "blob": "76f5aaf72a3605333e41748897c07f8e6c0a4612",
+      "path": "crates/bicdb-core/src/distribution_consensus/host_read.rs",
+      "sha256": "f713eb71eb83772fdac5e6382aa14de53c0eceb11d54989733278f823ff4a6df"
+    },
+    {
+      "blob": "88bcee288ca0f1500fb2c0090bd73b9d2c894cfd",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "sha256": "5949f75c66039b473c560882ca84cc675744061dd766c66a810f11c59824313c"
+    }
+  ]
+}

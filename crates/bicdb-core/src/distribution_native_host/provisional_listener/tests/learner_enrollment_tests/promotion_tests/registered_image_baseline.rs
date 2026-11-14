@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 mod closed_fence_controls;
 mod custody;
 mod fifth_data_path_tests;
+mod original_sdk_rpc;
 mod placement_cases;
 mod remote_source_tests;
 use closed_fence_controls::Case;
@@ -201,6 +202,12 @@ fn run_registered_image_baseline_with_placement_and_source(
     assignment: AssignmentMode,
     source_case: Option<remote_source_tests::SourceCase>,
 ) {
+    let hot_policy = source_case.is_some_and(remote_source_tests::hot_policy_tests::is_hot_policy);
+    let two_range_stall = matches!(
+        source_case,
+        Some(remote_source_tests::SourceCase::TwoRangeSourceReplyStall)
+    );
+    let single_range_move = hot_policy || two_range_stall;
     let mut f = EnrollmentFixture::new();
     let (factory, mut host) = f.factory("actual-registered-fifth-image-target");
     assert!(factory.spec.initial_ranges.is_empty());
@@ -313,6 +320,21 @@ fn run_registered_image_baseline_with_placement_and_source(
         .unwrap_or_else(|| f.root.path().join("registered-image-diagnostics"))
         .join(format!("native-registered-fifth-image-{}", Uuid::now_v7()));
     std::fs::create_dir_all(&output).unwrap();
+    evidence(
+        &output.join("execution-identity.json"),
+        &serde_json::json!({
+            "actual_rust_test_thread": std::thread::current().name().map(str::to_owned),
+            "source_commit": std::env::var("BICDB_TEST_SOURCE_SHA").ok(),
+            "package_version": env!("CARGO_PKG_VERSION"),
+            "source_case": source_case.map(|value| format!("{value:?}")),
+            "assignment_mode": format!("{assignment:?}"),
+            "identity_is_correlation_not_authority": true,
+        }),
+    )
+    .unwrap();
+    let original_sdk_rpc = source_case
+        .filter(|case| remote_source_tests::uses_original_sdk_rpc_observer(*case))
+        .map(|_| original_sdk_rpc::Journal::create(output.join("original-sdk-rpc")).unwrap());
     let mut phase = "four_initial_control";
     let mut reports = Vec::new();
     let mut ledger = Vec::new();
@@ -368,6 +390,24 @@ fn run_registered_image_baseline_with_placement_and_source(
             .unwrap()
             .with_request_timeout(Duration::from_secs(2))
             .unwrap();
+        // Attach to the one actual pre-join SDK object BEFORE its first APP.
+        // Every opted-in component keeps the same original 2s request timeout.
+        // Source identity identifies its actual SDK implementation; this composed
+        // candidate includes the separately qualified event-client repair.
+        let gateway = match &original_sdk_rpc {
+            Some(journal) => {
+                let observed = gateway
+                    .with_rpc_evidence_observer(journal.clone(), original_sdk_rpc::LIMITS)
+                    .unwrap();
+                journal.mark_attached_before_first_append();
+                let before = journal.snapshot().unwrap();
+                evidence(&output.join("original-sdk-rpc-before-app.json"),&serde_json::json!({
+                    "capture_phase":"before_first_source_append_invocation","actual_observer":before,
+                    "zero_records_are_only_observation_at_this_boundary":true})).unwrap();
+                observed
+            }
+            None => gateway,
+        };
         phase = "two_real_source_acks";
         for range in &ranges {
             let key = key_in(&current, range.id);
@@ -422,10 +462,43 @@ fn run_registered_image_baseline_with_placement_and_source(
             );
         }
         phase = "commit_two_data_learner_assignments";
-        let pending = match &automatic_plan {
+        let mut pending = match &automatic_plan {
             Some(plan) => placement_cases::pending(&current, &ranges, plan),
             None => assign_two_ranges(&current, &ranges),
         };
+        if single_range_move {
+            // This new component gate moves ONLY the selected first range.
+            // Both original ACKs still exist; the second descriptor remains
+            // populated on its original nodes and Unknown on the target.
+            let other = &ranges[1];
+            let token = *current
+                .ranges
+                .iter()
+                .find(|(_, range)| range.id == other.id)
+                .unwrap()
+                .0;
+            pending.ranges.insert(token, other.clone());
+            pending
+                .relocations
+                .retain(|_, plan| plan.range_id == ranges[0].id);
+            if matches!(
+                source_case,
+                Some(remote_source_tests::SourceCase::TargetHotDataFollower)
+            ) {
+                let selected = &ranges[0];
+                let retire = selected
+                    .replicas
+                    .iter()
+                    .find(|replica| {
+                        replica.role == RangeReplicaRole::Voter
+                            && replica.node_id != selected.leader
+                    })
+                    .unwrap();
+                pending.relocations.values_mut().next().unwrap().source =
+                    Some(retire.node_id.clone());
+            }
+            pending.validate().unwrap();
+        }
         let entry = metadata[0]
             .lock()
             .propose_topology(pending.clone())
@@ -495,7 +568,7 @@ fn run_registered_image_baseline_with_placement_and_source(
             assert!(point["native_applied_index"].is_null());
         }
         let mut succeeded = 0;
-        for original in &ranges {
+        for original in ranges.iter().take(if single_range_move { 1 } else { 2 }) {
             for (i, guard) in original_writers.iter().enumerate() {
                 assert!(Arc::ptr_eq(
                     guard,
@@ -724,9 +797,44 @@ fn run_registered_image_baseline_with_placement_and_source(
             );
         }
         phase = "required_fence_acceptance";
-        assert_eq!(succeeded,2,"REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute");
-        if let Some(source_case) = source_case {
+        assert_eq!(succeeded,if single_range_move {1} else {2},"REQUIRED genuine registered fifth CommittedHandoff fences unavailable; no INITIAL writer substitute");
+        if two_range_stall {
+            phase = "selected_actual_rows_transport_stall_other_populated_range_progress";
+            remote_source_tests::two_range_stall_tests::exercise(
+                &controls,
+                &clients,
+                &services,
+                &metadata,
+                &target_transport,
+                &pending,
+                &ranges,
+                &ledger,
+                &gateway,
+                &output,
+                &token,
+            );
+        } else if hot_policy {
+            phase = "actual_remote_original_a_through_first_policy_component";
+            remote_source_tests::hot_policy_tests::exercise(
+                source_case.unwrap(),
+                &mut controls,
+                &clients,
+                &services,
+                &metadata,
+                &target_transport,
+                host.test_registered_image_control_mut().unwrap(),
+                &factory,
+                &pending,
+                &ranges,
+                &ledger,
+                &output,
+                &configs[0],
+                &gateway,
+                &token,
+            );
+        } else if let Some(source_case) = source_case {
             phase = "actual_local_old_quorum_seeded_remote_source_frames";
+            let target_runtime = host.test_registered_receiver_parts().unwrap().1;
             remote_source_tests::exercise(
                 source_case,
                 &controls,
@@ -734,6 +842,10 @@ fn run_registered_image_baseline_with_placement_and_source(
                 &services,
                 &metadata,
                 &target_transport,
+                host.test_registered_image_control_mut().unwrap(),
+                &target_runtime,
+                &target_service,
+                &target_metadata,
                 &factory,
                 &pending,
                 &ranges,
@@ -760,6 +872,33 @@ fn run_registered_image_baseline_with_placement_and_source(
             );
         }
     }));
+    // Preserve actual primary and topology-refresh responses/errors even when
+    // the SDK's final returned error or the original test assertion differs.
+    let (sdk_rpc_capture, sdk_rpc_error) =
+        match original_sdk_rpc.as_ref().map(|journal| journal.snapshot()) {
+            Some(Ok(value)) => {
+                if value["complete_record_decode_and_contiguous_sequence"] != true {
+                    evidence_errors
+                        .push("original SDK RPC journal contains malformed/gapped records".into());
+                }
+                (Some(value), None)
+            }
+            Some(Err(error)) => {
+                evidence_errors.push(format!("original-sdk-rpc-index: {error}"));
+                (None, Some(error.to_string()))
+            }
+            None => (None, None),
+        };
+    if original_sdk_rpc.is_some() {
+        evidence_after(
+            &output.join("original-sdk-rpc-index.json"),
+            &serde_json::json!({
+            "capture_phase":"after_original_sdk_calls_returned_or_test_unwound",
+            "actual_observer":sdk_rpc_capture,"observer_snapshot_error":sdk_rpc_error,
+            "new_sdk_production_fix_included":true}),
+            &mut evidence_errors,
+        );
+    }
     let capture = custody::capture(&output, &databases, &services, &metadata);
     let (captured, capture_error) = match capture {
         Ok(value) => (Some(value), None),
@@ -776,6 +915,7 @@ fn run_registered_image_baseline_with_placement_and_source(
     let terminal = serde_json::json!({"source":std::env::var("BICDB_TEST_SOURCE_SHA").ok(),"package_version":env!("CARGO_PKG_VERSION"),
         "phase":phase,"required_baseline_succeeded":result.is_ok(),"reports":reports,"ack_ledger":ledger,"assignment_mode":format!("{assignment:?}"),"actual_automatic_plan":automatic_plan,
         "primary_error":primary_error,"existing_metadata_only_validator_refusal":metadata_only_refusal,
+        "original_sdk_rpc_observer":sdk_rpc_capture,"original_sdk_rpc_observer_error":sdk_rpc_error,
         "original_root":f.root.path(),"factory_root":original_factory_path,
         "initial_ranges":factory.spec.initial_ranges,"original_birth":original_birth,
         "protected_metadata_uuid":protected_metadata_uuid,"store_slot":target_slot.id(),

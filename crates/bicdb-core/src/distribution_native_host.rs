@@ -50,9 +50,19 @@ pub(crate) use initial_offer::{
     NativeInitialBirthOfferResponse,
 };
 #[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeInitialOldConstraintStep;
+#[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeJoinedRangeReceivePreflight;
+#[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeJoinedRemoteInstallPreflight;
+#[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::{
     NativeInitialConsensusLaunch, NativeLearnerMetadataEnrollment, NativeMetadataControlHost,
     NativeMetadataRegistrationController, NativeProvisionalHost,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::{
+    NativeJoinedRemoteJointOwner, NativeJoinedRemoteMaterializedOwner,
 };
 #[cfg(feature = "tls-replication")]
 mod joined_data_handoff;
@@ -602,9 +612,22 @@ pub use provisional_listener::NativeRegisteredReplicaReceiverStatus;
 #[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::{
     NativeAssignedDataAdmission, NativeAssignedDataPolicyOrigin,
-    NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission,
-    NativeRegisteredReplicaAdmission,
+    NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission, NativeJoinedRangeReceiveOrigin,
+    NativeJoinedRangeReceiveRequest, NativeRegisteredRemoteImageStep,
+    NativeRegisteredRemoteInstallPreflight, NativeRegisteredRemoteJointOwner,
+    NativeRegisteredRemoteJointReleaseOwner, NativeRegisteredRemoteJointTarget,
+    NativeRegisteredRemoteProposalPoint, NativeRegisteredRemoteTransactionRequest,
+    NativeRegisteredRemoteTransferRequest, NativeRegisteredReplicaAdmission,
+    NativeRegisteredSelectedRangeNoDomain, NativeRegisteredServingDataPolicyOrigin,
 };
 
 #[cfg(all(test, feature = "tls-replication"))]
-pub(crate) use provisional_listener::{before_native_old_wal, CancelOldOwnBeforeNativeWal};
+pub(crate) use provisional_listener::{
+    after_remote_native_old_wal, before_native_old_wal, CancelOldOwnBeforeNativeWal,
+    CancelRemoteOldAfterNativeWal,
+};
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::{
+    NativeJoinedRemoteImagePoint, NativeJoinedRemoteTransactionRequest,
+};

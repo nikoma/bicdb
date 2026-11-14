@@ -45,9 +45,27 @@ use current_joint_recovery::{CurrentJointRecoveryState, CURRENT_JOINT_CATALOG_FO
 #[cfg(test)]
 pub(crate) use native_prefix::test_validate_ordinary_native_intent;
 mod native_image_ready;
+#[cfg(feature = "tls-replication")]
+mod registered_no_domain;
+#[cfg(feature = "tls-replication")]
+pub(crate) use image_install_fence::NativeJoinedRemoteImageIntent;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use native_image_base::test_joined_remote_adoption_after_fsync;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use native_image_base::test_registered_remote_adoption_after_fsync;
 pub(crate) use native_image_base::NativeImageCatalogueAdoptionReceipt;
 use native_image_base::{NativeImageCatalogueBase, NATIVE_IMAGE_CATALOG_FORMAT};
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_image_base::{
+    NativeJoinedRemoteCatalogueMaterialization, NativeJoinedRemoteCataloguePoint,
+    NativeJoinedRemoteCataloguePublication, NativeRegisteredRemoteCatalogueMaterialization,
+    NativeRegisteredRemoteCataloguePoint, NativeRegisteredRemoteCataloguePublication,
+};
 pub(crate) use native_image_ready::FinalizedNativeImageCatalogueObservation;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_no_domain::NativeJoinedRangeCatalogueAbsence;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_no_domain::NativeRegisteredRangeCatalogueAbsence;
 mod image_install_obligations;
 pub(crate) use image_install_obligations::TargetImageCatalogHistoryObligations;
 mod image_replacement_handover;
@@ -61,6 +79,11 @@ pub(crate) use image_install_certification::{
 use image_install_certification::{InstallingCertifications, INSTALLING_CERTIFICATION_FORMAT};
 mod image_install_resume;
 mod image_install_state;
+use image_install_state::JOINED_IMAGE_INSTALL_CATALOG_FORMAT;
+use image_install_state::REGISTERED_IMAGE_INSTALL_CATALOG_FORMAT;
+pub(crate) use image_install_state::{
+    NativeJoinedRemoteProposalPointer, NativeRegisteredRemoteProposalPointer,
+};
 mod image_proposal_state;
 pub(crate) use image_install_resume::CurrentImageInstallingAdmission;
 use image_proposal_state::IMAGE_PROPOSAL_CATALOG_FORMAT;
@@ -101,9 +124,21 @@ pub(crate) use sparse_certification::{
 };
 use sparse_certification::{SparseDecisions, SPARSE_HISTORY_CATALOG_FORMAT};
 mod image_install_fence;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use image_install_fence::test_registered_remote_installing_after_fsync;
+#[cfg(feature = "tls-replication")]
+pub(crate) use image_install_fence::NativeRegisteredRemoteImageIntent;
 pub(crate) use image_install_fence::{
     NativeImageInstallRole, NativeImageInstallTransferPreflight, TargetImageInstallFence,
     UntouchedNativeImageTransferReturn,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use image_install_fence::{
+    NativeJoinedRemoteInstallingFence, NativeJoinedRemoteInstallingPublication,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use image_install_fence::{
+    NativeRegisteredRemoteInstallingFence, NativeRegisteredRemoteInstallingPublication,
 };
 use recovery_state::RecoveryFenceRecord;
 pub(crate) use recovery_state::{
@@ -135,12 +170,21 @@ mod native_durability;
 mod native_normal;
 mod native_prefix;
 mod native_writer;
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_writer::NativeAssignedCoordinatorWriterPublication;
+mod registered_joint_identity;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use joint_handoff_state::{test_registered_decision_catalogue_cut, CatalogueCut};
 pub(crate) use joint_handoff_state::{
     NativeJointBridgeCatalogue, NativeJointCatalogueActivationFact,
     NativeJointCatalogueActivationReceipt, NativeJointOldCatalogPreflight,
     NativeJointOldPromiseReceipt, NativeJointReleaseObservedObligations,
 };
 use joint_handoff_state::{NativeJointLocalState, NATIVE_JOINT_HANDOFF_CATALOG_FORMAT};
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint_handoff_state::{
+    NativeRegisteredDecisionCatalogueAuthority, NativeRegisteredDecisionCataloguePublication,
+};
 #[cfg(test)]
 pub(crate) use native_prefix::tests::{
     fixture as native_origin_fixture, seed_actual_origin, test_catalog_command,
@@ -170,6 +214,8 @@ const KNOWN_RANGE_WRITE_CATALOG_FORMATS: &[u32] = &[
     NATIVE_JOINT_HANDOFF_CATALOG_FORMAT,
     NATIVE_ABORT_CATALOG_FORMAT,
     CURRENT_JOINT_CATALOG_FORMAT,
+    REGISTERED_IMAGE_INSTALL_CATALOG_FORMAT,
+    JOINED_IMAGE_INSTALL_CATALOG_FORMAT,
 ];
 
 // Recognizing a format is not a phase, writer or recovery grant. Each caller
@@ -838,6 +884,11 @@ pub struct RangeWriteStore {
     native_activated_opens: BTreeMap<RangeId, crate::db::NativeActivatedOpenGuard>,
     native_joint_activated_opens: BTreeMap<RangeId, Arc<crate::db::NativeJointActivatedOpenGuard>>,
     native_writer_host: Option<std::sync::Weak<crate::db::NativeWriterHostState>>,
+    #[cfg(feature = "tls-replication")]
+    registered_joint_owners: BTreeMap<
+        RangeId,
+        std::sync::Weak<crate::distribution_native_host::NativeRegisteredRemoteJointOwner>,
+    >,
     // Necessary lifetime refusal, EMPTY on reopen; never reconstructed from JSON.
     current_joint_recovery_writers:
         BTreeMap<RangeId, std::sync::Weak<crate::db::NativeWriterHostState>>,
@@ -1000,6 +1051,28 @@ impl RangeWriteStore {
                 "protected proposal catalog lacks its mandatory native reader fence",
             ));
         }
+        if (catalog.format_version == REGISTERED_IMAGE_INSTALL_CATALOG_FORMAT
+            || catalog
+                .image_install_intents
+                .values()
+                .any(|i| i.registered_proposal.is_some()))
+            && !crate::format::native_registered_remote_proposal_active(&root)?
+        {
+            return Err(range_write_error(
+                "Registered install catalogue lacks its mandatory native reader fence",
+            ));
+        }
+        if (catalog.format_version == JOINED_IMAGE_INSTALL_CATALOG_FORMAT
+            || catalog
+                .image_install_intents
+                .values()
+                .any(|i| i.joined_proposal.is_some()))
+            && !crate::format::native_joined_remote_receive_active(&root)?
+        {
+            return Err(range_write_error(
+                "Joined install lacks mandatory v2 reader fence",
+            ));
+        }
         if catalog.native_joint_handoffs.is_some()
             && !crate::format::native_joint_data_handoff_active(&root)?
         {
@@ -1068,6 +1141,8 @@ impl RangeWriteStore {
             native_activated_opens: BTreeMap::new(),
             native_joint_activated_opens: BTreeMap::new(),
             native_writer_host: None,
+            #[cfg(feature = "tls-replication")]
+            registered_joint_owners: BTreeMap::new(),
             current_joint_recovery_writers: BTreeMap::new(),
             _native_abort_owner: abort_owner,
             recovery_persistence_uncertain: false,

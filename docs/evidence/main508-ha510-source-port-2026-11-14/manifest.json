@@ -1,0 +1,40 @@
+{
+  "schema": "bicdb-source-port-preserved-predecessor-v1",
+  "actual_delivered_main508": "f50acde6b0a2e923b92b31ab4b24d96f0dea5d6e",
+  "memo_port": "6c229eac89ab3db0674d25fa5d01f8523db3e3de",
+  "ha_parent": "cea9269680f792c3060043878a32c547ff2e3ab8",
+  "files": [
+    {
+      "path": "historical-candidate-508-release-notes.md.txt",
+      "source_path": "docs/releases/1.0.508-beta.md",
+      "source_parent": "cea9269680f792c3060043878a32c547ff2e3ab8",
+      "source_blob": "dd1d23c5f944c70425c143aff3bcf20e0fbd606c",
+      "original_sha256": "9a7d077b463639cbef423bdd0dcc797237410d5304ee02ad98df61d8070421c5",
+      "original_bytes": 3921,
+      "stored_sha256": "9a7d077b463639cbef423bdd0dcc797237410d5304ee02ad98df61d8070421c5",
+      "stored_bytes": 3921
+    },
+    {
+      "path": "pre-main508-fifth-data-path-tests.rs.gz",
+      "source_path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/fifth_data_path_tests.rs",
+      "source_parent": "cea9269680f792c3060043878a32c547ff2e3ab8",
+      "source_blob": "50590457b662cc433a41ec9216abee4c663fcd82",
+      "original_sha256": "e96fbfc38fc1a2f0325001e073845e078ef277f6e90cc03c4da0d0f69c075a55",
+      "original_bytes": 43849,
+      "stored_sha256": "f51a1c14b1d07d97c46a38597123faa7ba085e08e9ca8b3cffc0e0a43bb1696a",
+      "stored_bytes": 10475
+    }
+  ],
+  "resolution": "Canonical release508notes and rewritten product-driver fixture use deliveredmain508 bytes. Prior unmerged recovery-candidate508 notes and exact manualfixture remain archived without relabeling their failed results. Protected-native adaptations in that predecessor must be ported into the productdriver separately and validated; selecting new fixture does not establish compatibility.",
+  "qualification": "source port only; originalAzureFAILED; no physical or productionqualification",
+  "product_adapter": {
+    "source": "88cc8041398ff0092c95772987842296b4b0096f",
+    "review": {
+      "path": "88cc-main508-owned-context-independent-source-review.json",
+      "bytes": 2468,
+      "sha256": "680ee0a8fdcb3c39f70786ad883bcd968df7b9fdb70e050a04e73724bc2b72f2"
+    },
+    "scope": "actualownedDECISION+actualMStorepointbeforeServicelock; bothoriginalSession/currentDriveparent plusminRoledeadline; retry/unknown custody unchanged",
+    "classification": "source-reviewed; runtime NOT TESTED; knownsameprocess/oneRange/nooperator limitations remain"
+  }
+}

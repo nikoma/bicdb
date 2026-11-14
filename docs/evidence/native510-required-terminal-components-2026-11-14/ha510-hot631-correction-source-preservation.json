@@ -1,0 +1,27 @@
+{
+  "scope": "source-only correction and diagnostics; no build or runtime execution",
+  "failed_source": "d8115fedf13b0bd7107cfddd2664f2c6ea2f261f",
+  "root_base": "08d28e60f3afd5439d448324fa164465d116208c",
+  "record_record_inner_finish": "byte-identical to9feb prior source; complete actual service/native checks and metadata publicationguard beforecount preserved",
+  "original_failed_cases": 11,
+  "deadlines_retries_assertions": "original5s/request/OWN/rounddeadline and all existing assertions retained; no added retry",
+  "diagnostic_limit": "only subsequent failure logs successfulOWNelapsed; OWNhelper itself retains original unwrap; first-rounddeadline fallback explicitly labeled; no I/O/scheduler/root-cause attribution",
+  "files": [
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge.rs",
+      "sha256": "2e8693579b7e5067563eaec350c24618db6cdb42d04786c10d0fe09134b1e1b2"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "sha256": "f0331b1df2d3c396725cffff0fa64fb36b49bca918d223b7a137ecbae0c129ce"
+    }
+  ],
+  "validation": [
+    "cargo fmt --all passed",
+    "git diff --check passed",
+    "officialversion29packages510checkpassed",
+    "unchanged critical admission source region verified"
+  ],
+  "independent_source_review": "ha_policy_continuation approved onlyduplicateBegin removal; ha_remote_old reviewed actual2filediff/imports/moves/borrows and originalassertion preservation; neither executed tests",
+  "classification": "optimization and diagnostics NOT TESTED; not established timeoutfix"
+}

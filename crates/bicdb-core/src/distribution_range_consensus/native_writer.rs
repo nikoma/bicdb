@@ -295,3 +295,101 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
         Ok(())
     }
 }
+
+impl RangeWriteStore {
+    pub(crate) fn require_assigned_native_writer_publication(
+        &self,
+        database: &BicDb,
+        policy: &SealedHostWriterEnrollment,
+    ) -> Result<()> {
+        self.require_native_catalog_durability(database.data_path())?;
+        if self.open_id != policy.store_open_id()
+            || self.catalog.cluster_id != policy.facts().cluster_id
+            || self.catalog.node_id != policy.facts().local_node_id
+        {
+            return Err(range_write_error(
+                "Assigned publication changed actual catalogue/open",
+            ));
+        }
+        Ok(())
+    }
+    /// Called only through the sealed same-service mutable publication borrow.
+    pub(crate) fn publish_prevalidated_assigned_native_writer(
+        &mut self,
+        state: Weak<NativeWriterHostState>,
+    ) -> Option<Weak<NativeWriterHostState>> {
+        std::mem::replace(&mut self.native_writer_host, Some(state))
+    }
+}
+#[cfg(feature = "tls-replication")]
+pub(crate) struct NativeAssignedCoordinatorWriterPublication<'a> {
+    candidate: &'a crate::db::NativeFirstPolicyPublicationCandidate<'a>,
+    service: crate::distribution_data::NativeAssignedServiceWriterPublication<'a>,
+    cache: parking_lot::MutexGuard<'a, Option<Weak<NativeWriterHostState>>>,
+    _topology: parking_lot::RwLockReadGuard<'a, crate::ClusterTopology>,
+}
+#[cfg(feature = "tls-replication")]
+impl NativeAssignedCoordinatorWriterPublication<'_> {
+    /// No validation/callback/native read/filesystem access under final gate.
+    pub(crate) fn publish(
+        &mut self,
+    ) -> (
+        Option<Weak<NativeWriterHostState>>,
+        Option<Weak<NativeWriterHostState>>,
+    ) {
+        let state = Arc::downgrade(self.candidate.state());
+        let old_service = self.service.publish(state.clone());
+        let old_cache = std::mem::replace(&mut *self.cache, Some(state));
+        (old_service, old_cache)
+    }
+}
+impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn prepare_assigned_native_writer_publication<'a>(
+        &'a self,
+        database: &'a BicDb,
+        actual_service: &Arc<Mutex<ClusterDataNodeService>>,
+        service: &'a mut ClusterDataNodeService,
+        policy: &SealedHostWriterEnrollment,
+        candidate: &'a crate::db::NativeFirstPolicyPublicationCandidate<'a>,
+    ) -> Result<NativeAssignedCoordinatorWriterPublication<'a>> {
+        policy.require_live()?;
+        candidate.require_actual(database, policy)?;
+        if candidate.state().coordinator_id() != self.native_writer_coordinator_id() {
+            return Err(range_write_error(
+                "FIRST actual native candidate changed coordinator",
+            ));
+        }
+        if !Arc::ptr_eq(&self.local_service, actual_service)
+            || !self.native_image_mode
+            || database.actual_native_writer_enforcement_version()? != 1
+            || database.incarnation_id() != self.local_incarnation
+            || policy.database_incarnation() != self.local_incarnation
+            || policy.facts().cluster_id != self.cluster_id
+            || policy.facts().local_node_id != self.local_node_id
+        {
+            return Err(range_write_error(
+                "Assigned publication actual service/coordinator/DB differs",
+            ));
+        }
+        let topology = self
+            .topology
+            .try_read()
+            .ok_or_else(|| range_write_error("Assigned routing busy at publication"))?;
+        policy.facts().require_topology(&topology)?;
+        for range in topology.ranges.values() {
+            policy.facts().require_range(range)?;
+        }
+        let cache = self
+            .native_writer_host
+            .try_lock()
+            .ok_or_else(|| range_write_error("Assigned writer cache busy at publication"))?;
+        let service = service.prepare_assigned_native_writer_publication(database, policy)?;
+        Ok(NativeAssignedCoordinatorWriterPublication {
+            candidate,
+            service,
+            cache,
+            _topology: topology,
+        })
+    }
+}

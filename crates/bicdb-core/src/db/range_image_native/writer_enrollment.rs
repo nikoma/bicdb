@@ -8,9 +8,79 @@ use std::sync::Weak;
 const POLICY_POINTER: &str = "writer-enrollment/current";
 #[cfg(feature = "tls-replication")]
 mod assigned_install;
+#[cfg(feature = "tls-replication")]
+mod joined_publication;
+#[cfg(feature = "tls-replication")]
+mod joined_receive;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_publication::NativeJoinedPublicationScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_receive::NativeJoinedReceiveStorageScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_receive::NativeJoinedRemoteRotationPoint;
+#[cfg(feature = "tls-replication")]
+mod joined_remote_attempt;
+#[cfg(feature = "tls-replication")]
+pub(in crate::db::range_image_native) use joined_remote_attempt::JoinedRemoteMutationScopeLiveness;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_remote_attempt::{
+    NativeJoinedRemoteAttemptScope, NativeJoinedRemoteMutationScope,
+};
+#[cfg(feature = "tls-replication")]
+mod joined_receive_rows;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_receive_rows::NativeJoinedRowAbsenceScan;
+#[cfg(feature = "tls-replication")]
+mod original_identity;
+#[cfg(feature = "tls-replication")]
+pub(crate) use original_identity::NativeOriginalWriterIdentityBorrow;
+#[cfg(feature = "tls-replication")]
+mod data_domains;
+#[cfg(feature = "tls-replication")]
+pub(crate) use data_domains::{
+    NativeClosedWriterDomain, NativeWriterClosedHistoricalReadScope, NativeWriterDataDomainPolicy,
+    NativeWriterDataDomainTransition, NativeWriterHistoricalPredecessor,
+    NativeWriterServingDomainPublication,
+};
+mod joint_phase_owner;
+pub(crate) use joint_phase_owner::NativeJointPhaseOwner;
+#[cfg(feature = "tls-replication")]
+mod joined_joint;
+mod joint_domain;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joined_joint::NativeJoinedJointExclusionScope;
+#[cfg(feature = "tls-replication")]
+mod registered_joint;
+#[cfg(feature = "tls-replication")]
+mod registered_no_domain;
+#[cfg(feature = "tls-replication")]
+mod registered_remote_attempt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_joint::{
+    NativeRegisteredJointExclusionScope, NativeRegisteredJointIdentityBorrow,
+};
+#[cfg(feature = "tls-replication")]
+mod registered_remote_mutation;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_no_domain::NativeRegisteredNoDomainScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote_attempt::NativeRegisteredRemoteAttemptScope;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_remote_mutation::NativeRegisteredRemoteMutationScope;
+#[cfg(feature = "tls-replication")]
+pub(in crate::db::range_image_native) use registered_remote_mutation::RegisteredRemoteMutationScopeLiveness;
+#[cfg(feature = "tls-replication")]
+mod old_constraints;
+#[cfg(feature = "tls-replication")]
+mod remote_old_decision;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_old_decision::NativeRemoteOldDecisionWriterScope;
 mod registry_refresh;
 #[cfg(feature = "tls-replication")]
 pub(crate) use assigned_install::NativeAssignedWriterInstallAttempt;
+#[cfg(feature = "tls-replication")]
+pub(crate) use assigned_install::NativeFirstPolicyPublicationCandidate;
+pub(crate) use joint_domain::NativeJointWriterDomain;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -69,8 +139,40 @@ pub(crate) struct NativeWriterHostState {
     registry_extension:
         parking_lot::RwLock<Option<Arc<registry_refresh::VerifiedRegistryExtension>>>,
     registry_publication_pending: std::sync::atomic::AtomicBool,
+    #[cfg(feature = "tls-replication")]
+    data_domains: parking_lot::RwLock<data_domains::WriterDataDomains>,
 }
 impl NativeWriterHostState {
+    /// Necessary memory-only original hook/coordinator/open/schema lifetime
+    /// refusal at the remote read-pin handoff. No DB/native/MStore IO and no
+    /// writer, read, metadata or serving authority is created by this check.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_remote_new_registration_memory(&self) -> Result<()> {
+        let registration = self
+            .registration
+            .upgrade()
+            .ok_or_else(|| invalid("remote NEW original writer registration ended"))?;
+        let actual = registration
+            .authority()
+            .ok_or_else(|| invalid("remote NEW original writer authority ended"))?;
+        let expected = self
+            .coordinator
+            .upgrade()
+            .ok_or_else(|| invalid("remote NEW original writer coordinator ended"))?;
+        if !registration.is_active()
+            || registration.generation() != self.record.generation
+            || !Arc::ptr_eq(&actual, &expected)
+            || self.directory.upgrade().is_none()
+            || self.schema.generation() != self.schema_generation
+        {
+            return Err(invalid("remote NEW original writer lifetime changed"));
+        }
+        self.health
+            .upgrade()
+            .ok_or_else(|| invalid("remote NEW original database health ended"))?
+            .check()
+            .map_err(|e| BicDbError::PagedStorage(e.to_string()))
+    }
     pub(crate) fn registration_generation(&self) -> Uuid {
         self.record.generation
     }
@@ -129,18 +231,40 @@ impl NativeWriterHostState {
         self.record.coordinator_id
     }
     pub(crate) fn require_range_id(&self, range: RangeId) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        if self.effective_serving_data_range(range)?.is_some() {
+            return Ok(());
+        }
         if !self.record.facts.ranges.contains_key(&range) {
             return Err(invalid("range is outside actual host writer policy"));
         }
         Ok(())
     }
     pub(crate) fn require_range(&self, range: &RangeDescriptor) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        if let Some(actual) = self.effective_serving_data_range(range.id)? {
+            if crate::distribution_native_read::canonical_range(range) != actual {
+                return Err(invalid(
+                    "range configuration differs from verified SAME-State Serving policy",
+                ));
+            }
+            return Ok(());
+        }
         self.record.facts.require_range(range)
     }
     pub(crate) fn require_command(
         &self,
         command: &crate::distribution_range_consensus::RangeWriteCommand,
     ) -> Result<()> {
+        #[cfg(feature = "tls-replication")]
+        if let Some(actual) = self.effective_serving_data_range(command.range_id)? {
+            if actual.epoch != command.range_epoch || actual.leader != command.leader_node_id {
+                return Err(invalid(
+                    "native command configuration differs from verified Serving host policy",
+                ));
+            }
+            return Ok(());
+        }
         let range = self
             .record
             .facts
@@ -199,7 +323,7 @@ impl NativeWriterHostState {
     }
     // Only registry publication may reconcile a durable-but-unpublished audit.
     // This still proves the actual original DB/hook/policy/open, not a role.
-    fn require_original_database(&self, database: &BicDb, range: &RangeDescriptor) -> Result<()> {
+    fn require_original_identity_database(&self, database: &BicDb) -> Result<()> {
         self.require_lifetime()?;
         database.check_recovery_state()?;
         if database.incarnation_id() != self.record.database_incarnation
@@ -241,7 +365,14 @@ impl NativeWriterHostState {
         if stored != self.record {
             return Err(invalid("native host writer receipt changed"));
         }
-        self.require_range(range)
+        Ok(())
+    }
+    fn require_original_database(&self, database: &BicDb, range: &RangeDescriptor) -> Result<()> {
+        self.require_original_identity_database(database)?;
+        self.require_range(range)?;
+        #[cfg(feature = "tls-replication")]
+        self.require_serving_data_database(database, range.id)?;
+        Ok(())
     }
 }
 
@@ -252,6 +383,19 @@ pub(crate) struct NativeRegisteredReceiverHook {
     actual_open: Weak<()>,
 }
 impl NativeRegisteredReceiverHook {
+    /// Necessary original empty-hook lifetime only. Full actual slot/native
+    /// validation remains at scope entry; this grants no image/row authority.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_remote_new_registration_memory(&self) -> Result<()> {
+        let original = self
+            .registration
+            .upgrade()
+            .ok_or_else(|| invalid("remote NEW original Registered hook ended"))?;
+        if original.is_revoked() || original.is_active() || self.actual_open.upgrade().is_none() {
+            return Err(invalid("remote NEW original Registered hook/open changed"));
+        }
+        Ok(())
+    }
     #[cfg(test)]
     pub(crate) fn test_keep_original_registration(
         &self,
@@ -279,6 +423,7 @@ impl NativeRegisteredReceiverHook {
             || hook.is_some()
             || hook.native_writer().is_some()
             || original.is_active()
+            || original.is_revoked()
         {
             return Err(invalid(
                 "original registered receiver hook changed; restored None cannot rebase it",
@@ -564,6 +709,18 @@ impl BicDb {
         result.require_borrowed(self, &hook)?;
         Ok(result)
     }
+    /// A remote Registered image request cannot adopt a possibly durable
+    /// policy whose hook publication has not completed. Necessary refusal
+    /// only, called outside the native journal; this grants no image writes.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_registered_remote_image_writer_absence(
+        &self,
+        original: &NativeRegisteredReceiverHook,
+    ) -> Result<()> {
+        original.require_current(self)?;
+        self.require_never_installed_receiver_writer_records()?;
+        original.require_current(self)
+    }
     #[cfg(feature = "tls-replication")]
     pub(crate) fn with_assigned_closed_writer_exclusion<R>(
         &self,
@@ -589,6 +746,9 @@ impl BicDb {
     }
     fn require_never_installed_receiver_writer_records(&self) -> Result<()> {
         let _journal = self.try_native_image_journal()?;
+        self.require_never_installed_receiver_writer_records_point()
+    }
+    fn require_never_installed_receiver_writer_records_point(&self) -> Result<()> {
         if self
             .read_native_range_image_record::<NativeWriterPolicyRecord>(POLICY_POINTER)?
             .is_some()
@@ -774,6 +934,8 @@ impl BicDb {
             coordinator: Arc::downgrade(&authority),
             registry_extension: parking_lot::RwLock::new(None),
             registry_publication_pending: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(feature = "tls-replication")]
+            data_domains: parking_lot::RwLock::new(Default::default()),
         });
         #[cfg(test)]
         if TEST_FAIL_HOST_POLICY_PUBLICATION.with(|flag| flag.replace(false)) {

@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 struct OpenMember {
     committed: CommittedNativeJointDecisionObservation,
-    writer: Arc<crate::db::NativeWriterHostState>,
+    writer: crate::db::NativeJointPhaseOwner,
 }
 pub(crate) struct NativeJointOpenPhaseRound {
     original: Arc<NativeJointPublishedServingQuorum>,
@@ -99,24 +99,33 @@ impl NativeJointOpenPhaseRound {
             mq_trace.complete();
             drop(mq_trace);
         }
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &old.service,
+            &metadata,
+            business,
+            &self.cancellation,
+        )?;
         let (committed, writer) = {
             let mut service = old
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("fresh open service busy"))?;
-            service.reconcile_native_joint_open_phase(
+            service.reconcile_native_joint_open_phase_with_point(
                 &metadata,
                 business,
                 &self.original.receipts[node],
                 &old.actual,
                 &self.cancellation,
+                metadata_point.as_deref(),
             )?;
-            let committed = service.observe_committed_native_joint_decision(
+            let committed = old.actual.observe_fresh_committed_with_point(
+                &service,
                 metadata,
                 business,
                 self.original.data().old_range().id,
+                metadata_point,
             )?;
-            let writer = old.actual.require_current_under_open_phase(
+            let writer = old.require_open_phase_current(
                 &service,
                 &committed,
                 self.original.receipts[node].clone(),
@@ -200,12 +209,12 @@ impl NativeJointOpenPhaseQuorum {
             .members
             .get(node)
             .ok_or_else(|| invalid("fresh open omitted participant"))?;
-        let writer = original.actual.require_current_under_open_phase(
+        let writer = original.require_open_phase_current(
             service,
             &member.committed,
             self.original.receipts[node].clone(),
         )?;
-        if !Arc::ptr_eq(&writer, &member.writer) {
+        if !writer.same_actual(&member.writer) {
             return Err(invalid("fresh open writer registration/generation changed"));
         }
         self.require_live()
@@ -227,13 +236,13 @@ impl NativeJointOpenPhaseQuorum {
             .members
             .get(node)
             .ok_or_else(|| invalid("fresh open local scope missing member"))?;
-        let writer = original.actual.require_local_open_scope(
+        let writer = original.require_local_open_scope(
             scope,
             store,
             &member.committed,
             self.original.receipts[node].clone(),
         )?;
-        if !Arc::ptr_eq(&writer, &member.writer) {
+        if !writer.same_actual(&member.writer) {
             return Err(invalid(
                 "fresh open local native scope writer generation changed",
             ));
@@ -292,15 +301,23 @@ impl NativeJointOpenPhaseQuorum {
             remaining(&self.cancellation)?,
             &self.cancellation,
         )?;
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &local.service,
+            &metadata,
+            business,
+            &self.cancellation,
+        )?;
         let fresh = {
             let service = local
                 .service
                 .try_lock()
                 .ok_or_else(|| invalid("fresh open postquorum service busy"))?;
-            service.observe_committed_native_joint_decision(
+            local.actual.observe_fresh_committed_with_point(
+                &service,
                 metadata,
                 business,
                 self.original.data().old_range().id,
+                metadata_point,
             )?
         };
         let result = NativeJointOpenAdmission {

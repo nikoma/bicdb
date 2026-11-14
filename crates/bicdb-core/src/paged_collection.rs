@@ -85,6 +85,7 @@ pub fn paged_live_count_walks_on_this_thread() -> u64 {
 #[derive(Debug)]
 pub struct PagedRecords {
     store: Arc<PagedStore>,
+    opened_directory: PathBuf,
     // Sticky per actual open. A raw capability can outlive its outer BicDb
     // guard and clones cannot be revoked. Never reset when a handle is dropped.
     raw_row_capability_issued: std::sync::atomic::AtomicBool,
@@ -267,6 +268,7 @@ impl PagedRecords {
         let (store, _recovery) = PagedStore::open(dir, store_options).map_err(page_error)?;
         let aliases = load_nearby_index_aliases(dir)?;
         Ok(Self {
+            opened_directory: std::fs::canonicalize(dir)?,
             value_compression: std::sync::atomic::AtomicBool::new(false),
             store: Arc::new(store),
             raw_row_capability_issued: std::sync::atomic::AtomicBool::new(false),
@@ -291,6 +293,10 @@ impl PagedRecords {
 
     pub fn store(&self) -> &Arc<PagedStore> {
         &self.store
+    }
+    /// Actual opened directory identity, not a reconstructed database owner.
+    pub(crate) fn opened_directory(&self) -> &Path {
+        &self.opened_directory
     }
 
     pub fn free_page_extents(

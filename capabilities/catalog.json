@@ -187,6 +187,39 @@
         ],
         "test_paths": [],
         "conditions": []
+      },
+      "native_automatic_range_rebalancing": {
+        "status": "unsupported",
+        "summary": "The enforced native range path has no production automatic placement/relocation controller; the one-range handoff driver requires local participant owners and same-process custody.",
+        "source_paths": [
+          "crates/bicdb-core/src/distribution_native_host/operator.rs",
+          "crates/bicdb-core/src/distribution_native_host/joined_data_handoff.rs",
+          "docs/design/native-fifth-data-path.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      },
+      "native_range_cold_handoff_recovery": {
+        "status": "unsupported",
+        "summary": "Losing the controller or a participant during native handoff has no complete cold reconstruction/continuation contract; ordinary database reopen does not recreate its live handoff owners.",
+        "source_paths": [
+          "crates/bicdb-core/src/distribution_native_host/joined_data_handoff.rs",
+          "docs/design/native-fifth-data-path.md"
+        ],
+        "test_paths": [],
+        "conditions": []
+      },
+      "native_range_broker_transactions": {
+        "status": "unsupported",
+        "summary": "Born-native transactions with pending broker publishes, including broker-only and mixed row/broker transactions, are refused before Prepare and application WAL. Row quorum capability does not supply broker replication.",
+        "source_paths": [
+          "crates/bicdb-core/src/db/range_image_native/writer_enrollment.rs",
+          "crates/bicdb-core/src/db/range_image_native/writer_enrollment/tests.rs"
+        ],
+        "test_paths": [
+          "crates/bicdb-core/src/db/range_image_native/writer_enrollment/tests.rs"
+        ],
+        "conditions": []
       }
     },
     "cell_ha": {

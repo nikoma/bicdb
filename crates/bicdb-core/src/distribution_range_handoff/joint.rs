@@ -9,21 +9,50 @@ mod scope;
 use scope::{canonical_range, NativeJointScopeData};
 mod plan;
 pub(crate) use plan::NativeJointHandoffPlan;
+#[cfg(feature = "tls-replication")]
+pub(crate) use plan::NativeJointReadOnlyPlanIdentity;
 
 mod closed;
 pub(crate) use closed::NativeJointOldObservation;
 
 mod old_quorum;
+#[cfg(feature = "tls-replication")]
+mod remote_old;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_old::{
+    NativeRemoteOldOperationV1, NativeRemoteOldReplyV1, NativeRemoteOldRequestV1,
+};
+#[cfg(feature = "tls-replication")]
+mod remote_old_collect;
 pub(crate) use old_quorum::{
     NativeJointOldClosedQuorum, NativeJointOldImageProof, NativeJointOldRound,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_old_collect::{
+    NativeRemoteOldCutCertificate, NativeRemoteOldImageProof, NativeRemoteOldRound,
+};
 
+mod decision_owners;
+use decision_owners::NativeJointOldDecisionOwners;
 mod materialized;
 pub(crate) use materialized::{
     NativeJointMaterializedFacts, NativeJointMaterializedQuorums, NativeJointNewObservation,
     NativeJointNewRound,
 };
+#[cfg(feature = "tls-replication")]
+mod remote_new;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_new::{
+    NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,
+    NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1, NativeRemoteNewFactSetV1,
+    NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum, NativeRemoteNewOperationV1,
+    NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit, NativeRemoteNewReplyV1,
+    NativeRemoteNewRequestV1, NativeRemoteNewRound, NativeRemoteNewSnapshotV1,
+    NativeRemoteNewTargetPinIssuance,
+};
 
+#[cfg(feature = "tls-replication")]
+pub(crate) use decision::NativeRegisteredDecisionCatalogueRetry;
 mod decision;
 pub(crate) use decision::{
     NativeJointDecisionData, NativeJointDecisionPublicationAdmission,
@@ -39,11 +68,12 @@ pub(crate) use committed::CommittedNativeJointDecisionObservation;
 mod bridge;
 pub(crate) use bridge::{
     NativeJointActivationAdmission, NativeJointOpenAdmission, NativeJointOpenPhaseQuorum,
-    NativeJointOpenPhaseRound, NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound,
+    NativeJointOpenPhaseRound, NativeJointPreparationCustody, NativeJointPreparationPhaseQuorum,
+    NativeJointPreparationPhaseRound, NativeJointPreparedServingCandidate,
     NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
     NativeJointPreparedServingRound, NativeJointPreparedServingVoteData,
     NativeJointPublishedServingQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
-    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound,
+    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
     NativeJointServingPublicationRound,
 };
 

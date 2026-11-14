@@ -2,9 +2,19 @@
 //! publisher can write it. Reading bytes yields a historical local WAL fact,
 //! never reconstructed quorums or permission to release a freeze.
 use super::*;
+#[cfg(feature = "tls-replication")]
+mod registered;
+#[cfg(feature = "tls-replication")]
+mod remote;
 use crate::distribution_range_handoff::{
     NativeJointDecisionData, NativeJointDecisionPublicationAdmission,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered::NativeRegisteredJointDecisionAttempt;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use remote::test_remote_joint_decision_cut;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote::NativeRemoteJointDecisionAttempt;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -24,6 +34,8 @@ struct NativeJointDecisionRecord {
     post_quorum_metadata_term: u64,
     post_quorum_metadata_read_index: u64,
     native_page_xid: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    remote_provenance_sha256: Option<String>,
     checksum_sha256: String,
 }
 fn key(range: RangeId) -> String {
@@ -60,6 +72,10 @@ impl NativeJointDecisionRecord {
             || !digest(&self.birth_sha256)
             || !digest(&self.local_native_receipt_sha256)
             || !digest(&self.local_logical_history_sha256)
+            || self
+                .remote_provenance_sha256
+                .as_ref()
+                .is_some_and(|hash| !digest(hash))
             || self.checksum()? != self.checksum_sha256
         {
             return Err(invalid("damaged protected complete joint decision record"));
@@ -85,14 +101,27 @@ pub(crate) struct NativeJointDecisionReceipt {
     record: NativeJointDecisionRecord,
 }
 impl NativeJointDecisionReceipt {
+    pub(crate) fn native_admission(&self) -> &NativeRecoveryAdmission {
+        &self.native
+    }
+    pub(crate) fn native_metadata_initialization_version(&self) -> u32 {
+        self.native.metadata_initialization_version()
+    }
     pub(crate) fn native_database_incarnation(&self) -> &str {
         self.native.database_incarnation()
+    }
+    pub(crate) fn metadata_context_id(&self) -> Uuid {
+        self.record.post_quorum_metadata_context_id
     }
     pub(crate) fn metadata_anchor(&self) -> (u64, u64) {
         (
             self.record.post_quorum_metadata_term,
             self.record.post_quorum_metadata_read_index,
         )
+    }
+    #[cfg(test)]
+    pub(crate) fn test_native_page_xid(&self) -> u64 {
+        self.record.native_page_xid
     }
     pub(crate) fn checksum_sha256(&self) -> &str {
         &self.record.checksum_sha256
@@ -110,6 +139,7 @@ impl NativeJointDecisionReceipt {
         self.record.actual_local_visibility_sequence
     }
     pub(crate) fn require_current(&self, database: &BicDb) -> Result<()> {
+        database.require_native_joint_decision_reader_profile()?;
         self.native.require_current(database)?;
         self.record.validate()?;
         self.record.decision.require_actual_native(&self.native)?;
@@ -133,6 +163,16 @@ impl NativeJointDecisionReceipt {
                 &self.record.checksum_sha256,
             ))?
             .ok_or_else(|| invalid("immutable complete joint decision archive missing"))?;
+        #[cfg(feature = "tls-replication")]
+        database.require_remote_native_decision_profile(&self.record)?;
+        #[cfg(not(feature = "tls-replication"))]
+        if self.record.remote_provenance_sha256.is_some()
+            || format::native_remote_joint_decision_active(database.data_path())?
+        {
+            return Err(invalid(
+                "remote decision provenance requires tls-replication reader",
+            ));
+        }
         if actual != self.record || archived != self.record {
             return Err(invalid("protected current/archive joint decision differ"));
         }
@@ -140,6 +180,32 @@ impl NativeJointDecisionReceipt {
     }
 }
 impl BicDb {
+    fn require_native_joint_decision_reader_profile(&self) -> Result<()> {
+        #[cfg(not(feature = "tls-replication"))]
+        if format::native_remote_joint_decision_active(self.data_path())? {
+            return Err(invalid(
+                "remote decision semantic profile requires tls-replication reader",
+            ));
+        }
+        Ok(())
+    }
+    /// Actual protected CURRENT read, not a checksum/DTO authority constructor.
+    pub(in crate::db::range_image_native) fn read_current_native_joint_writer_decision(
+        &self,
+        native: &NativeRecoveryAdmission,
+        range: RangeId,
+    ) -> Result<NativeJointDecisionReceipt> {
+        self.require_native_joint_decision_reader_profile()?;
+        native.require_current(self)?;
+        let actual: NativeJointDecisionRecord = self
+            .read_native_range_image_record(&key(range))?
+            .ok_or_else(|| {
+            invalid("writer DATA transition lacks actual protected joint decision")
+        })?;
+        actual.validate()?;
+        self.read_native_joint_decision(native, range, actual.decision.checksum_sha256())
+    }
+
     pub(crate) fn persist_native_joint_decision_from_old(
         &self,
         admission: &NativeJointDecisionPublicationAdmission,
@@ -216,6 +282,7 @@ impl BicDb {
     ) -> Result<NativeJointDecisionReceipt> {
         admission.require_live()?;
         native.require_current(self)?;
+        admission.require_native_metadata_point(self, store, native)?;
         admission.data().require_actual_native(native)?;
         store.require_native_catalog_durability(self.data_path())?;
         store.require_native_writer_host_base()?;
@@ -248,6 +315,7 @@ impl BicDb {
             post_quorum_metadata_term: role.metadata_term(),
             post_quorum_metadata_read_index: role.metadata_read_index(),
             native_page_xid: 0,
+            remote_provenance_sha256: None,
             checksum_sha256: String::new(),
         };
         let _journal = self.try_native_image_journal()?;
@@ -270,6 +338,7 @@ impl BicDb {
         } else {
             self.in_paged_transaction(|paged, xid| {
                 admission.require_live()?;
+                admission.require_native_metadata_point(self, store, native)?;
                 record.native_page_xid = xid;
                 record.checksum_sha256 = record.checksum()?;
                 record.validate()?;
@@ -300,6 +369,10 @@ impl BicDb {
         };
         result.require_current(self)?;
         admission.require_live()?;
+        let _physical_journal = self.try_native_image_journal()?;
+        result.require_current(self)?;
+        admission.require_native_metadata_point(self, store, native)?;
+        let _version = admission.native_publication_guard(native)?;
         Ok(result)
     }
     /// Actual protected record reader. Expected checksum binds a committed
@@ -310,6 +383,7 @@ impl BicDb {
         range: RangeId,
         expected: &str,
     ) -> Result<NativeJointDecisionReceipt> {
+        self.require_native_joint_decision_reader_profile()?;
         native.require_current(self)?;
         let record: NativeJointDecisionRecord =
             self.read_native_range_image_record(&key(range))?
@@ -332,5 +406,56 @@ impl BicDb {
         };
         result.require_current(self)?;
         Ok(result)
+    }
+}
+
+#[cfg(all(test, not(feature = "tls-replication")))]
+mod unsupported_remote_reader_tests {
+    use super::*;
+    #[test]
+    fn native_remote_decision_current_reader_without_tls_refuses_required_profile_before_lookup() {
+        let (_root, database, topology, spec) =
+            crate::distribution_range_consensus::native_origin_fixture();
+        let db = database.read();
+        let native = db
+            .native_recovery_admission(
+                &spec.cluster_id,
+                spec.bootstrap_id,
+                &spec.node_id,
+                spec.member_incarnation,
+            )
+            .unwrap();
+        let range = topology.ranges.values().next().unwrap().id;
+        let expected = "a".repeat(64);
+        let before = db
+            .read_native_joint_decision(&native, range, &expected)
+            .unwrap_err()
+            .to_string();
+        assert!(before.contains("protected joint decision unavailable"));
+        // Refusal-only format fixture: no remote DECISION/sidecar is minted.
+        crate::format::test_publish_remote_joint_decision_reader_refusal_only(db.data_path())
+            .unwrap();
+        let format_error = crate::format::plan_migration(db.data_path(), false)
+            .unwrap_err()
+            .to_string();
+        let direct = db
+            .read_native_joint_decision(&native, range, &expected)
+            .unwrap_err()
+            .to_string();
+        let current = db
+            .read_current_native_joint_writer_decision(&native, range)
+            .unwrap_err()
+            .to_string();
+        eprintln!(
+            "NON_TLS_REMOTE_DECISION_ACTUAL_READER_REFUSAL {}",
+            serde_json::json!({
+                "genuine_native_birth":native.birth_id(),"actual_before_flag_error":before,
+                "actual_direct_reader_error":direct,"actual_current_reader_error":current,"actual_format_validation_error":format_error,
+                "remote_committed_record_not_created":true,"format_refusal_only_not_remote_qualification":true,
+            })
+        );
+        assert!(format_error.contains("requires tls-replication reader"));
+        assert!(direct.contains("requires tls-replication reader"));
+        assert!(current.contains("requires tls-replication reader"));
     }
 }

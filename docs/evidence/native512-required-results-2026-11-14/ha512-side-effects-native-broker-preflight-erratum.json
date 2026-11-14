@@ -1,0 +1,83 @@
+{
+  "schema": "bicdb-source-audit-erratum-v1",
+  "source": "1742776ab02957a053aded2ad4f665500d9325bf",
+  "original_report_sha256": "ba2e61c95839dbf85263346e75d4d90b4bc50acca20becccd2952797e31f6114",
+  "original_preserved_unchanged": true,
+  "superseded_scope": "Only interpretations of F2/F5/T1 that allow born-native broker-bearing transactions to ACK a local-only outbox, including affected earlier prose messages. Other original findings retain their original evidence scope.",
+  "correction": "Native writer-enforced transactions explicitly REFUSE every nonempty pending_broker_publishes, whether broker-only or mixed rows+broker. The refusal occurs before range Prepare and application commit WAL. There is no observed or source-established native mixed-row+broker acknowledged loss here.",
+  "actual_order": [
+    "Statement-phase buffer_broker_publish pushes PendingBrokerPublish immediately into the transaction, without publication.",
+    "Protected mutation authorization constructs a broker audit only when mutation_policy.audit_required; authorized mutation methods call enqueue_mutation_audit, which buffers it before commit.",
+    "workflow enqueue_on_commit invokes buffer_broker_publish and inserts an ordinary receipt row before commit.",
+    "commit_transaction_inner invokes require_enforced_transaction_preflight at2640; version0 bypasses native-only guard, born writer-enforced path checks pending broker before bypass_commit_admission/empty-row shortcuts.",
+    "Nonempty broker effects return Unsupported with literal native range commands do not yet replicate broker effects; transaction refused before range Prepare or application WAL.",
+    "Later phases inject flashback history2668, construct admission rows2776, generate sync_ops2834 and record-audit events2844, then encode local TxFrame sidecars2903. Those later nonbroker outboxes do not trigger the earlier broker guard."
+  ],
+  "audit_distinction": {
+    "broker_mutation_audit": "Only actual authorized producers with audit_required=true buffer __bicdb_mutation_audit before the guard; those born-native transactions are refused. Do not generalize this to all audit modes.",
+    "record_audit_events": "Generated after the guard by record_audit_events_for_commit, controlled by audit_events/imported_projection. They are local WAL sidecars, not pending broker publishes. Original locality/quorum-migration qualification gap remains.",
+    "sync_ops": "Generated after the guard under sync_outbox/imported_projection. They are separate WAL sidecars, not broker publishes; original ID/migration coverage is not provided by RangeWriteCommand.",
+    "spatial_maintenance_events": "Generated during physical index apply; distinct from both the broker mutation audit and record-audit sidecar."
+  },
+  "workflow": "When enqueue_on_commit actually queues a broker publication, born-native preflight refuses the whole transaction before row commit; the receipt is not a silently successful local-only queue. Pure ordinary job/receipt rows still join final range footprint and may cross-range reject.",
+  "test_source_evidence": {
+    "name": "native_writer_broker_effects_refuse_before_wal_even_without_record_mutations",
+    "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/tests.rs",
+    "executed_by_this_audit": false,
+    "latest_exact_runtime_result_not_claimed": true
+  },
+  "next_test_correction": "T1 must first assert existing born-native broker-only and mixed-broker refusal, original pending IDs, unchanged rows/catalogue/WAL and zero publication. Separately test nonbroker record-audit/sync parity through failover. Do not describe a broker-bearing native ACK test as currently supported.",
+  "scope": "Read-only correction; no hook or broker guard changes; no build/test/CI/provision/qualification claim.",
+  "source_pins": [
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment.rs",
+      "lines": [
+        787,
+        794,
+        798,
+        802
+      ],
+      "sha256": "62f5a71a1cff60501fc47d806b0f23b6bf259118a4d3d875563d746a84e03308"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/spatial_paged.rs",
+      "lines": [
+        2640,
+        2668,
+        2776,
+        2834,
+        2844,
+        2896
+      ],
+      "sha256": "065d4258ba052d3bbd5e9ab01f3fb9bf2f28f02b1bc5d8d30249cd3dc031559d"
+    },
+    {
+      "path": "crates/bicdb-core/src/db.rs",
+      "lines": [
+        16745,
+        16830,
+        17095,
+        17162,
+        17180,
+        19732
+      ],
+      "sha256": "ab3865caa2bc6a80ec5f9364f73d9339a2f7785885f7b01e7f7e902c5aef572c"
+    },
+    {
+      "path": "crates/bicdb-workflow/src/lib.rs",
+      "lines": [
+        197,
+        250,
+        261
+      ],
+      "sha256": "d3998353ed2c3df3e79c7e8e77e6482db4540c184b601466bf8e622c8d4172be"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/tests.rs",
+      "lines": [
+        199
+      ],
+      "sha256": "189a25db45251d58354c4845e7c3bb05154c5c9a8d5ff2d98709686dc6d384ed"
+    }
+  ]
+}

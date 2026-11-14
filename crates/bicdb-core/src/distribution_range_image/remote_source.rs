@@ -10,11 +10,23 @@ use crate::distribution_data::{
 };
 use crate::distribution_native_host::NativeInitialDataAdmission;
 use crate::distribution_range_consensus::RangeWriteCoordinator;
+use crate::distribution_range_handoff::NativeRemoteOldCutCertificate;
 use crate::distribution_range_handoff::{NativeJointMaterializedFacts, NativeJointOldClosedQuorum};
 use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use crate::distribution_transport::TcpClusterRelocationTransport;
 use parking_lot::Mutex;
 use std::collections::BTreeMap;
+mod discovery;
+mod export_retirement;
+pub(crate) use discovery::{
+    ActualNativeSourceDiscovery, NativeSourceDiscoveryOperationV1, NativeSourceDiscoveryReplyV1,
+    NativeSourceDiscoveryRequestV1,
+};
+pub(crate) use export_retirement::{
+    NativeObserveRegisteredNewRequestV1, NativeRegisteredNewExportReplyV1,
+    NativeSourceExportBindingV1, NativeSourceExportOperationV1, NativeSourceExportReplyV1,
+    NativeSourceExportRequestV1, NativeSourceExportRetiredV1,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -53,6 +65,8 @@ pub(crate) struct NativeRemoteImageManifestV1 {
     pub h0: String,
     pub h: String,
     pub source_native_receipt: String,
+    pub source_physical_base_receipt: String,
+    pub source_old_close_record: crate::db::NativeJointOldCloseRecordData,
     pub old_config_sha256: String,
     pub new_config_sha256: String,
     pub old_quorum_sha256: String,
@@ -62,6 +76,7 @@ pub(crate) struct NativeRemoteImageManifestV1 {
 }
 impl NativeRemoteImageManifestV1 {
     pub(crate) fn checksum(&self) -> Result<String> {
+        self.source_old_close_record.require_byte_bound()?;
         let mut value = self.clone();
         value.checksum_sha256.clear();
         Ok(hex::encode(Sha256::digest(bounded_json(
@@ -99,6 +114,7 @@ impl NativeRemoteImageManifestV1 {
                 "invalid remote image manifest DATA; not a source/target grant",
             ));
         }
+        self.source_old_close_record.require_source_manifest(self)?;
         Ok(())
     }
 }
@@ -191,6 +207,88 @@ impl ActualNativeRemoteImageSourceFrame {
 /// Owns the real local source snapshot and quorum. No serialized constructor,
 /// replacement setters or deadline-renewal API. Long-session cancellation is
 /// separate from every step's original bounded request/fresh OWN metadata.
+enum ActualSourceOld {
+    Local(NativeJointOldClosedQuorum),
+    Remote(Arc<NativeRemoteOldCutCertificate>),
+    RetiredJoint {
+        plan: Arc<crate::distribution_range_handoff::NativeJointHandoffPlan>,
+        source: ClusterNodeId,
+    },
+}
+impl ActualSourceOld {
+    fn plan(&self) -> std::sync::Arc<crate::distribution_range_handoff::NativeJointHandoffPlan> {
+        match self {
+            Self::Local(x) => x.plan(),
+            Self::Remote(x) => x.plan(),
+            Self::RetiredJoint { plan, .. } => plan.clone(),
+        }
+    }
+    fn selected_source_id(&self) -> &ClusterNodeId {
+        match self {
+            Self::Local(x) => x.selected_source_id(),
+            Self::Remote(x) => x.selected_source_id(),
+            Self::RetiredJoint { source, .. } => source,
+        }
+    }
+    fn require_current(&self) -> Result<()> {
+        match self {
+            Self::Local(x) => x.require_current(),
+            Self::Remote(x) => x.require_current(),
+            Self::RetiredJoint { .. } => Err(invalid(
+                "source export retired after actual joint Open; no old owner revived",
+            )),
+        }
+    }
+    fn checksum_sha256(&self) -> Result<String> {
+        match self {
+            Self::Local(x) => x.checksum_sha256(),
+            Self::Remote(x) => x.checksum_sha256(),
+            Self::RetiredJoint { .. } => {
+                Err(invalid("retired source cannot issue old certificate"))
+            }
+        }
+    }
+    fn source_image_materialized_facts(
+        &self,
+    ) -> Result<BTreeMap<ClusterNodeId, NativeJointMaterializedFacts>> {
+        match self {
+            Self::Local(x) => x.source_image_materialized_facts(),
+            Self::Remote(x) => x.source_image_materialized_facts(),
+            Self::RetiredJoint { .. } => {
+                Err(invalid("retired source has no materialization authority"))
+            }
+        }
+    }
+    fn selected_source_close_record(&self) -> Result<crate::db::NativeJointOldCloseRecordData> {
+        match self {
+            Self::Local(x) => x.selected_source_close_record(),
+            Self::Remote(x) => Ok(x.selected_source_close_record()?.clone()),
+            Self::RetiredJoint { .. } => Err(invalid(
+                "retired source cannot issue original OLD record DATA",
+            )),
+        }
+    }
+    fn begin_capture_with_initial_wait(
+        &mut self,
+        wait: Duration,
+        process: &CancellationToken,
+        publish: &CancellationToken,
+    ) -> Result<RangeImageCapture> {
+        match self {
+            Self::Local(x) => x.begin_capture_with_initial_wait(wait, process, publish),
+            Self::Remote(x) => Arc::get_mut(x)
+                .ok_or_else(|| {
+                    invalid(
+                        "original source capture cannot begin after actual OLD ownership shared",
+                    )
+                })?
+                .begin_capture_with_initial_wait(wait, process, publish),
+            Self::RetiredJoint { .. } => {
+                Err(invalid("retired source cannot start replacement capture"))
+            }
+        }
+    }
+}
 pub(crate) struct NativeRemoteImageSourceSession {
     admission: Arc<NativeInitialDataAdmission>,
     runtime: Arc<RangeRecoveryRuntime>,
@@ -201,7 +299,7 @@ pub(crate) struct NativeRemoteImageSourceSession {
     writer: Arc<crate::db::InstalledNativeWriterHostGuard>,
     coordinator: Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
     metadata_store_id: Option<Uuid>,
-    old: NativeJointOldClosedQuorum,
+    old: ActualSourceOld,
     capture: Option<RangeImageCapture>,
     manifest: Option<NativeRemoteImageManifestV1>,
     target_attempt: Uuid,
@@ -222,7 +320,7 @@ impl NativeRemoteImageSourceSession {
         metadata: Arc<Mutex<MetadataConsensusStore>>,
         writer: Arc<crate::db::InstalledNativeWriterHostGuard>,
         coordinator: Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
-        old: NativeJointOldClosedQuorum,
+        old: ActualSourceOld,
         target_attempt: Uuid,
         original_session: &CancellationToken,
     ) -> Self {
@@ -380,6 +478,8 @@ impl NativeRemoteImageSourceSession {
             h0: capture.lineage.logical_genesis_sha256().into(),
             h: capture.lineage.logical_history_sha256().into(),
             source_native_receipt: capture.lineage.native_receipt_sha256().into(),
+            source_physical_base_receipt: capture.lineage.physical_base_receipt_sha256().into(),
+            source_old_close_record: self.old.selected_source_close_record()?,
             old_config_sha256: capture.cut.old_config_sha256().into(),
             new_config_sha256: capture.cut.new_config_sha256().into(),
             old_quorum_sha256: self.old.checksum_sha256()?,
@@ -410,6 +510,14 @@ impl NativeRemoteImageSourceSession {
         business: Uuid,
         parent: &CancellationToken,
     ) -> Result<()> {
+        self.observe_source_current(own, business, parent).map(drop)
+    }
+    fn observe_source_current(
+        &self,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_consensus::NativeOwnedMetadataMemberObservation> {
         parent.check()?;
         self.original_session.check()?;
         self.admission
@@ -474,7 +582,8 @@ impl NativeRemoteImageSourceSession {
         actual_open.require_live()?;
         self.original_session.check()?;
         own.require_live_request(business)?;
-        parent.check()
+        parent.check()?;
+        Ok(proof)
     }
     /// Source OWN MQ is acquired by its real provider BEFORE this call and any
     /// session/engine latch. It is READONLY metadata, never a recovery role cast.
@@ -570,6 +679,23 @@ impl NativeRemoteImageSourceSession {
 /// by the original admission inside every real session boundary.
 pub(crate) struct NativeRemoteImageSourceRegistry {
     sessions: Mutex<BTreeMap<Uuid, Arc<Mutex<NativeRemoteImageSourceSession>>>>,
+    discoveries: Mutex<BTreeMap<RangeId, Arc<discovery::NativeSourceDiscoveryAttempt>>>,
+    #[cfg(test)]
+    drop_next_discovery_reply: std::sync::atomic::AtomicBool,
+    #[cfg(test)]
+    drop_next_export_reply: std::sync::atomic::AtomicBool,
+    #[cfg(test)]
+    export_detach_cut: Mutex<Option<Box<dyn FnOnce(Instant, &CancellationToken) + Send>>>,
+    #[cfg(test)]
+    export_callback_fault: std::sync::atomic::AtomicU8,
+    #[cfg(test)]
+    export_callback_trace: Mutex<Option<serde_json::Value>>,
+    #[cfg(test)]
+    export_callback_final_bits: std::sync::atomic::AtomicU16,
+    #[cfg(test)]
+    export_callback_final_own_remaining_us: std::sync::atomic::AtomicU64,
+    #[cfg(test)]
+    export_work_diagnostics: export_retirement::ExportWorkDiagnostics,
     transport: Arc<TcpClusterRelocationTransport>,
     provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
     original_process: std::sync::OnceLock<CancellationToken>,
@@ -581,6 +707,23 @@ impl NativeRemoteImageSourceRegistry {
     ) -> Self {
         Self {
             sessions: Mutex::new(BTreeMap::new()),
+            discoveries: Mutex::new(BTreeMap::new()),
+            #[cfg(test)]
+            drop_next_discovery_reply: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(test)]
+            drop_next_export_reply: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(test)]
+            export_detach_cut: Mutex::new(None),
+            #[cfg(test)]
+            export_callback_fault: std::sync::atomic::AtomicU8::new(0),
+            #[cfg(test)]
+            export_callback_trace: Mutex::new(None),
+            #[cfg(test)]
+            export_callback_final_bits: std::sync::atomic::AtomicU16::new(0),
+            #[cfg(test)]
+            export_callback_final_own_remaining_us: std::sync::atomic::AtomicU64::new(0),
+            #[cfg(test)]
+            export_work_diagnostics: Default::default(),
             transport,
             provider,
             original_process: std::sync::OnceLock::new(),
@@ -617,6 +760,52 @@ impl NativeRemoteImageSourceRegistry {
         writer: Arc<crate::db::InstalledNativeWriterHostGuard>,
         coordinator: Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
         old: NativeJointOldClosedQuorum,
+        target_attempt: Uuid,
+    ) -> NativeRetainedRemoteImageSource {
+        self.retain_initial_source_with_old(
+            admission,
+            runtime,
+            service,
+            metadata,
+            writer,
+            coordinator,
+            ActualSourceOld::Local(old),
+            target_attempt,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn retain_initial_source_from_remote_old(
+        self: &Arc<Self>,
+        admission: Arc<NativeInitialDataAdmission>,
+        runtime: Arc<RangeRecoveryRuntime>,
+        service: Arc<Mutex<ClusterDataNodeService>>,
+        metadata: Arc<Mutex<MetadataConsensusStore>>,
+        writer: Arc<crate::db::InstalledNativeWriterHostGuard>,
+        coordinator: Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
+        old: NativeRemoteOldCutCertificate,
+        target_attempt: Uuid,
+    ) -> NativeRetainedRemoteImageSource {
+        self.retain_initial_source_with_old(
+            admission,
+            runtime,
+            service,
+            metadata,
+            writer,
+            coordinator,
+            ActualSourceOld::Remote(Arc::new(old)),
+            target_attempt,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn retain_initial_source_with_old(
+        self: &Arc<Self>,
+        admission: Arc<NativeInitialDataAdmission>,
+        runtime: Arc<RangeRecoveryRuntime>,
+        service: Arc<Mutex<ClusterDataNodeService>>,
+        metadata: Arc<Mutex<MetadataConsensusStore>>,
+        writer: Arc<crate::db::InstalledNativeWriterHostGuard>,
+        coordinator: Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>,
+        old: ActualSourceOld,
         target_attempt: Uuid,
     ) -> NativeRetainedRemoteImageSource {
         // The actual Host checks require_original_process BEFORE transferring
@@ -728,6 +917,7 @@ impl NativeRemoteImageSourceRegistry {
 /// full registry or a failed begin leaves the consumed OLD proof in this owner.
 /// There is no source DTO/UUID constructor and no mutable session accessor.
 pub(crate) struct NativeRetainedRemoteImageSource {
+    export_retirement: Mutex<export_retirement::RetainedExportRetirement>,
     session: Arc<Mutex<NativeRemoteImageSourceSession>>,
     registry: Arc<NativeRemoteImageSourceRegistry>,
     cancellation: CancellationToken,
@@ -739,10 +929,138 @@ impl NativeRetainedRemoteImageSource {
         cancellation: CancellationToken,
     ) -> Self {
         Self {
+            export_retirement: Mutex::new(Default::default()),
             session: Arc::new(Mutex::new(session)),
             registry,
             cancellation,
         }
+    }
+    /// The original S2 capture has retired, but its actual certificate/freezes
+    /// remain owned. This read cannot revive its canceled exporter session.
+    pub(crate) fn original_decision_provenance(
+        &self,
+        manifest: &NativeRemoteImageManifestV1,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteDecisionSourceData> {
+        parent.check()?;
+        self.registry.require_original_process()?;
+        let old = {
+            let source = self
+                .session
+                .try_lock()
+                .ok_or_else(|| invalid("remote decision original source busy"))?;
+            let actual = source.manifest()?;
+            if !source.published
+                || source.capture.is_some()
+                || actual.checksum_sha256 != manifest.checksum_sha256
+            {
+                return Err(invalid(
+                    "remote decision source needs same retired export/manifest",
+                ));
+            }
+            self.require_completed_export_manifest(actual)?;
+            match &source.old {
+                ActualSourceOld::Remote(old) => old.clone(),
+                _ => {
+                    return Err(invalid(
+                        "remote decision original certificate no longer retained",
+                    ))
+                }
+            }
+        };
+        let result = crate::distribution_range_handoff::NativeRemoteDecisionSourceData::from_actual_certificate(&old, manifest)?;
+        self.registry.require_original_process()?;
+        parent.check()?;
+        Ok(result)
+    }
+    pub(crate) fn actual_remote_old_certificate(
+        &self,
+    ) -> Result<Arc<NativeRemoteOldCutCertificate>> {
+        let source = self
+            .session
+            .try_lock()
+            .ok_or_else(|| invalid("actual source certificate busy"))?;
+        source.original_session.check()?;
+        if !source.published || source.capture.is_none() {
+            return Err(invalid("actual source capture/manifest not published"));
+        }
+        match &source.old {
+            ActualSourceOld::Remote(old) => {
+                old.require_current()?;
+                Ok(old.clone())
+            }
+            _ => Err(invalid(
+                "source is not an actual retained remote OLD certificate",
+            )),
+        }
+    }
+    /// Retire ONLY the completed export read pin. OLD freezes and native
+    /// closure obligations stay retained. Actual target materialization is
+    /// required before the source can stop serving this immutable snapshot.
+    pub(crate) fn retire_export_after_actual_registered_new(
+        &self,
+        target: &crate::distribution_data::ActualServiceNativeRegisteredJointNewEvidence,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        let mut source = self
+            .session
+            .try_lock()
+            .ok_or_else(|| invalid("source export callback still active"))?;
+        target.require_remote_source_retirement(source.manifest()?)?;
+        source.old.require_current()?;
+        parent.check()?;
+        // Session latch excludes every actual exporter before its original
+        // cancellation and snapshot drop. A new frame must fail cancellation.
+        source.original_session.cancel();
+        drop(source.capture.take());
+        Ok(())
+    }
+    pub(crate) fn retire_old_export_custody_after_joint_open(
+        &self,
+        phase: &crate::distribution_range_handoff::NativeJointReleasePhaseQuorum,
+    ) -> Result<()> {
+        // Full foreign phase validation must precede this source latch.
+        let old = {
+            let source = self
+                .session
+                .try_lock()
+                .ok_or_else(|| invalid("source OLD retirement busy"))?;
+            if source.capture.is_some() {
+                return Err(invalid(
+                    "source export reader not drained before joint retirement",
+                ));
+            }
+            match &source.old {
+                ActualSourceOld::Remote(old) => old.clone(),
+                ActualSourceOld::RetiredJoint { .. } => return Ok(()),
+                _ => {
+                    return Err(invalid(
+                        "joint remote retirement cannot cast local OLD quorum",
+                    ))
+                }
+            }
+        };
+        phase.require_remote_old_owner_retirement(&old)?;
+        let mut source = self
+            .session
+            .try_lock()
+            .ok_or_else(|| invalid("source OLD retirement callback busy"))?;
+        match &source.old {
+            ActualSourceOld::Remote(actual) if Arc::ptr_eq(actual, &old) => {}
+            _ => {
+                return Err(invalid(
+                    "source OLD retirement changed original certificate owner",
+                ))
+            }
+        }
+        let retired = ActualSourceOld::RetiredJoint {
+            plan: old.plan(),
+            source: old.selected_source_id().clone(),
+        };
+        source.original_session.cancel();
+        source.old = retired;
+        Ok(())
     }
     /// Revokes only this actual source session's child, never its process or
     /// siblings. This is refusal-only; it creates no replacement identity.

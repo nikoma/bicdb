@@ -23,12 +23,14 @@ mod open_adversarial_tests;
 mod original_release_writer_tests;
 #[path = "complete_joint_tests/post_joint_no_data_tests.rs"]
 mod post_joint_no_data_tests;
+#[path = "complete_joint_tests/writer_data_domain_fact_tests.rs"]
+mod writer_data_domain_fact_tests;
 use crate::distribution_range_consensus::{
     ImageInstallPurpose, NativeImageInstallRole, RecoveryFenceScope,
 };
 use crate::distribution_range_handoff::{
     NativeJointDurableDecision, NativeJointNewObservation, NativeJointNewRound,
-    NativeJointPreparedServingObservation, NativeJointPreparedServingQuorum,
+    NativeJointPreparedServingCandidate, NativeJointPreparedServingQuorum,
     NativeJointPreparedServingRound,
 };
 use crate::distribution_range_image::RangeImageCapture;
@@ -352,6 +354,7 @@ fn install_actual_target(
 
 #[derive(Debug, PartialEq, Eq)]
 enum JointTestOutcome {
+    WriterDataDomainFactsOnly,
     ClosedC1ImageContractChecked,
     ClosedPolicyTransitionStillUnsupported,
     FullHandoffAckAndStrong,
@@ -395,6 +398,7 @@ fn native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogu
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum JointFullContinuation {
+    WriterDataDomainFacts(bool),
     ClosedC1Image(closed_c1_image_tests::Control),
     ClosedPolicyBaseline,
     OriginalTerminalControls,
@@ -471,6 +475,10 @@ fn run_complete_joint_with_controls(
         .local_namespace_identity("items")
         .unwrap();
     let original_policies = (continuation == JointFullContinuation::ClosedPolicyBaseline
+        || matches!(
+            continuation,
+            JointFullContinuation::WriterDataDomainFacts(_)
+        )
         || matches!(continuation, JointFullContinuation::ClosedC1Image(_)))
     .then(|| closed_policy_baseline_tests::capture(&fixture, &old));
     let relocation = if original_policies.is_some() {
@@ -578,15 +586,24 @@ fn run_complete_joint_with_controls(
         .unwrap(),
     )
     .unwrap();
-    let mut publication = new
-        .finish()
-        .unwrap()
-        .prepare_decision()
-        .unwrap()
-        .publication_round();
+    let mut publication = new.prepare_decision().unwrap().publication_round();
     for local in [node("n0"), node("n1"), node("n2"), node("n3")] {
+        let role = role(&fixture, &plan, &local);
+        let business = role.business_request_id();
+        // The protected publisher requires an independently observed local
+        // OWN and its actual attached MStore point, in addition to the Role.
+        // Keep acquisition/publication inside this SAME original Role budget.
+        let request = parent.child_with_deadline(role.deadline());
+        let own = fixture.clients[&local]
+            .acquire_host_metadata_observation(
+                &node("n1"),
+                business,
+                Duration::from_secs(5),
+                &request,
+            )
+            .unwrap();
         publication
-            .publish_actual_member(role(&fixture, &plan, &local), &parent)
+            .publish_actual_owned_member(role, own, business, &request)
             .unwrap();
     }
     let decision = publication.finish().unwrap();
@@ -594,6 +611,18 @@ fn run_complete_joint_with_controls(
     let old_h = decision.data().logical_history_sha256().to_owned();
     for stage in 0..3 {
         commit_joint_stage(&mut fixture, &decision, stage);
+    }
+    if let JointFullContinuation::WriterDataDomainFacts(foreign) = continuation {
+        writer_data_domain_fact_tests::exercise(
+            &fixture,
+            &old,
+            decision,
+            original_policies.unwrap(),
+            acknowledged.as_ref(),
+            &parent,
+            foreign,
+        );
+        return JointTestOutcome::WriterDataDomainFactsOnly;
     }
     if let Some(original) = original_policies {
         closed_policy_baseline_tests::exercise(
@@ -637,26 +666,33 @@ fn run_complete_joint_with_controls(
                 &parent,
             )
             .unwrap();
+        // Capture the actual attached recipient MStore before the service/DB
+        // latch. Keep the SAME independently acquired OWN and caller budget;
+        // the protected native preparation cannot use a metadata-only wrapper.
+        let point = crate::ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &service, &mq, business, &parent,
+        )
+        .unwrap();
         let actual = {
             let actual = service.lock();
             let committed = actual
-                .observe_committed_native_joint_decision(mq, business, old.id)
+                .observe_committed_native_joint_decision_with_point(mq, business, old.id, point)
                 .unwrap();
             actual
                 .prepare_local_native_joint_serving(committed, lease, &parent)
                 .unwrap()
         };
-        let observation =
-            NativeJointPreparedServingObservation::from_actual_service(actual, service).unwrap();
+        let candidate = NativeJointPreparedServingCandidate::from_actual_service(actual, service);
         eprintln!(
             "ACTUAL_JOINT_PHASE prepare-complete node={local} elapsed_ms={}",
             preparation_started.elapsed().as_millis()
         );
         if let Some(round) = &mut prepared_round {
-            round.record(observation).unwrap();
+            round.record_candidate(candidate).unwrap();
         } else {
-            prepared_round =
-                Some(NativeJointPreparedServingRound::begin(observation, &round_parent).unwrap());
+            prepared_round = Some(
+                NativeJointPreparedServingRound::begin_candidate(candidate, &round_parent).unwrap(),
+            );
         }
     }
     let prepared = Arc::new(prepared_round.unwrap().finish().unwrap());

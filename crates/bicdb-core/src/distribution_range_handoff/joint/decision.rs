@@ -6,6 +6,11 @@ use crate::distribution_range_recovery::RecoveryRoleAdmission;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+#[cfg(feature = "tls-replication")]
+mod registered_catalogue_retry;
+#[cfg(feature = "tls-replication")]
+pub(crate) use registered_catalogue_retry::NativeRegisteredDecisionCatalogueRetry;
+
 const MAX_DECISION_BYTES: usize = 2 * 1024 * 1024;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -123,6 +128,67 @@ impl NativeJointDecisionData {
         }
         Ok(())
     }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn from_remote_historical_data(
+        plan: &NativeJointHandoffPlan,
+        manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
+        source: &super::remote_new::NativeRemoteDecisionSourceData,
+        new_materialized: BTreeMap<ClusterNodeId, NativeJointMaterializedFacts>,
+    ) -> Result<Self> {
+        source.require_manifest(manifest)?;
+        source.binding.require_plan(plan)?;
+        let mut data = Self {
+            version: 1,
+            scope: plan.data().clone(),
+            old_closed: manifest.actual_old_closures.clone(),
+            observed_irrevocable: source.constraints.clone(),
+            new_materialized,
+            selected_source: manifest.source_id.clone(),
+            range_index: manifest.range_index,
+            h0: manifest.h0.clone(),
+            h: manifest.h.clone(),
+            checksum_sha256: String::new(),
+        };
+        data.checksum_sha256 = hex::encode(sha2::Sha256::digest(
+            crate::distribution_range_image::bounded_json(&data, MAX_DECISION_BYTES)?,
+        ));
+        data.validate()?;
+        Ok(data) // DATA only; no LocalQQ or local publication admission.
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_remote_source_data(
+        &self,
+        source: &super::remote_new::NativeRemoteDecisionSourceData,
+    ) -> Result<()> {
+        self.validate()?;
+        source.binding.require_shape()?;
+        if source.binding.scope_sha256 != self.scope.checksum()?
+            || source.binding.source_id != self.selected_source
+            || source.binding.target_id != self.scope.target
+            || source.constraints != self.observed_irrevocable
+            || source.constraints.len() != self.scope.old_members.len()
+            || source.original_close_records.len() != self.old_closed.len()
+            || source.checksum()? != source.checksum_sha256
+        {
+            return Err(invalid(
+                "protected remote decision source obligations/plan changed",
+            ));
+        }
+        for (id, fact) in &self.old_closed {
+            source
+                .original_close_records
+                .get(id)
+                .ok_or_else(|| invalid("protected remote original OLD record missing"))?
+                .require_materialized_facts(fact)?;
+        }
+        Ok(())
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn remote_new_facts(
+        &self,
+    ) -> &BTreeMap<ClusterNodeId, NativeJointMaterializedFacts> {
+        &self.new_materialized
+    }
     pub(crate) fn checksum_sha256(&self) -> &str {
         &self.checksum_sha256
     }
@@ -147,6 +213,12 @@ impl NativeJointDecisionData {
         node: &ClusterNodeId,
     ) -> Option<&NativeJointMaterializedFacts> {
         self.old_closed.get(node)
+    }
+    /// Immutable historical DATA only; this does not reconstruct an OLD quorum.
+    pub(crate) fn old_materialized_facts(
+        &self,
+    ) -> &BTreeMap<ClusterNodeId, NativeJointMaterializedFacts> {
+        &self.old_closed
     }
     pub(crate) fn promise(&self) -> &RangeHandoffPromise {
         &self.scope.promise
@@ -273,10 +345,84 @@ pub(crate) struct NativeJointPreparedDecision {
     data: NativeJointDecisionData,
 }
 impl NativeJointMaterializedQuorums {
+    /// Bounded failure-only DATA. Original guards have returned before this
+    /// formatter runs. It performs no currentness check or protocol callback.
+    #[cfg(test)]
+    fn report_preparation_refusal(
+        &self,
+        stage: &'static str,
+        failed_member: Option<&ClusterNodeId>,
+        prepare_entered: std::time::Instant,
+        current_returned: std::time::Instant,
+        step_entered: std::time::Instant,
+        returned: std::time::Instant,
+        error: &BicDbError,
+    ) {
+        let clocks: Vec<_> = self
+            .new
+            .iter()
+            .take(64)
+            .map(|(node, observation)| {
+                let bytes = node.as_str().as_bytes();
+                serde_json::json!({"member_bytes":&bytes[..bytes.len().min(128)],
+                "member_original_bytes":bytes.len(),"member_truncated":bytes.len()>128,
+                "failed_member":failed_member==Some(node),
+                "prepare_entry_and_initial_current_return":observation.test_issuance_clock(prepare_entered,current_returned),
+                    "actual_check_boundary":observation.test_issuance_clock(step_entered,returned)})
+            })
+            .collect();
+        let report = serde_json::json!({"stage":stage,"step_elapsed_us":returned.duration_since(step_entered).as_micros(),
+            "initial_current_elapsed_us":current_returned.duration_since(prepare_entered).as_micros(),
+            "step_entered_since_prepare_us":step_entered.duration_since(prepare_entered).as_micros(),
+            "failure_return_since_prepare_us":returned.duration_since(prepare_entered).as_micros(),
+            "cancellation_snapshot_time":"during post-error diagnostic, not historical stage time",
+            "members":clocks,"member_limit":64,"omitted_members":self.new.len().saturating_sub(64),
+            "actual_error_discriminant":format!("{:?}",std::mem::discriminant(error)),
+            "primary_error":"preserved by original Result propagation and caller unwrap",
+            "scope":"failure-only copied clocks; no CPU/IO/cause attribution or renewed authority"});
+        let _ = std::io::Write::write_fmt(
+            &mut std::io::stderr().lock(),
+            format_args!("NATIVE_DECISION_PREPARATION_REFUSAL {report}\n"),
+        );
+    }
     pub(crate) fn prepare_decision(self) -> Result<NativeJointPreparedDecision> {
-        self.require_current()?;
-        for obs in self.new.values() {
-            obs.require_live_issuance()?;
+        #[cfg(test)]
+        let prepare_entered = std::time::Instant::now();
+        let current = self.require_current();
+        #[cfg(test)]
+        let current_returned = std::time::Instant::now();
+        #[cfg(test)]
+        if let Err(error) = &current {
+            self.report_preparation_refusal(
+                "initial_actual_current",
+                None,
+                prepare_entered,
+                current_returned,
+                prepare_entered,
+                current_returned,
+                error,
+            );
+        }
+        current?;
+        for (_node, obs) in &self.new {
+            #[cfg(test)]
+            let entered = std::time::Instant::now();
+            let issued = obs.require_live_issuance();
+            #[cfg(test)]
+            let returned = std::time::Instant::now();
+            #[cfg(test)]
+            if let Err(error) = &issued {
+                self.report_preparation_refusal(
+                    "member_live_issuance",
+                    Some(_node),
+                    prepare_entered,
+                    current_returned,
+                    entered,
+                    returned,
+                    error,
+                );
+            }
+            issued?;
         }
         let plan = self.old.plan();
         let mut data = NativeJointDecisionData {
@@ -346,6 +492,9 @@ impl NativeJointPreparedDecision {
             data: self.data.clone(),
             plan,
             role,
+            #[cfg(feature = "tls-replication")]
+            registered_own: None,
+            metadata_point: None,
         })
     }
 }
@@ -355,8 +504,44 @@ pub(crate) struct NativeJointDecisionPublicationAdmission {
     data: NativeJointDecisionData,
     plan: Arc<NativeJointHandoffPlan>,
     role: RecoveryRoleAdmission,
+    metadata_point: Option<Arc<crate::distribution_data::ActualNativeJointMetadataPoint>>,
+    #[cfg(feature = "tls-replication")]
+    registered_own: Option<(
+        crate::distribution_consensus::HostMetadataReadObservation,
+        Uuid,
+    )>,
 }
 impl NativeJointDecisionPublicationAdmission {
+    pub(crate) fn require_native_metadata_point(
+        &self,
+        db: &crate::BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        native: &crate::db::NativeRecoveryAdmission,
+    ) -> Result<()> {
+        match &self.metadata_point {
+            Some(point) => point.require_native_store_point(db, store),
+            None if native.metadata_initialization_version() == 0 => Ok(()),
+            None => Err(invalid(
+                "protected native DECISION requires actual fresh OWN/current-MStore version",
+            )),
+        }
+    }
+    pub(crate) fn native_publication_guard(
+        &self,
+        native: &crate::db::NativeRecoveryAdmission,
+    ) -> Result<Option<crate::distribution_data::ActualNativeJointMetadataPublicationGuard<'_>>>
+    {
+        let version = match &self.metadata_point {
+            Some(point) => point.try_publication_guard().map(Some),
+            None if native.metadata_initialization_version() == 0 => Ok(None),
+            None => Err(invalid(
+                "protected native DECISION has no current metadata publication gate",
+            )),
+        }?;
+        // Original role request is a distinct memory-only cancellation/deadline.
+        self.role.require_live_request()?;
+        Ok(version)
+    }
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
         &self.data
     }
@@ -366,8 +551,31 @@ impl NativeJointDecisionPublicationAdmission {
     pub(crate) fn plan(&self) -> &NativeJointHandoffPlan {
         &self.plan
     }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn registered_metadata_request(
+        &self,
+    ) -> Result<(
+        &crate::distribution_consensus::HostMetadataReadObservation,
+        Uuid,
+    )> {
+        self.require_registered_own()?;
+        let (own, business) = self.registered_own.as_ref().unwrap();
+        Ok((own, *business))
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_registered_own(&self) -> Result<()> {
+        let (own, business) = self.registered_own.as_ref().ok_or_else(|| {
+            invalid("Registered joint publication requires independently fresh actual OWN")
+        })?;
+        self.role.require_own_host_metadata(own, *business)?;
+        self.require_live()
+    }
     pub(crate) fn require_live(&self) -> Result<()> {
         self.plan.require_role(&self.role)?;
+        #[cfg(feature = "tls-replication")]
+        if let Some((own, business)) = &self.registered_own {
+            self.role.require_own_host_metadata(own, *business)?;
+        }
         self.data.validate()
     }
 }
@@ -410,6 +618,11 @@ impl NativeJointPreparedDecision {
     }
 }
 impl NativeJointDecisionPublicationRound {
+    /// Actual local collection contents; no independent vote or authority.
+    #[cfg(test)]
+    pub(crate) fn test_actual_durable_member_ids(&self) -> Vec<ClusterNodeId> {
+        self.durable.keys().cloned().collect()
+    }
     pub(crate) fn publish_actual_member(
         &mut self,
         role: RecoveryRoleAdmission,
@@ -417,6 +630,83 @@ impl NativeJointDecisionPublicationRound {
     ) -> Result<()> {
         parent.check()?;
         let admission = self.prepared.authorize_local_publication(role)?;
+        self.publish_admitted_member(admission, parent)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn publish_actual_owned_member(
+        &mut self,
+        role: RecoveryRoleAdmission,
+        own: crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        parent: &crate::CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        role.require_own_host_metadata(&own, business)?;
+        // Re-fsync only an actual retained catalogue candidate before strict
+        // normal quorum/durability authorization. Never rebuild a NEW vote.
+        if let Some(NativeJointNewObservation::Registered { actual }) =
+            self.prepared.quorums.new.get(role.local_node_id())
+        {
+            actual.reconcile_retained_decision_catalogue(
+                &self.prepared,
+                &role,
+                &own,
+                business,
+                parent,
+            )?;
+        }
+        let mut admission = self.prepared.authorize_local_publication(role)?;
+        let node = admission.role().local_node_id().clone();
+        let service = match self.prepared.quorums.new.get(&node) {
+            Some(new) => new.actual_service_for_metadata().clone(),
+            None => self
+                .prepared
+                .quorums
+                .old
+                .old_observation(&node)
+                .ok_or_else(|| invalid("actual owned DECISION participant absent"))?
+                .actual_service()
+                .clone(),
+        };
+        admission.metadata_point =
+            crate::distribution_data::ClusterDataNodeService::capture_actual_joint_metadata_point(
+                &service, &own, business, parent,
+            )?;
+        admission.registered_own = Some((own, business));
+        admission.require_registered_own()?;
+        if let Some(NativeJointNewObservation::Registered { actual }) =
+            self.prepared.quorums.new.get(&node)
+        {
+            actual.publish_and_count_decision(&admission, parent, &mut self.durable)
+        } else {
+            self.publish_admitted_member(admission, parent)
+        }
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn publish_actual_registered_member(
+        &mut self,
+        role: RecoveryRoleAdmission,
+        own: crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        parent: &crate::CancellationToken,
+    ) -> Result<()> {
+        let node = role.local_node_id();
+        if !matches!(
+            self.prepared.quorums.new.get(node),
+            Some(NativeJointNewObservation::Registered { .. })
+        ) {
+            return Err(invalid(
+                "Registered publication requires actual original target NEW owner",
+            ));
+        }
+        self.publish_actual_owned_member(role, own, business, parent)
+    }
+
+    fn publish_admitted_member(
+        &mut self,
+        admission: NativeJointDecisionPublicationAdmission,
+        parent: &crate::CancellationToken,
+    ) -> Result<()> {
         let node = admission.role().local_node_id().clone();
         let receipt = if let Some(new) = self.prepared.quorums.new.get(&node) {
             new.publish_decision(&admission, parent)?
@@ -438,10 +728,30 @@ impl NativeJointDecisionPublicationRound {
                 "same member returned conflicting protected joint receipt",
             ));
         }
-        self.durable.insert(node, receipt);
+        let retired = {
+            let _version = admission.native_publication_guard(receipt.native_admission())?;
+            self.durable.insert(node, receipt)
+        };
+        drop(retired);
         Ok(())
     }
     pub(crate) fn finish(self) -> Result<NativeJointDurableDecision> {
+        self.try_finish().map_err(|(error, _original)| error)
+    }
+    /// On refusal, return the exact original owned round and durable receipts.
+    /// No fresh attempt or decoded decision can replace uncertain custody.
+    pub(crate) fn try_finish(
+        self,
+    ) -> std::result::Result<NativeJointDurableDecision, (BicDbError, Self)> {
+        if let Err(error) = self.require_finish_current() {
+            return Err((error, self));
+        }
+        Ok(NativeJointDurableDecision {
+            prepared: self.prepared,
+            durable: self.durable,
+        })
+    }
+    fn require_finish_current(&self) -> Result<()> {
         self.prepared.quorums.require_current()?;
         let old = self
             .durable
@@ -464,10 +774,7 @@ impl NativeJointDecisionPublicationRound {
         for receipt in self.durable.values() {
             self.prepared.require_actual_receipt(receipt)?;
         }
-        Ok(NativeJointDurableDecision {
-            prepared: self.prepared,
-            durable: self.durable,
-        })
+        Ok(())
     }
 }
 impl NativeJointDurableDecision {
@@ -485,24 +792,71 @@ impl NativeJointDurableDecision {
             ),
         >,
     > {
+        self.retain_new_serving_owners()
+    }
+    /// Retry custody only: these leases share the genuine original owners.
+    /// Keep this decision until the complete prepared quorum is retained.
+    pub(crate) fn retain_new_serving_owners(
+        &self,
+    ) -> Result<
+        BTreeMap<
+            ClusterNodeId,
+            (
+                Arc<parking_lot::Mutex<crate::distribution_data::ClusterDataNodeService>>,
+                crate::distribution_data::NativeJointServingLease,
+            ),
+        >,
+    > {
         self.require_current()?;
         let mut owners = BTreeMap::new();
-        for (node, observation) in self.prepared.quorums.new {
+        for (node, observation) in &self.prepared.quorums.new {
             let value = match observation {
                 NativeJointNewObservation::Survivor { old, .. } => old.retained_serving_lease()?,
+                #[cfg(feature = "tls-replication")]
+                NativeJointNewObservation::Registered { actual } => {
+                    actual.retain_serving_lease()?
+                }
                 NativeJointNewObservation::Target { actual, service } => {
                     let lease = {
                         let local = service
                             .try_lock()
                             .ok_or_else(|| invalid("joint NEW owner service busy"))?;
-                        actual.into_joint_serving_lease(&local)?
+                        actual.retain_joint_serving_lease(&local)?
                     };
-                    (service, lease)
+                    (service.clone(), lease)
                 }
             };
-            owners.insert(node, value);
+            owners.insert(node.clone(), value);
         }
         Ok(owners)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_preparation_custody(&self) -> serde_json::Value {
+        let images = self
+            .prepared
+            .quorums
+            .new
+            .iter()
+            .filter_map(|(node, observation)| match observation {
+                NativeJointNewObservation::Target { actual, .. } => {
+                    Some((node.clone(), actual.test_image_custody_identity()))
+                }
+                _ => None,
+            })
+            .collect::<BTreeMap<_, _>>();
+        let receipts = self
+            .durable
+            .iter()
+            .map(|(node, receipt)| {
+                (
+                    node.clone(),
+                    serde_json::json!({"checksum":receipt.checksum_sha256(),
+                "page_xid":receipt.test_native_page_xid(),
+                "database_open":receipt.native_database_incarnation()}),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        serde_json::json!({"decision":self.data(),"durable_receipts":receipts,"images":images})
     }
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
         &self.prepared.data

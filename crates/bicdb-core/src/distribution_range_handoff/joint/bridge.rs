@@ -8,25 +8,79 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 mod phase;
+mod preparation_custody;
 mod publication;
 pub(crate) use phase::{NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound};
+pub(crate) use preparation_custody::NativeJointPreparationCustody;
 pub(crate) use publication::{
     NativeJointOpenAdmission, NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound,
     NativeJointPublishedServingQuorum, NativeJointReleaseAdmission, NativeJointReleaseContinuation,
-    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound,
+    NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
     NativeJointServingPublicationRound,
 };
 
-pub(crate) struct NativeJointPreparedServingObservation {
-    actual: ActualServiceNativeJointPreparedEvidence,
+/// An uncounted bundle of genuine actual evidence and an untrusted service
+/// association. Construction performs no validation and grants nothing.
+/// Only a round's complete original record validation may count it.
+pub(crate) struct NativeJointPreparedServingCandidate {
+    actual: Arc<ActualServiceNativeJointPreparedEvidence>,
     service: Arc<Mutex<ClusterDataNodeService>>,
+    fresh: Option<CommittedNativeJointDecisionObservation>,
+    custody: Option<Arc<NativeJointPreparationCustody>>,
+}
+impl NativeJointPreparedServingCandidate {
+    pub(crate) fn from_actual_service(
+        actual: ActualServiceNativeJointPreparedEvidence,
+        service: Arc<Mutex<ClusterDataNodeService>>,
+    ) -> Self {
+        Self {
+            actual: Arc::new(actual),
+            service,
+            fresh: None,
+            custody: None,
+        }
+    }
+    #[cfg(test)]
+    pub(crate) fn test_replace_service_association(
+        mut self,
+        service: Arc<Mutex<ClusterDataNodeService>>,
+    ) -> Self {
+        self.service = service;
+        self
+    }
+    #[cfg(test)]
+    pub(crate) fn test_request_memory(&self) -> serde_json::Value {
+        self.fresh
+            .as_ref()
+            .unwrap_or_else(|| self.actual.committed())
+            .test_request_memory()
+    }
+    #[cfg(test)]
+    pub(crate) fn test_request_memory_probe(&self) -> Box<dyn Fn() -> serde_json::Value> {
+        self.fresh
+            .as_ref()
+            .unwrap_or_else(|| self.actual.committed())
+            .test_request_memory_probe()
+    }
+}
+
+pub(crate) struct NativeJointPreparedServingObservation {
+    actual: Arc<ActualServiceNativeJointPreparedEvidence>,
+    service: Arc<Mutex<ClusterDataNodeService>>,
+    fresh: Option<CommittedNativeJointDecisionObservation>,
+    custody: Option<Arc<NativeJointPreparationCustody>>,
 }
 impl NativeJointPreparedServingObservation {
     pub(crate) fn from_actual_service(
         actual: ActualServiceNativeJointPreparedEvidence,
         service: Arc<Mutex<ClusterDataNodeService>>,
     ) -> Result<Self> {
-        let result = Self { actual, service };
+        let result = Self {
+            actual: Arc::new(actual),
+            service,
+            fresh: None,
+            custody: None,
+        };
         result.require_current()?;
         Ok(result)
     }
@@ -35,7 +89,107 @@ impl NativeJointPreparedServingObservation {
             .service
             .try_lock()
             .ok_or_else(|| invalid("joint bridge service busy"))?;
-        self.actual.require_current(&service)
+        self.require_current_with_service(&service)
+    }
+    fn require_current_with_service(&self, service: &ClusterDataNodeService) -> Result<()> {
+        if let Some(custody) = &self.custody {
+            custody.require_actual(&self.actual)?;
+            custody.require_service(&self.service)?;
+            custody.require_original_caller()?;
+        }
+        match &self.fresh {
+            Some(fresh) => {
+                self.require_fresh_phase_current(service, fresh)?;
+            }
+            None => self.actual.require_current(service)?,
+        }
+        if let Some(custody) = &self.custody {
+            custody.require_original_caller()?;
+        }
+        Ok(())
+    }
+    fn committed(&self) -> &CommittedNativeJointDecisionObservation {
+        self.fresh
+            .as_ref()
+            .unwrap_or_else(|| self.actual.committed())
+    }
+    fn require_fresh_phase_current(
+        &self,
+        service: &ClusterDataNodeService,
+        fresh: &CommittedNativeJointDecisionObservation,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
+        match &self.custody {
+            Some(custody) => self
+                .actual
+                .require_current_under_preparation_custody(service, fresh, custody),
+            None => self
+                .actual
+                .require_current_under_fresh_phase(service, fresh),
+        }
+    }
+    fn release_fresh_pin(
+        &self,
+        service: &ClusterDataNodeService,
+        fresh: &CommittedNativeJointDecisionObservation,
+    ) -> Result<()> {
+        match &self.custody {
+            Some(custody) => self
+                .actual
+                .release_read_pin_under_preparation_custody(service, fresh, custody),
+            None => self
+                .actual
+                .release_read_pin_under_fresh_phase(service, fresh),
+        }
+    }
+    fn require_open_phase_current(
+        &self,
+        service: &ClusterDataNodeService,
+        fresh: &CommittedNativeJointDecisionObservation,
+        native: Arc<crate::db::NativeJointServingBridgeReceipt>,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
+        match &self.custody {
+            Some(custody) => self
+                .actual
+                .require_current_under_open_preparation_custody(service, fresh, native, custody),
+            None => self
+                .actual
+                .require_current_under_open_phase(service, fresh, native),
+        }
+    }
+    fn require_local_open_scope(
+        &self,
+        scope: &crate::db::NativeJointBridgeReadScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        fresh: &CommittedNativeJointDecisionObservation,
+        native: Arc<crate::db::NativeJointServingBridgeReceipt>,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
+        match &self.custody {
+            Some(custody) => self
+                .actual
+                .require_local_open_scope_with_preparation_custody(
+                    scope, store, fresh, native, custody,
+                ),
+            None => self
+                .actual
+                .require_local_open_scope(scope, store, fresh, native),
+        }
+    }
+    fn require_local_publication_scope(
+        &self,
+        scope: &crate::db::NativeJointPreparedPublicationScope<'_>,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+        fresh: &CommittedNativeJointDecisionObservation,
+    ) -> Result<crate::db::NativeJointPhaseOwner> {
+        match &self.custody {
+            Some(custody) => self
+                .actual
+                .require_local_publication_scope_with_preparation_custody(
+                    scope, store, fresh, custody,
+                ),
+            None => self
+                .actual
+                .require_local_publication_scope(scope, store, fresh),
+        }
     }
     fn data(&self) -> &NativeJointDecisionData {
         self.actual.committed().data()
@@ -48,7 +202,17 @@ impl NativeJointPreparedServingObservation {
             .service
             .try_lock()
             .ok_or_else(|| invalid("joint bridge pin service busy"))?;
-        self.actual.release_read_pin(&service)
+        if let Some(custody) = &self.custody {
+            custody.require_actual(&self.actual)?;
+        }
+        match &self.fresh {
+            Some(fresh) => self.release_fresh_pin(&service, fresh)?,
+            None => self.actual.release_read_pin(&service)?,
+        }
+        if let Some(custody) = &self.custody {
+            custody.require_original_caller()?;
+        }
+        Ok(())
     }
 }
 
@@ -66,18 +230,70 @@ impl NativeJointPreparedServingRound {
         first: NativeJointPreparedServingObservation,
         parent: &crate::CancellationToken,
     ) -> Result<Self> {
-        first.require_current()?;
-        let cancellation = parent.child_with_deadline(first.actual.committed().deadline());
+        Self::begin_candidate(
+            NativeJointPreparedServingCandidate {
+                actual: first.actual,
+                service: first.service,
+                fresh: first.fresh,
+                custody: first.custody,
+            },
+            parent,
+        )
+    }
+    /// The candidate remains uncounted until record performs the unchanged
+    /// complete actual service/native/MStore and original deadline checks.
+    pub(crate) fn begin_candidate(
+        first: NativeJointPreparedServingCandidate,
+        parent: &crate::CancellationToken,
+    ) -> Result<Self> {
+        let committed = first
+            .fresh
+            .as_ref()
+            .unwrap_or_else(|| first.actual.committed());
+        let cancellation = parent.child_with_deadline(committed.deadline());
         cancellation.check()?;
         let mut round = Self {
             caller: parent.child(),
-            data: first.data().clone(),
+            data: committed.data().clone(),
             observations: BTreeMap::new(),
             cancellation,
             poisoned: false,
         };
-        round.record(first)?;
+        // record performs the complete current service/native check before
+        // counting this actual observation, under its original deadline and
+        // publication guard. There is no admission between construction and
+        // that check; repeating it here spends the same bounded authority twice.
+        round.record_candidate(first)?;
         Ok(round)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_collection_deadline(&self) -> Option<std::time::Instant> {
+        self.cancellation.deadline()
+    }
+    #[cfg(test)]
+    pub(crate) fn test_collection_memory(&self) -> serde_json::Value {
+        let now = std::time::Instant::now();
+        serde_json::json!({"caller_cancel_requested":self.caller.is_cancel_requested(),
+            "collection_cancel_requested":self.cancellation.is_cancel_requested(),
+            "collection_remaining_us":self.cancellation.deadline().map(|d|d.saturating_duration_since(now).as_micros()),
+            "collection_past_deadline_us":self.cancellation.deadline().map(|d|now.saturating_duration_since(d).as_micros()),
+            "observations":self.observations.iter().map(|(id,o)|serde_json::json!({
+                "node":id,"request":o.committed().test_request_memory(),
+                "native_preparation_sha256":o.actual.prepared().checksum_sha256()})).collect::<Vec<_>>(),
+            "poisoned":self.poisoned,"memory_observation_not_authority":true})
+    }
+    /// No checked observation escapes: the private container is passed
+    /// directly to the original full record boundary before insertion.
+    pub(crate) fn record_candidate(
+        &mut self,
+        candidate: NativeJointPreparedServingCandidate,
+    ) -> Result<()> {
+        self.record(NativeJointPreparedServingObservation {
+            actual: candidate.actual,
+            service: candidate.service,
+            fresh: candidate.fresh,
+            custody: candidate.custody,
+        })
     }
     pub(crate) fn record(
         &mut self,
@@ -115,9 +331,18 @@ impl NativeJointPreparedServingRound {
         // compared with another replica's B nor substituted for range R.
         self.cancellation = self
             .cancellation
-            .child_with_deadline(observation.actual.committed().deadline());
-        self.observations
-            .insert(observation.local_node_id().clone(), Arc::new(observation));
+            .child_with_deadline(observation.committed().deadline());
+        let observation = Arc::new(observation);
+        let local = observation.local_node_id().clone();
+        let retired = {
+            let _version = observation.committed().native_publication_guard()?;
+            self.cancellation.check()?;
+            if let Some(custody) = &observation.custody {
+                custody.require_original_caller()?;
+            }
+            self.observations.insert(local, observation.clone())
+        };
+        drop(retired);
         Ok(())
     }
     pub(crate) fn finish(self) -> Result<NativeJointPreparedServingQuorum> {
@@ -162,6 +387,11 @@ impl NativeJointPreparedServingQuorum {
         if self.cancellation.is_cancel_requested() {
             return Err(crate::BicDbError::QueryCanceled);
         }
+        for observation in self.observations.values() {
+            if let Some(custody) = &observation.custody {
+                custody.require_original_caller()?;
+            }
+        }
         Ok(())
     }
     #[cfg(test)]
@@ -183,7 +413,6 @@ impl NativeJointPreparedServingQuorum {
                     (
                         node.clone(),
                         observation
-                            .actual
                             .committed()
                             .deadline()
                             .saturating_duration_since(now)
@@ -200,7 +429,10 @@ impl NativeJointPreparedServingQuorum {
         self.cancellation.check()?;
         self.require_original_caller()?;
         for observation in self.observations.values() {
-            observation.actual.committed().require_metadata_current()?;
+            observation.committed().require_metadata_current()?;
+            if let Some(custody) = &observation.custody {
+                custody.require_original_caller()?;
+            }
             observation.actual.require_original_writer_lifetime()?;
         }
         self.cancellation.check()
@@ -309,6 +541,12 @@ impl NativeJointPreparedServingQuorum {
             trace.complete();
             result
         };
+        let metadata_point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &local.service,
+            &metadata,
+            business,
+            &cancellation,
+        )?;
         let fresh = {
             let service = local
                 .service
@@ -320,10 +558,12 @@ impl NativeJointPreparedServingQuorum {
                 actor.node_id(),
                 &cancellation,
             );
-            let result = service.observe_committed_native_joint_decision(
+            let result = local.actual.observe_fresh_committed_with_point(
+                &service,
                 metadata,
                 business,
                 self.data.old_range().id,
+                metadata_point,
             )?;
             #[cfg(test)]
             trace.complete();
@@ -407,7 +647,7 @@ impl NativeJointActivationAdmission {
         if let Some(phase) = &self.phase {
             phase.require_member_with_service(self.local.local_node_id(), service)
         } else {
-            self.local.actual.require_current(service)
+            self.local.require_current_with_service(service)
         }
     }
     pub(crate) fn require_local_publication_scope(
@@ -417,10 +657,9 @@ impl NativeJointActivationAdmission {
     ) -> Result<()> {
         self.require_live()?;
         self.fresh.require_current_with_publication_scope(scope)?;
-        let writer =
-            self.local
-                .actual
-                .require_local_publication_scope(scope, store, &self.fresh)?;
+        let writer = self
+            .local
+            .require_local_publication_scope(scope, store, &self.fresh)?;
         if let Some(phase) = &self.phase {
             phase.require_local_publication_writer(self.local.local_node_id(), &writer)?;
         }
@@ -459,7 +698,7 @@ impl NativeJointActivationAdmission {
                     .committed(observation.local_node_id())?
                     .metadata_anchor()
             } else {
-                observation.actual.committed().metadata_anchor()
+                observation.committed().metadata_anchor()
             };
             if context == vote_context || term < vote_term || index < vote_index {
                 return Err(invalid(
@@ -491,7 +730,7 @@ impl NativeJointActivationAdmission {
             .map(|(node, observation)| {
                 let actual = observation.actual.prepared();
                 let (term, index, context) = self.phase.as_ref().map_or_else(
-                    || observation.actual.committed().metadata_anchor(),
+                    || observation.committed().metadata_anchor(),
                     |phase| phase.observations[node].committed.metadata_anchor(),
                 );
                 (

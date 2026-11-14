@@ -1,0 +1,126 @@
+{
+  "schema": "bicdb-recipient-catalogue-availability-design-correction-v1",
+  "source": "1742776ab02957a053aded2ad4f665500d9325bf",
+  "version": "1.0.512-beta",
+  "scope": "read-only immutable source and design correction; no engine open, code/build/test/job/push",
+  "original_frozen_contract": {
+    "path": "native512-next-remote-catalogue-recipient-stage-contract-1742776.json",
+    "sha256": "b0973f7e2b8acb764583fde826a03612d43b532a1764dc0a5bead7bce57aa3c8",
+    "unchanged": true
+  },
+  "classification": "BLOCKING before production admission: exact whole-catalogue retry is fail-closed safety, not bounded recovery; no actual rebase/resolver producer for this decision stage found",
+  "source_files": {
+    "crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/registered_decision.rs": {
+      "blob": "20f93fa695c029bcb5c231839770ceed93737fe5",
+      "sha256": "e1c37f5adaf04766e15ab47445435e50ace83048d99adaad1166db57198e0b80"
+    },
+    "crates/bicdb-core/src/distribution_range_consensus/native_image_base/joined_remote.rs": {
+      "blob": "32d1530fe816186c4d50f502884b12dddae89a1d",
+      "sha256": "580587638c38b1e14e8e864bc520fd5b698e2a5141c6c625833641d2827d9980"
+    },
+    "crates/bicdb-core/src/distribution_range_consensus.rs": {
+      "blob": "d9aa9453998c8be992193e71af0cc35a6d84dda1",
+      "sha256": "3016a267a14f5931c78ad3fab097fddf82234e48d3de28ae797159bf6e2dad2a"
+    },
+    "crates/bicdb-core/src/db/range_image_native/serving_configuration/joint_handoff/decision/remote.rs": {
+      "blob": "13da76f9da9a75f924549b78b7826cf5f6890872",
+      "sha256": "acacd63968284c197fe683e025132e056a963b8470b58d551e660d3d5ee83992"
+    },
+    "crates/bicdb-core/src/db/range_image_native/serving_configuration/joint_handoff/decision.rs": {
+      "blob": "e7d64c787c0063a54f3593087f817e14183cc323",
+      "sha256": "971608207cc4018d0025a79bcb36efc97b138ebcfaba3f8487eb239332fb70bf"
+    },
+    "crates/bicdb-core/src/distribution_range_handoff/joint/remote_new/participant/decision.rs": {
+      "blob": "3f6ff148b28d78e9b1442daf749cad599756cf08",
+      "sha256": "725183fe4dc4f414e0719e0cb61c3c1e9593daad8ce44690db004d637cb0f7e5"
+    },
+    "crates/bicdb-core/src/distribution_range_handoff/joint/remote_new/participant.rs": {
+      "blob": "3ed2ae3e4f92e476b16b5e6b6083f57b20f61c05",
+      "sha256": "96a0165febcd118f2b637f62322e187430b00b410cd3f0510c26c1947474ec7e"
+    },
+    "crates/bicdb-core/src/distribution_range_handoff/joint/decision/registered_catalogue_retry.rs": {
+      "blob": "505f8822c1df775eb36df9d162c0c1fd44134b56",
+      "sha256": "6bd13b29fa12ad220da8fb2fa7cece9c6fa1aacc778901035d232248d8d70cbe"
+    }
+  },
+  "confirmed_source_semantics": [
+    {
+      "at": "joint_handoff_state/registered_decision.rs185-217,238-249",
+      "finding": "NativeRegisteredDecisionCataloguePublication.require_binding rejects store.catalog not exactly original or candidate. advance calls it BEFORE verified fast-path; even known verified publication then demands whole candidate and exact old candidate file. Thus a different valid whole catalogue containing unchanged selected R1 plus unrelated R2 successor permanently rejects this object; fresh Role/OWN cannot repair its retained preimage. No rebase/supersession method on that owner."
+    },
+    {
+      "at": "registered_decision.rs260-309",
+      "finding": "Original/candidate bytes owned before memory mutation; global recovery_persistence_uncertain set before IO; actual replace return/error retained before postchecks. This preserves safety/custody but IO outcome cap8 and no rebase mean bounded refusal, not guaranteed successful reconciliation."
+    },
+    {
+      "at": "native_image_base/joined_remote.rs142-185,315-365",
+      "finding": "There IS a narrowly different known-verified Joined image-floor path: selected intent/base/log revalidated against actual current full durable disk/memory, no stale whole-candidate rewrite. Its uncertain path still requires exact whole original/candidate. It is not a rebase producer for decision publication and grants no permission to copy it by boolean."
+    },
+    {
+      "at": "RangeWriteCatalog at distribution_range_consensus.rs642-680",
+      "finding": "Whole file includes allrange logs, backup/handoff/recovery fences, install intents/bases, sparse decisions/install certification/handover maps, joint states/abort/current recovery state plus global format/nativewriter/identity. A safe decision patch must enumerate ALL selected-range and relevant global obligations, not just native_joint_handoffs[R1]. Unknown/global obligations cannot be erased as unrelated."
+    }
+  ],
+  "actual_native_attempt_evidence": [
+    {
+      "at": "decision/remote.rs83-130,365-431",
+      "finding": "NativeRemoteJointDecisionAttempt owns expected body, native record/provenance/encodedbytes, issued_xid and real outcome. xid retained immediately after actual paged.begin; no replacement if issued but incomplete custody. Full candidate bytes/provenance retained before puts."
+    },
+    {
+      "at": "decision/remote.rs460-517",
+      "finding": "Write error -> actual paged.abort result retained Aborted or Unknown; commit error fences DB and retains Unknown; actual paged.commit Ok retains Committed BEFORE after_commit cancellation test/postchecks. No automatic native replacement on Aborted or Unknown."
+    },
+    {
+      "at": "decision/remote.rs118-130,519-575",
+      "finding": "actual_committed_xid requires actual retained outcome Committed and issued_xid equality BEFORE reading native receipt. Unknown cannot be promoted simply because subsequent TxStatus says Committed; existing helper refuses before that read. A genuine same-open/cold outcome resolver would be another required producer, absent here."
+    },
+    {
+      "at": "decision.rs137-180 and remote.rs233-273,519-559",
+      "finding": "Known committed retry checks common native decision CURRENT and immutable archive equal exact retained record/bytes; remote profile requires provenance CURRENT and immutable archive with exact canonical checksums/correlation/native xid and actual TxStatus::Committed. Native birth/open/profile/local prefix bound remains; wire receipt alone is insufficient. Health/version/current actual physical scope still required after reads."
+    }
+  ],
+  "request_custody_exhaustion": [
+    {
+      "at": "participant/decision.rs208-246",
+      "finding": "Every accepted fresh decision request appends actual callback/source/Role/OWN/MStore context; len>=8 or total encoded>8MiB refuses BEFORE native retry/readback. No known-committed idempotent success bypass and no retirement/compaction. A postcommit canceled request consumes a slot; after8 retained contexts even a later quiet fresh request fails without changing native attempt. This is source-derivable finite availability bound, not an observed runtime failure of ninth request."
+    },
+    {
+      "at": "participant.rs302-335,450-490",
+      "finding": "Exact request map max64 and combined8MiB, no eviction; pin handoff has separate8attempt/8MiB retention. Reusing exact challenge with changed request bytes refuses. These are intentional custody bounds, not proof an operator can resume indefinitely."
+    },
+    {
+      "correction": "Do not solve by deleting old contexts or increasing limits. Need real sealed resolution/retirement producer proving no live worker, all immutable/uncertain constraints absorbed into retained native/progress outcome, original callbacks no longer needed as live grant, and fresh current authority still independent. No such producer is established by this proposal. Until reviewed/implemented, cap exhaustion is a production recovery blocker."
+    }
+  ],
+  "deterministic_two_range_schedule": {
+    "qualification": "Proposed genuine schedule, not run. Exact whole-file predicate demonstrates structural refusal; actual API reachability must be established honestly.",
+    "setup": "One real native host with two independently protected ranges and exact original selected R1 handoff owner. R2 action must be an actually permitted protected catalogue mutation on THAT same real Store; never inject a copied catalogue or grant a FIRST target an R2 APP writer it cannot have. For proposed Registered-FIRST-only stage, first establish legitimate concurrent R2 image/catalogue producer or keep schedule as unsupported until real OLD/Joined continuation scope exists.",
+    "steps": [
+      "1. Obtain real remote native DECISION forR1 with actual paged.commit returned success, retain exact originalA/session/body/native xid/record/provenance+allACKledger. Prepare catalogue originalO0 and candidateC0 using actual fresh recipient authority; hold before first catalogue write while original owner remains.",
+      "2. Perform genuine R2 catalogue update through its normal guarded durable producer, with actual commit/write return and exact current disk/memoryD1. Preserve original selected R1 projectionP0 and record native R2 outcome plus full catalogue checksum before/after. This is permitted unrelated progress, not test-forged state.",
+      "3. Fresh R1 request with real matching Role/OWN/MStore tries retained C0. Current require_binding refuses D1!=O0/C0 even if P0 unchanged; repeat after quiet interval demonstrates same-object permanent failclosed until new recovery producer, not transient stale OWN. Original R1 native decision remains irreversible/knowncommitted; no new xid/body.",
+      "4. Variant: R1 actual candidate write returns Ok/readback but cancellation prevents final current publication, then genuine R2 successor if existing global uncertainty permits it. Do not bypass recovery_persistence_uncertain to force this reachability. If R2 is correctly refused, report that global-availability effect separately.",
+      "5. Variant: R1 already verified, then real R2 successorD2 preserving exact R1 decision patch. Current Registered known-success check still rejects entire-file change; a new safe selected-known-success reader should return already-completed stage without rewritingC0.",
+      "6. New rebase producer acceptance once implemented: exact selected R1 projection unchanged or exact authorized postimage; actual D1 preserved; SAME R1 native/body/xid/A/session; new explicit catalogue generationC1 links prior O0/C0/outcomes. Every R2 field/currentbytes preserved, original C0 not overwritten onto D1. Fresh request after finite R2churn+quiet completes within declared original overall budget. Record all refusals/unknowns; no TTL change.",
+      "7. Negative: selected R1 native/promise/log/base/install/recovery/abort/map or global birth/UID/restore/profile changes; missing/bad archive or unknown native outcome. New producer must refuse, preserve full history and never reinterpret as unrelated."
+    ]
+  },
+  "required_actual_rebase_or_reconcile_producer": {
+    "status": "DESIGN ONLY: no such producer exists for this remote catalogue stage at174; code must remain production-unavailable until reviewed and implemented.",
+    "opaque_owner": "Original NativeRemoteNewParticipant/DecisionCustody retains canonical immutable R1 operation identity + originalA/session/native body/xid/record/provenance. Add a selected typed catalogue delta and explicit linked publication generations, rather than silently mutating one old candidate.",
+    "actual_acquisition": "Under original per-recipient operation exclusion AFTER prior real worker exits, acquire fresh Role/OWN/MStore externally; under same actual Store/native exclusion capture and validate actual current disk+memory head, catalogue UUID/open/root/nativeprofile, health and all selected native/current/archive/promise obligations. No network/MStore mutex under engine. Exclusive serialization must cover choosing head, retaining candidate and write; no other catalogue writer may race that critical sequence.",
+    "selected_projection": "Define reviewed complete selected obligation projection across every keyed map and relevant abort/recovery/global profile field, with exact preimageP0 and authorized postimageP1. Include global identity/format/minimum reader constraints. Retained delta only installs SAME decision hashes for SAME session; no new native DECISION or replay. Supported global-format normalization must be explicit/monotonic and preserve every unrelated entry; unsupported state fails closed.",
+    "known_verified": "If actual current durable head is healthy/disk==memory and exact selected postimage/native proof remains, use distinct actual selected-known-success capability and return historical completed catalogue stage under fresh current authority. Do not rewrite any retained whole candidate. This can borrow a shape like Joined floor selected reader but needs its own decision-specific proof.",
+    "not_written_old_candidate": "If actual selected projection stillP0 and old generation has provably not entered IO, retain old descriptor/outcomes and a NEW explicit generation(original_actual_headD1,candidateD1+delta,encodedbytes/hash,parent generation). Retain it before effects; do not discard C0 or replace native attempt. Fresh authority must validate D1 before write.",
+    "prior_catalogue_uncertain": "Do not assume not-written from a failed API or absence. Wait prior writer actual exit; perform actual same-store head reconciliation. Current checked full head must be shown to contain exactlyP0 orP1, remain compatible with every retained unresolved intent and all native facts, and have no unaccounted other publication uncertainty. Resolve/durably fsync the CURRENT accepted head or new linked candidate under real exclusive sink; NEVER replay oldC0 over newerD1. Keep original unknown IO outcome permanently recorded even if a later actual fsync establishes current head durability.",
+    "uncertainty_ownership": "Global recovery_persistence_uncertain bool cannot by itself prove which attempt owns uncertainty or permit clearing another operation. Need typed same-store publication-head/intent ownership, complete relevant unresolved-owner enumeration and resolution before clear. If not available, refuse; that is a blocker, not general recovery.",
+    "before_and_after_IO": "Every new generation stores exact bytes/preimage/native relation before memory write. Actual replace-return/error recorded immediately before readback/cancellation/currentness; exact readback and fresh actual boundary then short memory-only version publication. Cancellation leaves generation+outcomes retained. One generation transition per genuine fresh request, finite explicit bounds, no busy-loop or native replacement.",
+    "cold": "RAM generation chain is insufficient. Crash-recovery journal/atomic snapshot must durably bind selected intent, native xid/body and candidate generations/outcome uncertainty to real catalogue head; reopen must produce fresh actual owner from protected evidence, not deserialize authority. No actual cold producer exists here."
+  },
+  "production_admission_correction": [
+    "Original narrow next-stage contract is superseded in availability scope: exactWholeOriginal-or-Candidate is acceptable failclosed refusal but MUST NOT be advertised as general bounded recovery after irreversible native DECISION.",
+    "Implementation may remain a bounded unqualified component until actual selected reconcile/rebase and context-resolution producers exist. Never mark a stage production-admissible merely because its happy TCP case passes.",
+    "Do not weaken ordinary APP/Strong/Serving or generic catalogue persistence to bypass this. Preserve unrelated R2 updates and every original uncertain operation; do not extend OWN deadlines or retry a new native decision.",
+    "No deterministic schedule executed here, no claim this caused prior Azure/CI failures. W1/W2 ownership fix is independent."
+  ]
+}

@@ -1,0 +1,701 @@
+{
+  "run": 43581326157,
+  "run_type": "Actual normal pull_request requiredCI; no ad-hoc qualifier",
+  "source_head": "1742776ab02957a053aded2ad4f665500d9325bf",
+  "source_version": "1.0.512-beta",
+  "actual_checkout": "4700100a7741ffe402e0c0281201e4f1a6d0f0a6",
+  "actual_checkout_tree": "5437f30bfbca159d001469e963077db5fad1df30",
+  "head_tree_equal": true,
+  "actual_merge_parents": [
+    "7ad192a7d01ba1e0c1967bc4f1bc79d176a4c385",
+    "1742776ab02957a053aded2ad4f665500d9325bf"
+  ],
+  "tests_conclusion": "failure",
+  "rails_conclusion": "success",
+  "jobs": [
+    {
+      "id": 132406471522,
+      "name": "Licensing invariants",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:36:05Z",
+      "completed_at": "2026-11-14T09:36:17Z"
+    },
+    {
+      "id": 132406471697,
+      "name": "Public repository has no private dependencies",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:36:05Z",
+      "completed_at": "2026-11-14T09:36:42Z"
+    },
+    {
+      "id": 132406471713,
+      "name": "Formatting",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:36:06Z",
+      "completed_at": "2026-11-14T09:36:34Z"
+    },
+    {
+      "id": 132406471719,
+      "name": "Community-only workspace compiles, tests included",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:36:05Z",
+      "completed_at": "2026-11-14T09:42:50Z"
+    },
+    {
+      "id": 132406471752,
+      "name": "Validate focused test selectors",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:36:05Z",
+      "completed_at": "2026-11-14T09:36:08Z"
+    },
+    {
+      "id": 132406489542,
+      "name": "rest of workspace",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:36:10Z",
+      "completed_at": "2026-11-14T11:22:49Z"
+    },
+    {
+      "id": 132406489550,
+      "name": "bicdb-sql",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:36:10Z",
+      "completed_at": "2026-11-14T10:11:57Z"
+    },
+    {
+      "id": 132406489555,
+      "name": "bicdb-pgwire",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:36:10Z",
+      "completed_at": "2026-11-14T09:47:08Z"
+    },
+    {
+      "id": 132406489569,
+      "name": "bicdb-core",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:36:10Z",
+      "completed_at": "2026-11-14T09:53:17Z"
+    },
+    {
+      "id": 132406489716,
+      "name": "bicdb-core native multi-node (serial)",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-11-14T09:36:10Z",
+      "completed_at": "2026-11-14T10:36:12Z"
+    },
+    {
+      "id": 132406490563,
+      "name": "Focused PGwire library (${{ inputs.pgwire_filter }})",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-11-14T09:36:08Z",
+      "completed_at": "2026-11-14T09:36:08Z"
+    },
+    {
+      "id": 132406490678,
+      "name": "Focused Core library (${{ inputs.core_filter }})",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-11-14T09:36:09Z",
+      "completed_at": "2026-11-14T09:36:08Z"
+    },
+    {
+      "id": 132406490765,
+      "name": "Focused CLI integration (${{ inputs.cli_target }})",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-11-14T09:36:09Z",
+      "completed_at": "2026-11-14T09:36:08Z"
+    },
+    {
+      "id": 132406491251,
+      "name": "Focused Core integration target (${{ inputs.core_target }} x${{ inputs.core_target_repeat }})",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-11-14T09:36:09Z",
+      "completed_at": "2026-11-14T09:36:08Z"
+    },
+    {
+      "id": 132406471473,
+      "name": "Rails 8.1.4 with stock PostgreSQL adapter",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:36:06Z",
+      "completed_at": "2026-11-14T09:48:57Z"
+    }
+  ],
+  "component_reports": [
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/ha512-core-success-capture.json",
+      "bytes": 85965,
+      "sha256": "f14e3c193f0aa8996d5b564b1a417a9a6bca6788a6a3190b55941731c321301f"
+    },
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/ha512-native-pressure-capture.json",
+      "bytes": 2507,
+      "sha256": "bb2f3d08774cbc45a3bf4fdffce0634697d9d0387c2954160ddb9aecce628ec5"
+    },
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/ha512-pgwire-success-capture.json",
+      "bytes": 12018,
+      "sha256": "eb529482600456103cd7e2be1ed09810967332a03aaac36c031411d1743186e7"
+    },
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/ha512-rails-success-capture.json",
+      "bytes": 5432,
+      "sha256": "370283ea917bc3cd85d62c5c7fb01212bf1f69c54a377187748ba2f3bb7f180a"
+    },
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/ha512-rest-success-capture.json",
+      "bytes": 81480,
+      "sha256": "842195fc0ada8a28a3c365e28489e8d7987f09cbd46ba239b0343f7b1d7073e2"
+    },
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/ha512-sql-success-capture.json",
+      "bytes": 178425,
+      "sha256": "f0f816c0feedc76fd52501929cbb99f02b620d8e0092099dd7a7d660d4cb269b"
+    },
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/ha512-workspace-success-capture.json",
+      "bytes": 1040,
+      "sha256": "32781202627dcc3f82f109fa447c3e732a6941bc16b7eb07fa12aebc51b27958"
+    },
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/ha512-native-terminal-failures-and-510-map.json",
+      "bytes": 282581,
+      "sha256": "36180829031e7fa3e9a1ed2bce1641ebfd375c6ca6c1418e5f8c60b4a92cda14"
+    },
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/ha512-preparation-clock-boundary-analysis.json",
+      "bytes": 10218,
+      "sha256": "ef35d504b30f2a3c89ee63415184bbfc5b3e098f43dc403757021675ef52c8d7"
+    },
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/ha512-prior510-failure-case-registry.json",
+      "bytes": 30695,
+      "sha256": "f7a74f5fe37e1aa5548552bfc561be6aac4ac2f019c92706fe109d0bd11a0b05"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 14112190111,
+      "name": "required-ci-pressure-4-4700100a7741ffe402e0c0281201e4f1a6d0f0a6-1",
+      "zip_bytes": 55536,
+      "zip_sha256": "1c35dfa7ecb7faf67ed5fb44d989eac0cbf86f5777433ab74dda19f975823dae",
+      "members": [
+        {
+          "path": "workspace.jsonl",
+          "bytes": 810601,
+          "sha256": "08d6f9aa15fbd39598ec0143d09a42f9094fa16c080a4081a6b7471b40748e42"
+        }
+      ],
+      "pressure": [
+        {
+          "member": "workspace.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 3164,
+            "completed": 1
+          },
+          "command": [
+            "python3",
+            "scripts/platform/run_workspace_tests_bounded.py",
+            "--exclude",
+            "bicdb-core",
+            "--exclude",
+            "bicdb-sql",
+            "--exclude",
+            "bicdb-pgwire"
+          ],
+          "minimum_available_bytes": 9233379328,
+          "minimum_swap_free_bytes": 2445312000,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 6329.6605153519995,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        }
+      ]
+    },
+    {
+      "id": 14111349203,
+      "name": "rest-cli-evidence-4700100a7741ffe402e0c0281201e4f1a6d0f0a6-1",
+      "zip_bytes": 87303,
+      "zip_sha256": "71feebad028b07d9312c8b479e01fc8e0fc059fde7774a685dbbab9baf3086f4",
+      "members": [
+        {
+          "path": "rpc-journals/client-01a1d9b8-4621-7ff3-93fd-ea16b80d534c/journal.jsonl",
+          "bytes": 2342114,
+          "sha256": "b3fea41b192ee4f19fc54396133ec40af60a635683352feb6ae98b8df747d134"
+        },
+        {
+          "path": "rpc-journals/client-01a1d9b9-1481-7d91-8da0-50d62dacd58a/journal.jsonl",
+          "bytes": 67015,
+          "sha256": "1a78c5f9182372344971d8d1cb3a1bd2c81aef60a818c236aacabab26e28eb6e"
+        },
+        {
+          "path": "rpc-journals/client-01a1d9b9-89dd-7d40-a1af-d398d69bf1cc/journal.jsonl",
+          "bytes": 85746,
+          "sha256": "389d23b0424cb2c22cfbea5ed9a888992ee90104a23bb490a4e33121033c402b"
+        }
+      ],
+      "pressure": []
+    },
+    {
+      "id": 14109957664,
+      "name": "required-ci-pressure-1-4700100a7741ffe402e0c0281201e4f1a6d0f0a6-1",
+      "zip_bytes": 27375,
+      "zip_sha256": "53eb0f07a8ed42f3868c5ab55d48a904e074b2aa0af4e1392eee11b5365fa3c1",
+      "members": [
+        {
+          "path": "helper.jsonl",
+          "bytes": 73253,
+          "sha256": "3057de25742a953c4497a21a8cf0b4e82446d06ede655af079d8f525e4976333"
+        },
+        {
+          "path": "native.jsonl",
+          "bytes": 367585,
+          "sha256": "4b84b085c88a189dc1908b2fe8571eb5c60f2ad21aae1df57ac0380eb57a6fe0"
+        }
+      ],
+      "pressure": [
+        {
+          "member": "helper.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 293,
+            "completed": 1
+          },
+          "command": [
+            "cargo",
+            "build",
+            "--config",
+            "profile.dev.package.\"*\".opt-level=2",
+            "-p",
+            "bicdb-core",
+            "--example",
+            "chaos_child",
+            "--locked"
+          ],
+          "minimum_available_bytes": 11575230464,
+          "minimum_swap_free_bytes": 3221221376,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 586.1287151289999,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        },
+        {
+          "member": "native.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 1480,
+            "completed": 1
+          },
+          "command": [
+            "cargo",
+            "test",
+            "--config",
+            "profile.dev.package.\"*\".opt-level=2",
+            "-p",
+            "bicdb-core",
+            "--lib",
+            "--locked",
+            "--",
+            "distribution_native_host::",
+            "range_image_native::rf3_fixture::",
+            "--test-threads=1"
+          ],
+          "minimum_available_bytes": 10438324224,
+          "minimum_swap_free_bytes": 3221221376,
+          "completed": {
+            "child_returncode": 101,
+            "elapsed_seconds": 2960.623474869,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 101,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        }
+      ]
+    },
+    {
+      "id": 14109348397,
+      "name": "required-ci-pressure-2-4700100a7741ffe402e0c0281201e4f1a6d0f0a6-1",
+      "zip_bytes": 17702,
+      "zip_sha256": "0803ec36c4e6dbaf47f65228c746daea847dcb9d0fab817993641c9a5df812e4",
+      "members": [
+        {
+          "path": "sql.jsonl",
+          "bytes": 249282,
+          "sha256": "2669b168a63e13c295cf5345bd3da74da94bb679d4f6031db6658c4af2676913"
+        }
+      ],
+      "pressure": [
+        {
+          "member": "sql.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 1038,
+            "completed": 1
+          },
+          "command": [
+            "./scripts/run-cargo-test-targets-bounded.sh",
+            "bicdb-sql"
+          ],
+          "minimum_available_bytes": 8495906816,
+          "minimum_swap_free_bytes": 0,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 2076.558150136,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        }
+      ]
+    },
+    {
+      "id": 14109240957,
+      "name": "required-ci-pressure-0-4700100a7741ffe402e0c0281201e4f1a6d0f0a6-1",
+      "zip_bytes": 9733,
+      "zip_sha256": "c266c476a99aa7f9a3d1ea3195f603337e7f62f56629492eb2cd1c17b56e4470",
+      "members": [
+        {
+          "path": "core.jsonl",
+          "bytes": 74202,
+          "sha256": "f348f4afef138d868d8418a61a52bed85c1cac81b4766ac7036c2c2249752510"
+        },
+        {
+          "path": "helper.jsonl",
+          "bytes": 49481,
+          "sha256": "3866c739c157a286e60f9611a5f00e1666332defa94b16d8abf917d402f3a2dc"
+        }
+      ],
+      "pressure": [
+        {
+          "member": "core.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 286,
+            "completed": 1
+          },
+          "command": [
+            "cargo",
+            "test",
+            "--config",
+            "profile.dev.package.\"*\".opt-level=2",
+            "-p",
+            "bicdb-core",
+            "--locked",
+            "--",
+            "--test-threads=4",
+            "--skip",
+            "distribution_native_host::",
+            "--skip",
+            "range_image_native::rf3_fixture::"
+          ],
+          "minimum_available_bytes": 10461134848,
+          "minimum_swap_free_bytes": 3221172224,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 572.1537725950001,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        },
+        {
+          "member": "helper.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 197,
+            "completed": 1
+          },
+          "command": [
+            "cargo",
+            "build",
+            "--config",
+            "profile.dev.package.\"*\".opt-level=2",
+            "-p",
+            "bicdb-core",
+            "--example",
+            "chaos_child",
+            "--locked"
+          ],
+          "minimum_available_bytes": 11422949376,
+          "minimum_swap_free_bytes": 3221221376,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 394.07186395300005,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        }
+      ]
+    },
+    {
+      "id": 14108408043,
+      "name": "required-ci-pressure-3-4700100a7741ffe402e0c0281201e4f1a6d0f0a6-1",
+      "zip_bytes": 8055,
+      "zip_sha256": "eeb027726091285e960bef00e98057b35b10ba6b80f1c9855db8982639245b04",
+      "members": [
+        {
+          "path": "pgwire.jsonl",
+          "bytes": 75611,
+          "sha256": "455b63dc93080e691e0cdecfcbc28be3a2dec1a7cc010d3d5a6b427681df7355"
+        }
+      ],
+      "pressure": [
+        {
+          "member": "pgwire.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 296,
+            "completed": 1
+          },
+          "command": [
+            "cargo",
+            "test",
+            "-p",
+            "bicdb-pgwire",
+            "--locked",
+            "--",
+            "--test-threads=4"
+          ],
+          "minimum_available_bytes": 9211609088,
+          "minimum_swap_free_bytes": 2785980416,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 592.897382872,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        }
+      ]
+    },
+    {
+      "id": 14108368980,
+      "name": "required-ci-pressure-build-4700100a7741ffe402e0c0281201e4f1a6d0f0a6-1",
+      "zip_bytes": 3923,
+      "zip_sha256": "186f8072ae8823342fac24a5523dc91493ddbb25dc8c30736569b3ed14f071a0",
+      "members": [
+        {
+          "path": "alltargets.jsonl",
+          "bytes": 41189,
+          "sha256": "967d15e5bbc15ac96e3d69e4ead2228a89b44a45881db2f698959f079d835bb7"
+        },
+        {
+          "path": "consumer.jsonl",
+          "bytes": 5189,
+          "sha256": "a870a0f749cf69daed1e1608e7215454dd50ea9e9b48c26305e1799288663f99"
+        }
+      ],
+      "pressure": [
+        {
+          "member": "alltargets.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 164,
+            "completed": 1
+          },
+          "command": [
+            "cargo",
+            "check",
+            "--workspace",
+            "--all-targets",
+            "--locked"
+          ],
+          "minimum_available_bytes": 11448545280,
+          "minimum_swap_free_bytes": 3221221376,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 328.07128445700005,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        },
+        {
+          "member": "consumer.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 19,
+            "completed": 1
+          },
+          "command": [
+            "cargo",
+            "check",
+            "-p",
+            "bicdb-workflow",
+            "--all-targets",
+            "--locked"
+          ],
+          "minimum_available_bytes": 13246238720,
+          "minimum_swap_free_bytes": 3221221376,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 38.00892562900003,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        }
+      ]
+    },
+    {
+      "id": 14108982130,
+      "name": "rails-team-board-evidence",
+      "zip_bytes": 13120,
+      "zip_sha256": "2935d542db0fcdb3242fafa83f757e5a26b63e2b3c7a47651929230a5931939c",
+      "members": [
+        {
+          "path": "bicdb.log",
+          "bytes": 46978,
+          "sha256": "6af1cfffba093ee016cc099421b91df2c58bebbc96a46ec92315e8c2a432b225"
+        },
+        {
+          "path": "job-receipt.json",
+          "bytes": 536,
+          "sha256": "04f38535eb7564e1c2b05908bffc470d0a777118a9113668fe51b42d014b09a8"
+        },
+        {
+          "path": "http.log",
+          "bytes": 161,
+          "sha256": "c1a1ff6be1339f34b0d0c07f5db0b53df19a0f8212b5909fe3eb64c84d18b2c9"
+        },
+        {
+          "path": "migration-reapply.log",
+          "bytes": 2193,
+          "sha256": "a78b453022f54909a7f3f2a0d423ef346d5bc032d7f636b73ee5d3b4519dd558"
+        },
+        {
+          "path": "migration-rollback.log",
+          "bytes": 2206,
+          "sha256": "2556f76743cf67aa73393f3f99d262ee0280f0faa4e20b01ee6412c953d95dc8"
+        },
+        {
+          "path": "prepare-idempotent.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "prepare.log",
+          "bytes": 522,
+          "sha256": "0a5637344a5879aa9e109349672def25bcff39f1f5e1a809c5376cda02777673"
+        },
+        {
+          "path": "queue-completed.log",
+          "bytes": 537,
+          "sha256": "157ca0fe87fd8072e97aa841ab9dd09fa3ffbb842d85fa571aedec1d2b0b4ee3"
+        },
+        {
+          "path": "queue-pending.log",
+          "bytes": 230,
+          "sha256": "ac300fd85c5e09f78aea1863a560d4f438ec22991515356f4a663da0f461cc98"
+        },
+        {
+          "path": "queue-recovered.log",
+          "bytes": 69,
+          "sha256": "558a285b7d55891147989b7fed99194d4737a609caeec5ab9196625e31564e0d"
+        },
+        {
+          "path": "report.json",
+          "bytes": 1556,
+          "sha256": "9b893b3062b603b7196fce7b49373db336f0295d458c6186161945f992ddba4e"
+        },
+        {
+          "path": "seed-idempotent.log",
+          "bytes": 66,
+          "sha256": "4804dcaad20deecf22137a84b3f7196c5c748498d5cdb1d228c69cf00910235f"
+        },
+        {
+          "path": "seed.log",
+          "bytes": 66,
+          "sha256": "4804dcaad20deecf22137a84b3f7196c5c748498d5cdb1d228c69cf00910235f"
+        },
+        {
+          "path": "tests.log",
+          "bytes": 223,
+          "sha256": "840dfc9899caf5e39f1713a1e37d9aa553df5325df86b4e47782679cac518c9b"
+        },
+        {
+          "path": "web.log",
+          "bytes": 27178,
+          "sha256": "c9cf8d1793f54eeb7c3555ae139d250ac0fca5412645712ad1a1954c3e997189"
+        },
+        {
+          "path": "workers.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "pressure": []
+    }
+  ],
+  "log_capture_attempts": {
+    "132406471522": 1,
+    "132406471697": 1,
+    "132406471713": 1,
+    "132406471752": 1,
+    "132406471719": 1,
+    "132406489555": 1,
+    "132406471473": 1,
+    "132406489569": 1,
+    "132406489550": 1,
+    "132406489716": 1,
+    "132406489542": 1
+  },
+  "missing_non_skipped_logs": [],
+  "unavailable_artifacts": [],
+  "capture_complete": true,
+  "limits": [
+    "Skipped jobs are not executed test results and logs were not requested; transient actual terminal log failures retried separately.",
+    "Every component result applies only to exact source; passingother-sourcecase never erases priorfailure or provescause.",
+    "No per-operation external-ledger/coldreplay/physicalHA/scaling/production qualification inferred from CI PASS.",
+    "No engineopen/sourcechanges/reruns/cancellation by capture observer.",
+    "Resource files do not collectCPU/childRSS; functionaldurationnotRTO. Local0700/0600 doesnotguaranteeupstreamGitHubconfidentiality."
+  ]
+}

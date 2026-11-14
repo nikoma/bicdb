@@ -91,6 +91,12 @@ pub(crate) use native_ready::{
     NativeReadyObservation, NativeReadyPhysicalDomain, NativeReadyReply, NativeReadyRequest,
 };
 mod runtime;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use runtime::test_before_registered_remote_rotation;
+#[cfg(feature = "tls-replication")]
+pub(crate) use runtime::JoinedRemoteImageInstallFreeze;
+#[cfg(feature = "tls-replication")]
+pub(crate) use runtime::RegisteredRemoteImageInstallFreeze;
 pub(crate) use runtime::{RangeRecoveryRuntime, RecoveryImageInstallFreeze};
 mod quorum;
 pub(crate) use quorum::{FreshRangeRecoveryAuthority, RecoveryFenceQuorumRound};
@@ -822,6 +828,32 @@ impl RecoveryRoleAdmission {
     }
     pub(crate) fn remaining_budget(&self) -> Option<Duration> {
         self.witness.remaining_budget()
+    }
+    /// Failure-only copied diagnostics, never an authority or liveness check.
+    #[cfg(test)]
+    pub(crate) fn test_joint_issuance_clock(
+        &self,
+        entered: Instant,
+        returned: Instant,
+    ) -> serde_json::Value {
+        let (canceled, caller_deadline) = self.witness.test_original_request_state();
+        let peer = self.local_node_id().as_str().as_bytes();
+        let prefix = &peer[..peer.len().min(128)];
+        serde_json::json!({
+            "role_recipient_bytes":prefix,"role_recipient_original_bytes":peer.len(),
+            "role_recipient_truncated":prefix.len()!=peer.len(),
+            "role_context":self.context_id(),"role_business":self.business_request_id(),
+            "role_challenge":self.recipient_challenge(),"role_term":self.metadata_term(),
+            "role_read_index":self.metadata_read_index(),"role_range":self.current_range().id,
+            "role_epoch":self.current_range().epoch,
+            "role_remaining_us_at_enter":self.deadline().saturating_duration_since(entered).as_micros(),
+            "role_remaining_us_at_return":self.deadline().saturating_duration_since(returned).as_micros(),
+            "role_past_deadline_us_at_return":returned.saturating_duration_since(self.deadline()).as_micros(),
+            "original_role_caller_canceled_at_report":canceled,
+            "original_role_caller_remaining_us_at_return":caller_deadline.map(|d|d.saturating_duration_since(returned).as_micros()),
+            "scope_arguments":"require_live_request passes this witness's own business/challenge getters",
+            "clock_is_authority":false,
+        })
     }
     pub(crate) fn into_handoff(self) -> Result<HandoffRoleAdmission> {
         self.require_live_request()?;

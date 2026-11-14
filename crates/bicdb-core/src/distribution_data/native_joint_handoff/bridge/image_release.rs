@@ -6,6 +6,9 @@ use crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt;
 /// Same-open retry custody only. The original API keeps its receipt deadline;
 /// a distinct fresh full-member phase can validate that receipt as historical
 /// audit without reviving it or creating a replacement freeze/open grant.
+// Clones retain the SAME opaque lease; actual release still requires its
+// unique Arc. A builder's original must drain after successor retention.
+#[derive(Clone)]
 pub(crate) struct NativeJointImageReleaseOwner {
     service: Arc<parking_lot::Mutex<ClusterDataNodeService>>,
     image: Arc<NativeImageCatalogueFinalization>,
@@ -38,7 +41,7 @@ impl ActualServiceNativeJointPreparedEvidence {
                 .ok_or_else(|| data_error("joint image release service busy"))?;
             {
                 let database = checked_database_read(&actual.db, &actual.storage_policy)?;
-                self.require_original_writer(&database, &actual.range_writes)?;
+                self.require_original_phase_owner(&database, &actual.range_writes)?;
             }
             actual.require_native_joint_image_release(image, frozen.as_frozen(), &activation)?;
             self.require_original_writer_lifetime()?;
@@ -123,6 +126,16 @@ impl NativeJointImageReleaseOwner {
             }
             let actual = Arc::get_mut(frozen)
                 .ok_or_else(|| data_error("fresh joint image owner changed"))?;
+            if actual.requires_joined_remote_release() {
+                return Err(data_error(
+                    "Joined actual A requires its original joint activation/release producer",
+                ));
+            }
+            if actual.requires_registered_remote_release() {
+                return Err(data_error(
+                    "Registered remote image release protocol is not implemented",
+                ));
+            }
             if let NativeImageInstallFreeze::Recovery(lease) = actual {
                 lease.release_after_fresh_joint_activation(&self.image, admission)?;
             } else {
@@ -193,6 +206,16 @@ impl NativeJointImageReleaseOwner {
             self.activation.require_live()?;
             let actual = Arc::get_mut(frozen)
                 .ok_or_else(|| data_error("joint image lease acquired another owner"))?;
+            if actual.requires_joined_remote_release() {
+                return Err(data_error(
+                    "Joined actual A requires its original joint activation/release producer",
+                ));
+            }
+            if actual.requires_registered_remote_release() {
+                return Err(data_error(
+                    "Registered remote image release protocol is not implemented",
+                ));
+            }
             if let NativeImageInstallFreeze::Recovery(lease) = actual {
                 // This consumes only an actually activated joint image. Drop
                 // must not return its A-owned freeze to the old recovery map.
@@ -219,6 +242,23 @@ impl ClusterDataNodeService {
     pub(crate) fn require_native_joint_image_release(
         &self,
         image: &NativeImageCatalogueFinalization,
+        frozen: &FrozenRangeMutationPermit,
+        activation: &NativeJointCatalogueActivationReceipt,
+    ) -> Result<()> {
+        self.require_joint_image_materialization_release(image, frozen, activation)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_registered_joint_image_release(
+        &self,
+        image: &Arc<crate::distribution_native_host::NativeRegisteredRemoteJointTarget>,
+        frozen: &FrozenRangeMutationPermit,
+        activation: &NativeJointCatalogueActivationReceipt,
+    ) -> Result<()> {
+        self.require_joint_image_materialization_release(image, frozen, activation)
+    }
+    fn require_joint_image_materialization_release(
+        &self,
+        image: &dyn NativeJointImageMaterialization,
         frozen: &FrozenRangeMutationPermit,
         activation: &NativeJointCatalogueActivationReceipt,
     ) -> Result<()> {
@@ -263,6 +303,23 @@ impl ClusterDataNodeService {
     pub(crate) fn require_fresh_native_joint_image_release(
         &self,
         image: &NativeImageCatalogueFinalization,
+        frozen: &FrozenRangeMutationPermit,
+        admission: &crate::distribution_range_handoff::NativeJointReleaseAdmission,
+    ) -> Result<()> {
+        self.require_fresh_joint_image_materialization(image, frozen, admission)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_fresh_registered_joint_image_release(
+        &self,
+        image: &Arc<crate::distribution_native_host::NativeRegisteredRemoteJointTarget>,
+        frozen: &FrozenRangeMutationPermit,
+        admission: &crate::distribution_range_handoff::NativeJointReleaseAdmission,
+    ) -> Result<()> {
+        self.require_fresh_joint_image_materialization(image, frozen, admission)
+    }
+    fn require_fresh_joint_image_materialization(
+        &self,
+        image: &dyn NativeJointImageMaterialization,
         frozen: &FrozenRangeMutationPermit,
         admission: &crate::distribution_range_handoff::NativeJointReleaseAdmission,
     ) -> Result<()> {

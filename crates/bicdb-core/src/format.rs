@@ -70,10 +70,33 @@ pub const NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG: &str =
 /// Sticky node-local receipt semantics. Never a portable schema capability.
 pub const NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG: &str =
     "native_completed_decision_materialization_v1";
+pub const NATIVE_WRITER_DATA_DOMAIN_FEATURE_FLAG: &str = "native_writer_data_domain_v1";
+/// Node-local Registered proposal semantics; older binaries must refuse.
+pub const NATIVE_REGISTERED_REMOTE_PROPOSAL_FEATURE_FLAG: &str =
+    "native_registered_remote_proposal_v1";
+/// Node-local Registered remote history/row-intent semantics, never portable.
+pub const NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG: &str = "native_registered_remote_image_v1";
+/// Durable restrictive row-WAL index; old unindexed prototypes are unsupported.
+pub const NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG: &str = "native_registered_row_wal_index_v1";
+/// Existing-Joined selected native proposal/import semantics. Old readers
+/// must refuse even though Registered FIRST v1 remains independently valid.
+pub const NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG: &str = "native_joined_remote_receive_v2";
+/// Additional Joined history/row projection; must include the SAME strict
+/// pending-WAL index reader before the first intent can reach native WAL.
+pub const NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG: &str = "native_joined_remote_image_v1";
+/// Required companion provenance for genuine remote native DECISION.
+pub const NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG: &str = "native_remote_joint_decision_v1";
 const KNOWN_FEATURE_FLAGS: &[&str] = &[
+    NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG,
+    NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG,
+    NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG,
     SQL_PARTITION_EXECUTION_V1_FEATURE_FLAG,
+    NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG,
     EXACT_DECIMAL_UNITS_FEATURE_FLAG,
     NATIVE_COMPLETED_DECISION_MATERIALIZATION_FEATURE_FLAG,
+    NATIVE_WRITER_DATA_DOMAIN_FEATURE_FLAG,
+    NATIVE_REGISTERED_REMOTE_PROPOSAL_FEATURE_FLAG,
+    NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG,
     EXACT_DECIMAL_LIST_SUM_FEATURE_FLAG,
     EXACT_PROPORTIONAL_INTERVALS_FEATURE_FLAG,
     NATIVE_FACT_PROJECTION_CONTRACTS_FEATURE_FLAG,
@@ -660,6 +683,28 @@ fn migrate_to_current(
 }
 
 fn validate_supported(metadata: &FormatMetadata) -> Result<()> {
+    #[cfg(not(feature = "tls-replication"))]
+    if metadata
+        .feature_flags
+        .contains(NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG)
+    {
+        return Err(BicDbError::FormatCompatibility(
+            "remote decision semantic profile requires tls-replication reader".into(),
+        ));
+    }
+    #[cfg(not(feature = "tls-replication"))]
+    if metadata
+        .feature_flags
+        .contains(NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG)
+        || metadata
+            .feature_flags
+            .contains(NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG)
+    {
+        return Err(BicDbError::FormatCompatibility(
+            "Joined image semantic profile requires tls-replication reader".into(),
+        ));
+    }
+
     validate_supported_with_flags(metadata, KNOWN_FEATURE_FLAGS)
 }
 fn validate_supported_with_flags(metadata: &FormatMetadata, known: &[&str]) -> Result<()> {
@@ -1001,6 +1046,130 @@ pub(crate) fn native_catalogue_custody_active(root: &Path) -> Result<bool> {
         .contains(NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG))
 }
 
+pub(crate) fn enable_native_writer_data_domain(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    for required in [
+        NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
+        NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG,
+        NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG,
+    ] {
+        if !metadata.feature_flags.contains(required) {
+            return Err(BicDbError::InvalidConfig(
+                "writer DATA transition needs actual writer/joint/custody reader fences".into(),
+            ));
+        }
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_WRITER_DATA_DOMAIN_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+pub(crate) fn native_writer_data_domain_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_DATA_DOMAIN_FEATURE_FLAG))
+}
+pub(crate) fn enable_native_registered_remote_proposal(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    for required in [
+        RANGE_IMAGE_INSTALL_FEATURE_FLAG,
+        NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
+        NATIVE_METADATA_STORE_FEATURE_FLAG,
+        NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG,
+    ] {
+        if !metadata.feature_flags.contains(required) {
+            return Err(BicDbError::InvalidConfig(
+                "Registered proposal needs actual image/writer/metadata/custody reader fences"
+                    .into(),
+            ));
+        }
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_REGISTERED_REMOTE_PROPOSAL_FEATURE_FLAG.into());
+    // Always repeat the durable replacement, including when an earlier
+    // post-rename directory-sync error left this flag visibly installed.
+    persist_metadata_with(root, &metadata, true, |path, bytes, sync| {
+        storage::replace_durably(
+            path,
+            storage::ReplaceContents::Plain(bytes),
+            sync,
+            "registered_remote_proposal.format",
+            storage::FailClosed::No,
+        )
+    })
+}
+pub(crate) fn native_registered_remote_proposal_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_REGISTERED_REMOTE_PROPOSAL_FEATURE_FLAG))
+}
+pub(crate) fn enable_native_registered_remote_image(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_REGISTERED_REMOTE_PROPOSAL_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "Registered image requires its protected proposal reader fence".into(),
+        ));
+    }
+    if metadata
+        .feature_flags
+        .contains(NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG)
+        && !metadata
+            .feature_flags
+            .contains(NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG)
+    {
+        return Err(BicDbError::FormatCompatibility(
+            "unindexed Registered image prototype requires explicit recovery; upgrade refused"
+                .into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG.into());
+    // One durable reader-fence replacement precedes the first indexed intent.
+    metadata
+        .feature_flags
+        .insert(NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG.into());
+    persist_metadata_with(root, &metadata, true, |path, bytes, sync| {
+        storage::replace_durably(
+            path,
+            storage::ReplaceContents::Plain(bytes),
+            sync,
+            "registered_remote_image.format",
+            storage::FailClosed::No,
+        )
+    })
+}
+pub(crate) fn native_registered_remote_image_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_REGISTERED_REMOTE_IMAGE_FEATURE_FLAG))
+}
+pub(crate) fn native_registered_row_wal_index_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG))
+}
 pub(crate) fn native_writer_enrollment_active(root: &Path) -> Result<bool> {
     let metadata = read_or_legacy_metadata(root)?;
     validate_supported(&metadata)?;
@@ -1787,6 +1956,198 @@ mod mutation_reader_contract_tests {
                     db.close().unwrap();
                 }
             }
+        }
+    }
+}
+
+/// Repeat durable publication on every continuation: visible rename after a
+/// failed directory sync does not establish the format fence's durability.
+pub(crate) fn enable_native_joined_remote_receive(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    for required in [
+        RANGE_IMAGE_INSTALL_FEATURE_FLAG,
+        NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
+        NATIVE_METADATA_STORE_FEATURE_FLAG,
+        NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG,
+    ] {
+        if !metadata.feature_flags.contains(required) {
+            return Err(BicDbError::InvalidConfig(
+                "Joined receive needs actual image/writer/metadata/custody reader fences".into(),
+            ));
+        }
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG.into());
+    persist_metadata_with(root, &metadata, true, |path, bytes, sync| {
+        storage::replace_durably(
+            path,
+            storage::ReplaceContents::Plain(bytes),
+            sync,
+            "joined_remote_receive.format",
+            storage::FailClosed::No,
+        )
+    })
+}
+pub(crate) fn native_joined_remote_receive_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG))
+}
+
+pub(crate) fn enable_native_joined_remote_image(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG)
+    {
+        return Err(BicDbError::FormatCompatibility(
+            "Joined rows require actual v2 proposal reader fence".into(),
+        ));
+    }
+    if metadata
+        .feature_flags
+        .contains(NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG)
+        && !metadata
+            .feature_flags
+            .contains(NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG)
+    {
+        return Err(BicDbError::FormatCompatibility(
+            "unindexed Joined image prototype requires explicit recovery".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG.into());
+    metadata
+        .feature_flags
+        .insert(NATIVE_REGISTERED_ROW_WAL_INDEX_FEATURE_FLAG.into());
+    persist_metadata_with(root, &metadata, true, |path, bytes, sync| {
+        storage::replace_durably(
+            path,
+            storage::ReplaceContents::Plain(bytes),
+            sync,
+            "joined_remote_image.format",
+            storage::FailClosed::No,
+        )
+    })
+}
+pub(crate) fn native_joined_remote_image_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG))
+}
+
+/// Re-fsync on every continuation; a visible flag after failed directory fsync
+/// does not prove the older-reader refusal is durable.
+#[cfg(feature = "tls-replication")]
+pub(crate) fn enable_native_remote_joint_decision(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG)
+        || !metadata
+            .feature_flags
+            .contains(RANGE_IMAGE_INSTALL_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "remote DECISION requires actual joint/native-image reader fences".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG.into());
+    persist_metadata_with(root, &metadata, true, |path, bytes, sync| {
+        storage::replace_durably(
+            path,
+            storage::ReplaceContents::Plain(bytes),
+            sync,
+            "remote_joint_decision.format",
+            storage::FailClosed::No,
+        )
+    })
+}
+pub(crate) fn native_remote_joint_decision_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG))
+}
+#[cfg(test)]
+pub(crate) fn test_old_reader_without_remote_joint_decision(root: &Path) -> Result<()> {
+    let metadata = read_or_legacy_metadata(root)?;
+    let old: Vec<_> = KNOWN_FEATURE_FLAGS
+        .iter()
+        .copied()
+        .filter(|f| *f != NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG)
+        .collect();
+    validate_supported_with_flags(&metadata, &old)
+}
+
+#[cfg(all(test, not(feature = "tls-replication")))]
+pub(crate) fn test_publish_remote_joint_decision_reader_refusal_only(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata
+        .feature_flags
+        .insert(NATIVE_REMOTE_JOINT_DECISION_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+
+#[cfg(all(test, not(feature = "tls-replication")))]
+pub(crate) fn test_publish_joined_reader_refusal_only(root: &Path, image: bool) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    metadata.feature_flags.insert(
+        if image {
+            NATIVE_JOINED_REMOTE_IMAGE_FEATURE_FLAG
+        } else {
+            NATIVE_JOINED_REMOTE_RECEIVE_V2_FEATURE_FLAG
+        }
+        .into(),
+    );
+    persist_metadata(root, &metadata, true)
+}
+#[cfg(all(test, not(feature = "tls-replication")))]
+mod joined_unsupported_reader_tests {
+    #[test]
+    fn joined_semantic_format_without_tls_refuses_before_migration_mutation() {
+        for image in [false, true] {
+            let (_root, database, _topology, _spec) =
+                crate::distribution_range_consensus::native_origin_fixture();
+            let db = database.read();
+            let root = db.data_path();
+            super::test_publish_joined_reader_refusal_only(root, image).unwrap();
+            let before = super::read_or_legacy_metadata(root).unwrap();
+            let error = super::plan_migration(root, false).unwrap_err().to_string();
+            let after = super::read_or_legacy_metadata(root).unwrap();
+            eprintln!(
+                "JOINED_NON_TLS_FORMAT_REFUSAL {}",
+                serde_json::json!({"image_profile":image,"actual_error":error,"native_birth_not_fabricated":true,"flag_only_refusal_fixture_not_import_qualification":true})
+            );
+            assert!(error.contains("requires tls-replication reader"));
+            assert_eq!(
+                serde_json::to_value(before).unwrap(),
+                serde_json::to_value(after).unwrap()
+            );
         }
     }
 }

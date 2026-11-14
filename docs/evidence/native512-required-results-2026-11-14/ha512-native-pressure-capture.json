@@ -1,0 +1,82 @@
+{
+  "run": 43581326157,
+  "job": 132406489716,
+  "head": "1742776ab02957a053aded2ad4f665500d9325bf",
+  "artifacts": [
+    {
+      "id": 14109957664,
+      "name": "required-ci-pressure-1-4700100a7741ffe402e0c0281201e4f1a6d0f0a6-1",
+      "zip_bytes": 27375,
+      "zip_sha256": "53eb0f07a8ed42f3868c5ab55d48a904e074b2aa0af4e1392eee11b5365fa3c1",
+      "streams": [
+        {
+          "member": "helper.jsonl",
+          "sha256": "3057de25742a953c4497a21a8cf0b4e82446d06ede655af079d8f525e4976333",
+          "events": {
+            "started": 1,
+            "sample": 293,
+            "completed": 1
+          },
+          "minimum_available_bytes": 11575230464,
+          "minimum_swap_free_bytes": 3221221376,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 586.1287151289999,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "command": [
+            "cargo",
+            "build",
+            "--config",
+            "profile.dev.package.\"*\".opt-level=2",
+            "-p",
+            "bicdb-core",
+            "--example",
+            "chaos_child",
+            "--locked"
+          ],
+          "cpu_child_RSS": "NOT COLLECTED"
+        },
+        {
+          "member": "native.jsonl",
+          "sha256": "4b84b085c88a189dc1908b2fe8571eb5c60f2ad21aae1df57ac0380eb57a6fe0",
+          "events": {
+            "started": 1,
+            "sample": 1480,
+            "completed": 1
+          },
+          "minimum_available_bytes": 10438324224,
+          "minimum_swap_free_bytes": 3221221376,
+          "completed": {
+            "child_returncode": 101,
+            "elapsed_seconds": 2960.623474869,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 101,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "command": [
+            "cargo",
+            "test",
+            "--config",
+            "profile.dev.package.\"*\".opt-level=2",
+            "-p",
+            "bicdb-core",
+            "--lib",
+            "--locked",
+            "--",
+            "distribution_native_host::",
+            "range_image_native::rf3_fixture::",
+            "--test-threads=1"
+          ],
+          "cpu_child_RSS": "NOT COLLECTED"
+        }
+      ]
+    }
+  ]
+}

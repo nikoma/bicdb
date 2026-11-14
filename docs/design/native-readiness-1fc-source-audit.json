@@ -1,0 +1,388 @@
+{
+  "format_version": 1,
+  "source_revision": "1fcfdc3adf7e38422173e072e6fec4ad56e48188",
+  "source_tree": "9d24cdf8cac1d9db4da35227182c71ff72a1bb7e",
+  "scope": "Independent read-only source/callgraph review of normal native event point-read and native host lifecycle APIs. No runtime, build, CI dispatch, physical qualification, DB open, or repair performed.",
+  "conclusion": {
+    "classification": "SOURCE_REVIEW_ONLY",
+    "safety_boundary": "The examined born-v2 typed Strong event path has distinct redirect/unavailable outcomes and produces presence/absence only after consuming fresh request-specific metadata/data quorum and physical snapshot proofs. This is source structure, not an independent proof that every Strong read in every public frontend is correct.",
+    "availability_boundary": "Replica observations and recovered-epoch diagnostics do not establish strong-read availability. The operator does not yet automatically complete the remote image/joint/Joined path or cold restore its retained live owner custody.",
+    "no_new_confirmed_false_absence_bug": "None established by this bounded review. No blanket zero-404 or zero-loss certification follows."
+  },
+  "readiness_matrix": [
+    {
+      "indicator": "replica-ready",
+      "actual_producer": [
+        {
+          "path": "crates/bicdb-core/src/db/range_image_native.rs",
+          "lines": "535-557,1467-1507",
+          "function": "NativeRangePrefixObservation / native_range_prefix_observation"
+        },
+        {
+          "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/registered.rs",
+          "lines": "7-48",
+          "function": "registered_range_status"
+        }
+      ],
+      "actual_state": "Original same-open native lineage, invalidated=false, native applied index at least original historical bridge range index, no pending/materialized-pending command. Unknown lineage is None/invalidated, distinct from verified Some(0). Storage health failure/busy is diagnostic unavailable.",
+      "consumer": "NativeJoinedDataHost.status -> NativeMetadataControlHost.joined_data_status -> learner control wrapper. Observational JSON only; not passed as an admission grant to SDK or dispatcher.",
+      "limits": "replica_ready_observed is against a retained historical bridge floor, not a fresh latest committed cluster head. It cannot establish zero lag to current acknowledged writes. INITIAL status exposes a per-RPC check description rather than equivalent applied/committed numeric diagnostics."
+    },
+    {
+      "indicator": "leader-ready",
+      "actual_producer": [
+        {
+          "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+          "lines": "2859-2956",
+          "function": "recover_local_leadership / recover_one_range_leadership / require_recovered_epoch"
+        },
+        {
+          "path": "crates/bicdb-core/src/distribution_range_consensus/initial_data.rs",
+          "lines": "140-186",
+          "function": "recover_initial_native_genesis / initial_data_leader_admission_observed"
+        }
+      ],
+      "actual_state": "Selected current leader/epoch, schema/configuration, actual voter committed prefix and unresolved-tail recovery, installed original writer/coordinator and range fences. Recovered epoch map begins empty and is filled only after actual recovery; errors defer recovery, unknown write outcomes remove admission.",
+      "consumer": "Ordinary commit admission independently requires recovered epoch and current native/policy state. INITIAL/Registered status observes current local topology+recovered map; Registered publish invokes genuine recover_local_leadership before binding application ingress.",
+      "limits": "leader_admission_observed / leader_recovered_prefix_observed are diagnostic cached observations, not fresh distributed leases. Follower DATA binding need not invent local leader authority. A fresh role, metadata quorum and appropriate native fences remain necessary for each mutating or strong-read operation."
+    },
+    {
+      "indicator": "strong-read-ready",
+      "actual_producer": [
+        {
+          "path": "crates/bicdb-core/src/distribution_native_read/event_dispatch.rs",
+          "lines": "348-481",
+          "function": "NativeStrongEventDispatcher.execute"
+        },
+        {
+          "path": "crates/bicdb-core/src/distribution_range_recovery/runtime/strong_point_read.rs",
+          "lines": "93-424",
+          "function": "RangeRecoveryRuntime.strong_point_read"
+        },
+        {
+          "path": "crates/bicdb-core/src/distribution_native_read/strong.rs",
+          "lines": "149-331",
+          "function": "capture_actual_point_read / finalize"
+        },
+        {
+          "path": "crates/bicdb-core/src/distribution_native_read/quorum.rs",
+          "lines": "248-375",
+          "function": "require_no_known_conflict / matching_at_local_point"
+        }
+      ],
+      "actual_state": "New business ID/challenge+original absolute budget; fresh HostMQ for routing only; separate leader MQ; exact selected descriptor/epoch/member incarnations and TLS/native births; majority matching actual range index/history with known higher/conflicting facts veto; actual local materialization B floor and pinned record snapshot with snapshot B >= floor; a distinct fresh final MQ after snapshot and renewed actual local currentness/writer checks.",
+      "consumer": "Only NativeStrongPointReadOutcome::Observed reaches NativeEventGetResult::Value and its tagged present/absent payload. Every request rebuilds this proof. Status says new_request_bound_barrier_required and last_strong_barrier:null.",
+      "limits": "No persistent StrongReady bit exists. Published socket/dispatcher, metadata leadership, recovered map, image bytes or a status observation are insufficient. Four active dispatcher workers and finite caller channels bound concurrency/response waiting, not preemption of stalled kernel I/O or physical RTO."
+    }
+  ],
+  "production_callgraph": [
+    {
+      "entry": "bicdb cluster native-metadata ServeFresh / operator OpenInitialData",
+      "path": "native_metadata_command.rs:482,506-582 -> NativeMetadataHost.apply(OpenInitialData):388 -> control.open_initial_data:1105 -> same initial factory/runtime + actual genesis recovery -> installed writer/dispatcher; background metadata supervisor and narrowly scoped retained hot-origin recovery",
+      "classification": "PRODUCTION_ENTRY_PRESENT",
+      "notes": "Explicit operator path, distinct from ordinary main.rs balanced-controller selection at9412. No conclusion that arbitrary normal SQL/REST uses this typed event protocol."
+    },
+    {
+      "entry": "JoinFresh / ServeLearnerReopen / OpenReplicaReceiver",
+      "path": "native_metadata_command.rs:630-740 -> NativeMetadataLearnerHost.reopen_metadata_only/start_fresh_metadata_only -> open_replica_receiver:525 -> actual Registered hook-free receiver",
+      "classification": "PRODUCTION_ENTRY_PRESENT",
+      "notes": "Strict birth/store/current metadata checks. Replica ingress explicitly grants no recovered epoch, DATA writer or Strong permission."
+    },
+    {
+      "entry": "ClusterEventClient.get_strong(namespace,key)",
+      "path": "distribution_events.rs:1097 -> get_request:772 -> get_attempts -> shared topology hash route + original deadline/retries -> transport.native_event_get_listening:4432 -> validated correlated typed reply",
+      "classification": "PRODUCTION_ENTRY_PRESENT",
+      "notes": "Known routes may refresh within same original budget. At most two read exchanges retained. Every owned exchange ends before SDK return; observer evidence fence checked. APP identity/authentication unchanged."
+    },
+    {
+      "entry": "Authenticated listener NativeEventGet",
+      "path": "distribution_transport.rs:1807-1894 -> actual enforced store/registered replica and published owner checks -> attached NativeStrongEventDispatcher.dispatch -> execute -> coordinator.strong_point_read -> runtime strong protocol",
+      "classification": "PRODUCTION_ENTRY_PRESENT",
+      "notes": "Canonical namespace/key determines actual range under fresh committed topology. Wrong leader/range/epoch redirects. Registered replica-only, missing publication, busy or missing dispatcher returns typed unavailable, not absence."
+    },
+    {
+      "entry": "Registered FIRST -> Joined socket/policy publication",
+      "path": "joined_data.rs:428 open_registered_joined_data -> original retained transfer from FIRST -> bind -> publish_registered:50 -> actual native recovery + fresh metadata/selected publication gate -> status",
+      "classification": "IMPLEMENTED_INTERNAL_PRODUCER_NOT_AUTOMATIC_OPERATOR_FLOW",
+      "notes": "No synthetic INITIAL, re-enrollment or metadata-only permission. Actual full-caller search reaches tests through learner control wrappers; operator action enum exposes no joined/image/joint command."
+    },
+    {
+      "entry": "One-range handoff driver",
+      "path": "distribution_native_host/joined_data_handoff.rs:1-42, local_backend",
+      "classification": "INTERNAL_DRIVER_WITH_FIXTURE_CALLERS",
+      "notes": "Source explicitly states no production caller and custody retained in-process; losing process is unsupported cold continuation. Do not equate callable production Rust methods with deployed autonomous controller integration."
+    }
+  ],
+  "absence_routing_invariants": [
+    {
+      "source": {
+        "path": "crates/bicdb-core/src/distribution_native_read/event_wire.rs",
+        "lines": "75-143,180-258",
+        "function": "NativeEventValue / NativeEventGetResult / validate_for"
+      },
+      "finding": "Present(value:null), present empty object and absent are distinct wire cases. Strong forbids LegacyValue. Value audit binds request/challenge/range/epoch, two distinct metadata contexts, nonzero metadata term/read index and snapshot floor."
+    },
+    {
+      "source": {
+        "path": "crates/bicdb-core/src/distribution_transport.rs",
+        "lines": "4442-4490",
+        "function": "native_event_get_connect_bound"
+      },
+      "finding": "Validates exact typed response; enforced native birth promotes deployment-default request to Strong and refuses legacy response. Malformed/uncorrelated/unsupported is error, not Option::None."
+    },
+    {
+      "source": {
+        "path": "crates/bicdb-core/src/distribution_events.rs",
+        "lines": "772-1070",
+        "function": "get_request / get_attempts"
+      },
+      "finding": "Redirect refresh/backoff and retryable unavailable remain errors/retry under same absolute deadline; only validated Value/allowed deployment-default LegacyValue becomes Option. Explicit get_strong rejects legacy through transport wire validation. No manual shard hints are required for point-key hashing."
+    },
+    {
+      "finding": "Native typed RPC is not HTTP. This review establishes no blanket HTTP404 classification or arbitrary PostgreSQL/REST Strong semantics; those frontends need their own mapped consistency contract and evidence."
+    }
+  ],
+  "missing_or_restricted_transitions": [
+    {
+      "classification": "SOURCE_CONFIRMED_OPERATOR_INTEGRATION_GAP",
+      "boundary": "Whole remote movement -> Joined publication",
+      "source": {
+        "path": "crates/bicdb-core/src/distribution_native_host/joined_data_handoff.rs",
+        "lines": "24-42",
+        "function": "custody/seam/no-production-caller comment"
+      },
+      "necessary_next": "Actual authenticated remote phase/controller adapter must retain original A and exact candidate/unknown decisions and drive existing typed native producers. No local Arc/quorum deserialization, Ready synthesis, INITIAL reuse or direct writer flag."
+    },
+    {
+      "classification": "SOURCE_CONFIRMED_COLD_DATA_CONTINUATION_GAP",
+      "boundary": "Retained hot owner lost after process exit",
+      "sources": [
+        {
+          "path": "crates/bicdb-core/src/distribution_native_host/joined_data_handoff.rs",
+          "lines": "24-30",
+          "function": "hot custody lifetime"
+        },
+        {
+          "path": "crates/bicdb-core/src/distribution_native_host/operator_learner.rs",
+          "lines": "145-160,522-543",
+          "function": "reopen_metadata_only / open_replica_receiver"
+        },
+        {
+          "path": "crates/bicdb-core/src/db.rs",
+          "lines": "10901-10903",
+          "function": "prelogical-replay outstanding Registered row fence"
+        },
+        {
+          "path": "crates/bicdb-core/src/db/registered_row_retention.rs",
+          "lines": "238-256",
+          "function": "require_no_outstanding"
+        }
+      ],
+      "necessary_next": "Restricted cold repair/reconciliation producer using actual persistent original intent/TxID/native outcomes/current metadata, then new actual ownership and re-proven activation; metadata reopen alone cannot mint Serving. Outstanding row index deliberately refuses before generic logical replay/cut."
+    },
+    {
+      "classification": "SOURCE_CONFIRMED_BOUNDED_RECOVERY_SUBSET",
+      "boundary": "Automatic initial hot-origin recovery",
+      "source": {
+        "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/hot_recovery.rs",
+        "lines": "249-291,297-356",
+        "function": "candidate / tick"
+      },
+      "restriction": "Retains original INITIAL led ranges and supports actual same-epoch next unmaterialized Pending with retained quorum committed command. Materialized pending, other lineage and unfinished previous replica-debt/new-session cases explicitly refuse. No general newly elected arbitrary epoch/cold snapshot repair is established by this worker."
+    },
+    {
+      "classification": "SOURCE_CONFIRMED_DIAGNOSTIC_LIMIT",
+      "boundary": "Readiness observability",
+      "restriction": "Registered replica status lacks fresh globally committed head/lag and last completed request barrier; INITIAL lacks same numeric per-range replica diagnostic. Status can truthfully state eligibility or last observation, never a future Strong permission. Do not use replica_ready_observed alone for placement or critical admission."
+    },
+    {
+      "classification": "NOT_TESTED_BY_THIS_REVIEW",
+      "boundary": "Full second populated range into already Serving Joined target; independent range progress during physical stalled I/O; Joined future donor; actual crash/cold resume; fixed four-node producer discovery of added fifth; physical throughput",
+      "restriction": "Existing engine/adapter source pieces and narrower transport-stall test do not establish these acceptance outcomes. No source guard relaxation is justified."
+    }
+  ],
+  "next_deterministic_acceptance": {
+    "smallest_existing_path_component": {
+      "setup": "Use genuine native RF3 INITIAL fixture, stock fixed-gateway SDK, externally retained exact operation journal, original2s client budget. ACK a unique full-object value and retain payload hash/ID/epoch.",
+      "cut": "Hold the existing real post-snapshot NativePointSnapshotBarrier only after an actual Strong snapshot has been captured and all engine/service latches are dropped. Commit a genuine selected-range authority/epoch change through the actual metadata/native phase producer; do not edit DTO or reuse a canceled/expired proof as authority. Release the exact original read.",
+      "required": "Original in-flight read whose authority/scope became stale returns typed retryable unavailable/redirect/error within its original budget, never successful absence or stale payload. Actual fresh SDK retry obtains the exact ACKed full object only after new request-specific proof. Record both metadata contexts, range epochs/leader, native R/H/B, snapshot B, route dispatch/cert identity, original budgets and all uncertainty.",
+      "prerequisite": "If current fixture cannot lawfully complete the genuine selected native epoch transition, retain that prerequisite refusal; do not replace with fabricated metadata readiness. This is a component control, not movement or physical HA qualification."
+    },
+    "next_full_goal_cut": {
+      "setup": "Complete real remote image -> native base/final/catalogue -> NEW/dual DECISION/Open/ALL release -> Joined DATA using supported controller/owner producers; ACK baseline before movement.",
+      "cut": "Let new leader election/metadata recognition complete while withholding the actual selected replica materialization/catch-up needed for its read cut. Keep stale original gateway route. Release catch-up only after recording pre-ready read outcomes.",
+      "required": "Before applied proof: every Strong result is exact full acknowledged value or explicit retryable unavailable/redirect, zero false absence. After catch-up: same unchanged client discovers/routs to actual authority, exact full values and new APPACK succeed. Separately show replica readiness, recovered leader admission, and each fresh Strong barrier; actual independent-range write/read continues. Kill/restart afterward is a separate cold gate."
+    }
+  },
+  "validation_status": {
+    "source_read_only": true,
+    "new_tests_executed": 0,
+    "new_builds": 0,
+    "qualification_claim": false,
+    "external_tooling_status": "9c9 source frozen:61 focused Python controls PASS, legacy80563 unchanged PASS; Rust example/shared parser integration not compiled or executed. Separate from live1fc source and CI."
+  },
+  "file_pins": [
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data.rs",
+      "git_blob": "004fedc448102c746d3eca3d295a41c481ed4f87",
+      "bytes": 59299,
+      "sha256": "9c011d95b5fd77e20590e8edc462135f08a4a4b8e7caf45298966beac3c3ca6a"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/hot_recovery.rs",
+      "git_blob": "d8173eb74e5f27c1861cac61308b5a2ed0b69f3b",
+      "bytes": 34675,
+      "sha256": "dec07eff7bab2fe22a655b9ee4191771bb6d12c24f8bb14edc4f3e79242f680e"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data.rs",
+      "git_blob": "cfbd150fc44030314a5b284927225934db46b7f2",
+      "bytes": 23849,
+      "sha256": "95c63490df8a34580a4609aa9450f130313614cd502222a3fc09ac9e6e6bf407"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/registered.rs",
+      "git_blob": "040e053e29e954c468eedfaf1bd2e64275dde74c",
+      "bytes": 9508,
+      "sha256": "f645bbe06bcc3bdf813f237f27e50efeedd3751aa4785d2f293258aeace58758"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/receive.rs",
+      "git_blob": "2615dcaf0a14b440100014f4e17c1b17aaa594ef",
+      "bytes": 18276,
+      "sha256": "0818580609185351ac59ec580e96268c70a3157237379a3cd6f652d1d8e06c19"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/learner_birth/metadata_transition/control.rs",
+      "git_blob": "4f395d0f7df01d3257856dfd81f2286cca7b71c9",
+      "bytes": 10436,
+      "sha256": "929022efaf8992c973c7337df23c31df450719ab3e62194e45d9113fcd6b724c"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/operator.rs",
+      "git_blob": "9f43b09487dfa976928c5602208e4acec3435ac5",
+      "bytes": 19205,
+      "sha256": "346d6d50f2d52ce7f5ef16fb789d28b24cb6b622fd8dc681ad732b7ee829e51c"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/operator_learner.rs",
+      "git_blob": "58016ce64c05baf0e1940dc71ecb52269080c773",
+      "bytes": 25131,
+      "sha256": "b5531ae06a0769b0e787cce4ea9a6705bba9563134a9ce7ee01e1f9cc94d69ae"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/joined_data_handoff.rs",
+      "git_blob": "576b9fb4e1790457ab2ca8e4b8a2b09b8c69d50f",
+      "bytes": 27218,
+      "sha256": "b9fd77ad942db74c6fadce2e27f69c54086cd1993dd3520f2f6271a23856ebca"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_read.rs",
+      "git_blob": "0b1547c0f30c83eccefcb972deb2565d980aeaf6",
+      "bytes": 8499,
+      "sha256": "28cb45c9000807f7d1ff3ba5ee2ef4f627a901445267774a635e0f01b7387ce2"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_read/event_dispatch.rs",
+      "git_blob": "806c2d4d190cfb5ba0ffa9fa5a5ed4e52e0f5516",
+      "bytes": 19278,
+      "sha256": "210ff13587b99868db284f247cd2d571e5ff6690e47524ede9d7ee2dea249fdc"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_read/event_wire.rs",
+      "git_blob": "c2b62906a01fc7410e4b56b5af42a0f93921f12b",
+      "bytes": 11472,
+      "sha256": "40f36efe4895af243842873d5612a22b2f9dc7fc6b6f635bcc9baf0a36048860"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_read/strong.rs",
+      "git_blob": "a3c25c661bd335894675fcc442b6152493cba416",
+      "bytes": 13010,
+      "sha256": "1b2cea0c3984168d2db4ef0becfe32f0e3796efe1d42f4e6db973297d433e51e"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_read/quorum.rs",
+      "git_blob": "6d92589fc1ef1ecf720fd9363570575c0e180fcb",
+      "bytes": 21076,
+      "sha256": "a8587613b0738c03a5d42c84cf66ed51e07221c9a948451871598fc7bb5f90d9"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/native_read.rs",
+      "git_blob": "b0ba0a719d0f29f65b3604255a7a329f16466459",
+      "bytes": 13879,
+      "sha256": "25ddb2a6596fdc524966b577b0c86c80fecdef924168ecd68105dbb12ecb3628"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native.rs",
+      "git_blob": "e3a9e9d4714691d77585fc4115e7cf81e331633a",
+      "bytes": 96876,
+      "sha256": "6828c72530f3d692e6e23cc101bfa84d57b8de0e4bf8d2b7788378cacd077e57"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/registered_row_retention.rs",
+      "git_blob": "ee79a017199d50a4e0486e98eccfb7ba95159bd9",
+      "bytes": 18513,
+      "sha256": "e3f77a2c0e3220c073bc6d4f7b68c673eab1dbd5dad9bbe22decc61606c52908"
+    },
+    {
+      "path": "crates/bicdb-core/src/db.rs",
+      "git_blob": "eb9bba6622f9cb0b172abf601c7d91f0d9f3a30a",
+      "bytes": 1458492,
+      "sha256": "ab3865caa2bc6a80ec5f9364f73d9339a2f7785885f7b01e7f7e902c5aef572c"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_data/native_ready.rs",
+      "git_blob": "5b2f6416f66090a908dfd7a314cbc6166d953ee5",
+      "bytes": 7740,
+      "sha256": "c35959bd3d96592ca4c894c75b5595c143cefde96e841108e146ba351e9412a4"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "git_blob": "d9aa9453998c8be992193e71af0cc35a6d84dda1",
+      "bytes": 270209,
+      "sha256": "3016a267a14f5931c78ad3fab097fddf82234e48d3de28ae797159bf6e2dad2a"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/initial_data.rs",
+      "git_blob": "0109f2ba79845980aa9ea14588276cbeb802af76",
+      "bytes": 7710,
+      "sha256": "61c1f8c25f1445f23b95c1baaeb0d567847975eb98de580ef0dd40e9154204b1"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/strong_point_read.rs",
+      "git_blob": "eaa582da037a2195a40bd170e691fe0c87eeb38e",
+      "bytes": 6481,
+      "sha256": "ba42fcd4b5f1266d39c8f69d00232581688c5b5579e329816d3d68253995907a"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_recovery/runtime/strong_point_read.rs",
+      "git_blob": "00a5d4f4242383657e85867ba200115b62a54d69",
+      "bytes": 20513,
+      "sha256": "b9abd864c0f9fb1841376d23e07fd3da53d8e96aa013612bcc3cc1bb9c3ac4fc"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_events.rs",
+      "git_blob": "6e542245476df617e29ac5e7fd1a8764eaf7ad35",
+      "bytes": 60119,
+      "sha256": "fe3f2ea78dfa9d3c21c130ec7fbc93d0f14f57d2abbf07acb6634b547542f83c"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport.rs",
+      "git_blob": "4c2ab74390ff71b72f3950f03e04fac023ee9404",
+      "bytes": 348502,
+      "sha256": "26d795e1f583b33430a54488c289eae321ae29448806ad2d1354b0afc16f33d5"
+    },
+    {
+      "path": "crates/bicdb-cli/src/native_metadata_command.rs",
+      "git_blob": "e729bc3d738263d97d49285683ee9df6ab8e98c4",
+      "bytes": 39078,
+      "sha256": "9c36f303dd7f3d6bb94ef2d895773e2e5168995dd411354dcf92f50eb0b8a8bb"
+    },
+    {
+      "path": "crates/bicdb-cli/src/main.rs",
+      "git_blob": "6b84d60c341dafde3b0cbc5e0861a1a17b84bcde",
+      "bytes": 491160,
+      "sha256": "5c1eaf4f96c47d8e9c1a690919a9b9eff6a11bb7b20f2da77640fb07fca8b883"
+    }
+  ]
+}

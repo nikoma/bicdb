@@ -653,7 +653,8 @@ movement acceptance additionally needs the genuine remote Joined producer,
 stale-route refresh, retained ACK/attempt reconciliation, crash/cold recovery
 and observed convergence. None was executed by this source review.
 
-The independently pinned 27-file readiness review has SHA256
+The independently pinned [27-file readiness review](design/native-readiness-1fc-source-audit.json)
+has SHA256
 `479f9424f2f8724090e770704f8ca8342fe3bb90d342e99c236a4586992dad58`.
 It establishes source/callgraph findings only. Physical RPO/RTO, sustained
 capacity gain and production admission remain unqualified.

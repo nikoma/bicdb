@@ -84,3 +84,39 @@ wrong-UUID, other-range, ACK and expiration operations/assertions remain. No
 request is renewed or retried. Formatting and source-preservation checks are
 static only; no build, test, CI, push, version bump or qualification was run for
 this leaf. The original failed run remains failed.
+
+
+## Bounded per-probe facts in test builds
+
+The coherent diagnostic successor also includes a `cfg(test)`-only provider
+module, with at most 64 copied facts per actual context and an explicit omitted
+count. Each fact identifies the worker's actual destination and attempt, its
+context-relative dequeue and fact-recording times, and remaining context budget
+at dequeue. ACK facts copy only actual response fields: authenticated reply
+peer/context/request, append success, match/conflict/applied indexes, term, and
+the result of the original ACK validation. Recording an ACK happens after that
+original validation; the two timestamps do not constitute a network latency
+measurement. A validator error still propagates through its original path.
+
+Error facts copy the actual enum discriminant and known variant name. Selected
+existing message strings contribute at most their first 512 bytes, with exact
+copied bytes, original byte length and explicit truncation. Peer IDs have the
+same representation with a 128-byte limit. UTF-8 text is rendered lossily only
+in the final report; the copied bytes remain available. An I/O error contributes
+its actual kind and OS code, never a rendered custom source. Unsupported error
+fields are explicitly unavailable. Neither the original error nor any custom
+source, ACK, metadata authority or guard is retained by this trace.
+
+Capture invokes no Display implementation, JSON formatter, I/O or callback. The
+only formatting/output site is the **existing candidates-exhausted failure**,
+after the loop's consensus guard has dropped. The original error constructor,
+RPC body, quorum checks, four-attempt policy, queue operations and cancellation
+remain unchanged. Output failure is ignored. Other exits, including timeout,
+cancellation and direct validation errors, do not dump this per-probe report.
+The normal test path adds bounded diagnostic memory/copy/clock work; it is not
+an uninstrumented timing baseline. Non-test builds compile out the module,
+reader and every hook. The read-only ACK accessor is also `cfg(test)` and grants
+no constructor or voting permission.
+
+This successor remains uncompiled and unexecuted. These facts are prospective
+observability, not an explanation of the old failure or a passing qualification.

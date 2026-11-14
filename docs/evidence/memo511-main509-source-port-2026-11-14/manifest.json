@@ -1,0 +1,13 @@
+{
+  "main_source": "7ad192a7d01ba1e0c1967bc4f1bc79d176a4c385",
+  "memo_predecessor": "6c229eac89ab3db0674d25fa5d01f8523db3e3de",
+  "new_source_version": "1.0.511-beta",
+  "historical_notes": {
+    "path": "historical-memo509-release-notes.md.txt",
+    "original_path": "docs/releases/1.0.509-beta.md",
+    "sha256": "1df1a197af2eec2d5cbdd2246b5dde3eb6356740b4cad79d2bbb8476957882f2",
+    "bytes": 3948
+  },
+  "resolution": "deliveredmain509 release notes canonical; earlierunmergedmemo509 retainedunchanged; currentmemo511 distinct exactsource. Main509 workflowmerged with existing approvedmemorywrappers, selector retained withoutinvokingadditionalfocusedjobs.",
+  "qualification": "source only; no newbinary/appacceptance; earlierE3Corefailureunchanged; ownerreserved511memo\u2192512HA"
+}

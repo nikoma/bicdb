@@ -1058,6 +1058,12 @@ pub struct MetadataReadAck {
 }
 
 impl MetadataReadAck {
+    /// Borrow actual response DATA solely for bounded test diagnostics. This
+    /// exposes no constructor, voter authority or retained observation owner.
+    #[cfg(test)]
+    pub(crate) fn test_probe_response_data(&self) -> &MetadataReadProbeResponse {
+        &self.response
+    }
     pub fn voter_id(&self) -> &ClusterNodeId {
         &self.participant.node_id
     }

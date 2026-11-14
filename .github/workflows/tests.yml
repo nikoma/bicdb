@@ -125,11 +125,20 @@ jobs:
       # --all-targets is the point: `cargo build` alone would not have caught
       # bicdb-sql's unit tests failing to compile against a changed signature.
       - name: cargo check --workspace --all-targets
-        run: cargo check --workspace --all-targets --locked
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required-ci-pressure/alltargets.jsonl" -- cargo check --workspace --all-targets --locked
       # Workspace feature unification enables TLS in Core. Check this actual
       # consumer separately so TLS-only APIs cannot leak into its Core build.
       - name: Workflow consumer compiles without Core defaults
-        run: cargo check -p bicdb-workflow --all-targets --locked
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required-ci-pressure/consumer.jsonl" -- cargo check -p bicdb-workflow --all-targets --locked
+
+      - name: Retain required CI memory pressure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: required-ci-pressure-build-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/required-ci-pressure/
 
   fmt:
     name: Formatting
@@ -219,25 +228,25 @@ jobs:
       # workspace's examples, so build exactly that helper in the core job.
       - name: Build projection chaos helper
         if: startsWith(matrix.suite.name, 'bicdb-core')
-        run: cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required-ci-pressure/helper.jsonl" -- cargo build --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --example chaos_child --locked
       - name: cargo test ${{ matrix.suite.args }}
         if: matrix.suite.name == 'bicdb-pgwire'
-        run: cargo test ${{ matrix.suite.args }} --locked -- --test-threads=4
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required-ci-pressure/pgwire.jsonl" -- cargo test ${{ matrix.suite.args }} --locked -- --test-threads=4
       - name: cargo test bicdb-core without the serial native multi-node fixtures
         if: matrix.suite.name == 'bicdb-core'
         run: >-
-          cargo test --config 'profile.dev.package."*".opt-level=2' ${{ matrix.suite.args }} --locked -- --test-threads=4
+          python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required-ci-pressure/core.jsonl" -- cargo test --config 'profile.dev.package."*".opt-level=2' ${{ matrix.suite.args }} --locked -- --test-threads=4
           --skip distribution_native_host::
           --skip range_image_native::rf3_fixture::
       - name: cargo test bicdb-core native multi-node fixtures one at a time
         if: matrix.suite.name == 'bicdb-core native multi-node (serial)'
         run: >-
-          cargo test --config 'profile.dev.package."*".opt-level=2' ${{ matrix.suite.args }} --locked --
+          python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required-ci-pressure/native.jsonl" -- cargo test --config 'profile.dev.package."*".opt-level=2' ${{ matrix.suite.args }} --locked --
           distribution_native_host:: range_image_native::rf3_fixture::
           --test-threads=1
       - name: cargo test bicdb-sql with bounded linked artifacts
         if: matrix.suite.name == 'bicdb-sql'
-        run: ./scripts/run-cargo-test-targets-bounded.sh bicdb-sql
+        run: python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required-ci-pressure/sql.jsonl" -- ./scripts/run-cargo-test-targets-bounded.sh bicdb-sql
       - name: cargo test remaining workspace with bounded linked artifacts
         if: matrix.suite.name == 'rest of workspace'
         env:
@@ -248,7 +257,7 @@ jobs:
           BICDB_TEST_CLI_RPC_EVIDENCE_ROOT: ${{ runner.temp }}/rest-cli-evidence/rpc-journals
           BICDB_TEST_CLI_EVIDENCE_ROOT: ${{ runner.temp }}/rest-cli-evidence/failure-diagnostics
         run: >-
-          python3 scripts/platform/run_workspace_tests_bounded.py
+          python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required-ci-pressure/workspace.jsonl" -- python3 scripts/platform/run_workspace_tests_bounded.py
           --exclude bicdb-core --exclude bicdb-sql --exclude bicdb-pgwire
       - name: Cluster harness and offline queue contracts
         if: matrix.suite.name == 'rest of workspace'
@@ -272,6 +281,15 @@ jobs:
           path: |
             ${{ runner.temp }}/rest-cli-evidence/rpc-journals/
             ${{ runner.temp }}/rest-cli-evidence/failure-diagnostics/
+
+      - name: Retain required CI memory pressure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: required-ci-pressure-${{ strategy.job-index }}-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/required-ci-pressure/
 
   focused-core:
     needs: validate-selectors

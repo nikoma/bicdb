@@ -21,6 +21,8 @@ use crate::distribution_consensus::{
 use crate::error::{BicDbError, Result};
 use crate::CancellationToken;
 mod host_read;
+#[cfg(test)]
+mod probe_diagnostics;
 
 fn acquisition_error(message: impl Into<String>) -> BicDbError {
     BicDbError::Cluster(format!("metadata read acquisition: {}", message.into()))
@@ -385,6 +387,8 @@ impl MetadataReadProvider {
             context.restrict_deadline(token.deadline().unwrap());
             (context, range)
         };
+        #[cfg(test)]
+        let mut probe_diagnostics = probe_diagnostics::ProbeDiagnostics::new(&context, &request);
         let voters = context.remote_voters();
         if voters.len() + 1 > self.limits.max_voters {
             return Err(acquisition_error(
@@ -485,6 +489,8 @@ impl MetadataReadProvider {
                 outstanding.insert(candidate.destination.clone(), candidate);
             }
             if outstanding.is_empty() {
+                #[cfg(test)]
+                probe_diagnostics.report_exhausted();
                 return Err(acquisition_error(
                     "fresh joint quorum unavailable within bounded probe attempts",
                 ));
@@ -494,10 +500,29 @@ impl MetadataReadProvider {
                     let mut candidate = outstanding
                         .remove(&voter)
                         .ok_or_else(|| acquisition_error("unexpected probe worker result"))?;
+                    #[cfg(test)]
+                    let probe_observed_at = Instant::now();
+                    #[cfg(test)]
+                    if let Err(error) = &result {
+                        probe_diagnostics.record_error(
+                            &voter,
+                            candidate.attempts,
+                            error,
+                            probe_observed_at,
+                        );
+                    }
                     let retry = if let Ok(ack) = result {
                         let accepted = self
                             .lock_consensus(&token)?
                             .record_read_authority_ack(&mut context, &ack)?;
+                        #[cfg(test)]
+                        probe_diagnostics.record_ack(
+                            &voter,
+                            candidate.attempts,
+                            &ack,
+                            accepted,
+                            probe_observed_at,
+                        );
                         if !accepted {
                             candidate.next_index = ack
                                 .conflict_index()
@@ -1695,29 +1720,134 @@ mod tests {
 
     #[test]
     fn finished_local_authority_keeps_original_context_deadline() {
+        // Fixed-size, memory-only observations until a real API returns Err.
+        // The original context owns the only business deadline.
+        let mut stages: [Option<Instant>; 16] = [None; 16];
+        let stage_names = [
+            "fixture_enter",
+            "fixture_return",
+            "leader_acquired",
+            "begin_enter",
+            "begin_return",
+            "probe_build_enter",
+            "probe_build_return",
+            "leader_released",
+            "probe_enter",
+            "probe_return",
+            "leader_reacquire_enter",
+            "leader_reacquired",
+            "ack_enter",
+            "ack_return",
+            "finish_enter",
+            "finish_return",
+        ];
+        let mut observed_deadline: Option<Instant> = None;
+        fn report_failure(
+            api: &str,
+            error: &BicDbError,
+            stages: &[Option<Instant>; 16],
+            stage_names: &[&str; 16],
+            deadline: Option<Instant>,
+        ) {
+            // Allocate/format/write only after the original operation failed.
+            let origin = stages[0].unwrap();
+            let observations: Vec<_> = stage_names
+                .iter()
+                .zip(stages.iter())
+                .filter_map(|(name, instant)| {
+                    instant.map(|at| {
+                        serde_json::json!({
+                            "stage": name,
+                            "elapsed_us": at.duration_since(origin).as_micros(),
+                            "remaining_us": deadline.map(|deadline| {
+                                deadline.saturating_duration_since(at).as_micros()
+                            }),
+                            "past_deadline_us": deadline.map(|deadline| {
+                                at.saturating_duration_since(deadline).as_micros()
+                            }),
+                        })
+                    })
+                })
+                .collect();
+            let diagnostic = serde_json::json!({
+                "test": "finished_local_authority_keeps_original_context_deadline",
+                "failed_api": api,
+                "primary_error": error.to_string(),
+                "context_budget_ms": 100,
+                "stages": observations,
+                "cause": "not attributed; wall time does not separate I/O and scheduling",
+            });
+            // Output failure must not replace the original unwrap/panic.
+            let _ = writeln!(
+                std::io::stderr().lock(),
+                "BICDB_LOCAL_AUTHORITY_DEADLINE_FAILURE {}",
+                diagnostic
+            );
+        }
+        macro_rules! observed {
+            ($enter:expr, $return:expr, $api:expr, $operation:expr) => {{
+                stages[$enter] = Some(Instant::now());
+                let result = $operation;
+                stages[$return] = Some(Instant::now());
+                if let Err(error) = &result {
+                    report_failure($api, error, &stages, &stage_names, observed_deadline);
+                }
+                result
+            }};
+        }
+        stages[0] = Some(Instant::now());
         let fixture = Fixture::new();
+        stages[1] = Some(Instant::now());
         let leader = fixture.transport.leader.lock();
-        let mut context = leader
-            .begin_read_authority(
+        stages[2] = Some(Instant::now());
+        let mut context = observed!(
+            3,
+            4,
+            "begin_read_authority",
+            leader.begin_read_authority(
                 Uuid::now_v7(),
                 Duration::from_millis(100),
                 &participant(&fixture.topology, "n1"),
             )
-            .unwrap();
+        )
+        .unwrap();
         let deadline = context.deadline();
-        let request = leader
-            .read_authority_probe(&context, &node("n2"), 1, 16)
-            .unwrap();
+        observed_deadline = Some(deadline);
+        let request = observed!(
+            5,
+            6,
+            "read_authority_probe",
+            leader.read_authority_probe(&context, &node("n2"), 1, 16)
+        )
+        .unwrap();
         drop(leader);
-        let ack = fixture
-            .transport
-            .probe(&node("n2"), request, &CancellationToken::uncancelable())
-            .unwrap();
+        stages[7] = Some(Instant::now());
+        let ack = observed!(
+            8,
+            9,
+            "probe",
+            fixture
+                .transport
+                .probe(&node("n2"), request, &CancellationToken::uncancelable())
+        )
+        .unwrap();
+        stages[10] = Some(Instant::now());
         let mut leader = fixture.transport.leader.lock();
-        leader
-            .record_read_authority_ack(&mut context, &ack)
-            .unwrap();
-        let authority = leader.finish_read_authority(context).unwrap();
+        stages[11] = Some(Instant::now());
+        observed!(
+            12,
+            13,
+            "record_read_authority_ack",
+            leader.record_read_authority_ack(&mut context, &ack)
+        )
+        .unwrap();
+        let authority = observed!(
+            14,
+            15,
+            "finish_read_authority",
+            leader.finish_read_authority(context)
+        )
+        .unwrap();
         assert_eq!(authority.deadline(), deadline);
         assert!(authority.remaining_budget().unwrap() <= Duration::from_millis(100));
         drop(leader);

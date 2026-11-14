@@ -7,7 +7,7 @@ rollback is recorded separately in [issue191](https://github.com/nikoma/bicdb/is
 Post-vote old-primary acknowledgments are recorded in
 [issue192](https://github.com/nikoma/bicdb/issues/192).
 The separate snapshot target-data-head gate is tracked in
-[issue193](https://github.com/nikoma/bicdb/issues/193).
+[issue 193](https://github.com/nikoma/bicdb/issues/193).
 
 The delivered-main inspection checkpoint is **1.0.511-beta**,
 `74f17b912cec7f2fe093d10dcf1618a43b35f454`, tree
@@ -62,7 +62,7 @@ The subsequent diagnostic range head is
 `92ad46fee99fd50dc77022f6195b3b13086448aa`; its actual required-CI checkout
 `ddcd6a1fcca63a4594cea7abb51cccc642c09959` has the same tree. Its
 [required run](https://github.com/nikoma/bicdb/actions/runs/43608687107)
-passed compilation, Core1817/0/16, PGwire511/0/2 and SQL2681/0/4, where counts
+passed compilation, Core 1,817/0/16, PGwire 511/0/2 and SQL 2,681/0/4, where counts
 mean passed/failed/ignored. Its
 [Rails run](https://github.com/nikoma/bicdb/actions/runs/43608687112) passed
 20 runs/100 assertions. Serial native and remaining-workspace results are
@@ -77,22 +77,22 @@ inheriting source version511, with no assigned release version. Its actual
 checkout `dba3a015df88ecc81ca5515258a2950680662aa2` has the same tree.
 [Required run43609026644](https://github.com/nikoma/bicdb/actions/runs/43609026644)
 **failed Core and PGwire**. All-target/non-default-consumer compilation,
-repository checks, native216/0/1 and SQL2681/0/4 passed.
-[Rails](https://github.com/nikoma/bicdb/actions/runs/43609026629) passed20
+repository checks, native 216/0/1 and SQL 2,681/0/4 passed.
+[Rails](https://github.com/nikoma/bicdb/actions/runs/43609026629) passed 20
 runs/100 assertions. The remaining-workspace result is still pending. The
 native component result is25 minutes of CI execution, not a measured RTO.
 
-The twelve new file-backed epoch controls passed12/0 in1.59s on that source.
+The twelve new file-backed epoch controls passed 12/0 in 1.59 s on that source.
 They exercise actual commits, imports, qualification, ballots, fencing and
 snapshot custody. The complete candidate remains failed:
 
 - [Issue197](https://github.com/nikoma/bicdb/issues/197): existing
   `embedded_quorum_survives_primary_loss_and_fences_a_returning_writer` failed
-  its25-second wait at `embedded_ha.rs:393`. The successor election and UPDATE8
+  its 25-second wait at `embedded_ha.rs:393`. The successor election and UPDATE 8
   succeeded. The returning original primary's stale Ping was rejected before
   informational Pong, blocking the existing discovery/rejoin path. The later
-  UPDATE9 and stale-writer assertions were not reached. The target recorded
-  11 passed/one failed; raw789,941 bytes, SHA256
+  UPDATE 9 and stale-writer assertions were not reached. The target recorded
+  11 passed/one failed; raw 789,941 bytes, SHA256
   `e9718a8d4d69a8e1f1e45e693d4fa32ee5ecb238f5357559bb960d59af302645`.
 - [Issue198](https://github.com/nikoma/bicdb/issues/198): existing
   `external_attachments_require_a_snapshot_and_cannot_be_acknowledged_as_missing_blobs`
@@ -101,7 +101,7 @@ snapshot custody. The complete candidate remains failed:
   refused its unqualified snapshot. Earlier attachment-write/no-sequence-advance
   and missing-blob refusal assertions passed; snapshot restore, full attachment
   content and manifest comparison were not reached. The target recorded
-  31 passed/one failed; raw1,720,542 bytes, SHA256
+  31 passed/one failed; raw 1,720,542 bytes, SHA256
   `a1b937ed99eca9f209636341ff52ee898093e3588a1578cb5f344c3b887351e0`.
 
 Reviewed corrective source `f41a3986e17cfff9096cda8682fc460b884ae7c1`, tree
@@ -109,8 +109,8 @@ Reviewed corrective source `f41a3986e17cfff9096cda8682fc460b884ae7c1`, tree
 uncompiled and unexecuted** successor at this checkpoint. It:
 
 - Retains informational Pong for an allowed stale peer while denying stale
-  contact renewal. Same-runtime development-TCP controls use genuinely elected
-  n1 for the positive request and an actual later n2 ballot for the old-epoch
+  contact renewal. Same-runtime development-TCP controls use
+  n1 after actual Core ballots and promotion for the positive request and an actual later n2 ballot for the old-epoch
   contact refusal. Informational epoch knowledge grants no writer lease.
 - Retains genesis in memory only from actual empty-root birth under the original
   DirectoryLock, independently of initial HA enablement. Opening with HA enabled
@@ -126,13 +126,13 @@ controls remain byte-identical. Three additional public-producer Core controls
 are source definitions, not executed results. Independent review found no
 confirmed source blocker; formatting, whitespace and catalog source-path checks
 passed. The catalog retains conditional ACK preservation and the actual
-protocol5 condition; static quorum settings alone do not establish preservation.
+protocol 5 condition; static quorum settings alone do not establish preservation.
 See [the source contract](design/ha-qualified-data-epoch.md),
 [returning-primary correction](design/ha-returning-primary-stale-ping-197.md) and
 [fresh standalone origin](design/ha-fresh-standalone-origin-198.md).
 
 No mixed-version upgrade, all-legacy bootstrap-source procedure, data-head/ACK-copy
-protection for issue193 or complete physical HA qualification is supplied by
+protection for issue 193 or complete physical HA qualification is supplied by
 these corrections. Versions, binaries, release publication and deployment remain
 separate states. A next unused version and final versioned-head validation are
 required before merging; PR188's active512 reservation is not reused in parallel.
@@ -141,7 +141,7 @@ required before merging; PR188's active512 reservation is not reused in parallel
 
 | Finding | Classification | Scope |
 | --- | --- | --- |
-| Original Azure four-to-five convergence within300s | Failed | Historical experiment remains failed; no stable converged five-node comparison. |
+| Original Azure four-to-five convergence within 300 s | Failed | Historical experiment remains failed; no stable converged five-node comparison. |
 | Original two temporarily unreadable ACK records' causes | Inconclusive | Later matches do not establish routing/read-watermark/catch-up cause or the causal visibility-restoration event. |
 | b779 native handoff acceptance | Failed | 324 passed/13 failed/one ignored; raw log and complete capture retained. |
 | [Native activation issue195](https://github.com/nikoma/bicdb/issues/195) | Failed | Twelve local-activation timeouts; inner cause remains inconclusive pending diagnostic execution. |
@@ -149,7 +149,7 @@ required before merging; PR188's active512 reservation is not reused in parallel
 | 2c's new epoch/ballot component controls | Passed | Twelve file-backed Core cases at exact2c source; no physical/production qualification. |
 | 2c returning-primary and attachment-recovery acceptance | Failed | Issues197/198; later assertions were not reached. |
 | f41 corrective runtime behavior and three new Core controls | Not tested | Source review and static checks are distinct from execution. |
-| Snapshot target-data-head/ACK-copy protection193 | Not tested | Open source/API gate; the separate genuine regression source6bb1f64e is unexecuted. |
+| Snapshot target-data-head/ACK-copy protection193 | Not tested | Open source/API gate; the separate genuine regression source 6bb1f64e is unexecuted. |
 | Current-artifact physical RPO/RTO and latency percentiles | Not tested | No independent-machine current-artifact qualification dataset. |
 | Sustained throughput gain after complete convergence | Not tested | Neither relocation-phase rates nor shared-host debug measurements demonstrate this gate. |
 
@@ -263,7 +263,7 @@ must be read with these source-specific corrections:
 
 Concrete source/caller evidence:
 
-- `crates/bicdb-cli/src/native_metadata_command.rs:553` runs the500ms maintenance
+- `crates/bicdb-cli/src/native_metadata_command.rs:553` runs the 500 ms maintenance
   loop, explicitly limited to CONFIG enrollment.
   `crates/bicdb-core/src/distribution_native_host/operator.rs:280` calls
   `maintain_joins`;

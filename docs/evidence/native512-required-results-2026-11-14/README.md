@@ -10,9 +10,11 @@ corrections. It is not qualification of the current combined source.
   library case. Its remaining workspace passed1051 Rust cases/six ignored plus
   84 Python tests. The complete terminal capture manifest records all raw logs,
   pressure artifacts and source identity; nested child results are nonadditive.
-- Native512 remaining workspace job132406489542 was still running at this
-  checkpoint. Its result must be recorded separately when terminal. Old component
-  passes cannot qualify the changed source.
+- Native512 remaining workspace job132406489542 subsequently completed success
+  at11:22:49 UTC:127 outer Cargo targets,1051 passes/zero failures/six ignored,
+  plus84 Python tests. The complete terminal capture and raw-log identity are
+  included. The complete old workflow fails solely on its43 native cases.
+  These old component passes cannot qualify the changed source.
 - Source reviews of33613 custody,5341 slot identity and23ce uncounted candidates
   found no confirmed blockers in their stated scopes. Their controls are not
   compiled or executed. No original failure is erased or attributed to a new
@@ -52,3 +54,12 @@ evidence to the source erratum, not a new execution or broker failover proof.
 Whole-database streaming has a separate exporter/importer coverage gap for
 broker/sync frames; the born-native refusal must not be generalized to that
 legacy-commit mode or used to promise its outbox survival.
+
+Two independently source-pinned safe-head reviews identify a genuine next
+recovery boundary. Registered preflight requires a globally empty original
+receiver; after FIRST its old hook cannot authorize Joined R2 work. No lawful
+populated two-range Registered rebase fixture exists. Current global catalogue
+uncertainty and service/DB/journal locks also do not isolate a stalled range.
+A new fsync can prove a new justified head, never retroactively prove an old
+uncertain write succeeded or resolve an uncertain native transaction. These
+are open implementation/qualification gates, not new runtime results.

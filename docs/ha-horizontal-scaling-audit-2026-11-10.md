@@ -23,8 +23,9 @@ automatic enforced-native relocation or physical qualification.
 
 The original511 candidate2ec5f754 failed one Core case; its other components
 passed. The original512 candidate1742776 passed compilation/Core/SQL/PG/Rails
-but its native job failed **280/43/one ignored**. Its remaining workspace was
-still live at this checkpoint. The [complete per-case source/CI packet](evidence/native512-required-results-2026-11-14/README.md)
+but its native job failed **280/43/one ignored**. Remaining workspace passed
+1051 Rust cases/six ignored plus84 Python tests. The full old workflow is
+terminal and fails solely on those43 native cases. The [complete per-case source/CI packet](evidence/native512-required-results-2026-11-14/README.md)
 retains actual identities, all43 failure sections, literal failure groups,
 clock limits and separate source-only reviews. Later assertions not reached by
 a failed prerequisite are not tested. Historical successes do not make either

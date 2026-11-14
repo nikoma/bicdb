@@ -26,8 +26,8 @@
     },
     {
       "scope": "Native512 remaining workspace",
-      "disposition": "inconclusive",
-      "reason": "job132406489542 still live at checkpoint; no outcome inferred"
+      "disposition": "passed",
+      "reason": "Actual job132406489542 completed success at2026-11-14T11:22:49Z:127outerCargo targets1051passes/0failures/6ignored+84Python. Nested child nonadditive. Exactold174source only."
     },
     {
       "scope": "W1/W2,point,slot,candidate source reviews/static checks",
@@ -118,10 +118,35 @@
       "path": "native-broker-refusal-ci-corroboration-1742776.json",
       "bytes": 1985,
       "sha256": "fb559a9b6f9ce49554208512316bbb1b4efc4aaaadb228dffb8f482151f4d4c9"
+    },
+    {
+      "path": "ha512-rest-success-capture.json",
+      "bytes": 81480,
+      "sha256": "842195fc0ada8a28a3c365e28489e8d7987f09cbd46ba239b0343f7b1d7073e2"
+    },
+    {
+      "path": "ha512-required-terminal-complete-capture.json",
+      "bytes": 22463,
+      "sha256": "7264caf8a7af894da9818aba5f730125d9ea3de11283252653d74eacf8445f40"
+    },
+    {
+      "path": "native-catalogue-safe-head-independent-review-fe86.json",
+      "bytes": 11272,
+      "sha256": "e2a1737fb427ae02209fe04fa4425813c226dc128940a5bce4c8418d6b88755e"
+    },
+    {
+      "path": "registered-catalogue-safe-head-preconditions-fe86.json",
+      "bytes": 21714,
+      "sha256": "0106d049187f29fbe04411b02fd70b324e7c852574a38dfc46e8c02509b01bdd"
     }
   ],
   "raw_custody": "complete rawCIlogs and ZIPs retained outsideGit under/root/bicdb-ha-private-evidence; linked run/job/rawSHA in individualreceipts. This compact packet includes completepercase nativefailure sections, not allrawlogs/DBcustody.",
   "correction": "Originalba2 sideeffectaudit retained verbatim; affected brokerinterpretations supersededonlybyaf6erratum. Bornnative broker-only/mixed refuse; laternonbroker sidecars remain distinct.",
   "production_qualified": false,
-  "new_binary_or_deployment_produced": false
+  "new_binary_or_deployment_produced": false,
+  "finalized_at_utc": "2026-11-14T11:26:37.207892+00:00",
+  "all_original_jobs_terminal": true,
+  "capture_complete": true,
+  "overall_native512": "failed solelyNative43; otherrequiredcomponentsandRails passed in exactoldsource scope",
+  "prior_observation": "At original packet capture11:08 remainingworkspacewaslive; final result added onlyafteractualtermination/fullraw/artifactcapture. No original log reclassified."
 }

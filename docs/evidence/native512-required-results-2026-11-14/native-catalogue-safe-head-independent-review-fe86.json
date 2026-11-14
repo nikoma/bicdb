@@ -1,0 +1,117 @@
+{
+  "schema": "bicdb-independent-catalogue-reconciliation-design-review-v1",
+  "source": "fe86ac4a5d3e27e2280d499f9f8c9fb70de1c516",
+  "reviewed_frozen_correction_sha256": "570002d9b971fb2c8c19064ff058519c469883c349a1c79bcc2e48fa4f737684",
+  "scope": "Read-only source/design review. No source edits, builds, tests, CI, push or runtime qualification.",
+  "answer": "A fresh actual durable replacement of an independently justified latest-safe whole head plus the exact already-authorized R1 decision patch can establish THAT head durability. It cannot establish the prior write succeeded, resolve native CommitOutcomeUnknown, authorize another native xid, or alone provide range-isolated availability. Existing source lacks the safe-head/resolution producer.",
+  "confirmed_source_findings": [
+    {
+      "path": "joint_handoff_state/registered_decision.rs:185-217,238-309",
+      "finding": "Whole original/candidate identity is checked before even verified fast-path; newer R2 whole head refuses. File IO success is recorded before readback/currentness; error leaves uncertainty and old outcome retained."
+    },
+    {
+      "path": "distribution_range_consensus.rs:1831-1854;storage.rs:1835-1843,1971-2080",
+      "finding": "persist_or_restore restores old in-memory catalog after any write error; write_atomic uses FailClosed::No; an after-rename directory-sync error can leave newer visible disk with old memory. Thus neither memory-alone nor disk-alone is an authoritative safe head. This is a source-derived counterexample, not a newly observed physical failure."
+    },
+    {
+      "path": "recovery_state.rs:1045-1075;native_read_catalog.rs:69;recovery_state.rs:1154",
+      "finding": "One global unowned persistence-uncertain bool gates native catalogue durability, native read catalogue and normal writes. A full fresh fsync may physically settle accepted head bytes but cannot prove which unrelated operation has been completed. Existing synchronous service/store/journal scopes also do not isolate a stalled fsync."
+    },
+    {
+      "path": "writer_enrollment/registered_joint.rs:27-56;registration/registered_replica/remote_attempt/remote_joint.rs:180-283",
+      "finding": "Original Registered empty-hook/never-installed native policy and A/base/final/archive/lifetime checks remain essential. Materialized identity point is already selected physical base/log+actual abort identity; no blanket whole-catalogue bypass is needed or allowed."
+    },
+    {
+      "path": "decision/remote.rs:118-129,519-575",
+      "finding": "Native remote committed-xid requires retained original outcome Committed before exact receipt/provenance/TxnStatus readback. Unknown stays unknown despite later status. Catalogue resolver must not promote or replace this native owner."
+    }
+  ],
+  "necessary_safe_head_contract": {
+    "ownership": "Same actual service/Store open/DB open/catalogue UUID/native birth/restore/profile and retained exact original A/MF/session/DECISION receipt. Acquire fresh actual recipient Role/OWN/MStore outside engine scopes. Require previous attempt work/mutable Store borrower exited; existing same-attempt plus service mutexes can establish lexical exclusion, not a sleep or full-socket inference.",
+    "authority": "Keep exact original typed local admission/retry producer and required other actual OLD/NEW owners. Remote future consumer needs distinct genuine remote admission, never DTO to localPrepared/Role cast. Registered scope cannot be revived after FIRST installed a writer.",
+    "head": "Capture exact bounded CURRENT file bytes+verified envelope AND actual current memory under exclusive same-store mutation ownership. Equality is necessary for a healthy unrelated successor, but equality/checksum alone is NOT prior-fsync evidence. Own retained unknown O0/C0 disk-memory divergence must retain its exact original resolving path; do not universally require equality and thereby strand rename failures.",
+    "projection": "Review full R1 obligation projection: ranges/log, backup fences, handoff promises, install intents, recovery fences, native bases, sparse decisions, install certifications/handovers, joint local state, abort protocol R1 slots, current joint recovery. Include global cluster/node/enforcement/profile/format/map-presence and abort StoreUUID; only explicitly supported monotonic format normalization. Unknown or changed selected/global obligations refuse.",
+    "generation": "Before effects retain a distinct linked generation G1 with immutable parent G0/preimage/current safe-head bytes+checksum/R1 preimage and authorized postimage/native receipt checksum/xid/A identity/candidate bytes. Preserve all G0 outcomes exactly, including unknown. Bound generation count+bytes and one new attempt per actual fresh request; explicit exhaustion refusal, no eviction or retry-loop.",
+    "application": "Candidate is H with ONLY authorized same-session R1 decision hashes patched. Never replay old whole C0 over H. If H already carries exact selected postimage and independently justified current durability, separate selected-completed-stage observation may avoid rewriting. It is not Serving or a grant.",
+    "resolution": "Set uncertainty before actual IO. Retain actual return before readback/postchecks; exact new bytes and decoded full head readback; full physical/native/fresh metadata rechecks then short memory-only version publication. Old G0 succeeded flag remains unchanged. Record resolved-by-G1 explicitly; new fresh fsync proves G1 durability only.",
+    "foreign_uncertainty": "Do not clear an unrelated owner merely because this operation has fresh OWN or disk==memory. Need typed same-store head/uncertainty ownership or full unresolved-intent inventory plus actual native constraints to justify all bytes; absent that, refuse without calling it bounded recovery.",
+    "availability": "Whole-file writer serialization may still be necessary, but per-range read/write uncertainty and known-safe-head rules are needed before claiming unaffected R2 remains available during R1 stalls. Do not weaken current global refusal until those actual proofs exist.",
+    "cold": "RAM generation history/owner is not restart recovery. Durable intent/head ancestry/native binding and fresh protected recovery producer remain required; no deserialize-to-authority."
+  },
+  "smallest_real_acceptance_cases": [
+    "Known verified R1 then genuinely lawful durable R2 successor under valid original actor lifecycle: selected-completed reader returns only completed stage, preserves full latest R2 head, no stale C0 write. Demonstrate valid R2 producer first; after FIRST use distinct Joined/history admission, not revived Registered.",
+    "R1 known native committed; actual rename or directory-sync failure; wait actual prior work exit; genuine fresh same-owner request; observe original disk/memory O0/C0; fresh actual replacement+readback resolves current selected patch without changing original unknown outcome/native xid/A.",
+    "Actual lawful R2 successor preserving R1 preimage/postimage, then one linked-generation patch; compare EVERY R2 map entry/bytes and original native receipts before/after; no direct test DTO/catalogue mutation counted as R2 progress.",
+    "Repeat after-fsync cancellation and another generation: preserve all outcomes, no new native transaction; bounded quiet fresh request succeeds only after actual fsync/version proof.",
+    "Negative selected R1 log/base/promise/archive/native pointer/abort slot/recovery fence or global StoreUUID/birth/restore/profile change refuses; actual missing native/provenance archive and nativeUnknown refuse with same owner/xid.",
+    "Negative separate R2 uncertain publication or stale head-generation CAS; R1 must not clear foreign uncertainty or overwrite its candidate.",
+    "Stalled R1 actual catalogue IO while populated R2 original SDK APP+Strong: measure actual progress/refusal separately; current global guard may legitimately fail this requirement. Rebase alone is not proof.",
+    "Cold reopen after new generation or rename uncertainty remains NOT TESTED/unsupported until actual persisted intent producer."
+  ],
+  "pinned_files": [
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "sha256": "3016a267a14f5931c78ad3fab097fddf82234e48d3de28ae797159bf6e2dad2a"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/registered_decision.rs",
+      "sha256": "e1c37f5adaf04766e15ab47445435e50ace83048d99adaad1166db57198e0b80"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/decision/registered_catalogue_retry.rs",
+      "sha256": "6bd13b29fa12ad220da8fb2fa7cece9c6fa1aacc778901035d232248d8d70cbe"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/native_durability.rs",
+      "sha256": "b2cd305b50c0caca30b5220d230c8a22d9a6e8702caf6c31a9a4c0c897823f98"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/recovery_state.rs",
+      "sha256": "dcd14b011e7a6a2a8cff00f245a7ba5c7af23fb8bad4f5de76b7f4983160d4ca"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/native_read_catalog.rs",
+      "sha256": "33a0625b20dff56cd1df54a110738f9bb5d0c7a7ced5c76262cd103226c77e4b"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/catalogue_custody.rs",
+      "sha256": "a2055b60836539a80b1184fc4eeb34ba99dd9ec82c4cf1b2ec1e2de7d84f3219"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/native_writer.rs",
+      "sha256": "e0d796b2366d5ddd5f8e033cf984c4f89ff564d09ccd5322e9948ae14fcdc919"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/native_abort.rs",
+      "sha256": "f1137438aa456bb5bb725bd4dc51641621764f158857e26a0ee140aa85e7190d"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/native_image_base/joined_remote.rs",
+      "sha256": "580587638c38b1e14e8e864bc520fd5b698e2a5141c6c625833641d2827d9980"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/registered_joint.rs",
+      "sha256": "ab7a4d9b0c86ccdde9e15e124ac6737a26610f46dc9bbca534e553b306197aec"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_attempt/remote_joint.rs",
+      "sha256": "97349a4961072740396b0338ad90186c89a18b06ac93b401420c5584536b1095"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/serving_configuration/joint_handoff/decision/registered.rs",
+      "sha256": "a028e24bcbeba6ae1c0de78a89cff26f86622c364a97beefacfd4ba44afe2dc6"
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/serving_configuration/joint_handoff/decision/remote.rs",
+      "sha256": "acacd63968284c197fe683e025132e056a963b8470b58d551e660d3d5ee83992"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff/registered_target.rs",
+      "sha256": "00e1b32e1bfd84e1660f6c74472510e8c3bce99fee7d1457eab61c4a9536e12a"
+    },
+    {
+      "path": "crates/bicdb-core/src/storage.rs",
+      "sha256": "eeece5ddf6b753a661af7cac57f71697e057d32661c9f8c4780cf633801df50e"
+    }
+  ]
+}

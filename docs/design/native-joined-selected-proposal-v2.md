@@ -89,3 +89,21 @@ paths, not an executed second-range admission result. There is no native row
 import/base/final/catalogue producer yet, and no new source/donor authority.
 A native proposal whose exact xid cannot be proved committed remains blocked;
 this batch supplies no automatic replacement-xid or cold-repair policy.
+
+## Reviewed source corrections
+
+The c424 source review found two uses of an envelope after its consuming
+verify method. The successor compares the actual returned verified catalogue,
+and serializes the prepared envelope before consuming it for validation.
+Catalogue readback now uses one descriptor and a bounded read; on Unix it
+refuses symlinks. These are source corrections, not previously executed
+compiler or runtime failures.
+
+Actual native begin is now retained as the first operation of the real paged
+transaction closure, before request rechecks or candidate framing can fail.
+An explicit NativeBegun state and issued xid survive such failures; no proposal
+pointer is issued before complete framing, and a fresh call cannot silently
+start another xid. This does not add a proven-abort retry or cold reconstruction
+policy. A test-only cut at that actual boundary and a DATA-only outcome report
+support the pending real cancellation/abort-failure fixture controls. Those
+controls have not run.

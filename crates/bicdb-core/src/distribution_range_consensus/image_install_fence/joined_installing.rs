@@ -59,22 +59,35 @@ impl NativeJoinedRemoteInstallingFence {
     }
     fn read_disk_current(&self, store: &RangeWriteStore) -> Result<()> {
         let path = store.root.join(DEFAULT_RANGE_WRITE_LOG);
-        if std::fs::metadata(&path)?.len() > 64 * 1024 * 1024 {
+        // One descriptor and a bounded reader: a concurrent replacement or
+        // growth cannot cause fs::read to allocate an unbounded file first.
+        use std::io::Read;
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NOFOLLOW);
+        }
+        let file = options.open(&path)?;
+        let metadata = file.metadata()?;
+        if !metadata.is_file() || metadata.len() > 64 * 1024 * 1024 {
             return Err(range_write_error(
-                "Joined catalogue readback byte bound exceeded",
+                "Joined catalogue readback type/byte bound exceeded",
             ));
         }
-        let bytes = std::fs::read(&path)?;
+        let mut bytes = Vec::new();
+        file.take(64 * 1024 * 1024 + 1).read_to_end(&mut bytes)?;
         if bytes.len() > 64 * 1024 * 1024 {
             return Err(range_write_error(
-                "Joined catalogue changed beyond readback byte bound",
+                "Joined catalogue grew beyond readback byte bound",
             ));
         }
         let envelope: RangeWriteEnvelope = serde_json::from_slice(&bytes)?;
-        envelope.verify()?;
+        let actual = envelope.verify()?;
         // Compare disk against CURRENT memory, not an old full-catalogue
         // snapshot. Other ranges may advance through their actual writers.
-        if envelope.catalog != store.catalog
+        if actual != store.catalog
             || store
                 .catalog
                 .image_install_intents
@@ -189,8 +202,15 @@ impl NativeJoinedRemoteInstallingPublication {
                 ));
             }
             let envelope = RangeWriteEnvelope::new(candidate.clone())?;
-            envelope.verify()?;
+            // Serialize the exact retained envelope, then consume it for full
+            // format/checksum validation before any candidate/IO publication.
             let bytes = serde_json::to_vec_pretty(&envelope)?;
+            let validated = envelope.verify()?;
+            if validated != candidate {
+                return Err(range_write_error(
+                    "Joined prepared envelope changed candidate",
+                ));
+            }
             if bytes.len() > 64 * 1024 * 1024 {
                 return Err(range_write_error(
                     "Joined Installing catalogue byte bound exceeded",

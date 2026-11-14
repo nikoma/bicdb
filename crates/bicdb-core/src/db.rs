@@ -36255,3 +36255,6 @@ mod analyze_sampling_tests {
 mod distribution_event_retry_tests;
 
 pub(crate) use range_image_native::{NativeJointPhaseOwner, NativeJointWriterDomain};
+
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use range_image_native::test_joined_remote_proposal_after_native_begin;

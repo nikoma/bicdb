@@ -135,6 +135,9 @@ impl NativeJoinedRemoteProposalReceipt {
 }
 enum PublicationState {
     Prepared(JoinedProposalV2),
+    NativeBegun {
+        record: JoinedProposalV2,
+    },
     Attempted {
         record: JoinedProposalV2,
         bytes: Vec<u8>,
@@ -152,6 +155,9 @@ enum PublicationState {
 /// never creates another xid or forgets the exact attempted bytes.
 pub(crate) struct NativeJoinedRemoteProposalPublication {
     state: PublicationState,
+    // Assigned as the FIRST closure operation after actual native begin,
+    // before scope/framing/callback work can fail. Never reset for a retry.
+    issued_native_xid: Option<u64>,
     commit_returned: Option<u64>,
 }
 impl NativeJoinedRemoteProposalPublication {
@@ -198,8 +204,37 @@ impl NativeJoinedRemoteProposalPublication {
         sized.validate()?;
         Ok(Self {
             state: PublicationState::Prepared(record),
+            issued_native_xid: None,
             commit_returned: None,
         })
+    }
+    #[cfg(test)]
+    pub(crate) fn test_outcome(&self) -> serde_json::Value {
+        let (phase, record, bytes) = match &self.state {
+            PublicationState::Prepared(record) => ("prepared_no_native_begin", record, None),
+            PublicationState::NativeBegun { record } => {
+                ("actual_native_began_before_candidate", record, None)
+            }
+            PublicationState::Attempted { record, bytes } => {
+                ("attempted_outcome_unproven", record, Some(bytes))
+            }
+            PublicationState::NativeCommitted { record, bytes } => (
+                "native_commit_returned_before_postchecks",
+                record,
+                Some(bytes),
+            ),
+            PublicationState::Verified { receipt, bytes } => (
+                "exact_current_archive_verified",
+                &receipt.record,
+                Some(bytes),
+            ),
+        };
+        serde_json::json!({"phase":phase,"issued_native_xid":self.issued_native_xid,
+            "actual_commit_returned_xid":self.commit_returned,
+            "retained_record_native_xid":record.native_page_xid,
+            "attempt":record.attempt,"range":record.range,
+            "candidate_bytes_sha256":bytes.map(|b| hex::encode(Sha256::digest(b))),
+            "pointer":self.pointer(),"DATA_not_authority":true})
     }
     pub(crate) fn receipt(&self) -> Option<&NativeJoinedRemoteProposalReceipt> {
         match &self.state {
@@ -209,7 +244,7 @@ impl NativeJoinedRemoteProposalPublication {
     }
     pub(crate) fn pointer(&self) -> Option<NativeJoinedRemoteProposalPointer> {
         match &self.state {
-            PublicationState::Prepared(_) => None,
+            PublicationState::Prepared(_) | PublicationState::NativeBegun { .. } => None,
             PublicationState::Attempted { record, .. }
             | PublicationState::NativeCommitted { record, .. } => Some(record.pointer()),
             PublicationState::Verified { receipt, .. } => Some(receipt.pointer()),
@@ -224,6 +259,11 @@ impl NativeJoinedRemoteProposalPublication {
         scope.require_initial_preimage(db, store)?;
         crate::format::enable_native_joined_remote_receive(db.data_path())?;
         if let PublicationState::Prepared(record) = &self.state {
+            if self.issued_native_xid.is_some() {
+                return Err(invalid(
+                    "Joined native begin already issued; no replacement transaction",
+                ));
+            }
             if record.attempt != scope.attempt_id() {
                 return Err(invalid("Joined proposal changed original attempt"));
             }
@@ -238,8 +278,15 @@ impl NativeJoinedRemoteProposalPublication {
             let mut record = record.clone();
             record.original_observed_b = db.current_commit_seq();
             let result = db.in_paged_transaction(|paged, xid| {
-                scope.require_initial_preimage(db, store)?;
+                // Actual begin precedes this closure. Retain its issued xid
+                // before EVERY fallible request check, framing, or test cut.
+                self.issued_native_xid = Some(xid);
                 record.native_page_xid = xid;
+                self.state = PublicationState::NativeBegun {
+                    record: record.clone(),
+                };
+                after_begin::fire_if_test();
+                scope.require_initial_preimage(db, store)?;
                 record.checksum_sha256 = record.checksum()?;
                 record.validate()?;
                 let bytes = crate::distribution_range_image::bounded_json(&record, MAX_BYTES)?;
@@ -285,7 +332,18 @@ impl NativeJoinedRemoteProposalPublication {
             PublicationState::Prepared(_) => {
                 return Err(invalid("Joined proposal was never attempted"))
             }
+            PublicationState::NativeBegun { record } => {
+                if self.issued_native_xid != Some(record.native_page_xid) {
+                    return Err(invalid("Joined original native begin custody inconsistent"));
+                }
+                return Err(invalid("Joined original native begin has no framed candidate; retained xid cannot be replaced"));
+            }
         };
+        if self.issued_native_xid != Some(record.native_page_xid) {
+            return Err(invalid(
+                "Joined attempted candidate lost its actual issued native xid",
+            ));
+        }
         scope.require_initial_preimage(db, store)?;
         if record.intent_bytes != scope.preflight().intent().canonical_intent_bytes()?
             || record.source.checksum_sha256
@@ -362,3 +420,41 @@ impl BicDb {
         Ok(NativeJoinedRemoteProposalReceipt { record })
     }
 }
+
+mod after_begin {
+    #[cfg(test)]
+    pub(super) fn fire_if_test() {
+        super::begin_cut::fire();
+    }
+    #[cfg(not(test))]
+    pub(super) fn fire_if_test() {}
+}
+#[cfg(test)]
+mod begin_cut {
+    use std::cell::RefCell;
+    type Cut = Box<dyn FnOnce()>;
+    thread_local! { static CUT: RefCell<Option<Cut>> = const { RefCell::new(None) }; }
+    pub(crate) struct Guard {
+        previous: Option<Cut>,
+    }
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            CUT.with(|c| {
+                c.replace(self.previous.take());
+            });
+        }
+    }
+    pub(crate) fn install(cut: Cut) -> Guard {
+        Guard {
+            previous: CUT.with(|c| c.replace(Some(cut))),
+        }
+    }
+    pub(super) fn fire() {
+        let cut = CUT.with(|c| c.borrow_mut().take());
+        if let Some(cut) = cut {
+            cut();
+        }
+    }
+}
+#[cfg(test)]
+pub(crate) use begin_cut::install as test_joined_remote_proposal_after_native_begin;

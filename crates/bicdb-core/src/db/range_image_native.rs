@@ -2338,3 +2338,6 @@ mod tests {
 }
 
 pub(crate) use writer_enrollment::{NativeJointPhaseOwner, NativeJointWriterDomain};
+
+#[cfg(all(test, feature = "tls-replication"))]
+pub(crate) use joined_remote_proposal::test_joined_remote_proposal_after_native_begin;

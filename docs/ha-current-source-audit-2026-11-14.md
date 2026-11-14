@@ -59,7 +59,8 @@ device-power-loss resilience was not established.
 
 Main511 rejects an automatic five-voter configuration with nonzero synchronous
 K=1. `HaServerConfig::validate` checks the current and every future-primary role;
-K must reach the configured majority and only voting peers count toward ACKs
+Nonzero K must satisfy `K >= floor(group_size / 2)`, giving a majority of
+durable voting copies including the primary. Only voting peers count toward ACKs
 and the liveness lease. K=0 and timeout degradation deliberately permit
 asynchronous acknowledged-loss risk. The original arbitrary-K configuration
 finding is therefore closed at source, not physically qualified.

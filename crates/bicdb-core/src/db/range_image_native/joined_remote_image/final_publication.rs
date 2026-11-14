@@ -4,26 +4,7 @@ use super::verification::VerifiedJoinedTargetContents;
 use super::*;
 use crate::distribution_range_image::{LocalRangeImageSealV1, NativeRemoteImageManifestV1};
 
-/// Immutable persistence DATA, never an original-owner or phase grant.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct NativeJoinedRemoteFinalImagePointer {
-    pub(crate) attempt_id: Uuid,
-    pub(crate) native_page_xid: u64,
-    pub(crate) checksum_sha256: String,
-}
-impl NativeJoinedRemoteFinalImagePointer {
-    pub(crate) fn validate(&self) -> Result<()> {
-        if self.attempt_id.is_nil()
-            || self.native_page_xid == 0
-            || self.checksum_sha256.len() != 64
-            || !self.checksum_sha256.bytes().all(|b| b.is_ascii_hexdigit())
-        {
-            return Err(invalid("invalid Joined final-image pointer DATA"));
-        }
-        Ok(())
-    }
-}
+pub(crate) use crate::db::NativeJoinedRemoteFinalImagePointer;
 fn current(attempt: Uuid) -> String {
     format!("joined-remote-image/{attempt}/final/current")
 }
@@ -623,5 +604,151 @@ impl NativeJoinedRemoteImageInstallation {
             .as_mut()
             .unwrap()
             .advance(db, context, &proof)
+    }
+}
+
+/// Lower-bound publication integrity from a real DB-root read, never a
+/// current image, resumed owner, row mutation, adoption or Serving capability.
+pub(crate) struct HistoricalJoinedFinalImage {
+    record: Record,
+}
+impl std::fmt::Debug for HistoricalJoinedFinalImage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HistoricalJoinedFinalImage")
+            .field("pointer", &self.pointer())
+            .finish_non_exhaustive()
+    }
+}
+impl HistoricalJoinedFinalImage {
+    pub(crate) fn pointer(&self) -> NativeJoinedRemoteFinalImagePointer {
+        self.record.pointer()
+    }
+    pub(crate) fn manifest(&self) -> &NativeRemoteImageManifestV1 {
+        &self.record.manifest
+    }
+    pub(crate) fn source_seal(&self) -> &LocalRangeImageSealV1 {
+        &self.record.source_seal
+    }
+    pub(crate) fn history_generation(&self) -> Uuid {
+        self.record.history_generation
+    }
+    pub(crate) fn range_index(&self) -> u64 {
+        self.record.manifest.range_index
+    }
+    pub(crate) fn logical_genesis_sha256(&self) -> &str {
+        &self.record.manifest.h0
+    }
+    pub(crate) fn logical_history_sha256(&self) -> &str {
+        &self.record.manifest.h
+    }
+    pub(crate) fn image_root_sha256(&self) -> &str {
+        &self.record.source_seal.image_root_sha256
+    }
+    pub(crate) fn record_count(&self) -> u64 {
+        self.record.source_seal.record_count
+    }
+    pub(crate) fn serialized_record_bytes(&self) -> u64 {
+        self.record.source_seal.serialized_record_bytes
+    }
+    pub(crate) fn target_reserved_b(&self) -> u64 {
+        self.record.target_reserved_b
+    }
+    pub(crate) fn target_min_scan_b(&self) -> u64 {
+        self.record.target_min_scan_b
+    }
+    pub(crate) fn image_generations(&self) -> (Uuid, Uuid) {
+        self.record.image_generations
+    }
+    pub(crate) fn target_birth(&self) -> &crate::distribution::NativeStoreBirthV1 {
+        &self.record.target_birth
+    }
+    pub(crate) fn target_namespace_ids(&self) -> &[(String, Uuid)] {
+        &self.record.namespaces
+    }
+    pub(crate) fn target_catalogue_id(&self) -> Uuid {
+        self.record.catalogue_id
+    }
+    pub(crate) fn intent_sha256(&self) -> &str {
+        &self.record.intent_sha256
+    }
+    pub(crate) fn proposal(&self) -> &NativeJoinedRemoteProposalPointer {
+        &self.record.proposal
+    }
+    pub(crate) fn history_header_sha256(&self) -> &str {
+        &self.record.history_header_sha256
+    }
+    pub(crate) fn rows_header_sha256(&self) -> &str {
+        &self.record.rows_header_sha256
+    }
+    pub(crate) fn rows_native_xid(&self) -> u64 {
+        self.record.rows_native_xid
+    }
+    pub(crate) fn index_definitions(&self) -> &[IndexDefinition] {
+        &self.record.index_definitions
+    }
+    pub(crate) fn require_current(
+        &self,
+        db: &BicDb,
+        native: &NativeRecoveryAdmission,
+    ) -> Result<()> {
+        let actual = db.read_joined_final_image_integrity(native, &self.pointer())?;
+        if bounded_json(&actual.record, MAX_NATIVE_RECEIPT_BYTES)?
+            != bounded_json(&self.record, MAX_NATIVE_RECEIPT_BYTES)?
+        {
+            return Err(invalid(
+                "Joined historical final image protected binding changed",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl BicDb {
+    pub(crate) fn read_joined_final_image_integrity(
+        &self,
+        native: &NativeRecoveryAdmission,
+        pointer: &NativeJoinedRemoteFinalImagePointer,
+    ) -> Result<HistoricalJoinedFinalImage> {
+        native.require_current(self)?;
+        pointer.validate()?;
+        self.check_recovery_state()?;
+        if !crate::format::native_joined_remote_image_active(self.data_path())? {
+            return Err(invalid("Joined historical final-image reader fence absent"));
+        }
+        let record: Record = self
+            .read_native_range_image_record(&current(pointer.attempt_id))?
+            .ok_or_else(|| invalid("Joined historical final CURRENT absent"))?;
+        let archived: Record = self
+            .read_native_range_image_record(&archive(pointer.attempt_id, pointer.native_page_xid))?
+            .ok_or_else(|| invalid("Joined historical final immutable archive absent"))?;
+        record.validate()?;
+        archived.validate()?;
+        if record.pointer() != *pointer
+            || archived.pointer() != *pointer
+            || bounded_json(&record, MAX_NATIVE_RECEIPT_BYTES)?
+                != bounded_json(&archived, MAX_NATIVE_RECEIPT_BYTES)?
+            || record.target_birth
+                != crate::distribution::NativeStoreBirthV1::from_actual_native(native)?
+            || record.manifest.cluster_id != *native.cluster_id()
+            || record.manifest.bootstrap_id != native.bootstrap_id()
+            || record.manifest.target_id != *native.local_node_id()
+            || record.manifest.target_birth.node_incarnation() != native.local_member_incarnation()
+            || record.manifest.restore.as_ref() != native.restore_activation()
+            || self.native_abort_catalogue_store_id()? != Some(record.catalogue_id)
+            || self
+                .paged_records
+                .as_ref()
+                .ok_or_else(|| invalid("Joined historical final page store absent"))?
+                .store()
+                .transactions()
+                .status(record.native_page_xid)
+                != bicdb_page::TxStatus::Committed
+        {
+            return Err(invalid("Joined historical final-image native identity or exact committed publication differs"));
+        }
+        record.require_published_history(self)?;
+        native.require_current(self)?;
+        self.check_recovery_state()?;
+        Ok(HistoricalJoinedFinalImage { record })
     }
 }

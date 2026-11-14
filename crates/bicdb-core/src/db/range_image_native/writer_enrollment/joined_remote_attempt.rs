@@ -226,6 +226,16 @@ impl NativeJoinedRemoteMutationScope<'_> {
         db.require_native_writer_catalogue_custody(store)?;
         self.require_database(db)
     }
+    pub(crate) fn require_original_install_safety(&self, db: &BicDb) -> Result<()> {
+        self.require_database(db)?;
+        self.preflight().safety().require_current_under_journal(
+            db,
+            self.native(),
+            self.frozen()?,
+            &self.original.journal,
+        )?;
+        self.require_database(db)
+    }
     pub(in crate::db::range_image_native) fn retained_scope_liveness(
         &self,
     ) -> JoinedRemoteMutationScopeLiveness {

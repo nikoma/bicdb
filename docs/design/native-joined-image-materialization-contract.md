@@ -326,3 +326,34 @@ native base, selected catalogue adoption, materialized-owner handoff, NEW/dual
 decision/Open/ALL release, APP/Strong Serving or cold recovery. No source-defined
 publication result substitutes for those actual producers or their acceptance
 controls. Registered FIRST final/base files remain byte-identical.
+
+## Same-original Joined native base source
+
+The next source-only batch adds a distinct installed-receipt profile 3 with an
+unconditional Joined final-pointer DATA field. Profiles 1 and 2 still require
+exactly their previous pointer shape; mixed, absent or unknown profile pointers
+refuse. The new optional field is omitted for all old-profile serialization.
+A Joined historical-final reader validates actual native CURRENT/archive,
+committed xid, birth, complete immutable history endpoints and archived row
+header. It grants no old A, resumed owner, mutation or Serving permission.
+Common installed-current and integrity readers explicitly dispatch this profile;
+a build without its actual Joined history reader refuses it.
+
+PublishNativeBase uses the original host-retained Joined image and actual
+final receipt. Before its first begin, the selected native safety preimage must
+still be absent under the held actual journal. It stores the issued xid before
+fallible framing and the complete exact base candidate/bytes before the first
+put; native base CURRENT and immutable archive share the same transaction.
+Unframed, aborted and uncertain attempts remain owned and cannot allocate a new
+transaction. After a base appears, continuation accepts only that same retained
+candidate and refuses any unowned selected prefix, pending command or genesis.
+It never treats the original absence proof as permission to ignore new debt.
+
+The common base readback independently checks profile-3 immutable provenance
+and actual committed xid. Publication of the original owner's verified-base
+observation uses the actual selected-current and metadata-version short guards;
+old observers drop after the guards. The original writer-State/hook stays the
+same and unrelated ranges are not replaced. Selected catalogue adoption and
+materialized owner, NEW/dual decision/Open/ALL release, actual APP/Strong on the
+new range and cold continuation are still absent. This is uncompiled source,
+not an actual successful base operation or acceptance result.

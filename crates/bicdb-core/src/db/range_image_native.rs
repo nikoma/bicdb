@@ -33,7 +33,7 @@ mod joined_remote_image;
 mod joined_remote_proposal;
 #[cfg(feature = "tls-replication")]
 pub(crate) use joined_remote_image::{
-    NativeJoinedRemoteFinalImagePointer, NativeJoinedRemoteFinalImageReceipt,
+    HistoricalJoinedFinalImage, NativeJoinedRemoteFinalImageReceipt,
     NativeJoinedRemoteImageContext, NativeJoinedRemoteImageInstallation,
     NativeJoinedRemoteImageOperation, NativeJoinedRemoteImageProgress,
     NativeJoinedRemoteRowTransactionGrant,

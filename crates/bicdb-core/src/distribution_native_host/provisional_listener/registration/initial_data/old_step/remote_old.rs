@@ -280,7 +280,7 @@ impl NativeInitialDataAdmission {
                 }
                 let runtime = Arc::new(NativeJointHandoffRuntime::new(service.clone())?);
                 let owner = Arc::new(Mutex::new(RetainedInitialOld {
-                    writer: step.writer.clone(),
+                    writer: Arc::clone(step.writer_snapshot()),
                     plan_sha256: request.scope_sha256.clone(),
                     plan: step.plan().clone(),
                     runtime,
@@ -298,7 +298,7 @@ impl NativeInitialDataAdmission {
                 .try_lock()
                 .ok_or_else(|| invalid("OLD constraint operation already active"))?;
             if held.plan_sha256 != request.scope_sha256
-                || !Arc::ptr_eq(&held.writer, &step.writer)
+                || !Arc::ptr_eq(&held.writer, step.writer_snapshot())
                 || held.actual.is_some()
                 || held.outcome.is_some()
             {

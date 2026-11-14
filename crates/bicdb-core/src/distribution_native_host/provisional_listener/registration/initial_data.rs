@@ -4,6 +4,7 @@ use super::*;
 use crate::db::{NativeInitialDataGenesis, NativeWriterHostState};
 use crate::distribution_native_read::NativeStrongEventDispatcher;
 use crate::distribution_range_recovery::RangeRecoveryRuntime;
+use crate::RangeWriteCoordinator;
 use std::sync::Weak;
 
 mod cleanup;

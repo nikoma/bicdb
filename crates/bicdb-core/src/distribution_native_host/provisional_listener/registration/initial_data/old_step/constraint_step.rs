@@ -88,6 +88,11 @@ impl NativeInitialDataAdmission {
     }
 }
 impl NativeInitialOldConstraintStep<'_> {
+    /// Exact retained writer Arc for owner identity; no current-writer lookup
+    /// and no new authority. All existing live/store/plan checks still apply.
+    pub(super) fn writer_snapshot(&self) -> &Arc<crate::db::NativeWriterHostState> {
+        &self.writer
+    }
     pub(crate) fn plan(&self) -> &Arc<NativeJointHandoffPlan> {
         &self.plan
     }

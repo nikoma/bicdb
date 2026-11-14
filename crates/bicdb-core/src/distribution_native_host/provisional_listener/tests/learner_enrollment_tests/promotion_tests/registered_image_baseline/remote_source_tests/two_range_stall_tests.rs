@@ -179,13 +179,19 @@ pub(super) fn exercise(
         .unwrap();
     let value = serde_json::json!({"component":"independent-range-during-selected-response-hold",
         "nested":[null,17,{"full":"unaffected range payload"}]});
+    // Pure logical DATA only. Move the original journal into its next producer
+    // so frame() cannot overwrite prior actual OLD/Manifest evidence with a
+    // new vector. No live source/request/authority object is copied here.
+    let source_prefix = source_journal.clone();
+    let source_prefix_len = source_prefix.len();
     let (reached, held_before, old_read, append, new_read, held_after, frame_result, wire_journal) =
         std::thread::scope(|scope| {
-            let worker = scope.spawn(|| {
-                let mut journal = Vec::new();
+            let manifest = &manifest;
+            let worker = scope.spawn(move || {
+                let mut journal = source_journal;
                 let result = frame(
                     target,
-                    &manifest,
+                    manifest,
                     Op::Rows {
                         cursor: RangeImageCursorV1::default(),
                         options: Default::default(),
@@ -237,6 +243,13 @@ pub(super) fn exercise(
                 reached, before, old_read, append, new_read, after, frame, journal,
             )
         });
+    let source_prefix_preserved =
+        wire_journal.get(..source_prefix_len) == Some(source_prefix.as_slice());
+    let actual_rows_entry_appended = wire_journal.len() == source_prefix_len + 1
+        && wire_journal.last().is_some_and(|entry| {
+            entry["operation"] == "source_image_frame"
+                && entry["intent"]["operation"].get("Rows").is_some()
+        });
     // Validate the actual returned observation while its original request is
     // still live, before unrelated reconciliation/evidence IO. Retain the
     // complete observed reply as DATA; this boolean is never a target grant.
@@ -274,12 +287,24 @@ pub(super) fn exercise(
         "actual_rows_reply":wire,"actual_frame_validated_before_reconciliation":frame_result.is_ok(),
         "actual_frame_error":frame_result.as_ref().err().map(ToString::to_string),
         "actual_frame_error_debug":frame_result.as_ref().err().map(|e|format!("{e:?}")),
+        "pre_worker_source_journal_data_prefix":source_prefix,
+        "pre_worker_source_journal_prefix_len":source_prefix_len,
+        "original_source_journal_prefix_preserved":source_prefix_preserved,
+        "actual_rows_entry_appended":actual_rows_entry_appended,
         "actual_request_journal":wire_journal,"external_api_ledger":ledger,
         "new_write_reconciliation":reconciled.as_ref().ok(),"reconciliation_error":reconciled.as_ref().err().map(ToString::to_string),
         "target_rows_installed":false,"second_range_moved_after_joined":false,
         "disk_stall_tested":false,"transport_hold_after_actual_export":true,
         "automatic_controller_or_physical_qualification":false})).unwrap();
     reached.unwrap();
+    assert!(
+        source_prefix_preserved,
+        "original actual OLD/Manifest journal prefix must survive Rows worker"
+    );
+    assert!(
+        actual_rows_entry_appended,
+        "one actual Rows request must append to the same complete source journal"
+    );
     assert_eq!(
         held_before["currently_held"], true,
         "actual selected reply hold prerequisite"

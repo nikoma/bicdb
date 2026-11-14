@@ -41,6 +41,12 @@ the first source APP. Its separate journal and index retain actual primary and
 refresh RPCs, frames and errors. A logical ledger ID is not a wire attempt ID;
 actual routes and retries require reconciliation against that raw journal.
 The observer does not supply responses, routing hints or serving authority.
+The actual OLD/Manifest logical journal moves into the Rows worker and returns
+as one complete chain. A retained pure-DATA prefix is recorded and compared
+exactly, with one new actual Rows entry required. Starting a fresh vector at
+that shared journal pathname would overwrite earlier evidence; the earlier
+`a6cbea305`/`cb07f6047` source leaves retain that confirmed test-custody defect
+and have not been qualified by this successor.
 The hold automatically ends at the original handler
 deadline and an RAII guard releases it on unwind. The frame worker is joined
 before assertions. A subsequent Strong read reconciles the fresh write without

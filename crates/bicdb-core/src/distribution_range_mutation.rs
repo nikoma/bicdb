@@ -208,6 +208,27 @@ pub(crate) struct NativeRangeArmPublicationBorrow<'a> {
     _generations: parking_lot::MutexGuard<'a, BTreeMap<RangeId, (Uuid, Weak<AtomicBool>)>>,
 }
 impl RangeMutationGate {
+    /// Memory-only diagnostic of the ACTUAL gate; never a permit, reset or
+    /// serving admission. Used to distinguish Option removal from pin release.
+    #[cfg(test)]
+    pub(crate) fn test_source_capture_pin_state(
+        &self,
+        range: RangeId,
+    ) -> Result<serde_json::Value> {
+        let ranges = self
+            .inner
+            .ranges
+            .try_lock()
+            .ok_or_else(|| invalid("capture-pin diagnostic gate busy"))?;
+        Ok(match ranges.get(&range) {
+            Some(state) => {
+                serde_json::json!({"capture_pin":state.capture_pin,"frozen":state.frozen,
+                "frozen_owner_dropped":state.frozen_owner_dropped,"poisoned":state.poisoned,
+                "active":state.active.len(),"controlled":state.controlled.len()})
+            }
+            None => serde_json::Value::Null,
+        })
+    }
     pub(crate) fn borrow_native_arm_publication<'a>(
         &'a self,
         range: RangeId,

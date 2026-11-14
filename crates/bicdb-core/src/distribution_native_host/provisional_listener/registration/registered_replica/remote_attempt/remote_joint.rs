@@ -1,6 +1,7 @@
 //! Sealed original-A Registered materialization. No legacy image-fence, local
 //! OLD quorum or ordinary writer is manufactured from remote Manifest DATA.
 use super::*;
+mod export_new;
 mod first_data_policy;
 pub(crate) use first_data_policy::NativeRegisteredServingDataPolicyOrigin;
 mod release;
@@ -19,11 +20,13 @@ pub(crate) struct NativeRegisteredRemoteJointTarget {
     base: NativeInstalledRangeImageBase,
     image: Arc<NativeRegisteredRemoteFinalImageReceipt>,
     catalogue: NativeRegisteredRemoteCatalogueMaterialization,
+    readonly_plan: crate::distribution_range_handoff::NativeJointReadOnlyPlanIdentity,
 }
 /// Process-owned continuation custody, retained in the ORIGINAL receiver
 /// before an API can return or later NEW/decision/phase work can fail.
 /// The real runtime also retains A; no drop creates N or Serving.
 pub(crate) struct NativeRegisteredRemoteJointOwner {
+    export_new: parking_lot::Mutex<Option<export_new::RegisteredExportNewPin>>,
     decision_attempt: parking_lot::Mutex<
         Option<Arc<parking_lot::Mutex<crate::db::NativeRegisteredJointDecisionAttempt>>>,
     >,
@@ -267,7 +270,13 @@ impl NativeMetadataControlHost {
             .as_mut()
             .ok_or_else(|| invalid("actual original Registered receiver absent"))?;
         let range = role.role().current_range().id;
-        if receiver.remote_joint_targets.contains_key(&range) {
+        // Acquire table custody BEFORE any A lease take; insertion after that
+        // irreversible transfer stays infallible, as in the original path.
+        let mut joint_targets = receiver
+            .remote_joint_targets
+            .try_lock()
+            .ok_or_else(|| invalid("Registered joint owner table busy"))?;
+        if joint_targets.contains_key(&range) {
             return Err(invalid(
                 "Registered joint continuation already retained; use original actual owner",
             ));
@@ -325,6 +334,7 @@ impl NativeMetadataControlHost {
             frame,
         };
         point.require_live()?;
+        let readonly_plan = request.retain_readonly_plan_identity(source, frame)?;
         let target = {
             let service = receiver
                 .backend
@@ -371,6 +381,7 @@ impl NativeMetadataControlHost {
                             base,
                             image: final_image.clone(),
                             catalogue,
+                            readonly_plan,
                         })
                     })
                 },
@@ -387,6 +398,7 @@ impl NativeMetadataControlHost {
             .take()
             .expect("same original lease borrowed above");
         let owner = Arc::new(NativeRegisteredRemoteJointOwner {
+            export_new: parking_lot::Mutex::new(None),
             decision_attempt: parking_lot::Mutex::new(None),
             terminal_writer: std::sync::OnceLock::new(),
             release: parking_lot::Mutex::new(None),
@@ -399,7 +411,8 @@ impl NativeMetadataControlHost {
             ))),
         });
         // Infallible retention follows the infallible original-lease take.
-        receiver.remote_joint_targets.insert(range, owner.clone());
+        joint_targets.insert(range, owner.clone());
+        drop(joint_targets);
         // Any following busy/error retains the complete original host owner.
         // The caller resumes that owner; no second lease/target is created.
         owner
@@ -418,12 +431,20 @@ impl NativeMetadataControlHost {
         &self,
         range: crate::RangeId,
     ) -> Result<Arc<NativeRegisteredRemoteJointOwner>> {
-        let owner = self
+        let receiver = self
             .replica
             .as_ref()
-            .and_then(|receiver| receiver.remote_joint_targets.get(&range))
-            .cloned()
-            .ok_or_else(|| invalid("original actual Registered joint continuation absent"))?;
+            .ok_or_else(|| invalid("original actual Registered receiver absent"))?;
+        let owner = {
+            let table = receiver
+                .remote_joint_targets
+                .try_lock()
+                .ok_or_else(|| invalid("Registered joint owner table busy"))?;
+            table
+                .get(&range)
+                .cloned()
+                .ok_or_else(|| invalid("original actual Registered joint continuation absent"))?
+        };
         owner
             .service()
             .try_lock()

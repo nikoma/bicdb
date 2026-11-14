@@ -9,6 +9,8 @@ mod scope;
 use scope::{canonical_range, NativeJointScopeData};
 mod plan;
 pub(crate) use plan::NativeJointHandoffPlan;
+#[cfg(feature = "tls-replication")]
+pub(crate) use plan::NativeJointReadOnlyPlanIdentity;
 
 mod closed;
 pub(crate) use closed::NativeJointOldObservation;

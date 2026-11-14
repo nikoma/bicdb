@@ -472,3 +472,19 @@ impl NativeRegisteredRemoteImageStep<'_> {
         self.require_live()
     }
 }
+
+impl NativeRegisteredRemoteTransferRequest {
+    pub(crate) fn retain_readonly_plan_identity(
+        &self,
+        source: &Arc<NativeRemoteImageFact>,
+        frame: &NativeRemoteImageStep<'_>,
+    ) -> Result<crate::distribution_range_handoff::NativeJointReadOnlyPlanIdentity> {
+        self.require_live(source, frame)?;
+        NativeJointHandoffPlan::from_actual_role_and_own(
+            self.role.role(),
+            &self.own,
+            self.business,
+        )?
+        .into_readonly_identity()
+    }
+}

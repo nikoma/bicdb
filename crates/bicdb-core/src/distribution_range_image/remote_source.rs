@@ -17,9 +17,15 @@ use crate::distribution_transport::TcpClusterRelocationTransport;
 use parking_lot::Mutex;
 use std::collections::BTreeMap;
 mod discovery;
+mod export_retirement;
 pub(crate) use discovery::{
     ActualNativeSourceDiscovery, NativeSourceDiscoveryOperationV1, NativeSourceDiscoveryReplyV1,
     NativeSourceDiscoveryRequestV1,
+};
+pub(crate) use export_retirement::{
+    NativeObserveRegisteredNewRequestV1, NativeRegisteredNewExportReplyV1,
+    NativeSourceExportBindingV1, NativeSourceExportOperationV1, NativeSourceExportReplyV1,
+    NativeSourceExportRequestV1, NativeSourceExportRetiredV1,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -489,6 +495,14 @@ impl NativeRemoteImageSourceSession {
         business: Uuid,
         parent: &CancellationToken,
     ) -> Result<()> {
+        self.observe_source_current(own, business, parent).map(drop)
+    }
+    fn observe_source_current(
+        &self,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_consensus::NativeOwnedMetadataMemberObservation> {
         parent.check()?;
         self.original_session.check()?;
         self.admission
@@ -553,7 +567,8 @@ impl NativeRemoteImageSourceSession {
         actual_open.require_live()?;
         self.original_session.check()?;
         own.require_live_request(business)?;
-        parent.check()
+        parent.check()?;
+        Ok(proof)
     }
     /// Source OWN MQ is acquired by its real provider BEFORE this call and any
     /// session/engine latch. It is READONLY metadata, never a recovery role cast.
@@ -652,6 +667,10 @@ pub(crate) struct NativeRemoteImageSourceRegistry {
     discoveries: Mutex<BTreeMap<RangeId, Arc<discovery::NativeSourceDiscoveryAttempt>>>,
     #[cfg(test)]
     drop_next_discovery_reply: std::sync::atomic::AtomicBool,
+    #[cfg(test)]
+    drop_next_export_reply: std::sync::atomic::AtomicBool,
+    #[cfg(test)]
+    export_detach_cut: Mutex<Option<Box<dyn FnOnce(Instant, &CancellationToken) + Send>>>,
     transport: Arc<TcpClusterRelocationTransport>,
     provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
     original_process: std::sync::OnceLock<CancellationToken>,
@@ -666,6 +685,10 @@ impl NativeRemoteImageSourceRegistry {
             discoveries: Mutex::new(BTreeMap::new()),
             #[cfg(test)]
             drop_next_discovery_reply: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(test)]
+            drop_next_export_reply: std::sync::atomic::AtomicBool::new(false),
+            #[cfg(test)]
+            export_detach_cut: Mutex::new(None),
             transport,
             provider,
             original_process: std::sync::OnceLock::new(),
@@ -859,6 +882,7 @@ impl NativeRemoteImageSourceRegistry {
 /// full registry or a failed begin leaves the consumed OLD proof in this owner.
 /// There is no source DTO/UUID constructor and no mutable session accessor.
 pub(crate) struct NativeRetainedRemoteImageSource {
+    export_retirement: Mutex<export_retirement::RetainedExportRetirement>,
     session: Arc<Mutex<NativeRemoteImageSourceSession>>,
     registry: Arc<NativeRemoteImageSourceRegistry>,
     cancellation: CancellationToken,
@@ -870,6 +894,7 @@ impl NativeRetainedRemoteImageSource {
         cancellation: CancellationToken,
     ) -> Self {
         Self {
+            export_retirement: Mutex::new(Default::default()),
             session: Arc::new(Mutex::new(session)),
             registry,
             cancellation,

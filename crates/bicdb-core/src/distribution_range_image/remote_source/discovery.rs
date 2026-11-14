@@ -337,8 +337,26 @@ impl NativeRemoteImageSourceRegistry {
                 .session
                 .try_lock()
                 .ok_or_else(|| invalid("discovery source busy"))?;
+            let gate = (|| -> Result<serde_json::Value> {
+                let database = held
+                    .service
+                    .try_lock()
+                    .ok_or_else(|| invalid("capture-pin diagnostic actual service busy"))?
+                    .database();
+                let observed = database
+                    .try_read()
+                    .ok_or_else(|| invalid("capture-pin diagnostic actual DB busy"))?
+                    .range_mutation_gate()
+                    .test_source_capture_pin_state(range);
+                observed
+            })();
+            let gate = match gate {
+                Ok(value) => value,
+                Err(error) => serde_json::json!({"diagnostic_error":error.to_string()}),
+            };
             serde_json::json!({"source_session":held.source_session,"capture_attempted":held.capture_attempted,
-                "capture_retained":held.capture.is_some(),"published":held.published,"manifest":held.manifest})
+                "capture_retained":held.capture.is_some(),"published":held.published,"manifest":held.manifest,
+                "export_retirement":source.test_export_retirement_state()?,"actual_gate":gate})
         } else {
             serde_json::Value::Null
         };

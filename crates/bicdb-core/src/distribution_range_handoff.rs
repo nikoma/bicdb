@@ -11,6 +11,8 @@ use crate::distribution::{ClusterId, ClusterNodeId, RangeDescriptor, RangeId, Re
 use crate::error::{BicDbError, Result};
 
 mod joint;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::NativeJointReadOnlyPlanIdentity;
 pub(crate) use joint::{
     CommittedNativeJointDecisionObservation, NativeJointActivationAdmission,
     NativeJointDecisionData, NativeJointDecisionPublicationAdmission,

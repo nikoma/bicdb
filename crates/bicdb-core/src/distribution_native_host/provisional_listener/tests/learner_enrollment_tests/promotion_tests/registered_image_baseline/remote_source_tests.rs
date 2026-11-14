@@ -11,9 +11,23 @@ use crate::distribution_range_image::{
 };
 use crate::distribution_transport::AuthenticatedNativeRemoteImageSourceFrame;
 mod source_discovery_tests;
+mod source_export_retirement_tests;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum SourceCase {
+    TargetSourceExportRetire,
+    TargetSourceExportReplyLost,
+    TargetSourceExportStartReplyLost,
+    TargetSourceExportWrongActor,
+    TargetSourceExportWrongManifest,
+    TargetSourceExportWrongAttempt,
+    TargetSourceExportWrongBirth,
+    TargetSourceExportTargetStoreABA,
+    TargetSourceExportOriginalSourceCanceled,
+    TargetSourceExportNativeUnknown,
+    TargetSourceExportTermAtDetach,
+    TargetSourceExportExpiryAtDetach,
+    TargetSourceExportProcessCancelAtDetach,
     SourceDiscovery,
     SourceDiscoveryReplyLost,
     SourceDiscoveryWrongActor,
@@ -729,6 +743,11 @@ fn remote_old_seed(
         })
         .collect::<std::collections::BTreeMap<_, _>>();
     assert_eq!(native_before.len(), plan.old_members().len());
+    if source_export_retirement_tests::is_case(case) {
+        evidence(&output.join("source-export-original-old-records.json"), &serde_json::json!({"native_before":native_before,"actual_donor":donor,"all_old_close_requests_expired":true,"local_source_retainer_not_created":true})).unwrap();
+        return None;
+    }
+
     if matches!(
         case,
         SourceCase::SourceDiscovery

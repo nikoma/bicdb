@@ -1,5 +1,6 @@
 //! Actual recipient-owned donor discovery; no recovery-purpose cast.
 use super::*;
+mod export_retirement;
 
 impl NativeInitialDataAdmission {
     pub(super) fn collect_remote_old_for_source(

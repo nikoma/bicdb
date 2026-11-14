@@ -11,20 +11,21 @@ use crate::distribution_range_handoff::{
 };
 
 pub(in super::super) fn is_hot_policy(case: SourceCase) -> bool {
-    matches!(
-        case,
-        SourceCase::TargetHotPolicy
-            | SourceCase::TargetHotEarlyPolicy
-            | SourceCase::TargetHotStoreReplacement
-            | SourceCase::TargetHotDecisionReplyLost
-            | SourceCase::TargetHotData
-            | SourceCase::TargetHotDataReplyLost
-            | SourceCase::TargetHotDataFirstCallerExpired
-            | SourceCase::TargetHotDataFollower
-            | SourceCase::TargetHotDecisionTermBeforePut
-            | SourceCase::TargetHotDecisionTermAfterCommit
-            | SourceCase::TargetHotFirstPolicyTermBeforeHook
-    )
+    source_export_retirement_tests::is_case(case)
+        || matches!(
+            case,
+            SourceCase::TargetHotPolicy
+                | SourceCase::TargetHotEarlyPolicy
+                | SourceCase::TargetHotStoreReplacement
+                | SourceCase::TargetHotDecisionReplyLost
+                | SourceCase::TargetHotData
+                | SourceCase::TargetHotDataReplyLost
+                | SourceCase::TargetHotDataFirstCallerExpired
+                | SourceCase::TargetHotDataFollower
+                | SourceCase::TargetHotDecisionTermBeforePut
+                | SourceCase::TargetHotDecisionTermAfterCommit
+                | SourceCase::TargetHotFirstPolicyTermBeforeHook
+        )
 }
 #[test]
 fn native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy() {
@@ -187,6 +188,24 @@ pub(in super::super) fn exercise(
     original_gateway: &crate::ClusterEventClient,
     process: &CancellationToken,
 ) {
+    if source_export_retirement_tests::is_case(case) {
+        source_export_retirement_tests::exercise(
+            case,
+            controls,
+            clients,
+            services,
+            metadata,
+            target,
+            target_control,
+            factory,
+            pending,
+            ranges,
+            acknowledged,
+            output,
+            process,
+        );
+        return;
+    }
     assert!(is_hot_policy(case));
     assert_eq!(ranges.len(), 2);
     assert_eq!(acknowledged.len(), 2);

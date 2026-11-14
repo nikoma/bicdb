@@ -2,7 +2,8 @@
 
 **Production qualification remains incomplete.** The original Azure scale-out
 experiment remains failed. A new single-primary streaming election defect is
-recorded in [issue190](https://github.com/nikoma/bicdb/issues/190).
+recorded in [issue190](https://github.com/nikoma/bicdb/issues/190); snapshot ballot
+rollback is recorded separately in [issue191](https://github.com/nikoma/bicdb/issues/191).
 
 Inspected delivered main is **1.0.511-beta**,
 `74f17b912cec7f2fe093d10dcf1618a43b35f454`, tree
@@ -51,6 +52,8 @@ HTTP status code**. Its two unverified ACK reads were later matched, but the
 original responses/routes/read-time watermarks and causal visibility-restoration
 event were not retained. Their exact causes remain inconclusive. The 300-second
 convergence check failed; bounded useful progress versus churn was inconclusive.
+The Azure observations concern distinct VM guests. Independent physical-host or
+device-power-loss resilience was not established.
 
 ## Streaming election: configuration fix and a separate open defect
 
@@ -86,6 +89,17 @@ Existing regressions are in `crates/bicdb-core/tests/live_replication.rs`,
 `crates/bicdb-cli/tests/ha_failover_cli.rs`. Passing those existing tests does
 not resolve an uncovered failure schedule. This issue is independent of the
 virtual-range and Cell protocols.
+
+Issue191 identifies a separate source-level snapshot race. Staging captures the
+target's ballot, but a peer can persist a later vote before shutdown. Installation
+does not compare the latest target HA state before replacing it, allowing that
+later ballot to disappear. The deterministic stage→vote→reopen schedule and
+required recovery controls are retained in the issue. No runtime double-vote or
+data-loss experiment was performed. Protecting this path requires install-time
+authority/data checks; blindly merging ballots can still overwrite data after a
+promotion. A refusal of changed state preserves safety but does not establish
+automatic bounded recovery. Old/new installer compatibility must account for
+bootstrap installation occurring before the ordinary format-reader check.
 
 ## Native range components and the missing automatic operator
 

@@ -249,7 +249,21 @@ pub(in super::super) fn exercise(
         )
         .unwrap(),
     );
-    let actor = clients[donor].local_metadata_read_participant();
+    // The genuine image donor may be neither leader nor retiree. A handoff
+    // mutation still needs the independently authenticated allowed initiator.
+    let actor = clients[source].local_metadata_read_participant();
+    evidence(&output.join("registered-hot-role-actor-selection.json"), &serde_json::json!({
+        "operation":"actual_handoff_initiator_selection_before_target_image",
+        "actual_initiator":{"node_id":actor.node_id(),"incarnation":actor.member_incarnation(),
+            "certificate_sha256":actor.certificate_sha256(),"plaintext_loopback":actor.plaintext_loopback()},
+        "selected_range_leader":range.leader,"retiring_replica":plan.retiring_source(),
+        "actual_image_donor":manifest.source_id,"source_session":manifest.source_session,
+        "target_attempt":manifest.target_attempt,"manifest_sha256":manifest.checksum_sha256,
+        "plan_sha256":plan.checksum_sha256().unwrap(),
+        "donor_own_and_source_publication_unchanged":true,
+        "role_not_yet_acquired":true,"metadata_leader_or_range_leader_rule_unchanged":true
+    })).unwrap();
+    assert_eq!(actor.node_id(), &range.leader);
     let provider = MetadataReadProvider::new(metadata[4].clone(), target.clone()).unwrap();
     target_final_image_tests::exercise(
         SourceCase::TargetCatalogueFloor,

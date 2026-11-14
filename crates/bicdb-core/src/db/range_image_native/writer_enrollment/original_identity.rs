@@ -199,6 +199,28 @@ impl BicDb {
                 ))
             };
             let elapsed_us = started.elapsed().as_micros();
+            // Separate validation return from point destruction, own writer
+            // join and later fixture Drop. A child timeout is not by itself
+            // evidence that borrowed validation deadlocked.
+            let validation_marker = queued_marker
+                .parent()
+                .unwrap()
+                .join("actual-hook-validation-returned.json");
+            let validation_marker_error = (|| -> Result<()> {
+                let bytes = serde_json::to_vec_pretty(&serde_json::json!({
+                    "borrowed_validation_returned":true,
+                    "borrowed_validation_error":validation.as_ref().err().map(ToString::to_string),
+                    "borrowed_validation_elapsed_us":elapsed_us,
+                    "original_point_still_held_before_drop":true,
+                    "own_writer_join_not_started":true,
+                }))?;
+                let mut file = std::fs::File::create(validation_marker)?;
+                std::io::Write::write_all(&mut file, &bytes)?;
+                file.sync_all()?;
+                Ok(())
+            })()
+            .err()
+            .map(|error| error.to_string());
             drop(point);
             let joined = worker.join().is_ok();
             let ordinary = writer.require_original_identity_database(self);
@@ -207,6 +229,7 @@ impl BicDb {
                 "marker_error":marker_result.as_ref().err().map(ToString::to_string),
                 "borrowed_validation_error":validation.as_ref().err().map(ToString::to_string),
                 "borrowed_validation_elapsed_us":elapsed_us,
+                "validation_marker_error":validation_marker_error,
                 "own_writer_joined":joined,
                 "own_writer_acquired_after_point_drop":acquired.load(Ordering::Acquire),
                 "ordinary_identity_after_cleanup_error":ordinary.as_ref().err().map(ToString::to_string),

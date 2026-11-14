@@ -110,6 +110,21 @@ fn native_initial_real_writer_borrowed_identity_progresses_with_actual_queued_ho
     let result = std::fs::read(root.path().join("actual-hook-control-result.json"))
         .ok()
         .map(|b| serde_json::from_slice::<serde_json::Value>(&b).unwrap());
+    let validation_returned =
+        std::fs::read(root.path().join("actual-hook-validation-returned.json"))
+            .ok()
+            .map(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).unwrap());
+    let timeout_phase = timeout.map(|_| {
+        if result.is_some() {
+            "control result retained; later assertions or fixture cleanup/Drop; not borrowed-validation deadlock proof"
+        } else if validation_returned.is_some() {
+            "validation returned; point drop/own writer join/post-cleanup identity/result persistence unfinished"
+        } else if queued.is_some() {
+            "queued marker retained; borrowed validation or validation-marker persistence unfinished; cause unresolved"
+        } else {
+            "actual installed/queued prerequisite or marker persistence unfinished"
+        }
+    });
     let file = std::fs::File::open(&log_path).unwrap();
     let log_bytes = file.metadata().unwrap().len();
     let mut raw = Vec::new();
@@ -119,7 +134,7 @@ fn native_initial_real_writer_borrowed_identity_progresses_with_actual_queued_ho
     let logs = String::from_utf8_lossy(&raw);
     eprintln!(
         "ACTUAL_NATIVE_BORROWED_HOOK_PARENT {}",
-        serde_json::json!({"actual_queued_marker":queued,"actual_result":result,"child_status":status.map(|s|s.to_string()),"timeout":timeout,"queued_child_bound_seconds":5,"setup_bound_seconds":20,"child_log_bytes":log_bytes,"child_log_truncated":log_bytes>16*1024*1024,"no_process_outside_owned_child_terminated":true})
+        serde_json::json!({"actual_queued_marker":queued,"actual_result":result,"validation_returned":validation_returned,"timeout_phase":timeout_phase,"five_second_measurement_scope":"queued marker observed to child exit, including control cleanup and fixture Drop","child_status":status.map(|s|s.to_string()),"timeout":timeout,"queued_child_bound_seconds":5,"setup_bound_seconds":20,"child_log_bytes":log_bytes,"child_log_truncated":log_bytes>16*1024*1024,"no_process_outside_owned_child_terminated":true})
     );
     eprintln!("ACTUAL_NATIVE_BORROWED_HOOK_CHILD_LOG {logs}");
     assert!(timeout.is_none(), "{timeout:?}");

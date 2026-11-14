@@ -2623,8 +2623,17 @@ impl BicDb {
     /// Engine-level paged handle for tests and embedders that drive raw
     /// concurrent load; not a stable API.
     #[doc(hidden)]
+    /// Returns `None` when this open has no paged store or exclusive core
+    /// admission is busy. In particular an admission hook must not block by
+    /// asking for a raw writer while its own Serializable commit owns that gate.
+    /// Once issued, even a dropped raw handle disables invariant memo sharing
+    /// for this actual writer lifetime; raw clones cannot be revoked.
     pub fn paged_records_handle(&self) -> Option<Arc<crate::paged_collection::PagedRecords>> {
-        self.paged_records.as_ref().cloned()
+        let paged = self.paged_records.as_ref()?;
+        let _admission = self.serializable_commit_admission.try_read()?;
+        // Publish before any Arc can escape, while excluding an active memo.
+        paged.mark_raw_row_capability_issued();
+        Some(Arc::clone(paged))
     }
 
     pub fn paged_read_ahead_handle(&self) -> Option<PagedReadAheadHandle> {

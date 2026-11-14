@@ -8562,6 +8562,107 @@ fn resulting_records_for_relation(
     Ok(records.into_values().collect())
 }
 
+#[cfg(test)]
+mod invariant_relation_snapshot_tests;
+
+/// Raw relations shared only within one stable commit-validation pass.
+/// Sharing borrows this database's actual exclusive Serializable admission.
+/// Issuing any raw paged writer permanently disables sharing for that open.
+/// Policy, tenant and expression results are NOT cached.
+
+struct NativeInvariantRelationSnapshot<'a, 'lock> {
+    db: &'a BicDb,
+    tx: &'a Transaction,
+    _exclusive: Option<&'a parking_lot::RwLockWriteGuard<'lock, ()>>,
+    share_relations: bool,
+    cache_limit: usize,
+    relations: std::cell::RefCell<BTreeMap<String, CachedInvariantRelation>>,
+}
+struct CachedInvariantRelation {
+    records: Arc<[Record]>,
+    estimated_bytes: usize,
+}
+impl<'a, 'lock> NativeInvariantRelationSnapshot<'a, 'lock> {
+    fn new(
+        db: &'a BicDb,
+        tx: &'a Transaction,
+        exclusive: Option<&'a parking_lot::RwLockWriteGuard<'lock, ()>>,
+    ) -> Self {
+        // Inspect issuance ONLY under the actual same-DB exclusive admission.
+        // The borrowed guard cannot end while this lexical pass remains alive.
+        // RC, including forced-global RC, always uses original fresh scans.
+        let share_relations = tx.isolation == TransactionIsolation::Serializable
+            && exclusive.is_some_and(|guard| {
+                std::ptr::eq(
+                    parking_lot::RwLockWriteGuard::rwlock(guard),
+                    &db.serializable_commit_admission,
+                )
+            })
+            && db
+                .paged_records
+                .as_ref()
+                .is_none_or(|paged| !paged.raw_row_capability_issued());
+        Self {
+            db,
+            tx,
+            _exclusive: exclusive,
+            share_relations,
+            cache_limit: crate::query_budget::limit(16 * 1024 * 1024),
+            relations: Default::default(),
+        }
+    }
+    fn records(&self, relation: &str) -> Result<Arc<[Record]>> {
+        crate::query_budget::check()?;
+        if !self.share_relations {
+            return Ok(resulting_records_for_relation(self.db, self.tx, relation)?.into());
+        }
+        if let Some(records) = self.relations.borrow().get(relation) {
+            return Ok(Arc::clone(&records.records));
+        }
+        // Before another scan, discard cache-only bodies. Bodies still owned
+        // by an active subject/recursive loop already belong to the original
+        // evaluator's working set and are kept alive by that caller's Arc.
+        self.relations
+            .borrow_mut()
+            .retain(|_, entry| Arc::strong_count(&entry.records) > 1);
+        // Preserve the exact full relation + original ID-keyed tx overlay.
+        let records: Arc<[Record]> =
+            resulting_records_for_relation(self.db, self.tx, relation)?.into();
+        let mut entry_bytes = 0usize;
+        for record in records.iter() {
+            crate::query_budget::check()?;
+            entry_bytes =
+                entry_bytes.saturating_add(crate::query_budget::materialized_record_bytes(record)?);
+            if entry_bytes > self.cache_limit {
+                return Ok(records); // Original fresh scan, never a truncated set.
+            }
+        }
+        let retained = self
+            .relations
+            .borrow()
+            .values()
+            .fold(0usize, |total, entry| {
+                total.saturating_add(entry.estimated_bytes)
+            });
+        let combined = retained.saturating_add(entry_bytes);
+        if combined <= self.cache_limit {
+            // Observe each cached body once, irrespective of Arc reference count.
+            // Admission never raises the caller's limit or adds a memory refusal:
+            // a body that would exceed the memo cap remains an uncached scan.
+            crate::query_budget::observe(combined);
+            crate::query_budget::check()?;
+            self.relations.borrow_mut().insert(
+                relation.to_owned(),
+                CachedInvariantRelation {
+                    records: Arc::clone(&records),
+                    estimated_bytes: entry_bytes,
+                },
+            );
+        }
+        Ok(records)
+    }
+}
+
 fn json_number(value: Option<&Value>) -> Option<f64> {
     match value? {
         Value::Number(number) => number.as_f64(),
@@ -8695,13 +8796,14 @@ fn compare_native_invariant_values(
 }
 
 fn evaluate_native_invariant_expression(
-    db: &BicDb,
-    tx: &Transaction,
+    snapshot: &NativeInvariantRelationSnapshot<'_, '_>,
     subject_relation: &str,
     subject: &Record,
-    bindings: &BTreeMap<String, Record>,
+    bindings: &BTreeMap<String, &Record>,
     expression: &NativeInvariantExpression,
 ) -> Result<Value> {
+    let db = snapshot.db;
+    let tx = snapshot.tx;
     Ok(match expression {
         NativeInvariantExpression::SubjectField { field } => record_invariant_field(subject, field),
         NativeInvariantExpression::BindingField { binding, field } => bindings
@@ -8718,8 +8820,7 @@ fn evaluate_native_invariant_expression(
                 .iter()
                 .map(|argument| {
                     evaluate_native_invariant_expression(
-                        db,
-                        tx,
+                        snapshot,
                         subject_relation,
                         subject,
                         bindings,
@@ -8734,8 +8835,7 @@ fn evaluate_native_invariant_expression(
                 .iter()
                 .map(|argument| {
                     evaluate_native_invariant_expression(
-                        db,
-                        tx,
+                        snapshot,
                         subject_relation,
                         subject,
                         bindings,
@@ -8750,8 +8850,7 @@ fn evaluate_native_invariant_expression(
                 .iter()
                 .map(|argument| {
                     evaluate_native_invariant_expression(
-                        db,
-                        tx,
+                        snapshot,
                         subject_relation,
                         subject,
                         bindings,
@@ -8763,16 +8862,14 @@ fn evaluate_native_invariant_expression(
         }
         NativeInvariantExpression::DateAddDays { date, days } => {
             let date = evaluate_native_invariant_expression(
-                db,
-                tx,
+                snapshot,
                 subject_relation,
                 subject,
                 bindings,
                 date,
             )?;
             let days = evaluate_native_invariant_expression(
-                db,
-                tx,
+                snapshot,
                 subject_relation,
                 subject,
                 bindings,
@@ -8782,16 +8879,14 @@ fn evaluate_native_invariant_expression(
         }
         NativeInvariantExpression::DateDifferenceDays { end, start } => {
             let end = evaluate_native_invariant_expression(
-                db,
-                tx,
+                snapshot,
                 subject_relation,
                 subject,
                 bindings,
                 end,
             )?;
             let start = evaluate_native_invariant_expression(
-                db,
-                tx,
+                snapshot,
                 subject_relation,
                 subject,
                 bindings,
@@ -8805,8 +8900,7 @@ fn evaluate_native_invariant_expression(
             value_type,
         } => {
             let value = evaluate_native_invariant_expression(
-                db,
-                tx,
+                snapshot,
                 subject_relation,
                 subject,
                 bindings,
@@ -8839,8 +8933,7 @@ fn evaluate_native_invariant_expression(
             value_type,
         } => {
             let left = evaluate_native_invariant_expression(
-                db,
-                tx,
+                snapshot,
                 subject_relation,
                 subject,
                 bindings,
@@ -8860,8 +8953,7 @@ fn evaluate_native_invariant_expression(
                 _ => {}
             }
             let right = evaluate_native_invariant_expression(
-                db,
-                tx,
+                snapshot,
                 subject_relation,
                 subject,
                 bindings,
@@ -8924,8 +9016,7 @@ fn evaluate_native_invariant_expression(
                 .iter()
                 .map(|value| {
                     evaluate_native_invariant_expression(
-                        db,
-                        tx,
+                        snapshot,
                         subject_relation,
                         subject,
                         bindings,
@@ -8983,8 +9074,7 @@ fn evaluate_native_invariant_expression(
                 BicDbError::CommitValidation("native fact integrity failed".into())
             })?;
             evaluate_native_invariant_expression(
-                db,
-                tx,
+                snapshot,
                 subject_relation,
                 subject,
                 bindings,
@@ -9036,8 +9126,10 @@ fn evaluate_native_invariant_expression(
                     BicDbError::CommitValidation("native fact integrity failed".into())
                 })?;
             let mut found = false;
-            for record in resulting_records_for_relation(db, tx, relation)? {
-                let eligible = record_invariant_field(&record, &publication.tenant_field)
+            let records = snapshot.records(relation)?;
+            for record in records.iter() {
+                crate::query_budget::check()?;
+                let eligible = record_invariant_field(record, &publication.tenant_field)
                     .as_str()
                     .and_then(|tenant| Uuid::parse_str(tenant).ok())
                     == Some(tenant);
@@ -9047,8 +9139,7 @@ fn evaluate_native_invariant_expression(
                 let mut nested = bindings.clone();
                 nested.insert(binding.clone(), record);
                 if evaluate_native_invariant_expression(
-                    db,
-                    tx,
+                    snapshot,
                     subject_relation,
                     subject,
                     &nested,
@@ -9068,17 +9159,17 @@ fn evaluate_native_invariant_expression(
             relation,
             condition,
         } => {
-            let records = resulting_records_for_relation(db, tx, relation)?;
+            let records = snapshot.records(relation)?;
             let mut found = false;
-            for record in records {
+            for record in records.iter() {
+                crate::query_budget::check()?;
                 if relation == subject_relation && record.id == subject.id {
                     continue;
                 }
                 let mut nested = bindings.clone();
                 nested.insert(binding.clone(), record);
                 if evaluate_native_invariant_expression(
-                    db,
-                    tx,
+                    snapshot,
                     subject_relation,
                     subject,
                     &nested,
@@ -9101,7 +9192,7 @@ fn evaluate_native_invariant_expression(
             field,
             value_type,
         } => {
-            let records = resulting_records_for_relation(db, tx, relation)?;
+            let records = snapshot.records(relation)?;
             let mut count = 0i64;
             // Each input keeps Decimal's existing admission contract. The
             // aggregate must not round an intermediate total before later
@@ -9114,12 +9205,12 @@ fn evaluate_native_invariant_expression(
                 NativeInvariantValueType::Float64 => Value::from(0.0),
                 _ => Value::from(0),
             };
-            for record in records {
+            for record in records.iter() {
+                crate::query_budget::check()?;
                 let mut nested = bindings.clone();
-                nested.insert(binding.clone(), record.clone());
+                nested.insert(binding.clone(), record);
                 if evaluate_native_invariant_expression(
-                    db,
-                    tx,
+                    snapshot,
                     subject_relation,
                     subject,
                     &nested,
@@ -9163,10 +9254,10 @@ fn evaluate_native_invariant_expression(
 }
 
 fn validate_carrier_invariant(
-    db: &BicDb,
-    tx: &Transaction,
+    snapshot: &NativeInvariantRelationSnapshot<'_, '_>,
     definition: &NativeInvariantDefinition,
 ) -> Result<()> {
+    let tx = snapshot.tx;
     if !tx.validate_existing_application_invariants
         && !tx.writes.is_empty()
         && !tx
@@ -9212,8 +9303,9 @@ fn validate_carrier_invariant(
     {
         return Ok(());
     }
-    let subjects = resulting_records_for_relation(db, tx, &definition.subject_relation)?;
-    for subject in subjects {
+    let subjects = snapshot.records(&definition.subject_relation)?;
+    for subject in subjects.iter() {
+        crate::query_budget::check()?;
         if published
             && !tx.writes.iter().any(|write| {
                 write.collection == definition.subject_relation && write.record_id == subject.id
@@ -9223,10 +9315,9 @@ fn validate_carrier_invariant(
         }
 
         let value = evaluate_native_invariant_expression(
-            db,
-            tx,
+            snapshot,
             &definition.subject_relation,
-            &subject,
+            subject,
             &BTreeMap::new(),
             &definition.expression,
         )?;

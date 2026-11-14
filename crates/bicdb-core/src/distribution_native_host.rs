@@ -602,7 +602,8 @@ pub use provisional_listener::NativeRegisteredReplicaReceiverStatus;
 #[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::{
     NativeAssignedDataAdmission, NativeAssignedDataPolicyOrigin,
-    NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission, NativeRegisteredRemoteImageStep,
+    NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission, NativeJoinedRangeReceiveOrigin,
+    NativeJoinedRangeReceiveRequest, NativeRegisteredRemoteImageStep,
     NativeRegisteredRemoteInstallPreflight, NativeRegisteredRemoteJointOwner,
     NativeRegisteredRemoteJointReleaseOwner, NativeRegisteredRemoteJointTarget,
     NativeRegisteredRemoteProposalPoint, NativeRegisteredRemoteTransactionRequest,

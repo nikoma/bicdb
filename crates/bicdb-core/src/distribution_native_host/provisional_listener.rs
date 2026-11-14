@@ -24,7 +24,8 @@ pub(crate) use registration::{
 };
 pub(crate) use registration::{
     NativeAssignedDataAdmission, NativeAssignedDataPolicyOrigin,
-    NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission, NativeRegisteredRemoteImageStep,
+    NativeAssignedRegisteredClosedFence, NativeDataOwnerAdmission, NativeJoinedRangeReceiveOrigin,
+    NativeJoinedRangeReceiveRequest, NativeRegisteredRemoteImageStep,
     NativeRegisteredRemoteInstallPreflight, NativeRegisteredRemoteJointOwner,
     NativeRegisteredRemoteJointReleaseOwner, NativeRegisteredRemoteJointTarget,
     NativeRegisteredRemoteProposalPoint, NativeRegisteredRemoteTransactionRequest,

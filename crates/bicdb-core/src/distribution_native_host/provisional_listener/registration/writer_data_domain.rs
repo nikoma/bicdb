@@ -126,10 +126,13 @@ impl NativeMetadataControlHost {
         parent: &CancellationToken,
     ) -> Result<()> {
         parent.check()?;
-        match (&mut self.data, &mut self.assigned) {
-            (Some(owner), None) => owner.begin_writer_data_domain(range, lease, parent),
-            (None, Some(owner)) => owner.begin_writer_data_domain(range, lease, parent),
-            _ => Err(invalid("one actual Initial or Assigned DATA host required")),
+        match (&mut self.data, &mut self.assigned, &mut self.joined) {
+            (Some(owner), None, None) => owner.begin_writer_data_domain(range, lease, parent),
+            (None, Some(owner), None) => owner.begin_writer_data_domain(range, lease, parent),
+            (None, None, Some(owner)) => owner.begin_writer_data_domain(range, lease, parent),
+            _ => Err(invalid(
+                "one actual Initial, Assigned or Joined DATA host required",
+            )),
         }
     }
     pub(in crate::distribution_native_host) fn advance_native_writer_closed_domain(
@@ -138,9 +141,10 @@ impl NativeMetadataControlHost {
         parent: &CancellationToken,
     ) -> Result<()> {
         let policy = self.fresh_writer_data_policy(parent)?;
-        match (&mut self.data, &mut self.assigned) {
-            (Some(owner), None) => owner.advance_writer_closed_domain(range, &policy),
-            (None, Some(owner)) => owner.advance_writer_closed_domain(range, &policy),
+        match (&mut self.data, &mut self.assigned, &mut self.joined) {
+            (Some(owner), None, None) => owner.advance_writer_closed_domain(range, &policy),
+            (None, Some(owner), None) => owner.advance_writer_closed_domain(range, &policy),
+            (None, None, Some(owner)) => owner.advance_writer_closed_domain(range, &policy),
             _ => Err(invalid("one actual retained DATA host required")),
         }
     }
@@ -150,9 +154,10 @@ impl NativeMetadataControlHost {
         parent: &CancellationToken,
     ) -> Result<Arc<NativeClosedWriterDomain>> {
         parent.check()?;
-        let actual = match (&self.data, &self.assigned) {
-            (Some(owner), None) => owner.closed_writer_domain(range),
-            (None, Some(owner)) => owner.closed_writer_domain(range),
+        let actual = match (&self.data, &self.assigned, &self.joined) {
+            (Some(owner), None, None) => owner.closed_writer_domain(range),
+            (None, Some(owner), None) => owner.closed_writer_domain(range),
+            (None, None, Some(owner)) => owner.closed_writer_domain(range),
             _ => Err(invalid("one actual retained DATA host required")),
         }?;
         actual.require_lifetime()?;
@@ -165,9 +170,10 @@ impl NativeMetadataControlHost {
         parent: &CancellationToken,
     ) -> Result<NativeJointServingLease> {
         parent.check()?;
-        match (&mut self.data, &mut self.assigned) {
-            (Some(owner), None) => owner.take_closed_joint_lease(range, parent),
-            (None, Some(owner)) => owner.take_closed_joint_lease(range, parent),
+        match (&mut self.data, &mut self.assigned, &mut self.joined) {
+            (Some(owner), None, None) => owner.take_closed_joint_lease(range, parent),
+            (None, Some(owner), None) => owner.take_closed_joint_lease(range, parent),
+            (None, None, Some(owner)) => owner.take_closed_joint_lease(range, parent),
             _ => Err(invalid("one actual retained DATA host required")),
         }
     }
@@ -179,9 +185,16 @@ impl NativeMetadataControlHost {
     ) -> Result<()> {
         // Actual OWN/MStore follows the already-completed all-released phase.
         let policy = self.fresh_writer_data_policy(parent)?;
-        match (&mut self.data, &mut self.assigned) {
-            (Some(owner), None) => owner.publish_writer_serving_domain(range, admission, &policy),
-            (None, Some(owner)) => owner.publish_writer_serving_domain(range, admission, &policy),
+        match (&mut self.data, &mut self.assigned, &mut self.joined) {
+            (Some(owner), None, None) => {
+                owner.publish_writer_serving_domain(range, admission, &policy)
+            }
+            (None, Some(owner), None) => {
+                owner.publish_writer_serving_domain(range, admission, &policy)
+            }
+            (None, None, Some(owner)) => {
+                owner.publish_writer_serving_domain(range, admission, &policy)
+            }
             _ => Err(invalid("one actual retained DATA host required")),
         }
         // No ordinary enrolled readQQ, recovered Ready or dispatcher/APP

@@ -14,7 +14,10 @@
 use super::*;
 use crate::distribution_native_read::NativeStrongEventDispatcher;
 use crate::distribution_range_consensus::RangeWriteCoordinator;
+mod receive;
 mod registered;
+pub(crate) use receive::{NativeJoinedRangeReceiveOrigin, NativeJoinedRangeReceiveRequest};
+mod writer_data_domain;
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct NativeJoinedDataStatus {

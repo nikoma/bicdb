@@ -63,6 +63,8 @@ pub(crate) use writer_enrollment::NativeFirstPolicyPublicationCandidate;
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeJoinedPublicationScope;
 #[cfg(feature = "tls-replication")]
+pub(crate) use writer_enrollment::NativeJoinedReceiveStorageScope;
+#[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredClosedPersistScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeRegisteredNoDomainScope;

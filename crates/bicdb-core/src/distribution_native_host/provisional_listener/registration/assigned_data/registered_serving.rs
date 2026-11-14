@@ -20,9 +20,13 @@ pub(in super::super) struct NativeRegisteredJoinedDataTransfer {
     pub(in super::super) range: crate::RangeDescriptor,
     pub(super) cleanup: AssignedCleanupSender,
     pub(in super::super) drained: DrainedClusterDataListener,
-    pub(super) writer_data_domains: super::super::writer_data_domain::NativeHostWriterDataDomains,
+    pub(in super::super) writer_data_domains:
+        super::super::writer_data_domain::NativeHostWriterDataDomains,
 }
 impl NativeRegisteredJoinedDataTransfer {
+    pub(in super::super) fn registered_owner(&self) -> Arc<NativeRegisteredRemoteJointOwner> {
+        self.registered.owner.clone()
+    }
     #[cfg(test)]
     pub(in super::super) fn test_first_policy_evidence(&self) -> Result<serde_json::Value> {
         self.attempt.test_publication_evidence()

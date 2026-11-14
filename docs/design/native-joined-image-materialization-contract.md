@@ -252,3 +252,13 @@ must match the retained bytes/headers before debt and its WAL pin are released.
 Optional checkpoint maintenance begins only after successful operation,
 postchecks and a still-live parent/source request. It cannot preempt a kernel
 I/O already in flight; bounded physical I/O progress remains unqualified.
+
+
+The next source successor adds the actual Joined bounded target verifier:
+BeginVerification/VerifyTarget consume the authenticated Finished frame,
+committed rows and audited history under the original Joined scope. It records
+actual target B, waits for durability and visibility, scans selected primary
+payloads with retained cursors and reconciles full count/byte/content hashes.
+It retains selected image generation, namespace/schema and index definitions.
+This is source-only and unexecuted. Definition equality is not index/FTS
+contents parity; no final/base/catalogue/Serving result is published yet.

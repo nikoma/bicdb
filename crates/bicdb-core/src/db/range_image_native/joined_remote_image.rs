@@ -9,7 +9,9 @@ use crate::distribution_range_image::{
     NativeRemoteImageSourcePayloadV1, RangeImageHistoryCursorV1,
 };
 mod rows;
+mod verification;
 pub(crate) use rows::{NativeJoinedRemoteRowProgress, NativeJoinedRemoteRowTransactionGrant};
+pub(crate) use verification::NativeJoinedRemoteVerificationProgress;
 
 fn header_key(attempt: Uuid) -> String {
     format!("joined-remote-image/{attempt}/history")
@@ -76,11 +78,14 @@ pub(crate) enum NativeJoinedRemoteImageOperation {
     AppendHistory,
     AuditHistory { max_entries: usize },
     ApplyRows,
+    BeginVerification,
+    VerifyTarget { max_scanned_records: usize },
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) enum NativeJoinedRemoteImageProgress {
     History(NativeJoinedRemoteHistoryProgress),
     Rows(NativeJoinedRemoteRowProgress),
+    Verification(NativeJoinedRemoteVerificationProgress),
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -189,6 +194,7 @@ pub(crate) struct NativeJoinedRemoteImageInstallation {
     pending: Option<HistoryPending>,
     native_history_commit_returned: Option<u64>,
     rows: Option<rows::RetainedRemoteRows>,
+    verification: Option<verification::JoinedTargetVerifier>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct NativeJoinedRemoteHistoryProgress {
@@ -252,6 +258,14 @@ impl NativeJoinedRemoteImageInstallation {
             NativeJoinedRemoteImageOperation::ApplyRows => self
                 .apply_rows(db, context)
                 .map(NativeJoinedRemoteImageProgress::Rows),
+            NativeJoinedRemoteImageOperation::BeginVerification => self
+                .begin_verification(db, context)
+                .map(NativeJoinedRemoteImageProgress::Verification),
+            NativeJoinedRemoteImageOperation::VerifyTarget {
+                max_scanned_records,
+            } => self
+                .verify_target(db, context, max_scanned_records)
+                .map(NativeJoinedRemoteImageProgress::Verification),
         }
     }
     #[cfg(test)]
@@ -259,6 +273,7 @@ impl NativeJoinedRemoteImageInstallation {
         serde_json::json!({"history":self.header,"pending":self.pending.as_ref().map(|p|serde_json::json!({
             "header":p.header,"issued_native_xid":p.native_begin,"commit_returned":p.commit_returned,
             "candidate_framed":p.bytes.is_some()})),"rows":self.rows.as_ref().map(|r|r.test_state()),
+            "verification":self.verification.as_ref().map(|v|v.test_state()),
             "native_base_published":false,"Serving":false})
     }
 }
@@ -298,6 +313,7 @@ impl NativeJoinedRemoteImageInstallation {
             pending: None,
             native_history_commit_returned: None,
             rows: None,
+            verification: None,
         })
     }
     fn require_owner(

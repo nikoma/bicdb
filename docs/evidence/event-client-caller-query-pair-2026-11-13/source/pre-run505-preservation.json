@@ -1,0 +1,25 @@
+{
+  "recorded_utc": "2026-11-14T00:12:05.742395+00:00",
+  "head": "8ec10012cf7aa9f746bc503fca104de1e896f418",
+  "parent": "01308fb09512f02e0c61b740fc339382e44b3521",
+  "source_version": "1.0.505-beta",
+  "paired_test_leaf": "560d8a873e65a7931226a0e38fc460f38c058ae6",
+  "foreign182_source": "b18fb02685de53a90529adff3eb429e5f0957aad",
+  "selector": "event_client_caller_query_budget_",
+  "expected_test_count": 2,
+  "test_file_sha256": "a7e9f0b65a5ea9db0c3cc699ff30eaca282add7353001cc1cc6349e24432fd80",
+  "test_file_identical_b18_fixture": true,
+  "only_two_paths_changed": [
+    "crates/bicdb-core/src/distribution_transport.rs",
+    "crates/bicdb-core/src/distribution_transport/event_client_retry_tests/caller_query_budget_tests.rs"
+  ],
+  "existing_transport_source_exact_after_removing_one_test_module_declaration": true,
+  "all_other505_paths_unchanged": true,
+  "worktree_clean": true,
+  "worktree": "/tmp/bicdb-event-client-caller-budget-505",
+  "branch": "test/event-client-caller-budget-505",
+  "compiled_or_tests_executed": false,
+  "push_or_CI": false,
+  "production_fix": false,
+  "paired_expectations_source_only_not_executed": true
+}

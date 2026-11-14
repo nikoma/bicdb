@@ -1,0 +1,41 @@
+{
+  "run": 43544810818,
+  "runtime": "5a85900f571c389ff97e278a0b9555048bdeadec",
+  "actual_result": "70PASS12FAIL0ignored941.30s",
+  "artifacts": [
+    {
+      "id": 14094258684,
+      "name": "focused-core-88ffe19f40ffd4ee83fb63a062795380b385bb33-1",
+      "zip_bytes": 23829148,
+      "sha256": "bdf53f0eb21bf88397a14099f6a971460db1497104bcb799ae078b3d85c03561",
+      "files": 9361,
+      "uncompressed_bytes": 379438111,
+      "crc_ok": true,
+      "actual_listed": 82,
+      "summary": "test result: FAILED. 70 passed; 12 failed; 0 ignored; 0 measured; 1088 filtered out; finished in 941.30s",
+      "actual_failed_names": [
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_first_policy_real_caller_expiry_fresh_same_xid",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_original_client_ack_and_full_strong",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_decision_commit_retains_xid_refuses_vote",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_policy_readback_refuses_hook",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_before_decision_first_put_refuses_vote",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_store_slot_replacement_refuses",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_lost_committed_decision_reply_same_native_attempt",
+        "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_no_domain_actual_mstore_term_change_refuses"
+      ]
+    },
+    {
+      "id": 14093402901,
+      "name": "native-workspace-pressure-88ffe19f40ffd4ee83fb63a062795380b385bb33-1",
+      "zip_bytes": 3031,
+      "sha256": "7676855d20070a02076c7a00b9d916c199a3f254e261fb7dc3fbb0e0fc3505d4",
+      "files": 2,
+      "uncompressed_bytes": 32249,
+      "crc_ok": true
+    }
+  ]
+}

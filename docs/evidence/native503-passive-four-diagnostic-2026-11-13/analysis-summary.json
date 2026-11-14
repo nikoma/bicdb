@@ -1,0 +1,1995 @@
+{
+  "source": "2b8c2b2de400038729a226ff61b9b275df846d18",
+  "diagnostic_source": "7ab56348a8309d4d396b1af87467232bfed1ac96",
+  "original_failed_source": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+  "run_id": 43537820765,
+  "jobs": {
+    "132271009934": "success",
+    "132270985379": "success"
+  },
+  "exact_selection_and_results": {
+    "artifact_id": 14090703744,
+    "listed_tests": [
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_current_damage_refused_at_exit",
+      "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_finite_open_never_starts_process_worker",
+      "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation",
+      "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root"
+    ],
+    "requested_tests": [
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_current_damage_refused_at_exit",
+      "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_finite_open_never_starts_process_worker",
+      "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation",
+      "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root"
+    ],
+    "actual_test_results": [
+      {
+        "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_current_damage_refused_at_exit",
+        "start_line": 3424,
+        "result": "ok",
+        "result_line": 3600
+      },
+      {
+        "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_finite_open_never_starts_process_worker",
+        "start_line": 3601,
+        "result": "ok",
+        "result_line": 4017
+      },
+      {
+        "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation",
+        "start_line": 4018,
+        "result": "ok",
+        "result_line": 4574
+      },
+      {
+        "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root",
+        "start_line": 4575,
+        "result": "ok",
+        "result_line": 6249
+      }
+    ],
+    "terminal_test_result": "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 1086 filtered out; finished in 15.52s",
+    "tests_log_sha256": "66c8c6a64ed892e4acbe6b850e38363cf874b70a97921d5e5256f88ade65b3db"
+  },
+  "classification": "four focused original cases passed in a separate passive diagnostic qualifier; original failure cause inconclusive",
+  "cases": [
+    {
+      "test": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_current_damage_refused_at_exit",
+      "classification": "passed",
+      "actual_control_reached_via_unchanged_test_assertions": true,
+      "snapshot_integrity": {
+        "stored_records": 764,
+        "stored_record_bytes": 507272,
+        "retained_buffer_incomplete_at_snapshot": true,
+        "global_capture_complete": false,
+        "background_quiescence_proven": false,
+        "dropped_busy": 11,
+        "dropped_bound": 0,
+        "dropped_closed_at_snapshot": 0,
+        "serialization_errors": 0,
+        "counters_are_snapshot_only": true
+      },
+      "gaps": [
+        "no SDK raw frames or APP internal retry trace",
+        "no extra worker join/drain; late background results may follow this snapshot",
+        "test-only memory observations are not a durable external ACK ledger",
+        "no host resource sampling or native-data reconciliation"
+      ],
+      "stage_counts": {
+        "normal_damage_recovery_prerequisite_begin": 1,
+        "metadata_acquire_begin": 69,
+        "metadata_context_begun": 70,
+        "metadata_probe_dispatch": 140,
+        "metadata_probe_worker_start": 140,
+        "metadata_probe_actual_return": 131,
+        "metadata_probe_ack_acceptance": 70,
+        "metadata_probe_collector_result": 70,
+        "metadata_acquire_return": 69,
+        "normal_damage_recovery_prerequisite_return": 1,
+        "normal_damage_fresh_metadata_begin": 1,
+        "normal_damage_fresh_metadata_return": 1,
+        "normal_damage_actual_injection_reached": 1
+      },
+      "captured_metadata_acquisition_returns": 69,
+      "captured_metadata_acquisition_failures": 0,
+      "captured_probe_returns": 131,
+      "captured_probe_errors": 20,
+      "probe_error_details": [
+        {
+          "acquisition_id": "01a1d79a-b479-77d1-ab25-06529c0c4282",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 519044,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 518934,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-b478-7ed3-95a9-3ff61d60ea2f",
+          "voter": "n0",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 529309,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 529060,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-b538-7af0-8ec2-2359ba26d68e",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 720840,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 720527,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-b5a7-7bc0-a551-0404b7c1938b",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 831920,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 831656,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-b616-7880-8187-5b7a047b8306",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 932845,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 932514,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-b979-7cb1-b7a7-d13b35eb7339",
+          "voter": "n0",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 1833688,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 1809754,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-ba06-7733-be17-c95a804de204",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 1940469,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 1940393,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-ba57-7673-a2f4-49c234d8eb78",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2021804,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2021690,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-bac6-76e1-9b48-b068d598b7d6",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2143847,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2143748,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-bb21-7500-bc3b-5f72c983bac6",
+          "voter": "n0",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2234902,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2234209,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-bb21-7500-bc3b-5f484f398010",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2238231,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2234381,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-bb3c-7062-b594-5b520cd79556",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2245816,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2243258,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-bc54-78f2-a7e0-dc2a2dd687a2",
+          "voter": "n0",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2559742,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2535599,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-bd62-7ff0-95a2-7ceec1795e44",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2797550,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2797428,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-bd7e-7f72-bd12-20397e50f347",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2840152,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2839476,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-be45-7e30-97ea-95b4e10a51fe",
+          "voter": "n0",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 3026969,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 3020212,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-be57-7c61-864a-ca32feeabc14",
+          "voter": "n0",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 3071500,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 3049849,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-be69-7741-b2d2-24738bf5c7a5",
+          "voter": "n0",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 3093672,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 3070048,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-be8d-7af3-be29-ba4f7f58d26d",
+          "voter": "n0",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 3176716,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 3175745,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-be8e-70c1-9772-29a279cbbb07",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 3192558,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 3190874,
+          "recorded_after_matching_success": true
+        }
+      ],
+      "error_interpretation": "All retained probe errors are cancellation records after a matched successful acquisition terminal; they do not establish the cause of the earlier failed source.",
+      "reached": {
+        "fresh_metadata_return_ok": true,
+        "actual_current_damage_injection": true,
+        "original_refusal_assertions": "passed in unchanged original test"
+      }
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_finite_open_never_starts_process_worker",
+      "classification": "passed",
+      "actual_control_reached_via_unchanged_test_assertions": true,
+      "snapshot_integrity": {
+        "stored_records": 162,
+        "stored_record_bytes": 96516,
+        "retained_buffer_incomplete_at_snapshot": true,
+        "global_capture_complete": false,
+        "background_quiescence_proven": false,
+        "dropped_busy": 1,
+        "dropped_bound": 0,
+        "dropped_closed_at_snapshot": 0,
+        "serialization_errors": 0,
+        "counters_are_snapshot_only": true
+      },
+      "gaps": [
+        "no SDK raw frames or APP internal retry trace",
+        "no extra worker join/drain; late background results may follow this snapshot",
+        "test-only memory observations are not a durable external ACK ledger",
+        "no host resource sampling or native-data reconciliation"
+      ],
+      "stage_counts": {
+        "initial_fixture_begin": 1,
+        "initial_fixture_return": 1,
+        "initial_configuration_observe_begin": 1,
+        "initial_configuration_observe_return": 1,
+        "initial_preparing_host_begin": 3,
+        "initial_config_recipient_begin": 9,
+        "initial_config_recipient_return": 9,
+        "initial_config_permit_return": 3,
+        "initial_preparing_host_return": 3,
+        "metadata_acquire_begin": 12,
+        "metadata_context_begun": 12,
+        "metadata_probe_dispatch": 24,
+        "metadata_probe_worker_start": 24,
+        "metadata_probe_actual_return": 23,
+        "metadata_probe_ack_acceptance": 12,
+        "metadata_probe_collector_result": 12,
+        "metadata_acquire_return": 12
+      },
+      "captured_metadata_acquisition_returns": 12,
+      "captured_metadata_acquisition_failures": 0,
+      "captured_probe_returns": 23,
+      "captured_probe_errors": 0,
+      "probe_error_details": [],
+      "error_interpretation": "All retained probe errors are cancellation records after a matched successful acquisition terminal; they do not establish the cause of the earlier failed source.",
+      "reached": {
+        "all_three_preparing_hosts_returned_ok": true,
+        "original_hot_control_assertions": "passed in unchanged original test",
+        "public_APP_operations": 0
+      }
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation",
+      "classification": "passed",
+      "actual_control_reached_via_unchanged_test_assertions": true,
+      "snapshot_integrity": {
+        "stored_records": 240,
+        "stored_record_bytes": 148549,
+        "retained_buffer_incomplete_at_snapshot": false,
+        "global_capture_complete": false,
+        "background_quiescence_proven": false,
+        "dropped_busy": 0,
+        "dropped_bound": 0,
+        "dropped_closed_at_snapshot": 0,
+        "serialization_errors": 0,
+        "counters_are_snapshot_only": true
+      },
+      "gaps": [
+        "no SDK raw frames or APP internal retry trace",
+        "no extra worker join/drain; late background results may follow this snapshot",
+        "test-only memory observations are not a durable external ACK ledger",
+        "no host resource sampling or native-data reconciliation"
+      ],
+      "stage_counts": {
+        "initial_fixture_begin": 1,
+        "initial_fixture_return": 1,
+        "initial_configuration_observe_begin": 1,
+        "initial_configuration_observe_return": 1,
+        "initial_preparing_host_begin": 3,
+        "initial_config_recipient_begin": 9,
+        "initial_config_recipient_return": 9,
+        "initial_config_permit_return": 3,
+        "initial_preparing_host_return": 3,
+        "metadata_acquire_begin": 19,
+        "metadata_context_begun": 19,
+        "metadata_probe_dispatch": 38,
+        "metadata_probe_worker_start": 38,
+        "metadata_probe_actual_return": 38,
+        "metadata_probe_ack_acceptance": 19,
+        "metadata_probe_collector_result": 19,
+        "metadata_acquire_return": 19
+      },
+      "captured_metadata_acquisition_returns": 19,
+      "captured_metadata_acquisition_failures": 0,
+      "captured_probe_returns": 38,
+      "captured_probe_errors": 10,
+      "probe_error_details": [
+        {
+          "acquisition_id": "01a1d79a-cd84-7d13-97d7-12a08c0e5d0a",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 1106168,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 1106101,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-ce07-7fe3-9582-a68dc771b703",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 1227218,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 1226916,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-cf1a-7003-aad9-0f5b9403a3f6",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 1500968,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 1500180,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-d024-71e3-8a39-a551c81f19e4",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 1774190,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 1773802,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-d0c2-7930-877c-236a50ace5db",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 1928145,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 1926753,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-d0c2-7930-877c-23357e757fa5",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 1931066,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 1925010,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-d197-7943-9ac3-65d500b1450a",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2139528,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2136842,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-d19f-73f3-a7ff-7ad4ed392d75",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2147214,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2147075,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-d1ea-7240-9c3a-b1f6ecfb1dd9",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2228310,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2227213,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-d1fe-7943-a554-d7be954a707e",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2237299,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2236963,
+          "recorded_after_matching_success": true
+        }
+      ],
+      "error_interpretation": "All retained probe errors are cancellation records after a matched successful acquisition terminal; they do not establish the cause of the earlier failed source.",
+      "reached": {
+        "all_three_preparing_hosts_returned_ok": true,
+        "original_hot_control_assertions": "passed in unchanged original test",
+        "public_APP_operations": 0
+      }
+    },
+    {
+      "test": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root",
+      "classification": "passed",
+      "actual_control_reached_via_unchanged_test_assertions": true,
+      "snapshot_integrity": {
+        "stored_records": 756,
+        "stored_record_bytes": 449608,
+        "retained_buffer_incomplete_at_snapshot": true,
+        "global_capture_complete": false,
+        "background_quiescence_proven": false,
+        "dropped_busy": 6,
+        "dropped_bound": 0,
+        "dropped_closed_at_snapshot": 0,
+        "serialization_errors": 0,
+        "counters_are_snapshot_only": true
+      },
+      "gaps": [
+        "no SDK raw frames or APP internal retry trace",
+        "no extra worker join/drain; late background results may follow this snapshot",
+        "test-only memory observations are not a durable external ACK ledger",
+        "no host resource sampling or native-data reconciliation"
+      ],
+      "stage_counts": {
+        "lifecycle_mode_begin": 3,
+        "initial_fixture_begin": 3,
+        "initial_fixture_return": 3,
+        "initial_configuration_observe_begin": 3,
+        "initial_configuration_observe_return": 3,
+        "initial_preparing_host_begin": 9,
+        "initial_config_recipient_begin": 27,
+        "initial_config_recipient_return": 27,
+        "initial_config_permit_return": 9,
+        "initial_preparing_host_return": 9,
+        "metadata_acquire_begin": 55,
+        "metadata_context_begun": 57,
+        "metadata_probe_dispatch": 114,
+        "metadata_probe_worker_start": 114,
+        "metadata_probe_actual_return": 110,
+        "metadata_probe_ack_acceptance": 57,
+        "metadata_probe_collector_result": 57,
+        "metadata_acquire_return": 57,
+        "lifecycle_append_intent": 3,
+        "lifecycle_append_actual_return": 3,
+        "lifecycle_strong_intent": 3,
+        "lifecycle_strong_actual_return": 3,
+        "lifecycle_materialization_complete": 3,
+        "lifecycle_fault_or_drop_branch_entered": 3,
+        "lifecycle_drop_original_controls_begin": 3,
+        "lifecycle_original_weak_owners_ended": 3,
+        "lifecycle_same_root_reopen_begin": 6,
+        "lifecycle_same_root_reopen_return": 6,
+        "lifecycle_mode_all_original_assertions_complete": 3
+      },
+      "captured_metadata_acquisition_returns": 57,
+      "captured_metadata_acquisition_failures": 0,
+      "captured_probe_returns": 110,
+      "captured_probe_errors": 30,
+      "probe_error_details": [
+        {
+          "acquisition_id": "01a1d79a-d8d2-75e0-b628-bf8f7a60b33c",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 1539761,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 1539724,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-d91e-7d50-8cf4-a11c6bf44c54",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 1635052,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 1611548,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-d95e-7693-882c-1c1e3cac5dfa",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 1671486,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 1671351,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-d9d5-7192-af32-47d3020af8ea",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 1816033,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 1792289,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-da0e-7bc0-b7e3-324ead5116fe",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 1853048,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 1852864,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-da85-7803-a16c-a83432adfc80",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 1975074,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 1974291,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-da85-7803-a16c-a868930dac14",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 1976227,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 1973977,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-db63-74b0-a8a8-f17336df1c03",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2195770,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2195709,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-db63-74b0-a8a8-f147681e3f61",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2199247,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2197131,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-dba9-70f0-bcff-fe5bec280a55",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2266664,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2266176,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-dbc1-79d2-b96f-27546a752164",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2286489,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2286343,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-dc38-7791-a1d8-d285085c08e7",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 2432029,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 2407508,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-e2de-7df1-8177-23ae83e67d52",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 4108864,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 4108292,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-e320-79c1-ae33-c60d6d48cb12",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 4169527,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 4168721,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-e35a-7492-9997-05d7b1d7403e",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 4230180,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 4229326,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-e38c-7e92-b69a-fe9d100ffa89",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 4280463,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 4279623,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-e3ca-7a13-9192-8c1be6c230f2",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 4341065,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 4340085,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-e43d-7b81-b8a5-e4eb8483f52c",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 4464488,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 4461776,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-e4b6-7f51-8bd2-3d8c1d1d2cee",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 4584930,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 4582226,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-e4fb-7b33-9a88-92073f73246f",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 4653635,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 4652592,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-e513-72f0-b459-225a734ce321",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 4673890,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 4672738,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-e587-7ec2-b91c-80d265dca36e",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 4785300,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 4783936,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-eced-7810-8ef7-8350d4ee7c82",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 6682494,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 6679462,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-ed5d-7432-9647-7dab88a81699",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 6793464,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 6787790,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-ed65-7201-a261-a36f24ce06ad",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 6803494,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 6797689,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-edd4-74d3-bc0a-bd93e26c3211",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 6914436,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 6908681,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-edd6-7920-91de-4673df90242e",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 6914486,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 6909847,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-ee24-7c71-9c4c-e112e8cead9c",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 6994946,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 6989507,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-ee34-77e1-91e3-13ce4825548f",
+          "voter": "n2",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 7005429,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 6999474,
+          "recorded_after_matching_success": true
+        },
+        {
+          "acquisition_id": "01a1d79a-ee9d-7eb0-9305-edb947521976",
+          "voter": "n1",
+          "attempt": 1,
+          "actual_error_chain": {
+            "complete": true,
+            "depth_limited": false,
+            "entries": [
+              {
+                "format_complete": true,
+                "io_kind": null,
+                "raw_os_error": null,
+                "text": "canceling statement due to user request",
+                "truncated": false
+              }
+            ],
+            "max_depth": 8,
+            "max_text_bytes": 2048
+          },
+          "probe_record_capture_elapsed_us": 7120143,
+          "matching_terminal_success": true,
+          "matching_terminal_capture_elapsed_us": 7118647,
+          "recorded_after_matching_success": true
+        }
+      ],
+      "error_interpretation": "All retained probe errors are cancellation records after a matched successful acquisition terminal; they do not establish the cause of the earlier failed source.",
+      "reached": {
+        "modes_complete": [
+          0,
+          1,
+          2
+        ],
+        "APP_successful_returns": 3,
+        "APP_uncertain_returns": 0,
+        "APP_failed_returns": 0,
+        "Strong_full_value_successes": 3,
+        "same_root_native_reopens": 6,
+        "mode2_durability_fence_reopen": "not requested by original test"
+      }
+    }
+  ],
+  "APP_ledger": [
+    {
+      "mode": 0,
+      "independent_fixture_cluster": true,
+      "intent": {
+        "configured_request_budget_ms": 2000,
+        "diagnostic_id_is_not_protocol_id": true,
+        "expected_full_value": {
+          "mode": 0,
+          "preserved": "ACK through the actually opened DATA owner"
+        },
+        "expected_payload_sha256": "51b2aeedefd33d652a2c745fa0d4669742b746f857e854babc15c3cc457ce413",
+        "internal_APP_retry_trace": "not captured",
+        "key": "actual-before-owner-drop",
+        "logical_id": "01a1d79a-da54-7ff3-a9cb-9c98aa2931b3",
+        "namespace": "items",
+        "raw_SDK_frames_recorded": false
+      },
+      "actual_append_result": {
+        "acknowledged": true,
+        "actual_error_chain": null,
+        "inserted": true,
+        "logical_id": "01a1d79a-da54-7ff3-a9cb-9c98aa2931b3",
+        "uncertain_write_effect": false
+      },
+      "actual_strong_result": {
+        "actual_error_chain": null,
+        "full_value": {
+          "mode": 0,
+          "preserved": "ACK through the actually opened DATA owner"
+        },
+        "logical_id": "01a1d79a-dba5-7242-9bda-61acb9ac578b",
+        "preceding_append_id": "01a1d79a-da54-7ff3-a9cb-9c98aa2931b3",
+        "present": true,
+        "success": true
+      },
+      "full_payload_hash_verified": true,
+      "same_root_reopen_results": [
+        {
+          "actual_error_chain": null,
+          "mode": 0,
+          "node_index": 0,
+          "result_ok": true
+        },
+        {
+          "actual_error_chain": null,
+          "mode": 0,
+          "node_index": 1,
+          "result_ok": true
+        },
+        {
+          "actual_error_chain": null,
+          "mode": 0,
+          "node_index": 2,
+          "result_ok": true
+        }
+      ],
+      "all_original_mode_assertions_complete": true,
+      "SDK_internal_retries": "not captured",
+      "native_effects_beyond_successful_APP_return": "not independently reconciled by this analysis"
+    },
+    {
+      "mode": 1,
+      "independent_fixture_cluster": true,
+      "intent": {
+        "configured_request_budget_ms": 2000,
+        "diagnostic_id_is_not_protocol_id": true,
+        "expected_full_value": {
+          "mode": 1,
+          "preserved": "ACK through the actually opened DATA owner"
+        },
+        "expected_payload_sha256": "33957a5ca26c91e7d9b3b4e1730e5f1ba21553a73d2a64415cd9c3343b4e8913",
+        "internal_APP_retry_trace": "not captured",
+        "key": "actual-before-owner-drop",
+        "logical_id": "01a1d79a-e40a-7e43-bf4f-ab11edad0c29",
+        "namespace": "items",
+        "raw_SDK_frames_recorded": false
+      },
+      "actual_append_result": {
+        "acknowledged": true,
+        "actual_error_chain": null,
+        "inserted": true,
+        "logical_id": "01a1d79a-e40a-7e43-bf4f-ab11edad0c29",
+        "uncertain_write_effect": false
+      },
+      "actual_strong_result": {
+        "actual_error_chain": null,
+        "full_value": {
+          "mode": 1,
+          "preserved": "ACK through the actually opened DATA owner"
+        },
+        "logical_id": "01a1d79a-e4f9-7c23-9d6f-309eae1e39ee",
+        "preceding_append_id": "01a1d79a-e40a-7e43-bf4f-ab11edad0c29",
+        "present": true,
+        "success": true
+      },
+      "full_payload_hash_verified": true,
+      "same_root_reopen_results": [
+        {
+          "actual_error_chain": null,
+          "mode": 1,
+          "node_index": 0,
+          "result_ok": true
+        },
+        {
+          "actual_error_chain": null,
+          "mode": 1,
+          "node_index": 1,
+          "result_ok": true
+        },
+        {
+          "actual_error_chain": null,
+          "mode": 1,
+          "node_index": 2,
+          "result_ok": true
+        }
+      ],
+      "all_original_mode_assertions_complete": true,
+      "SDK_internal_retries": "not captured",
+      "native_effects_beyond_successful_APP_return": "not independently reconciled by this analysis"
+    },
+    {
+      "mode": 2,
+      "independent_fixture_cluster": true,
+      "intent": {
+        "configured_request_budget_ms": 2000,
+        "diagnostic_id_is_not_protocol_id": true,
+        "expected_full_value": {
+          "mode": 2,
+          "preserved": "ACK through the actually opened DATA owner"
+        },
+        "expected_payload_sha256": "6bfb0dc88efe694da684594523aa1820a7b089b2421d77fcf2961830a77b6aa8",
+        "internal_APP_retry_trace": "not captured",
+        "key": "actual-before-owner-drop",
+        "logical_id": "01a1d79a-ed33-7742-866b-99ffe37207ab",
+        "namespace": "items",
+        "raw_SDK_frames_recorded": false
+      },
+      "actual_append_result": {
+        "acknowledged": true,
+        "actual_error_chain": null,
+        "inserted": true,
+        "logical_id": "01a1d79a-ed33-7742-866b-99ffe37207ab",
+        "uncertain_write_effect": false
+      },
+      "actual_strong_result": {
+        "actual_error_chain": null,
+        "full_value": {
+          "mode": 2,
+          "preserved": "ACK through the actually opened DATA owner"
+        },
+        "logical_id": "01a1d79a-ee1c-7520-acfa-76c46ae88a26",
+        "preceding_append_id": "01a1d79a-ed33-7742-866b-99ffe37207ab",
+        "present": true,
+        "success": true
+      },
+      "full_payload_hash_verified": true,
+      "same_root_reopen_results": [],
+      "all_original_mode_assertions_complete": true,
+      "SDK_internal_retries": "not captured",
+      "native_effects_beyond_successful_APP_return": "not independently reconciled by this analysis"
+    }
+  ],
+  "APP_aggregate_scope": "3 acknowledged calls and3 full Strong returns across3 independent lifecycle fixtures, not one scaling/failover workload; internal SDK retries not captured",
+  "pressure": [
+    {
+      "artifact_id": 14090703744,
+      "member": "list-pressure.jsonl",
+      "sample_count": 43,
+      "minimum_sampled_MemAvailable_bytes": 11250642944,
+      "minimum_sampled_SwapFree_bytes": 3221221376,
+      "event_counts": {
+        "started": 1,
+        "sample": 43,
+        "completed": 1
+      },
+      "completed": {
+        "child_returncode": 0,
+        "elapsed_seconds": 86.01710096,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 0,
+        "omitted_sample_records": 0
+      },
+      "sha256": "0145bc85c3e35579ab1cb119623f1fccb19a4f05f78dd496dd292af90da7a010",
+      "scope": "host MemAvailable samples during build/check/list only; not runtime/cgroup/sudden-OOM proof"
+    },
+    {
+      "artifact_id": 14090703744,
+      "member": "helper-pressure.jsonl",
+      "sample_count": 236,
+      "minimum_sampled_MemAvailable_bytes": 11807399936,
+      "minimum_sampled_SwapFree_bytes": 3221221376,
+      "event_counts": {
+        "started": 1,
+        "sample": 236,
+        "completed": 1
+      },
+      "completed": {
+        "child_returncode": 0,
+        "elapsed_seconds": 472.092012557,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 0,
+        "omitted_sample_records": 0
+      },
+      "sha256": "70f206e1e2ee252ff94f4de3d738324c962f733c0a6e19ceef27f1bd637f583f",
+      "scope": "host MemAvailable samples during build/check/list only; not runtime/cgroup/sudden-OOM proof"
+    },
+    {
+      "artifact_id": 14090462497,
+      "member": "alltargets.jsonl",
+      "sample_count": 122,
+      "minimum_sampled_MemAvailable_bytes": 11930685440,
+      "minimum_sampled_SwapFree_bytes": 3221221376,
+      "event_counts": {
+        "started": 1,
+        "sample": 122,
+        "completed": 1
+      },
+      "completed": {
+        "child_returncode": 0,
+        "elapsed_seconds": 244.048729869,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 0,
+        "omitted_sample_records": 0
+      },
+      "sha256": "d094befce05c999ea36b78465d2b4b86c474cdd8ba4a4047da1a5057b2becf1c",
+      "scope": "host MemAvailable samples during build/check/list only; not runtime/cgroup/sudden-OOM proof"
+    },
+    {
+      "artifact_id": 14090462497,
+      "member": "consumer.jsonl",
+      "sample_count": 16,
+      "minimum_sampled_MemAvailable_bytes": 13278347264,
+      "minimum_sampled_SwapFree_bytes": 3221221376,
+      "event_counts": {
+        "started": 1,
+        "sample": 16,
+        "completed": 1
+      },
+      "completed": {
+        "child_returncode": 0,
+        "elapsed_seconds": 32.007354228,
+        "event": "completed",
+        "final_group_signal_before_leader_reap": true,
+        "guard_returncode": 0,
+        "omitted_sample_records": 0
+      },
+      "sha256": "6fd68e7bdc166dad48d01b81cec1bb4472e8b302bc0efb9805b43a172ca7b9a7",
+      "scope": "host MemAvailable samples during build/check/list only; not runtime/cgroup/sudden-OOM proof"
+    }
+  ],
+  "no_resource_or_monitor_interruption_in_retained_guard_logs": true,
+  "all_capture_globals_incomplete": true,
+  "captured_busy_drops": 18,
+  "original_failure_archive_unchanged": true,
+  "not_proven": [
+    "original c6 failure cause",
+    "broad503 required-suite result",
+    "complete probe census or raw SDK retry trace",
+    "physical HA/RPO/RTO or scale-out",
+    "Serving under rebalancing",
+    "power-loss durability"
+  ],
+  "engine_opened": false,
+  "new_dispatches_or_retries": 0
+}

@@ -1,0 +1,160 @@
+{
+  "format": 1,
+  "source": "5a85900f571c389ff97e278a0b9555048bdeadec",
+  "predecessor_gap_docs": "2ac270872cbef913f5ca0b8e4c61fffb08b2e38f",
+  "Core_subtree": "0472ff801146f2cdf51a6db769c0354315eb5b04",
+  "review_only": true,
+  "runtime_test_or_dispatch_changes": false,
+  "source_pins": [
+    {
+      "path": "crates/bicdb-core/src/distribution_transport.rs",
+      "blob": "6eeb4fe0c2ccdd5ac8504b16a46a0e51d9b57f88",
+      "sha256": "288357de356685b88f024f50ff21cba10a9864717faa326480f7029b8bc60db1",
+      "bytes": 327752
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport/native_source_discovery.rs",
+      "blob": "1e147ac85e06c0bc275b96e09f7da96804160c7e",
+      "sha256": "3d921ccd58190caa8d560d49466f31347f0e585ad439b5caae33b93902a2199d",
+      "bytes": 6755
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport/initial_data_listener.rs",
+      "blob": "9a2d51add258d905c96660537d54dbb2e42b2a25",
+      "sha256": "bad69684c85895663faa366c9da93636adef37877378290dd46d0b9c4086c849",
+      "bytes": 4525
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/source_discovery.rs",
+      "blob": "a01bce2100efa81bbe65dcafa44ee4b8f0207e3f",
+      "sha256": "12ac2a827f831d8baafe7bf324f22267e382dcd7e78e87a19b2f6bcea99d1bc6",
+      "bytes": 16516
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_image/remote_source.rs",
+      "blob": "35ae75c6bedf2792301aaa4cca6ca57375d9fa29",
+      "sha256": "c546a7141b006122fffb5d68fefe6d85030f78a76f4540e5bb4c71b2e6965fa7",
+      "bytes": 40531
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_image/remote_source/discovery.rs",
+      "blob": "33b032718279826310272629812dd70f491bb474",
+      "sha256": "46cfd69a78a848bb65471c181c51f3fb63c57e6e4467aa0b0a44487927aad82f",
+      "bytes": 14721
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/remote_old_collect.rs",
+      "blob": "3004089f61c48af74d511e0d19b508cafdac50a3",
+      "sha256": "660f1676431c44af360c9f0c10d215715a8a9022cd607fe805cbf4e620781199",
+      "bytes": 13415
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/materialized.rs",
+      "blob": "0efce2657bd6b71565e8b52087bc442ad40f014f",
+      "sha256": "c28b3ee86e1272e5ef7ad8b5a7e3415c1dfb12568e18333ae3d6d0c0ba69ab08",
+      "bytes": 10585
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/decision_owners.rs",
+      "blob": "2d46360dbe0cdf4f531dc01b3ee4083ee73a5de6",
+      "sha256": "0af6623a98fa0c54219bc90784580d0631368d5a2cba402b0df82cc6cb70a526",
+      "bytes": 6200
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/decision.rs",
+      "blob": "8c6c99e42571ce9b1d539f8f9d37ad8fa7e42ca0",
+      "sha256": "018a7654d909d159e5a63b7666ab6ca4e02b6b97628099544cd2e1b0c67ba9a1",
+      "bytes": 29094
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/publication/release_phase.rs",
+      "blob": "70c8bb31d720c97a93d6c9d936077316ea8d22af",
+      "sha256": "ca070cf724041ab61dcef7b50ce0fc7d8511a9d61929b4e6947be92d305f066b",
+      "bytes": 25382
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/publication/release_phase/writer_policy.rs",
+      "blob": "d07b6ecd0542abfef12a146ec62b21285ed0508f",
+      "sha256": "1950cb75fc6b38b9227c91279ec9b4fa0708de777f5b0d588507a8daca93c0d5",
+      "bytes": 10881
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff/registered_target.rs",
+      "blob": "1b73152ec1842228fd5954a563cc5989120ce542",
+      "sha256": "f5290dbcd9daa33b84a2e19003475673b8744dbb430b5413913146a5432d25a1",
+      "bytes": 19146
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff/bridge/release.rs",
+      "blob": "d6298054ff8094c89f7bbfbed582e0c51de9c1fc",
+      "sha256": "de40a03469cd5f353332a9ae5c3c54b305633f2ad55403f4b412a1469d7da0f9",
+      "bytes": 14576
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_attempt/remote_joint.rs",
+      "blob": "7c1e07d3d773222960cbcb5c36480c12571064e0",
+      "sha256": "77ca8581e85f5a250dcad2b93de19ae4cdbeec803b4835d58e23664d9a7b9e24",
+      "bytes": 18205
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_attempt/remote_joint/release.rs",
+      "blob": "1083902547726a9b1616f24613546cf47210893e",
+      "sha256": "834355e702111c7382f354511d38acaa5debfbcddc610b3588a169287247a7f2",
+      "bytes": 7328
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica.rs",
+      "blob": "23f1d08fd6529f53150796c45c4093b6fd6c0a38",
+      "sha256": "1911e0e2fdd15051d6b38e13a003eccf664e07c86f67c95ae3a4684d52988cf9",
+      "bytes": 18817
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/old_step.rs",
+      "blob": "5bdb7da7011298249e98478f3062cc0d53bd3b02",
+      "sha256": "9fb7825850bc11c747613e6006ae8c5b2a8a94e8fc86d27329851ef53dda623b",
+      "bytes": 19058
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/assigned_data/registered_serving.rs",
+      "blob": "9c50a19afbe045e0292edf4aafac6ef237b41d5e",
+      "sha256": "bdcf5df27d7ee006f5291c676458c8ade7dd595edc6bbc41604720e336cf99c9",
+      "bytes": 13620
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "blob": "475b8de7da3b54431f9dd1a13fd8c07311dc611d",
+      "sha256": "bc8b9f0caa408a1035e82fc144f469be94fbd98219ff25731d38a7149974dc55",
+      "bytes": 30412
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_discovery_tests.rs",
+      "blob": "8f831d11531efa9d3ec1a93d6b1d643b58cda777",
+      "sha256": "26234826c1048ab4bc921d4bcdc2edc69161f081e9f63464572072f770f5133d",
+      "bytes": 13320
+    }
+  ],
+  "wire_enum_inspection": {
+    "old_discovery_frame_present": true,
+    "joint_NEW_decision_activation_Open_operations_present": false,
+    "enum_sha256": "4c1d2adb11d253eb317327be6136f283c93dff4b6ee6dded8d30a8daef5226e8"
+  },
+  "confirmed_producer_boundaries": [
+    "authenticated Registered NEW recipient producer/transport wrapper",
+    "remote actual OLD/NEW/decision recipient operations",
+    "authenticated all-final activated/Open-continuity producer/validator",
+    "S2-owned export/OLD retirement consumer",
+    "later all-released/armed phase and FIRST serving wire continuation",
+    "safe terminal registry pruning and cold continuation"
+  ],
+  "retirement_vs_serving": {
+    "retire_export": "actual Registered materialization/NEW; OLD fence remains",
+    "retire_obsolete_OLD_references": "all-final committed native bridge+catalogue activation/Open continuity; Frozen may still be held",
+    "Serving": "later complete released/armed-Open plus FIRST writer policy; not supplied by early retirement",
+    "retired_replica_fence_or_physical_data": "not deleted by these memory-custody transitions",
+    "cap8": "registry entries still retained; no eviction claimed"
+  },
+  "minimal_genuine_slice": "actual target NEW phase producer + pinned TLS wrapper + donor independently fetched validation + exact S2-owned export retirement sink; requires new proof producer, not existing DTO/local evidence cast",
+  "full_normal_and_lost_Start_cases": "designed; not added or executed; originalSDK2s/fixedgateway/fullStrong required",
+  "no_helper_presented_as_completion": true,
+  "production_or_physical_qualification": false
+}

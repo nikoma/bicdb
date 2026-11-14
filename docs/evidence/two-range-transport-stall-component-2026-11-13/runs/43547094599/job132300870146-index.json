@@ -1,0 +1,175 @@
+{
+  "source": "b01ed646b476cbb5f76a495d0f71bc8d13b929d6",
+  "run": 43547094599,
+  "job": {
+    "id": 132300870146,
+    "run_id": 43547094599,
+    "workflow_name": "tests",
+    "head_branch": "qual/native-source-stall-component-c08",
+    "run_url": "https://api.github.com/repos/nikoma/bicdb/actions/runs/43547094599",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOUimcAs8AAAAezb8SAg",
+    "head_sha": "b01ed646b476cbb5f76a495d0f71bc8d13b929d6",
+    "url": "https://api.github.com/repos/nikoma/bicdb/actions/jobs/132300870146",
+    "html_url": "https://github.com/nikoma/bicdb/actions/runs/43547094599/job/132300870146",
+    "status": "completed",
+    "conclusion": "failure",
+    "created_at": "2026-11-14T02:34:57Z",
+    "started_at": "2026-11-14T02:34:59Z",
+    "completed_at": "2026-11-14T02:44:17Z",
+    "name": "Focused Core library (native_registered_fifth_remote_selected_rows_reply_stall_other_populated_range_original_sdk_progress)",
+    "steps": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 1,
+        "started_at": "2026-11-14T02:35:00Z",
+        "completed_at": "2026-11-14T02:35:04Z"
+      },
+      {
+        "name": "Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 2,
+        "started_at": "2026-11-14T02:35:04Z",
+        "completed_at": "2026-11-14T02:35:14Z"
+      },
+      {
+        "name": "Run dtolnay/rust-toolchain@stable",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 3,
+        "started_at": "2026-11-14T02:35:14Z",
+        "completed_at": "2026-11-14T02:35:27Z"
+      },
+      {
+        "name": "Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 4,
+        "started_at": "2026-11-14T02:35:27Z",
+        "completed_at": "2026-11-14T02:35:36Z"
+      },
+      {
+        "name": "Build projection chaos helper",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 5,
+        "started_at": "2026-11-14T02:35:36Z",
+        "completed_at": "2026-11-14T02:43:32Z"
+      },
+      {
+        "name": "Record exact source and list one component plus whole inventory",
+        "status": "completed",
+        "conclusion": "failure",
+        "number": 6,
+        "started_at": "2026-11-14T02:43:32Z",
+        "completed_at": "2026-11-14T02:44:12Z"
+      },
+      {
+        "name": "Execute only the exact transport-stall component serially",
+        "status": "completed",
+        "conclusion": "skipped",
+        "number": 7,
+        "started_at": "2026-11-14T02:44:12Z",
+        "completed_at": "2026-11-14T02:44:12Z"
+      },
+      {
+        "name": "Retain focused source, log and opted-in fault-state evidence",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 8,
+        "started_at": "2026-11-14T02:44:12Z",
+        "completed_at": "2026-11-14T02:44:14Z"
+      },
+      {
+        "name": "Post Run Swatinem/rust-cache@v2",
+        "status": "completed",
+        "conclusion": "skipped",
+        "number": 15,
+        "started_at": "2026-11-14T02:44:14Z",
+        "completed_at": "2026-11-14T02:44:14Z"
+      },
+      {
+        "name": "Post Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 16,
+        "started_at": "2026-11-14T02:44:14Z",
+        "completed_at": "2026-11-14T02:44:14Z"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 17,
+        "started_at": "2026-11-14T02:44:14Z",
+        "completed_at": "2026-11-14T02:44:14Z"
+      }
+    ],
+    "check_run_url": "https://api.github.com/repos/nikoma/bicdb/check-runs/132300870146",
+    "labels": [
+      "ubuntu-latest"
+    ],
+    "runner_id": 1000025030,
+    "runner_name": "GitHub Actions 1000025030",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  },
+  "raw_bytes": 1322874,
+  "raw_sha256": "2c15efd3ab46769df1e486bbf2656e0dbe8588d9e41a04f6c5d9c6dec985df5c",
+  "gzip_sha256": "0a660be5827dc7dede74bde48eb890c8c8aab0d6f6520212bdfd8c08845d3d0b",
+  "summaries": [],
+  "failure_lines": [
+    {
+      "line": 13314,
+      "text": "2026-11-14T02:43:36.7582228Z error[E0603]: function `exercise` is private"
+    },
+    {
+      "line": 13850,
+      "text": "2026-11-14T02:44:12.6421097Z ##[error]Process completed with exit code 101."
+    }
+  ],
+  "failure_contexts": [
+    {
+      "line": 13314,
+      "remaining": 0,
+      "lines": [
+        "2026-11-14T02:43:32.8436645Z warning: `bicdb-page` (lib) generated 2 warnings",
+        "2026-11-14T02:43:32.8437141Z    Compiling bicdb-core v1.0.502-beta (/home/runner/work/bicdb/bicdb/crates/bicdb-core)",
+        "2026-11-14T02:43:36.7582228Z error[E0603]: function `exercise` is private",
+        "2026-11-14T02:43:36.7582923Z    --> crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs:800:57",
+        "2026-11-14T02:43:36.7583445Z     |",
+        "2026-11-14T02:43:36.7583895Z 800 |             remote_source_tests::two_range_stall_tests::exercise(",
+        "2026-11-14T02:43:36.7584490Z     |                                                         ^^^^^^^^ private function",
+        "2026-11-14T02:43:36.7585037Z     |",
+        "2026-11-14T02:43:36.7585272Z note: the function `exercise` is defined here",
+        "2026-11-14T02:43:36.7585981Z    --> crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/two_range_stall_tests.rs:86:1",
+        "2026-11-14T02:43:36.7586574Z     |",
+        "2026-11-14T02:43:36.7586816Z  86 | / pub(super) fn exercise(",
+        "2026-11-14T02:43:36.7587175Z  87 | |     controls: &[NativeMetadataControlHost],"
+      ]
+    },
+    {
+      "line": 13850,
+      "remaining": 0,
+      "lines": [
+        "2026-11-14T02:44:11.8685562Z error: could not compile `bicdb-core` (lib test) due to 1 previous error; 70 warnings emitted",
+        "2026-11-14T02:44:12.6352878Z OWNED_BUILD_GROUP_CLEANED pid=9005 returncode=101",
+        "2026-11-14T02:44:12.6421097Z ##[error]Process completed with exit code 101.",
+        "2026-11-14T02:44:12.6472835Z ##[group]Run actions/upload-artifact@v4",
+        "2026-11-14T02:44:12.6473052Z with:",
+        "2026-11-14T02:44:12.6473268Z   name: focused-core-b01ed646b476cbb5f76a495d0f71bc8d13b929d6-1",
+        "2026-11-14T02:44:12.6473532Z   retention-days: 3",
+        "2026-11-14T02:44:12.6473707Z   include-hidden-files: true",
+        "2026-11-14T02:44:12.6473902Z   if-no-files-found: warn",
+        "2026-11-14T02:44:12.6474113Z   path: /home/runner/work/_temp/native-core-evidence/",
+        "2026-11-14T02:44:12.6474347Z   compression-level: 6",
+        "2026-11-14T02:44:12.6474513Z   overwrite: false",
+        "2026-11-14T02:44:12.6474886Z env:"
+      ]
+    }
+  ],
+  "observed_test_start_lines": []
+}

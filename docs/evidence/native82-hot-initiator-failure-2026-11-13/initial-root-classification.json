@@ -1,0 +1,297 @@
+{
+  "job": 132293554417,
+  "conclusion": "failure",
+  "raw_bytes": 22693709,
+  "raw_sha256": "241738e911657e0ed0e6d975f5ddf14ff10076f40e222699f859bf945a1181d0",
+  "steps": [
+    [
+      "Set up job",
+      "success"
+    ],
+    [
+      "Run actions/checkout@v4",
+      "success"
+    ],
+    [
+      "Run dtolnay/rust-toolchain@stable",
+      "success"
+    ],
+    [
+      "Run Swatinem/rust-cache@v2",
+      "success"
+    ],
+    [
+      "Build projection chaos helper",
+      "success"
+    ],
+    [
+      "Record source and list selected Core library tests",
+      "success"
+    ],
+    [
+      "Execute selected Core native library tests serially",
+      "failure"
+    ],
+    [
+      "Retain focused source, log and opted-in fault-state evidence",
+      "success"
+    ],
+    [
+      "Post Run Swatinem/rust-cache@v2",
+      "skipped"
+    ],
+    [
+      "Post Run actions/checkout@v4",
+      "success"
+    ],
+    [
+      "Complete job",
+      "success"
+    ]
+  ],
+  "failed_names": [],
+  "summary": [
+    "test result: FAILED. 70 passed; 12 failed; 0 ignored; 0 measured; 1088 filtered out; finished in 941.30s"
+  ],
+  "bounded_panic_or_error_contexts": [
+    {
+      "uncompressed_offset": 1260070,
+      "before": [
+        "actual = [line[:-6] for line in path.read_text().splitlines() if line.endswith(': test')]",
+        "if count != 82 or sorted(actual) != expected:"
+      ],
+      "match": "    raise SystemExit('Qualification must select exactly all 82 compiler-listed native_registered_fifth_ cases, including eleven existing macro-generated controls')",
+      "following": [
+        "print(f'Selected {count} Core library tests; ignored tests remain identified by the execution result')",
+        "PY",
+        "shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}",
+        "env:",
+        "  CARGO_TERM_COLOR: always",
+        "  CARGO_BUILD_JOBS: 1"
+      ],
+      "remaining": 0
+    },
+    {
+      "uncompressed_offset": 22622096,
+      "before": [
+        "bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-14T02:36:26.9720619Z"
+      ],
+      "match": "thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_first_policy_real_caller_expiry_fresh_same_xid' (16564) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs:283:10:",
+      "following": [
+        "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+        "note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "2026-11-14T02:36:26.9722560Z",
+        "---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready stdout ----",
+        "NATIVE_LEARNER_ENROLLMENT_ROOT /tmp/.tmpHF7dMZ",
+        "bicdb cluster data RPC error: io error: Broken pipe (os error 32)"
+      ],
+      "remaining": 0
+    },
+    {
+      "uncompressed_offset": 22623768,
+      "before": [
+        "bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-14T02:36:26.9729818Z"
+      ],
+      "match": "thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready' (17276) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs:283:10:",
+      "following": [
+        "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+        "2026-11-14T02:36:26.9731481Z",
+        "---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt stdout ----",
+        "NATIVE_LEARNER_ENROLLMENT_ROOT /tmp/.tmp6w9YH1",
+        "bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "bicdb cluster data RPC error: io error: Broken pipe (os error 32)"
+      ],
+      "remaining": 0
+    },
+    {
+      "uncompressed_offset": 22626359,
+      "before": [
+        "bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-14T02:36:26.9734193Z"
+      ],
+      "match": "thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt' (17990) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs:283:10:",
+      "following": [
+        "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+        "2026-11-14T02:36:26.9735888Z",
+        "---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_original_client_ack_and_full_strong stdout ----",
+        "NATIVE_LEARNER_ENROLLMENT_ROOT /tmp/.tmpdKx7eW",
+        "bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "bicdb cluster data RPC error: io error: Broken pipe (os error 32)"
+      ],
+      "remaining": 0
+    },
+    {
+      "uncompressed_offset": 22633168,
+      "before": [
+        "bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-14T02:36:26.9744123Z"
+      ],
+      "match": "thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_original_client_ack_and_full_strong' (18702) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs:283:10:",
+      "following": [
+        "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+        "2026-11-14T02:36:26.9745716Z",
+        "---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_decision_commit_retains_xid_refuses_vote stdout ----",
+        "NATIVE_LEARNER_ENROLLMENT_ROOT /tmp/.tmpbSuDD9",
+        "bicdb cluster data RPC error: io error: unexpected end of file",
+        "bicdb cluster data RPC error: io error: unexpected end of file"
+      ],
+      "remaining": 0
+    },
+    {
+      "uncompressed_offset": 22641637,
+      "before": [
+        "bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-14T02:36:26.9756647Z"
+      ],
+      "match": "thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_decision_commit_retains_xid_refuses_vote' (19414) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs:283:10:",
+      "following": [
+        "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+        "2026-11-14T02:36:26.9758355Z",
+        "---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_policy_readback_refuses_hook stdout ----",
+        "NATIVE_LEARNER_ENROLLMENT_ROOT /tmp/.tmpbRjRLg",
+        "bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "bicdb cluster data RPC error: io error: Broken pipe (os error 32)"
+      ],
+      "remaining": 0
+    },
+    {
+      "uncompressed_offset": 22647566,
+      "before": [
+        "bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-14T02:36:26.9766255Z"
+      ],
+      "match": "thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_policy_readback_refuses_hook' (20127) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs:283:10:",
+      "following": [
+        "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+        "2026-11-14T02:36:26.9767971Z",
+        "---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_before_decision_first_put_refuses_vote stdout ----",
+        "NATIVE_LEARNER_ENROLLMENT_ROOT /tmp/.tmpYYWkGl",
+        "bicdb cluster data RPC error: io error: unexpected end of file",
+        "bicdb cluster data RPC error: io error: unexpected end of file"
+      ],
+      "remaining": 0
+    },
+    {
+      "uncompressed_offset": 22654008,
+      "before": [
+        "bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-14T02:36:26.9775715Z"
+      ],
+      "match": "thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_before_decision_first_put_refuses_vote' (20839) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs:283:10:",
+      "following": [
+        "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+        "2026-11-14T02:36:26.9777384Z",
+        "---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy stdout ----",
+        "NATIVE_LEARNER_ENROLLMENT_ROOT /tmp/.tmpT4Svyx",
+        "2026-11-14T02:36:26.9778123Z",
+        "thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy' (21550) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs:283:10:"
+      ],
+      "remaining": 0
+    },
+    {
+      "uncompressed_offset": 22655188,
+      "before": [
+        "NATIVE_LEARNER_ENROLLMENT_ROOT /tmp/.tmpT4Svyx",
+        "2026-11-14T02:36:26.9778123Z"
+      ],
+      "match": "thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy' (21550) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs:283:10:",
+      "following": [
+        "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+        "2026-11-14T02:36:26.9779957Z",
+        "---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_store_slot_replacement_refuses stdout ----",
+        "NATIVE_LEARNER_ENROLLMENT_ROOT /tmp/.tmpFz5Mkp",
+        "bicdb cluster data RPC error: io error: unexpected end of file",
+        "bicdb cluster data RPC error: io error: unexpected end of file"
+      ],
+      "remaining": 0
+    },
+    {
+      "uncompressed_offset": 22663070,
+      "before": [
+        "bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-14T02:36:26.9789578Z"
+      ],
+      "match": "thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_store_slot_replacement_refuses' (22260) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs:283:10:",
+      "following": [
+        "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+        "2026-11-14T02:36:26.9791232Z",
+        "---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses stdout ----",
+        "NATIVE_LEARNER_ENROLLMENT_ROOT /tmp/.tmp4mTzD7",
+        "bicdb cluster data RPC error: io error: unexpected end of file",
+        "bicdb cluster data RPC error: io error: unexpected end of file"
+      ],
+      "remaining": 0
+    },
+    {
+      "uncompressed_offset": 22669587,
+      "before": [
+        "bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-14T02:36:26.9799015Z"
+      ],
+      "match": "thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses' (22975) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs:283:10:",
+      "following": [
+        "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+        "2026-11-14T02:36:26.9800710Z",
+        "---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_lost_committed_decision_reply_same_native_attempt stdout ----",
+        "NATIVE_LEARNER_ENROLLMENT_ROOT /tmp/.tmpD6zBzn",
+        "bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "bicdb cluster data RPC error: io error: unexpected end of file"
+      ],
+      "remaining": 0
+    },
+    {
+      "uncompressed_offset": 22675469,
+      "before": [
+        "bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "2026-11-14T02:36:26.9807741Z"
+      ],
+      "match": "thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_lost_committed_decision_reply_same_native_attempt' (23687) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests.rs:283:10:",
+      "following": [
+        "called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata recovery-role identity, purpose or committed configuration changed\")",
+        "2026-11-14T02:36:26.9809486Z",
+        "---- distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_no_domain_actual_mstore_term_change_refuses stdout ----",
+        "NATIVE_LEARNER_ENROLLMENT_ROOT /tmp/.tmpjYwELm",
+        "bicdb cluster data RPC error: io error: Broken pipe (os error 32)",
+        "bicdb cluster data RPC error: io error: Broken pipe (os error 32)"
+      ],
+      "remaining": 0
+    },
+    {
+      "uncompressed_offset": 22684199,
+      "before": [
+        "bicdb cluster data RPC error: io error: unexpected end of file",
+        "2026-11-14T02:36:26.9820234Z"
+      ],
+      "match": "thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_no_domain_actual_mstore_term_change_refuses' (73277) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_no_domain_tests.rs:113:17:",
+      "following": [
+        "cluster error: metadata consensus: actual metadata authority version changed/dirty; retained native outcome is not a current grant",
+        "2026-11-14T02:36:26.9821736Z",
+        "2026-11-14T02:36:26.9821739Z",
+        "failures:",
+        "    distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_first_policy_real_caller_expiry_fresh_same_xid",
+        "    distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready"
+      ],
+      "remaining": 0
+    },
+    {
+      "uncompressed_offset": 22688467,
+      "before": [
+        "    distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_no_domain_actual_mstore_term_change_refuses",
+        "2026-11-14T02:36:26.9829029Z"
+      ],
+      "match": "test result: FAILED. 70 passed; 12 failed; 0 ignored; 0 measured; 1088 filtered out; finished in 941.30s",
+      "following": [
+        "2026-11-14T02:36:26.9829549Z",
+        "error: test failed, to rerun pass `-p bicdb-core --lib`",
+        "##[error]Process completed with exit code 101.",
+        "##[group]Run actions/upload-artifact@v4",
+        "with:",
+        "  name: focused-core-88ffe19f40ffd4ee83fb63a062795380b385bb33-1"
+      ],
+      "remaining": 0
+    }
+  ],
+  "bounded_scan_segments": 65927
+}

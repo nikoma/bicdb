@@ -36,6 +36,11 @@ def main():
         require(tuple(map(int,target_match.groups()[:3])) > tuple(map(int,match.groups()[:3])),
                 'new version must be newer than '+current)
     tracked = subprocess.check_output(['git','ls-files','-z'],cwd=root).decode().split('\0')
+    # Source copies in evidence packets are immutable historical inputs, not
+    # live manifests or lockfiles. Keep both validation and mutation away from
+    # them: a copied Core manifest can legitimately require an older BicDB.
+    tracked = [name for name in tracked
+               if not name.startswith('docs/evidence/')]
     manifests = [root/name for name in tracked if name.endswith('Cargo.toml')]
     release_names = set()
     planned = {}

@@ -1,0 +1,26 @@
+tree 33480d5ab92f676ded81906093f1d648cf96e860
+parent a06e09336c70fecbc38232d677c330984959388f
+parent 4f1d61b837894217bb3c2b7e2461985382ce6cef
+author Nikolai Manek <nikolai@plumeria.ai> 1794612853 +0800
+committer GitHub <noreply@github.com> 1794612853 +0800
+gpgsig -----BEGIN PGP SIGNATURE-----
+ 
+ wsFcBAABCAAQBQJq9551CRC1aQ7uu5UhlAAALWIQAIOfHlK/oOJPyBbHyxIflC/r
+ lumWdOo2u9vumCeggnmlj/z884vh170gERvW3xJ3Qg1TnMrMRhTny8f6Rxid26Ki
+ sZAcY0op41tbj60R1LSNn/DkXapHoFWJfhwK11r7ej65CEW8gkMSUh9xXYMoOoN6
+ TBV+M+zkHUFGq76gBh2gUIq7TW5DQrmYuIuhDAE49AxgR+t1+7/kJKrBqJXn9b73
+ ROGn3kBtKyu5Qe4RuBnFa5MP0CF8tK0XssdL6iAbTkSP4n2XArzsipQ914m/B5/3
+ oJIVe1FXQnRgxUPQl3PwttGnBlV8d4MFmMY0dAPaoyMstCzLBN4YkmKRvB2fPRBG
+ lA4sag9o1MRcsoNKHm4QBZuqO6n4PCrOPlKZkVB74SWTSjkmE5cxK9U0CqvGIfPj
+ pYxXPgQsd+MDGEhaYZHVydV+C89w2S1yt+JdVPLQxmw3SczgpXcW4kczWvJRpkfJ
+ go95QwInPDnAy/2nVk0MpbiXejyFufdPsDGHLcgYQJfKF56bGxGjCULMq2P2fVIF
+ Yp3YfP2yFT9NfqGIrceQsM7e9ia+1mTQsA+F0e6iFbHMzVqdBav5kUEctU80n+nk
+ 6JMzvvnMpP1KlNlYyfbWoFCmCu+X5XfuL87c9S5phjnTI+cKpJeyDcn5OkroUBcS
+ Yd4E4SmkZoHCIQI2+D2I
+ =ItUb
+ -----END PGP SIGNATURE-----
+ 
+
+Merge pull request #177 from nikoma/feat/ha-fifth-node-data-path
+
+Add the first positive data path for a registered fifth member (1.0.502-beta)

@@ -1,0 +1,15 @@
+{
+  "source": "c6a081a6026f4efd00d80f392c94b67f2f2f4e12",
+  "PR": 181,
+  "run": 43529104485,
+  "job": 132242099377,
+  "completedAt": "2026-11-14T00:13:00Z",
+  "conclusion": "failure",
+  "rawLog": "/root/erp-modernization/evidence/native503-core-serial-failure.log",
+  "rawLogBytes": 3946909,
+  "rawLogSHA256": "8af0ca1ea94ef88ae64a0ed4101d907d044072acd20ff8ce2c22d4149da09e54",
+  "summary": "test result: FAILED. 208 passed; 4 failed; 1 ignored; 0 measured; 877 filtered out; finished in 1197.50s",
+  "automaticRetry": false,
+  "sourceChanged": false,
+  "NativeProductBuildContinues": true
+}

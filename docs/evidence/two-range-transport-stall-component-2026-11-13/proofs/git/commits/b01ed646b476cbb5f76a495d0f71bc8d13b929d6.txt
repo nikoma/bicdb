@@ -1,0 +1,6 @@
+tree bc3335e47de0c975e64190932edf8888305e8b6c
+parent c08fb440be78ff1b891dc9a5e4c6ec87228918cb
+author nikoma <niko.manek@gmail.com> 1794623649 -0800
+committer nikoma <niko.manek@gmail.com> 1794623649 -0800
+
+Qualify exact selected Rows stall component and preserve83 inventory

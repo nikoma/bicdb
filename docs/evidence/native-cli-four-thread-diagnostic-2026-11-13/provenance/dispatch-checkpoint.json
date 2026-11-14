@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "observed_utc": "2026-11-13T23:26:14.609580+00:00",
+  "dispatch_post_count": 1,
+  "source": "03454e72cab0dea71b4783153fabf6716d9784fd",
+  "runtime_identical_to": "68b30c1bbe59b59345ec5a4d2f12354ae60d38ea",
+  "ref": "qual/native-cli-first-ack-pressure-68b",
+  "run_id": 43527079466,
+  "url": "https://github.com/nikoma/bicdb/actions/runs/43527079466",
+  "status": "queued",
+  "conclusion": null,
+  "created_at": "2026-11-13T23:26:04Z",
+  "request_sha256": "cbdfb04146540fa71f03634d670598dee8b2a4b8791649717b1b275d1cd35efa",
+  "no_foreign_retry_or_cancel": true
+}

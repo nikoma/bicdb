@@ -1,0 +1,8 @@
+{
+  "scope": "Packaged source/metadata/proofs and decompressed original raw log; recognized private-key begin marker only",
+  "recognized_private_key_block_files": [],
+  "public_Git_signatures_are_not_private_keys": true,
+  "does_not_guarantee_absence_of_all_secret_formats": true,
+  "no_database_or_TLS_key_directory_captured": true,
+  "upstream_public_repository_access_applies": true
+}

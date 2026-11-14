@@ -1,0 +1,5 @@
+{
+  "scope": "all4fullrawlogs andall4ZIPmembers",
+  "recognized_private_key_block_markers": 0,
+  "limitation": "literal-marker scan only; no exhaustive secret-detection guarantee; Git signatures are public, not private keys"
+}

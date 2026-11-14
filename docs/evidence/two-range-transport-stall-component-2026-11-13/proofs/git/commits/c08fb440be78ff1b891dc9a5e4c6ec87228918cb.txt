@@ -1,0 +1,6 @@
+tree a6033632df7c96ef9fd1a129b4ddef7fde3423c1
+parent cb07f60475df79a7d8aa7d864bcf4f5d3af187a4
+author nikoma <niko.manek@gmail.com> 1794623450 -0800
+committer nikoma <niko.manek@gmail.com> 1794623450 -0800
+
+test(ha): preserve original source journal through Rows worker

@@ -389,8 +389,9 @@ fn run_registered_image_baseline_with_placement_and_source(
             .with_request_timeout(Duration::from_secs(2))
             .unwrap();
         // Attach to the one actual pre-join SDK object BEFORE its first APP.
-        // All 8 hot / 6 discovery / 3 local-term variants keep the same 2s
-        // request timeout and unchanged primary/refresh/retry implementation.
+        // Every opted-in component keeps the same original 2s request timeout.
+        // Source identity identifies its actual SDK implementation; this composed
+        // candidate includes the separately qualified event-client repair.
         let gateway = match &original_sdk_rpc {
             Some(journal) => {
                 let observed = gateway
@@ -892,7 +893,7 @@ fn run_registered_image_baseline_with_placement_and_source(
             &serde_json::json!({
             "capture_phase":"after_original_sdk_calls_returned_or_test_unwound",
             "actual_observer":sdk_rpc_capture,"observer_snapshot_error":sdk_rpc_error,
-            "new_sdk_production_fix_included":false}),
+            "new_sdk_production_fix_included":true}),
             &mut evidence_errors,
         );
     }

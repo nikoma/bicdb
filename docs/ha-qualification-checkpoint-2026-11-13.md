@@ -1,6 +1,6 @@
 # HA qualification checkpoint — November 13, 2026
 
-Evidence cutoff: November 14, 2026, 02:12 UTC (November 13 in Los Angeles).
+Evidence cutoff: November 14, 2026, 03:30 UTC (November 13 in Los Angeles).
 This is a source-pinned development checkpoint, not a production certificate.
 The production gate is unchanged: zero lost acknowledged commits, correct read
 consistency/routing, bounded fault-safe rebalance, and a sustained throughput
@@ -41,9 +41,25 @@ qualification and verified deployment remain separate states.
 | PR183 baseline01308, broad REST native CLI case | Failed; third write outcome inconclusive | Two positive writes returned ACKs and their full Strong reads succeeded; the third positive append, an empty object, returned QueryTimedOut. | No ACK or subsequent Strong read for the third operation. Its RPC journal was not retained by the original broad workflow. No durable-loss inference or reconciliation claim. |
 | Native composition `3b`, qualifier `29ae` | Failed compilation; runtime not tested | Four concrete import/privacy compiler errors precede CI's90-minute cancellation. No test list or runtime execution was reached. | The old71 count was an unverified text inventory, not an executed cohort. |
 | Compile successor `5a859`, qualifier `244` | Passed compilation; failed inventory guard; runtime not tested | Workspace all-target/consumer checks and the actual library test build passed. Rust listed82 tests; the guard stopped before runtime because its static71 expectation omitted11 existing macro-generated controls. | Zero runtime cases executed. All82 cases, including the omitted macros, remain required; no case or deadline was removed. Workflow-only successor `88ffe19f` is qualifying the full exact compiler list separately. |
-| S2 discovery through complete Joined Serving | Not tested; source integration incomplete | Source review identifies missing authenticated remote NEW/decision/activation/Open producers, as well as the retained S2 source retirement consumers. | Separate discovery and hot-lifecycle fixtures do not establish the complete path. A private getter or manifest DTO cannot replace authority. |
+| Full82 runtime at `5a859`, qualifier `88ffe19f` | Failed |70 passed,12 failed, zero ignored,941.30 seconds. Eleven hot/data/term cases supplied a donor that was neither allowed leader as their initiator; the twelfth reached actual term mutation and received the newer version-fence refusal before an older error-message assertion. | The intended later cuts of the eleven cases were not reached. This is not an acknowledged-loss finding. Corrected fixture `dd8870bd` preserves production authority rules and business assertions; its new qualification is separate. |
+| Two-populated-range component `c968`, qualifier `21669a25` | Passed, one component only | Exact1 executed/passed; full83-name inventory compiled/listed separately. Three APP ACKs across the fixture, four full Strong reads; an old Strong, fresh APP and new Strong on the unaffected range all completed while the selected range's actual exported Rows response remained held. | Transport hold occurs after export/DB guards release. Original request resumes unexpired; Rows.complete is false, no Finish/target install/second Joined move/controller/disk/physical/capacity or RPO qualification. |
+| First S2 export-reference retirement `913bd4b`, qualifier `3d7b6a74` | Passed compilation; runtime not yet established | Two pinned mTLS hops, original retained target/native obligations and a final callback-token check; exact15 selected plus whole97-name inventory compiled/listed. | Runtime qualification is separate. Only the export capture/reference retires; shared OLD pin/freeze and target pin remain. This is not NEW quorum, decision/Open or Serving. |
+| S2 discovery through complete Joined Serving | Not tested; source integration incomplete | A first readonly target/export-reference wire slice is in separate qualification; full remote NEW quorum/decision/activation/Open producers and OLD-custody retirement remain absent. | Separate discovery, export-reference and hot-lifecycle fixtures do not establish the complete path. A private getter or manifest DTO cannot replace authority. |
+| Second populated range onto the same Serving Joined target | Not tested; confirmed implementation gap | Source-pinned FIRST policy accepts exactly one local-voter range; original-image and dispatch paths do not provide a protected additional-range receiver on Joined. | Requires a genuine per-range receive/activation producer preserving the first range and native WAL/index history. A successful transport-stall component does not exercise this path. |
 | Independent-machine four-to-five-node expansion | Failed original Azure qualification | Original failure, partial results and teardown remain the baseline. | No new Azure campaign, stable converged five-node throughput comparison or qualified physical RPO/RTO/percentiles. |
 | Transparent PostgreSQL cross-range business transactions | Not tested as a delivered capability; implementation incomplete | Current SQL source review retains local gateway execution and an abstract multi-range protocol without a production coordinator. | No general transparent cross-range joins/snapshots or durable atomic multi-range SQL execution. |
+
+## Raw custody and public evidence
+
+The complete original native82 artifact is retained privately outside Git, with
+ZIP SHA256 `bdf53f0eb21bf88397a14099f6a971460db1497104bcb799ae078b3d85c03561`.
+Its 9,361 members include native DB/pages/WAL and per-fixture mesh-signing keys.
+Those bytes are not suitable for a public documentation upload. The separate
+logical projection and omission inventory must identify the excluded custody;
+file hashes and copied metadata do not establish fsync, cold recovery or the
+absence of secrets in arbitrary output. The two-range component's complete
+original archive is likewise retained privately. Neither archive was opened
+with a database engine or repaired during verification.
 
 ## Reproduction and next bounded tests
 
@@ -85,8 +101,10 @@ retain exact sources, requests, outcomes and portable verifiers.
    Open continuity can still hold Frozen owners while obsolete OLD references
    drain; later released/armed Open gates FIRST Serving. Requiring Serving for
    the earlier retirement would create a dependency cycle. In-process owner
-   references are not RPC proof. Terminal registry pruning, Joined-as-future-
-   donor admission, cold reconstruction and the automatic controller remain open.
+   references are not RPC proof. The [second-range admission report](design/native-joined-second-populated-range-admission-gap.md)
+   pins the separate receiver/dispatch/policy boundary. Terminal registry pruning,
+   Joined-as-future-donor admission, cold reconstruction and the automatic
+   controller remain open.
 6. After the supported automatic path is qualified, rerun the independent
    four-to-five-node physical experiment with its complete external attempt/ACK/
    uncertainty ledger. Separate relocation throughput from sustained throughput

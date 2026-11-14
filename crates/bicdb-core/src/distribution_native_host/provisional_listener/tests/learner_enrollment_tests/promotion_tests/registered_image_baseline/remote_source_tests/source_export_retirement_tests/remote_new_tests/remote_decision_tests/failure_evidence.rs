@@ -10,9 +10,10 @@ const MAX_FILE_BYTES: usize = 1024 * 1024;
 const MAX_TOTAL_BYTES: usize = 4 * 1024 * 1024;
 const MAX_API_ERRORS: usize = 2;
 const MAX_API_ERROR_BYTES: usize = 64 * 1024;
-const COMPACT_FILES: [&str; 2] = [
+const COMPACT_FILES: [&str; 3] = [
     "remote-decision-compact-first.json",
     "remote-decision-compact-retry.json",
+    "remote-decision-compact-retry-with-gate-after.json",
 ];
 const MAX_COMPACT_WRITES: usize = 3;
 const MAX_SCALAR_BYTES: usize = 256;
@@ -102,7 +103,14 @@ impl OnPanic {
                 "error":scalar(Some(&serde_json::Value::String(error.to_string())))}),
             _ => value,
         };
-        let name = COMPACT_FILES[usize::from(retry)];
+        // Preserve the first retry observation even if later state/gate
+        // diagnostics panic or the later evidence write fails.
+        let index = if retry && gate_after.is_some() {
+            2
+        } else {
+            usize::from(retry)
+        };
+        let name = COMPACT_FILES[index];
         // Best effort: a failed write cannot replace the primary API result.
         let error = super::evidence(&self.directory.join(name), &value)
             .err()

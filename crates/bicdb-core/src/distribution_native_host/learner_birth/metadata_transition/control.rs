@@ -71,6 +71,20 @@ impl NativeUnassignedLearnerHost {
             .as_ref()
             .and_then(|control| control.joined_data_status())
     }
+    /// See `NativeMetadataControlHost::joined_data_handoff_parts`.
+    #[allow(clippy::type_complexity)]
+    pub(in crate::distribution_native_host) fn joined_data_handoff_parts(
+        &self,
+    ) -> Result<(
+        Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>,
+        Arc<TcpClusterRelocationTransport>,
+    )> {
+        self.metadata_transition
+            .control
+            .as_ref()
+            .ok_or_else(|| invalid("actual retained joined DATA control absent"))?
+            .joined_data_handoff_parts()
+    }
     #[cfg(test)]
     #[allow(clippy::type_complexity)]
     pub(in crate::distribution_native_host) fn test_joined_data_bindings(

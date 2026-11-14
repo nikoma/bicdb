@@ -1,26 +1,26 @@
-//! Positive four-to-five DATA path for ONE range, with a genuine Registered
-//! fifth member (no INITIAL ranges, learner-born store, promoted metadata
-//! voter) as the image target and the new range leader.
+//! Four-to-five DATA path for ONE range, with a genuine Registered fifth
+//! member (no INITIAL ranges, learner-born store, promoted metadata voter) as
+//! the image target and the new range leader, driven by the product driver
+//! `NativeJoinedDataHandoff`.
 //!
 //! Scope, stated exactly: five actual native hosts with real mutual-TLS
 //! metadata and DATA sockets in ONE process. Application writes, Strong reads,
 //! metadata consensus, recovery roles and range replication use those sockets.
-//! The handoff itself is orchestrated here through the existing in-process
-//! joint objects (source closure, local image capture, target install, joint
-//! decision, staged metadata membership, Open and release). There is no
-//! cross-process image stream and no automatic controller in this test.
+//! The driver sequences the existing in-process joint objects through the
+//! host actions implemented for this fixture below. There is no cross-process
+//! image stream and no automatic controller in these tests.
+//!
+//! Besides the positive path, the tests cover: an abort back to the original
+//! voters after the learner allocation and before any source cut; a transfer
+//! that fails after the source cut and is re-driven to completion, including
+//! the replacement of the target's partial install; and a driver that returns
+//! between stages and is run again.
 use super::*;
-use crate::distribution_range_consensus::{ImageInstallPurpose, NativeImageInstallRole};
-use crate::distribution_range_handoff::{
-    NativeJointDurableDecision, NativeJointHandoffPlan, NativeJointHandoffRuntime,
-    NativeJointNewObservation, NativeJointNewRound, NativeJointOldClosedQuorum,
-    NativeJointOldRound, NativeJointPreparedServingObservation, NativeJointPreparedServingRound,
+use crate::distribution_native_host::joined_data_handoff::{
+    NativeJoinedDataHandoff, NativeJoinedDataHandoffHosts, NativeJoinedDataHandoffStage as Stage,
+    NativeJoinedDataMember, NativeJoinedDataPlanningView,
 };
-use crate::distribution_range_image::RangeImageCapture;
-use crate::distribution_range_image_install::{
-    NativeImageCatalogueFinalization, NativeImageInstallFreeze, NativeRangeImageInstaller,
-};
-use crate::RangeSnapshotOptions;
+use crate::distribution_range_handoff::{NativeJointHandoffRuntime, NativeJointOldObservation};
 
 type Transport = Arc<TcpClusterRelocationTransport>;
 
@@ -33,6 +33,10 @@ struct Five {
     services: Vec<Arc<Mutex<crate::ClusterDataNodeService>>>,
     clients: Vec<Transport>,
     configs: Vec<crate::DistributionConfig>,
+    /// Directories of the ephemeral planning views; never a metadata store.
+    planning_roots: Vec<tempfile::TempDir>,
+    /// Fail the image transfer once, after this many copied steps.
+    fail_transfer_after: Option<usize>,
 }
 
 fn index_of(id: &ClusterNodeId) -> usize {
@@ -172,6 +176,8 @@ fn start_five(name: &str) -> Five {
         services,
         clients,
         configs,
+        planning_roots: Vec::new(),
+        fail_transfer_after: None,
     }
 }
 
@@ -220,385 +226,140 @@ fn commit_topology(five: &Five, candidate: ClusterTopology) {
     }
 }
 
-/// One committed learner allocation of the fifth member on `original`,
-/// retiring the current range leader.
-fn assign_fifth(current: &ClusterTopology, original: &crate::RangeDescriptor) -> ClusterTopology {
-    let mut proposed = current.clone();
-    assert!(proposed.nodes[&node(4)].native_store_birth_v1.is_some());
-    assert!(proposed.ranges.values().all(|range| range
-        .replicas
-        .iter()
-        .all(|replica| replica.node_id != node(4))));
-    let id = RelocationId::new(proposed.next_relocation_id).unwrap();
-    proposed.next_relocation_id += 1;
-    let target_replica = ReplicaId::new(proposed.next_replica_id).unwrap();
-    proposed.next_replica_id += 1;
-    let range = proposed
-        .ranges
-        .values_mut()
-        .find(|r| r.id == original.id)
-        .unwrap();
-    assert_eq!(&*range, original);
-    range.epoch += 1;
-    range.replicas.push(RangeReplica {
-        id: target_replica,
-        node_id: node(4),
-        role: RangeReplicaRole::Learner,
-    });
-    proposed.relocations.insert(
-        id,
-        RangeRelocation {
-            id,
-            plan_id: format!("fifth-data-path-{}", original.id),
-            handoff_session: Some(RangeHandoffSession {
-                session_id: Uuid::now_v7(),
-                nonce: Uuid::now_v7(),
-            }),
-            native_joint_handoff_v1: None,
-            range_id: original.id,
-            expected_epoch: original.epoch,
-            learner_epoch: original.epoch + 1,
-            promoted_epoch: None,
-            source: Some(original.leader.clone()),
-            target: node(4),
-            target_replica_id: target_replica,
-            reason: ReplicaMoveReason::LoadBalance,
-            phase: RelocationPhase::LearnerAllocated,
-            resume_phase: None,
-            snapshot_id: None,
-            snapshot_sha256: None,
-            snapshot_bytes_copied: 0,
-            snapshot_resume_after_key: None,
-            snapshot_commit_sequence: None,
-            destination_durable_commit_sequence: None,
-            source_commit_sequence: None,
-            cleanup_resume_after_key: None,
-            cleanup_records_deleted: 0,
-            created_at_ms: 100,
-            updated_at_ms: 100,
-            last_error: None,
-        },
-    );
-    proposed.generation += 1;
-    proposed.validate().unwrap();
-    proposed
-}
-
-/// Actual per-member handles for the joint orchestration. Index 4 is the
-/// fifth member; its transport is the one its own DATA owner uses.
-struct Members {
-    clients: Vec<Transport>,
-    providers: Vec<MetadataReadProvider>,
-    services: Vec<Arc<Mutex<crate::ClusterDataNodeService>>>,
-    actor: crate::distribution_consensus::MetadataReadParticipant,
-}
-impl Members {
-    fn role(&self, plan: &NativeJointHandoffPlan, recipient: usize) -> RecoveryRoleAdmission {
-        let promise = plan.promise();
+/// The fixture's host actions. Each one is the member's existing host method;
+/// the sequencing and the abort/resume decisions are the driver's.
+impl NativeJoinedDataHandoffHosts for Five {
+    fn metadata_leader(&self) -> Result<ClusterNodeId> {
+        Ok(node(0))
+    }
+    fn committed_topology(&self) -> Result<ClusterTopology> {
+        Ok(self.metadata[0].lock().committed_topology().clone())
+    }
+    fn commit_topology(
+        &mut self,
+        candidate: ClusterTopology,
+        _parent: &CancellationToken,
+    ) -> Result<()> {
+        commit_topology(self, candidate.clone());
+        if let Ok((_, client)) = self.host.joined_data_handoff_parts() {
+            client.install_topology(candidate)?;
+        }
+        Ok(())
+    }
+    fn planning_view(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<NativeJoinedDataPlanningView> {
         let business = Uuid::now_v7();
-        let challenge = Uuid::now_v7();
-        let purpose =
-            crate::distribution_consensus::MetadataRecoveryRolePurpose::CommittedHandoff {
-                relocation_id: promise.relocation_id,
-                plan_id: promise.plan_id.clone(),
-                session_id: promise.session_id,
-                nonce: promise.nonce,
-            };
-        let token = budget(5000);
-        let observed = self.providers[recipient]
-            .witness_recovery_role(
-                &self.actor,
-                business,
-                plan.old_range().id,
-                plan.old_range().epoch,
-                promise.nonce,
-                challenge,
-                purpose.clone(),
-                &token,
-            )
-            .unwrap();
-        RecoveryRoleAdmission::from_witness(
-            observed,
-            &self.actor,
-            &node(recipient),
+        let fresh = self.clients[0].acquire_host_metadata_observation(
+            &node(0),
             business,
-            plan.old_range().id,
-            plan.old_range().epoch,
-            promise.nonce,
-            challenge,
-            &purpose,
-        )
-        .unwrap()
-    }
-}
-
-/// Ship the frozen source image and its complete history into the fifth
-/// member's Installing state, verify it there and finalize its catalogue.
-fn install_on_fifth(
-    members: &Members,
-    runtime: &Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>,
-    plan: &NativeJointHandoffPlan,
-    mut capture: RangeImageCapture,
-    fail_after_first_copy_step: bool,
-    restart: bool,
-) -> std::result::Result<(NativeImageInstallFreeze, NativeImageCatalogueFinalization), String> {
-    let target = 4usize;
-    let parent = CancellationToken::uncancelable();
-    let initial = members.role(plan, target);
-    let scope = RecoveryFenceScope::from_role(&initial).unwrap();
-    if !restart {
-        runtime
-            .fence_epoch(
-                &members.actor,
-                &RecoveryEpochFenceRequest {
-                    scope: scope.clone(),
-                    budget_ms: 5000,
-                },
-                &parent,
-            )
-            .unwrap();
-    }
-    let handoff = members.role(plan, target).into_handoff().unwrap();
-    let image_role = NativeImageInstallRole::CommittedHandoff(&handoff);
-    let attempt = Uuid::now_v7();
-    let source = capture.authorize_target_install().unwrap();
-    let lease = if restart {
-        runtime
-            .restart_dropped_image_transfer(
-                &scope,
-                &source,
-                &image_role,
-                ImageInstallPurpose::RelocationLearner,
-                attempt,
-                &parent,
-            )
-            .unwrap()
-    } else {
-        runtime
-            .transfer_image_install(
-                &scope,
-                &source,
-                &image_role,
-                ImageInstallPurpose::RelocationLearner,
-                attempt,
-                &parent,
-            )
-            .unwrap()
-    };
-    let mut install: NativeRangeImageInstaller = members.services[target]
-        .lock()
-        .begin_native_range_image_install(
-            &source,
-            &image_role,
-            lease,
-            ImageInstallPurpose::RelocationLearner,
-            attempt,
-            &parent,
-        )
-        .unwrap();
-    drop(source);
-    loop {
-        let cursor = capture.history_cursor().clone();
-        let step = capture.export_history_step(&cursor, 256, &parent).unwrap();
-        let handoff = members.role(plan, target).into_handoff().unwrap();
-        let source = capture.authorize_target_install().unwrap();
-        let stage_id = install.history_stage_id();
-        let progress = members.services[target]
-            .lock()
-            .stage_native_range_image_history(
-                &mut install,
-                &NativeImageInstallRole::CommittedHandoff(&handoff),
-                &source,
-                stage_id,
-                &step,
-                &parent,
-            )
-            .unwrap();
-        if progress.cursor.complete() {
-            break;
+            Duration::from_secs(5),
+            parent,
+        )?;
+        let (controller, _) = self.controls[0].test_initial_data_routing_inputs()?;
+        let snapshot = controller.bootstrap(parent)?;
+        if &snapshot.topology != fresh.committed_topology(business)? {
+            return Err(BicDbError::Cluster(
+                "planning snapshot is not the fresh committed configuration".into(),
+            ));
         }
+        // A planning view only: it holds the fresh committed configuration and
+        // is never a metadata store. Only the real consensus commit publishes.
+        let root = tempfile::tempdir()?;
+        let config = crate::provision_cluster_member_directory(
+            root.path(),
+            &snapshot,
+            &node(0),
+            snapshot.config_template.transport.clone(),
+            true,
+        )?;
+        let view = crate::DistributionStore::open(root.path(), config, true)?.fork_ephemeral();
+        self.planning_roots.push(root);
+        Ok(NativeJoinedDataPlanningView {
+            view,
+            fresh,
+            business,
+        })
     }
-    loop {
-        let handoff = members.role(plan, target).into_handoff().unwrap();
-        let source = capture.authorize_target_install().unwrap();
-        if members.services[target]
-            .lock()
-            .audit_native_range_image_history(
-                &mut install,
-                &NativeImageInstallRole::CommittedHandoff(&handoff),
-                &source,
-                256,
-                &parent,
-            )
-            .unwrap()
-            .audit_complete
+    fn member(&self, id: &ClusterNodeId) -> Result<NativeJoinedDataMember> {
+        let i = index_of(id);
+        // The fifth member's transport is the one its own DATA owner uses.
+        let client = if i == 4 {
+            self.host.joined_data_handoff_parts()?.1
+        } else {
+            self.clients[i].clone()
+        };
+        Ok(NativeJoinedDataMember {
+            provider: Arc::new(MetadataReadProvider::new(
+                self.metadata[i].clone(),
+                client.clone(),
+            )?),
+            service: self.services[i].clone(),
+            client,
+        })
+    }
+    fn data_owners(&self) -> Result<Vec<ClusterNodeId>> {
+        Ok((0..4).map(node).collect())
+    }
+    fn open_target(&mut self, parent: &CancellationToken) -> Result<()> {
+        if self
+            .host
+            .joined_data_status()
+            .is_some_and(|status| status.receiver_listening && status.writer_policy_installed)
         {
-            break;
+            return Ok(());
         }
+        self.host.open_joined_data(parent)
     }
-    loop {
-        let handoff = members.role(plan, target).into_handoff().unwrap();
-        let source = capture.authorize_target_install().unwrap();
-        if members.services[target]
-            .lock()
-            .clear_native_range_image_step(
-                &mut install,
-                &NativeImageInstallRole::CommittedHandoff(&handoff),
-                &source,
-                &parent,
-            )
-            .unwrap()
-        {
-            break;
-        }
+    fn target_recovery_runtime(
+        &self,
+    ) -> Result<Arc<crate::distribution_range_recovery::RangeRecoveryRuntime>> {
+        Ok(self.host.joined_data_handoff_parts()?.0)
     }
-    let options = RangeSnapshotOptions {
-        max_records_per_batch: 1,
-        max_bytes_per_batch: 1024 * 1024,
-        max_record_bytes: 1024 * 1024,
-    };
-    let mut copied = 0usize;
-    loop {
-        let cursor = capture.cursor().clone();
-        let step = capture.export_step(&cursor, &options, &parent).unwrap();
-        let handoff = members.role(plan, target).into_handoff().unwrap();
-        let source = capture.authorize_target_install().unwrap();
-        members.services[target]
-            .lock()
-            .copy_native_range_image_step(
-                &mut install,
-                &NativeImageInstallRole::CommittedHandoff(&handoff),
-                &source,
-                attempt,
-                &step,
-                &parent,
-            )
-            .unwrap();
-        copied += 1;
-        if fail_after_first_copy_step && copied == 1 {
-            return Err("injected transfer failure after the first copied image step".into());
-        }
-        if step.complete {
-            break;
-        }
+    fn refresh_target_policy(&mut self, parent: &CancellationToken) -> Result<()> {
+        self.host.refresh_joined_data_policy(parent)
     }
-    let completed = capture.complete().unwrap();
-    let handoff = members.role(plan, target).into_handoff().unwrap();
-    let mut verification = members.services[target]
-        .lock()
-        .begin_native_range_image_verification(
-            install,
-            &NativeImageInstallRole::CommittedHandoff(&handoff),
-            completed,
-            &parent,
-        )
-        .unwrap();
-    let mut complete = false;
-    for _ in 0..128 {
-        let handoff = members.role(plan, target).into_handoff().unwrap();
-        if members.services[target]
-            .lock()
-            .advance_native_range_image_verification(
-                &mut verification,
-                &NativeImageInstallRole::CommittedHandoff(&handoff),
-                &parent,
-            )
-            .unwrap()
-            == crate::db::NativeTargetImageVerificationProgress::Complete
-        {
-            complete = true;
-            break;
-        }
+    fn publish_target(&mut self, parent: &CancellationToken) -> Result<usize> {
+        self.host.publish_joined_data(parent)
     }
-    assert!(complete, "actual bounded target verification must finish");
-    let handoff = members.role(plan, target).into_handoff().unwrap();
-    let verified = members.services[target]
-        .lock()
-        .finish_native_range_image_verification(
-            verification,
-            &NativeImageInstallRole::CommittedHandoff(&handoff),
-            &parent,
-        )
-        .unwrap();
-    let handoff = members.role(plan, target).into_handoff().unwrap();
-    let adopted = members.services[target]
-        .lock()
-        .adopt_native_range_image_catalogue(
-            verified,
-            &NativeImageInstallRole::CommittedHandoff(&handoff),
-            &parent,
-        )
-        .unwrap();
-    let handoff = members.role(plan, target).into_handoff().unwrap();
-    Ok(members.services[target]
-        .lock()
-        .finalize_native_range_image_catalogue(
-            adopted,
-            &NativeImageInstallRole::CommittedHandoff(&handoff),
-            &parent,
-        )
-        .unwrap())
-}
-
-/// One staged metadata membership step, built from the durable dual-majority
-/// decision and a fresh host metadata observation, then committed by the
-/// actual metadata consensus.
-fn commit_joint_stage(five: &Five, decision: &NativeJointDurableDecision, stage: usize) {
-    let token = budget(5000);
-    let business = Uuid::now_v7();
-    let fresh = five.clients[0]
-        .acquire_host_metadata_observation(&node(0), business, Duration::from_secs(5), &token)
-        .unwrap();
-    let (controller, _) = five.controls[0].test_initial_data_routing_inputs().unwrap();
-    let snapshot = controller.bootstrap(&token).unwrap();
-    assert_eq!(
-        &snapshot.topology,
-        fresh.committed_topology(business).unwrap()
-    );
-    // A planning view only: it holds the fresh committed configuration and is
-    // never a metadata store. Only the real consensus commit publishes it.
-    let root = tempfile::tempdir().unwrap();
-    let config = crate::provision_cluster_member_directory(
-        root.path(),
-        &snapshot,
-        &node(0),
-        snapshot.config_template.transport.clone(),
-        true,
-    )
-    .unwrap();
-    let mut view = crate::DistributionStore::open(root.path(), config, true)
-        .unwrap()
-        .fork_ephemeral();
-    match stage {
-        0 => {
-            assert!(view
-                .certify_native_joint_handoff(decision, &fresh, business, &node(0), 110)
-                .unwrap());
-        }
-        1 => {
-            view.promote_native_joint_handoff_frozen(decision, &fresh, business, &node(0), 111)
-                .unwrap();
-        }
-        2 => {
-            view.finalize_native_joint_membership_frozen(decision, &fresh, business, &node(0), 112)
-                .unwrap();
-        }
-        _ => panic!("unknown joint stage"),
+    fn close_old(
+        &self,
+        id: &ClusterNodeId,
+        runtime: Arc<NativeJointHandoffRuntime>,
+        role: Arc<RecoveryRoleAdmission>,
+        own: crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<Arc<NativeJointOldObservation>> {
+        self.controls[index_of(id)].close_initial_old_step(runtime, role, own, business, parent)
     }
-    commit_topology(five, view.topology().clone());
-}
-
-fn retry_timed_out<T>(what: &str, mut attempt: impl FnMut() -> Result<T>) -> T {
-    for round in 0..4 {
-        match attempt() {
-            Ok(value) => return value,
-            Err(BicDbError::QueryTimedOut) if round < 3 => {
-                eprintln!("FIFTH_DATA_PATH bounded retry of {what} after a timed-out phase");
-            }
-            Err(error) => panic!("{what} failed: {error}"),
-        }
+    fn forget_old_closure(&self, id: &ClusterNodeId, range: crate::RangeId) -> Result<bool> {
+        self.controls[index_of(id)].forget_initial_old_closure(range)
     }
-    unreachable!()
+    fn refresh_owner_policy(
+        &mut self,
+        id: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.controls[index_of(id)].refresh_initial_data_policy(parent)
+    }
+    fn recover_owner_leadership(
+        &mut self,
+        id: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<usize> {
+        self.controls[index_of(id)].recover_initial_data_leadership(parent)
+    }
+    fn transfer_progress(&mut self, copied_steps: usize) -> Result<()> {
+        if self.fail_transfer_after == Some(copied_steps) {
+            self.fail_transfer_after = None;
+            return Err(BicDbError::Cluster(
+                "injected transfer failure after a copied image step".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 fn append_until_acknowledged(
@@ -651,118 +412,20 @@ fn stored(five: &Five, member: usize, key: &str) -> Option<serde_json::Value> {
         .map(|record| record.metadata.clone())
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Fault {
-    None,
-    /// The joining member is unavailable before any range is touched.
-    TargetUnavailable,
-    /// The image transfer fails after the source cut and the first copied
-    /// step, while the range is frozen on its owners.
-    TransferAfterSourceCut,
-    AbortBeforeCut,
-    AbortThenRetry,
+fn gateway(five: &Five, topology: &ClusterTopology, seconds: u64) -> crate::ClusterEventClient {
+    crate::ClusterEventClient::new(&five.configs[0], topology.clone())
+        .unwrap()
+        .with_request_timeout(Duration::from_secs(seconds))
+        .unwrap()
 }
 
-#[test]
-fn native_fifth_exp_abort_before_cut() {
-    run_fifth_data_path(Fault::AbortBeforeCut);
+fn committed(five: &Five) -> ClusterTopology {
+    five.metadata[0].lock().committed_topology().clone()
 }
 
-#[test]
-fn native_fifth_exp_abort_then_retry() {
-    run_fifth_data_path(Fault::AbortThenRetry);
-}
-
-fn source_cut(
-    five: &Five,
-    members: &Members,
-    runtimes: &BTreeMap<usize, Arc<NativeJointHandoffRuntime>>,
-    range: &crate::RangeDescriptor,
-    relocation: RelocationId,
-    leader_index: usize,
-) -> (
-    Arc<NativeJointHandoffPlan>,
-    NativeJointOldClosedQuorum,
-    RangeImageCapture,
-) {
-    let parent = CancellationToken::uncancelable();
-    let round_parent = budget(5000);
-    let business = Uuid::now_v7();
-    let observation = members.clients[leader_index]
-        .acquire_metadata_read_observation(
-            &node(0),
-            business,
-            range.id,
-            range.epoch,
-            Duration::from_secs(5),
-            &round_parent,
-        )
-        .unwrap();
-    let mut round = NativeJointOldRound::begin(observation, business, relocation).unwrap();
-    let plan = round.plan();
-    let old_indices = plan.old_members().keys().map(index_of).collect::<Vec<_>>();
-    for &i in &old_indices {
-        let operation = budget(5000);
-        let constraints = runtimes[&i]
-            .observe_constraints(plan.clone(), members.role(&plan, i), &operation)
-            .unwrap();
-        round
-            .record_constraints(constraints, &members.services[i])
-            .unwrap();
-    }
-    eprintln!("FIFTH_EXP source constraints observed");
-    for &i in &old_indices {
-        let operation = budget(5000);
-        let role = members.role(&plan, i);
-        let own_business = Uuid::now_v7();
-        let own = members.clients[i]
-            .acquire_host_metadata_observation(
-                &node(0),
-                own_business,
-                Duration::from_secs(5),
-                &operation,
-            )
-            .unwrap();
-        let closed = five.controls[i]
-            .close_initial_old_step(
-                runtimes[&i].clone(),
-                Arc::new(role),
-                own,
-                own_business,
-                &operation,
-            )
-            .unwrap();
-        round.record_retained_closed_actual(closed).unwrap();
-    }
-    eprintln!("FIFTH_EXP source owners closed");
-    let mut closed = round.finish().unwrap();
-    assert!(closed.range_index() >= 1);
-    let capture = closed
-        .begin_capture(Duration::from_secs(2), &parent)
-        .unwrap();
-    (plan, closed, capture)
-}
-
-#[test]
-fn native_fifth_data_path_receives_image_becomes_voter_and_serves_after_one_original_stops() {
-    run_fifth_data_path(Fault::None);
-}
-
-#[test]
-fn native_fifth_data_path_unavailable_target_leaves_range_writable_on_original_four() {
-    run_fifth_data_path(Fault::TargetUnavailable);
-}
-
-#[test]
-fn native_fifth_data_path_transfer_failure_after_source_cut_characterization() {
-    run_fifth_data_path(Fault::TransferAfterSourceCut);
-}
-
-fn run_fifth_data_path(fault: Fault) {
-    let mut five = start_five("fifth-data-path-target");
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        exercise(&mut five, fault);
-    }));
+fn run(name: &str, body: impl FnOnce(&mut Five)) {
+    let mut five = start_five(name);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| body(&mut five)));
     let cleanup = stop_five(five);
     eprintln!("FIFTH_DATA_PATH cleanup errors: {cleanup:?}");
     if let Err(panic) = result {
@@ -770,39 +433,46 @@ fn run_fifth_data_path(fault: Fault) {
     }
 }
 
-fn exercise(five: &mut Five, fault: Fault) {
-    let parent = CancellationToken::uncancelable();
-    let started = Instant::now();
-    let mark = |phase: &str| {
+struct Scenario {
+    current: ClusterTopology,
+    original: crate::RangeDescriptor,
+    old_voters: Vec<usize>,
+    old_leader: usize,
+    acknowledged: Vec<(String, serde_json::Value)>,
+    handoff: NativeJoinedDataHandoff,
+    started: Instant,
+}
+impl Scenario {
+    fn mark(&self, phase: &str) {
         eprintln!(
             "FIFTH_DATA_PATH phase={phase} t_ms={}",
-            started.elapsed().as_millis()
-        )
-    };
-    let current = five.metadata[0].lock().committed_topology().clone();
-    let original = current.ranges.values().next().unwrap().clone();
-    assert_eq!(
-        original
-            .replicas
-            .iter()
-            .filter(|r| r.role == RangeReplicaRole::Voter)
-            .count(),
-        3
-    );
-    assert!(original.replicas.iter().all(|r| r.node_id != node(4)));
+            self.started.elapsed().as_millis()
+        );
+    }
+}
 
-    // Rows acknowledged by the four-node cluster, before any change.
-    let gateway = crate::ClusterEventClient::new(&five.configs[0], current.clone())
-        .unwrap()
-        .with_request_timeout(Duration::from_secs(5))
-        .unwrap();
+/// Rows acknowledged by the four-node cluster before any change, and one
+/// handoff of the first range onto the fifth member.
+fn prepare(five: &mut Five) -> Scenario {
+    let started = Instant::now();
+    let current = committed(five);
+    let original = current.ranges.values().next().unwrap().clone();
+    let old_voters = original
+        .replicas
+        .iter()
+        .filter(|r| r.role == RangeReplicaRole::Voter)
+        .map(|r| index_of(&r.node_id))
+        .collect::<Vec<_>>();
+    assert_eq!(old_voters.len(), 3);
+    assert!(original.replicas.iter().all(|r| r.node_id != node(4)));
+    let client = gateway(five, &current, 5);
     let mut acknowledged = Vec::new();
     for n in 0..3 {
         let key = key_for(&current, original.id, &format!("before-{n}"));
         let value = serde_json::json!({"fifth_data_path":"acknowledged by four","n":n,"nested":[null,17,{"full":"payload"}]});
-        assert!(gateway.append("items", &key, value.clone()).unwrap());
+        assert!(client.append("items", &key, value.clone()).unwrap());
         assert_eq!(
-            gateway.get_strong("items", &key).unwrap(),
+            client.get_strong("items", &key).unwrap(),
             Some(value.clone())
         );
         acknowledged.push((key, value));
@@ -814,284 +484,73 @@ fn exercise(five: &mut Five, fault: Fault) {
             "the fifth member holds no rows before the change"
         );
     }
+    let scenario = Scenario {
+        old_leader: index_of(&original.leader),
+        handoff: NativeJoinedDataHandoff::new(original.id, node(4)).with_image_batch_records(1),
+        current,
+        original,
+        old_voters,
+        acknowledged,
+        started,
+    };
+    scenario.mark("four-node rows acknowledged");
+    scenario
+}
 
-    // Step 1: the joining member must hold an installed host writer policy
-    // and a DATA socket BEFORE any range configuration is changed.
-    if fault == Fault::TargetUnavailable {
-        five.host.stop_owned_metadata(&budget(10_000)).unwrap();
-        let refused = five.host.open_joined_data(&budget(10_000)).unwrap_err();
-        eprintln!("FIFTH_DATA_PATH unavailable target refused before any change: {refused}");
-        // No learner allocation was proposed, so the range is untouched.
-        assert_eq!(
-            five.metadata[0].lock().committed_topology(),
-            &current,
-            "a refused join must not change the committed configuration"
-        );
-        let key = key_for(&current, original.id, "after-refused-join");
-        let value = serde_json::json!({"fifth_data_path":"still writable on four"});
-        assert!(gateway.append("items", &key, value.clone()).unwrap());
-        assert_eq!(gateway.get_strong("items", &key).unwrap(), Some(value));
-        for (key, value) in &acknowledged {
-            assert_eq!(
-                gateway.get_strong("items", key).unwrap(),
-                Some(value.clone())
-            );
-        }
-        return;
-    }
-    mark("four-node rows acknowledged");
-    five.host.open_joined_data(&budget(10_000)).unwrap();
-    let status = five.host.joined_data_status().unwrap();
-    assert!(status.receiver_listening && status.writer_policy_installed);
-    assert!(!status.dispatcher_published);
-    let (_, _, fifth_runtime, fifth_client) = five.host.test_joined_data_bindings().unwrap();
-
-    mark("fifth joined DATA owner open");
-    // Step 2: commit the learner allocation of the fifth member.
-    let pending = assign_fifth(&current, &original);
-    commit_topology(five, pending.clone());
-    let range = pending.range_by_id(original.id).unwrap().clone();
-    let relocation = pending
+/// The committed relocation of the scenario's range onto the fifth member.
+fn relocation(five: &Five, scenario: &Scenario) -> RangeRelocation {
+    committed(five)
         .relocations
         .values()
-        .find(|plan| plan.range_id == range.id)
+        .find(|plan| plan.range_id == scenario.original.id && plan.target == node(4))
         .unwrap()
-        .clone();
-    let leader_index = index_of(&range.leader);
-    let mut clients = five.clients.clone();
-    clients.push(fifth_client);
-    clients[4].install_topology(pending.clone()).unwrap();
-    let members = Members {
-        providers: (0..5)
-            .map(|i| {
-                MetadataReadProvider::new(five.metadata[i].clone(), clients[i].clone()).unwrap()
-            })
-            .collect(),
-        actor: clients[leader_index].local_metadata_read_participant(),
-        services: five.services.clone(),
-        clients,
-    };
+        .clone()
+}
 
-    mark("learner allocation committed");
-    let old_indices = range
-        .replicas
-        .iter()
-        .filter(|r| r.role == RangeReplicaRole::Voter)
-        .map(|r| index_of(&r.node_id))
-        .collect::<Vec<_>>();
-    if matches!(fault, Fault::AbortBeforeCut | Fault::AbortThenRetry) {
-        if fault == Fault::AbortBeforeCut {
-            five.host.stop_owned_metadata(&budget(10_000)).unwrap();
-        }
-        for (i, control) in five.controls.iter_mut().enumerate() {
-            let outcome = control.refresh_initial_data_policy(&budget(10_000));
-            eprintln!(
-                "FIFTH_EXP abort refresh member={i}: {:?}",
-                outcome.as_ref().map_err(|error| error.to_string())
+/// The range is frozen or outside every installed policy: a write on the
+/// committed configuration must not be acknowledged, and every acknowledged
+/// row is still on every old voter.
+fn assert_unwritable_and_intact(five: &Five, scenario: &Scenario, tag: &str) {
+    let pending = committed(five);
+    for (key, value) in &scenario.acknowledged {
+        for &i in &scenario.old_voters {
+            assert_eq!(
+                stored(five, i, key).as_ref(),
+                Some(value),
+                "acknowledged row lost on an original owner during the handoff"
             );
         }
-        for (i, control) in five.controls.iter().enumerate() {
-            let outcome = control.recover_initial_data_leadership(&budget(20_000));
-            eprintln!(
-                "FIFTH_EXP abort recover member={i}: {:?}",
-                outcome.as_ref().map_err(|error| error.to_string())
-            );
-        }
-        let gateway = crate::ClusterEventClient::new(&five.configs[0], pending.clone())
-            .unwrap()
-            .with_request_timeout(Duration::from_secs(5))
-            .unwrap();
-        let key = key_for(&pending, range.id, "after-abort");
-        let value = serde_json::json!({"fifth_data_path":"acknowledged after abort"});
-        for round in 0..3 {
-            let raw = five.clients[0].application_event_cancellable(
-                &budget(5000),
-                &range.leader,
-                crate::ClusterEventRequest {
-                    range_id: range.id,
-                    range_epoch: range.epoch,
-                    operation: crate::ClusterEventOperation::Append {
-                        namespace: "items".into(),
-                        key: format!("{key}-raw-{round}"),
-                        value: value.clone(),
-                    },
-                },
-            );
-            match raw {
-                Ok(_) => eprintln!("FIFTH_EXP raw append round={round}: acknowledged"),
-                Err(error) => eprintln!("FIFTH_EXP raw append round={round}: {error}"),
-            }
-            for (i, control) in five.controls.iter().enumerate() {
-                let outcome = control.recover_initial_data_leadership(&budget(20_000));
-                eprintln!(
-                    "FIFTH_EXP abort recover again round={round} member={i}: {:?}",
-                    outcome.as_ref().map_err(|error| error.to_string())
-                );
-            }
-        }
-        append_until_acknowledged(&gateway, &key, &value);
-        assert_eq!(strong_until_served(&gateway, &key).as_ref(), Some(&value));
-        let holders = old_indices
+    }
+    let key = key_for(&pending, scenario.original.id, tag);
+    let value = serde_json::json!({"fifth_data_path":"must not be acknowledged","tag":tag});
+    let outcome = gateway(five, &pending, 3).append("items", &key, value.clone());
+    eprintln!(
+        "FIFTH_DATA_PATH write during the handoff ({tag}): {:?}",
+        outcome.as_ref().map_err(|error| error.to_string())
+    );
+    // Safety: an acknowledgement, if one were ever returned here, must be a
+    // real durable row on a majority of the old owners.
+    if matches!(outcome, Ok(true)) {
+        let holders = scenario
+            .old_voters
             .iter()
             .filter(|i| stored(five, **i, &key).as_ref() == Some(&value))
             .count();
-        assert!(holders >= 2, "abort write is not on an old majority");
-        for (key, value) in &acknowledged {
-            assert_eq!(strong_until_served(&gateway, key).as_ref(), Some(value));
-        }
-        acknowledged.push((key, value));
-        mark("abort write acknowledged");
-        if fault == Fault::AbortBeforeCut {
-            return;
-        }
+        assert!(holders >= 2, "acknowledged write is not on an old majority");
     }
-    // Step 3: freeze the range on its current owners (source cut).
-    let runtimes = old_indices
-        .iter()
-        .map(|i| {
-            (
-                *i,
-                Arc::new(NativeJointHandoffRuntime::new(members.services[*i].clone()).unwrap()),
-            )
-        })
-        .collect::<BTreeMap<_, _>>();
-    let (mut plan, mut closed, capture) = source_cut(
-        five,
-        &members,
-        &runtimes,
-        &range,
-        relocation.id,
-        leader_index,
+    assert!(
+        outcome.is_err(),
+        "a range inside an unfinished handoff acknowledged a write"
     );
-    assert_eq!(plan.activation_range().leader, node(4));
-    let new_indices = plan.new_members().keys().map(index_of).collect::<Vec<_>>();
-    assert!(new_indices.contains(&4) && !new_indices.contains(&leader_index));
-    let survivors = new_indices
-        .iter()
-        .copied()
-        .filter(|i| *i != 4)
-        .collect::<Vec<_>>();
-    assert_eq!(survivors.len(), 2);
+}
 
-    mark("source cut and capture started");
-    // Step 4: ship image + history into the fifth member and verify there.
-    let mut installed = install_on_fifth(
-        &members,
-        &fifth_runtime,
-        &plan,
-        capture,
-        fault == Fault::TransferAfterSourceCut,
-        false,
-    );
-    if fault == Fault::TransferAfterSourceCut {
-        let error = match &installed {
-            Err(error) => error.clone(),
-            Ok(_) => panic!("injected transfer failure"),
-        };
-        eprintln!("FIFTH_DATA_PATH transfer failed after source cut: {error}");
-        drop(closed);
-        for &i in &old_indices {
-            five.controls[i]
-                .forget_initial_old_closure(range.id)
-                .unwrap();
-        }
-        for (key, value) in &acknowledged {
-            for &i in &old_indices {
-                assert_eq!(
-                    stored(five, i, key).as_ref(),
-                    Some(value),
-                    "acknowledged row lost on an original owner after a failed transfer"
-                );
-            }
-        }
-        let key = key_for(&current, original.id, "after-failed-transfer");
-        let value = serde_json::json!({"fifth_data_path":"after failed transfer"});
-        let gateway = crate::ClusterEventClient::new(&five.configs[0], pending.clone())
-            .unwrap()
-            .with_request_timeout(Duration::from_secs(3))
-            .unwrap();
-        let outcome = gateway.append("items", &key, value.clone());
-        eprintln!(
-            "FIFTH_DATA_PATH_CHARACTERIZATION write on the old configuration after a post-cut transfer failure: {:?}",
-            outcome.as_ref().map_err(|error| error.to_string())
-        );
-        if matches!(outcome, Ok(true)) {
-            let holders = old_indices
-                .iter()
-                .filter(|i| stored(five, **i, &key).as_ref() == Some(&value))
-                .count();
-            assert!(holders >= 2, "acknowledged write is not on an old majority");
-        }
-        mark("resume: re-closing the source");
-        let (plan2, closed2, capture2) = source_cut(
-            five,
-            &members,
-            &runtimes,
-            &range,
-            relocation.id,
-            leader_index,
-        );
-        plan = plan2;
-        closed = closed2;
-        mark("resume: re-shipping the image");
-        installed = install_on_fifth(&members, &fifth_runtime, &plan, capture2, false, true);
-    }
-    let closed = Arc::new(closed);
-    mark("image transfer finished");
-    let (frozen, image) = installed.unwrap();
-    assert_eq!(image.base().range_index(), closed.range_index());
-    assert_eq!(
-        image.base().logical_history_sha256(),
-        closed.logical_history_sha256()
-    );
-    for (key, value) in &acknowledged {
-        assert_eq!(
-            stored(five, 4, key).as_ref(),
-            Some(value),
-            "verified image row missing on the fifth member"
-        );
-    }
-
-    mark("image verified on the fifth");
-    // Step 5: joint decision over the old and the new DATA majority, then the
-    // staged metadata membership change (learner -> voter, source retired).
-    let handoff = members.role(&plan, 4).into_handoff().unwrap();
-    let target = members.services[4]
-        .lock()
-        .observe_native_joint_new_target(&closed, handoff, image, frozen, &parent)
-        .unwrap();
-    let mut new = NativeJointNewRound::begin(closed.clone()).unwrap();
-    for &i in &survivors {
-        new.record_actual_survivor(&node(i), members.role(&plan, i))
-            .unwrap();
-    }
-    new.record(
-        NativeJointNewObservation::from_finalized_actual_target(
-            target,
-            members.services[4].clone(),
-        )
-        .unwrap(),
-    )
-    .unwrap();
-    let mut publication = new
-        .finish()
-        .unwrap()
-        .prepare_decision()
-        .unwrap()
-        .publication_round();
-    for &i in old_indices.iter().chain(std::iter::once(&4)) {
-        publication
-            .publish_actual_member(members.role(&plan, i), &parent)
-            .unwrap();
-    }
-    mark("joint decision published");
-    let decision = publication.finish().unwrap();
-    for stage in 0..3 {
-        commit_joint_stage(five, &decision, stage);
-    }
-    let committed = five.metadata[0].lock().committed_topology().clone();
-    let activation = committed.range_by_id(range.id).unwrap().clone();
-    assert_eq!(&activation, plan.activation_range());
+/// Acceptance of the completed path: the fifth member is a voter and the only
+/// leader of the range, serves Strong reads of every earlier row, acknowledges
+/// new writes, and keeps doing so with one original member stopped.
+fn accept(five: &mut Five, scenario: &mut Scenario) {
+    let committed = committed(five);
+    let range = scenario.original.id;
+    let activation = committed.range_by_id(range).unwrap().clone();
     assert_eq!(activation.leader, node(4));
     assert!(activation
         .replicas
@@ -1100,173 +559,49 @@ fn exercise(five: &mut Five, fault: Fault) {
     assert!(activation
         .replicas
         .iter()
-        .all(|r| r.node_id != node(leader_index)));
-    members.clients[4]
-        .install_topology(committed.clone())
-        .unwrap();
-
-    mark("membership stages committed");
-    // Step 6: every owner installs the host policy of the new configuration.
-    for &i in &old_indices {
-        five.controls[i]
-            .forget_initial_old_closure(range.id)
-            .unwrap();
-    }
-    for control in &mut five.controls {
-        control
-            .refresh_initial_data_policy(&budget(10_000))
-            .unwrap();
-    }
-    five.host
-        .refresh_joined_data_policy(&budget(10_000))
-        .unwrap();
-
-    mark("new-configuration policies installed");
-    // Step 7: joint serving preparation, publication, Open and release
-    // (unfreeze) on the complete new member set, including the fifth.
-    let mut prepared_round: Option<NativeJointPreparedServingRound> = None;
-    for (local, (service, lease)) in decision.into_new_serving_owners().unwrap() {
-        let business = Uuid::now_v7();
-        let mq = members.clients[index_of(&local)]
-            .acquire_host_metadata_observation(&node(0), business, Duration::from_secs(5), &parent)
-            .unwrap();
-        let actual = {
-            let actual = service.lock();
-            let committed = actual
-                .observe_committed_native_joint_decision(mq, business, range.id)
-                .unwrap();
-            actual
-                .prepare_local_native_joint_serving(committed, lease, &parent)
-                .unwrap()
-        };
-        let observation =
-            NativeJointPreparedServingObservation::from_actual_service(actual, service).unwrap();
-        if let Some(round) = &mut prepared_round {
-            round.record(observation).unwrap();
-        } else {
-            prepared_round =
-                Some(NativeJointPreparedServingRound::begin(observation, &parent).unwrap());
-        }
-    }
-    mark("serving prepared");
-    let prepared = Arc::new(prepared_round.unwrap().finish().unwrap());
-    let leader = node(0);
-    let mut publication = prepared.resume_native_publication().unwrap();
-    for &local in &new_indices {
-        retry_timed_out("joint serving publication", || {
-            let mut fresh = prepared.begin_fresh_preparation_phase(Duration::from_secs(4))?;
-            for &i in &new_indices {
-                fresh.acquire_actual_member(&members.clients[i], &leader)?;
-            }
-            let fresh = Arc::new(fresh.finish()?);
-            let admission = fresh.acquire_local_activation(&members.clients[local], &leader)?;
-            publication.publish_actual_local_member(&admission, &parent)
-        });
-    }
-    let current_phase = retry_timed_out("joint serving publication aggregate", || {
-        let mut fresh = prepared.begin_fresh_preparation_phase(Duration::from_secs(4))?;
-        for &i in &new_indices {
-            fresh.acquire_actual_member(&members.clients[i], &leader)?;
-        }
-        Ok(Arc::new(fresh.finish()?))
-    });
-    let published = Arc::new(publication.finish_with_fresh_phase(current_phase).unwrap());
-    mark("serving published");
-    let mut activations = BTreeMap::new();
-    let mut image_owner = None;
-    let mut open_order = vec![4usize];
-    open_order.extend(survivors.iter().copied());
-    for &local in &open_order {
-        let receipt = retry_timed_out("joint Open", || {
-            let mut round = published.begin_fresh_open_phase(Duration::from_secs(4))?;
-            for &i in &new_indices {
-                round.acquire_actual_member(&members.clients[i], &leader)?;
-            }
-            let round = Arc::new(round.finish()?);
-            let open = round.acquire_local_open(&members.clients[local], &leader)?;
-            let receipt = Arc::new(open.persist_local_catalogue_activation(&parent)?);
-            if local == 4 && image_owner.is_none() {
-                image_owner = Some(open.retain_image_release_owner(receipt.clone())?);
-            }
-            Ok(receipt)
-        });
-        activations.insert(node(local), receipt);
-    }
-    mark("joint Open persisted");
-    let continuation = Arc::new(
-        published
-            .retain_release_continuation(
-                activations,
-                survivors
-                    .iter()
-                    .map(|i| (node(*i), runtimes[i].clone()))
-                    .collect(),
-                image_owner.unwrap(),
-            )
-            .unwrap(),
-    );
-    // Real freeze owners must drain before release.
-    drop(published);
-    drop(prepared);
-    drop(closed);
-    for &local in &open_order {
-        retry_timed_out("joint release", || {
-            let mut round = continuation.begin_fresh_release_phase(Duration::from_secs(4))?;
-            for &i in &new_indices {
-                round.acquire_actual_member(&members.clients[i], &leader)?;
-            }
-            Arc::new(round.finish()?)
-                .acquire_local_release(&members.clients[local], &leader)?
-                .release_actual_local()
-        });
-    }
-
-    mark("released");
-    // Step 8: the fifth member recovers leadership of its range and opens
-    // application and Strong ingress.
-    let recovered = five.host.publish_joined_data(&budget(20_000)).unwrap();
-    assert!(recovered >= 1, "the fifth member must lead its new range");
+        .all(|r| r.node_id != node(scenario.old_leader)));
+    let survivors = activation
+        .replicas
+        .iter()
+        .map(|r| index_of(&r.node_id))
+        .filter(|i| *i != 4)
+        .collect::<Vec<_>>();
+    assert_eq!(survivors.len(), 2);
     assert!(five.host.joined_data_status().unwrap().dispatcher_published);
-
-    mark("fifth leadership recovered and ingress published");
-    let gateway = crate::ClusterEventClient::new(&five.configs[0], committed.clone())
-        .unwrap()
-        .with_request_timeout(Duration::from_secs(5))
-        .unwrap();
-    // (a) Strong reads of the pre-change rows are served by the fifth member:
+    let client = gateway(five, &committed, 5);
+    // (a) Strong reads of the earlier rows are served by the fifth member:
     // it is the only leader of this range in the committed configuration.
-    for (key, value) in &acknowledged {
-        assert_eq!(strong_until_served(&gateway, key).as_ref(), Some(value));
+    for (key, value) in &scenario.acknowledged {
+        assert_eq!(strong_until_served(&client, key).as_ref(), Some(value));
         assert_eq!(stored(five, 4, key).as_ref(), Some(value));
     }
-    mark("(a) Strong reads served by the fifth");
+    scenario.mark("(a) Strong reads served by the fifth");
     // (b) A new write is acknowledged with the fifth member as a voter (and
     // leader) and is readable from it.
-    let key = key_for(&committed, range.id, "after-change");
+    let key = key_for(&committed, range, "after-change");
     let value = serde_json::json!({"fifth_data_path":"acknowledged with the fifth as voter"});
-    append_until_acknowledged(&gateway, &key, &value);
-    assert_eq!(strong_until_served(&gateway, &key).as_ref(), Some(&value));
+    append_until_acknowledged(&client, &key, &value);
+    assert_eq!(strong_until_served(&client, &key).as_ref(), Some(&value));
     assert_eq!(stored(five, 4, &key).as_ref(), Some(&value));
     for &i in &survivors {
         assert_eq!(stored(five, i, &key).as_ref(), Some(&value));
     }
     assert_eq!(
-        stored(five, leader_index, &key),
+        stored(five, scenario.old_leader, &key),
         None,
         "the retired source must not receive post-change rows"
     );
-    acknowledged.push((key, value));
-
-    mark("(b) post-change write acknowledged");
+    scenario.acknowledged.push((key, value));
+    scenario.mark("(b) post-change write acknowledged");
     // (c) Stop one ORIGINAL member that is a voter of the new configuration.
     // The remaining DATA majority is the fifth member plus one original.
     let stopped = *survivors.iter().find(|i| **i != 0).unwrap();
     let remaining = *survivors.iter().find(|i| **i != stopped).unwrap();
     five.controls[stopped].stop(&budget(10_000)).unwrap();
-    let key = key_for(&committed, range.id, "after-one-original-stopped");
+    let key = key_for(&committed, range, "after-one-original-stopped");
     let value = serde_json::json!({"fifth_data_path":"acknowledged with one original stopped"});
-    append_until_acknowledged(&gateway, &key, &value);
-    assert_eq!(strong_until_served(&gateway, &key).as_ref(), Some(&value));
+    append_until_acknowledged(&client, &key, &value);
+    assert_eq!(strong_until_served(&client, &key).as_ref(), Some(&value));
     assert_eq!(stored(five, 4, &key).as_ref(), Some(&value));
     assert_eq!(stored(five, remaining, &key).as_ref(), Some(&value));
     assert_eq!(
@@ -1274,16 +609,262 @@ fn exercise(five: &mut Five, fault: Fault) {
         None,
         "the stopped original cannot have received this row"
     );
-    acknowledged.push((key, value));
-    for (key, value) in &acknowledged {
-        assert_eq!(strong_until_served(&gateway, key).as_ref(), Some(value));
+    scenario.acknowledged.push((key, value));
+    for (key, value) in &scenario.acknowledged {
+        assert_eq!(strong_until_served(&client, key).as_ref(), Some(value));
     }
     eprintln!(
         "FIFTH_DATA_PATH_ACCEPTANCE range={} old_leader={} new_leader={} survivors={survivors:?} stopped_original={} rows={}",
-        range.id,
-        node(leader_index),
+        range,
+        node(scenario.old_leader),
         activation.leader,
         node(stopped),
-        acknowledged.len()
+        scenario.acknowledged.len()
     );
+}
+
+#[test]
+fn native_fifth_data_path_receives_image_becomes_voter_and_serves_after_one_original_stops() {
+    run("fifth-data-path-target", |five| {
+        let parent = CancellationToken::uncancelable();
+        let mut scenario = prepare(five);
+        // Step 1: the joining member holds an installed host writer policy and
+        // a DATA socket BEFORE any range configuration is changed.
+        assert_eq!(
+            scenario
+                .handoff
+                .drive_until(&mut *five, Some(Stage::TargetAdmitted), &parent)
+                .unwrap(),
+            Stage::TargetAdmitted
+        );
+        let status = five.host.joined_data_status().unwrap();
+        assert!(status.receiver_listening && status.writer_policy_installed);
+        assert!(!status.dispatcher_published);
+        assert_eq!(committed(five), scenario.current);
+        scenario.mark("fifth joined DATA owner open");
+        // Steps 2 to 4: allocation, source cut, transfer and verification.
+        assert_eq!(
+            scenario
+                .handoff
+                .drive_until(&mut *five, Some(Stage::ImageVerified), &parent)
+                .unwrap(),
+            Stage::ImageVerified
+        );
+        for (key, value) in &scenario.acknowledged {
+            assert_eq!(
+                stored(five, 4, key).as_ref(),
+                Some(value),
+                "verified image row missing on the fifth member"
+            );
+        }
+        let pending = relocation(five, &scenario);
+        assert_eq!(pending.phase, RelocationPhase::LearnerAllocated);
+        assert!(pending.native_joint_handoff_v1.is_none());
+        scenario.mark("image verified on the fifth");
+        // Steps 5 to 9.
+        assert_eq!(
+            scenario.handoff.drive(&mut *five, &parent).unwrap(),
+            Stage::Serving
+        );
+        scenario.mark("fifth leadership recovered and ingress published");
+        accept(five, &mut scenario);
+    });
+}
+
+#[test]
+fn native_fifth_data_path_unavailable_target_leaves_range_writable_on_original_four() {
+    run("fifth-data-path-unavailable", |five| {
+        let parent = CancellationToken::uncancelable();
+        let mut scenario = prepare(five);
+        five.host.stop_owned_metadata(&budget(10_000)).unwrap();
+        let refused = scenario.handoff.drive(&mut *five, &parent).unwrap_err();
+        eprintln!("FIFTH_DATA_PATH unavailable target refused before any change: {refused}");
+        assert!(!scenario.handoff.cut_attempted());
+        // No learner allocation was proposed, so the range is untouched.
+        assert_eq!(
+            committed(five),
+            scenario.current,
+            "a refused join must not change the committed configuration"
+        );
+        let client = gateway(five, &scenario.current, 5);
+        let key = key_for(
+            &scenario.current,
+            scenario.original.id,
+            "after-refused-join",
+        );
+        let value = serde_json::json!({"fifth_data_path":"still writable on four"});
+        assert!(client.append("items", &key, value.clone()).unwrap());
+        assert_eq!(client.get_strong("items", &key).unwrap(), Some(value));
+        for (key, value) in &scenario.acknowledged {
+            assert_eq!(
+                client.get_strong("items", key).unwrap(),
+                Some(value.clone())
+            );
+        }
+    });
+}
+
+/// The target fails after the learner allocation committed and before any
+/// source cut. The abort returns the range to its original voters: a new
+/// write is acknowledged by them and is Strong-readable.
+#[test]
+fn native_fifth_data_path_target_stopped_after_allocation_aborts_to_original_voters() {
+    run("fifth-data-path-abort", |five| {
+        let parent = CancellationToken::uncancelable();
+        let mut scenario = prepare(five);
+        assert_eq!(
+            scenario
+                .handoff
+                .drive_until(&mut *five, Some(Stage::LearnerAllocated), &parent)
+                .unwrap(),
+            Stage::LearnerAllocated
+        );
+        let pending = committed(five);
+        let range = pending.range_by_id(scenario.original.id).unwrap().clone();
+        assert_eq!(range.epoch, scenario.original.epoch + 1);
+        assert!(range
+            .replicas
+            .iter()
+            .any(|r| r.node_id == node(4) && r.role == RangeReplicaRole::Learner));
+        assert_eq!(
+            relocation(five, &scenario).phase,
+            RelocationPhase::LearnerAllocated
+        );
+        scenario.mark("learner allocation committed");
+        // The gap this closes: the committed allocation alone leaves the
+        // range outside every original owner's installed policy.
+        assert_unwritable_and_intact(five, &scenario, "after-allocation");
+        five.host.stop_owned_metadata(&budget(10_000)).unwrap();
+        scenario.mark("target stopped");
+        assert!(!scenario.handoff.cut_attempted());
+        let recovered = scenario
+            .handoff
+            .abort_before_cut(&mut *five, &parent)
+            .unwrap();
+        assert!(recovered >= 1, "the original leader must recover its range");
+        scenario.mark("aborted to the original voters");
+        // The abort changes no committed configuration.
+        assert_eq!(committed(five), pending);
+        let client = gateway(five, &pending, 5);
+        for n in 0..2 {
+            let key = key_for(&pending, range.id, &format!("after-abort-{n}"));
+            let value = serde_json::json!({"fifth_data_path":"acknowledged after abort","n":n});
+            append_until_acknowledged(&client, &key, &value);
+            assert_eq!(strong_until_served(&client, &key).as_ref(), Some(&value));
+            let holders = scenario
+                .old_voters
+                .iter()
+                .filter(|i| stored(five, **i, &key).as_ref() == Some(&value))
+                .count();
+            assert!(holders >= 2, "abort write is not on an original majority");
+            assert_eq!(
+                stored(five, 4, &key),
+                None,
+                "the stopped fifth member cannot hold a post-abort row"
+            );
+            scenario.acknowledged.push((key, value));
+        }
+        for (key, value) in &scenario.acknowledged {
+            assert_eq!(strong_until_served(&client, key).as_ref(), Some(value));
+        }
+        scenario.mark("writes acknowledged by the original voters");
+    });
+}
+
+/// The transfer fails after the source cut and the first copied step. The
+/// old voters hold a permanent promise, so there is no abort: the same
+/// handoff is driven again, the target's partial install is replaced by a new
+/// attempt, and the path completes with the acceptance of the positive test.
+#[test]
+fn native_fifth_data_path_transfer_failure_after_source_cut_resumes_to_completion() {
+    run("fifth-data-path-resume", |five| {
+        let parent = CancellationToken::uncancelable();
+        let mut scenario = prepare(five);
+        five.fail_transfer_after = Some(1);
+        let failed = scenario.handoff.drive(&mut *five, &parent).unwrap_err();
+        eprintln!("FIFTH_DATA_PATH transfer failed after source cut: {failed}");
+        assert!(failed.to_string().contains("injected transfer failure"));
+        assert!(scenario.handoff.cut_attempted());
+        let pending = relocation(five, &scenario);
+        assert_eq!(pending.phase, RelocationPhase::LearnerAllocated);
+        assert!(pending.native_joint_handoff_v1.is_none());
+        scenario.mark("transfer failed after the source cut");
+        // Safety of the interrupted state.
+        assert_unwritable_and_intact(five, &scenario, "after-failed-transfer");
+        // A permanent promise exists: the abort is refused, not attempted.
+        let refused = scenario
+            .handoff
+            .abort_before_cut(&mut *five, &parent)
+            .unwrap_err();
+        assert!(refused.to_string().contains("can only be resumed"));
+        assert_unwritable_and_intact(five, &scenario, "after-refused-abort");
+        // Resume: the same call again.
+        assert_eq!(
+            scenario.handoff.drive(&mut *five, &parent).unwrap(),
+            Stage::Serving
+        );
+        scenario.mark("resumed to completion");
+        accept(five, &mut scenario);
+    });
+}
+
+/// The driver returns between stages (after the joint decision, after the
+/// certification and after the union membership) and is run again each time.
+/// Repeating the call after completion changes nothing.
+#[test]
+fn native_fifth_data_path_interrupted_driver_reruns_to_completion() {
+    run("fifth-data-path-rerun", |five| {
+        let parent = CancellationToken::uncancelable();
+        let mut scenario = prepare(five);
+        for stage in [
+            Stage::DecisionPublished,
+            Stage::Certified,
+            Stage::PromotedFrozen,
+        ] {
+            assert_eq!(
+                scenario
+                    .handoff
+                    .drive_until(&mut *five, Some(stage), &parent)
+                    .unwrap(),
+                stage
+            );
+            let pending = relocation(five, &scenario);
+            let recorded = pending
+                .native_joint_handoff_v1
+                .as_ref()
+                .map(|record| record.stage());
+            match stage {
+                Stage::DecisionPublished => {
+                    assert_eq!(pending.phase, RelocationPhase::LearnerAllocated);
+                    assert_eq!(recorded, None);
+                }
+                Stage::Certified => assert_eq!(
+                    recorded,
+                    Some(crate::distribution::NativeJointHandoffStageV1::Certified)
+                ),
+                _ => assert_eq!(
+                    recorded,
+                    Some(crate::distribution::NativeJointHandoffStageV1::PromotedFrozen)
+                ),
+            }
+            assert!(!scenario.handoff.completed());
+            scenario.mark(&format!("driver returned after {stage:?}"));
+            assert_unwritable_and_intact(five, &scenario, &format!("after-{stage:?}"));
+        }
+        assert_eq!(
+            scenario.handoff.drive(&mut *five, &parent).unwrap(),
+            Stage::Serving
+        );
+        assert!(scenario.handoff.completed());
+        scenario.mark("driver completed after three interruptions");
+        // Repeating the call after completion is a no-op.
+        let after = committed(five);
+        assert_eq!(
+            scenario.handoff.drive(&mut *five, &parent).unwrap(),
+            Stage::Serving
+        );
+        assert_eq!(committed(five), after);
+        assert!(five.host.joined_data_status().unwrap().dispatcher_published);
+        accept(five, &mut scenario);
+    });
 }

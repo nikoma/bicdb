@@ -50,10 +50,15 @@ collector, validates the returned hash/identity/end offset, and fsyncs the local
 receipt transcript before returning. The collector writes to its own local
 durable storage, fsyncs the complete row, then writes and fsyncs its receipt
 journal before sending the receipt. No NFS/SSHFS or network-filesystem durability
-assumption is used. A bounded Linux mount preflight rejects unsupported/network
-and memory filesystem types and records the actual path, mount and `st_dev`.
-This identifies filesystem type only; backing-device/cache/flush behavior still
-requires independent qualification.
+assumption is used. The collector opens the real directory using `O_PATH` where
+available, binds its `fstat` device/inode and `/proc/self/fdinfo` kernel mount ID,
+and requires one matching `/proc/self/mountinfo` record. Its major/minor,
+filesystem root/path relationship and freshly opened mountpoint must match
+the actual handle. Ambiguous, unsupported, network and memory filesystems
+refuse. The same retained directory handle is then used for `openat` creation
+and directory fsync; later namespace/path replacement cannot retarget those
+writes. These are kernel filesystem/mount observations, not backing-device,
+cache, flush or physical-host qualification.
 
 The SDK observer waits for this receipt at every original SDK phase, including
 before dispatch and before response decoding. Its fallible callback can fence
@@ -84,6 +89,10 @@ cannot turn those gaps into a successful no-loss result.
 The collector uses pinned mutual TLS and one bounded request per connection.
 The producer pins the collector's leaf DER hash in addition to normal CA/name
 validation. The collector pins distinct producer and controller leaf hashes.
+Both Python helpers decode only the first certificate from a bounded 1 MiB PEM
+bundle, matching Rust's leaf selection and the actual TLS peer certificate.
+They do not hash an entire concatenated certificate chain. A malformed first
+certificate is refused rather than skipped for a later certificate.
 The controller cannot impersonate producer row submission and the producer
 cannot submit independent exit/fault witnesses.
 
@@ -189,7 +198,13 @@ server readiness or per-request Strong barriers. A fifth node requiring a new
 CA outside the unchanged client's initial trust is an unresolved integration
 gate, not permission to rewrite the client's trust during the experiment.
 
-## Validation recorded for this source batch
+## Historical a846 validation
+
+The following result belongs to frozen `a846ea208241e14eaf021da410125e57d95b5874`.
+Its receipt remains unchanged. It did not exercise multi-certificate chain
+interop or bind the mount preflight to a retained directory descriptor. The
+successor adds separate controls for those boundaries; source availability
+alone is not their execution result.
 
 The new `test_external` cohort executed 35 controls: 35 passed, none skipped or
 failed, in 4.750 seconds under a configured 512 MiB address-space cap. These
@@ -207,6 +222,42 @@ separate from compilation. No Rust build, real SDK request, VM provisioning,
 physical failure, production deployment, scale-out or throughput trial was
 performed for this batch. Both Rust compilation and genuine SDK/collector
 end-to-end execution remain gates before physical use.
+
+## Descriptor and PEM-chain successor validation
+
+The successor's focused aggregate executed 53 controls: the 35 existing
+instrumentation controls plus 18 new descriptor/mount/PEM-chain controls.
+All 53 passed, none skipped or failed, in 5.676 seconds under a configured
+512 MiB address-space cap. The unchanged 805 files and their historical
+63-control result are reused separately.
+
+The new controls observe real opened directory devices, inodes and kernel
+mount IDs, test contradictory/ambiguous mount observations, refuse a genuine
+other-device memory filesystem, and demonstrate that actual path replacement
+cannot redirect subsequent collector input writes from its retained handle.
+No mount operations are performed. Contradictory mount observations are
+injections around actual descriptors, not physical disk or namespace faults.
+A real loopback mTLS exchange uses multi-certificate PEM bundles on both
+peers and validates the original single-leaf pins; a wrong peer pin refuses.
+The same control also verifies file/descriptor cleanup after a genuine
+occupied-port startup refusal.
+
+The first aggregate is retained as failed: 52 executed, 14 passed, 7 assertion
+failures and 31 errors. Its new parser incorrectly rejected legitimate
+unrelated `nsfs` roots such as `net:[...]` before reaching the selected storage
+preflight. Those are prerequisite failures, not physical storage failures;
+even its passing refusal checks are not proof that their intended selected
+mount cut was reached. The correction keeps unrelated kernel DATA intact
+and applies strict root/device/mount-ID checks to the uniquely selected actual
+directory only. It adds an explicit unrelated-namespace control. That failed
+source/log and a846's earlier 35-control receipt remain unchanged.
+
+The external checker now requires the stronger descriptor-bound storage
+profile. Older path-only a846 storage facts remain historical DATA and cannot
+substitute for that profile. Format-1 SDK journal bytes and the original
+known/possible-ACK reconciliation corpus are unchanged. Rust examples remain
+uncompiled; no real SDK, database, VM, node expansion or physical fault was
+executed by these Python controls.
 
 ## Commands and evidence boundaries
 

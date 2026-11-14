@@ -7,6 +7,7 @@ preemptible; use an independent process supervisor. Restart never resumes an
 existing output directory. All uncertain/partial files remain evidence.
 """
 import argparse
+import base64
 import hashlib
 import ipaddress
 import json
@@ -21,6 +22,7 @@ import time
 import uuid
 
 import verify as V
+from local_storage import local_storage_contract, open_local_storage
 
 MAX_HEADER = 65536
 MAX_PAYLOAD = 64 * 1024**2
@@ -43,31 +45,29 @@ def new_file(path):
     return os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb", buffering=0)
 
 
+def new_file_at(directory_fd, name):
+    V.require(Path(name).name == name and name not in {"", ".", ".."}, "bounded collector basename")
+    fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory_fd)
+    return os.fdopen(fd, "wb", buffering=0)
+
+
+def first_leaf_der(path):
+    """Exact first certificate DER in a bounded PEM bundle; never hash a chain."""
+    raw = V.bounded(path, 1024**2)
+    found = re.search(rb"-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----", raw, re.S)
+    V.require(found is not None, "missing first PEM certificate")
+    body = re.sub(rb"\s+", b"", found[1])
+    der = base64.b64decode(body, validate=True)
+    V.require(der, "empty first PEM certificate")
+    return der
+
+
 def directory_sync(path, sync=os.fsync):
     fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
     try:
         sync(fd)
     finally:
         os.close(fd)
-
-
-def local_storage_contract(path):
-    """Conservative Linux mount preflight, not a disk/power-loss qualification."""
-    path = Path(path).resolve(strict=True)
-    candidates = []
-    for raw in V.bounded('/proc/self/mountinfo', 1024**2).decode().splitlines():
-        before, after = raw.split(' - ', 1)
-        fields = before.split()
-        mount = Path(re.sub(r'\\([0-7]{3})', lambda m: chr(int(m[1], 8)), fields[4]))
-        if mount == path or mount in path.parents:
-            candidates.append((len(str(mount)), mount, after.split()[0]))
-    V.require(candidates, "cannot establish collector local-storage mount")
-    _, mount, filesystem = max(candidates)
-    V.require(filesystem in {"ext2", "ext3", "ext4", "xfs", "btrfs", "zfs", "f2fs"},
-              "collector requires supported local durable filesystem; no NFS/SSHFS/tmpfs assumption")
-    return {"canonical_directory": str(path), "mountpoint": str(mount), "filesystem": filesystem,
-            "st_dev": path.stat().st_dev, "mount_preflight": "local_filesystem_type_only",
-            "actual_backing_storage_and_flush_behavior_qualified": False}
 
 
 def exact_write(file, raw, check=lambda: None):
@@ -97,18 +97,30 @@ class Store:
         self.request_end = None
         self.root.mkdir(mode=0o700)  # Existing/partially written runs never reopen for append.
         directory_sync(self.root.parent, sync)
-        storage_contract = local_storage_contract(self.root)
-        self.journal = new_file(self.root / "journal.jsonl")
-        self.receipts = new_file(self.root / "collector-receipts.jsonl")
-        self.witnesses = new_file(self.root / "controller-witnesses.jsonl")
-        for file in (self.journal, self.receipts, self.witnesses):
-            sync(file.fileno())
-        directory_sync(self.root, sync)
-        self._file("storage-contract.json", encode(storage_contract))
+        self.directory_fd, storage_contract = open_local_storage(self.root)
+        opened = []
+        try:
+            for attr, name in (("journal", "journal.jsonl"), ("receipts", "collector-receipts.jsonl"),
+                               ("witnesses", "controller-witnesses.jsonl")):
+                file = new_file_at(self.directory_fd, name)
+                opened.append(file)
+                setattr(self, attr, file)
+                sync(file.fileno())
+            sync(self.directory_fd)
+            self._file("storage-contract.json", encode(storage_contract))
+        except BaseException:
+            for file in opened:
+                file.close()
+            os.close(self.directory_fd)
+            self.directory_fd = None
+            raise
 
     def close(self):
         for file in (self.journal, self.receipts, self.witnesses):
             file.close()
+        if self.directory_fd is not None:
+            os.close(self.directory_fd)
+            self.directory_fd = None
 
     def fence(self):
         self.poisoned = True
@@ -238,10 +250,10 @@ class Store:
 
     def _file(self, name, raw):
         self.check_time()
-        with new_file(self.root / name) as file:
+        with new_file_at(self.directory_fd, name) as file:
             self.persist(file, raw)
         self.check_time()
-        directory_sync(self.root, self.sync)
+        self.sync(self.directory_fd)
         self.check_time()
 
 
@@ -295,7 +307,7 @@ def serve(args, ready=None):
     host = host.strip("[]")
     ipaddress.ip_address(host)  # No resolver-dependent deadline.
     V.require(1 <= args.io_timeout_ms <= 30000, "instrumentation timeout bound")
-    certificate = ssl.PEM_cert_to_DER_cert(Path(args.cert).read_text())
+    certificate = first_leaf_der(args.cert)
     server_sha = sha(certificate)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_3
@@ -304,12 +316,19 @@ def serve(args, ready=None):
     context.load_cert_chain(args.cert, args.key)
     store = Store(args.output, args.run_id, args.producer_id, args.client_sha256,
                   args.controller_sha256, server_sha, args.max_bytes)
-    listener = socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET)
-    listener.bind((host, int(port)))
-    listener.listen(8)
-    listener.settimeout(1)
-    if ready is not None:
-        ready(listener.getsockname())  # Test-only transport harness; no DB authority.
+    listener = None
+    try:
+        listener = socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET)
+        listener.bind((host, int(port)))
+        listener.listen(8)
+        listener.settimeout(1)
+        if ready is not None:
+            ready(listener.getsockname())  # Test-only transport harness; no DB authority.
+    except BaseException:
+        if listener is not None:
+            listener.close()
+        store.close()  # Retained real directory FD must not leak on startup refusal.
+        raise
     end = time.monotonic() + args.max_runtime_seconds
     try:
         while time.monotonic() < end and not store.poisoned:

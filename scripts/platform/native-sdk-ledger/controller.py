@@ -37,7 +37,7 @@ class WitnessClient:
         self.context = ssl.create_default_context(cafile=config["ca_path"])
         self.context.minimum_version = ssl.TLSVersion.TLSv1_3
         self.context.load_cert_chain(config["cert_path"], config["key_path"])
-        self.client_sha = C.sha(ssl.PEM_cert_to_DER_cert(Path(config["cert_path"]).read_text()))
+        self.client_sha = C.sha(C.first_leaf_der(config["cert_path"]))
         self.failed = False
 
     def record(self, witness):

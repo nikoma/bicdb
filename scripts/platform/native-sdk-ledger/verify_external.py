@@ -9,7 +9,7 @@ import argparse
 import hashlib
 import json
 from decimal import Decimal
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import collector as C
 import verify as V
@@ -86,10 +86,29 @@ def check(index_path, root):
               and manifest.get("throughput_benchmark") is False
               and set(manifest["inputs"]) == set(C.INPUT_LIMITS), "original collector manifest scope")
     storage = V.decode(read_pinned("storage-contract.json", C.MAX_HEADER))
-    V.require(storage.get("filesystem") in {"ext2", "ext3", "ext4", "xfs", "btrfs", "zfs", "f2fs"}
-              and storage.get("mount_preflight") == "local_filesystem_type_only"
+    storage_fields = {"canonical_directory", "mountpoint", "mount_filesystem_root", "filesystem_relative_path",
+                      "filesystem", "st_dev", "st_ino", "kernel_mount_id", "actual_device_major",
+                      "actual_device_minor", "mount_preflight", "actual_backing_storage_and_flush_behavior_qualified"}
+    V.require(set(storage) == storage_fields
+              and storage.get("filesystem") in {"ext2", "ext3", "ext4", "xfs", "btrfs", "zfs", "f2fs"}
+              and storage.get("mount_preflight") == "opened_directory_device_and_kernel_mount_id"
+              and type(storage.get("kernel_mount_id")) is int and 0 < storage["kernel_mount_id"] < 2**64
+              and type(storage.get("st_dev")) is int and 0 <= storage["st_dev"] < 2**64
+              and type(storage.get("st_ino")) is int and 0 < storage["st_ino"] < 2**64
+              and type(storage.get("actual_device_major")) is int and storage["actual_device_major"] >= 0
+              and type(storage.get("actual_device_minor")) is int and storage["actual_device_minor"] >= 0
+              and storage.get("actual_device_major") == C.os.major(storage["st_dev"])
+              and storage.get("actual_device_minor") == C.os.minor(storage["st_dev"])
               and storage.get("actual_backing_storage_and_flush_behavior_qualified") is False,
               "collector local-storage preflight missing; no flush/power-loss qualification")
+    for key in ("canonical_directory", "mountpoint", "mount_filesystem_root", "filesystem_relative_path"):
+        value = storage[key]
+        V.require(isinstance(value, str) and "\0" not in value and PurePosixPath(value).is_absolute()
+                  and ".." not in PurePosixPath(value).parts, "invalid recorded mount/root path")
+    actual, point, filesystem_root = (PurePosixPath(storage[k]) for k in (
+        "canonical_directory", "mountpoint", "mount_filesystem_root"))
+    V.require(PurePosixPath(storage["filesystem_relative_path"]) == filesystem_root / actual.relative_to(point),
+              "recorded directory/mount/filesystem-root relationship changed")
     for key in ("run_id", "producer_id", "session_id", "source_sha", "binary_sha256", "member_node_id",
                 "member_certificate_sha256", "collector_certificate_sha256", "ledger_client_certificate_sha256"):
         V.require(manifest[key] == index[key], "manifest/index identity: " + key)

@@ -36,10 +36,20 @@ native record and audit verification followed by the external actual MStore
 postcheck. A pending transition remains unavailable to ordinary operations.
 
 The actual issued native xid is retained as the first operation of the native
-transaction closure, before scope checks and framing. The exact framed record is
-retained before any native put. Unknown outcomes keep the same attempt; this
-change adds no abort-retry protocol, replacement xid, TTL, range-wide bypass or
-new source lineage.
+transaction closure, before scope checks and framing. The exact framed counter/archive/CURRENT bytes are retained in the same
+attempt before any native put (at most 16 KiB plus two 256 KiB records).
+
+The transition retains the actual native helper return before any health,
+readback or liveness postcheck: `KnownCommitReturned` with its actual returned xid,
+`ReturnedNoStore`, or `HelperErrorUnknown` with the actual issued xid when known.
+Error provenance retains a UTF-8 prefix of at most 4,096 bytes and a streamed SHA-256
+of the complete displayed error, with an explicit completeness flag. Health
+observed after that return is separate; no helper error or TxStatus observation
+is described as a successful abort API return. A helper outcome is DATA and does
+not replace the actual protected CLOSED CURRENT/archive checks. Original unknown
+or unframed attempts cannot obtain a replacement helper invocation. Unknown
+outcomes keep the same attempt; this change adds no abort-retry protocol,
+replacement xid, TTL, range-wide bypass or new source lineage.
 
 The added genuine fifth-fixture case
 `native_registered_fifth_remote_hot_closed_audit_native_reply_lost_same_attempt_retry`
@@ -47,7 +57,8 @@ uses the real initial survivor, real CLOSED native CURRENT/archive readback, and
 an actual cancellation after that native publication. At that boundary it records
 ordinary selected-range and no-image refusal, typed historical success, and
 other-range scope refusal. It then requires fresh same-owner reconciliation to
-retain the exact whole native audit record/xid. All original 87 selectors,
+retain the exact whole native audit record/xid, actual helper return, one helper
+invocation and all three retained byte hashes. All original 87 selectors,
 assertions and budgets remain. The new control is source only until executed;
 formatting is not a compile/runtime result.
 

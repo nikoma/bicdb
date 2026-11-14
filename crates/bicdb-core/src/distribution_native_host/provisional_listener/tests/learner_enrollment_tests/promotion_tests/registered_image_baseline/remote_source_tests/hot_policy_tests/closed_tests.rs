@@ -33,7 +33,7 @@ pub(super) fn exercise(
         "original_parent_still_live":process.check().is_ok(),
         "closed_fact_unavailable_before_fresh_reconciliation":control.native_closed_writer_domain(selected, process).is_err(),
     })).unwrap();
-    assert!(result.is_err());
+    assert!(matches!(result, Err(crate::BicDbError::QueryCanceled)));
     process.check().unwrap();
     let before = before.expect("actual native CLOSED post-readback cut must run");
     assert_eq!(
@@ -53,6 +53,18 @@ pub(super) fn exercise(
         );
     }
     assert_eq!(before["other_original_range_still_serving"], true);
+    let helper = &before["actual_helper"];
+    assert_eq!(
+        helper["actual_helper_return"]["outcome"],
+        "known_commit_returned"
+    );
+    assert_eq!(
+        helper["actual_helper_return"]["xid"],
+        before["native_closed_record"]["native_page_xid"]
+    );
+    assert_eq!(helper["helper_calls"], 1);
+    assert_eq!(helper["health_observed_after_return"], true);
+    assert_eq!(helper["retained_exact_frames"].as_array().unwrap().len(), 3);
     assert!(before["wrong_range_error"]
         .as_str()
         .unwrap()
@@ -62,6 +74,9 @@ pub(super) fn exercise(
         .is_err());
     let fresh = budget(5000);
     let retry = control.advance_native_writer_closed_domain(selected, &fresh);
+    let after_helper = control
+        .native_closed_writer_domain(selected, process)
+        .and_then(|actual| actual.test_closed_helper_evidence());
     let after = control
         .native_closed_writer_domain(selected, process)
         .and_then(|actual| actual.test_closed_record_evidence());
@@ -73,6 +88,7 @@ pub(super) fn exercise(
             "actual_cut":before,
             "fresh_retry_result":retry.as_ref().err().map(ToString::to_string),
             "actual_after_record":after.as_ref().ok(),
+            "actual_after_helper":after_helper.as_ref().ok(),
             "after_error":after.as_ref().err().map(ToString::to_string),
             "original_parent_still_live":process.check().is_ok(),
             "external_application_qualification":false,
@@ -81,4 +97,5 @@ pub(super) fn exercise(
     .unwrap();
     retry.unwrap();
     assert_eq!(after.unwrap(), before["native_closed_record"]);
+    assert_eq!(after_helper.unwrap(), before["actual_helper"]);
 }

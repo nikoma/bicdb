@@ -21,6 +21,66 @@ pub(crate) struct NativeWriterDataDomainTransition {
     range: RangeId,
     lease: Option<NativeJointServingLease>,
     publication: ClosedPublication,
+    native_helper_return: ClosedNativeHelperReturn,
+    native_helper_health: Option<bool>,
+    native_helper_calls: u32,
+    native_bytes: Option<Arc<Vec<(String, Vec<u8>)>>>,
+}
+/// Retained actual helper observations, never a native receipt or abort proof.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "outcome", rename_all = "snake_case")]
+enum ClosedNativeHelperReturn {
+    NotInvoked,
+    Invoked {
+        issued_xid: Option<u64>,
+    },
+    KnownCommitReturned {
+        xid: u64,
+    },
+    ReturnedNoStore,
+    HelperErrorUnknown {
+        issued_xid: Option<u64>,
+        detail: Option<ClosedHelperError>,
+    },
+}
+#[derive(Clone, Debug, Serialize)]
+struct ClosedHelperError {
+    prefix: String,
+    complete: bool,
+    full_sha256: String,
+}
+impl ClosedHelperError {
+    fn retain(error: &BicDbError) -> Self {
+        use std::fmt::Write;
+        struct Bounded {
+            prefix: String,
+            complete: bool,
+            hash: sha2::Sha256,
+        }
+        impl std::fmt::Write for Bounded {
+            fn write_str(&mut self, text: &str) -> std::fmt::Result {
+                self.hash.update(text.as_bytes());
+                let mut end = (4096 - self.prefix.len()).min(text.len());
+                while !text.is_char_boundary(end) {
+                    end -= 1;
+                }
+                self.prefix.push_str(&text[..end]);
+                self.complete &= end == text.len();
+                Ok(())
+            }
+        }
+        let mut bounded = Bounded {
+            prefix: String::new(),
+            complete: true,
+            hash: sha2::Sha256::new(),
+        };
+        let _ = write!(&mut bounded, "{error}");
+        Self {
+            prefix: bounded.prefix,
+            complete: bounded.complete,
+            full_sha256: hex::encode(bounded.hash.finalize()),
+        }
+    }
 }
 /// Borrowed joint-only historical read boundary from the ORIGINAL retained
 /// transition. It neither constructs CLOSED audit success nor permits APP/Strong.
@@ -140,11 +200,24 @@ pub(crate) struct NativeClosedWriterDomain {
     caller: CancellationToken,
     pub(super) slot: RangeWriteServiceSlotGuard,
     open: ClusterServiceOpenGuard,
+    native_helper_return: ClosedNativeHelperReturn,
+    native_helper_health: Option<bool>,
+    native_helper_calls: u32,
+    native_bytes: Option<Arc<Vec<(String, Vec<u8>)>>>,
 }
 impl NativeClosedWriterDomain {
     #[cfg(test)]
     pub(crate) fn test_closed_record_evidence(&self) -> Result<serde_json::Value> {
         Ok(serde_json::to_value(&self.record)?)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_closed_helper_evidence(&self) -> Result<serde_json::Value> {
+        closed_helper_evidence(
+            &self.native_helper_return,
+            self.native_helper_health,
+            self.native_helper_calls,
+            self.native_bytes.as_deref(),
+        )
     }
     pub(crate) fn actual_writer(&self) -> &Arc<NativeWriterHostState> {
         &self.writer
@@ -256,6 +329,10 @@ impl NativeWriterDataDomainTransition {
             range,
             lease: Some(lease),
             publication: ClosedPublication::Unwritten,
+            native_helper_return: ClosedNativeHelperReturn::NotInvoked,
+            native_helper_health: None,
+            native_helper_calls: 0,
+            native_bytes: None,
         })
     }
     fn require_owner<T: RangeWriteTransport + 'static>(
@@ -495,6 +572,14 @@ impl NativeWriterDataDomainTransition {
         self.caller.check()?;
         self.writer.data_domains.write().pending.insert(self.range);
         if matches!(&self.publication, ClosedPublication::Prepared(_)) {
+            if !matches!(
+                self.native_helper_return,
+                ClosedNativeHelperReturn::NotInvoked
+            ) {
+                return Err(invalid(
+                    "writer DATA retains an earlier native helper outcome; replacement forbidden",
+                ));
+            }
             let mut record = record;
             // No native put has happened in Prepared. Another RANGE may have
             // published while this prewrite attempt was retained; allocate
@@ -508,10 +593,15 @@ impl NativeWriterDataDomainTransition {
                 .try_read()
                 .ok_or_else(|| invalid("writer DATA hook busy"))?;
             self.writer.require_borrowed_original_hook(db, &hook)?;
-            db.in_paged_transaction(|paged, xid| {
+            self.native_helper_calls += 1;
+            self.native_helper_return = ClosedNativeHelperReturn::Invoked { issued_xid: None };
+            let native_result = db.in_paged_transaction(|paged, xid| {
                 // The actual native transaction already exists. Retain its exact
                 // identity BEFORE scope checks/framing; failure cannot retry a new xid.
                 record.native_page_xid = xid;
+                self.native_helper_return = ClosedNativeHelperReturn::Invoked {
+                    issued_xid: Some(xid),
+                };
                 self.publication = ClosedPublication::Uncertain(record.clone());
                 policy.require_live()?;
                 policy.require_local(db, &actual_service, self.slot.id())?;
@@ -528,7 +618,7 @@ impl NativeWriterDataDomainTransition {
                     checksum_sha256: String::new(),
                 };
                 counter.checksum_sha256 = counter.checksum()?;
-                for (key, bytes) in [
+                let encoded = Arc::new(vec![
                     (
                         counter_key(self.writer.record.generation),
                         bounded_json(&counter, 16 * 1024)?,
@@ -541,16 +631,46 @@ impl NativeWriterDataDomainTransition {
                         closed_current(self.writer.record.generation, self.range),
                         bounded_json(&record, MAX_AUDIT_BYTES)?,
                     ),
-                ] {
+                ]);
+                self.native_bytes = Some(encoded.clone());
+                for (key, bytes) in encoded.iter() {
                     paged
                         .store()
-                        .put(xid, &native_key(&key), &bytes)
+                        .put(xid, &native_key(key), bytes)
                         .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
                 }
                 policy.require_local(db, &actual_service, self.slot.id())?;
                 Ok(())
-            })?
-            .ok_or_else(|| invalid("writer DATA has no actual native page store"))?;
+            });
+            // Retain the ACTUAL helper return before health/readback/liveness or
+            // any other fallible postcheck. A helper error never proves abort.
+            self.native_helper_return = match &native_result {
+                Ok(Some(xid)) => ClosedNativeHelperReturn::KnownCommitReturned { xid: *xid },
+                Ok(None) => ClosedNativeHelperReturn::ReturnedNoStore,
+                Err(_) => ClosedNativeHelperReturn::HelperErrorUnknown {
+                    issued_xid: match &self.publication {
+                        ClosedPublication::Uncertain(record) => Some(record.native_page_xid),
+                        _ => None,
+                    },
+                    detail: None,
+                },
+            };
+            if let Err(error) = &native_result {
+                let retained = ClosedHelperError::retain(error);
+                if let ClosedNativeHelperReturn::HelperErrorUnknown { detail, .. } =
+                    &mut self.native_helper_return
+                {
+                    *detail = Some(retained);
+                }
+            }
+            self.native_helper_health = Some(db.check_recovery_state().is_ok());
+            let returned_xid = native_result?
+                .ok_or_else(|| invalid("writer DATA has no actual native page store"))?;
+            if returned_xid != record.native_page_xid {
+                return Err(invalid(
+                    "writer DATA actual helper returned another native xid",
+                ));
+            }
             drop(hook);
         }
         let record = match &self.publication {
@@ -592,6 +712,7 @@ impl NativeWriterDataDomainTransition {
                 .map(|e| e.to_string());
             cut(serde_json::json!({
                 "native_closed_record":record,
+                "actual_helper":closed_helper_evidence(&self.native_helper_return, self.native_helper_health, self.native_helper_calls, self.native_bytes.as_deref())?,
                 "ordinary_range_error":ordinary_range_error,
                 "ordinary_no_image_error":ordinary_no_image_error,
                 "other_actual_range":other,
@@ -623,6 +744,10 @@ impl NativeWriterDataDomainTransition {
             caller: self.caller.clone(),
             slot: self.slot.clone(),
             open: self.open.clone(),
+            native_helper_return: self.native_helper_return.clone(),
+            native_helper_health: self.native_helper_health,
+            native_helper_calls: self.native_helper_calls,
+            native_bytes: self.native_bytes.clone(),
         }));
         Ok(())
     }
@@ -666,4 +791,25 @@ impl BicDb {
     ) -> closed_test_cut::Guard {
         closed_test_cut::install(Box::new(cut))
     }
+}
+
+#[cfg(test)]
+fn closed_helper_evidence(
+    outcome: &ClosedNativeHelperReturn,
+    health: Option<bool>,
+    calls: u32,
+    encoded: Option<&Vec<(String, Vec<u8>)>>,
+) -> Result<serde_json::Value> {
+    let frames: Vec<_> = encoded
+        .into_iter()
+        .flatten()
+        .map(|(key, bytes)| {
+            serde_json::json!({
+                "key":key,"length":bytes.len(),"sha256":hex::encode(sha2::Sha256::digest(bytes)),
+            })
+        })
+        .collect();
+    Ok(
+        serde_json::json!({"actual_helper_return":outcome,"health_observed_after_return":health,"helper_calls":calls,"retained_exact_frames":frames}),
+    )
 }

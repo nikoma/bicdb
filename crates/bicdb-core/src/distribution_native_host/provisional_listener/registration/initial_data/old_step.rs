@@ -24,6 +24,7 @@ const METADATA_LOCK_POLL: std::time::Duration = std::time::Duration::from_millis
 pub(crate) struct NativeInitialOldStep<'request> {
     admission: &'request NativeInitialDataAdmission,
     writer: Arc<crate::db::NativeWriterHostState>,
+    predecessor: Arc<crate::db::NativeWriterHistoricalPredecessor>,
     service: Arc<Mutex<ClusterDataNodeService>>,
     runtime: Arc<RangeRecoveryRuntime>,
     metadata: Arc<Mutex<MetadataConsensusStore>>,
@@ -127,8 +128,59 @@ impl NativeInitialDataAdmission {
         let plan = Arc::new(NativeJointHandoffPlan::from_actual_role_and_own(
             &role, &own, business,
         )?);
+        let writer = self.writer();
+        // Reuse only the SAME original pre-freeze owner from the actual table.
+        // A native/JSON receipt never reconstructs provenance after closure.
+        let previous = {
+            let table = self
+                .old_closures
+                .upgrade()
+                .ok_or_else(|| invalid("OLD predecessor original table ended"))?;
+            let entries = table
+                .try_lock()
+                .ok_or_else(|| invalid("OLD predecessor original table busy"))?;
+            let held = entries.get(&plan.old_range().id).cloned();
+            drop(entries);
+            match held {
+                None => None,
+                Some(held) => {
+                    let held = held
+                        .try_lock()
+                        .ok_or_else(|| invalid("OLD predecessor original owner busy"))?;
+                    if held.plan_sha256 != plan.checksum_sha256()?
+                        || !Arc::ptr_eq(&held.writer, &writer)
+                    {
+                        return Err(invalid(
+                            "OLD predecessor changed original retained plan/State",
+                        ));
+                    }
+                    Some(
+                        held.predecessor
+                            .as_ref()
+                            .ok_or_else(|| {
+                                invalid("OLD retained owner has no original pre-freeze predecessor")
+                            })?
+                            .clone(),
+                    )
+                }
+            }
+        };
+        let predecessor = match previous {
+            Some(actual) => actual,
+            None => {
+                let actual = service
+                    .try_lock()
+                    .ok_or_else(|| invalid("OLD pre-freeze predecessor actual service busy"))?;
+                let db = actual.database();
+                let db = db
+                    .try_read()
+                    .ok_or_else(|| invalid("OLD pre-freeze predecessor actual DB busy"))?;
+                db.capture_writer_historical_predecessor(writer.clone(), &plan)?
+            }
+        };
         let step = NativeInitialOldStep {
-            writer: self.writer(),
+            writer,
+            predecessor,
             admission: self,
             service,
             runtime,
@@ -161,6 +213,11 @@ impl NativeInitialDataAdmission {
     }
 }
 impl NativeInitialOldStep<'_> {
+    pub(crate) fn historical_predecessor(
+        &self,
+    ) -> &Arc<crate::db::NativeWriterHistoricalPredecessor> {
+        &self.predecessor
+    }
     pub(crate) fn require_joint_runtime(
         &self,
         runtime: &crate::distribution_range_handoff::NativeJointHandoffRuntime,
@@ -229,8 +286,7 @@ impl NativeInitialOldStep<'_> {
         plan.require_old_native_configuration(&actual)?;
         self.writer
             .require_store(database.data_path(), self.slot.id())?;
-        self.writer
-            .require_database(database, actual.native_write_range()?)?;
+        self.predecessor.require_original_database(database, plan)?;
         if !Arc::ptr_eq(&store.native_writer_host_state()?, &self.writer) {
             return Err(invalid("OLD step original actual writer replaced"));
         }
@@ -243,6 +299,7 @@ impl NativeInitialOldStep<'_> {
 /// An uncertain producer never removes this owner or invents an observation.
 pub(super) struct RetainedInitialOld {
     remote_new: Option<Arc<crate::distribution_range_handoff::NativeRemoteNewParticipant>>,
+    predecessor: Option<Arc<crate::db::NativeWriterHistoricalPredecessor>>,
     writer: Arc<crate::db::NativeWriterHostState>,
     plan_sha256: String,
     plan: Arc<NativeJointHandoffPlan>,
@@ -323,6 +380,7 @@ impl NativeInitialDataHost {
                 }
                 let owner = Arc::new(Mutex::new(RetainedInitialOld {
                     remote_new: None,
+                    predecessor: Some(step.predecessor.clone()),
                     writer: step.writer.clone(),
                     plan_sha256: digest.clone(),
                     plan: step.plan().clone(),

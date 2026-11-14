@@ -31,7 +31,7 @@ mod data_domains;
 #[cfg(feature = "tls-replication")]
 pub(crate) use data_domains::{
     NativeClosedWriterDomain, NativeWriterDataDomainPolicy, NativeWriterDataDomainTransition,
-    NativeWriterServingDomainPublication,
+    NativeWriterHistoricalPredecessor, NativeWriterServingDomainPublication,
 };
 mod joint_phase_owner;
 pub(crate) use joint_phase_owner::NativeJointPhaseOwner;

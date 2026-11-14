@@ -15,6 +15,8 @@ pub(crate) struct NativeJointOldObservation {
     frozen: Arc<FrozenRangeMutationPermit>,
     pin: Mutex<Option<Arc<SourceCaptureReadPin>>>,
     service: Arc<Mutex<ClusterDataNodeService>>,
+    #[cfg(feature = "tls-replication")]
+    predecessor: Option<Arc<crate::db::NativeWriterHistoricalPredecessor>>,
 }
 impl NativeJointOldObservation {
     #[cfg(feature = "tls-replication")]
@@ -159,7 +161,7 @@ impl NativeJointOldObservation {
         ))
     }
     pub(crate) fn from_actual_service(
-        evidence: ActualServiceNativeJointOldEvidence,
+        mut evidence: ActualServiceNativeJointOldEvidence,
         service: Arc<Mutex<ClusterDataNodeService>>,
     ) -> Result<Self> {
         {
@@ -168,6 +170,8 @@ impl NativeJointOldObservation {
                 .ok_or_else(|| invalid("old closure service busy during binding"))?;
             evidence.require_current(&actual)?;
         }
+        #[cfg(feature = "tls-replication")]
+        let predecessor = evidence.take_historical_predecessor();
         let (plan, role, native, promise, frozen, pin) = evidence.into_parts();
         let result = Self {
             plan,
@@ -177,6 +181,8 @@ impl NativeJointOldObservation {
             frozen,
             pin: Mutex::new(Some(pin)),
             service,
+            #[cfg(feature = "tls-replication")]
+            predecessor,
         };
         result.require_current()?;
         Ok(result)
@@ -399,6 +405,26 @@ impl NativeJointOldObservation {
 
 #[cfg(feature = "tls-replication")]
 impl NativeJointOldObservation {
+    pub(super) fn require_remote_decision_predecessor(
+        &self,
+        db: &crate::BicDb,
+        writer: &crate::db::NativeWriterHostState,
+    ) -> Result<()> {
+        self.predecessor
+            .as_ref()
+            .ok_or_else(|| {
+                invalid("remote OLD decision has no original pre-close predecessor owner")
+            })?
+            .require_historical(db, writer, &self.plan)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_remote_decision_predecessor(&self) -> Result<serde_json::Value> {
+        Ok(self
+            .predecessor
+            .as_ref()
+            .ok_or_else(|| invalid("remote OLD test predecessor absent"))?
+            .test_evidence())
+    }
     pub(super) fn require_remote_decision_parts(
         &self,
         native: &crate::db::NativeJointOldCloseReceipt,

@@ -54,16 +54,9 @@ impl NativeRemoteOldDecisionWriterScope<'_> {
                 "remote OLD decision original installed hook/DB/open changed",
             ));
         }
-        // Pure predecessor policy facts, NOT require_range/effective Serving.
-        self.writer
-            .record
-            .facts
-            .require_range(&admission.plan().old_native_predecessor_data()?)
-            .map_err(|error| {
-                invalid(format!(
-                    "remote OLD DECISION requires original immutable birth predecessor; retained historical Serving predecessor not implemented: {error}"
-                ))
-            })?;
+        // Consume only the proof retained by THIS original OLD observation
+        // before closure. Never derive effective Serving from current DATA.
+        admission.require_old_predecessor(db, self.writer)?;
         let stored: NativeWriterPolicyRecord =
             db.read_native_range_image_record(POLICY_POINTER)?
                 .ok_or_else(|| invalid("remote OLD decision installed policy absent"))?;

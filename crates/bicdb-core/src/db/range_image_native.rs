@@ -91,7 +91,7 @@ pub(crate) use writer_enrollment::{
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::{
     NativeClosedWriterDomain, NativeWriterDataDomainPolicy, NativeWriterDataDomainTransition,
-    NativeWriterServingDomainPublication,
+    NativeWriterHistoricalPredecessor, NativeWriterServingDomainPublication,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::{

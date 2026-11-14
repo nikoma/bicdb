@@ -19,12 +19,6 @@ struct CompletionJob {
     #[cfg(test)]
     parent_deadline: Option<Instant>,
 }
-struct CompletionRoundCancel(CancellationToken);
-impl Drop for CompletionRoundCancel {
-    fn drop(&mut self) {
-        self.0.cancel();
-    }
-}
 impl RangeRecoveryRuntime {
     pub(crate) fn acquire_native_completion_quorum(
         &self,
@@ -236,7 +230,9 @@ impl RangeRecoveryRuntime {
             .as_ref()
             .ok_or_else(|| invalid("native-completion participant transport is not wired"))?;
         let worker_token = token.child();
-        let _cancel = CompletionRoundCancel(worker_token.clone());
+        // Declared before the channels: they disconnect first, then teardown
+        // waits, bounded, for the status workers to release this operation.
+        let mut status_workers = CollectionWorkers::new(worker_token.clone());
         let (jobs, rx) = mpsc::sync_channel::<CompletionJob>(workers.max(1));
         let rx = Arc::new(Mutex::new(rx));
         let (tx, results) = mpsc::sync_channel(workers.max(1));
@@ -246,7 +242,7 @@ impl RangeRecoveryRuntime {
             let transport = Arc::clone(transport);
             let token = worker_token.clone();
             let permit = Arc::clone(&operation);
-            std::thread::Builder::new()
+            let handle = std::thread::Builder::new()
                 .name("native-completion-status".into())
                 .spawn(move || {
                     let _permit = permit;
@@ -276,6 +272,7 @@ impl RangeRecoveryRuntime {
                         }
                     }
                 })?;
+            status_workers.push(handle);
         }
         drop(tx);
         let mut outstanding = BTreeMap::new();

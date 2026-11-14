@@ -308,6 +308,11 @@ impl ActualServiceNativeJointPreparedEvidence {
             &service.node_id,
             fresh.deadline(),
         );
+        #[cfg(test)]
+        let _detail = crate::distribution_range_handoff::NativeRefreshTraceContext::enter(
+            &service.node_id,
+            fresh.deadline(),
+        );
         let database = checked_database_read(&service.db, &service.storage_policy)?;
         service.require_native_catalog_database(&database)?;
         // In-memory binding of the FRESH range only. The full writer-domain

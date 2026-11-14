@@ -939,13 +939,22 @@ impl BicDb {
         let lineage = self.native_range_source_lineage_contract(range_id)?;
         #[cfg(test)]
         let second_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
-            "refresh-source-lineage-second-contract-and-pending",
+            "refresh-source-lineage-pending-and-health",
         );
         #[cfg(test)]
         if second_trace.is_some() {
             eprintln!("ACTUAL_REFRESH_LINEAGE_RANGE range={range_id}");
         }
-        self.validate_source_range_image_lineage(&lineage, range_id, lineage.range_index())?;
+        // `native_range_source_lineage_contract` has just re-read every
+        // lineage input and compared it with the constructed point. A further
+        // identical re-read here proved nothing new; only the pending-command
+        // and health checks remain, as in the journal-held variant.
+        if self.native_range_pending_exists(range_id)? {
+            return Err(invalid(
+                "unfinished native command; source range image unavailable",
+            ));
+        }
+        self.check_recovery_state()?;
         #[cfg(test)]
         crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(second_trace);
         Ok(lineage)

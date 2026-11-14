@@ -61,4 +61,29 @@ impl RangeWriteStore {
             }
         }
     }
+    /// Joint activation catalogue write. An installed writer host passes the
+    /// ordinary gate; a registered joint member that is not yet a writer is
+    /// authorised only by its live registered owner for this exact range,
+    /// re-proved before and after the write. Anything else is refused.
+    ///
+    /// The registered owner's proof also demands a durable catalogue. During
+    /// this write the store's uncertain marker is this operation's own (or
+    /// the exact one its re-fsync resolves), and only this write can clear
+    /// it, so the identity is proved with that marker set aside and the
+    /// marker is restored unchanged; the caller clears it after success.
+    pub(super) fn persist_native_joint(&mut self, db: &crate::BicDb, range: RangeId) -> Result<()> {
+        self.require_native_joint_identity_for_persist(db, range)?;
+        self.persist_gated(|_| Ok(()), crate::storage::write_atomic)?;
+        self.require_native_joint_identity_for_persist(db, range)
+    }
+    fn require_native_joint_identity_for_persist(
+        &mut self,
+        db: &crate::BicDb,
+        range: RangeId,
+    ) -> Result<()> {
+        let uncertain = std::mem::replace(&mut self.recovery_persistence_uncertain, false);
+        let proved = self.require_native_joint_host_base(db, range);
+        self.recovery_persistence_uncertain = uncertain;
+        proved
+    }
 }

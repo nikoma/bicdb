@@ -316,7 +316,7 @@ impl RangeWriteStore {
         let gate = database.range_mutation_gate();
         gate.validate_quiescent_frozen(range, frozen)?;
         let controlled = gate.try_controlled_mutation(frozen)?;
-        self.persist()?;
+        self.persist_native_joint(database, range)?;
         self.recovery_persistence_uncertain = false;
         drop(controlled);
         host.require_live_request(business)?;
@@ -479,7 +479,7 @@ impl RangeWriteStore {
             ));
         }
         writer_domain.require_current(database, self, native.data().activation_range())?;
-        self.persist()?;
+        self.persist_native_joint(database, range)?;
         self.recovery_persistence_uncertain = false;
         writer.require_store(&writer_root, self.open_id)?;
         admission.require_live()
@@ -639,7 +639,7 @@ impl RangeWriteStore {
         if existing.is_none() && image.is_some() {
             self.catalog.image_install_intents.remove(&range);
         }
-        let persisted = self.persist();
+        let persisted = self.persist_native_joint(database, range);
         #[cfg(test)]
         eprintln!("ACTUAL_JOINT_OPEN_CATALOGUE_PERSIST node={} success={} uncertain={} range={} activation_sha={}",self.catalog.node_id,persisted.is_ok(),self.recovery_persistence_uncertain,range,candidate.checksum().unwrap_or_else(|e|format!("diagnostic-unavailable:{e}")));
         persisted?;

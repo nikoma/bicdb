@@ -816,18 +816,29 @@ impl BicDb {
                 invalid("born-v2 application commit has no actual installed writer policy")
             })?;
         for write in &transaction.writes {
+            let token =
+                crate::distribution::distribution_key_token(&write.collection, &write.record_id);
             let range = state
                 .record
                 .facts
                 .ranges
                 .values()
-                .find(|r| {
-                    r.contains_token(crate::distribution::distribution_key_token(
-                        &write.collection,
-                        &write.record_id,
-                    ))
-                })
+                .find(|r| r.contains_token(token))
                 .ok_or_else(|| invalid("application mutation has no registered native range"))?;
+            // The original policy facts predate any later joint handoff of
+            // this range. Once a verified Serving domain is published for it,
+            // that domain's configuration is the one this writer must hold;
+            // a pending or unresolved publication is refused by the lookup.
+            #[cfg(feature = "tls-replication")]
+            if let Some(serving) = state.effective_serving_data_range(range.id)? {
+                if !serving.contains_token(token) {
+                    return Err(invalid(
+                        "application mutation is outside the verified Serving range",
+                    ));
+                }
+                state.require_database(self, &serving)?;
+                continue;
+            }
             state.require_database(self, range)?;
         }
         Ok(())

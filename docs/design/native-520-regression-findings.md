@@ -17,7 +17,8 @@ Workspace/all-target and no-default consumer compilation passed. PGwire complete
 100 assertions, zero failures/errors/skips, including actual process-kill queue
 and cache recovery, 24 completed reports and 24 cable messages. Core has failed
 at the legacy primary-record-only format-preservation assertion described below.
-Native, SQL and remaining-workspace are still pending at this checkpoint; no overall
+SQL has completed 2,682/0/4; Native and remaining-workspace are still pending
+at this checkpoint. No overall
 pass or inherited Native acceptance is claimed.
 
 This successor composes the two backup-vector expectations, all-worker INITIAL
@@ -84,6 +85,17 @@ independent source-review receipts respectively:
 `3dc3f6a23cd53cc7f302e275f3e4ff2614f6463f946e072a00f775036bbb6436`,
 `12d78f3206e9ef4aa3d1fcaf27aa6bc80e2b70ea72a06796ba0f6fab963ffae3`.
 The failed source6de result is not reclassified by this untested successor.
+
+Source6de SQL completed 282 summaries and 2,682 passing / zero failing / four
+ignored case-result rows. Raw log: 295,903,295 bytes, SHA-256
+`8591bf8f284cbb0ee3dd03ca0858154104d465e3385373860f4d7019b881414c`;
+gzip SHA-256 `f18c2b482c81846d34744e39172ab82741c37818c8068fa9ed650bfab9ccdf0f`.
+Independent complete raw-hash, checkout, summary and case verification receipt:
+`baad4882d9065bde1168575947729dc0f605c3145e85329a07a53d90be8c59fd`.
+The real known-committed error/DDL cleanup control passed at raw12418 and the
+SQLSTATE mapping control at11875. This is component acceptance on source6de;
+it does not test the later primary-only correction or remote Serving composition,
+establish general distributed SQL, or override the failed Core job.
 
 ### Completed source7c: Core and Native failed; workspace and application components passed
 

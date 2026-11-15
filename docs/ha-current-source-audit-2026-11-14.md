@@ -12,7 +12,7 @@ Current draft **1.0.520-beta / `6de646beb603accf39358017d8e0c83c39c741b1`**
 passed workspace/no-default compilation, PGwire511/0/2 and Rails20 runs /
 100 assertions. Core subsequently failed legacy primary-record-only FORMAT
 preservation after its read, mutation refusal and index-byte assertions passed.
-Native, SQL and remaining-workspace are still pending; this is not a complete
+SQL completed2,682/0/4; Native and remaining-workspace are still pending. This is not a complete
 HA acceptance result. INITIAL diagnostics are not a socket fix, and the new
 Open/identity-wait corrections still require their actual native controls.
 

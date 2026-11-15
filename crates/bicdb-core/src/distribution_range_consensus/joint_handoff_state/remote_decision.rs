@@ -11,6 +11,7 @@ struct WriteOutcome {
 }
 pub(crate) struct NativeRemoteDecisionCataloguePublication {
     original: RangeWriteCatalog,
+    original_disk_bytes: Vec<u8>,
     candidate: RangeWriteCatalog,
     bytes: Vec<u8>,
     candidate_sha256: String,
@@ -29,6 +30,16 @@ pub(crate) struct NativeRemoteDecisionCataloguePublication {
     intervening_write_once: bool,
     #[cfg(test)]
     intervening_write_count: u64,
+    #[cfg(test)]
+    inject_foreign_disk_once: bool,
+    #[cfg(test)]
+    injected_disk_sha256: Option<String>,
+    #[cfg(test)]
+    actual_pre_io_cancel: bool,
+    #[cfg(test)]
+    pre_io_cancel_evidence: Option<serde_json::Value>,
+    #[cfg(test)]
+    actual_disk_after_preimage_check: Option<String>,
 }
 impl NativeRemoteDecisionCataloguePublication {
     pub(crate) fn begin(
@@ -39,6 +50,14 @@ impl NativeRemoteDecisionCataloguePublication {
     ) -> Result<Self> {
         physical.require_current(db, store, admission)?;
         store.require_native_catalog_durability(db.data_path())?;
+        let original_disk_bytes = read_actual_catalogue_bytes(store)?;
+        let original_disk =
+            serde_json::from_slice::<RangeWriteEnvelope>(&original_disk_bytes)?.verify()?;
+        if original_disk != store.catalog {
+            return Err(range_write_error(
+                "remote catalogue initial disk/RAM preimage differs",
+            ));
+        }
         let receipt = admission.catalogue_receipt()?;
         if receipt.local_node_id() != &store.catalog.node_id
             || receipt.local_node_id() != admission.role().local_node_id()
@@ -113,6 +132,7 @@ impl NativeRemoteDecisionCataloguePublication {
                 hex::encode(sha2::Sha256::digest(&bytes))
             },
             original: store.catalog.clone(),
+            original_disk_bytes,
             candidate,
             bytes,
             store_open: store.open_id,
@@ -132,6 +152,16 @@ impl NativeRemoteDecisionCataloguePublication {
             intervening_write_once: false,
             #[cfg(test)]
             intervening_write_count: 0,
+            #[cfg(test)]
+            inject_foreign_disk_once: false,
+            #[cfg(test)]
+            injected_disk_sha256: None,
+            #[cfg(test)]
+            actual_pre_io_cancel: false,
+            #[cfg(test)]
+            pre_io_cancel_evidence: None,
+            #[cfg(test)]
+            actual_disk_after_preimage_check: None,
         })
     }
     pub(crate) fn candidate_sha256(&self) -> &str {
@@ -168,7 +198,10 @@ impl NativeRemoteDecisionCataloguePublication {
         if store.current_catalogue_write_generation() != generation
             || (store.catalog != self.original && store.catalog != self.candidate)
             || match self.pending_generation {
-                None => self.owns_uncertainty || store.recovery_persistence_uncertain,
+                None if self.owns_uncertainty => {
+                    !store.recovery_persistence_uncertain || store.catalog != self.candidate
+                }
+                None => store.recovery_persistence_uncertain,
                 Some(_) => !self.owns_uncertainty || !store.recovery_persistence_uncertain,
             }
         {
@@ -178,16 +211,21 @@ impl NativeRemoteDecisionCataloguePublication {
         }
         Ok(())
     }
-    fn require_disk(&self, store: &RangeWriteStore, candidate_only: bool) -> Result<String> {
-        let mut bytes = Vec::new();
-        open_range_catalog_no_follow(&store.root.join(DEFAULT_RANGE_WRITE_LOG))?
-            .take(64 * 1024 * 1024 + 1)
-            .read_to_end(&mut bytes)?;
-        if bytes.len() > 64 * 1024 * 1024 {
-            return Err(range_write_error(
-                "remote catalogue actual readback exceeds existing 64MiB bound",
-            ));
+    /// Actual disk must be exactly the saved original OR candidate before
+    /// effects. Memory C/disk O is valid after failure before rename; a third
+    /// head (even a valid envelope) is never overwritten by this old owner.
+    fn require_pending_disk(&self, store: &RangeWriteStore) -> Result<()> {
+        let bytes = read_actual_catalogue_bytes(store)?;
+        let parsed = serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?;
+        if !((bytes == self.original_disk_bytes && parsed == self.original)
+            || (bytes == self.bytes && parsed == self.candidate))
+        {
+            return Err(range_write_error("remote catalogue actual disk preimage is neither original nor candidate; no replacement"));
         }
+        Ok(())
+    }
+    fn require_disk(&self, store: &RangeWriteStore, candidate_only: bool) -> Result<String> {
+        let bytes = read_actual_catalogue_bytes(store)?;
         let parsed = serde_json::from_slice::<RangeWriteEnvelope>(&bytes)?.verify()?;
         if parsed != store.catalog || (candidate_only && bytes != self.bytes) {
             return Err(range_write_error(
@@ -261,6 +299,54 @@ impl NativeRemoteDecisionCataloguePublication {
             self.intervening_write_count += 1;
         }
         self.require_pending(store)?;
+        #[cfg(test)]
+        if std::mem::take(&mut self.inject_foreign_disk_once) {
+            let mut foreign = self.candidate.clone();
+            let state = foreign
+                .native_joint_handoffs
+                .as_mut()
+                .and_then(|m| m.get_mut(&admission.data().old_range().id))
+                .ok_or_else(|| {
+                    range_write_error("actual disk control selected joint state absent")
+                })?;
+            state.global_decision_sha256 = Some(if self.decision_sha256 == "0".repeat(64) {
+                "1".repeat(64)
+            } else {
+                "0".repeat(64)
+            });
+            let envelope = RangeWriteEnvelope::new(foreign)?;
+            let bytes = serde_json::to_vec_pretty(&envelope)?;
+            if bytes.len() > 64 * 1024 * 1024 {
+                return Err(range_write_error(
+                    "actual disk control exceeds existing head bound",
+                ));
+            }
+            envelope.verify()?;
+            // Explicit actual-disk fault schedule, NOT a lawful catalogue
+            // producer or generation bypass available in production.
+            crate::storage::replace_durably(
+                &store.root.join(DEFAULT_RANGE_WRITE_LOG),
+                crate::storage::ReplaceContents::Plain(&bytes),
+                true,
+                "remote_joint_decision.catalogue.test_foreign_disk",
+                crate::storage::FailClosed::No,
+            )?;
+            use sha2::Digest;
+            self.injected_disk_sha256 = Some(hex::encode(sha2::Sha256::digest(
+                read_actual_catalogue_bytes(store)?,
+            )));
+        }
+        let disk_preimage = self.require_pending_disk(store);
+        #[cfg(test)]
+        if self.injected_disk_sha256.is_some() {
+            use sha2::Digest;
+            self.actual_disk_after_preimage_check = Some(hex::encode(sha2::Sha256::digest(
+                read_actual_catalogue_bytes(store)?,
+            )));
+        }
+        disk_preimage?;
+        self.require_identity(db, store, admission, physical)?;
+        self.require_pending(store)?;
         if self.outcomes.len() >= 8 {
             return Err(range_write_error(
                 "remote catalogue existing eight-IO attempt bound; original custody retained",
@@ -268,10 +354,24 @@ impl NativeRemoteDecisionCataloguePublication {
         }
         // No allocation/framing after IO entry: retain exact candidate and
         // outcome slot first. A failed entered write remains owned and fenced.
+        let actual_path = store.root.join(DEFAULT_RANGE_WRITE_LOG);
         self.outcomes.reserve(1);
         self.owns_uncertainty = true;
         store.recovery_persistence_uncertain = true;
         store.catalog = self.candidate.clone();
+        #[cfg(test)]
+        if let Some(evidence) = admission.test_cancel_catalogue_before_io()? {
+            self.actual_pre_io_cancel = true;
+            self.pre_io_cancel_evidence = Some(evidence);
+        }
+        // Full authority/physical checks AFTER cloning the potentially large
+        // candidate, then exact O-or-C actual disk and memory/request checks.
+        // A refusal here keeps private memory-published/no-IO ownership, so a
+        // distinct fresh same-candidate request can finish actual durability.
+        self.require_identity(db, store, admission, physical)?;
+        self.require_pending_disk(store)?;
+        self.require_pending(store)?;
+        admission.require_memory_current()?;
         let generation = store.note_catalogue_write_entered()?;
         self.pending_generation = Some(generation);
         self.outcomes.push(WriteOutcome {
@@ -281,7 +381,7 @@ impl NativeRemoteDecisionCataloguePublication {
         });
         let at = self.outcomes.len() - 1;
         let result = crate::storage::replace_durably(
-            &store.root.join(DEFAULT_RANGE_WRITE_LOG),
+            &actual_path,
             crate::storage::ReplaceContents::Plain(&self.bytes),
             true,
             "remote_joint_decision.catalogue",
@@ -323,12 +423,41 @@ impl NativeRemoteDecisionCataloguePublication {
         Ok(())
     }
     #[cfg(test)]
+    pub(crate) fn test_arm_foreign_disk(&mut self) -> Result<()> {
+        if !self.owns_uncertainty
+            || self.pending_generation.is_none()
+            || self.verified_generation.is_some()
+            || self.inject_foreign_disk_once
+            || self.injected_disk_sha256.is_some()
+        {
+            return Err(range_write_error(
+                "actual foreign disk control requires original pending uncertainty",
+            ));
+        }
+        self.inject_foreign_disk_once = true;
+        Ok(())
+    }
+    #[cfg(test)]
     pub(crate) fn test_evidence(&self) -> serde_json::Value {
         use sha2::Digest;
         serde_json::json!({"candidate_sha256":hex::encode(sha2::Sha256::digest(&self.bytes)),
+            "pre_io_cancel_evidence":self.pre_io_cancel_evidence,"actual_disk_after_preimage_check":self.actual_disk_after_preimage_check,"actual_pre_io_cancel":self.actual_pre_io_cancel,"actual_injected_disk_sha256":self.injected_disk_sha256,"original_disk_sha256":hex::encode(sha2::Sha256::digest(&self.original_disk_bytes)),
             "preimage_generation":self.preimage_generation,"pending_generation":self.pending_generation,"owns_uncertainty":self.owns_uncertainty,
             "verified_generation":self.verified_generation,"actual_intervening_write_count":self.intervening_write_count,"native_record_sha256":self.native_sha256,
             "decision_sha256":self.decision_sha256,"IO_attempts":self.outcomes.iter().map(|o|
                 serde_json::json!({"generation":o.generation,"actual_returned_ok":o.returned_ok,"error_sha256":o.error_sha256})).collect::<Vec<_>>()})
     }
+}
+
+fn read_actual_catalogue_bytes(store: &RangeWriteStore) -> Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    open_range_catalog_no_follow(&store.root.join(DEFAULT_RANGE_WRITE_LOG))?
+        .take(64 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > 64 * 1024 * 1024 {
+        return Err(range_write_error(
+            "remote catalogue actual readback exceeds existing 64MiB bound",
+        ));
+    }
+    Ok(bytes)
 }

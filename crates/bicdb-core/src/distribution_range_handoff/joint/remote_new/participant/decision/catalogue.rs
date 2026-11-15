@@ -38,11 +38,19 @@ impl NativeRemoteNewParticipant {
             .try_lock()
             .ok_or_else(|| invalid("remote catalogue original decision active"))?;
         #[cfg(test)]
-        let fault = if std::mem::take(&mut held.fail_catalogue_dirsync) {
+        let fail_rename = std::mem::take(&mut held.fail_catalogue_rename);
+        #[cfg(test)]
+        let fail_dirsync = std::mem::take(&mut held.fail_catalogue_dirsync);
+        #[cfg(test)]
+        let fault = if fail_rename || fail_dirsync {
             match &self.original {
                 OriginalParticipant::Registered { target, .. } => {
                     Some(bicdb_page::test_faults::arm_io_failure(
-                        "remote_joint_decision.catalogue.dir_sync",
+                        if fail_rename {
+                            "remote_joint_decision.catalogue.rename"
+                        } else {
+                            "remote_joint_decision.catalogue.dir_sync"
+                        },
                         target.database_root(),
                         1,
                         false,
@@ -57,6 +65,8 @@ impl NativeRemoteNewParticipant {
         } else {
             None
         };
+        #[cfg(test)]
+        let cancel_before_io = std::mem::take(&mut held.cancel_catalogue_before_io);
         let DecisionCustody {
             expected,
             completed,
@@ -64,6 +74,8 @@ impl NativeRemoteNewParticipant {
             catalogue,
             #[cfg(test)]
             catalogue_dirsync_fault_count,
+            #[cfg(test)]
+            catalogue_rename_fault_count,
             ..
         } = &mut *held;
         let data = expected
@@ -93,6 +105,8 @@ impl NativeRemoteNewParticipant {
                 caller: parent,
                 completed,
                 native,
+                #[cfg(test)]
+                cancel_before_io,
             },
         };
         admission.require_current()?;
@@ -103,7 +117,12 @@ impl NativeRemoteNewParticipant {
         };
         #[cfg(test)]
         {
-            *catalogue_dirsync_fault_count += fault.as_ref().map(|f| f.fired()).unwrap_or(0);
+            let fired = fault.as_ref().map(|f| f.fired()).unwrap_or(0);
+            if fail_rename {
+                *catalogue_rename_fault_count += fired;
+            } else {
+                *catalogue_dirsync_fault_count += fired;
+            }
         }
         let current_sha = result?;
         let reply = NativeRemoteCatalogueDecisionV1 {

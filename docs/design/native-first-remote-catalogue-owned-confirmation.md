@@ -4,7 +4,7 @@ This source batch is based on `f201b937e28bcc6c75364e99a793d3bfe593d265`.
 It adds actual recipient catalogue publication, fresh readback of a privately
 known committed native decision, a distinct authenticated dual-durability
 collection, and a finite operation on the actual metadata leader. The new Rust
-source and eight new normal-host control definitions have not been compiled or
+source and eleven new normal-host control definitions have not been compiled or
 executed. A source review or a passing earlier revision does not qualify them.
 
 ## Original native outcome and fresh readback
@@ -31,7 +31,8 @@ native attempt before and after the fresh read, including XID and provenance.
 ## Catalogue ownership and uncertainty
 
 `NativeRemoteDecisionCataloguePublication` is retained on the original recipient
-before changing catalogue memory or entering IO. It owns the original and exact
+before changing catalogue memory or entering IO. It retains actual bounded
+verified original disk bytes and owns the original and exact
 candidate full catalogues, encoded candidate bytes, actual Store/open/catalogue
 and participant identities, original native receipt and decision hashes, and
 actual IO outcomes. It changes only the existing selected joint-decision fields
@@ -44,6 +45,18 @@ generic currentness stays strict. Actual IO outcomes are recorded before any
 postcheck. A failed directory sync cannot be promoted by readonly observation,
 even if the renamed bytes are visible. The same retained candidate may perform
 another real complete durable replacement and readback under fresh authority.
+Before every replacement the actual disk must equal the exact saved original
+or candidate bytes and decode to that same catalogue. Memory candidate with
+original disk is allowed after failure before rename; a different valid disk
+head is refused before replacement. The exact candidate is checked after IO.
+
+After cloning the potentially large candidate into memory, the producer
+rechecks full original physical identity and fresh authority, exact disk O/C,
+owned generation and actual request/Role/OWN/local-MStore liveness before
+entering IO. A refusal at that boundary keeps generic uncertainty and a distinct
+private memory-published/no-IO state; it does not increment the write generation
+or falsely record an IO attempt. A genuine fresh request can finish durability
+of that same candidate without renewing the canceled request.
 A verified readonly outcome additionally requires generic durability healthy,
 current physical identity and matching selected decision in the actual latest
 full catalogue. Healthy unrelated-range catalogue advancement is allowed for
@@ -117,6 +130,16 @@ application assertions. They define:
   resolution without another native XID or catalogue IO.
 - Actual directory-sync failure, readonly refusal, wrong unresolved recipient
   refusal, and same-candidate durable retry under a fresh real request.
+- Actual before-rename failure leaving original disk with candidate memory,
+  then fresh same-candidate durable retry.
+- An explicit actual-disk fault writes a different valid envelope without
+  changing RAM generation. The old owner refuses before replacement, and a
+  subsequent actual byte hash confirms that head remains unchanged. This is a
+  disk-fault schedule, not lawful concurrent range advancement or a new grant.
+- Actual original server request cancellation after candidate cloning, with
+  live actual Role/OWN/member/process prerequisites checked at the cut. The
+  producer records no IO attempt or generation advance, retains uncertainty,
+  and a distinct fresh request durably completes the same candidate.
 - Actual intervening byte-identical generic catalogue IO, then refusal by the
   stale pending owner without clearing its uncertainty. This is an IO-generation
   component, not an unrelated populated-range movement test.
@@ -127,6 +150,11 @@ application assertions. They define:
   later real collection without renewing or rewriting the old token.
 - Actual private native commit followed by cut-2 failure and fresh protected
   KnownRead of the identical original attempt before catalogue certification.
+
+Review found the missing pre-effect disk comparison and missing fresh
+post-clone check in frozen predecessor `a9b74b5d9ee7bf7b05b673d1ee2c7adda9976bdc`.
+That source and its receipt remain unchanged; this successor closes those source
+contract gaps. No runtime failure cause or measured improvement is inferred.
 
 Definitions are not executed proof. Full cross-owner Store/slot ABA during this
 new catalogue operation, two independently produced mixed-D corpora, a real

@@ -39,7 +39,13 @@ pub(super) struct DecisionCustody {
     #[cfg(test)]
     fail_catalogue_dirsync: bool,
     #[cfg(test)]
+    fail_catalogue_rename: bool,
+    #[cfg(test)]
+    cancel_catalogue_before_io: bool,
+    #[cfg(test)]
     catalogue_dirsync_fault_count: u64,
+    #[cfg(test)]
+    catalogue_rename_fault_count: u64,
 }
 /// Constructor is private to the original participant after genuine callbacks.
 /// This does NOT implement or convert to a local publication admission.
@@ -66,10 +72,36 @@ enum DecisionRequest<'a> {
         metadata: &'a ActualNativeJointMetadataPoint,
         caller: &'a CancellationToken,
         completed: &'a crate::db::NativeJointDecisionReceipt,
+        #[cfg(test)]
+        cancel_before_io: bool,
         native: &'a crate::db::NativeRemoteJointDecisionAttempt,
     },
 }
 impl NativeRemoteDecisionAdmission<'_> {
+    #[cfg(test)]
+    pub(crate) fn test_cancel_catalogue_before_io(&self) -> Result<Option<serde_json::Value>> {
+        if let DecisionRequest::Catalogue {
+            caller,
+            native,
+            cancel_before_io: true,
+            ..
+        } = &self.context
+        {
+            self.require_memory_current()?;
+            let (own, _) = self.own_request();
+            let now = std::time::Instant::now();
+            let remaining = |d: std::time::Instant| d.saturating_duration_since(now).as_micros();
+            let evidence = serde_json::json!({"original_server_request_cancelled":true,
+                "all_actual_contexts_live_before_cut":true,"role_remaining_us":remaining(self.role().deadline()),
+                "own_remaining_us":remaining(own.deadline()),"caller_remaining_us":caller.deadline().map(remaining),
+                "actual_native_xid":native.actual_committed_xid()?,"original_participant_sha256":self.original_participant_sha256()});
+            self.require_memory_current()?;
+            caller.cancel();
+            Ok(Some(evidence))
+        } else {
+            Ok(None)
+        }
+    }
     pub(crate) fn require_native_mutation(&self) -> Result<()> {
         if !matches!(&self.context, DecisionRequest::Native(_)) {
             return Err(invalid(
@@ -530,13 +562,36 @@ impl NativeRemoteNewParticipant {
 #[cfg(test)]
 impl NativeRemoteNewParticipant {
     pub(crate) fn test_arm_remote_decision_cut(&self, code: u8) -> Result<()> {
-        if !(1..=7).contains(&code) {
+        if !(1..=10).contains(&code) {
             return Err(invalid("unknown remote DECISION fault code"));
         }
         let mut held = self
             .decision
             .try_lock()
             .ok_or_else(|| invalid("remote DECISION diagnostic custody busy"))?;
+        if code == 10 {
+            if held.cancel_catalogue_before_io || held.catalogue.is_some() {
+                return Err(invalid(
+                    "actual catalogue pre-IO cancellation needs original unstarted candidate",
+                ));
+            }
+            held.cancel_catalogue_before_io = true;
+            return Ok(());
+        }
+        if code == 8 {
+            return held
+                .catalogue
+                .as_mut()
+                .ok_or_else(|| invalid("actual pending catalogue candidate absent"))?
+                .test_arm_foreign_disk();
+        }
+        if code == 9 {
+            if held.fail_catalogue_rename || held.catalogue_rename_fault_count != 0 {
+                return Err(invalid("actual catalogue rename fault already armed/fired"));
+            }
+            held.fail_catalogue_rename = true;
+            return Ok(());
+        }
         if code == 7 {
             return held
                 .catalogue
@@ -647,7 +702,7 @@ impl NativeRemoteNewParticipant {
             "successful_sink_return_retained":held.completed.is_some(),"actual_success_reply_lost":held.lost_success_reply,
             "catalogue":held.catalogue.as_ref().map(|c|c.test_evidence()),
             "actual_catalogue_success_reply_lost":held.lost_catalogue_reply,
-            "actual_catalogue_dirsync_fault_count":held.catalogue_dirsync_fault_count,
+            "actual_catalogue_dirsync_fault_count":held.catalogue_dirsync_fault_count,"actual_catalogue_rename_fault_count":held.catalogue_rename_fault_count,
             "actual_test_cut":held.observed_cut.as_ref().map(|(code,fired)|serde_json::json!({"code":code,"fired":fired.load(Ordering::Acquire)})),
             "retained_encoded_bytes":held.encoded_bytes,"native":held.native.as_ref().map(|n|n.test_evidence()),
             "source_callback_actual_observers":held.contexts.iter().map(|c|serde_json::json!({"node":c.source.actual_observer(),"birth":c.source.actual_observer_birth()})).collect::<Vec<_>>(),

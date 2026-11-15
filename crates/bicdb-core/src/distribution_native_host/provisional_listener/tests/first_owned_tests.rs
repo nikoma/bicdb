@@ -34,6 +34,9 @@ enum Case {
     CatalogueKnownNativeRead,
     CatalogueLostReply,
     CatalogueIoUnknown,
+    CatalogueRenameUnknown,
+    CatalogueForeignDisk,
+    CataloguePreIoCancel,
     CatalogueInterveningWrite,
     CatalogueDuplicate,
     CatalogueWrongExpected,
@@ -46,6 +49,9 @@ fn is_catalogue_case(case: Case) -> bool {
             | Case::CatalogueKnownNativeRead
             | Case::CatalogueLostReply
             | Case::CatalogueIoUnknown
+            | Case::CatalogueRenameUnknown
+            | Case::CatalogueForeignDisk
+            | Case::CataloguePreIoCancel
             | Case::CatalogueInterveningWrite
             | Case::CatalogueDuplicate
             | Case::CatalogueWrongExpected
@@ -412,6 +418,19 @@ fn native_first_remote_catalogue_actual_reply_loss_same_known_candidate() {
 #[test]
 fn native_first_remote_catalogue_actual_dirsync_unknown_same_candidate_retry() {
     run(Case::CatalogueIoUnknown);
+}
+
+#[test]
+fn native_first_remote_catalogue_actual_rename_unknown_original_disk_same_candidate_retry() {
+    run(Case::CatalogueRenameUnknown);
+}
+#[test]
+fn native_first_remote_catalogue_actual_foreign_disk_preimage_not_overwritten() {
+    run(Case::CatalogueForeignDisk);
+}
+#[test]
+fn native_first_remote_catalogue_actual_postclone_cancel_no_io_same_candidate_retry() {
+    run(Case::CataloguePreIoCancel);
 }
 
 #[test]
@@ -1298,6 +1317,9 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                     | Case::CatalogueKnownNativeRead
                     | Case::CatalogueLostReply
                     | Case::CatalogueIoUnknown
+                    | Case::CatalogueRenameUnknown
+                    | Case::CatalogueForeignDisk
+                    | Case::CataloguePreIoCancel
                     | Case::CatalogueInterveningWrite
                     | Case::CatalogueDuplicate
                     | Case::CatalogueWrongExpected
@@ -1506,6 +1528,9 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         case,
                         Case::CatalogueLostReply
                             | Case::CatalogueIoUnknown
+                            | Case::CatalogueRenameUnknown
+                            | Case::CatalogueForeignDisk
+                            | Case::CataloguePreIoCancel
                             | Case::CatalogueInterveningWrite
                     ) {
                         native_command(
@@ -1513,6 +1538,10 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                             selected.id,
                             Some(if case == Case::CatalogueLostReply {
                                 5
+                            } else if case == Case::CatalogueRenameUnknown {
+                                9
+                            } else if case == Case::CataloguePreIoCancel {
+                                10
                             } else {
                                 6
                             }),
@@ -1531,7 +1560,50 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         before_catalogue["native"], after_catalogue["native"],
                         "catalogue must not begin or commit another native D"
                     );
-                    if case == Case::CatalogueLostReply {
+                    if case == Case::CataloguePreIoCancel {
+                        assert!(target_catalogue.is_err());
+                        assert_eq!(after_catalogue["catalogue"]["actual_pre_io_cancel"], true);
+                        assert_eq!(
+                            after_catalogue["catalogue"]["pre_io_cancel_evidence"]
+                                ["all_actual_contexts_live_before_cut"],
+                            true
+                        );
+                        assert!(after_catalogue["catalogue"]["pre_io_cancel_evidence"]
+                            ["role_remaining_us"]
+                            .as_u64()
+                            .is_some_and(|n| n > 0));
+                        assert!(after_catalogue["catalogue"]["pre_io_cancel_evidence"]
+                            ["own_remaining_us"]
+                            .as_u64()
+                            .is_some_and(|n| n > 0));
+                        assert_eq!(after_catalogue["catalogue"]["owns_uncertainty"], true);
+                        assert!(after_catalogue["catalogue"]["pending_generation"].is_null());
+                        assert!(after_catalogue["catalogue"]["verified_generation"].is_null());
+                        assert_eq!(
+                            after_catalogue["catalogue"]["IO_attempts"]
+                                .as_array()
+                                .unwrap()
+                                .len(),
+                            0
+                        );
+                        let retry = drive!(
+                            "actual_postclone_cancel_fresh_same_candidate_retry",
+                            Action::ResumeCatalogueMember { node: node(4) }
+                        );
+                        let after = native_command(&owner_send, selected.id, None)?;
+                        report.event(serde_json::json!({"fresh_retry":retry.as_ref().ok(),"fresh_error":retry.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),"after":after}));
+                        retry?;
+                        assert_eq!(after_catalogue["native"], after["native"]);
+                        assert_eq!(
+                            after_catalogue["catalogue"]["candidate_sha256"],
+                            after["catalogue"]["candidate_sha256"]
+                        );
+                        assert_eq!(
+                            after["catalogue"]["IO_attempts"].as_array().unwrap().len(),
+                            1
+                        );
+                        assert_eq!(after["catalogue"]["owns_uncertainty"], false);
+                    } else if case == Case::CatalogueLostReply {
                         assert!(target_catalogue.is_err());
                         assert!(
                             after_catalogue["actual_catalogue_success_reply_lost"].is_object(),
@@ -1553,13 +1625,23 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         );
                     } else if matches!(
                         case,
-                        Case::CatalogueIoUnknown | Case::CatalogueInterveningWrite
+                        Case::CatalogueIoUnknown
+                            | Case::CatalogueInterveningWrite
+                            | Case::CatalogueRenameUnknown
+                            | Case::CatalogueForeignDisk
                     ) {
                         assert!(target_catalogue.is_err());
-                        assert_eq!(
-                            after_catalogue["actual_catalogue_dirsync_fault_count"], 1,
-                            "real named storage dirsync fault reached"
-                        );
+                        if case == Case::CatalogueRenameUnknown {
+                            assert_eq!(
+                                after_catalogue["actual_catalogue_rename_fault_count"], 1,
+                                "actual before-rename IO fault reached"
+                            );
+                        } else {
+                            assert_eq!(
+                                after_catalogue["actual_catalogue_dirsync_fault_count"], 1,
+                                "real named storage dirsync fault reached"
+                            );
+                        }
                         assert_eq!(after_catalogue["catalogue"]["owns_uncertainty"], true);
                         assert!(after_catalogue["catalogue"]["verified_generation"].is_null());
                         let observe = drive!(
@@ -1584,6 +1666,8 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         assert_eq!(after_catalogue["native"], refused["native"]);
                         if case == Case::CatalogueInterveningWrite {
                             native_command(&owner_send, selected.id, Some(7))?;
+                        } else if case == Case::CatalogueForeignDisk {
+                            native_command(&owner_send, selected.id, Some(8))?;
                         }
                         let retry = drive!(
                             "same_owned_catalogue_candidate_fresh_retry",
@@ -1599,6 +1683,33 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                             after_catalogue["catalogue"]["candidate_sha256"],
                             after_retry["catalogue"]["candidate_sha256"]
                         );
+                        if case == Case::CatalogueForeignDisk {
+                            assert!(retry
+                                .as_ref()
+                                .err()
+                                .is_some_and(|e| e.to_string().contains("disk preimage")));
+                            assert!(after_retry["catalogue"]["actual_injected_disk_sha256"]
+                                .as_str()
+                                .is_some());
+                            assert_eq!(
+                                after_retry["catalogue"]["actual_disk_after_preimage_check"],
+                                after_retry["catalogue"]["actual_injected_disk_sha256"],
+                                "actual different valid disk head preserved after refusal"
+                            );
+                            assert_eq!(
+                                after_catalogue["catalogue"]["pending_generation"],
+                                after_retry["catalogue"]["pending_generation"],
+                                "explicit disk fault does not change RAM write generation"
+                            );
+                            assert_eq!(
+                                after_catalogue["catalogue"]["IO_attempts"],
+                                after_retry["catalogue"]["IO_attempts"],
+                                "old owner never enters replacement over actual third head"
+                            );
+                            assert_eq!(after_retry["catalogue"]["owns_uncertainty"], true);
+                            assert!(after_retry["catalogue"]["verified_generation"].is_null());
+                            return Ok(()); // explicit real-disk fault remains closed
+                        }
                         if case == Case::CatalogueInterveningWrite {
                             assert!(retry
                                 .as_ref()

@@ -18,7 +18,10 @@ import subprocess
 # runner measure runner contention, not the protocol (the same reason the
 # in-process multi-node Core fixtures have their own serial job), so these
 # targets run their tests one at a time. Nothing is skipped.
-SERIAL_TARGETS = {("bicdb-cli", "native_metadata_operator_cli")}
+SERIAL_TARGETS = {
+    ("bicdb-cli", "native_metadata_operator_cli"),
+    ("bicdb-cli", "native_range_move_five_process"),
+}
 
 
 def main():

@@ -299,6 +299,42 @@ pub(super) fn exercise(
                 .unwrap();
             assert!(plain.reply().native_decision.is_none());
             assert!(plain.reply().native_decision_body.is_none());
+            let retained = |host: &NativeMetadataControlHost| {
+                host.test_remote_new_phase_evidence(range).unwrap()["retained_requests"]
+                    .as_u64()
+                    .unwrap()
+            };
+            let before = retained(target);
+            // This fixture's coordinator is outside the plan: every read
+            // above was admitted only by the initiator rule (metadata
+            // leader), evaluated by each recipient on its own observation.
+            assert!(!mf.old_members.contains_key(&node(0)));
+            assert!(!mf.new_members.contains_key(&node(0)));
+            // Legitimate decision reads never consume the lifetime request
+            // table: more reads than its capacity leave it unchanged ...
+            for _ in 0..70 {
+                let frame = observe(coordinator, &mf.target_id, mf, phase).unwrap();
+                assert_eq!(
+                    frame.reply().native_decision_body.as_ref(),
+                    Some(certificate.data())
+                );
+            }
+            assert_eq!(retained(target), before);
+            assert!(before < 64);
+            // ... and a following slot-retaining exchange is still admitted.
+            clients[participant]
+                .remote_joint_decision_exchange(
+                    &node(0),
+                    &mf.target_id,
+                    mf,
+                    phase,
+                    NewOp::Observe,
+                    &budget(5000),
+                )
+                .unwrap();
+            assert_eq!(retained(target), before + 1);
+            let after = target.test_remote_native_decision_evidence(range).unwrap();
+            assert_eq!(after["native"], native["native"]);
         }
         SourceCase::TargetRemoteDecisionCertificateRefusals => {
             let mut observations = Vec::new();

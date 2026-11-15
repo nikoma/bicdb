@@ -27,7 +27,7 @@ use std::time::{Duration, Instant};
 /// least `MIN_STAGE_WHEN_BLOCKED`, may then report a blocked stage, and the
 /// cluster must stay healthy. `true`: the move must complete and the fifth
 /// node must lead the range.
-const EXPECT_COMPLETION: bool = false;
+const EXPECT_COMPLETION: bool = true;
 /// The stage a move that does not complete must have reached at least.
 const MIN_STAGE_WHEN_BLOCKED: &str = "membership_final";
 /// Stage names in order, as `range_move.rs` publishes them.

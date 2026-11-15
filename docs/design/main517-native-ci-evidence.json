@@ -1,0 +1,140 @@
+{
+  "actual_checkout": "9c740c3d07decd5efcbc1a2de66324018daa1f3a",
+  "admission_grant": false,
+  "archive": {
+    "capture_verification_sha256": "713755f2fc680b0800259ef19b8a75ae19860da03bf12ae04c666abfad7bce99",
+    "manifest_files": 85,
+    "manifest_sha256": "6a66e4d2e9ee90a641ec19328e462c5eeaf097036e5b4528f5cec073586d7bd0",
+    "missing": 0,
+    "original_logs": 11,
+    "partials": 0,
+    "root_complete_verification_sha256": "998af01d91650aad85d0f2e428e2251a056cc4d82e02e9e191c62421c2562ff5",
+    "unique_original_zips": 8,
+    "zip_members": 28
+  },
+  "case_groups": {
+    "hot_policy": {
+      "actual_pass_count": 30,
+      "overlaps_other_groups": true
+    },
+    "registered_fifth": {
+      "actual_pass_count": 131,
+      "overlaps_other_groups": true
+    },
+    "strong_point": {
+      "actual_pass_count": 68,
+      "overlaps_other_groups": true
+    }
+  },
+  "classification": "passed_within_recorded_contract",
+  "comparison_to_failed_881": {
+    "881_only_names": [
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_controlled_writer_after_collection_refuses_publication",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_foreign_archive_after_collection_refuses_publication",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_local_archive_after_collection_refuses_publication",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_mstore_after_collection_refuses_publication",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_producer_session_after_collection_refuses_publication",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_store_aba_after_collection_refuses_publication",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::publication_scope_tests::native_registered_fifth_publication_closed_archive_after_scope_refuses_before_bridge_wal",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::publication_scope_tests::native_registered_fifth_publication_retained_middle_history_after_scope_refuses",
+      "distribution_native_host::provisional_listener::tests::metadata_supervisor_tests::snapshot_reader_tests::native_owned_metadata_supervisor_short_snapshot_readers_preserve_anchor_progress"
+    ],
+    "main517_only_names": [],
+    "missing_controls_are_not_passed": true,
+    "same_runtime_inventory": false,
+    "shared_count": 338
+  },
+  "counts": {
+    "failed": 0,
+    "filtered": 940,
+    "ignored": 1,
+    "passed": 337,
+    "seconds": 1876.46
+  },
+  "execution_projection_sha256": "b44d1aa51f42711fb75e7c0c49abd1944f294a0f74a033018d8e67f18059e79e",
+  "merged_main_commit": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4",
+  "native_job": 132645298216,
+  "native_log": {
+    "complete_download": true,
+    "compression": "gzip",
+    "conclusion": "success",
+    "job": 132645298216,
+    "name": "bicdb-core native multi-node (serial)",
+    "path": "job-132645298216.log.gz",
+    "raw_bytes": 13059459,
+    "raw_sha256": "c1d57d2eda0ed7c540072c2affe367b6bd89eae3cd08c5302127eab75cf2fac6",
+    "run": 43659430043,
+    "stored_bytes": 1881033,
+    "stored_sha256": "903a8c442ac5bebb7046e00e930262cbd905e3d911853b6a2864e5987994268a"
+  },
+  "post_merge_ci": "separate_run_identity; not asserted by pre-merge evidence",
+  "qualifications": {
+    "deployment": "not_verified",
+    "independent_machine_scale_out": "not_tested",
+    "new_binary": "not_verified",
+    "production": "not_established",
+    "release": "not_verified",
+    "sustained_throughput_gain": "not_tested",
+    "unchanged_881_acceptance": "not_tested_by_this_run"
+  },
+  "rails_run": 43659430112,
+  "required_run": 43659430043,
+  "root_execution_verification_sha256": "f1af163fd9f468cf785be1daeea43e5dd2e80fb95d0d9797d87433712489af13",
+  "schema": "bicdb-source-ci-evidence-v1",
+  "scope": "Actual successful premergeCI of exactmergedMain517 source tree with declared4s fixtureOWN/lightworkspaceopt1. Not unchanged1.5s881acceptance, all latercontrols, automaticoperator/controller/cold/physical qualification; no IO/CPU/scheduler cause or benchmark claim. No source/CI action by collector.",
+  "settings": {
+    "881_hot_fixture_bound_ms": 1500,
+    "881_native_workspace_opt_level": "default unoptimized workspace; dependency_package2",
+    "SDK_gateway_hot_budget": "Original2s expression not raised in this declared hot fixture comparison; other endpoint components carry their own original budgets.",
+    "actual_command_lines": [
+      {
+        "exact": "2026-11-15T00:51:30.1079766Z ##[group]Run python3 scripts/qualification/guard-build-memory.py --log \"$RUNNER_TEMP/required-ci-pressure/native.jsonl\" -- cargo test --config 'profile.dev.package.\"*\".opt-level=2' --config profile.dev.opt-level=1 -p bicdb-core --lib --locked -- distribution_native_host:: range_image_native::rf3_fixture:: --test-threads=1",
+        "line": 12041
+      },
+      {
+        "exact": "2026-11-15T00:51:30.1081554Z \u001b[36;1mpython3 scripts/qualification/guard-build-memory.py --log \"$RUNNER_TEMP/required-ci-pressure/native.jsonl\" -- cargo test --config 'profile.dev.package.\"*\".opt-level=2' --config profile.dev.opt-level=1 -p bicdb-core --lib --locked -- distribution_native_host:: range_image_native::rf3_fixture:: --test-threads=1\u001b[0m",
+        "line": 12042
+      }
+    ],
+    "actual_hot_fixture_io_OWN_bound_ms": 4000,
+    "dependency_package_opt_level": 2,
+    "native_workspace_opt_level": 1,
+    "no_claim_changed_settings_only_cause": true,
+    "source_profile": "hot_policy selects EnrollmentFixture::with_spares_and_io_timeout(1,4000); othercases retain new()"
+  },
+  "source_commit": "23e2b7682ccbfd5db8fbca93e9fc2740f842aefc",
+  "source_settings_pins": [
+    {
+      "git_blob": "6103d5bce6cfa8d3ff490f9f94c5230b2f0fb570",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs",
+      "ref": "23e2b7682ccbfd5db8fbca93e9fc2740f842aefc",
+      "sha256": "ce984be0f842921bda06e0d10c9888779959be2d591eb6f44107e8647371623f"
+    },
+    {
+      "git_blob": "3485b43377dffc43c53afe373364d57753f02948",
+      "path": ".github/workflows/tests.yml",
+      "ref": "23e2b7682ccbfd5db8fbca93e9fc2740f842aefc",
+      "sha256": "7d831a8a4bf5ce8cf2ae0064d1d944f2d34f8f603f1f9139218c38a43d3beef5"
+    },
+    {
+      "git_blob": "2e058d3f3c48165eeb0dca017614434406da943e",
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline.rs",
+      "ref": "881087806b3a5a9792b3e0ba46ba1ba1f2dd0617",
+      "sha256": "1b8fde63ce55a810ebdc94213d1a0d1fdeaff3a9b0ef96baf5c8b24674e748f9"
+    },
+    {
+      "git_blob": "5257b44764c934228ef2c7bd66a4b586851be9fe",
+      "path": ".github/workflows/tests.yml",
+      "ref": "881087806b3a5a9792b3e0ba46ba1ba1f2dd0617",
+      "sha256": "e8bbfab2e25adee297ed60eb8a5d35ca90f06313307f9a679b2cd775642c0d8f"
+    }
+  ],
+  "source_version": "1.0.517-beta",
+  "summary": [
+    {
+      "exact": "2026-11-15T01:31:49.5856346Z test result: ok. 337 passed; 0 failed; 1 ignored; 0 measured; 940 filtered out; finished in 1876.46s",
+      "line": 18540
+    }
+  ],
+  "tree": "7ee0e1f37c310612165b56e3ca0c1dc10a8e0e9c"
+}

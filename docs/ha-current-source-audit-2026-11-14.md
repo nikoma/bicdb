@@ -6,7 +6,9 @@ Latest delivered-main observation, November 15 02:13 UTC:
 `7ee0e1f37c310612165b56e3ca0c1dc10a8e0e9c` is identical to source
 `23e2b7682ccbfd5db8fbca93e9fc2740f842aefc`, whose normal
 [required CI](https://github.com/nikoma/bicdb/actions/runs/43659430043) passed,
-including the native job. The separate post-merge push runs were still live
+including native **337 passed /zero failed /one ignored**. The
+[complete source-pinned CI evidence](design/main517-native-ci-evidence.md)
+retains actual hot/fifth/Strong results and their exact settings. The separate post-merge push runs were still live
 at this observation. Source delivery and that CI result do not establish a
 new binary, release, deployment, automatic remote operator, physical expansion
 or production qualification.
@@ -14,10 +16,11 @@ or production qualification.
 PR206 uses a different native validation setting: the hot fixture's configured
 IO/OWN ceiling is four seconds, versus source881's original 1.5 seconds, and
 the native job additionally optimizes workspace code. Its older source line
-does not contain eight later source881 negative controls. This is a separate
+does not contain nine source881 cases: eight later negative controls and one
+supervisor short-reader case. This is a separate
 passing result; it does not retroactively pass the failed source881 run below
 or prove the original windows on the composed current-main source. Complete
-source-pinned CI capture and reconciliation are being retained separately.
+source-pinned CI capture and reconciliation are retained separately.
 
 Earlier delivered-main observation, November 15 00:15 UTC: **1.0.514-beta**,
 `7fc833e3a9130ea710a0fbbfbaba6b065eedf8d3`. Its normal

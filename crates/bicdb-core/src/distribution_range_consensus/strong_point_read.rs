@@ -6,12 +6,71 @@ use crate::distribution_consensus::MetadataReadObservation;
 use crate::distribution_native_read::{NativeStrongPointReadOutcome, NativeStrongPointReadRequest};
 use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use crate::TcpClusterRelocationTransport;
+#[cfg(test)]
+mod publication_contention;
 
 pub(crate) struct NativePointReadReservation<'a, T: RangeWriteTransport> {
     _reservation: RangeAdmissionReservation<'a, T>,
 }
 
 impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
+    /// Opt-in for a guard-free finite INITIAL actor. The generic one-shot
+    /// validator below remains suitable for callers holding other guards.
+    /// Waiting supplies no read barrier, recovered epoch or Serving grant.
+    pub(crate) fn validate_strong_event_dispatch_install_bounded(
+        self: &Arc<Self>,
+        runtime: &RangeRecoveryRuntime,
+        host: &InstalledNativeWriterHostGuard,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        if parent.deadline().is_none() {
+            return Err(range_write_error(
+                "Strong publication requires a finite original request",
+            ));
+        }
+        self.require_strong_point_runtime(runtime)?;
+        loop {
+            parent.check()?;
+            let Some(topology) = self.topology.try_read_for(Duration::from_millis(5)) else {
+                continue;
+            };
+            let ranges = topology
+                .ranges
+                .values()
+                .map(crate::distribution_native_read::canonical_range)
+                .collect::<Vec<_>>();
+            drop(topology);
+            if ranges.is_empty() {
+                return Err(range_write_error(
+                    "installed event writer has no range configuration",
+                ));
+            }
+            parent.check()?;
+            let Some(service) = self.local_service.try_lock_for(Duration::from_millis(5)) else {
+                #[cfg(test)]
+                publication_contention::after_failed_service_slice(
+                    Arc::as_ptr(&self.local_service) as usize,
+                )?;
+                continue;
+            };
+            parent.check()?;
+            let database = service.database();
+            let Some(database) = database.try_read_for(Duration::from_millis(5)) else {
+                // Release the service before trying again; do not keep it
+                // while waiting for another owner's database guard.
+                drop(service);
+                continue;
+            };
+            parent.check()?;
+            for range in ranges {
+                parent.check()?;
+                host.require_for_coordinator(&database, &range, self)?;
+            }
+            parent.check()?;
+            return Ok(());
+        }
+    }
     /// Publication is not a read permit. Check the REAL hook/DB/coordinator;
     /// every request still acquires its own metadata/data/snapshot protocol.
     pub(crate) fn validate_strong_event_dispatch_install(

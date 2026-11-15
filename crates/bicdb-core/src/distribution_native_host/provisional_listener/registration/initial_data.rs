@@ -533,7 +533,7 @@ impl NativeInitialDataHost {
         parent.check()?;
         let already_published = self.published.load(Ordering::Acquire);
         let dispatcher = self.dispatcher.as_ref().unwrap();
-        dispatcher.publish(&enrollment.coordinator, &enrollment.guard)?;
+        dispatcher.publish_bounded_initial(&enrollment.coordinator, &enrollment.guard, parent)?;
         if let Err(error) = parent.check().and_then(|_| admission.require_live()) {
             // APP and typed Get are still fenced by published=false. Clearing
             // this first unpublished slot cannot revoke an acknowledged APP.

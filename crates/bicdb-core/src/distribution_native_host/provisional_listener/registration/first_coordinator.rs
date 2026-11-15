@@ -377,8 +377,9 @@ impl NativeFirstCoordinator {
                     )?;
                     let intent = serde_json::json!({"peer":peer,"request":request});
                     self.reserve_intent(intent.clone())?;
-                    // SAME permanent plan/session. A failed Close is retried
-                    // only by the existing real OLD retained-outcome producer.
+                    // SAME permanent plan/session. An unresolved Close is
+                    // observed only by a distinct authenticated readonly Observe
+                    // of the original peer/session; it is never replayed here.
                     if self.pending_control.is_none() {
                         self.pending_control = Some((kind, peer.clone(), intent));
                     }

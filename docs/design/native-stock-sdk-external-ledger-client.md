@@ -9,7 +9,11 @@ Current tooling includes a bounded offline verifier and cross-run read-only
 reconciliation generator/checker. The external-sink source
 `9c9d2ddcf83b8c913ab54dc6a67c4a688f77e36c` passed 61 focused Python controls,
 including local file and loopback TLS operations. The Rust producer's compilation
-and real SDK/cluster experiment remain unexecuted. Statements below about the
+is now covered by the all-target type-check checkpoint at source6de
+`6de646beb603accf39358017d8e0c83c39c741b1` (1.0.520-beta candidate). This does
+not build a retained optimized probe binary or execute its SDK/cluster workload.
+The actual producer/collector experiment remains unexecuted, and later local
+source additions do not inherit that type-check pass. Statements below about the
 first leaf's missing verifier/generator describe that historical b440 design;
 they are not the current Python implementation inventory. See the
 [current tooling overview](../../scripts/platform/native-sdk-ledger/README.md).

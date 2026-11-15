@@ -7,6 +7,18 @@ uses 1.0.516-beta. Rust compilation and real BicDB execution must
 be recorded separately from Python format, local persistence and loopback TLS
 controls.
 
+Current type-check checkpoint: candidate520 source6de
+`6de646beb603accf39358017d8e0c83c39c741b1` passed
+[all-target CI132814500830](https://github.com/nikoma/bicdb/actions/runs/43714999361/job/132814500830),
+including this default-TLS example. Type-checking creates no retained optimized
+probe artifact and executes no SDK/collector workload. The seven receipt-parser
+controls separately passed on historical source516
+[2d379](native-ledger-2d379-failed-acceptance.md); source6de's Core failure
+occurred before that target. Source6de also failed Native. The source-time
+uncompiled statements below are superseded by these precisely scoped results,
+not by a physical or production qualification. Later local source remains
+uncompiled and unexecuted.
+
 ## Identity and placement contract
 
 `ClusterEventClient` is a trusted host API. APP callers must be Active metadata
@@ -256,8 +268,9 @@ source/log and a846's earlier 35-control receipt remain unchanged.
 The external checker now requires the stronger descriptor-bound storage
 profile. Older path-only a846 storage facts remain historical DATA and cannot
 substitute for that profile. Format-1 SDK journal bytes and the original
-known/possible-ACK reconciliation corpus are unchanged. Rust examples remain
-uncompiled; no real SDK, database, VM, node expansion or physical fault was
+known/possible-ACK reconciliation corpus are unchanged. At that source-time
+checkpoint Rust examples remained uncompiled; the current type-check result is
+separate above. No real SDK, database, VM, node expansion or physical fault was
 executed by these Python controls.
 
 ## Receipt-schema successor controls
@@ -286,8 +299,9 @@ Core integration target `native_external_ledger_receipts`. The unchanged
 required Core command runs `cargo test -p bicdb-core` with two unrelated native
 module skip prefixes; these integration test names match neither prefix. No
 workflow or manifest change is needed. All-target compilation alone is not
-their execution result: these new Rust controls are source-listed, uncompiled
-and unexecuted until an actual target result is retained.
+their execution result: these new Rust controls were initially source-listed,
+uncompiled and unexecuted. The subsequent exact seven-parser runtime checkpoint
+is linked above; no newer runtime result is inferred from type-checking.
 
 Eight additional Python witness-schema/fencing controls cover this layer.
 One uses a synthetic endpoint to exercise the actual controller

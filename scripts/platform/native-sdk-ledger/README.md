@@ -12,6 +12,18 @@ Source availability and parser tests do not establish a working end-to-end
 SDK client, database durability, HA, consistency or scale-out. Later candidate
 compilation and runtime results must retain their own source identities.
 
+Latest type-check checkpoint: source `6de646beb603accf39358017d8e0c83c39c741b1`
+(1.0.520-beta candidate), tree `de0b68af8d158f39358604590769afb8237115f0`, passed
+the normal [all-target CI job132814500830](https://github.com/nikoma/bicdb/actions/runs/43714999361/job/132814500830).
+Its `cargo check --workspace --all-targets --locked` includes the automatically
+discovered `native_external_ledger` example; Core defaults enable its real TLS
+client module. This is **type-checking**, not a linked/optimized experiment
+binary, a producer invocation or external-collector acceptance. The separate
+Core job failed before its ledger integration target, so no new seven-parser
+runtime result is inherited from this checkpoint. Core and Native failed overall.
+The later unpublished startup/Serving composition has not compiled or run.
+See the [source6de results and raw log identities](../../../docs/design/native-520-regression-findings.md).
+
 The original producer source was
 `b44064c2bf1b22712e5f30d2031aa5d58e907e44`, based on the 1.0.512-beta candidate
 `4efcfc2cccc51307721777ad7d53a251e67bbbf3`. Its format and reconciliation

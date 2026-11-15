@@ -1,0 +1,339 @@
+{
+  "schema_version": 1,
+  "observed_at_utc": "2026-11-15T04:33:01.981782+00:00",
+  "main": {
+    "version": "1.0.517-beta",
+    "sha": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4"
+  },
+  "unmerged_candidate": {
+    "version": "1.0.518-beta",
+    "sha": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab"
+  },
+  "classification": "SOURCE/DESIGN REVIEW ONLY; no new SQL build/runtime/physical test executed by this recheck",
+  "source_pins": [
+    {
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "main517_blob": "2b5eb58f812ac2352ad80ec87601f1d865bdd6ab",
+      "main517_sha256": "f1bae040c48b7aa97fda0d1d59e25c194173d395d35044c731bd40e801d62de9",
+      "candidate_fbb_blob": "be13efaeef19b8e3179575d67aeefcdec230758c",
+      "candidate_fbb_sha256": "674131a7eacf002e5a91b589d9d5caf4a0be14a8ace36a186576e507b1582424",
+      "same_main517_and_candidate": false,
+      "same_main502_and_main517": true
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/query_exec.rs",
+      "main517_blob": "5b8d412d85bd16e34dfdff0c05f6c032678ba8d0",
+      "main517_sha256": "5ce7b5fd977387e88cd9942f7d148be24b1053fa073f1369cbc0b2cf959f87d0",
+      "candidate_fbb_blob": "5b8d412d85bd16e34dfdff0c05f6c032678ba8d0",
+      "candidate_fbb_sha256": "5ce7b5fd977387e88cd9942f7d148be24b1053fa073f1369cbc0b2cf959f87d0",
+      "same_main517_and_candidate": true,
+      "same_main502_and_main517": true
+    },
+    {
+      "path": "crates/bicdb-pgwire/src/server_cluster.rs",
+      "main517_blob": "ae2b588f426f2f03173e571eab12e7974730f3dd",
+      "main517_sha256": "7840c1c93d88e980c49f7e51fb97978b8dac5dd95201cfd41a9993aa44201b2f",
+      "candidate_fbb_blob": "ae2b588f426f2f03173e571eab12e7974730f3dd",
+      "candidate_fbb_sha256": "7840c1c93d88e980c49f7e51fb97978b8dac5dd95201cfd41a9993aa44201b2f",
+      "same_main517_and_candidate": true,
+      "same_main502_and_main517": true
+    },
+    {
+      "path": "crates/bicdb-sql/src/session.rs",
+      "main517_blob": "8d64c1dd11a6ef44f9ba2162e692e3fce163ff64",
+      "main517_sha256": "86d1f7ebf6b1b4ca0aac15d701088b2b9b07e742994ad0f2c350228b89902886",
+      "candidate_fbb_blob": "f1e0e00abca335f85d293ee9c1f0701f98899236",
+      "candidate_fbb_sha256": "407094b50ce4753b71e32562255f8c17d9ffd21ce9ebbe227c48bfaab2e27d1e",
+      "same_main517_and_candidate": false,
+      "same_main502_and_main517": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "main517_blob": "2c9390f0b0f75789160df64129f9da2b142767ec",
+      "main517_sha256": "3f4ba08a2694662a163f7ddb7cd41b2ac88f5c1539ac18483d4eb69caedbaa44",
+      "candidate_fbb_blob": "2c9390f0b0f75789160df64129f9da2b142767ec",
+      "candidate_fbb_sha256": "3f4ba08a2694662a163f7ddb7cd41b2ac88f5c1539ac18483d4eb69caedbaa44",
+      "same_main517_and_candidate": true,
+      "same_main502_and_main517": true
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "main517_blob": "4dc15ef10d0106c28dd5f03965f965409489be18",
+      "main517_sha256": "b99060cc4388b771029c707a673b23758566057628e014f5066ab93c338bef38",
+      "candidate_fbb_blob": "27a8e21e87e1db282c78f71b20c0a05a0e5012e7",
+      "candidate_fbb_sha256": "0dea7387fd2c0ee3a7c0db6aa74763257ae3f2d556d0b311a42e4a606ea04592",
+      "same_main517_and_candidate": false,
+      "same_main502_and_main517": false
+    },
+    {
+      "path": "crates/bicdb-core/src/db/record_read_snapshot.rs",
+      "main517_blob": "2154cc5e975538b2f7dc7ff6aaa322719d713746",
+      "main517_sha256": "abf6b52158b64bb940a050100f97386a33ce4ae82a648e75eac0742e87f231f7",
+      "candidate_fbb_blob": "2154cc5e975538b2f7dc7ff6aaa322719d713746",
+      "candidate_fbb_sha256": "abf6b52158b64bb940a050100f97386a33ce4ae82a648e75eac0742e87f231f7",
+      "same_main517_and_candidate": true,
+      "same_main502_and_main517": true
+    },
+    {
+      "path": "crates/bicdb-core/src/query_budget.rs",
+      "main517_blob": "03153c51450aef4871edc87f0d7e1c7bafcfa2a7",
+      "main517_sha256": "7edb9fa9683c2d933b6dcbc2d2d3f5f84861ea08431a39dcb288bf08be46be4d",
+      "candidate_fbb_blob": "03153c51450aef4871edc87f0d7e1c7bafcfa2a7",
+      "candidate_fbb_sha256": "7edb9fa9683c2d933b6dcbc2d2d3f5f84861ea08431a39dcb288bf08be46be4d",
+      "same_main517_and_candidate": true,
+      "same_main502_and_main517": false
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_events.rs",
+      "main517_blob": "6e542245476df617e29ac5e7fd1a8764eaf7ad35",
+      "main517_sha256": "fe3f2ea78dfa9d3c21c130ec7fbc93d0f14f57d2abbf07acb6634b547542f83c",
+      "candidate_fbb_blob": "6e542245476df617e29ac5e7fd1a8764eaf7ad35",
+      "candidate_fbb_sha256": "fe3f2ea78dfa9d3c21c130ec7fbc93d0f14f57d2abbf07acb6634b547542f83c",
+      "same_main517_and_candidate": true,
+      "same_main502_and_main517": false
+    }
+  ],
+  "verified_anchors": [
+    {
+      "revision": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4",
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "exact_anchor": "pub trait DistributedCommitProtocol<Write>",
+      "lines": [
+        1054
+      ]
+    },
+    {
+      "revision": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4",
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "exact_anchor": "protocol.record_decision(transaction_id, DistributedCommitDecision::Abort)?;",
+      "lines": [
+        1151
+      ]
+    },
+    {
+      "revision": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4",
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "exact_anchor": "participants[..prepared].iter().rev()",
+      "lines": [
+        1152
+      ]
+    },
+    {
+      "revision": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4",
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "exact_anchor": "impl DistributedCommitProtocol<&'static str> for RecordingCommitProtocol",
+      "lines": [
+        1602
+      ]
+    },
+    {
+      "revision": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab",
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "exact_anchor": "pub trait DistributedCommitProtocol<Write>",
+      "lines": [
+        1054
+      ]
+    },
+    {
+      "revision": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab",
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "exact_anchor": "protocol.record_decision(transaction_id, DistributedCommitDecision::Abort)?;",
+      "lines": [
+        1151
+      ]
+    },
+    {
+      "revision": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab",
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "exact_anchor": "participants[..prepared].iter().rev()",
+      "lines": [
+        1152
+      ]
+    },
+    {
+      "revision": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab",
+      "path": "crates/bicdb-core/src/distribution_query.rs",
+      "exact_anchor": "impl DistributedCommitProtocol<&'static str> for RecordingCommitProtocol",
+      "lines": [
+        1602
+      ]
+    },
+    {
+      "revision": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4",
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "exact_anchor": "fn resolve_range(&self, intent: &CommitAdmissionIntent)",
+      "lines": [
+        3105
+      ]
+    },
+    {
+      "revision": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4",
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "exact_anchor": "cross-range write rejected: use the explicit distributed commit protocol",
+      "lines": [
+        3115
+      ]
+    },
+    {
+      "revision": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4",
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "exact_anchor": "node {} is not leader for {} epoch {}; current leader is {}",
+      "lines": [
+        3126
+      ]
+    },
+    {
+      "revision": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab",
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "exact_anchor": "fn resolve_range(&self, intent: &CommitAdmissionIntent)",
+      "lines": [
+        3124
+      ]
+    },
+    {
+      "revision": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab",
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "exact_anchor": "cross-range write rejected: use the explicit distributed commit protocol",
+      "lines": [
+        3134
+      ]
+    },
+    {
+      "revision": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab",
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "exact_anchor": "node {} is not leader for {} epoch {}; current leader is {}",
+      "lines": [
+        3145
+      ]
+    },
+    {
+      "revision": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4",
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "exact_anchor": "fn execute_server_db_sql_for_state_inner(",
+      "lines": [
+        4132
+      ]
+    },
+    {
+      "revision": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4",
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "exact_anchor": "fn execute_server_transaction_sql(",
+      "lines": [
+        4498
+      ]
+    },
+    {
+      "revision": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4",
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "exact_anchor": "fn sql_session_for_server<'db>",
+      "lines": [
+        4683
+      ]
+    },
+    {
+      "revision": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4",
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "exact_anchor": "Some(ctx) => SqlSession::new_secure(db, ctx),",
+      "lines": [
+        4685
+      ]
+    },
+    {
+      "revision": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab",
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "exact_anchor": "fn execute_server_db_sql_for_state_inner(",
+      "lines": [
+        4132
+      ]
+    },
+    {
+      "revision": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab",
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "exact_anchor": "fn execute_server_transaction_sql(",
+      "lines": [
+        4503
+      ]
+    },
+    {
+      "revision": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab",
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "exact_anchor": "fn sql_session_for_server<'db>",
+      "lines": [
+        4688
+      ]
+    },
+    {
+      "revision": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab",
+      "path": "crates/bicdb-pgwire/src/lib.rs",
+      "exact_anchor": "Some(ctx) => SqlSession::new_secure(db, ctx),",
+      "lines": [
+        4690
+      ]
+    },
+    {
+      "revision": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4",
+      "path": "crates/bicdb-sql/src/session.rs",
+      "exact_anchor": "fn acquire_postgres_statement_snapshot(",
+      "lines": [
+        3972
+      ]
+    },
+    {
+      "revision": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4",
+      "path": "crates/bicdb-sql/src/session.rs",
+      "exact_anchor": "tx.acquire_statement_snapshot(floor)?;",
+      "lines": [
+        4007
+      ]
+    },
+    {
+      "revision": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab",
+      "path": "crates/bicdb-sql/src/session.rs",
+      "exact_anchor": "fn acquire_postgres_statement_snapshot(",
+      "lines": [
+        3974
+      ]
+    },
+    {
+      "revision": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab",
+      "path": "crates/bicdb-sql/src/session.rs",
+      "exact_anchor": "tx.acquire_statement_snapshot(floor)?;",
+      "lines": [
+        4009
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "status": "implemented limitation",
+      "claim": "PGwire still executes over local BicDb/SqlSession and statement snapshot. Planning helpers remain separate; no transparent ordinary PostgreSQL gateway execution established."
+    },
+    {
+      "status": "not implemented in inspected source",
+      "claim": "Repository implementation search still finds only test RecordingCommitProtocol. Existing helper aborts acknowledged prepared prefix, not every contacted uncertain participant; not a recoverable SQL coordinator."
+    },
+    {
+      "status": "implemented limitation",
+      "claim": "Final-row admission rejects multiple ranges and a local node that is not the selected range leader."
+    },
+    {
+      "status": "design boundary",
+      "claim": "Candidate ordinary commit-completion preservation and native per-range read/activation receipts do not establish SQL decision order S, exact shared snapshots, distributed joins or multi-range atomicity."
+    }
+  ],
+  "remaining_SQL_gates": [
+    "authenticated transparent SQL gateway",
+    "one exact cross-range SQL read view plus range-local actual MVCC mapping/pins",
+    "durable enlisted participant manifest and invisible intents",
+    "immutable quorum terminal decision with independent coordinator-loss resolution",
+    "all-participant visibility and original complete effect publication before ACK",
+    "ordinary PostgreSQL and separate Oracle application acceptance",
+    "locality remains optional for correctness"
+  ],
+  "qualification": {
+    "transparent_distributed_SQL": false,
+    "general_multi_range_transactions": false,
+    "physical_scaling": false,
+    "production_admission": false
+  }
+}

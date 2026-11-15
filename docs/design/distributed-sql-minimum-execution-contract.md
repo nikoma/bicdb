@@ -16,6 +16,34 @@ transparent replay of an uncertain business transaction are not promised.
 Locality is an optional placement optimization. Correctness must hold when
 related rows, indexes and constraint authorities occupy different ranges.
 
+## Source517 and candidate518 recheck
+
+A [new source checkpoint](distributed-sql-main517-candidate518-checkpoint.json)
+pins nine boundaries on main **1.0.517-beta /
+`bde74650c40934096e1cc6c6e75a3ea3c4643cf4`** and the unmerged **1.0.518-beta /
+`fbbadef57c5532af6acbc0f3e2016b332a3d16ab`** composition. PGwire still executes
+through local `BicDb`/`SqlSession`; final-row admission rejects cross-range
+writes and a nonleader node. The only inspected `DistributedCommitProtocol`
+implementation remains the test `RecordingCommitProtocol`, and the generic
+helper still aborts only its acknowledged prepared prefix after a failed
+Prepare. A recipient whose durable prepare reply was lost remains a required
+production recovery case.
+
+Candidate ordinary commit-completion corrections preserve actual committed
+transaction outcomes after a visibility error. They do not introduce the SQL
+decision order `S`, an exact common read cut, a durable participant registry or
+multi-range atomicity. Native per-range metadata/quorum/preparation/Open records
+also cannot stand in for those SQL votes or shared snapshots. A future SQL
+coordinator must retain a durable COMMIT through caller cancellation and resolve
+every enlisted or contacted uncertain participant with the original payload.
+Tenant locality remains an optional optimization, never an atomicity condition.
+
+This recheck is source/design work only. It runs no SQL tests and grants no
+runtime, physical or production qualification. Historical and current CI results
+retain their exact source scopes; successful local PostgreSQL application tests
+cannot establish transparent cross-range SQL. The earlier502 checkpoint and its
+worker-context counterexample below remain historical evidence.
+
 ## Source 502 recheck and execution-context constraint
 
 The [separate source checkpoint](distributed-sql-main502-source-and-context-checkpoint.json)

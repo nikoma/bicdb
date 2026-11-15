@@ -1,0 +1,248 @@
+{
+  "schema": "bicdb-selected-catalogue-resumption-preconditions-v1",
+  "source": "fe86ac4a5d3e27e2280d499f9f8c9fb70de1c516",
+  "source_version": "1.0.512-beta",
+  "scope": "Source-only necessary recovery-path design/reachability audit; no runtime edits, build, test, CI, provision, push or version change.",
+  "prior_frozen_correction": {
+    "path": "native512-remote-catalogue-rebase-availability-correction-1742776.json",
+    "sha256": "570002d9b971fb2c8c19064ff058519c469883c349a1c79bcc2e48fa4f737684",
+    "preserved": true
+  },
+  "source_pins": [
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "blob": "d9aa9453998c8be992193e71af0cc35a6d84dda1",
+      "sha256": "3016a267a14f5931c78ad3fab097fddf82234e48d3de28ae797159bf6e2dad2a",
+      "bytes": 270209
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/registered_decision.rs",
+      "blob": "20f93fa695c029bcb5c231839770ceed93737fe5",
+      "sha256": "e1c37f5adaf04766e15ab47445435e50ace83048d99adaad1166db57198e0b80",
+      "bytes": 14376
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/serving_configuration/joint_handoff/decision/registered.rs",
+      "blob": "e59a809fa097ced423f289190cd167031ae75b6d",
+      "sha256": "a028e24bcbeba6ae1c0de78a89cff26f86622c364a97beefacfd4ba44afe2dc6",
+      "bytes": 22997
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/decision/registered_catalogue_retry.rs",
+      "blob": "505f8822c1df775eb36df9d162c0c1fd44134b56",
+      "sha256": "6bd13b29fa12ad220da8fb2fa7cece9c6fa1aacc778901035d232248d8d70cbe",
+      "bytes": 3871
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/decision.rs",
+      "blob": "ddc5dd359a6072b5196adf6efb52fd1f9058cffe",
+      "sha256": "86db8f53f36affed0ff7363fff4d37ee3193f6e483b89722c56299cb7239448e",
+      "bytes": 37935
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/recovery_state/registered_closed.rs",
+      "blob": "6e499628042c7a08a43efb90475ecf64693e0f01",
+      "sha256": "5e3513ffe212e8affb3c9b6b1af219233a1f8d8bd15326efd161e20f5915e3db",
+      "bytes": 11789
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/registered_receiver_domain.rs",
+      "blob": "e818f97de06867c5ddba1e669200cfc119d0e756",
+      "sha256": "7b56dfda8df5442b7556fa38376b70954649489fa847212f44c0a07d69a3c591",
+      "bytes": 6379
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/registered_joint.rs",
+      "blob": "e9f7fd51720e2b5a88bd2f4aa2b29cf9df3e154c",
+      "sha256": "ab7a4d9b0c86ccdde9e15e124ac6737a26610f46dc9bbca534e553b306197aec",
+      "bytes": 6605
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/assigned_install.rs",
+      "blob": "3e0d92d83c2347a06fc17b3d5f816ee0ef38b67d",
+      "sha256": "0ba0626b0dbb59d5249c8ee178dec068b67e2c96e05da53ee4312cebd511f689",
+      "bytes": 28487
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_attempt/remote_joint.rs",
+      "blob": "cfa8063de1821633948780a5657da9afd3eddc31",
+      "sha256": "97349a4961072740396b0338ad90186c89a18b06ac93b401420c5584536b1095",
+      "bytes": 20914
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/native_image_base/registered_remote/joint_materialization.rs",
+      "blob": "7b449a0494213ae1494fcb6e11b5932e0fa092f9",
+      "sha256": "f462931521cabc5eee5eaa6ee50d7bc83ec6be464cb791ff8e7b4a886e1b37c1",
+      "bytes": 4131
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/recovery_state.rs",
+      "blob": "f6a65b93770d95c85ebcb402ae61df072e5dd795",
+      "sha256": "dcd14b011e7a6a2a8cff00f245a7ba5c7af23fb8bad4f5de76b7f4983160d4ca",
+      "bytes": 81905
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/catalogue_custody.rs",
+      "blob": "ffb8b882fba4c46c5ecac7c507b8cbe0955a6481",
+      "sha256": "a2055b60836539a80b1184fc4eeb34ba99dd9ec82c4cf1b2ec1e2de7d84f3219",
+      "bytes": 6052
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/native_abort.rs",
+      "blob": "255c7ff3a6d8f053125fdd0d57e092000c2f02cc",
+      "sha256": "f1137438aa456bb5bb725bd4dc51641621764f158857e26a0ee140aa85e7190d",
+      "bytes": 64325
+    },
+    {
+      "path": "crates/bicdb-core/src/storage.rs",
+      "blob": "8e33ce6384a52085094951a597f3abfa3cb8cacb",
+      "sha256": "eeece5ddf6b753a661af7cac57f71697e057d32661c9f8c4780cf633801df50e",
+      "bytes": 127572
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/materialized.rs",
+      "blob": "ef58f67d10cc9660e3537c2d1716eff4db762d61",
+      "sha256": "46b7442dcb9cbf240cd4803d6921bfa4afa3ea76cf369006a4b6c68ca2033bf4",
+      "bytes": 11412
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/native_image_base/joined_remote.rs",
+      "blob": "32d1530fe816186c4d50f502884b12dddae89a1d",
+      "sha256": "580587638c38b1e14e8e864bc520fd5b698e2a5141c6c625833641d2827d9980",
+      "bytes": 22451
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests/catalogue_tests.rs",
+      "blob": "a8c9341352415d941ce590650a2a79928d8a0143",
+      "sha256": "f19a79e355c83e075befbf4dd6467095e4749806872d0b95c9dec3bfbf240b2f",
+      "bytes": 11932
+    }
+  ],
+  "unchanged_174_sink_and_retry": true,
+  "decision": "DO NOT IMPLEMENT Registered-only rebase as a general two-populated-range recovery fix. A lawful same-Store R2 successor producer is missing from this Registered lifetime; a generalized historical/Joined admission and owned head/uncertainty protocol are prerequisites. Existing exact-original/candidate path remains fail-closed.",
+  "confirmed_source_boundaries": [
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/registered_decision.rs",
+      "lines": "188-247",
+      "finding": "require_binding compares entire Store catalog against original or candidate before the verified fast-path; later verified path also requires whole candidate and exact retained bytes. A different valid R2 head is structurally refused even if every selected R1 field is unchanged. This remains source-derived; no lawful actual two-range schedule executed."
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/registered_decision.rs",
+      "lines": "249-297",
+      "finding": "At most8 actual replacement outcomes; original/candidate retained before effects; uncertainty set before memory candidate; actual replace return/error retained immediately before readback/live checks. No generations/rebase/supersession producer. Verified set only after real successful replacement+exact readback+fresh actual publication guard. Visible bytes do not prove that old call fsynced."
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/serving_configuration/joint_handoff/decision/registered.rs",
+      "lines": "171-265",
+      "finding": "Original NativeRegisteredJointDecisionAttempt owns complete expected DATA and actual native attempt; known retry requires exact retained outcome Committed with actual issued xid plus identical record and bytes. Reconciliation reads real native receipt and matches that custody; no new begin/put/commit. A catalogue barrier cannot turn NativeOutcome::Unknown/Aborted into Committed."
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/registered_joint.rs",
+      "lines": "7-81",
+      "finding": "Actual Registered exclusion retains original empty hook, admission read, journal and same A Frozen permit; identity point independently checks exact installed physical floor/open/native receipt. Fresh Role/OWN/metadata point remain mandatory. A new catalogue head cannot create this owner or bypass it."
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/native_image_base/registered_remote/joint_materialization.rs",
+      "lines": "46-100",
+      "finding": "Original Registered materialization identity is selected-range base/log+physical/open/custody, not the old whole catalogue. Thus a hypothetical valid unrelated successor does not itself invalidate this identity. Durability/current authority are separate, not implied by that selected check."
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/recovery_state/registered_closed.rs",
+      "lines": "38-114",
+      "finding": "The actual R2 Registered CLOSED producer rejects any image_install_intents, native_image_bases, joint/sparse/installing/handover/current maps globally; all existing logs must be zero/empty and original receiver current_commit_seq must be0. It therefore cannot make R2 durable progress once R1 has a populated image/native DECISION."
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/registered_receiver_domain.rs",
+      "lines": "11-31,62-113",
+      "finding": "Registered NoDomain requires original B0 and complete native namespace inventory containing only original birth/READY/MStore/catalogue keys (plus tightly bounded proposal keys in dedicated predecessor). Selected-row absence alone does not waive this global birth/inventory condition. Reusing it on populated R1 would be a fabricated producer."
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/assigned_install.rs",
+      "lines": "541-604",
+      "finding": "FIRST atomically installs a real enrolled hook and retains Installed state. The old Registered empty-hook scope cannot survive this transition; the new monotonic hook revocation strengthens that fact. Post-FIRST R2 belongs to actual Joined/installed-State admission, never reactivated Registered authority."
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/materialized.rs",
+      "lines": "32-45",
+      "finding": "Current generic NEW enum has Registered, Survivor, Target; actual Joined NEW evidence exists separately but is not yet a generic Joined DECISION/catalogue participant. Do not relabel Target or Registered as Joined to make a two-range fixture pass."
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "lines": "872-891",
+      "finding": "RangeWriteStore retains one recovery_persistence_uncertain bool, not per-range ownership or unresolved-publication inventory/head generation."
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/recovery_state.rs",
+      "lines": "1045-1076",
+      "finding": "require_durable_recovery_catalog rejects the global uncertain bool; successful persist_recovery_catalog clears it. Existing general uncertainty is not an identity token and cannot prove that a particular R1 attempt owns all pending effects."
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/catalogue_custody.rs",
+      "lines": "106-151",
+      "finding": "Verified custody rejects global uncertainty and requires actual file parsed/verified catalog == current memory. Equality establishes current content, not historical fsync return or all unresolved owners."
+    },
+    {
+      "path": "crates/bicdb-core/src/storage.rs",
+      "lines": "1923-2080",
+      "finding": "Actual replacement writes temp, syncs temp, renames, syncs directory; dedicated Registered sink uses FailClosed::No and retains an uncertain flag itself. Rename failure can leave disk=old and memory=candidate; directory-sync failure can leave visible candidate without proven directory durability. New successful barrier establishes NEW head durability only."
+    }
+  ],
+  "minimal_safe_transition_contract": {
+    "genuine_owner_first": "Before implementing rebase, add or identify actual same-open Joined/historical selected-range DECISION admission from the original installed State/A/materialized owner and real native DECISION CURRENT+archive. Fresh matching Role/OWN/current MStore must come from outside service/engine locks. Never deserialise that authority or revive Registered after FIRST. This producer must lawfully coexist with independently protected R2 progress on the SAME Store. The future Joined operation has its OWN truthful original attempt/lease; it must not convert the old Registered A into a Joined grant or revive that old object after FIRST. Shared selected-patch logic may be reused only behind each genuine mode-specific owner.",
+    "head_owner": "Add a same-Store nonserde catalogue head generation/IO-owner protocol at actual catalogue sinks, not a bool in one caller. It must account for every pending native-catalogue publication that can mutate/restore memory or replace this shared file; unmatched preexisting global uncertainty refuses. An opaque per-range operation owner plus serialized immutable whole-head publication is required. Other sinks cannot silently clear another owner through persist success.",
+    "selected_projection": "Capture a complete selected R1 obligation projection using exhaustive RangeWriteCatalog field handling: ranges, backup_fences, handoff_promises, image_install_intents, recovery_fences, native_image_bases, sparse_committed_decisions[R1], installing_committed_certifications[R1], installing_recovery_handovers[R1], native_joint_handoffs[R1], native_abort_protocol.ranges[R1], current_joint_recoveries[R1]. Preserve cluster/node/native-writer profile and native_abort store UUID. Revalidate full known envelope/version/mandatory-map rules. Unknown JSON fields must refuse instead of being silently dropped by typed serde; preserve canonical bytes of every unrelated entry, not a promise about file whitespace.",
+    "delta": "Only original exact session/scope/nonce R1 joint-state global_decision_sha256 and global_decision_native_sha256 may be installed. Every other R1 field must equal the genuine captured preimage, or the exact already installed authorized postimage. No replay/new native body/xid, no replacement A/session, no servingActivation overwrite, no promise/history deletion. Known format/minimum-map normalization explicitly reviewed; unsupported drift refuses.",
+    "known_verified_success": "Given real live owner/native proof and current head whose whole-file durability is proved by an actual later protected publication, no pending foreign uncertainty and exact selected R1 postimage, return historically completed stage without rewriting retained old candidate. Current own/fresh metadata checks remain mandatory. Merely disk==memory is not the later-publication proof.",
+    "fresh_generation_before_io": "If actual selected preimage is unchanged and previous generation provably never entered IO, acquire actual serialized current head H1; construct H1+SAME R1 delta. Retain explicit linked generation with exact H1 and candidate bytes/hashes, original operation/native identity and outcomes before any memory/IO. Do not overwrite old descriptor or silently rebuild/replay native decision.",
+    "unknown_io_resolution": "Wait for the exact previous worker to exit under genuine operation exclusion. If disk=old/memory=candidate for that SAME owned generation, permit a new actual fsync of its exact candidate after all retained constraints; do not require disk==memory as a universal prerequisite. If a different head exists, admit it only through complete typed head/owner reconciliation preserving every unresolved constraint and unrelated range; no choosing arbitrary newer disk or memory. Before actual replace retain next result slot; immediately retain returnedOk/error before any readback or authority check. Readback+fresh exact boundary+short memory-only publication clears ONLY the corresponding typed uncertainty owner. Preserve old unknown outcome forever as unknown; new fsync proves new head only.",
+    "bounds": "One linked generation/actual write per genuine fresh request, explicit retained-byte/generation caps and no native replacement on unknown. Finite cap exhaustion remains an operational blocker unless an actual protected resolution/retirement producer proves worker exit and absorbs all constraints; never erase history/increase limits as a correctness fix.",
+    "locking": "Actual IO serialization must cover retained immutable head selection through write/readback ordering, while separating per-range pending-operation refusal from unrelated-range authority. Do not hold MStore mutex or final publication guard across IO/network. Existing service/DB/admission/journal locks across whole-file fsync are NOT range isolation and no role deadline bounds kernel IO.",
+    "cold": "RAM owner/generation state alone gives same-process resumption. A separately protected progress journal and fresh owner reconstruction from actual native/candidate evidence are required for restart; no cold availability claim from this component."
+  },
+  "smallest_genuine_tests_after_prerequisites": [
+    {
+      "schedule": "Legitimate same actual Joined host serves populated R2 and owns materialized selected R1 with original A/native DECISION; external original-SDK ACK/full Strong ledger precedes cuts. No Registered scope survives FIRST.",
+      "gate": "Real production receiver/controller phase producer must exist before this can run."
+    },
+    {
+      "schedule": "After retained R1 generation prepared but before any catalogue IO, actual caller cancels; genuine protected R2 operation persists H1; new matching R1 Role/OWN authorises explicit generation H1+R1delta; require same native xid/body/A/session, unchanged all R2 entries and payloads, no stale C0 file write.",
+      "gate": "First actual rebase success; cap/refusal not counted as successful bounded recovery."
+    },
+    {
+      "schedule": "On that genuine rebased generation arm actual registered_joint_decision.catalogue.rename failure. Preserve returned error, disk-old/memory-candidate and typed owner; fresh same-operation request re-fsyncs original owned candidate, retaining original failed outcome.",
+      "gate": "Real IO-boundary fault count, exact same native xid/bytes and R2 preservation; no inferred old fsync."
+    },
+    {
+      "schedule": "Arm actual .dir_sync failure after rename; visible candidate alone must not count. Fresh same operation executes a new actual file+directory barrier; returned success retained before late cancellation/readback failure; same original unknown history remains.",
+      "gate": "Real after-rename uncertainty, not simulated API outcome; new barrier distinguished from original outcome."
+    },
+    {
+      "schedule": "A different range has a pending unknown catalogue write or an incompatible head; R1 cannot clear it. Actual IO-owner queue/exclusion resolves or explicitly diagnoses each; R2 unrelated progress/Strong expectations measured separately.",
+      "gate": "No global bool-based ownership inference. Do not forcibly clear uncertain flag in fixture."
+    },
+    {
+      "schedule": "After actual R1 verified and genuine later durable R2 successor, fresh same R1 continuation returns completed selected stage without stale rewrite; verify actual write-counter unchanged and all R2 canonical entry bytes/ACK/full Strong values preserved.",
+      "gate": "Real later protected head receipt, not path visibility."
+    },
+    {
+      "schedule": "Actual selected promise/native archive/base/log/restore/member or global profile changes refuse with exact provenance; unknown native decision never becomes committed through catalogue reconciliation; cancellation/term-version cuts retain original candidate/outcome and no counted vote.",
+      "gate": "Existing exact negative assertions and budgets retained."
+    },
+    {
+      "schedule": "Stall actual R1 fsync while observing R2 original-SDK APP/Strong.",
+      "gate": "Blocked until per-range uncertainty and IO/lock scheduling exist; transport-only reply stall or selected rebase success is not proof."
+    }
+  ],
+  "existing_test_scope": {
+    "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests/catalogue_tests.rs",
+    "cases": 5,
+    "evidence": "Source contains before-memory cancellation, actual rename failure, readback failure, post-fsync cancellation, real post-fsync term drift; these operate one Registered selected range and assert empty other range unchanged. No genuine populated R2 writer or rebase outcome demonstrated by them. This task runs no tests."
+  },
+  "actionable_next_batch": "First complete a lawful actual Joined/historical selected DECISION/catalogue admission plus same-Store per-range uncertainty/head-generation and serialized-IO ownership; then connect exact local sink to that owner and implement reviewed selected projection/generation resolver with the genuine two-range IO controls above. Do not add a Registered-only happy rebase API or borrow old empty authority after FIRST.",
+  "claims_not_made": [
+    "No cause assigned to original Azure nonconvergence or512CI failures.",
+    "No actual bounded recovery or different-head durability test performed.",
+    "No ordinary PostgreSQL transparent routing/transactions, automatic controller readiness, RPO/RTO, physical scale-out or production qualification claim.",
+    "No independent R2 APP/Strong availability under stalled R1 IO follows; existing global uncertainty and service/DB/journal locks are explicit blockers."
+  ]
+}

@@ -995,6 +995,29 @@ pub(crate) fn stream_frames_live(
     stream_frames_from_file(file, path, expected_kind, encryption, false, visit).map(|_| ())
 }
 
+/// Inspect an already-open descriptor without creating, repairing or cutting
+/// any bytes. Unlike a live-tail reader, incomplete framing is a refusal.
+/// The caller retains ownership/exclusion and separately verifies file
+/// identity/content stability. Successful framing alone grants no recovery.
+pub(crate) fn stream_frames_readonly_complete(
+    file: File,
+    path: &Path,
+    expected_kind: FrameKind,
+    encryption: &EncryptionRuntime,
+    visit: impl FnMut(u64, Vec<u8>) -> Result<()>,
+) -> Result<()> {
+    let unconsumed = stream_frames_from_file(file, path, expected_kind, encryption, false, visit)?;
+    if unconsumed != 0 {
+        return Err(BicDbError::Corruption {
+            path: path.to_owned(),
+            message: format!(
+                "strict readonly frame inspection refused {unconsumed} incomplete/invalid tail bytes; file unchanged"
+            ),
+        });
+    }
+    Ok(())
+}
+
 fn stream_frames_from_file(
     mut file: File,
     path: &Path,
@@ -2973,6 +2996,57 @@ mod tests {
             &CompressionConfig::disabled(),
             &EncryptionRuntime::disabled(),
         )
+    }
+
+    #[test]
+    fn registered_row_readonly_complete_descriptor_refuses_damaged_tail_without_repair() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("strict-readonly.log");
+        let payloads = frame_payloads(3, "strict");
+        let offsets = append_plain(&path, &payloads, true).unwrap();
+        let original = fs::read(&path).unwrap();
+        let encryption = EncryptionRuntime::disabled();
+        let mut observed = Vec::new();
+        stream_frames_readonly_complete(
+            File::open(&path).unwrap(),
+            &path,
+            FrameKind::Sync,
+            &encryption,
+            |_, payload| {
+                observed.push(payload);
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(observed, payloads);
+        assert_eq!(fs::read(&path).unwrap(), original);
+        // Every nonempty partial final frame must be refused, including an
+        // invalid checksum at an otherwise complete final frame boundary.
+        let start = offsets[2] as usize;
+        for cut in start + 1..original.len() {
+            fs::write(&path, &original[..cut]).unwrap();
+            assert!(stream_frames_readonly_complete(
+                File::open(&path).unwrap(),
+                &path,
+                FrameKind::Sync,
+                &encryption,
+                |_, _| Ok(())
+            )
+            .is_err());
+            assert_eq!(fs::read(&path).unwrap(), original[..cut]);
+        }
+        let mut damaged = original.clone();
+        *damaged.last_mut().unwrap() ^= 0x55;
+        fs::write(&path, &damaged).unwrap();
+        assert!(stream_frames_readonly_complete(
+            File::open(&path).unwrap(),
+            &path,
+            FrameKind::Sync,
+            &encryption,
+            |_, _| Ok(())
+        )
+        .is_err());
+        assert_eq!(fs::read(&path).unwrap(), damaged);
     }
 
     /// A torn last frame, cut at every byte offset inside it, and a complete

@@ -140,9 +140,19 @@ pub(super) fn exercise(
             )
             .unwrap();
         assert_eq!(mq.committed_topology(business).unwrap(), &topology);
+        // Supply the genuine current recipient MStore point even for this
+        // negative control, so it tests the unchanged OLD writer's descriptor
+        // refusal rather than a missing protected metadata prerequisite.
+        let point = crate::ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &fixture.native.services[id],
+            &mq,
+            business,
+            parent,
+        )
+        .unwrap();
         let error = fixture.native.services[id]
             .lock()
-            .observe_committed_native_joint_decision(mq, business, old.id)
+            .observe_committed_native_joint_decision_with_point(mq, business, old.id, point)
             .err()
             .expect("unchanged OLD writer cannot authorize the NEW descriptor");
         assert_eq!(error.to_string(), expected);

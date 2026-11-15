@@ -106,6 +106,7 @@ impl MetadataConsensusStore {
         subject: &MetadataReadAcquireRequest,
         caller: &MetadataReadParticipant,
     ) -> Result<crate::RangeDescriptor> {
+        self.publication_version.require_ready()?;
         host.require_subject(subject)?;
         host.validate_member(&self.state.committed_topology)?;
         let node = &self.state.committed_topology.nodes[&host.requester_node_id];
@@ -157,6 +158,17 @@ pub(crate) struct HostMetadataReadObservation {
     cancellation: crate::CancellationToken,
 }
 impl HostMetadataReadObservation {
+    /// Necessary original request cancellation only, never a cloned metadata
+    /// observation or authority. Native version points retain this same token.
+    pub(crate) fn original_request_cancellation(&self) -> crate::CancellationToken {
+        self.cancellation.clone()
+    }
+    /// Test-only liveness DATA from the SAME original request; no observation
+    /// clone, deadline renewal or metadata authority is constructed.
+    #[cfg(test)]
+    pub(crate) fn test_original_request_cancellation(&self) -> crate::CancellationToken {
+        self.cancellation.clone()
+    }
     #[cfg(feature = "tls-replication")]
     pub(crate) fn from_transport(
         authenticated: crate::distribution_transport::AuthenticatedHostMetadataReadReply,
@@ -261,6 +273,33 @@ impl HostMetadataReadObservation {
     /// Actual live old/new quorum evidence must describe the SAME committed
     /// voter identity domain. Pending statistics are not membership authority;
     /// facts always come from committed C, never its uncommitted candidate.
+    /// Historical DATA-domain audit only. Unlike metadata-only refresh this
+    /// explicit purpose allows the ACTUAL committed selected relocation. The
+    /// native sink independently requires protected decision/materialization;
+    /// this JSON projection constructs no capability or role.
+    pub(crate) fn joint_writer_domain_audit(
+        &self,
+        business: Uuid,
+        decision: &crate::distribution_range_handoff::NativeJointDecisionData,
+    ) -> Result<serde_json::Value> {
+        self.require_live_request(business)?;
+        decision.require_metadata_domain(
+            self.committed_topology(business)?,
+            self.restore_activation(business)?,
+        )?;
+        if !decision
+            .new_members()
+            .get(self.requester_node_id())
+            .is_some_and(|m| m.incarnation == self.requester_incarnation())
+        {
+            return Err(metadata_error(
+                "writer DATA audit is not an actual NEW local requester",
+            ));
+        }
+        let encoded = crate::distribution_range_image::bounded_json(&self.response, 256 * 1024)?;
+        self.require_live_request(business)?;
+        Ok(serde_json::from_slice(&encoded)?)
+    }
     pub(crate) fn stable_writer_registry_audit(&self, business: Uuid) -> Result<serde_json::Value> {
         self.require_live_request(business)?;
         let evidence = &self.response.evidence;

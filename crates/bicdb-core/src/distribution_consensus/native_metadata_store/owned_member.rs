@@ -4,6 +4,7 @@ use super::*;
 
 pub(crate) struct NativeOwnedMetadataMemberObservation {
     pub(super) store_id: Uuid,
+    version: crate::distribution_consensus::NativeMetadataVersionPoint,
     node: ClusterNodeId,
     birth: crate::distribution::NativeStoreBirthV1,
     topology: ClusterTopology,
@@ -14,6 +15,11 @@ pub(crate) struct NativeOwnedMetadataMemberObservation {
     cancellation: crate::CancellationToken,
 }
 impl NativeOwnedMetadataMemberObservation {
+    pub(crate) fn publication_version(
+        &self,
+    ) -> &crate::distribution_consensus::NativeMetadataVersionPoint {
+        &self.version
+    }
     pub(crate) fn store_id(&self) -> Uuid {
         self.store_id
     }
@@ -21,6 +27,20 @@ impl NativeOwnedMetadataMemberObservation {
         &self.topology
     }
     pub(crate) fn require_database(&self, db: &BicDb) -> Result<()> {
+        let record = db.read_native_metadata_store(&self.topology, &self.node)?;
+        self.require_database_record(db, &record)
+    }
+    /// Immutable protected-record/local-open recheck while the caller already
+    /// holds the native journal. Not a fresh metadata quorum or MStore check.
+    pub(crate) fn require_database_point(&self, db: &BicDb) -> Result<()> {
+        let record = db.read_native_metadata_store_point(&self.topology, &self.node)?;
+        self.require_database_record(db, &record)
+    }
+    fn require_database_record(
+        &self,
+        db: &BicDb,
+        record: &crate::db::NativeMetadataStoreRecord,
+    ) -> Result<()> {
         self.cancellation.check()?;
         if !std::sync::Weak::ptr_eq(&self.actual_open, &db.native_metadata_owner_open_lifetime())
             || self.actual_open.upgrade().is_none()
@@ -45,7 +65,6 @@ impl NativeOwnedMetadataMemberObservation {
                 "owned metadata member native birth/restore changed",
             ));
         }
-        let record = db.read_native_metadata_store(&self.topology, &self.node)?;
         if !record.registered() || record.store_id() != self.store_id {
             return Err(metadata_error(
                 "actual protected Registered metadata owner differs",
@@ -58,6 +77,7 @@ impl NativeOwnedMetadataMemberObservation {
     }
     pub(crate) fn require_current(&self, store: &MetadataConsensusStore) -> Result<()> {
         self.cancellation.check()?;
+        self.version.require_current_memory()?;
         let id = store.registered_native_metadata_member_store_id()?;
         let owner = store
             .native_owner
@@ -103,6 +123,7 @@ impl MetadataConsensusStore {
     ) -> Result<NativeOwnedMetadataMemberObservation> {
         observed.require_live_request(business)?;
         parent.check()?;
+        self.publication_version.require_ready()?;
         let id = self.registered_native_metadata_member_store_id()?;
         if observed.requester_node_id() != &self.state.node_id
             || observed.term() != self.state.current_term
@@ -138,8 +159,15 @@ impl MetadataConsensusStore {
             &self.state.committed_topology,
             2 * 1024 * 1024,
         )?;
+        let cancellation = parent.child_with_deadline(observed.deadline());
+        let version = self.publication_version.seal(
+            observed
+                .original_request_cancellation()
+                .child_with_deadline(observed.deadline()),
+        )?;
         Ok(NativeOwnedMetadataMemberObservation {
             store_id: id,
+            version,
             node: self.state.node_id.clone(),
             birth,
             topology: self.state.committed_topology.clone(),
@@ -147,7 +175,7 @@ impl MetadataConsensusStore {
             term: self.state.current_term,
             read_index: self.state.commit_index,
             actual_open: owner.actual_open.clone(),
-            cancellation: parent.child_with_deadline(observed.deadline()),
+            cancellation,
         })
     }
 }

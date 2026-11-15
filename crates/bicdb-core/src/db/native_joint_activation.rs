@@ -31,7 +31,37 @@ fn canonical(range: &RangeDescriptor) -> RangeDescriptor {
     range.replicas.sort_by_key(|replica| replica.id);
     range
 }
+pub(crate) struct NativeJointArmPublicationScope<'a> {
+    actual: &'a NativeJointActivatedOpenGuard,
+    _gate: crate::distribution_range_mutation::NativeRangeArmPublicationBorrow<'a>,
+}
+impl NativeJointArmPublicationScope<'_> {
+    /// Every local mutable slot is already borrowed; no callback/destructor,
+    /// lock acquisition, native read or I/O in this actual publication.
+    pub(crate) fn publish(&self) {
+        self.actual.armed.store(true, Ordering::Release);
+    }
+}
 impl NativeJointActivatedOpenGuard {
+    pub(crate) fn borrow_arm_publication<'a>(
+        &'a self,
+        store_open: Uuid,
+        activation_sha: &str,
+    ) -> Result<NativeJointArmPublicationScope<'a>> {
+        self.require_binding(store_open, activation_sha)?;
+        let gate = self.gate.borrow_native_arm_publication(
+            self.range.id,
+            &self.generation,
+            self.armed.load(Ordering::Acquire),
+        )?;
+        self.health
+            .check()
+            .map_err(crate::error::durability_error)?;
+        Ok(NativeJointArmPublicationScope {
+            actual: self,
+            _gate: gate,
+        })
+    }
     fn require_binding(&self, store_open: Uuid, activation_sha: &str) -> Result<()> {
         if self.database.upgrade().is_none()
             || self.store_open_id != store_open

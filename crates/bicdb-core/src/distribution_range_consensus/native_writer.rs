@@ -222,11 +222,29 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
     ) -> Result<()> {
         self.require_native_writer_host_context_under(database, range, Some(held_topology))
     }
+    /// The commit callback's check while its own command is still pending.
+    pub(crate) fn require_native_writer_host_context_applying(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+        applying: &crate::db::NativeRangePendingApply,
+    ) -> Result<()> {
+        self.require_native_writer_host_context_with(database, range, None, Some(applying))
+    }
     fn require_native_writer_host_context_under(
         &self,
         database: &BicDb,
         range: &RangeDescriptor,
         held_topology: Option<&ClusterTopology>,
+    ) -> Result<()> {
+        self.require_native_writer_host_context_with(database, range, held_topology, None)
+    }
+    fn require_native_writer_host_context_with(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+        held_topology: Option<&ClusterTopology>,
+        applying: Option<&crate::db::NativeRangePendingApply>,
     ) -> Result<()> {
         if database.actual_native_writer_enforcement_version()? == 0 {
             return Ok(());
@@ -244,7 +262,10 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
                 "native coordinator DB/open identity changed",
             ));
         }
-        state.require_database(database, range)?;
+        match applying {
+            Some(own) => state.require_database_applying(database, range, own)?,
+            None => state.require_database(database, range)?,
+        }
         match held_topology {
             Some(topology) => state.require_topology(topology),
             None => state.require_topology(&self.topology.read_recursive()),
@@ -293,5 +314,103 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
             .install_native_writer_host_state(database, policy, state.clone())?;
         *self.native_writer_host.lock() = Some(state);
         Ok(())
+    }
+}
+
+impl RangeWriteStore {
+    pub(crate) fn require_assigned_native_writer_publication(
+        &self,
+        database: &BicDb,
+        policy: &SealedHostWriterEnrollment,
+    ) -> Result<()> {
+        self.require_native_catalog_durability(database.data_path())?;
+        if self.open_id != policy.store_open_id()
+            || self.catalog.cluster_id != policy.facts().cluster_id
+            || self.catalog.node_id != policy.facts().local_node_id
+        {
+            return Err(range_write_error(
+                "Assigned publication changed actual catalogue/open",
+            ));
+        }
+        Ok(())
+    }
+    /// Called only through the sealed same-service mutable publication borrow.
+    pub(crate) fn publish_prevalidated_assigned_native_writer(
+        &mut self,
+        state: Weak<NativeWriterHostState>,
+    ) -> Option<Weak<NativeWriterHostState>> {
+        std::mem::replace(&mut self.native_writer_host, Some(state))
+    }
+}
+#[cfg(feature = "tls-replication")]
+pub(crate) struct NativeAssignedCoordinatorWriterPublication<'a> {
+    candidate: &'a crate::db::NativeFirstPolicyPublicationCandidate<'a>,
+    service: crate::distribution_data::NativeAssignedServiceWriterPublication<'a>,
+    cache: parking_lot::MutexGuard<'a, Option<Weak<NativeWriterHostState>>>,
+    _topology: parking_lot::RwLockReadGuard<'a, crate::ClusterTopology>,
+}
+#[cfg(feature = "tls-replication")]
+impl NativeAssignedCoordinatorWriterPublication<'_> {
+    /// No validation/callback/native read/filesystem access under final gate.
+    pub(crate) fn publish(
+        &mut self,
+    ) -> (
+        Option<Weak<NativeWriterHostState>>,
+        Option<Weak<NativeWriterHostState>>,
+    ) {
+        let state = Arc::downgrade(self.candidate.state());
+        let old_service = self.service.publish(state.clone());
+        let old_cache = std::mem::replace(&mut *self.cache, Some(state));
+        (old_service, old_cache)
+    }
+}
+impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn prepare_assigned_native_writer_publication<'a>(
+        &'a self,
+        database: &'a BicDb,
+        actual_service: &Arc<Mutex<ClusterDataNodeService>>,
+        service: &'a mut ClusterDataNodeService,
+        policy: &SealedHostWriterEnrollment,
+        candidate: &'a crate::db::NativeFirstPolicyPublicationCandidate<'a>,
+    ) -> Result<NativeAssignedCoordinatorWriterPublication<'a>> {
+        policy.require_live()?;
+        candidate.require_actual(database, policy)?;
+        if candidate.state().coordinator_id() != self.native_writer_coordinator_id() {
+            return Err(range_write_error(
+                "FIRST actual native candidate changed coordinator",
+            ));
+        }
+        if !Arc::ptr_eq(&self.local_service, actual_service)
+            || !self.native_image_mode
+            || database.actual_native_writer_enforcement_version()? != 1
+            || database.incarnation_id() != self.local_incarnation
+            || policy.database_incarnation() != self.local_incarnation
+            || policy.facts().cluster_id != self.cluster_id
+            || policy.facts().local_node_id != self.local_node_id
+        {
+            return Err(range_write_error(
+                "Assigned publication actual service/coordinator/DB differs",
+            ));
+        }
+        let topology = self
+            .topology
+            .try_read()
+            .ok_or_else(|| range_write_error("Assigned routing busy at publication"))?;
+        policy.facts().require_topology(&topology)?;
+        for range in topology.ranges.values() {
+            policy.facts().require_range(range)?;
+        }
+        let cache = self
+            .native_writer_host
+            .try_lock()
+            .ok_or_else(|| range_write_error("Assigned writer cache busy at publication"))?;
+        let service = service.prepare_assigned_native_writer_publication(database, policy)?;
+        Ok(NativeAssignedCoordinatorWriterPublication {
+            candidate,
+            service,
+            cache,
+            _topology: topology,
+        })
     }
 }

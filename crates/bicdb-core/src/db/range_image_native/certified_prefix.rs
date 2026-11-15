@@ -139,6 +139,11 @@ pub(crate) struct NativeRangePendingApply {
     pending: PendingNativeRangeCommand,
     _scope: NativeCommandScopeLease,
 }
+impl NativeRangePendingApply {
+    pub(in crate::db::range_image_native) fn range_id(&self) -> RangeId {
+        self.pending.range_id
+    }
+}
 
 /// Destructive-install guard observation. Invalidating source visibility does
 /// not erase these irreversible native lower bounds. It is neither a source
@@ -527,7 +532,22 @@ impl BicDb {
         if self.read_native_birth()?.is_none() {
             return Ok(());
         }
+        #[cfg(feature = "tls-replication")]
+        if transaction.native_joined_remote_row_grant.is_some()
+            && (transaction.native_image_row_grant.is_some()
+                || transaction.native_registered_remote_row_grant.is_some())
+        {
+            return Err(invalid("Joined native mutation has mixed grant provenance"));
+        }
         if let Some(grant) = &transaction.native_image_row_grant {
+            return grant.require_current(self, transaction);
+        }
+        #[cfg(feature = "tls-replication")]
+        if let Some(grant) = &transaction.native_registered_remote_row_grant {
+            return grant.require_current(self, transaction);
+        }
+        #[cfg(feature = "tls-replication")]
+        if let Some(grant) = &transaction.native_joined_remote_row_grant {
             return grant.require_current(self, transaction);
         }
         let actual_hash =
@@ -557,7 +577,7 @@ impl BicDb {
         let journal = self.try_native_image_journal()?;
         self.native_range_install_safety_under_journal(admission, range_id, frozen, &journal)
     }
-    fn native_range_install_safety_under_journal(
+    pub(in crate::db::range_image_native) fn native_range_install_safety_under_journal(
         &self,
         admission: &NativeRecoveryAdmission,
         range_id: RangeId,
@@ -570,6 +590,18 @@ impl BicDb {
         // Draining is a caller operation outside DB/service guards.
         self.range_mutations
             .validate_quiescent_frozen(range_id, frozen)?;
+        self.native_range_install_safety_record_point(admission, range_id, journal)
+    }
+    /// Shared readonly native record calculation. Every caller must retain
+    /// its own actual frozen/quiescent or guarded Controlled exclusion.
+    pub(in crate::db::range_image_native) fn native_range_install_safety_record_point(
+        &self,
+        admission: &NativeRecoveryAdmission,
+        range_id: RangeId,
+        journal: &NativeImageJournalGuard<'_>,
+    ) -> Result<NativeRangeInstallSafety> {
+        journal.require_database(self)?;
+        admission.require_current(self)?;
         let birth = self
             .read_native_birth()?
             .ok_or_else(|| invalid("install safety has no native birth"))?;
@@ -905,6 +937,41 @@ impl BicDb {
         journal.require_database(self)?;
         Ok(lineage)
     }
+    /// Lineage for the writer applying exactly `own`: the one case where a
+    /// pending command is expected. The stored pending record must be that
+    /// command, byte for byte apart from its materialization mark, from this
+    /// database open, and must extend the returned lineage. Any other pending
+    /// record, or none, is refused; every other caller keeps the strict read.
+    pub(in crate::db::range_image_native) fn native_range_source_lineage_applying(
+        &self,
+        own: &NativeRangePendingApply,
+    ) -> Result<SourceRangeImageLineage> {
+        if own.database_incarnation != self.incarnation {
+            return Err(invalid(
+                "applying native command belongs to another database open",
+            ));
+        }
+        let range_id = own.pending.range_id;
+        let lineage = self.native_range_source_lineage_contract(range_id)?;
+        let stored: PendingNativeRangeCommand = self
+            .read_native_range_image_record(&pending_key(range_id))?
+            .ok_or_else(|| invalid("applying native command has no pending record"))?;
+        stored.validate()?;
+        let mut unsigned = stored.clone();
+        unsigned.materialized = None;
+        unsigned.checksum_sha256 = unsigned.checksum()?;
+        if unsigned != own.pending
+            || stored.birth_id != lineage.birth.birth_id
+            || stored.previous_index != lineage.range_index()
+            || stored.previous_receipt_sha256 != lineage.native_receipt_sha256()
+        {
+            return Err(invalid(
+                "unfinished native command; source range image unavailable",
+            ));
+        }
+        self.check_recovery_state()?;
+        Ok(lineage)
+    }
     pub(crate) fn current_native_range_source_lineage(
         &self,
         range_id: RangeId,
@@ -912,13 +979,22 @@ impl BicDb {
         let lineage = self.native_range_source_lineage_contract(range_id)?;
         #[cfg(test)]
         let second_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::refresh_detail(
-            "refresh-source-lineage-second-contract-and-pending",
+            "refresh-source-lineage-pending-and-health",
         );
         #[cfg(test)]
         if second_trace.is_some() {
             eprintln!("ACTUAL_REFRESH_LINEAGE_RANGE range={range_id}");
         }
-        self.validate_source_range_image_lineage(&lineage, range_id, lineage.range_index())?;
+        // `native_range_source_lineage_contract` has just re-read every
+        // lineage input and compared it with the constructed point. A further
+        // identical re-read here proved nothing new; only the pending-command
+        // and health checks remain, as in the journal-held variant.
+        if self.native_range_pending_exists(range_id)? {
+            return Err(invalid(
+                "unfinished native command; source range image unavailable",
+            ));
+        }
+        self.check_recovery_state()?;
         #[cfg(test)]
         crate::distribution_range_handoff::NativeJointPhaseTrace::finish_detail(second_trace);
         Ok(lineage)

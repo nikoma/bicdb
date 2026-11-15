@@ -1,0 +1,408 @@
+{
+  "schema": "bicdb-range-side-effect-source-audit-v1",
+  "source": "1742776ab02957a053aded2ad4f665500d9325bf",
+  "source_version": "1.0.512-beta",
+  "classification": "READ-ONLY source audit; no code/tests/CI/provisioning performed; existing tests below are source references only",
+  "main_conclusion": "Final user/implicit ROW mutations share final range admission; physical index updates are dependent local apply, while audit/sync/broker outboxes and memory-index jobs have distinct local persistence. Replicated row correctness is not proof of queue/audit/worker migration or quorum durability.",
+  "findings": [
+    {
+      "id": "F1",
+      "classification": "implemented source contract",
+      "topic": "Final row footprint and internal row writes",
+      "behavior": "spatial_paged commit repairs final writes, injects flashback history, builds index mutations, then builds admission mutations from every actual tx.write; coordinator hashes collection+record_id and rejects multiple ranges before WAL. No origin-range locality override is present for flashback history or workflow receipt rows. This proves possible explicit rejection, not a demonstrated lost or partially committed transaction.",
+      "sources": [
+        "db/spatial_paged.rs:2668/2776",
+        "distribution_range_consensus.rs:3095",
+        "db/flashback.rs:511/567",
+        "bicdb-workflow/src/lib.rs:197/261"
+      ]
+    },
+    {
+      "id": "F2",
+      "classification": "implemented local durability; distributed scope gap",
+      "topic": "Audit, sync and broker sidecars",
+      "behavior": "Record-audit events, SyncOps and PendingBrokerPublish are not extra tx.write records and are not independently hashed. They are encoded as distinct TxFrames before the same local Commit decision. Post-durable publication is idempotent or fences for verified recovery; local checkpoint/outbox tests exist. RangeWriteCommand contains admitted row mutations only, with no broker/record-audit/sync sidecar field. Native replica projection suppresses newly generated record audits/sync ops. There is no basis to claim original audit/outbox IDs or broker queue state migrate or survive quorum failover solely because all row mutations do. No loss experiment was run.",
+      "sources": [
+        "db/commit_snapshot.rs:102/910/975",
+        "db/spatial_paged.rs:2834/2844/2903/3120",
+        "db.rs:19673/21866",
+        "distribution_range_consensus.rs:280",
+        "certified_prefix/ordinary_apply.rs:268"
+      ]
+    },
+    {
+      "id": "F3",
+      "classification": "implemented conditional native import contract",
+      "topic": "Registered and Joined physical image rows",
+      "behavior": "Both actual row producers explicitly bypass a second logical range admission under genuine original native scope, require imported_projection=true and enqueue_memory_jobs_on_commit=false, and use ordinary row/index apply plus native Tx/WAL custody. They suppress fresh model/embedding jobs and newly generated record-audit/sync output; they are not copying the source local broker state, sync.log or event segment. Spatial index-maintenance events may still be locally appended; do not describe projection as producing zero local events.",
+      "sources": [
+        "registered_remote_image/rows.rs:289/476",
+        "joined_remote_image/rows.rs:299/569",
+        "db/spatial_paged.rs:2996"
+      ]
+    },
+    {
+      "id": "F4",
+      "classification": "implemented maintenance; independent parity unqualified",
+      "topic": "Indexes, FTS and schema",
+      "behavior": "Indexes/FTS postings are dependent physical state updated by the normal transaction apply on installed definitions, not separately hashed logical rows. Paged read-through postings are maintained in paged apply; resident BTree/FTS/JSONB/array state in apply_index_mutations. The source manifest/target receipt pins schema, reader features, namespace identities and index definitions. The independent target verifier explicitly marks independent_index_parity=false; copied primary rows/definition equality do not certify actual posting/query parity, global uniqueness, FTS scoring, rebuild/asset migration or whole-cluster DDL.",
+      "sources": [
+        "db/commit_snapshot.rs:1182",
+        "db/range_image_bindings.rs:58",
+        "registered_remote_image/verification.rs:1/136/160",
+        "registered_remote_image/final_publication.rs:355/379"
+      ]
+    },
+    {
+      "id": "F5",
+      "classification": "implemented local worker persistence; migration unqualified",
+      "topic": "Memory-index jobs versus business jobs",
+      "behavior": "Memory-index jobs are held in local memory_index_jobs and persisted to memory-index-jobs.json, not a distributed record namespace. Normal native command/historical projections set imported_projection=true but do not disable the default enqueue_memory_jobs_on_commit=true; their explicit finalizer can enqueue/process local index jobs when configured. This is local maintenance, not proof of duplicate business execution. Registered/Joined image producers disable it. Workflow enqueue_on_commit is different: it writes a real job receipt row plus buffers a local broker publication; its receipt key joins final range admission, while its broker payload remains a WAL sidecar. No transparent global worker/lease/receipt migration is established.",
+      "sources": [
+        "db/access_mutation.rs:957/972",
+        "db.rs:12263/12476/12583",
+        "certified_prefix/ordinary_apply.rs:268/298",
+        "certified_prefix/recovery_apply.rs:671/702",
+        "bicdb-workflow/src/lib.rs:197/261"
+      ]
+    },
+    {
+      "id": "F6",
+      "classification": "implemented distinct export contracts",
+      "topic": "Snapshots and suffixes",
+      "behavior": "Bounded range snapshots scan every pinned paged collection at an MVCC snapshot, emit only records whose own collection+ID token belongs to the selected range, and carry reader requirements. This includes any internal collections as independent rows, not files/segments/worker memory. The generic CommitFrame range filter keeps only matching writes, preserves continuity, and explicitly REJECTS a nonempty whole-database origin journal; it does not silently filter journals. Native historical/range command replay reconstructs admitted rows from the command spine with imported_projection, not whole source TxFrame outboxes. Old unscoped/generic relocation paths are separately gated on born-native databases; do not generalize their behavior to guarded native import.",
+      "sources": [
+        "db/pitr_maintenance.rs:1947/2018",
+        "distribution.rs:949",
+        "replication.rs:184",
+        "certified_prefix/recovery_apply.rs:634/671",
+        "db.rs:13230/13311/13416"
+      ]
+    },
+    {
+      "id": "F7",
+      "classification": "implemented mode-specific stream limits",
+      "topic": "Legacy whole-database streaming versus range replication",
+      "behavior": "The whole-database CommitFrame exporter includes original audit journal only when record_journal is enabled; retained original envelopes/signatures have dedicated tests. It explicitly ignores TxFrame::BrokerPublish and SyncOps when constructing stream frames. Whole-database importer passes empty broker and sync arrays into its local WAL encoder while carrying the optional original journal. Therefore native single-primary streaming row/journal guarantees must not be promoted into broker queue or original sync-op identity replication. Whole-file HA/backup is a different contract.",
+      "sources": [
+        "db/replication_live.rs:222/268/294/321",
+        "db/commit_snapshot.rs:252",
+        "db/replication_journal.rs:88/166/218"
+      ]
+    }
+  ],
+  "existing_test_source_evidence": [
+    {
+      "path": "crates/bicdb-core/tests/outbox_exactly_once.rs",
+      "names": [
+        "a_durable_commit_stays_committed_when_its_outbox_publication_fails",
+        "change_capture_republication_is_exactly_once_across_interrupted_reopens",
+        "audit_republication_is_exactly_once_across_interrupted_reopens",
+        "crashes_at_every_outbox_boundary_deliver_each_committed_entry_exactly_once"
+      ],
+      "scope": "local embedded/paged + child-process crash/reopen; not node/range migration; not executed by this audit"
+    },
+    {
+      "path": "crates/bicdb-core/tests/broker_outbox_retention.rs",
+      "names": [
+        "a_checkpoint_between_core_commit_and_caller_finalization_keeps_committed_outboxes",
+        "a_failed_committed_broker_publication_fences_until_verified_recovery",
+        "crashes_reconcile_acknowledged_rows_and_publications_across_retention_and_reopen"
+      ],
+      "scope": "local outbox retention/fencing/crash reconciliation; not native range failover or queue migration"
+    },
+    {
+      "path": "crates/bicdb-core/tests/replication_journal.rs",
+      "names": [
+        "original_signatures_and_journal_only_commits_survive_native_replication_and_restart",
+        "an_invalid_projection_commits_neither_a_row_prefix_nor_its_origin_history"
+      ],
+      "scope": "whole-database replication journal; distinct from range filter and queue state"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_image_tests.rs",
+      "scope": "genuine stored history/rows, pending-WAL/error/cancellation custody and other-range checks; no broker/group state or independent index/FTS parity assertions"
+    },
+    {
+      "path": "crates/bicdb-core/tests/distribution_learner.rs",
+      "names": [
+        "abrupt_node_and_controller_restart_resumes_every_physical_relocation_phase"
+      ],
+      "scope": "existing generic relocation family, not proof of current guarded-native image/audit/queue qualification"
+    }
+  ],
+  "next_smallest_deterministic_tests_not_run": [
+    {
+      "id": "T1",
+      "test": "One native RF3 admitted row + explicit broker publish + required mutation audit + record audit/sync flags, external ACK/message/event-ID ledger; fault original leader after durable decision/outbox cut and reconcile new leader row and every original side-effect identity.",
+      "acceptance": "Either exact documented refusal before side effects, or preserved acknowledged row AND required auditable/queue outputs; no row-only success claim."
+    },
+    {
+      "id": "T2",
+      "test": "One populated selected range plus untouched range, installed BTree/unique/FTS/spatial definitions, actual native snapshot+suffix+cleanup and source/target queries; compare data, postings/counts, FTS results, audit IDs and memory-job side effects before/after a WAL/apply crash.",
+      "acceptance": "Independent index/FTS/query parity and correct local-vs-original-event classification; fixed original ledger and unchanged application endpoint."
+    },
+    {
+      "id": "T3",
+      "test": "Flashback tracked write and workflow enqueue with actual final footprint choosing both same-range and cross-range rows. Record pre-WAL refusal, unchanged rows/history/queue on reject, then same-range durability/reopen.",
+      "acceptance": "No partial row/job/audit publication; preserve explicit unsupported cross-range outcome instead of silently skipping history or job receipt."
+    },
+    {
+      "id": "T4",
+      "test": "Whole-database synchronous standby promotion with a transactional broker message and origin audit/sync ledger, separated from range relocation.",
+      "acceptance": "Measure and document actual queue/group/receipt coverage; do not infer it from optional record journal or row stream."
+    }
+  ],
+  "qualification": "No current source-pinned physical index/FTS/queue/audit migration, independent-host fault campaign, production deployment or throughput qualification established by this source audit. Existing source tests and current useful CI are not reclassified or rerun.",
+  "preservation": "No code/features/docs commit/build/test/job/provision/push or frozen-head edit.4967 diagnostics branch preserved.",
+  "source_pins": [
+    {
+      "path": "crates/bicdb-core/src/db/spatial_paged.rs",
+      "sha256": "065d4258ba052d3bbd5e9ab01f3fb9bf2f28f02b1bc5d8d30249cd3dc031559d",
+      "relevant_lines": [
+        2668,
+        2776,
+        2834,
+        2844,
+        2896,
+        2903,
+        2996,
+        3085,
+        3120
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus.rs",
+      "sha256": "3016a267a14f5931c78ad3fab097fddf82234e48d3de28ae797159bf6e2dad2a",
+      "relevant_lines": [
+        280,
+        3095
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/db/commit_snapshot.rs",
+      "sha256": "9b49e9c869de933674ad68037494f903cbcc9c9f8dad05da5bb997dccb5c309f",
+      "relevant_lines": [
+        102,
+        252,
+        910,
+        975,
+        1182
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/db.rs",
+      "sha256": "ab3865caa2bc6a80ec5f9364f73d9339a2f7785885f7b01e7f7e902c5aef572c",
+      "relevant_lines": [
+        9519,
+        9715,
+        9776,
+        12263,
+        12476,
+        12583,
+        13230,
+        13311,
+        13416,
+        17162,
+        19673,
+        21866,
+        22014
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/db/flashback.rs",
+      "sha256": "459883733cd87e01c61ada38324f0eb071089fa5238090a2105ae87a521cf8f8",
+      "relevant_lines": [
+        169,
+        242,
+        511,
+        567
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution.rs",
+      "sha256": "b2e546fe3ff2b8a4a690b42af174a48e6850c3be8021a24d6282aa653a58ad23",
+      "relevant_lines": [
+        949
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/replication.rs",
+      "sha256": "f610b15655aa5b1b3db5bed241f6dbf6d0bb3de51e16d2b3f0406c7642a0e4f1",
+      "relevant_lines": [
+        184
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/db/replication_live.rs",
+      "sha256": "9721dac92b6010a0c7e505ec29bf340011fa622ef569299aba73e10aa7425218",
+      "relevant_lines": [
+        222,
+        268,
+        294,
+        321
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/db/replication_journal.rs",
+      "sha256": "0417585a19107137da8e68dcede350f05273dd05850eb5c83c3679db6d0576d2",
+      "relevant_lines": [
+        88,
+        166,
+        218
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_bindings.rs",
+      "sha256": "01e2ceafc71fcea6cfe6d5f53e57dc0f27c4f9ff17ba0514356fbdb37200e720",
+      "relevant_lines": [
+        58
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/db/pitr_maintenance.rs",
+      "sha256": "8aa62c2c4ebdef0277e953e0ddbe5846eb24e15124bde035749fe2b960367e61",
+      "relevant_lines": [
+        1947,
+        2018
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/registered_remote_image/rows.rs",
+      "sha256": "65867054e78a46ebc3c3e30ff371d8feb95e5223bf9d442ac4ca5700a3a7a193",
+      "relevant_lines": [
+        289,
+        476
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/joined_remote_image/rows.rs",
+      "sha256": "66c9bbb83a0efd2c20231c986aee8dab9f8021062abb129697aa84c6abe9ba50",
+      "relevant_lines": [
+        299,
+        569
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/registered_remote_image/verification.rs",
+      "sha256": "cb491ac396f92564eb86b6da6a48993aff7c2cb15bd49f285c204b823436eaad",
+      "relevant_lines": [
+        1,
+        136,
+        160
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/registered_remote_image/final_publication.rs",
+      "sha256": "b2a5c1149d8f75dd5b9431db6c7fd3680989a5baf1c36f7eee1e2ed397f73592",
+      "relevant_lines": [
+        355,
+        379
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/certified_prefix/ordinary_apply.rs",
+      "sha256": "be6fab19aed9f1cb2ec8d01608cbb25dac2d32210e9817e440ec07390509690a",
+      "relevant_lines": [
+        244,
+        268,
+        298
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/certified_prefix/recovery_apply.rs",
+      "sha256": "473b02b7ee4d3b439151099840c4c4cde1756f535e3eacdee46408a249e15f9d",
+      "relevant_lines": [
+        634,
+        671,
+        702
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/db/access_mutation.rs",
+      "sha256": "6f05cef75a6d5905f873ecab2557437902f791e0811413379791aa296b13a346",
+      "relevant_lines": [
+        957,
+        972
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/broker.rs",
+      "sha256": "2e5f6cc8b617042d0e55454b42bcd27ee36825b5f5f9850701cc0b177c702dba",
+      "relevant_lines": [
+        117,
+        456,
+        1093
+      ]
+    },
+    {
+      "path": "crates/bicdb-workflow/src/lib.rs",
+      "sha256": "d3998353ed2c3df3e79c7e8e77e6482db4540c184b601466bf8e622c8d4172be",
+      "relevant_lines": [
+        11,
+        197,
+        261
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/tests/outbox_exactly_once.rs",
+      "sha256": "9afc17e131a11fe14a7f312eb9c10d6ed1c5b0164227be89c6a1e129034a005d",
+      "relevant_lines": [
+        284,
+        339,
+        409,
+        574
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/tests/broker_outbox_retention.rs",
+      "sha256": "e2c629fb1cc39a72a08b063aa723bd6fea29cdd7bd7c6c02e211803c9381518b",
+      "relevant_lines": [
+        88,
+        136,
+        339
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/tests/replication_journal.rs",
+      "sha256": "30928b6754746e601b61ce56bbfac26a3049042bbca8989aa5f6ba8f2db0f0be",
+      "relevant_lines": [
+        40,
+        197
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/tests/flashback.rs",
+      "sha256": "16cc2f64cd48ec90ef940ca27b470917ea3d5d76681e58305d83d4525940901b",
+      "relevant_lines": [
+        205,
+        327
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/tests/distribution_learner.rs",
+      "sha256": "f6e61c58ea2859bc92a8c0f6cf496c8f8b4b8f914128a1930421b064c330e017",
+      "relevant_lines": [
+        493
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_image_tests.rs",
+      "sha256": "27c0b7ea658af0eaf1e3284d88bdefe5ed601e1846da8aac3de41ed5405b9f6c",
+      "relevant_lines": [
+        13,
+        18,
+        25,
+        32,
+        39
+      ]
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/target_final_image_tests.rs",
+      "sha256": "fd8737ea5488ffdecc85c97df3d52e533bd18b8c0ab0c05128a885a325e977c4",
+      "relevant_lines": [
+        441
+      ]
+    }
+  ]
+}

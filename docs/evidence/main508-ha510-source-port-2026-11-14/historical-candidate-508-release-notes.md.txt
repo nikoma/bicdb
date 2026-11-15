@@ -1,0 +1,62 @@
+# BicDB 1.0.508-beta — historical unmerged recovery candidate
+
+This historical candidate was superseded by the [510 candidate](1.0.510-beta.md)
+after current main independently advanced to507. Its failed CI and absence of
+qualification are retained at their original source revision.
+
+This is an unqualified source candidate. It does not identify a published
+binary, release or deployment. Required CI and application acceptance remain
+separate gates; the original Azure scale-out qualification remains failed.
+
+The native range recovery batch retains the original host, writer, range
+exclusion, metadata authority and native transaction identity through image
+movement and uncertain outcomes. Authenticated source/OLD/NEW evidence stays
+distinct from ordinary read/write permission. Native decisions retain their
+issued transaction ID and exact candidate bytes before fallible publication;
+an unknown result cannot silently create a replacement transaction.
+
+The CLOSED historical repair uses the actual retained transition and protected
+native audit rather than asking a fenced range for ordinary Serving permission.
+Metadata contention waits remain bounded by the original authority and caller.
+The Joined physical path adds history, row, final-image, native-base and selected
+catalogue custody while retaining the original installed writer for other
+ranges. Its joint continuation holds the same actual exclusion across errors.
+
+The batch also fixes a recursive hook-read path by retaining and reusing the
+actual borrowed hook identity. The ordinary identity checks remain strict. A
+genuine queued-writer control uses the installed native hook, with a bounded
+child process so a regression fails instead of indefinitely hanging CI. Remote
+decision replies explicitly associate their receipt node with the authenticated
+participant snapshot. These new controls require actual execution before they
+can be described as passing.
+
+The Constrain-first path captures that same original predecessor before its
+first freeze and carries existing constraint custody into the first Close
+attempt and exact replay. Its new real-RPC acceptance case and unchanged
+constraint-only assertions remain unexecuted until required CI runs.
+
+The OLD path can retain a genuine historical predecessor audit captured before
+freeze, without requesting effective Serving afterward. Competing captured
+owners must match the original allocation before any close side effect. This
+necessary producer does not supply the missing Joined OLD ingress or establish
+repeated-movement correctness; its new Serving-profile path is unexecuted.
+
+The [integration review](../design/ha-recovery-integration-review-2026-11-13.md)
+classifies source findings and pins their evidence. The earlier recovery cohort
+remains **79 passed/eight failed**. Two later source cohorts never reached their
+selected runtime tests because of compiler errors; their failures are preserved.
+Formatting and independent source review do not replace those missing results.
+
+The first assembled required-CI head, `2b216186f942a62b2cb16eea4ca78da6fb0899ab`,
+also failed compilation: one role-retention method was called on the inner
+role rather than its original owner, and two catalogue-ID comparisons omitted
+propagation of the fallible read. The correction retains the same role Arc and
+original request deadline, and propagates the original catalogue errors. A
+passing corrected build and actual runtime results remain required.
+
+The genuine Joined NEW evidence and lexical exclusion components do not yet
+complete the Joined participant, pin-handoff, atomic decision/catalogue,
+release or Serving pipeline. Normal-controller integration, repeated range
+movement, cold recovery, ordinary PostgreSQL cross-range SQL and physical
+four-to-five-node qualification remain open. No sustained throughput gain,
+physical RPO/RTO or production admission follows from this source version.

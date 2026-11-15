@@ -28,6 +28,26 @@ impl NativePointSnapshotBarrier {
     }
 }
 impl RangeRecoveryRuntime {
+    /// Retain the ACTUAL attached dispatcher slot across one producer's
+    /// publication scope. This grants no metadata, range or read authority.
+    /// The operation starts before (and must release) any short version guard.
+    pub(crate) fn with_actual_event_dispatcher<R>(
+        &self,
+        expected: &Arc<crate::distribution_native_read::NativeStrongEventDispatcher>,
+        operation: impl FnOnce() -> Result<R>,
+    ) -> Result<R> {
+        let slot = self
+            .event_dispatcher
+            .try_lock()
+            .ok_or_else(|| invalid("actual dispatcher attachment busy"))?;
+        let actual = slot
+            .upgrade()
+            .ok_or_else(|| invalid("actual dispatcher attachment ended"))?;
+        if !Arc::ptr_eq(&actual, expected) {
+            return Err(invalid("actual dispatcher attachment changed"));
+        }
+        operation()
+    }
     pub(crate) fn point_read_local_node_id(&self) -> &ClusterNodeId {
         &self.local_node_id
     }

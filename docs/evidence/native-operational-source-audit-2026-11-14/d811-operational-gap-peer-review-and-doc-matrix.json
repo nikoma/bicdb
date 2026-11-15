@@ -1,0 +1,115 @@
+{
+  "confirmed_corrections": [
+    {
+      "issue": "Residual source lifetime attachment phrase is too broad despite corrected stage text.",
+      "location": "d811-native-operator-joined-r2-operational-gap-map-corrected.json::experiment_revalidation.can_current_normal_native_controller_execute_4_to_5",
+      "replacement": "Missing native relocation scheduling and Joined source/phase adapters. INITIAL source-process lifetime attachment IS implemented."
+    },
+    {
+      "issue": "Native decision catalogue adoption versus image catalogue-floor adoption",
+      "replacement": "Joined physical image/base catalogue-floor adoption exists; actual Joined DECISION catalogue publication is missing. Do not call all catalogue adoption absent."
+    },
+    {
+      "issue": "Broad claim cold recovery absent",
+      "replacement": "Metadata cold reopen and row preservation mechanisms exist; complete hot Joined owner/phase reconstruction and two-range Serving after cold restart remain unestablished."
+    },
+    {
+      "issue": "Missing NEW producer broad phrasing",
+      "replacement": "Actual Joined NEW evidence producer exists; its counting/participant/pin-handoff/DECISION consumers are missing. API existence does not show execution."
+    }
+  ],
+  "matrix": [
+    {
+      "area": "Native operator/controller",
+      "implemented": "ServeFresh/JoinFresh owns actual metadata/TLS/birth, election, learner enrollment/catch-up/promotion and receiver. INITIAL startup really binds source-process lifetime. Start/Describe and source/NEW/DECISION component RPCs exist.",
+      "missing": "No native placement/relocation worker in operator maintenance to initiate actual Close/Start and drive native target work/final phases. Generic PG balanced controller is a different path and is fenced from protected native membership/data cleanup.",
+      "paths": [
+        "crates/bicdb-cli/src/native_metadata_command.rs:556",
+        "crates/bicdb-core/src/distribution_native_host/operator.rs:280",
+        "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration.rs:799",
+        "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data.rs:303",
+        "crates/bicdb-core/src/distribution/native_joint_handoff.rs:468"
+      ],
+      "smallest_gate": "Actual five CLI processes: add fifth via supported JoinFresh; normal controller alone creates committed native relocation and retained recipient progress, no fixture controls/private service Arc handoffs."
+    },
+    {
+      "area": "Joined receives another populated range",
+      "implemented": "Distinct selected R2 original-State/open/A receive, history/rows/scan/final/base/catalogue-floor and sealed Joined NEW evidence are implemented in source. SAME-State selected CLOSED/Serving policy dispatch exists.",
+      "missing": "Actual Joined evidence is not admitted to NativeJointNewObservation or remote OriginalParticipant (only Registered/Survivor/Target and Old/Registered respectively). Joined NEW pin handoff, native DECISION plus protected decision-catalogue publisher and target-specific release owner are missing. Generic Image release explicitly refuses JoinedRemote A; actual Closed Writer phase identity alone does not release target A.",
+      "paths": [
+        "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/receive/attempt.rs:48",
+        "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/receive/catalogue.rs:7",
+        "crates/bicdb-core/src/distribution_data/native_joint_handoff/joined_target.rs:29",
+        "crates/bicdb-core/src/distribution_range_handoff/joint/materialized.rs:32",
+        "crates/bicdb-core/src/distribution_range_handoff/joint/remote_new/participant.rs:20",
+        "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/publication/release_phase.rs:13",
+        "crates/bicdb-core/src/distribution_data/native_joint_handoff/bridge/image_release.rs:126"
+      ],
+      "smallest_gate": "Same Joined node has R1 APP ACK + full Strong first, then genuinely materializes R2 under same DB/State/coordinator with original A. Count actual Joined NEW, publish exact native+catalogue decision, complete ALL activation/Open/release and independent post-quorums, extend policy and APP/full Strong both ranges through original unchanged SDK. R1 continues throughout; materialization-only milestone must still refuse R2 ordinary access."
+    },
+    {
+      "area": "Cross-process final phases",
+      "implemented": "Authenticated source discovery/frame, OLD and remote NEW Materialize/Observe/PrepareDecision/PublishDecision protocols exist for their actual supported owners. Local protected prepare/activation/Open/release protocols retain real objects.",
+      "missing": "No native wire adapters for complete prepare/activation/Open/ALL-release/Serving sequence; in-process aggregate of foreign service/owner Arcs cannot substitute. Joined participant also lacks remote source provenance/pin-handoff dispatch.",
+      "paths": [
+        "crates/bicdb-core/src/distribution_transport.rs:287",
+        "crates/bicdb-core/src/distribution_transport.rs:1745",
+        "crates/bicdb-core/src/distribution_range_handoff/joint/remote_new.rs:62",
+        "crates/bicdb-core/src/distribution_range_handoff/joint/decision.rs:697"
+      ],
+      "smallest_gate": "Target and each voter are separate normal processes; every phase request rederives actual recipient owner/fresh Role/OWN/current MStore and retains exact attempt; lost real reply resumes same xid/A. Require ALL releases and fresh local readiness before original SDK APP/Strong."
+    },
+    {
+      "area": "Joined later becomes OLD/donor/source",
+      "implemented": "Historical pre-freeze predecessor supports actual existing INITIAL source State, including prior Serving provenance, through Constrain/Close. INITIAL source process binding exists.",
+      "missing": "Joined APP admission deliberately has empty source-writer/coordinator/registry/OLD bindings; source ingress refuses it. Source capture/frame still invokes ordinary InstalledGuard.require_for_coordinator, which demands effective Serving invalidated by freeze; old historical proof alone is not an export scope. Need genuine Joined source owner/listener and retained historical capture/OLD writer-coordinator scope, not filling INITIAL weak refs from DATA.",
+      "paths": [
+        "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data.rs:132",
+        "crates/bicdb-core/src/distribution_transport/initial_data_listener.rs:41",
+        "crates/bicdb-core/src/distribution_range_image/remote_source.rs:433",
+        "crates/bicdb-core/src/distribution_range_image/remote_source.rs:565",
+        "crates/bicdb-core/src/db/range_image_native/writer_enrollment.rs:636",
+        "crates/bicdb-core/src/distribution_range_mutation.rs:560"
+      ],
+      "smallest_gate": "First move makes node5 Joined serving R1; it then becomes actual OLD donor to fresh target6. Genuine Constrain/Close captures prior Serving proof before freeze, real target Start/Describe/History/Rows/Finish exports same ACK payloads with exact original State/OLD/session custody. Separate from Joined receiving R2."
+    },
+    {
+      "area": "Cold recovery, replacement and cleanup",
+      "implemented": "Metadata-only cold reopen, native row WAL/index preservation/refusal and native physical integrity mechanisms exist. Hot owners retain exact attempts and outcomes; source pin retirement exists.",
+      "missing": "Hot A/pin/participant/phase owners are RAM custody, not a cold multi-range Serving reconstruction protocol. No normal restartable native controller cleanup path demonstrated. Pin retirement is not obsolete-source physical data removal. Generic native cleanup is fenced; metadata stage keeps activation/cleanup pending. All-OLD live collection does not prove dead-OLD node replacement.",
+      "paths": [
+        "crates/bicdb-core/src/distribution_native_host/operator_learner.rs:148",
+        "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/joined_data/receive/attempt.rs:10",
+        "crates/bicdb-core/src/distribution_range_handoff/joint/remote_new/participant.rs:1",
+        "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/publication/release_phase.rs:372",
+        "crates/bicdb-core/src/distribution/native_joint_handoff.rs:419"
+      ],
+      "smallest_gate": "Actual process loss/reopen during R2 row/native/catalogue/cleanup; reconcile exact known/unknown outcomes and pending retention before any Serving. Verify both ranges ACKs/Strong after restart, authoritative obsolete-source removal and zero unfinished relocations. Test dead OLD replacement independently; no omission of its obligations merely to get a quorum."
+    }
+  ],
+  "qualification_boundary": [
+    "No new component/physical result from this review. All source-only gaps remain separate from currently running or failed required CI.",
+    "Two populated source ranges or a stalled post-export transport reply do not prove two moves onto the same Joined host.",
+    "Ordinary PostgreSQL transparent cross-range SQL and atomic multi-range transactions remain outside native point Event APP/Get contract.",
+    "Do not provision current native controller as a claimed 4-to-5 scale qualification. First satisfy real normal-process operation gate, then converge before comparing stable four/five-node throughput at equal error/tail-latency budget.",
+    "Preserve failed Azure scale-out status and ACK reconciliation. VM resets/hot component checks are not physical server power-loss certification."
+  ],
+  "reports_verified": [
+    {
+      "all_match": true,
+      "exact_source_files_verified": 28,
+      "path": "/tmp/bicdb-native-foundations-ci/d811-native-operator-joined-r2-operational-gap-map-corrected.json",
+      "sha256": "a6648d06f7c57ac111cc7ceb5e3cc013eef2f0b36a177eef29ee9dd10889815c"
+    },
+    {
+      "all_match": true,
+      "exact_source_files_verified": 11,
+      "path": "/tmp/bicdb-native-foundations-ci/joined-repeated-source-d811-readonly-gap-map.json",
+      "sha256": "9c0cf709670d2ce49bee519be73a77089c625aac2e6c641b2ebd65077b1a9acb"
+    }
+  ],
+  "review": "READONLY immutable source; no runtime proof imported",
+  "schema": "bicdb-operational-gap-map-peer-review-doc-matrix-v1",
+  "source": "d8115fedf13b0bd7107cfddd2664f2c6ea2f261f",
+  "source_version": "1.0.510-beta candidate"
+}

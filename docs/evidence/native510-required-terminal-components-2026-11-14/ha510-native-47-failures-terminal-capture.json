@@ -1,0 +1,2510 @@
+{
+  "run": 43572675143,
+  "job": 132380250977,
+  "source_head": "d8115fedf13b0bd7107cfddd2664f2c6ea2f261f",
+  "actual_checkout": "b38f461ffc2a6729abb7a441bf25951009bbd721",
+  "actual_tree": "be4b39ad95e86abac73d7c7ca889301d10d88c90",
+  "conclusion": "FAILED actual Rust runtime tests",
+  "raw_bytes": 12766010,
+  "raw_sha256": "07463b09c7df9ed59fe828d1813aaa81b65798cff5be6980f0d2b78dac568e3f",
+  "gzip_bytes": 1770356,
+  "gzip_sha256": "76f0766c46fd823d5291397bd7d7416d24c8a742e879d0dc15f7211c16325a62",
+  "outer_library_result": {
+    "line": 26149,
+    "status": "FAILED",
+    "passed": 273,
+    "failed": 47,
+    "ignored": 1,
+    "filtered": 924,
+    "seconds": 2239.32
+  },
+  "all_anchored_result_blocks": [
+    {
+      "line": 26149,
+      "status": "FAILED",
+      "passed": 273,
+      "failed": 47,
+      "ignored": 1,
+      "filtered": 924,
+      "seconds": 2239.32
+    }
+  ],
+  "anchored_case_status_counts": {
+    "ok": 273,
+    "FAILED": 47,
+    "ignored": 1
+  },
+  "all_anchored_cases": [
+    {
+      "case": "db::range_image_native::rf3_fixture::actual_rf3_two_initial_ranges_have_real_genesis_and_independent_origin_indices",
+      "status": "ok",
+      "line": 21292
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_commit_uncertainty::native_commit_uncertainty_actual_local_commit_publication_error_keeps_decision",
+      "status": "ok",
+      "line": 21293
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_commit_uncertainty::native_commit_uncertainty_lost_genuine_durable_commit_replies_never_abort_or_ack",
+      "status": "ok",
+      "line": 21294
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_commit_uncertainty::native_commit_uncertainty_prepare_only_failure_remains_no_ack_and_definite_local_abort",
+      "status": "ok",
+      "line": 21295
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::activation_rplusone::activated_anchor_keeps_r1_after_new_ack_and_late_prepared_follower_activates",
+      "status": "ok",
+      "line": 21296
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::activation_smoke::actual_native_completion_quorum_rejects_duplicate_and_original_cancellation",
+      "status": "ok",
+      "line": 21297
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::activation_smoke::actual_native_same_voter_activation_releases_only_after_durable_decision_and_never_returns_ready",
+      "status": "ok",
+      "line": 21298
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::activation_tests::actual_late_prepared_follower_after_two_activations_and_one_endpoint_loss_completes",
+      "status": "ok",
+      "line": 21299
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_collection_holds_no_recipient_service_or_database_latch",
+      "status": "ok",
+      "line": 21300
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_participant_current_quorum_recovers_without_old_data_leader_and_rejects_stale_scope",
+      "status": "ok",
+      "line": 21301
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::actual_mtls_unwired_participant_receiver_refuses_without_materializing",
+      "status": "ok",
+      "line": 21302
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::expired_ready_delivery_tests::native_ready_actual_tls_both_matching_peer_attempts_expire_without_counting_or_mutation",
+      "status": "ok",
+      "line": 21303
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_cancellation_and_delayed_decode_preserve_original_budget",
+      "status": "ok",
+      "line": 21304
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_follower_observes_without_generic_range_leadership",
+      "status": "ok",
+      "line": 21305
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_metadata_leader_observes_over_its_actual_listener",
+      "status": "ok",
+      "line": 21306
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_response_cannot_be_retagged_under_new_request",
+      "status": "ok",
+      "line": 21307
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_spoofed_member_incarnation_and_missing_member_refuse",
+      "status": "ok",
+      "line": 21308
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::host_metadata_tests::host_metadata_actual_tls_unassigned_learner_observes_but_cannot_supply_quorum",
+      "status": "ok",
+      "line": 21309
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_canceled_socket_after_real_persistence_recovers_by_readonly_status",
+      "status": "ok",
+      "line": 21310
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_sequential_replicas_keep_frozen_pins_and_duplicate_sha",
+      "status": "ok",
+      "line": 21311
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_completion_actual_tls_wrong_actor_cannot_complete_but_current_voter_can_observe",
+      "status": "ok",
+      "line": 21312
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_normal_tls::native_normal_actual_mtls_catchup_then_two_acks_and_old_duplicate_preserves_new_value",
+      "status": "ok",
+      "line": 21313
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_normal_tls::native_normal_actual_mtls_wrong_actor_bootstrap_scope_epoch_refuse_before_native_mutation",
+      "status": "ok",
+      "line": 21314
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_recovered_serving_requires_actual_activated_open",
+      "status": "ok",
+      "line": 21315
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_observation_tests::native_read_observation_uses_current_r2_not_activation_anchor_and_refuses_cq_only_peer",
+      "status": "ok",
+      "line": 21316
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_local_io_context_outlives_canceled_collector",
+      "status": "ok",
+      "line": 21317
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_enrolled_births_require_actual_metadata_and_peer_facts",
+      "status": "ok",
+      "line": 21318
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_expired_healthy_attempt_retries_without_renewing_parent",
+      "status": "ok",
+      "line": 21319
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_fresh_metadata_unadmitted_candidate",
+      "status": "ok",
+      "line": 21320
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_genuine_other_birth_in_metadata_cannot_admit_local_a",
+      "status": "ok",
+      "line": 21321
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_majority_returns_while_minority_worker_retains_context",
+      "status": "ok",
+      "line": 21322
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_missing_quorum_never_returns_candidate",
+      "status": "ok",
+      "line": 21323
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_rejects_old_challenge_actor_incarnation_and_pins",
+      "status": "ok",
+      "line": 21324
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_read_rpc_tests::native_read_rpc_actual_tls_unenrolled_quorum_cannot_be_admitted",
+      "status": "ok",
+      "line": 21325
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_ready_actual_tls_duplicate_voter_cannot_count_twice",
+      "status": "ok",
+      "line": 21326
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_ready_actual_tls_fast_clean_zero_minority_does_not_starve_matching_one_majority",
+      "status": "ok",
+      "line": 21327
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_ready_actual_tls_preparation_status_and_local_closed_quorum_remain_frozen",
+      "status": "ok",
+      "line": 21328
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::after_transfer::native_strong_point_after_actual_same_voter_leader_transfer_and_recovery_reads_acked_value",
+      "status": "ok",
+      "line": 21329
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::missing_catalogue_tests::native_event_endpoint_missing_catalogue_same_birth_restart_must_never_return_acked_absence",
+      "status": "ok",
+      "line": 21330
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_actual_hook_refresh_requires_refreshed_dispatch_publication",
+      "status": "ok",
+      "line": 21331
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_actual_hostmq_nonleader_and_stale_hint_are_redirect_data_only",
+      "status": "ok",
+      "line": 21332
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_actual_tls_value_null_object_and_absence_have_distinct_presence",
+      "status": "ok",
+      "line": 21333
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_empty_slot_refuses_before_actual_db_and_service_guards_then_publishes",
+      "status": "ok",
+      "line": 21334
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_explicit_strong_actual_born1_refuses_without_legacy_downgrade",
+      "status": "ok",
+      "line": 21335
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_real_client_cancel_retains_actual_io_context_and_never_returns_absence",
+      "status": "ok",
+      "line": 21336
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_routing_retries_do_not_renew_original_deadline_or_become_absence",
+      "status": "ok",
+      "line": 21337
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::native_event_endpoint_stale_route_retries_until_actual_new_leader_ready_under_original_budget",
+      "status": "ok",
+      "line": 21338
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::endpoint_tests::stale_gateway_tests::native_event_endpoint_same_stale_gateway_preserves_full_acked_value_after_real_transfer",
+      "status": "ok",
+      "line": 21339
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::four_member_activation_tests::native_activation_four_metadata_members_keeps_exact_three_data_voters",
+      "status": "ok",
+      "line": 21340
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activated_anchor_archive_tests::native_current_joint_actual_image_target_anchor_r3_at_r4_refuses_missing_serving_archive",
+      "status": "FAILED",
+      "line": 21341
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_caller_cancel_and_exact_fresh_recovery",
+      "status": "FAILED",
+      "line": 21342
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_foreign_db_and_store_refused",
+      "status": "FAILED",
+      "line": 21343
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_missing_decision_archive_refused",
+      "status": "FAILED",
+      "line": 21344
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_writer_replacement_refused",
+      "status": "FAILED",
+      "line": 21345
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_c1_image_tests::native_joint_closed_c1_image_actual_old_owners_ended_cannot_reissue_quorum",
+      "status": "ok",
+      "line": 21346
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_c1_image_tests::native_joint_closed_c1_image_actual_rows_copy_without_policy_reinstall",
+      "status": "ok",
+      "line": 21347
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_c1_image_tests::native_joint_closed_c1_image_live_original_writer_replacement_refused",
+      "status": "ok",
+      "line": 21348
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_c1_image_tests::native_joint_closed_c1_image_original_caller_cancel_before_actual_row_wal_refused",
+      "status": "ok",
+      "line": 21349
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_c1_image_tests::native_joint_closed_c1_image_step_role_cancel_before_actual_row_wal_refused",
+      "status": "ok",
+      "line": 21350
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_policy_baseline_tests::native_joint_policy_original_writer_reaches_actual_decision_without_reinstall_baseline",
+      "status": "FAILED",
+      "line": 21351
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::current_joint_authority_tests::native_current_joint_actual_authority_and_original_writer_cannot_rebase_recovery",
+      "status": "FAILED",
+      "line": 21352
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_activation_idempotence_tests::native_post_joint_actual_activation_idempotence_after_fresh_activation_ack4_and_strong",
+      "status": "FAILED",
+      "line": 21353
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read",
+      "status": "FAILED",
+      "line": 21354
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogue_reply_while_frozen",
+      "status": "FAILED",
+      "line": 21355
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_phase_refuses_expired_original_caller_with_later_long_budget",
+      "status": "FAILED",
+      "line": 21356
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_preparation_phase_publishes_all_final_members_after_original_expiry",
+      "status": "FAILED",
+      "line": 21357
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::observer_scope_cut_tests::native_current_joint_observer_scope_actual_foreign_identity_cancel_and_hook_cuts",
+      "status": "FAILED",
+      "line": 21358
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_final_sweep_foreign_actual_writer_reenrollment_refuses_old_phase",
+      "status": "FAILED",
+      "line": 21359
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_original_caller_cancel_cannot_start_fresh_phase",
+      "status": "FAILED",
+      "line": 21360
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_step_cancel_recovers_exact_fact_with_original_caller_live",
+      "status": "FAILED",
+      "line": 21361
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_image_release_refuses_hot_writer_reinstallation_before_owner_drop",
+      "status": "FAILED",
+      "line": 21362
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_survivor_release_refuses_hot_writer_reinstallation_before_owner_drop",
+      "status": "FAILED",
+      "line": 21363
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::post_joint_no_data_tests::native_post_joint_actual_new_domain_prepare_only_recovers_then_ack4_and_strong",
+      "status": "FAILED",
+      "line": 21364
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::writer_data_domain_fact_tests::native_writer_data_domain_actual_decided_closed_points_preserve_original_policy",
+      "status": "FAILED",
+      "line": 21365
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::writer_data_domain_fact_tests::native_writer_data_domain_actual_foreign_mstore_refuses_without_native_change",
+      "status": "FAILED",
+      "line": 21366
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::native_joint_actual_old_capture_finished_publish_cancel_does_not_renew_or_end_session",
+      "status": "ok",
+      "line": 21367
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::native_joint_actual_old_capture_initial_request_cancel_at_wait_refused",
+      "status": "ok",
+      "line": 21368
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::native_joint_actual_old_closure_four_metadata_rf3_nonempty_complete_prefix_and_shared_pin",
+      "status": "ok",
+      "line": 21369
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::mismatch_tests::native_event_endpoint_cached_enforced_sender_promotes_default_and_actual_legacy_default_remains",
+      "status": "ok",
+      "line": 21370
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::mismatch_tests::native_event_endpoint_enrolled_identity_actual_legacy_refuses_all_paths_before_latches",
+      "status": "ok",
+      "line": 21371
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::mismatch_tests::native_event_endpoint_enrolled_identity_legacy_coordinator_refuses_before_recovery_prepare",
+      "status": "ok",
+      "line": 21372
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_abort_cold::native_abort_actual_canonical_publication_before_raw_mark_cold_reuses_exact_decision",
+      "status": "ok",
+      "line": 21373
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_abort_tests::native_abort_actual_enforced_post_durable_commit_errors_cannot_become_no_effect_or_abort",
+      "status": "ok",
+      "line": 21374
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_abort_tests::native_abort_actual_enforced_prepare_failure_canonical_metadata_history_then_next_ack",
+      "status": "ok",
+      "line": 21375
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_abort_tests::native_abort_actual_enforced_prior_leader_no_effect_fresh_e2_abort_then_new_leader_ack",
+      "status": "ok",
+      "line": 21376
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_born_v2_image_tests::native_born_v2_actual_policy_image_clear_copy_history_and_prepared_with_distinct_local_b",
+      "status": "ok",
+      "line": 21377
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_actual_final_metadata_leader_change_refuses_owned_snapshot",
+      "status": "ok",
+      "line": 21378
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_born2_legacy_event_get_never_falls_back_to_empty_database",
+      "status": "ok",
+      "line": 21379
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_canceled_actual_local_io_retains_owned_context_until_drain",
+      "status": "ok",
+      "line": 21380
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_fresh_born2_actual_tls_ack_value_and_absence_with_local_b",
+      "status": "ok",
+      "line": 21381
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_initial_four_metadata_members_rf3_keeps_exact_data_identity",
+      "status": "ok",
+      "line": 21382
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_policy_native_wal_publication_failure_fences_old_guard_and_prepare",
+      "status": "ok",
+      "line": 21383
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_raw_cq_or_pending_native_cannot_return_old_row_or_absence",
+      "status": "ok",
+      "line": 21384
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_reservation_deadline_and_native_writer_do_not_invert_stamps",
+      "status": "ok",
+      "line": 21385
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::native_strong_point_stale_route_and_missing_or_foreign_installed_hook_refuse",
+      "status": "ok",
+      "line": 21386
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::service_open_guard_tests::native_service_actual_tls_original_open_ended_refuses_before_held_service_and_replacement_latches",
+      "status": "ok",
+      "line": 21387
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_foreign_database_refused",
+      "status": "ok",
+      "line": 21388
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_foreign_store_refused",
+      "status": "ok",
+      "line": 21389
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_hook_replacement_refused",
+      "status": "ok",
+      "line": 21390
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_missing_middle_history_refused",
+      "status": "ok",
+      "line": 21391
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_original_caller_cancel_refused",
+      "status": "ok",
+      "line": 21392
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_schema_generation_refused",
+      "status": "ok",
+      "line": 21393
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::native_serving_observation_scope_actual_tls_reply_and_fresh_finish",
+      "status": "ok",
+      "line": 21394
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_archive_damage_refused_at_exit",
+      "status": "ok",
+      "line": 21395
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::serving_observation_scope_tests::normal_serving_record_tests::native_serving_observation_scope_actual_normal_serving_current_damage_refused_at_exit",
+      "status": "ok",
+      "line": 21396
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_normal_apply_actual_rf3_services_materialize_two_acks_and_lost_apply_catchup",
+      "status": "ok",
+      "line": 21397
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_repair_regression::actual_native_catchup_produces_prefix_one_before_next_prepare_and_ack",
+      "status": "ok",
+      "line": 21398
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_rf3_actual_services_ack_origin_while_bare_replica_apply_remains_refused",
+      "status": "ok",
+      "line": 21399
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_rf3_oversize_refuses_before_any_durable_quorum_or_native_pending",
+      "status": "ok",
+      "line": 21400
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::heartbeat_backlog_tests::native_initial_metadata_actual_tls_65_barriers_resume_across_finite_heartbeat_calls",
+      "status": "ok",
+      "line": 21401
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::heartbeat_backlog_tests::native_initial_metadata_actual_tls_barrier_backlog_advances_beyond_first_batch",
+      "status": "ok",
+      "line": 21402
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::heartbeat_backlog_tests::native_initial_metadata_actual_tls_midround_retirement_skips_stale_peer",
+      "status": "ok",
+      "line": 21403
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::borrowed_hook_tests::native_initial_real_writer_borrowed_identity_progresses_with_actual_queued_hook_writer",
+      "status": "ok",
+      "line": 21404
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_activation_rpc_refuses_unprepared_and_wrong_actual_leader",
+      "status": "ok",
+      "line": 21405
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_cancel_waiter_preserves_actual_other_owner",
+      "status": "ok",
+      "line": 21406
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_finite_open_never_starts_process_worker",
+      "status": "ok",
+      "line": 21407
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_original_writer_replacement_refuses_without_reserving_or_clearing",
+      "status": "ok",
+      "line": 21408
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_queued_read_handoff_and_unrelated_range_progress",
+      "status": "ok",
+      "line": 21409
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::native_hot_recovery_retained_original_store_replace_restore_revokes_held_reservation",
+      "status": "ok",
+      "line": 21410
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::peer_transport_tests::native_hot_recovery_actual_socket_blackhole_subrequest_timeout_and_parent_cancel",
+      "status": "ok",
+      "line": 21411
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::peer_transport_tests::native_hot_recovery_actual_socket_eof_reset_and_authenticated_rejection_are_distinct",
+      "status": "ok",
+      "line": 21412
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::peer_transport_tests::native_hot_recovery_completed_fence_simulated_old_reader_refuses_before_receipt_and_after_rewrite",
+      "status": "ok",
+      "line": 21413
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::peer_transport_tests::native_hot_recovery_completed_materialization_requires_actual_QQ_leader_and_live_parent",
+      "status": "ok",
+      "line": 21414
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::hot_recovery_tests::peer_transport_tests::native_hot_recovery_wire30_refuses_actual29_peer_without_catalogue_mutation",
+      "status": "ok",
+      "line": 21415
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_cancel_partial_quorum_then_nonempty_is_not_new_genesis",
+      "status": "ok",
+      "line": 21416
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_drop_without_stop_ends_inner_owner_and_reopens_same_root",
+      "status": "ok",
+      "line": 21418
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_actual_tls_lost_listener_is_restored_while_leader_is_unknown",
+      "status": "ok",
+      "line": 21419
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_genesis_refuses_changed_epoch_restore_and_actual_foreign_birth",
+      "status": "ok",
+      "line": 21420
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::native_initial_data_genesis_refuses_same_root_same_birth_new_actual_open",
+      "status": "ok",
+      "line": 21421
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_actual_rpc_post_admission_fault_requires_autonomous_tail_recovery",
+      "status": "ok",
+      "line": 21422
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::native_initial_data_origin_fault_arm_drop_revokes_retained_probe_without_erasing_successor",
+      "status": "ok",
+      "line": 21423
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_one_peer_loss_actual_rpc_requires_autonomous_tail_recovery",
+      "status": "ok",
+      "line": 21424
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_actual_CQ2_native1_before_fence_requires_automatic_R4_convergence",
+      "status": "ok",
+      "line": 21425
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_actual_semantic_rejection_then_socket_loss_retains_veto",
+      "status": "ok",
+      "line": 21426
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_blackhole_actual_rpc_requires_autonomous_tail_recovery",
+      "status": "ok",
+      "line": 21427
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_completion_reply_requires_fresh_recovery",
+      "status": "ok",
+      "line": 21428
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_fence_reply_requires_automatic_R4_convergence",
+      "status": "ok",
+      "line": 21429
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_follower_prepare_reply_requires_automatic_R4_convergence",
+      "status": "ok",
+      "line": 21430
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_lost_actual_origin_completion_reply_requires_fresh_reattest",
+      "status": "ok",
+      "line": 21431
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_second_actual_origin_unknown5_same_owners_requires_ack6_and_full_replica_convergence",
+      "status": "ok",
+      "line": 21432
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::origin_pre_wal_fault_tests::one_peer_loss_tests::native_hot_peer_socket_eof_actual_rpc_requires_autonomous_tail_recovery",
+      "status": "ok",
+      "line": 21433
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::registry_refresh_tests::native_initial_data_registry_actual_native_publication_error_fresh_retry_and_cold_no_grant",
+      "status": "ok",
+      "line": 21434
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::registry_refresh_tests::native_initial_data_registry_original_cancellation_and_retained_old_store_slot_refuse",
+      "status": "ok",
+      "line": 21435
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::registry_refresh_tests::native_initial_data_registry_original_writer_replacement_refuses_before_new_audit",
+      "status": "ok",
+      "line": 21436
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::routing_discovery_tests::native_initial_data_healthy_metadata_discovery_while_all_data_services_held",
+      "status": "ok",
+      "line": 21437
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::routing_discovery_tests::native_initial_data_routing_refuses_replaced_store_with_old_actual_owner_retained",
+      "status": "ok",
+      "line": 21438
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_data_tests::routing_discovery_tests::native_initial_data_routing_refuses_wrong_actual_service_and_stopped_owner",
+      "status": "ok",
+      "line": 21439
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_exposed_cold_copy_never_reenters_prevote_or_resets_term",
+      "status": "ok",
+      "line": 21440
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_drain_deadline_retains_stopping_owner_and_same_store",
+      "status": "ok",
+      "line": 21441
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_foreign_c_and_incomplete_barrier_never_expose_votes",
+      "status": "ok",
+      "line": 21442
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_original_cancel_cannot_relabel_accepted_fact",
+      "status": "ok",
+      "line": 21443
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_prepared_cold_copy_reopens_same_store_without_birth_fallback",
+      "status": "ok",
+      "line": 21444
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_protected_proposal_and_both_metadata_cuts_resume_exact_c_on_cold_copy",
+      "status": "ok",
+      "line": 21445
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::initial_preparation_tests::native_initial_preparation_tls_sequential_launch_uses_historical_same_c_after_first_vote",
+      "status": "ok",
+      "line": 21446
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_birth_tests::native_unassigned_learner_birth_tls_live_scope_cancel_and_permanent_provisional_refusal",
+      "status": "ok",
+      "line": 21447
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::cold_tests::native_learner_cold_actual_uid_receipt_old_decoder_refuses_and_none_voter_bytes_unchanged",
+      "status": "ok",
+      "line": 21448
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::cold_tests::native_learner_cold_all_owners_sidecar_and_both_prepared_cuts_keep_uuid_and_actual_tls_ack",
+      "status": "ok",
+      "line": 21449
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::cold_tests::native_learner_cold_prepared_missing_or_changed_original_and_nonzero_vote_never_reset",
+      "status": "ok",
+      "line": 21450
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::cold_tests::native_learner_cold_registered_loss_refuses_and_bind_cancel_retry_keeps_real_owner",
+      "status": "ok",
+      "line": 21451
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::cold_tests::registered_catchup_tests::native_registered_metadata_cancel_promotion_catchup_and_all_owner_cold_voter_reopen",
+      "status": "ok",
+      "line": 21452
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::native_enrolled_learner_metadata_constructor_failure_retains_prepared_quarantine_identity",
+      "status": "ok",
+      "line": 21453
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::native_enrolled_learner_metadata_registered_cancel_and_bind_retry_keep_same_owned_uuid",
+      "status": "ok",
+      "line": 21454
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::metadata_transition_tests::native_enrolled_learner_same_service_metadata_tls_catchup_bound_ack_and_strict_reopen",
+      "status": "ok",
+      "line": 21455
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::native_registered_learner_enrollment_rejects_original_canceled_or_expired_fact_before_held_latches",
+      "status": "ok",
+      "line": 21456
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::native_registered_learner_enrollment_retries_only_exact_persisted_pending_entry",
+      "status": "ok",
+      "line": 21457
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::native_registered_learner_enrollment_tls_commits_exact_birth_and_preserves_identity_fences",
+      "status": "ok",
+      "line": 21458
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::bootstrap_budget_tests::native_metadata_fresh_bootstrap_original_budget_and_cancel_refuse_before_root",
+      "status": "ok",
+      "line": 21459
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::native_metadata_promotion_pending_entry_and_held_ack_cannot_cross_actual_leader_transfer",
+      "status": "ok",
+      "line": 21460
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::native_metadata_promotion_requires_actual_owned_ack_and_original_live_budget",
+      "status": "ok",
+      "line": 21461
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_owned_metadata_validation_original_cancel_exits_while_actual_final_store_held",
+      "status": "ok",
+      "line": 21462
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_owned_metadata_validation_waits_for_actual_final_store_then_keeps_same_proof",
+      "status": "ok",
+      "line": 21463
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_registered_metadata_catchup_original_cancel_exits_while_actual_final_store_held",
+      "status": "ok",
+      "line": 21464
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::owned_validation_wait_tests::native_registered_metadata_catchup_waits_for_actual_final_store_with_same_proof",
+      "status": "ok",
+      "line": 21465
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_assigned_policy_requires_image",
+      "status": "ok",
+      "line": 21468
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_durable_invalidation_is_not_unknown_absence",
+      "status": "ok",
+      "line": 21471
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_foreign_database_refused",
+      "status": "ok",
+      "line": 21474
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_nonleader_rpc_initiator_refused",
+      "status": "ok",
+      "line": 21477
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_receiver_stop_refused",
+      "status": "ok",
+      "line": 21480
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_sink_fsync_then_original_cancel_retains_refusal",
+      "status": "ok",
+      "line": 21483
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_sink_io_unknown_exact_live_refsync",
+      "status": "ok",
+      "line": 21486
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_actual_store_slot_restore_refused",
+      "status": "ok",
+      "line": 21489
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_captured_original_caller_cancel_refused",
+      "status": "ok",
+      "line": 21492
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_generic_ingress_stays_strict",
+      "status": "ok",
+      "line": 21495
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::closed_fence_controls::native_registered_fifth_closed_fence_original_empty_hook_aba_refused",
+      "status": "ok",
+      "line": 21498
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_receives_image_becomes_voter_and_serves_after_one_original_stops",
+      "status": "FAILED",
+      "line": 21499
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_transfer_failure_after_source_cut_characterization",
+      "status": "ok",
+      "line": 21500
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_unavailable_target_leaves_range_writable_on_original_four",
+      "status": "ok",
+      "line": 21501
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::native_registered_fifth_actual_closed_handoff_fence_without_initial_writer_baseline",
+      "status": "ok",
+      "line": 21504
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::placement_cases::native_registered_fifth_placement_actual_metadata_leader_can_initiate",
+      "status": "ok",
+      "line": 21507
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::placement_cases::native_registered_fifth_placement_actual_planner_retiree_is_not_initiator",
+      "status": "ok",
+      "line": 21510
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::catalogue_tests::native_registered_fifth_remote_hot_decision_catalogue_actual_readback_error_same_attempt_retry",
+      "status": "ok",
+      "line": 21513
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::catalogue_tests::native_registered_fifth_remote_hot_decision_catalogue_actual_rename_error_same_attempt_retry",
+      "status": "ok",
+      "line": 21516
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::catalogue_tests::native_registered_fifth_remote_hot_decision_catalogue_post_fsync_actual_term_refuses_vote",
+      "status": "ok",
+      "line": 21519
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::catalogue_tests::native_registered_fifth_remote_hot_decision_catalogue_post_fsync_cancel_same_attempt_retry",
+      "status": "ok",
+      "line": 21522
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::catalogue_tests::native_registered_fifth_remote_hot_decision_catalogue_pre_memory_cancel_same_attempt_retry",
+      "status": "ok",
+      "line": 21525
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_contention_same_own_progress",
+      "status": "FAILED",
+      "line": 21528
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_wait_expired_own_refuses",
+      "status": "FAILED",
+      "line": 21531
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_tests::native_registered_fifth_remote_hot_closed_audit_native_reply_lost_same_attempt_retry",
+      "status": "FAILED",
+      "line": 21534
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_first_policy_real_caller_expiry_fresh_same_xid",
+      "status": "FAILED",
+      "line": 21537
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready",
+      "status": "FAILED",
+      "line": 21540
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt",
+      "status": "FAILED",
+      "line": 21543
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_original_client_ack_and_full_strong",
+      "status": "FAILED",
+      "line": 21546
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_decision_commit_retains_xid_refuses_vote",
+      "status": "ok",
+      "line": 21549
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_policy_readback_refuses_hook",
+      "status": "FAILED",
+      "line": 21552
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_before_decision_first_put_refuses_vote",
+      "status": "ok",
+      "line": 21555
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy",
+      "status": "FAILED",
+      "line": 21558
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_store_slot_replacement_refuses",
+      "status": "ok",
+      "line": 21561
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses",
+      "status": "FAILED",
+      "line": 21564
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_lost_committed_decision_reply_same_native_attempt",
+      "status": "FAILED",
+      "line": 21567
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_actual_close_fetch_cut_and_source_tls_without_local_quorum",
+      "status": "ok",
+      "line": 21570
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_actual_constraints_then_close_preserves_original_custody",
+      "status": "ok",
+      "line": 21573
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_collector_actual_fresh_final_mq_after_observation_expiry",
+      "status": "ok",
+      "line": 21576
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_collector_actual_original_caller_cancellation_refuses",
+      "status": "ok",
+      "line": 21579
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_collector_actual_original_donor_revocation_refuses",
+      "status": "ok",
+      "line": 21582
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_collector_actual_selected_plan_phase_change_refuses",
+      "status": "ok",
+      "line": 21585
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_collector_actual_unrelated_metadata_advance_is_allowed",
+      "status": "ok",
+      "line": 21588
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_constraint_only_guarded_capture_is_not_closed_vote",
+      "status": "ok",
+      "line": 21591
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_post_native_cancel_retains_outcome_and_exact_fresh_retry",
+      "status": "ok",
+      "line": 21594
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_old_source_actual_hook_revoked_after_promise_before_native_wal",
+      "status": "ok",
+      "line": 21597
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_source_actual_session_cancel_preserves_issued_facts_target_closed",
+      "status": "ok",
+      "line": 21600
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::native_registered_fifth_remote_source_actual_tls_history_rows_seal_local_old_seed",
+      "status": "ok",
+      "line": 21603
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_current_plan_revocation_refuses",
+      "status": "ok",
+      "line": 21606
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_exact_request_conflict_refuses",
+      "status": "ok",
+      "line": 21609
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_lost_reply_same_session",
+      "status": "ok",
+      "line": 21612
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_original_process_revocation_before_capture",
+      "status": "ok",
+      "line": 21615
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_start_describe_and_frames",
+      "status": "ok",
+      "line": 21618
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_wrong_actor_before_capture",
+      "status": "FAILED",
+      "line": 21621
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::callback_liveness_tests::native_registered_fifth_source_export_retirement_actual_callback_cancel_at_final_detach",
+      "status": "ok",
+      "line": 21624
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::callback_liveness_tests::native_registered_fifth_source_export_retirement_actual_callback_expiry_at_final_detach",
+      "status": "ok",
+      "line": 21627
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_local_term_change_at_final_detach_refuses",
+      "status": "ok",
+      "line": 21630
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_lost_retire_reply_same_terminal_custody",
+      "status": "ok",
+      "line": 21633
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_lost_start_reply_original_two_second_request",
+      "status": "ok",
+      "line": 21636
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_original_own_expires_at_final_detach",
+      "status": "ok",
+      "line": 21639
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_original_source_process_cancel_refuses",
+      "status": "ok",
+      "line": 21642
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_original_source_process_canceled_at_final_detach",
+      "status": "ok",
+      "line": 21645
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_target_store_aba_refuses_before_drop",
+      "status": "ok",
+      "line": 21648
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_two_mtls_hops_nonleader_donor",
+      "status": "ok",
+      "line": 21651
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_unknown_native_base_has_no_new_owner",
+      "status": "ok",
+      "line": 21655
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_wrong_a_refuses_before_drop",
+      "status": "ok",
+      "line": 21658
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_wrong_actor_refuses_before_drop",
+      "status": "ok",
+      "line": 21661
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_wrong_manifest_refuses_before_drop",
+      "status": "ok",
+      "line": 21664
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::native_registered_fifth_source_export_retirement_actual_wrong_native_birth_refuses_before_drop",
+      "status": "ok",
+      "line": 21667
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_cancel_after_take_retains_exact_progress",
+      "status": "FAILED",
+      "line": 21670
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_cancel_before_take_same_phase_fresh_retry",
+      "status": "FAILED",
+      "line": 21673
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_changed_valid_quorum_cannot_replace_intent",
+      "status": "FAILED",
+      "line": 21676
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_materialization_independent_fetch_all_pin_owners",
+      "status": "FAILED",
+      "line": 21679
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_wrong_fact_digest_refuses_before_pin_take",
+      "status": "FAILED",
+      "line": 21682
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_commit_sync_unknown_never_replaces_xid",
+      "status": "FAILED",
+      "line": 21685
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_donor_provenance_and_native_target_record",
+      "status": "FAILED",
+      "line": 21688
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_postcommit_cancel_reconciles_same_xid",
+      "status": "FAILED",
+      "line": 21691
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_preput_abort_retains_original_attempt",
+      "status": "FAILED",
+      "line": 21694
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_nonleader_donor_independent_self_callback",
+      "status": "FAILED",
+      "line": 21697
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_observer_and_capture_ingress_refusals",
+      "status": "FAILED",
+      "line": 21700
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_retiree_postcommit_cancel_same_xid",
+      "status": "FAILED",
+      "line": 21703
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_survivor_native_body_and_same_xid",
+      "status": "FAILED",
+      "line": 21706
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::catalogue_tests::native_registered_fifth_remote_catalogue_floor_actual_missing_native_base_refuses",
+      "status": "ok",
+      "line": 21709
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::catalogue_tests::native_registered_fifth_remote_catalogue_floor_actual_native_base_and_catalogue_match",
+      "status": "ok",
+      "line": 21712
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::catalogue_tests::native_registered_fifth_remote_catalogue_floor_actual_post_fsync_cancel_same_native_base_retry",
+      "status": "ok",
+      "line": 21715
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::catalogue_tests::native_registered_fifth_remote_catalogue_floor_actual_repeated_directory_eio_same_candidate",
+      "status": "ok",
+      "line": 21718
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_abort_sync_failure_never_replaces_poisoned_owner",
+      "status": "ok",
+      "line": 21722
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_commit_sync_unknown_never_replaces_owner",
+      "status": "ok",
+      "line": 21726
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_abort_tests::native_registered_fifth_remote_native_base_actual_proven_abort_budget_exhaustion_retains_every_owner",
+      "status": "ok",
+      "line": 21729
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_integrity_survives_image_invalidation",
+      "status": "ok",
+      "line": 21732
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_post_wal_cancel_reconciles_same_xid",
+      "status": "ok",
+      "line": 21735
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_preserves_verified_history_floor",
+      "status": "ok",
+      "line": 21738
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_base_tests::native_registered_fifth_remote_native_base_actual_refuses_without_live_final_image",
+      "status": "ok",
+      "line": 21741
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_commit_same_xid_resumes",
+      "status": "ok",
+      "line": 21744
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_after_successful_put_proven_abort_same_a_resumes",
+      "status": "ok",
+      "line": 21747
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_expiry_tests::native_registered_fifth_remote_native_base_actual_expiry_before_put_proven_abort_same_a_resumes",
+      "status": "ok",
+      "line": 21750
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_registered_fifth_remote_final_image_actual_historical_integrity_uses_immutable_header_archive",
+      "status": "ok",
+      "line": 21753
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_registered_fifth_remote_final_image_actual_independent_scan_and_native_receipt",
+      "status": "ok",
+      "line": 21756
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_registered_fifth_remote_final_image_actual_missing_physical_row_is_not_hidden_by_import_hash",
+      "status": "ok",
+      "line": 21759
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_registered_fifth_remote_final_image_actual_post_wal_cancel_reconciles_same_xid",
+      "status": "ok",
+      "line": 21762
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_final_image_tests::native_registered_fifth_remote_final_image_actual_refuses_without_independent_target_scan",
+      "status": "ok",
+      "line": 21765
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_image_tests::cold_preservation_tests::native_registered_row_cold_sigkill_preserves_pending_before_generic_open",
+      "status": "ok",
+      "line": 21766
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_image_tests::native_registered_fifth_remote_image_actual_durable_row_cancel_same_tx_fresh_progress",
+      "status": "ok",
+      "line": 21770
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_image_tests::native_registered_fifth_remote_image_actual_inner_durable_apply_failure_retains_pending",
+      "status": "ok",
+      "line": 21771
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_image_tests::native_registered_fifth_remote_image_actual_pre_wal_caller_revoked_same_tx_retry",
+      "status": "ok",
+      "line": 21774
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_image_tests::native_registered_fifth_remote_image_actual_rows_refuse_without_stored_history_audit",
+      "status": "ok",
+      "line": 21777
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_image_tests::native_registered_fifth_remote_image_actual_stored_history_rows_beyond_b0_preserve_other_range",
+      "status": "ok",
+      "line": 21780
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_after_fsync_cancel_fresh_same_attempt",
+      "status": "ok",
+      "line": 21783
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_catalogue_same_owner_preserves_rows",
+      "status": "ok",
+      "line": 21786
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_installing_tests::native_registered_fifth_remote_installing_actual_directory_sync_error_retries_exact_catalogue",
+      "status": "ok",
+      "line": 21789
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_actual_no_domain_preserves_all_state",
+      "status": "ok",
+      "line": 21792
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_no_domain_actual_mstore_term_change_refuses",
+      "status": "ok",
+      "line": 21795
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_no_domain_actual_schema_generation_revokes",
+      "status": "ok",
+      "line": 21798
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_no_domain_tests::native_registered_fifth_remote_step_no_domain_original_hook_aba_refuses",
+      "status": "ok",
+      "line": 21801
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_post_wal_cancel_fresh_retry_same_xid",
+      "status": "ok",
+      "line": 21804
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_pre_wal_caller_revocation_preserves_data",
+      "status": "ok",
+      "line": 21807
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_pre_wal_hook_aba_preserves_data",
+      "status": "ok",
+      "line": 21810
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_reader_flag_dir_sync_failure_retry",
+      "status": "ok",
+      "line": 21813
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_proposal_tests::native_registered_fifth_remote_proposal_actual_wal_current_archive_preserve_data",
+      "status": "ok",
+      "line": 21816
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_actual_callback_arc_blocks_then_fresh_retry",
+      "status": "ok",
+      "line": 21819
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_actual_cancellation_before_rotation_preserves_n",
+      "status": "ok",
+      "line": 21822
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_actual_hook_aba_before_rotation_preserves_n",
+      "status": "ok",
+      "line": 21825
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::target_transfer_tests::native_registered_fifth_remote_transfer_unique_runtime_owner_preserves_data",
+      "status": "ok",
+      "line": 21828
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::two_range_stall_tests::native_registered_fifth_remote_selected_rows_reply_stall_other_populated_range_original_sdk_progress",
+      "status": "ok",
+      "line": 21831
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::replica_receiver_tests::native_registered_replica_receiver_actual_tls_preserves_owner_and_refuses_blank_app_strong",
+      "status": "ok",
+      "line": 21832
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::self_maintenance_tests::native_metadata_promoted_leader_maintenance_never_appends_to_itself",
+      "status": "ok",
+      "line": 21833
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::stale_seed_tests::native_metadata_fresh_sixth_stale_seed_discovers_current_quorum_before_root",
+      "status": "ok",
+      "line": 21834
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::writer_registry_continuity_tests::native_initial_data_registry_actual_added_voter_remains_bound_on_later_member_mutation",
+      "status": "ok",
+      "line": 21835
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::writer_registry_continuity_tests::native_initial_data_registry_legacy_none_policy_refuses_retroactive_continuity_capture",
+      "status": "ok",
+      "line": 21836
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::schema_label_tests::native_registered_learner_schema_commits_actual_label_and_refuses_contradictory_or_bound_missing_label",
+      "status": "ok",
+      "line": 21837
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_factory_tests::native_unassigned_fifth_factory_actual_host_mq_create_reopen_and_proposal",
+      "status": "ok",
+      "line": 21838
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::metadata_supervisor_tests::native_owned_metadata_supervisor_actual_tls_invalid_and_stale_messages_do_not_renew_contact",
+      "status": "ok",
+      "line": 21839
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::metadata_supervisor_tests::native_owned_metadata_supervisor_actual_tls_majority_minority_stationary_leader_and_heal",
+      "status": "ok",
+      "line": 21840
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::metadata_supervisor_tests::native_owned_metadata_supervisor_closed_ingress_cannot_hold_leadership_same_worker_resumes",
+      "status": "ok",
+      "line": 21841
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::metadata_supervisor_tests::native_owned_metadata_supervisor_strict_metadata_reopen_preserves_protected_uuid_and_durable_state",
+      "status": "ok",
+      "line": 21842
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::native_initial_birth_tls_all_actual_factories_bind_initial_config_without_admitting_writes",
+      "status": "ok",
+      "line": 21843
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::native_initial_birth_tls_before_latch_but_busy_actual_factory_is_bounded_unavailable",
+      "status": "ok",
+      "line": 21844
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::native_initial_birth_tls_provisional_surface_never_falls_through_even_after_factory_owner_ends",
+      "status": "ok",
+      "line": 21845
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::native_initial_birth_tls_refuses_incomplete_duplicate_changed_plan_and_expired_attempt",
+      "status": "ok",
+      "line": 21846
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::native_initial_birth_tls_refuses_registered_root_stale_peer_and_plaintext_host",
+      "status": "ok",
+      "line": 21847
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::process_tests::native_initial_birth_process_child",
+      "status": "ignored",
+      "line": 21848
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::process_tests::native_initial_birth_process_four_independent_factories_and_cold_restart",
+      "status": "ok",
+      "line": 21849
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::process_tests::startup_tests::native_initial_startup_four_processes_actual_election_host_mq_and_writer_policies",
+      "status": "ok",
+      "line": 21850
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::process_tests::startup_tests::registration_tests::native_metadata_registration_four_process_commands_commit_exact_learner",
+      "status": "ok",
+      "line": 21851
+    },
+    {
+      "case": "distribution_native_host::tests::native_host_actual_seed_strict_reopen_preserves_birth_and_still_cannot_ack",
+      "status": "ok",
+      "line": 21852
+    },
+    {
+      "case": "distribution_native_host::tests::native_host_initial_metadata_binds_every_actual_factory_and_rejects_recreated_root",
+      "status": "ok",
+      "line": 21853
+    },
+    {
+      "case": "distribution_native_host::tests::native_host_initial_plan_assigns_replicas_and_leaders_without_manual_shards",
+      "status": "ok",
+      "line": 21854
+    },
+    {
+      "case": "distribution_native_host::tests::native_host_initial_seed_refuses_existing_root_and_incompatible_plan",
+      "status": "ok",
+      "line": 21855
+    }
+  ],
+  "failure_stdout_sections": [
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activated_anchor_archive_tests::native_current_joint_actual_image_target_anchor_r3_at_r4_refuses_missing_serving_archive",
+      "start_line": 21859,
+      "end_line": 21868,
+      "normalized_stdout_sha256": "8eaf53172bd5245c450b4460ddca66d2ace8109094c45daef857e20b6dcb9d13",
+      "panic_evidence": [
+        {
+          "line": 21863,
+          "panic": "2026-11-14T08:35:32.7726722Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activated_anchor_archive_tests::native_current_joint_actual_image_target_anchor_r3_at_r4_refuses_missing_serving_archive' (33078) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.7729597Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.7730514Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+            "2026-11-14T08:35:32.7731022Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpX75PYt",
+            "2026-11-14T08:35:32.7731493Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpsDyPds"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_caller_cancel_and_exact_fresh_recovery",
+      "start_line": 21869,
+      "end_line": 21879,
+      "normalized_stdout_sha256": "22dec1c888e6bf8dc48b14dffea264561443204d77cbbbe07b5bf6f0d883942b",
+      "panic_evidence": [
+        {
+          "line": 21875,
+          "panic": "2026-11-14T08:35:32.7737822Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_caller_cancel_and_exact_fresh_recovery' (33452) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.7739766Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.7740458Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpsxVvPL",
+            "2026-11-14T08:35:32.7740846Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpzwgazb",
+            "2026-11-14T08:35:32.7741167Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_foreign_db_and_store_refused",
+      "start_line": 21880,
+      "end_line": 21888,
+      "normalized_stdout_sha256": "d234f675ae21597379ee487ece30c39375c10868455295006111b4b205d5465d",
+      "panic_evidence": [
+        {
+          "line": 21884,
+          "panic": "2026-11-14T08:35:32.7744892Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_foreign_db_and_store_refused' (33877) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.7747482Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.7748165Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpkRfYeW",
+            "2026-11-14T08:35:32.7748560Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpY3SSPg",
+            "2026-11-14T08:35:32.7748813Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_missing_decision_archive_refused",
+      "start_line": 21889,
+      "end_line": 21897,
+      "normalized_stdout_sha256": "fbd4c0ae398f53dd0d2f2e6f27c5b640a0d0edabc18253717281d697146a2dce",
+      "panic_evidence": [
+        {
+          "line": 21893,
+          "panic": "2026-11-14T08:35:32.7752566Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_missing_decision_archive_refused' (34250) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.7754664Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.7755347Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpTWC3c6",
+            "2026-11-14T08:35:32.7755725Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmp3mgRCB",
+            "2026-11-14T08:35:32.7755987Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_writer_replacement_refused",
+      "start_line": 21898,
+      "end_line": 21907,
+      "normalized_stdout_sha256": "95ab5233486169bfd45a93a93a5a67e39f26e12c30cb0546b93707fd4989657b",
+      "panic_evidence": [
+        {
+          "line": 21903,
+          "panic": "2026-11-14T08:35:32.7760201Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_writer_replacement_refused' (34675) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.7762043Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.7762695Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpN4w4yw",
+            "2026-11-14T08:35:32.7763152Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpIzm5jT",
+            "2026-11-14T08:35:32.7763406Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_policy_baseline_tests::native_joint_policy_original_writer_reaches_actual_decision_without_reinstall_baseline",
+      "start_line": 21908,
+      "end_line": 21917,
+      "normalized_stdout_sha256": "8f44861e3581f616472fd2fdd15d035c90cb8010f4b2f4216c8cef535bacaa96",
+      "panic_evidence": [
+        {
+          "line": 21913,
+          "panic": "2026-11-14T08:35:32.7961748Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_policy_baseline_tests::native_joint_policy_original_writer_reaches_actual_decision_without_reinstall_baseline' (36479) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.7963137Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.7963664Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmptJXcXs",
+            "2026-11-14T08:35:32.7963979Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpbs2hPP",
+            "2026-11-14T08:35:32.7964189Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::current_joint_authority_tests::native_current_joint_actual_authority_and_original_writer_cannot_rebase_recovery",
+      "start_line": 21918,
+      "end_line": 21927,
+      "normalized_stdout_sha256": "e5dd3f99f8a7bde58544e045ce212f1c8b9eacdb2bcbac04b6850e6df8d0fec5",
+      "panic_evidence": [
+        {
+          "line": 21923,
+          "panic": "2026-11-14T08:35:32.7967384Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::current_joint_authority_tests::native_current_joint_actual_authority_and_original_writer_cannot_rebase_recovery' (36826) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.7968723Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.7969227Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpbBIj36",
+            "2026-11-14T08:35:32.7969533Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpMqn1P1",
+            "2026-11-14T08:35:32.7969734Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_activation_idempotence_tests::native_post_joint_actual_activation_idempotence_after_fresh_activation_ack4_and_strong",
+      "start_line": 21928,
+      "end_line": 21936,
+      "normalized_stdout_sha256": "a23010317350d2576dd0e548fef2d7c9002987fdd320d679ecb259c83e5fc289",
+      "panic_evidence": [
+        {
+          "line": 21932,
+          "panic": "2026-11-14T08:35:32.7972507Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_activation_idempotence_tests::native_post_joint_actual_activation_idempotence_after_fresh_activation_ack4_and_strong' (37250) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.7973930Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.7974478Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmprPRUdY",
+            "2026-11-14T08:35:32.7974783Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpWPVtMt",
+            "2026-11-14T08:35:32.7974974Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read",
+      "start_line": 21937,
+      "end_line": 21947,
+      "normalized_stdout_sha256": "f083faa92f4409f12e5c300963aab96d68b62224b990a9fbe9046bb0707f440a",
+      "panic_evidence": [
+        {
+          "line": 21943,
+          "panic": "2026-11-14T08:35:32.7978825Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read' (37623) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.7980048Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.7980545Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpzMaDEB",
+            "2026-11-14T08:35:32.7980854Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpbzDktK",
+            "2026-11-14T08:35:32.7981043Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogue_reply_while_frozen",
+      "start_line": 21948,
+      "end_line": 21956,
+      "normalized_stdout_sha256": "1a2b0d43200200c6781ac0be9a24138db4c84a09951a55c9e8db720acd693c4c",
+      "panic_evidence": [
+        {
+          "line": 21952,
+          "panic": "2026-11-14T08:35:32.7983674Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogue_reply_while_frozen' (38049) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.7984986Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.7985493Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpsTPxRo",
+            "2026-11-14T08:35:32.7985791Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmp0H1vk2",
+            "2026-11-14T08:35:32.7985990Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_phase_refuses_expired_original_caller_with_later_long_budget",
+      "start_line": 21957,
+      "end_line": 21966,
+      "normalized_stdout_sha256": "9b318baf01344f2b5d7a555c00bfc089802a51620eea34eb4d407e919e22ead1",
+      "panic_evidence": [
+        {
+          "line": 21962,
+          "panic": "2026-11-14T08:35:32.7988860Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_phase_refuses_expired_original_caller_with_later_long_budget' (38422) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.7990220Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.7990714Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpXYfAXI",
+            "2026-11-14T08:35:32.7991015Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpN0hmeh",
+            "2026-11-14T08:35:32.7991213Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_preparation_phase_publishes_all_final_members_after_original_expiry",
+      "start_line": 21967,
+      "end_line": 21975,
+      "normalized_stdout_sha256": "6ff73adbe8a6097c40a445238a66717a320b6b8c1eb5fccd7be6cfad0c4e9e50",
+      "panic_evidence": [
+        {
+          "line": 21971,
+          "panic": "2026-11-14T08:35:32.7993766Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_preparation_phase_publishes_all_final_members_after_original_expiry' (38844) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.7995017Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.7995511Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpo0Wurt",
+            "2026-11-14T08:35:32.7995811Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpnx4z07",
+            "2026-11-14T08:35:32.7996000Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::observer_scope_cut_tests::native_current_joint_observer_scope_actual_foreign_identity_cancel_and_hook_cuts",
+      "start_line": 21976,
+      "end_line": 21984,
+      "normalized_stdout_sha256": "f61adaad900fb02389ff9089318ffbf9db3e4427a484e13e31d419c36fd456ec",
+      "panic_evidence": [
+        {
+          "line": 21980,
+          "panic": "2026-11-14T08:35:32.7998760Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::observer_scope_cut_tests::native_current_joint_observer_scope_actual_foreign_identity_cancel_and_hook_cuts' (39219) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8000065Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.8000577Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmp5ruw7t",
+            "2026-11-14T08:35:32.8000874Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpS0Apwu",
+            "2026-11-14T08:35:32.8001072Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_final_sweep_foreign_actual_writer_reenrollment_refuses_old_phase",
+      "start_line": 21985,
+      "end_line": 22002,
+      "normalized_stdout_sha256": "1f02162995c3c415de88159bc7876b009dff14169aa3b723afbf3d3c511810bd",
+      "panic_evidence": [
+        {
+          "line": 21998,
+          "panic": "2026-11-14T08:35:32.8006662Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_final_sweep_foreign_actual_writer_reenrollment_refuses_old_phase' (39593) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8008176Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.8008701Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpySah5f",
+            "2026-11-14T08:35:32.8009012Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmp82rAr1",
+            "2026-11-14T08:35:32.8009232Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_original_caller_cancel_cannot_start_fresh_phase",
+      "start_line": 22003,
+      "end_line": 22011,
+      "normalized_stdout_sha256": "1477e87cbef160e46816e7396c836c3321e98a32de7df9225a12ce538af67920",
+      "panic_evidence": [
+        {
+          "line": 22007,
+          "panic": "2026-11-14T08:35:32.8011806Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_original_caller_cancel_cannot_start_fresh_phase' (40019) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8013091Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.8013597Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpJHp79U",
+            "2026-11-14T08:35:32.8013892Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpvyOzQY",
+            "2026-11-14T08:35:32.8014086Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_step_cancel_recovers_exact_fact_with_original_caller_live",
+      "start_line": 22012,
+      "end_line": 22027,
+      "normalized_stdout_sha256": "ba7707bf3c396e92d5d44c3330318213a19e71ea0680dcd313a762ad08ab93bc",
+      "panic_evidence": [
+        {
+          "line": 22023,
+          "panic": "2026-11-14T08:35:32.8019127Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_step_cancel_recovers_exact_fact_with_original_caller_live' (40392) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8020430Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.8020960Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpjTvEoB",
+            "2026-11-14T08:35:32.8021255Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmp9GkH1r",
+            "2026-11-14T08:35:32.8021454Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_image_release_refuses_hot_writer_reinstallation_before_owner_drop",
+      "start_line": 22028,
+      "end_line": 22036,
+      "normalized_stdout_sha256": "a98feb63719b1c62f95987103ac5b766321233b3abc08a8db69e7173a4621603",
+      "panic_evidence": [
+        {
+          "line": 22032,
+          "panic": "2026-11-14T08:35:32.8024240Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_image_release_refuses_hot_writer_reinstallation_before_owner_drop' (40816) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8025583Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.8026075Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpQnZrVq",
+            "2026-11-14T08:35:32.8026369Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpmsxplf",
+            "2026-11-14T08:35:32.8026564Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_survivor_release_refuses_hot_writer_reinstallation_before_owner_drop",
+      "start_line": 22037,
+      "end_line": 22045,
+      "normalized_stdout_sha256": "4d9a37294884fe8143642272a1bb444f31c4da1313c80ad51b76bdfdef2a2df0",
+      "panic_evidence": [
+        {
+          "line": 22041,
+          "panic": "2026-11-14T08:35:32.8029487Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_survivor_release_refuses_hot_writer_reinstallation_before_owner_drop' (41190) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8030806Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.8031300Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpRJV2LB",
+            "2026-11-14T08:35:32.8031601Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpI8JkeN",
+            "2026-11-14T08:35:32.8031790Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::post_joint_no_data_tests::native_post_joint_actual_new_domain_prepare_only_recovers_then_ack4_and_strong",
+      "start_line": 22046,
+      "end_line": 22054,
+      "normalized_stdout_sha256": "6612c053a38385cd481d4fed9f8ae4a1d7692d1365dfbb85489c95ad52c6943a",
+      "panic_evidence": [
+        {
+          "line": 22050,
+          "panic": "2026-11-14T08:35:32.8034394Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::post_joint_no_data_tests::native_post_joint_actual_new_domain_prepare_only_recovers_then_ack4_and_strong' (41614) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8035689Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.8036189Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpXLCgRd",
+            "2026-11-14T08:35:32.8036482Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpq0ZWiO",
+            "2026-11-14T08:35:32.8036707Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::writer_data_domain_fact_tests::native_writer_data_domain_actual_decided_closed_points_preserve_original_policy",
+      "start_line": 22055,
+      "end_line": 22065,
+      "normalized_stdout_sha256": "249b75ce6329aad1a6850eef1818eb89e1f9833e7ad111bce9af0ce43a718e8c",
+      "panic_evidence": [
+        {
+          "line": 22061,
+          "panic": "2026-11-14T08:35:32.8173006Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::writer_data_domain_fact_tests::native_writer_data_domain_actual_decided_closed_points_preserve_original_policy' (41990) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8174448Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.8174968Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmp8g5uml",
+            "2026-11-14T08:35:32.8175281Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmp1CEBDl",
+            "2026-11-14T08:35:32.8175484Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::writer_data_domain_fact_tests::native_writer_data_domain_actual_foreign_mstore_refuses_without_native_change",
+      "start_line": 22066,
+      "end_line": 22075,
+      "normalized_stdout_sha256": "c5a1f435452ef895d03a137b7f983d32ab3f5330cb068e179a128579791bad0a",
+      "panic_evidence": [
+        {
+          "line": 22071,
+          "panic": "2026-11-14T08:35:32.8309545Z thread 'db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::writer_data_domain_fact_tests::native_writer_data_domain_actual_foreign_mstore_refuses_without_native_change' (42386) panicked at crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8310911Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.8311426Z RETAINED_BORN2_STRONG_DATABASES /tmp/.tmpdr1EMJ",
+            "2026-11-14T08:35:32.8311738Z RETAINED_BORN2_STRONG_METADATA_AND_PRIVATE_TLS /tmp/.tmpp7iiQk",
+            "2026-11-14T08:35:32.8311932Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_receives_image_becomes_voter_and_serves_after_one_original_stops",
+      "start_line": 22076,
+      "end_line": 22152,
+      "normalized_stdout_sha256": "e5fc9471208291d229bd6c3e52dc5ab61e0a5ce95edcba057c5f07ee78478255",
+      "panic_evidence": [
+        {
+          "line": 22149,
+          "panic": "2026-11-14T08:35:32.8337266Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_receives_image_becomes_voter_and_serves_after_one_original_stops' (83201) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/fifth_data_path_tests.rs:955:14:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8338695Z called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")",
+            "2026-11-14T08:35:32.8339188Z FIFTH_DATA_PATH cleanup errors: []",
+            "2026-11-14T08:35:32.8339339Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_contention_same_own_progress",
+      "start_line": 22153,
+      "end_line": 22364,
+      "normalized_stdout_sha256": "f8a93036b783c20277ce51b897beb43276810b95a040314a413d523252fed5e9",
+      "panic_evidence": [
+        {
+          "line": 22362,
+          "panic": "2026-11-14T08:35:32.8432437Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_contention_same_own_progress' (96380) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8433770Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+            "2026-11-14T08:35:32.8433965Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_wait_expired_own_refuses",
+      "start_line": 22365,
+      "end_line": 22523,
+      "normalized_stdout_sha256": "dbf60dd67d39f8e4e2161b5ff1e29ab4d630d6cb4e0cb0111dc03f1057af5bc6",
+      "panic_evidence": [
+        {
+          "line": 22521,
+          "panic": "2026-11-14T08:35:32.8508977Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_wait_expired_own_refuses' (98268) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8510283Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+            "2026-11-14T08:35:32.8510472Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_tests::native_registered_fifth_remote_hot_closed_audit_native_reply_lost_same_attempt_retry",
+      "start_line": 22524,
+      "end_line": 22644,
+      "normalized_stdout_sha256": "497f89b270e759e1d86cfe3b32bb835a1fb3e48902316515894201f651d672a7",
+      "panic_evidence": [
+        {
+          "line": 22642,
+          "panic": "2026-11-14T08:35:32.8573121Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_tests::native_registered_fifth_remote_hot_closed_audit_native_reply_lost_same_attempt_retry' (100278) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8574404Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+            "2026-11-14T08:35:32.8574587Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_first_policy_real_caller_expiry_fresh_same_xid",
+      "start_line": 22645,
+      "end_line": 22877,
+      "normalized_stdout_sha256": "b90848097295b60d5e6673a55b5fadcc01d95903224eb5c069430045d570df3d",
+      "panic_evidence": [
+        {
+          "line": 22875,
+          "panic": "2026-11-14T08:35:32.8673906Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_first_policy_real_caller_expiry_fresh_same_xid' (102230) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8675216Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+            "2026-11-14T08:35:32.8675397Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready",
+      "start_line": 22878,
+      "end_line": 23097,
+      "normalized_stdout_sha256": "95e1b8a9c2e452c77f1a99cafe7789706cf15cf68d5c7396f83e1af71e979a36",
+      "panic_evidence": [
+        {
+          "line": 23095,
+          "panic": "2026-11-14T08:35:32.8728255Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready' (104170) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8728428Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+            "2026-11-14T08:35:32.8728432Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt",
+      "start_line": 23098,
+      "end_line": 23263,
+      "normalized_stdout_sha256": "ce8bbbdadf5a90a0c71e7ff586ffa081271b944a99bcffde87bc09e8f4782a54",
+      "panic_evidence": [
+        {
+          "line": 23261,
+          "panic": "2026-11-14T08:35:32.8763825Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt' (106061) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8763986Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+            "2026-11-14T08:35:32.8763990Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_original_client_ack_and_full_strong",
+      "start_line": 23264,
+      "end_line": 23523,
+      "normalized_stdout_sha256": "b16fc6f7d0003a4583a3948b289a795f2d9450aa20969b6f6836359fbc8cb330",
+      "panic_evidence": [
+        {
+          "line": 23521,
+          "panic": "2026-11-14T08:35:32.8811750Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_original_client_ack_and_full_strong' (108020) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8811879Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+            "2026-11-14T08:35:32.8811883Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_policy_readback_refuses_hook",
+      "start_line": 23524,
+      "end_line": 23802,
+      "normalized_stdout_sha256": "02c165ed3ca2e8bf191a8d420fb14ddbbf3674605e1e0f4abfab95e641fa4cd6",
+      "panic_evidence": [
+        {
+          "line": 23800,
+          "panic": "2026-11-14T08:35:32.8861940Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_policy_readback_refuses_hook' (111658) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8862076Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+            "2026-11-14T08:35:32.8862079Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy",
+      "start_line": 23803,
+      "end_line": 23921,
+      "normalized_stdout_sha256": "5cd9cf11b386fabc287a4a947a6d2cf641a35ca77967e9425e3e68a3952b502d",
+      "panic_evidence": [
+        {
+          "line": 23919,
+          "panic": "2026-11-14T08:35:32.8890294Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy' (115353) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8890430Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+            "2026-11-14T08:35:32.8890433Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses",
+      "start_line": 23922,
+      "end_line": 24167,
+      "normalized_stdout_sha256": "08ce8491a34ad87f8ac5e7fa7bfa028cf861986d6cf81a4209715b66ff432d47",
+      "panic_evidence": [
+        {
+          "line": 24165,
+          "panic": "2026-11-14T08:35:32.8935530Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses' (118848) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8935658Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+            "2026-11-14T08:35:32.8935669Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_lost_committed_decision_reply_same_native_attempt",
+      "start_line": 24168,
+      "end_line": 24341,
+      "normalized_stdout_sha256": "17f8378b1ec8e212b7327da249152b053b4e3dc2a7ceb73bac7e564fd49f88c4",
+      "panic_evidence": [
+        {
+          "line": 24339,
+          "panic": "2026-11-14T08:35:32.8971689Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_lost_committed_decision_reply_same_native_attempt' (120788) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8971814Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+            "2026-11-14T08:35:32.8971817Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_wrong_actor_before_capture",
+      "start_line": 24342,
+      "end_line": 24354,
+      "normalized_stdout_sha256": "7fa91d090dfc78cec9116cfd9be8381e94158d43ef8041374b50ea6ad70d31b7",
+      "panic_evidence": [
+        {
+          "line": 24352,
+          "panic": "2026-11-14T08:35:32.8974977Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_wrong_actor_before_capture' (139430) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_discovery_tests.rs:135:9:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8975324Z cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native host bootstrap: source discovery target identity differs",
+            "2026-11-14T08:35:32.8975328Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_cancel_after_take_retains_exact_progress",
+      "start_line": 24355,
+      "end_line": 24454,
+      "normalized_stdout_sha256": "0cb9b2855b387421ded68146557c28a935ac9e82cb44942b098258ba05c79109",
+      "panic_evidence": [
+        {
+          "line": 24452,
+          "panic": "2026-11-14T08:35:32.8990233Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_cancel_after_take_retains_exact_progress' (165310) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+          "following_lines": [
+            "2026-11-14T08:35:32.8990701Z called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+            "2026-11-14T08:35:32.8990707Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_cancel_before_take_same_phase_fresh_retry",
+      "start_line": 24455,
+      "end_line": 24623,
+      "normalized_stdout_sha256": "a9af9ca589e7077113c7c4ed6cdc91ca7ab31482fc6ee4114d25e546187a5ba7",
+      "panic_evidence": [
+        {
+          "line": 24621,
+          "panic": "2026-11-14T08:35:32.9014777Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_cancel_before_take_same_phase_fresh_retry' (167079) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+          "following_lines": [
+            "2026-11-14T08:35:32.9015243Z called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+            "2026-11-14T08:35:32.9015248Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_changed_valid_quorum_cannot_replace_intent",
+      "start_line": 24624,
+      "end_line": 24643,
+      "normalized_stdout_sha256": "d2f97998a020d5567cb0a34459321d271b3d1927c5ae9bcbabb460af3edd96e5",
+      "panic_evidence": [
+        {
+          "line": 24641,
+          "panic": "2026-11-14T08:35:32.9019299Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_changed_valid_quorum_cannot_replace_intent' (168796) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+          "following_lines": [
+            "2026-11-14T08:35:32.9019754Z called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+            "2026-11-14T08:35:32.9019759Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_materialization_independent_fetch_all_pin_owners",
+      "start_line": 24644,
+      "end_line": 24766,
+      "normalized_stdout_sha256": "0e4d4f8c07b5fe4f7ff6307b6f21ed67c1bcfa1b7a7f61cbe4c1a9bf85d453a9",
+      "panic_evidence": [
+        {
+          "line": 24764,
+          "panic": "2026-11-14T08:35:32.9037237Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_materialization_independent_fetch_all_pin_owners' (170508) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+          "following_lines": [
+            "2026-11-14T08:35:32.9037692Z called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+            "2026-11-14T08:35:32.9037696Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_wrong_fact_digest_refuses_before_pin_take",
+      "start_line": 24767,
+      "end_line": 24842,
+      "normalized_stdout_sha256": "1c18852d31081569e8994ad5301a29be68a1055ec44ef74b07f65e0646a1bce3",
+      "panic_evidence": [
+        {
+          "line": 24840,
+          "panic": "2026-11-14T08:35:32.9049280Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_wrong_fact_digest_refuses_before_pin_take' (172222) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+          "following_lines": [
+            "2026-11-14T08:35:32.9049774Z called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+            "2026-11-14T08:35:32.9049781Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_commit_sync_unknown_never_replaces_xid",
+      "start_line": 24843,
+      "end_line": 24953,
+      "normalized_stdout_sha256": "4dbe82cd8af254d715b09168d307d1fba96b7f43aef1576626eccaa09e01ed77",
+      "panic_evidence": [
+        {
+          "line": 24951,
+          "panic": "2026-11-14T08:35:32.9065921Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_commit_sync_unknown_never_replaces_xid' (173989) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+          "following_lines": [
+            "2026-11-14T08:35:32.9066368Z called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+            "2026-11-14T08:35:32.9066372Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_donor_provenance_and_native_target_record",
+      "start_line": 24954,
+      "end_line": 25183,
+      "normalized_stdout_sha256": "b994a9dd7bd0b80f73399e2854eb51e6a2cb54dea928c664aee1ab5c614cad4d",
+      "panic_evidence": [
+        {
+          "line": 25181,
+          "panic": "2026-11-14T08:35:32.9118070Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_donor_provenance_and_native_target_record' (175703) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+          "following_lines": [
+            "2026-11-14T08:35:32.9118541Z called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+            "2026-11-14T08:35:32.9118548Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_postcommit_cancel_reconciles_same_xid",
+      "start_line": 25184,
+      "end_line": 25335,
+      "normalized_stdout_sha256": "ae2b6cecc8d68149e9089659d99c6a14fd869d4a760faa83e5d477b5a28b3803",
+      "panic_evidence": [
+        {
+          "line": 25332,
+          "panic": "2026-11-14T08:35:32.9141063Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_postcommit_cancel_reconciles_same_xid' (177419) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+          "following_lines": [
+            "2026-11-14T08:35:32.9141837Z error: test failed, to rerun pass `-p bicdb-core --lib`",
+            "2026-11-14T08:35:32.9142609Z called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+            "2026-11-14T08:35:32.9142615Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_preput_abort_retains_original_attempt",
+      "start_line": 25336,
+      "end_line": 25361,
+      "normalized_stdout_sha256": "4d90aaf02584c47631b52465656a6a75290ff74ea9374aa2659e69abbfc70874",
+      "panic_evidence": [
+        {
+          "line": 25359,
+          "panic": "2026-11-14T08:35:32.9149012Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_preput_abort_retains_original_attempt' (179135) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+          "following_lines": [
+            "2026-11-14T08:35:32.9149453Z called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+            "2026-11-14T08:35:32.9149462Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_nonleader_donor_independent_self_callback",
+      "start_line": 25362,
+      "end_line": 25469,
+      "normalized_stdout_sha256": "7d3951b3cc948707bbc9f677aa583268887a3ed6d88a6aced56620e36c5453a8",
+      "panic_evidence": [
+        {
+          "line": 25467,
+          "panic": "2026-11-14T08:35:32.9165727Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_nonleader_donor_independent_self_callback' (180903) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+          "following_lines": [
+            "2026-11-14T08:35:32.9166180Z called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+            "2026-11-14T08:35:32.9166190Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_observer_and_capture_ingress_refusals",
+      "start_line": 25470,
+      "end_line": 25697,
+      "normalized_stdout_sha256": "c629bdbc7bdde8f6b21df947d78533cca839ad96836cdc10cf3bdde0a2b2e9eb",
+      "panic_evidence": [
+        {
+          "line": 25695,
+          "panic": "2026-11-14T08:35:32.9198573Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_observer_and_capture_ingress_refusals' (182616) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+          "following_lines": [
+            "2026-11-14T08:35:32.9199033Z called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+            "2026-11-14T08:35:32.9199039Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_retiree_postcommit_cancel_same_xid",
+      "start_line": 25698,
+      "end_line": 25865,
+      "normalized_stdout_sha256": "bf3c5de99397ba73222d933da91105273ec65415055f57946b73464f4055451b",
+      "panic_evidence": [
+        {
+          "line": 25863,
+          "panic": "2026-11-14T08:35:32.9241876Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_retiree_postcommit_cancel_same_xid' (184329) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+          "following_lines": [
+            "2026-11-14T08:35:32.9243660Z called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+            "2026-11-14T08:35:32.9244168Z "
+          ]
+        }
+      ]
+    },
+    {
+      "case": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_survivor_native_body_and_same_xid",
+      "start_line": 25866,
+      "end_line": 26099,
+      "normalized_stdout_sha256": "b5c402fe3853c036f1d5bd544142c7920f62dac891eaa87d99bbc99380230f6a",
+      "panic_evidence": [
+        {
+          "line": 26096,
+          "panic": "2026-11-14T08:35:32.9321019Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_survivor_native_body_and_same_xid' (186046) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10:",
+          "following_lines": [
+            "2026-11-14T08:35:32.9322877Z called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")",
+            "2026-11-14T08:35:32.9323380Z ",
+            "2026-11-14T08:35:32.9323383Z "
+          ]
+        }
+      ]
+    }
+  ],
+  "grouped_exact_last_panic_location_and_following_error": {
+    "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14: | called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")": [
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activated_anchor_archive_tests::native_current_joint_actual_image_target_anchor_r3_at_r4_refuses_missing_serving_archive",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_caller_cancel_and_exact_fresh_recovery",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_foreign_db_and_store_refused",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_missing_decision_archive_refused",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_writer_replacement_refused",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_policy_baseline_tests::native_joint_policy_original_writer_reaches_actual_decision_without_reinstall_baseline",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::current_joint_authority_tests::native_current_joint_actual_authority_and_original_writer_cannot_rebase_recovery",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_activation_idempotence_tests::native_post_joint_actual_activation_idempotence_after_fresh_activation_ack4_and_strong",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogue_reply_while_frozen",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_phase_refuses_expired_original_caller_with_later_long_budget",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_preparation_phase_publishes_all_final_members_after_original_expiry",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::observer_scope_cut_tests::native_current_joint_observer_scope_actual_foreign_identity_cancel_and_hook_cuts",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_final_sweep_foreign_actual_writer_reenrollment_refuses_old_phase",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_original_caller_cancel_cannot_start_fresh_phase",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_step_cancel_recovers_exact_fact_with_original_caller_live",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_image_release_refuses_hot_writer_reinstallation_before_owner_drop",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_survivor_release_refuses_hot_writer_reinstallation_before_owner_drop",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::post_joint_no_data_tests::native_post_joint_actual_new_domain_prepare_only_recovers_then_ack4_and_strong",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::writer_data_domain_fact_tests::native_writer_data_domain_actual_decided_closed_points_preserve_original_policy",
+      "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::writer_data_domain_fact_tests::native_writer_data_domain_actual_foreign_mstore_refuses_without_native_change"
+    ],
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/fifth_data_path_tests.rs:955:14: | called `Result::unwrap()` on an `Err` value: Cluster(\"native joint data handoff: protected native DECISION requires actual fresh OWN/current-MStore version\")": [
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_receives_image_becomes_voter_and_serves_after_one_original_stops"
+    ],
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:631:54: | called `Result::unwrap()` on an `Err` value: QueryTimedOut": [
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_contention_same_own_progress",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_wait_expired_own_refuses",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_tests::native_registered_fifth_remote_hot_closed_audit_native_reply_lost_same_attempt_retry",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_first_policy_real_caller_expiry_fresh_same_xid",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_original_client_ack_and_full_strong",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_policy_readback_refuses_hook",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_lost_committed_decision_reply_same_native_attempt"
+    ],
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_discovery_tests.rs:135:9: | cluster error: cluster node n2 rejected RPC cluster_data_operation_failed: cluster error: native host bootstrap: source discovery target identity differs": [
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_discovery_tests::native_registered_fifth_source_discovery_actual_tcp_wrong_actor_before_capture"
+    ],
+    "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests.rs:171:10: | called `Result::unwrap()` on an `Err` value: Cluster(\"cluster node n0 rejected RPC cluster_data_operation_failed: cluster error: metadata consensus: metadata acquisition requester/range authority changed\")": [
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_cancel_after_take_retains_exact_progress",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_cancel_before_take_same_phase_fresh_retry",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_changed_valid_quorum_cannot_replace_intent",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_materialization_independent_fetch_all_pin_owners",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_wrong_fact_digest_refuses_before_pin_take",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_commit_sync_unknown_never_replaces_xid",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_donor_provenance_and_native_target_record",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_postcommit_cancel_reconciles_same_xid",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_preput_abort_retains_original_attempt",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_nonleader_donor_independent_self_callback",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_observer_and_capture_ingress_refusals",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_retiree_postcommit_cancel_same_xid",
+      "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_old_decision_tests::native_registered_fifth_remote_old_decision_actual_survivor_native_body_and_same_xid"
+    ]
+  },
+  "compiler_errors": [],
+  "limits": [
+    "Failure groups are literal panic-location/error groupings, not causal diagnoses.",
+    "Final stdout sections are line-addressed into complete retained raw log; full per-operation JSON remains in raw, not summarized away.",
+    "Intended fault boundaries are NOT proved merely by test names. Prerequisite failures remain failed and their later controls not tested.",
+    "OriginalSDK/APP/Strong/externalledger outcomes require separate exact-case JSON/source analysis; no aggregate acknowledged-loss claim.",
+    "No physical/production/scaling qualification."
+  ]
+}

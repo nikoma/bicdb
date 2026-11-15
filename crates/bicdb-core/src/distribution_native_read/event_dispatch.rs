@@ -33,12 +33,55 @@ pub(crate) struct NativeStrongEventDispatcher {
     test_requests: Mutex<std::collections::VecDeque<(Uuid, Uuid, u64)>>,
 }
 struct Active(Arc<AtomicUsize>);
+/// Concrete bound slot/candidate after full actual runtime/coordinator/hook
+/// validation. Caller keeps its actual physical scope and version guard; this
+/// token alone is not a metadata lease or APP/Strong request permission.
+pub(crate) struct NativeStrongEventPublication<'a> {
+    slot: parking_lot::MutexGuard<'a, Option<Binding>>,
+    next: Option<Binding>,
+}
+pub(crate) struct NativeRetiredStrongEventBinding {
+    _binding: Option<Binding>,
+}
+impl NativeStrongEventPublication<'_> {
+    /// Infallible memory swap only. Retired ownership leaves after final gate.
+    pub(crate) fn publish(&mut self) -> NativeRetiredStrongEventBinding {
+        NativeRetiredStrongEventBinding {
+            _binding: std::mem::replace(&mut *self.slot, self.next.take()),
+        }
+    }
+}
 impl Drop for Active {
     fn drop(&mut self) {
         self.0.fetch_sub(1, Ordering::SeqCst);
     }
 }
 impl NativeStrongEventDispatcher {
+    pub(crate) fn prepare_publication<'a>(
+        self: &'a Arc<Self>,
+        coordinator: &Arc<Coordinator>,
+        host: &Arc<InstalledNativeWriterHostGuard>,
+    ) -> Result<NativeStrongEventPublication<'a>> {
+        let runtime = self
+            .runtime
+            .upgrade()
+            .ok_or_else(|| invalid("Strong publication runtime ended"))?;
+        self.require_runtime(&runtime)?;
+        coordinator.validate_strong_event_dispatch_install(&runtime, host)?;
+        let next = Binding {
+            generation: Uuid::now_v7(),
+            coordinator: Arc::downgrade(coordinator),
+            host: Arc::downgrade(host),
+        };
+        let slot = self
+            .binding
+            .try_lock()
+            .ok_or_else(|| invalid("Strong publication actual binding slot busy"))?;
+        Ok(NativeStrongEventPublication {
+            slot,
+            next: Some(next),
+        })
+    }
     pub(crate) fn new(
         service: &Arc<Mutex<ClusterDataNodeService>>,
         runtime: &Arc<RangeRecoveryRuntime>,

@@ -1,0 +1,35 @@
+{
+  "schema": "bicdb-source-peer-review-v1",
+  "source": "88cc8041398ff0092c95772987842296b4b0096f",
+  "base": "d9327c386495389b95407fe88ed3c92f028f92e5",
+  "classification": "source-only; no confirmed blocker in examined adapter; uncompiled/unexecuted",
+  "changed_paths": [
+    "crates/bicdb-core/src/distribution_native_host/joined_data_handoff.rs",
+    "docs/design/native-main508-owned-context-integration.md",
+    "docs/design/native-main508-owned-context-source-index.json"
+  ],
+  "blobs": {
+    "crates/bicdb-core/src/distribution_native_host/joined_data_handoff.rs": "97db1a8d8dc0e4eb5a53633922c9456bd81ff30f1a9e490fabe503fbf1463dc6",
+    "docs/design/native-main508-owned-context-integration.md": "83029a0131105e17bc7e8ec4fb5409b063675e9c538955448a62ecda10e60368",
+    "docs/design/native-main508-owned-context-source-index.json": "6c3a44f76c6b1b6fbc8bd37042735d1ca616e37faef4091a715fff26a8504af8"
+  },
+  "examined": {
+    "D1": "Actual recipient client HostOWN uses original role business; child of drive parent linked to original session and min role deadline; existing owned publisher validates real role/OWN, captures MStore point, retains native/catalogue uncertain attempts. No raw DTO cast.",
+    "D2": "Real same OWN/business/request metadata point captured outside service lock; existing with_point producer checks point before native/readback; no current-MStore lock acquisition added under service/DB guard.",
+    "compile_surface": "TLS-only enclosing module matches owned publisher feature gate; imports already available; session cloned before mutable publishing borrow; business/deadline copied before Role move; point/fresh consumed once; service Arc moved only after guard scope.",
+    "preservation": "Actual Members::role and retry_timed_out byte-identical; PHASE_ATTEMPTS=4; same original publication/done map; unknown does not create fresh handoff or reset retained attempt.",
+    "session_fix": "Reviewed successor88cc; c388 alone lacked explicit original session ancestry and is not treated as corrected final source."
+  },
+  "limits": [
+    "No normal production controller caller",
+    "Legacy one-range same-process path; no JoinedRemoteA cast or additional-populated-range support claimed",
+    "Inherited consumed-decision serving-preparation safe-stuck window remains",
+    "No new TCP/native/physical test evidence; no production qualification"
+  ],
+  "not_run": [
+    "Cargo",
+    "Rust build/test",
+    "CI",
+    "push"
+  ]
+}

@@ -5,7 +5,7 @@ use super::*;
 mod fresh;
 use crate::distribution_consensus::MetadataRecoveryRolePurpose;
 use crate::distribution_range_handoff::NativeJointOpenAdmission;
-use crate::distribution_range_image_install::NativeImageCatalogueFinalization;
+use crate::distribution_range_image_install::NativeJointImageMaterialization;
 use crate::distribution_range_mutation::{FrozenRangeMutationPermit, RangeMutationAuthority};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -76,7 +76,8 @@ pub(crate) struct NativeJointCatalogueActivationReceipt {
     activated: NativeJointCatalogueActivation,
     native: Arc<crate::db::NativeJointServingBridgeReceipt>,
     // Request continuity only; never serialized into the durable fact below.
-    writer: Arc<crate::db::NativeWriterHostState>,
+    writer: crate::db::NativeJointPhaseOwner,
+    writer_domain: crate::db::NativeJointWriterDomain,
     writer_root: PathBuf,
     cancellation: CancellationToken,
 }
@@ -113,7 +114,7 @@ impl NativeJointCatalogueActivationFact {
         scope.require_native(&self.native)?;
         let database = scope.database();
         store.require_native_catalog_durability(database.data_path())?;
-        store.require_native_writer_host_base()?;
+        store.require_native_joint_host_base(database, self.native.data().old_range().id)?;
         if self.store_open_id != store.open_id
             || self.native.local_node_id() != &store.catalog.node_id
             || self.activated != NativeJointCatalogueActivation::from_actual(&self.native)?
@@ -143,7 +144,7 @@ impl NativeJointCatalogueActivationFact {
         scope.require_native(&self.native)?;
         let database = scope.database();
         store.require_native_catalog_durability(database.data_path())?;
-        store.require_native_writer_host_base()?;
+        store.require_native_joint_host_base(database, self.native.data().old_range().id)?;
         if self.store_open_id != store.open_id
             || self.native.local_node_id() != &store.catalog.node_id
             || self.activated != NativeJointCatalogueActivation::from_actual(&self.native)?
@@ -189,22 +190,26 @@ impl NativeJointCatalogueActivationReceipt {
         self.cancellation.check()?;
         self.writer
             .require_store(&self.writer_root, self.store_open_id)?;
-        self.writer.require_range(&self.activated.range)?;
+        self.writer_domain.require_lifetime(
+            &self.writer_root,
+            self.store_open_id,
+            &self.activated.range,
+        )?;
         self.cancellation.check()
     }
-    fn require_original_writer_current(
+    pub(crate) fn require_original_writer_current(
         &self,
         database: &crate::BicDb,
         store: &RangeWriteStore,
     ) -> Result<()> {
         self.require_live()?;
-        if !Arc::ptr_eq(&self.writer, &store.native_writer_host_state()?) {
+        if !self.writer.same_actual(&self.writer_domain.phase_owner()) {
             return Err(range_write_error(
                 "original joint activation writer registration changed",
             ));
         }
-        self.writer
-            .require_database(database, &self.activated.range)?;
+        self.writer_domain
+            .require_current(database, store, &self.activated.range)?;
         self.require_live()
     }
     #[cfg(test)]
@@ -219,7 +224,7 @@ impl NativeJointCatalogueActivationReceipt {
         self.require_original_writer_current(database, store)?;
         self.native.require_current(database)?;
         store.require_native_catalog_durability(database.data_path())?;
-        store.require_native_writer_host_base()?;
+        store.require_native_joint_host_base(database, self.native.data().old_range().id)?;
         if self.store_open_id != store.open_id
             || self.native.local_node_id() != &store.catalog.node_id
             || self.activated != NativeJointCatalogueActivation::from_actual(&self.native)?
@@ -251,6 +256,7 @@ impl RangeWriteStore {
         host: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         native: &crate::db::NativeJointServingBridgeReceipt,
+        writer_domain: &crate::db::NativeJointWriterDomain,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<()> {
@@ -281,9 +287,21 @@ impl RangeWriteStore {
             ));
         }
         native.require_current(database)?;
-        self.require_native_writer_host_base()?;
-        self.native_writer_host_state()?
-            .require_database(database, data.activation_range())?;
+        // This path exists to resolve the store's uncertain marker, which a
+        // registered owner's proof would otherwise refuse. The checks below
+        // still require the uncertainty to be this exact activation's.
+        self.with_own_uncertainty_set_aside(|store| {
+            store.require_native_joint_host_base(database, data.old_range().id)?;
+            writer_domain.require_current(database, store, data.activation_range())
+        })?;
+        #[cfg(feature = "tls-replication")]
+        if let crate::db::NativeJointWriterDomain::Closed(actual) = writer_domain {
+            if actual.data() != data {
+                return Err(range_write_error(
+                    "joint activation refsync changed exact protected CLOSED decision",
+                ));
+            }
+        }
         let range = data.old_range().id;
         let expected = NativeJointCatalogueActivation::from_actual(native)?;
         let state = self
@@ -303,7 +321,7 @@ impl RangeWriteStore {
         let gate = database.range_mutation_gate();
         gate.validate_quiescent_frozen(range, frozen)?;
         let controlled = gate.try_controlled_mutation(frozen)?;
-        self.persist()?;
+        self.persist_native_joint(database, range)?;
         self.recovery_persistence_uncertain = false;
         drop(controlled);
         host.require_live_request(business)?;
@@ -386,11 +404,19 @@ impl RangeWriteStore {
         database: &crate::BicDb,
         admission: &NativeJointOpenAdmission,
     ) -> Result<Option<NativeJointCatalogueActivationReceipt>> {
-        if admission.has_fresh_open_phase() {
+        if admission.has_fresh_open_phase()
+            || admission
+                .committed()
+                .native_receipt()
+                .native_metadata_initialization_version()
+                == 1
+        {
             return self.recover_fresh_native_joint_activation(database, admission);
         }
 
-        let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+        let (writer, writer_root) =
+            admission.original_phase_owner_for_activation(database, self)?;
+        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
         admission.require_live()?;
         admission.committed().require_current(database)?;
         let Some(fact) =
@@ -405,6 +431,7 @@ impl RangeWriteStore {
             activated: fact.activated,
             native: fact.native,
             writer,
+            writer_domain,
             writer_root,
             cancellation: admission.cancellation().clone(),
         };
@@ -419,7 +446,9 @@ impl RangeWriteStore {
         database: &crate::BicDb,
         admission: &NativeJointOpenAdmission,
     ) -> Result<()> {
-        let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+        let (writer, writer_root) =
+            admission.original_phase_owner_for_activation(database, self)?;
+        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
         if !self.recovery_persistence_uncertain {
             return Ok(());
         }
@@ -427,7 +456,11 @@ impl RangeWriteStore {
         admission.committed().require_current(database)?;
         let native = admission.native_receipt();
         native.require_current(database)?;
-        self.require_native_writer_host_base()?;
+        // As above: only reached while uncertain, and bound below to the
+        // exact activation before anything is re-fsynced.
+        self.with_own_uncertainty_set_aside(|store| {
+            store.require_native_joint_host_base(database, native.data().old_range().id)
+        })?;
         if !self.fsync
             || self.root.canonicalize()? != database.data_path().canonicalize()?
             || !crate::format::native_joint_data_handoff_active(database.data_path())?
@@ -454,8 +487,10 @@ impl RangeWriteStore {
                 "cannot re-fsync an unrelated uncertain joint activation",
             ));
         }
-        writer.require_database(database, native.data().activation_range())?;
-        self.persist()?;
+        self.with_own_uncertainty_set_aside(|store| {
+            writer_domain.require_current(database, store, native.data().activation_range())
+        })?;
+        self.persist_native_joint(database, range)?;
         self.recovery_persistence_uncertain = false;
         writer.require_store(&writer_root, self.open_id)?;
         admission.require_live()
@@ -467,7 +502,7 @@ impl RangeWriteStore {
         admission: &NativeJointOpenAdmission,
         original: &crate::distribution_range_handoff::CommittedNativeJointDecisionObservation,
         catalogue: &NativeJointBridgeCatalogue,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<NativeJointCatalogueActivationReceipt> {
@@ -477,7 +512,13 @@ impl RangeWriteStore {
             &self.catalog.node_id,
             admission.cancellation(),
         );
-        if admission.has_fresh_open_phase() {
+        if admission.has_fresh_open_phase()
+            || admission
+                .committed()
+                .native_receipt()
+                .native_metadata_initialization_version()
+                == 1
+        {
             let result = self.persist_fresh_native_joint_activation(
                 database, admission, original, catalogue, image, frozen, parent,
             );
@@ -488,7 +529,9 @@ impl RangeWriteStore {
             return result;
         }
         parent.check()?;
-        let (writer, writer_root) = admission.original_writer_for_activation(database, self)?;
+        let (writer, writer_root) =
+            admission.original_phase_owner_for_activation(database, self)?;
+        let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
 
         admission.require_external_publications_current()?;
         admission.committed().require_current(database)?;
@@ -572,6 +615,15 @@ impl RangeWriteStore {
         drop(pin);
         let controlled = gate.try_controlled_mutation(frozen)?;
         gate.validate(range, &RangeMutationAuthority::Controlled(&controlled))?;
+        if existing.is_some() {
+            // Exact retry of this activation (matched above): its own
+            // uncertain marker must not refuse the write that resolves it.
+            self.with_own_uncertainty_set_aside(|store| {
+                writer_domain.require_current(database, store, data.activation_range())
+            })?;
+        } else {
+            writer_domain.require_current(database, self, data.activation_range())?;
+        }
         let state = self
             .catalog
             .native_joint_handoffs
@@ -590,7 +642,6 @@ impl RangeWriteStore {
         }
         // Retiring the exact adopted image refusal and recording the new
         // CLOSED activation happen in the SAME fsynced catalogue publication.
-        writer.require_database(database, data.activation_range())?;
         self.recovery_persistence_uncertain = true;
         state.serving_activation = Some(candidate.clone());
         self.catalog
@@ -607,7 +658,7 @@ impl RangeWriteStore {
         if existing.is_none() && image.is_some() {
             self.catalog.image_install_intents.remove(&range);
         }
-        let persisted = self.persist();
+        let persisted = self.persist_native_joint(database, range);
         #[cfg(test)]
         eprintln!("ACTUAL_JOINT_OPEN_CATALOGUE_PERSIST node={} success={} uncertain={} range={} activation_sha={}",self.catalog.node_id,persisted.is_ok(),self.recovery_persistence_uncertain,range,candidate.checksum().unwrap_or_else(|e|format!("diagnostic-unavailable:{e}")));
         persisted?;
@@ -619,6 +670,7 @@ impl RangeWriteStore {
             activated: candidate,
             native,
             writer,
+            writer_domain,
             writer_root,
             cancellation: admission.cancellation().clone(),
         };

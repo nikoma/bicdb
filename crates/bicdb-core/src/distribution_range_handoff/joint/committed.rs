@@ -4,29 +4,55 @@
 use super::*;
 use crate::distribution_consensus::HostMetadataReadObservation;
 use crate::distribution_data::ActualServiceNativeJointCommittedEvidence;
+use std::sync::Arc;
 
 pub(crate) struct CommittedNativeJointDecisionObservation {
     native: crate::db::NativeJointDecisionReceipt,
     metadata: HostMetadataReadObservation,
     business: Uuid,
     database_incarnation: String,
+    metadata_point: Option<Arc<crate::distribution_data::ActualNativeJointMetadataPoint>>,
+    closed_writer_domain: Option<crate::db::NativeJointWriterDomain>,
 }
 impl CommittedNativeJointDecisionObservation {
     pub(crate) fn from_actual_service(
         evidence: ActualServiceNativeJointCommittedEvidence,
     ) -> Result<Self> {
-        let (native, metadata, business, database_incarnation) = evidence.into_parts();
+        let (
+            native,
+            metadata,
+            business,
+            database_incarnation,
+            metadata_point,
+            closed_writer_domain,
+        ) = evidence.into_parts();
         let result = Self {
             native,
             metadata,
             business,
             database_incarnation,
+            metadata_point,
+            closed_writer_domain,
         };
         result.require_metadata_current()?;
+        match &result.closed_writer_domain {
+            None => {}
+            #[cfg(feature = "tls-replication")]
+            Some(crate::db::NativeJointWriterDomain::Closed(actual))
+                if actual.data() == result.data() => {}
+            _ => {
+                return Err(invalid(
+                    "committed CLOSED historical owner is not the original exact protected domain",
+                ))
+            }
+        }
         Ok(result)
     }
     pub(super) fn require_metadata_current(&self) -> Result<()> {
         self.metadata.require_live_request(self.business)?;
+        if let Some(point) = &self.metadata_point {
+            point.require_request(&self.metadata, self.business)?;
+        }
         let data = self.native.data();
         let topology = self.metadata.committed_topology(self.business)?;
         data.require_metadata_domain(topology, self.metadata.restore_activation(self.business)?)?;
@@ -122,6 +148,48 @@ impl CommittedNativeJointDecisionObservation {
         }
         self.native.require_current(database)
     }
+    /// Necessary captured-open equality only. This neither makes an old
+    /// metadata request live nor validates a protected record/current grant.
+    pub(crate) fn require_captured_native_open_identity(&self) -> Result<()> {
+        if self.native.native_database_incarnation() != self.database_incarnation {
+            return Err(invalid(
+                "committed joint observation actual DB-open binding changed",
+            ));
+        }
+        Ok(())
+    }
+    /// The actual service producer alone can retain this owner. Native/metadata
+    /// records cannot construct it; ordinary/Installed observations keep None.
+    pub(crate) fn closed_writer_domain(&self) -> Option<&crate::db::NativeJointWriterDomain> {
+        self.closed_writer_domain.as_ref()
+    }
+    pub(crate) fn require_native_publication_metadata(
+        &self,
+        db: &crate::BicDb,
+        store: &crate::distribution_range_consensus::RangeWriteStore,
+    ) -> Result<()> {
+        self.require_metadata_current()?;
+        match &self.metadata_point {
+            Some(point) => point.require_native_store_point(db, store),
+            None if self.native.native_metadata_initialization_version() == 0 => Ok(()),
+            None => Err(invalid("protected native joint publication requires an actual current-MStore version captured outside engine locks")),
+        }
+    }
+    pub(crate) fn require_publication_request_memory(&self) -> Result<()> {
+        self.metadata.require_live_request(self.business)
+    }
+    pub(crate) fn native_publication_guard(
+        &self,
+    ) -> Result<Option<crate::distribution_data::ActualNativeJointMetadataPublicationGuard<'_>>>
+    {
+        match &self.metadata_point {
+            Some(point) => point.try_publication_guard().map(Some),
+            None if self.native.native_metadata_initialization_version() == 0 => Ok(None),
+            None => Err(invalid(
+                "protected native joint publication has no actual local metadata version gate",
+            )),
+        }
+    }
     pub(crate) fn data(&self) -> &NativeJointDecisionData {
         self.native.data()
     }
@@ -137,5 +205,39 @@ impl CommittedNativeJointDecisionObservation {
     }
     pub(crate) fn deadline(&self) -> std::time::Instant {
         self.metadata.deadline()
+    }
+    #[cfg(test)]
+    pub(crate) fn test_request_memory(&self) -> serde_json::Value {
+        let now = std::time::Instant::now();
+        serde_json::json!({"context_id":self.metadata.context_id(),
+            "term":self.metadata.term(),"read_index":self.metadata.read_index(),
+            "requester":self.metadata.requester_node_id(),
+            "cancel_requested":self.metadata.test_original_request_cancellation().is_cancel_requested(),
+            "remaining_us":self.deadline().saturating_duration_since(now).as_micros(),
+            "past_deadline_us":now.saturating_duration_since(self.deadline()).as_micros(),
+            "memory_observation_not_authority":true})
+    }
+    /// A cfg(test) read-only memory probe survives consumption, without
+    /// exposing the actual cancelable request or any metadata permission.
+    #[cfg(test)]
+    pub(crate) fn test_request_memory_probe(&self) -> Box<dyn Fn() -> serde_json::Value> {
+        let token = self.metadata.test_original_request_cancellation();
+        let context = self.metadata.context_id();
+        let term = self.metadata.term();
+        let index = self.metadata.read_index();
+        let deadline = self.deadline();
+        Box::new(move || {
+            let now = std::time::Instant::now();
+            serde_json::json!({"context_id":context,"term":term,"read_index":index,
+                "cancel_requested":token.is_cancel_requested(),
+                "remaining_us":deadline.saturating_duration_since(now).as_micros(),
+                "past_deadline_us":now.saturating_duration_since(deadline).as_micros(),
+                "memory_observation_not_authority":true})
+        })
+    }
+    pub(crate) fn writer_domain_metadata_audit(&self) -> Result<serde_json::Value> {
+        self.require_metadata_current()?;
+        self.metadata
+            .joint_writer_domain_audit(self.business, self.data())
     }
 }

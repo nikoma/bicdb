@@ -227,6 +227,9 @@ impl NativeJointServingDomain {
     pub(in crate::db::range_image_native) fn decision_sha256(&self) -> &str {
         self.record.decision.checksum_sha256()
     }
+    pub(in crate::db::range_image_native) fn plan_sha256(&self) -> Result<String> {
+        self.record.decision.plan_sha256()
+    }
     pub(in crate::db::range_image_native) fn native_bridge_sha256(&self) -> &str {
         &self.record.checksum_sha256
     }
@@ -663,7 +666,7 @@ impl BicDb {
         prepared: &NativeJointServingPreparation,
         store: &RangeWriteStore,
         catalogue: &NativeJointBridgeCatalogue,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<NativeJointServingBridgeReceipt> {
@@ -673,7 +676,13 @@ impl BicDb {
             prepared.local_node_id(),
             admission.test_phase_cancellation(),
         );
-        if admission.has_fresh_publication_phase() {
+        if admission.has_fresh_publication_phase()
+            || admission
+                .committed()
+                .native_receipt()
+                .native_metadata_initialization_version()
+                == 1
+        {
             let result = self.publish_scoped_native_joint_bridge(
                 admission, original, prepared, store, catalogue, image, frozen, parent,
             );
@@ -937,7 +946,7 @@ impl BicDb {
         prepared: &NativeJointServingPreparation,
         store: &RangeWriteStore,
         catalogue: &NativeJointBridgeCatalogue,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<NativeJointServingBridgeReceipt> {
@@ -960,6 +969,9 @@ impl BicDb {
         let scope =
             prepared.publication_read_scope(self, store, original, catalogue, image, frozen)?;
         admission.require_local_publication_scope(&scope, store)?;
+        admission
+            .committed()
+            .require_native_publication_metadata(self, store)?;
         if !self.config.fsync || !format::native_joint_data_handoff_active(self.data_path())? {
             return Err(invalid(
                 "scoped native joint publication requires actual fsync/reader fence",
@@ -993,6 +1005,9 @@ impl BicDb {
             )?;
             parent.check()?;
             admission.require_local_publication_scope(&scope, store)?;
+            admission
+                .committed()
+                .require_native_publication_metadata(self, store)?;
             #[cfg(test)]
             let mut wal_trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
                 "bridge-native-page-wal",
@@ -1000,6 +1015,9 @@ impl BicDb {
                 admission.test_phase_cancellation(),
             );
             self.in_paged_transaction(|paged, xid| {
+                admission
+                    .committed()
+                    .require_native_publication_metadata(self, store)?;
                 record.native_page_xid = xid;
                 record.checksum_sha256 = record.checksum()?;
                 record.validate()?;
@@ -1028,16 +1046,22 @@ impl BicDb {
         let receipt = scope.receipt_from_actual(record)?;
         scope.require_bridge_postcondition(&receipt, controlled.as_ref())?;
         admission.require_local_publication_scope(&scope, store)?;
+        admission
+            .committed()
+            .require_native_publication_metadata(self, store)?;
         drop(controlled);
         self.range_mutations
             .validate_quiescent_frozen(prepared.record.range_id, frozen)?;
-        drop(scope);
-        // Actual fsync may have succeeded while this phase expired/canceled.
-        // Such a return remains Unknown; the caller retains its pending marker.
+        // Actual fsync is historical on any later refusal. The SAME actual
+        // scope/journal/hook/A remains held through the local version gate.
         parent.check()?;
         admission.require_live()?;
+        admission
+            .committed()
+            .require_native_publication_metadata(self, store)?;
         #[cfg(test)]
         eprintln!("ACTUAL_JOINT_SCOPED_PUBLICATION node={} recovered_exact_original_audit={} new-pointer-archive-and-unchanged-physical-poststate=true",prepared.local_node_id(),recovered);
+        let _version = admission.committed().native_publication_guard()?;
         Ok(receipt)
     }
     #[allow(clippy::too_many_arguments)]
@@ -1047,7 +1071,7 @@ impl BicDb {
         prepared: &NativeJointServingPreparation,
         store: &RangeWriteStore,
         catalogue: &NativeJointBridgeCatalogue,
-        image: Option<&NativeImageCatalogueFinalization>,
+        image: Option<&dyn NativeJointImageMaterialization>,
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<Option<NativeJointServingBridgeReceipt>> {
@@ -1062,6 +1086,9 @@ impl BicDb {
             frozen,
         )?;
         admission.require_local_publication_scope(&scope, store)?;
+        admission
+            .committed()
+            .require_native_publication_metadata(self, store)?;
         let Some(record) = scope.actual_existing_bridge()? else {
             parent.check()?;
             admission.require_live()?;
@@ -1070,9 +1097,15 @@ impl BicDb {
         let receipt = scope.receipt_from_actual(record)?;
         scope.require_bridge_postcondition(&receipt, None)?;
         admission.require_local_publication_scope(&scope, store)?;
-        drop(scope);
+        admission
+            .committed()
+            .require_native_publication_metadata(self, store)?;
         parent.check()?;
         admission.require_live()?;
+        admission
+            .committed()
+            .require_native_publication_metadata(self, store)?;
+        let _version = admission.committed().native_publication_guard()?;
         Ok(Some(receipt))
     }
 }

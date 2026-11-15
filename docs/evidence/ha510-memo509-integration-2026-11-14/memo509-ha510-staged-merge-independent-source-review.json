@@ -1,0 +1,318 @@
+{
+  "actual_raw_getter_inventory": [
+    "crates/bicdb-core/src/db/invariant_relation_snapshot_tests.rs:172:    let raw = db.paged_records_handle().unwrap();",
+    "crates/bicdb-core/src/db/invariant_relation_snapshot_tests.rs:224:            send.send(database.paged_records_handle().is_some())",
+    "crates/bicdb-core/src/db/invariant_relation_snapshot_tests.rs:236:        db.paged_records_handle().is_some(),",
+    "crates/bicdb-core/src/db/invariant_relation_snapshot_tests.rs:267:    let raw = db.paged_records_handle().unwrap();",
+    "crates/bicdb-core/src/db/invariant_relation_snapshot_tests.rs:302:            .store(db.paged_records_handle().is_some(), AtomicOrdering::SeqCst);",
+    "crates/bicdb-core/src/db/pitr_maintenance.rs:2631:    pub fn paged_records_handle(&self) -> Option<Arc<crate::paged_collection::PagedRecords>> {",
+    "crates/bicdb-core/tests/archive_fail_closed.rs:444:    db.paged_records_handle()",
+    "crates/bicdb-core/tests/backup_online.rs:56:    let paged = db.paged_records_handle().expect(\"paged store\");",
+    "crates/bicdb-core/tests/backup_online.rs:211:    let paged = db.paged_records_handle().unwrap();",
+    "crates/bicdb-core/tests/backup_online.rs:260:    let restored_paged = restored.paged_records_handle().unwrap();",
+    "crates/bicdb-core/tests/backup_online_wal_rotation.rs:67:    let paged = db.paged_records_handle().expect(\"paged store\");",
+    "crates/bicdb-core/tests/backup_repository.rs:830:    let storage = db.paged_records_handle().unwrap();",
+    "crates/bicdb-core/tests/storage_ops_handle.rs:56:    let paged = db.paged_records_handle().expect(\"paged store\");"
+  ],
+  "checks": [
+    "No unresolved index paths",
+    "git diff --cached --check PASS",
+    "33 normalized package/lock comparisons PASS",
+    "Four HA private row/scope blobs equal ours"
+  ],
+  "classification": "Uncommitted merge INDEX source audit; no confirmed HA/memo conflict in examined boundaries. Not compiled/executed/merged/qualified by reviewer.",
+  "findings": [
+    "PagedRecords preserves actual opened_directory canonical root field/initializer/getter AND sticky raw_row_capability_issued false initializer/Release-Acquire methods. No drop reset/root identity removal.",
+    "No native HA callsite of public paged_records_handle in tracked workspace. Callers are memo and backup/storage integration tests; HA internal accesses do not become None-on-admission-busy.",
+    "Getter takes nonblocking actual DB admission.read before sticky publication/Arc escape. None-on-exclusive-busy is documented; cannot block recursively in Serializable hook. Callers assuming Some during contention must handle this API behavior.",
+    "Memo sharing requires Serializable + actual borrowed same-DB exclusive admission pointer + never-issued raw flag. commit_lock/bypass flag alone insufficient; borrowed guard retained through lexical pass, prior raw issuance permanently disables reuse for this open.",
+    "Registered/Joined private grants remain ReadCommitted/imported/bypass/memory-jobs-false and original lexical Weak/claim/Tx validation. Their held actual admission.read excludes memo exclusive; invalid Serializable grant rejects before exclusive. No cross-grant cache.",
+    "Only relation Record bodies with immutable same-Tx overlay cached in lexical validation pass; no tenant/policy/expression decision, source origin, native authority or quorum cache.",
+    "Private boxed grant constructors and durable/applied callbacks unchanged vs ours. Sole production validator passes actual _serializable_exclusive.as_ref. No bool or metadata DTO replaces a guard."
+  ],
+  "incoming": "c2000839e7d47e69e29b3a9b3a527d1dd911323d",
+  "not_run": [
+    "Cargo",
+    "build",
+    "tests",
+    "CI/jobs",
+    "push/merge by reviewer"
+  ],
+  "ours": "d473805a23cda661aefb10ca8a597ebb8c91a6a0",
+  "qualification_limit": "Source audit does not qualify combined runtime; final exact versioned head requires existing repository CI.",
+  "schema": "bicdb-memo-ha-staged-merge-independent-review-v1",
+  "staged_diff_sha256": "fcc8ddb01fdf0697525db2911de9d3e127a82b439330306c60fac66c03199613",
+  "staged_files": [
+    {
+      "equals_incoming": false,
+      "equals_ours": false,
+      "path": "crates/bicdb-core/src/db.rs",
+      "sha256": "ab3865caa2bc6a80ec5f9364f73d9339a2f7785885f7b01e7f7e902c5aef572c",
+      "staged_blob": "eb9bba6622f9cb0b172abf601c7d91f0d9f3a30a"
+    },
+    {
+      "equals_incoming": true,
+      "equals_ours": false,
+      "path": "crates/bicdb-core/src/db/invariant_relation_snapshot_tests.rs",
+      "sha256": "fe72fa4c75e2dad8fbc440c738c40592e13bd12bb1f5e98181f5451cc997aa12",
+      "staged_blob": "0ebf64fcc8a259e911886cfa97f662d3039becee"
+    },
+    {
+      "equals_incoming": true,
+      "equals_ours": false,
+      "path": "crates/bicdb-core/src/db/pitr_maintenance.rs",
+      "sha256": "8aa62c2c4ebdef0277e953e0ddbe5846eb24e15124bde035749fe2b960367e61",
+      "staged_blob": "40991d4506d4f7968d9999c274a43e5ea2923137"
+    },
+    {
+      "equals_incoming": false,
+      "equals_ours": false,
+      "path": "crates/bicdb-core/src/db/spatial_paged.rs",
+      "sha256": "065d4258ba052d3bbd5e9ab01f3fb9bf2f28f02b1bc5d8d30249cd3dc031559d",
+      "staged_blob": "6deffce19caf69f6093e529d56c18ce9003824be"
+    },
+    {
+      "equals_incoming": true,
+      "equals_ours": false,
+      "path": "crates/bicdb-core/src/distribution_metadata_read_provider.rs",
+      "sha256": "5bc05e6e91ce5c898a8dad4e9f36e2f12ad68a7b37bc0a4d397e46ae0adbf09a",
+      "staged_blob": "a5413f63eb565ee8feb43df6bd28250fccca379c"
+    },
+    {
+      "equals_incoming": false,
+      "equals_ours": false,
+      "path": "crates/bicdb-core/src/paged_collection.rs",
+      "sha256": "6ac97b26513e02c36c567c1c422781addf0294b1f89024e63225918c48e6fc38",
+      "staged_blob": "799e4dd92dc3ac949dcaffea06349d3b138eba79"
+    },
+    {
+      "equals_incoming": true,
+      "equals_ours": false,
+      "path": "crates/bicdb-core/src/query_budget.rs",
+      "sha256": "f69c567ff23c93fb594705f31f7010d344c9e9662734405e882d7df93e1b6fe1",
+      "staged_blob": "0928e15c40fd685ea0700f9ec4a22b1dea360236"
+    },
+    {
+      "equals_incoming": true,
+      "equals_ours": false,
+      "path": "docs/design/local-authority-deadline-diagnostics.md",
+      "sha256": "853a27731b9a373cbcd3f0ec0ad64d0b657495d82b32c0d4166e41be4cd4ff80",
+      "staged_blob": "60708a7fa0f487aab10457fbe9cc740e08b32ef8"
+    },
+    {
+      "equals_incoming": true,
+      "equals_ours": false,
+      "path": "docs/design/native-invariant-raw-snapshot-memo-prototype.md",
+      "sha256": "940b99fab8e51b5bc4f79de6ba8614e6bfab57241954439bed26b72274d5e9ae",
+      "staged_blob": "9b76f8160517f09dec4eb605a65525c8feb7f6d6"
+    },
+    {
+      "equals_incoming": true,
+      "equals_ours": false,
+      "path": "docs/releases/1.0.509-beta.md",
+      "sha256": "efadd9bbd5b1b1a453b36d72fbb65430934cb69cef39c41452537bb71ecfbc39",
+      "staged_blob": "46027758ecf322cef4f582dee22c88b4969a9a63"
+    },
+    {
+      "equals_incoming": false,
+      "equals_ours": false,
+      "path": "docs/releases/1.0.510-beta.md",
+      "sha256": "ea22134728244b931cdfa13de729b81f501b990e279942060b8d872133e5f7c8",
+      "staged_blob": "729ebfefa933d624de471084a63f1361d9c6ba99"
+    }
+  ],
+  "unchanged_ha_scope_sources": [
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/registered_remote_image/rows.rs",
+      "sha256": "65867054e78a46ebc3c3e30ff371d8feb95e5223bf9d442ac4ca5700a3a7a193",
+      "staged_equals_ours": true
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/joined_remote_image/rows.rs",
+      "sha256": "66c9bbb83a0efd2c20231c986aee8dab9f8021062abb129697aa84c6abe9ba50",
+      "staged_equals_ours": true
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/registered_remote_mutation.rs",
+      "sha256": "dc215c39ef1404a734519a3c84e54241e9d35d4a4f571af9364d149972a95963",
+      "staged_equals_ours": true
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/joined_remote_attempt.rs",
+      "sha256": "9260d249a514fb5192cd6587f306b4b903be28756a681ce68090f778d89c6903",
+      "staged_equals_ours": true
+    }
+  ],
+  "version_scope": {
+    "all_exact_normalized": true,
+    "checked_package_lock_paths": 33,
+    "limit": "Owner separately proved34 conflict resolutions; reviewer independently checked33 package/lock paths, not an invented34th proof.",
+    "paths": [
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "Cargo.lock"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-analytics/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-app-host/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-app-runtime/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-bench/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-blob-s3/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-cell-admission/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-cell-device/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-cell-grant/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-cell-ha/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-cell/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-cli/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-core/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-extension/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-fleet/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-lua/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-page/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-pgwire/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-provider-email/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-provider-embeddings/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-provider-grpc/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-provider-llm/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-provider-redis/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-provider-tokenizer/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-resp/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-script/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-sql/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-sync/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-wasm/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "crates/bicdb-workflow/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "examples/extensions/hello-extension/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "examples/extensions/website-host/Cargo.toml"
+      },
+      {
+        "index_equals_ours": true,
+        "normalized_incoming_equals_ours": true,
+        "path": "examples/extensions/website-renderer/Cargo.toml"
+      }
+    ]
+  }
+}

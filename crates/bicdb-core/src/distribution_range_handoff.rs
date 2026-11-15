@@ -11,6 +11,8 @@ use crate::distribution::{ClusterId, ClusterNodeId, RangeDescriptor, RangeId, Re
 use crate::error::{BicDbError, Result};
 
 mod joint;
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::NativeJointReadOnlyPlanIdentity;
 pub(crate) use joint::{
     CommittedNativeJointDecisionObservation, NativeJointActivationAdmission,
     NativeJointDecisionData, NativeJointDecisionPublicationAdmission,
@@ -19,16 +21,37 @@ pub(crate) use joint::{
     NativeJointNewObservation, NativeJointNewRound, NativeJointOldClosedQuorum,
     NativeJointOldImageProof, NativeJointOldObservation, NativeJointOldRound,
     NativeJointOpenAdmission, NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound,
-    NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound,
-    NativeJointPreparedDecision, NativeJointPreparedServingObservation,
+    NativeJointPreparationCustody, NativeJointPreparationPhaseQuorum,
+    NativeJointPreparationPhaseRound, NativeJointPreparedDecision,
+    NativeJointPreparedServingCandidate, NativeJointPreparedServingObservation,
     NativeJointPreparedServingQuorum, NativeJointPreparedServingRound,
     NativeJointPreparedServingVoteData, NativeJointPublishedServingQuorum,
     NativeJointReleaseAdmission, NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum,
-    NativeJointReleasePhaseRound, NativeJointServingPublicationRound,
+    NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
+    NativeJointServingPublicationRound,
 };
 #[cfg(test)]
 pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::{
+    NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,
+    NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1, NativeRemoteNewFactSetV1,
+    NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum, NativeRemoteNewOperationV1,
+    NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit, NativeRemoteNewReplyV1,
+    NativeRemoteNewRequestV1, NativeRemoteNewRound, NativeRemoteNewSnapshotV1,
+    NativeRemoteNewTargetPinIssuance,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::{
+    NativeRemoteOldCutCertificate, NativeRemoteOldImageProof, NativeRemoteOldRound,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::{
+    NativeRemoteOldOperationV1, NativeRemoteOldReplyV1, NativeRemoteOldRequestV1,
+};
 
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::NativeRegisteredDecisionCatalogueRetry;
 pub(crate) const HANDOFF_RANGE_LOG_FORMAT: u32 = 4;
 pub(crate) const MAX_HANDOFF_PROMISES: usize = 65_536;
 
@@ -86,6 +109,8 @@ impl RangeHandoffPromise {
 pub(crate) struct CertifiedRangeImageCut {
     // Only the native OLD round can supply this live, non-serializable proof.
     native_old: Option<std::sync::Arc<NativeJointOldImageProof>>,
+    #[cfg(feature = "tls-replication")]
+    native_remote_old: Option<std::sync::Arc<NativeRemoteOldImageProof>>,
     promise: RangeHandoffPromise,
     cluster_id: ClusterId,
     range: RangeDescriptor,
@@ -106,6 +131,12 @@ pub(crate) struct CertifiedRangeImageCut {
 }
 
 impl CertifiedRangeImageCut {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn native_remote_old_image_proof(
+        &self,
+    ) -> Option<&std::sync::Arc<NativeRemoteOldImageProof>> {
+        self.native_remote_old.as_ref()
+    }
     pub(crate) fn native_old_image_proof(
         &self,
     ) -> Option<&std::sync::Arc<NativeJointOldImageProof>> {
@@ -562,6 +593,8 @@ impl HandoffCutRound {
             .collect();
         Ok(CertifiedRangeImageCut {
             native_old: None,
+            #[cfg(feature = "tls-replication")]
+            native_remote_old: None,
             promise: self.request,
             cluster_id: topology.cluster_id.clone(),
             range: self.range,

@@ -14,12 +14,14 @@ This additive update inspects candidate **1.0.520-beta /
 NOT IMPLEMENTED/NOT WIRED assessments below only for the specific components
 listed here. Main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
 The candidate's normal [Tests43767288668](https://github.com/nikoma/bicdb/actions/runs/43767288668)
-is still running at this checkpoint. Its complete all-target compilation and
+is still running at the **2026-11-15 22:54 UTC** evidence checkpoint. Its complete all-target compilation and
 no-default consumer checks passed; [Rails43767288693](https://github.com/nikoma/bicdb/actions/runs/43767288693)
 also passed its actual 20 runs/100 assertions, zero failures/errors/skips and
-24 completed reports/cable messages. Native/Core and the unchanged CLI
-availability control remain pending. No runtime or physical result is inferred
-from compilation or Rails.
+24 completed reports/cable messages. Nonserial Core passed 1,875/0/16 across
+138 main-suite summaries, plus one separately isolated child pass. SQL passed
+2,682/0/4 across 282 summaries. Serial Native and the remaining workspace,
+including the unchanged CLI availability control, remain pending. None of
+these component results establishes their outcome or physical qualification.
 
 | Boundary | Implemented source | Actual executed evidence and classification |
 | --- | --- | --- |
@@ -43,6 +45,18 @@ Independent complete-log/original-ZIP review receipt SHA256
 pins actual checkout `2f42e67a11c5d8f81d79e170edd0814d4a741d2d` to the
 candidate tree. The Rails artifact records its CI-built debug binary hash;
 no binary file, release or deployment is produced by this document.
+
+Core job `132975184546` full raw-log SHA256 is
+`0e5b45cd82677876404904215e50895c87116f1e60aef47d5483840020a6094e`;
+its 139 raw summaries include the extra child execution. Independent accounting
+receipt SHA256 `7ce6ca81ae5f70e194fb477b5bc531e00840ce810d993d93ebc2bdf1fb0516d1`
+separates that child from the 1,875 main-suite passes. Serial native namespaces
+are excluded from this Core job. SQL job `132975184578` full 348,522,627-byte
+raw-log SHA256 is `e710b5e959f0ba12763f7047d469a99b2d073f156220312b9932266eafa96610`;
+complete-stream receipt SHA256
+`efc3be20d387920fa3fc6a17565316500f684d833937d17046410c0d79c63e4d`
+retains 2,686 result rows, including two distinct integration tests sharing one
+bare function name. These counts are not physical HA or scaling measurements.
 
 The precise automatic/native distinction matters. The existing generic
 `TransportClusterRelocationDriver` and placement planner are real implementations;

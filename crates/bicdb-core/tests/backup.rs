@@ -232,7 +232,10 @@ fn encrypted_full_backup_verifies_and_restores_records() {
     assert!(report.full);
     assert!(report.files_included > 0);
     assert_eq!(report.source_format_version, CURRENT_FORMAT_VERSION);
-    assert_eq!(report.source_feature_flags, vec!["format_metadata_v2"]);
+    assert_eq!(
+        report.source_feature_flags,
+        vec!["format_metadata_v2", "physical_backup_gate_v1"]
+    );
     assert!(std::fs::read(&backup_path)
         .unwrap()
         .windows(b"Asha".len())
@@ -241,7 +244,10 @@ fn encrypted_full_backup_verifies_and_restores_records() {
     let verify = verify_backup(&backup_path, KEY).unwrap();
     assert_eq!(verify.backup_id, report.backup_id);
     assert_eq!(verify.source_format_version, CURRENT_FORMAT_VERSION);
-    assert_eq!(verify.source_feature_flags, vec!["format_metadata_v2"]);
+    assert_eq!(
+        verify.source_feature_flags,
+        vec!["format_metadata_v2", "physical_backup_gate_v1"]
+    );
     assert!(verify_backup(&backup_path, "wrong key").is_err());
 
     let restore = restore_backup(

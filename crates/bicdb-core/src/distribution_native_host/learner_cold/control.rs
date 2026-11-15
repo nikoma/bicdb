@@ -100,6 +100,16 @@ impl NativeColdLearnerMetadataHost {
 }
 
 impl NativeColdLearnerMetadataHost {
+    /// Host-thread half of the joint handoff host commands of this member.
+    pub(in crate::distribution_native_host) fn advance_joint_bridge_host_commands(
+        &mut self,
+        process: &CancellationToken,
+    ) -> Result<bool> {
+        match self.control.as_mut() {
+            Some(control) => control.advance_joint_bridge_host_commands(process),
+            None => Ok(false),
+        }
+    }
     pub(in crate::distribution_native_host) fn open_registered_replica_receiver(
         &mut self,
         observed: &HostMetadataReadObservation,

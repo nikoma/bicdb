@@ -38,6 +38,14 @@ pub(super) fn require_request(
 ) -> Result<()> {
     admission.require_live()?;
     match request {
+        // The Joined continuation of an original Registered receiver: that
+        // receiver itself authorises and serves its bridge observations and
+        // host commands. It has no INITIAL source hosting authority.
+        ClusterDataRequest::NativeJointHandoffStep { .. }
+            if admission.registered_bridge_receiver().is_some() =>
+        {
+            Ok(())
+        }
         ClusterDataRequest::NativeRemoteImageSourceFrame { .. }
         | ClusterDataRequest::NativeRemoteOld { .. }
         | ClusterDataRequest::NativeRemoteNew { .. }

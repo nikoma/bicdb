@@ -16,6 +16,8 @@ use super::super::super::remote_publication::{
 use super::*;
 use crate::distribution_range_handoff::NativeJointBridgePhaseKindV1;
 use crate::distribution_transport::TcpClusterRelocationTransport;
+mod remote_policy;
+pub(super) use remote_policy::RemotePolicyBacking;
 
 /// The real freeze owner this member retained for its own release.
 pub(crate) enum NativeJointMemberReleaseOwner {
@@ -47,6 +49,9 @@ pub(crate) struct NativeJointReleasePhaseFacts {
     pub(crate) activation_sha256: String,
     /// The armed same-open generation; `None` while Frozen or unarmed.
     pub(crate) released_generation: Option<Uuid>,
+    /// WRITER AUDIT observation of a released member only: this member's own
+    /// metadata read audit of the observation behind these facts.
+    pub(crate) writer_audit: Option<serde_json::Value>,
 }
 
 impl NativeJointPreparationCustody {
@@ -452,6 +457,7 @@ impl NativeJointMemberRelease {
             activation_sha256,
             // Frozen, or dropped but not armed, is NOT released.
             released_generation: evidence.require_released_open().ok(),
+            writer_audit: None,
         })
     }
     /// The member-local half of one fresh RELEASE phase. Read-only: nothing
@@ -466,6 +472,26 @@ impl NativeJointMemberRelease {
         request.check()?;
         let evidence = self.observe(metadata, business, &request)?;
         let facts = self.facts_of(&evidence)?;
+        request.check()?;
+        Ok(facts)
+    }
+    /// The same read-only RELEASE observation, additionally carrying this
+    /// member's own metadata read audit of that very observation when the
+    /// member is released and armed: exactly the value the in-process writer
+    /// policy stores for this member. Historical DATA; grants nothing.
+    pub(crate) fn observe_fresh_writer_audit_phase(
+        &self,
+        metadata: crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        parent: &crate::CancellationToken,
+    ) -> Result<NativeJointReleasePhaseFacts> {
+        let request = self.bound(parent);
+        request.check()?;
+        let evidence = self.observe(metadata, business, &request)?;
+        let mut facts = self.facts_of(&evidence)?;
+        if facts.released_generation.is_some() {
+            facts.writer_audit = Some(evidence.committed().writer_domain_metadata_audit()?);
+        }
         request.check()?;
         Ok(facts)
     }

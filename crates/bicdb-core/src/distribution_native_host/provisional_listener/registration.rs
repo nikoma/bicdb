@@ -26,6 +26,8 @@ pub(crate) use joined_data::{
 };
 pub(crate) use joined_data::{NativeJoinedRemoteJointOwner, NativeJoinedRemoteMaterializedOwner};
 mod bridge_step;
+#[cfg(test)]
+pub(crate) use bridge_step::test_arm_writer_audit_substitute;
 mod registered_replica;
 mod writer_data_domain;
 use registered_replica::NativeRegisteredReplicaReceiver;

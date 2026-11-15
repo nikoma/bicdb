@@ -5,9 +5,9 @@ use super::*;
 use crate::distribution_consensus::MetadataReadParticipant;
 use crate::distribution_data::NativeJointServingLease;
 use crate::distribution_native_host::provisional_listener::registration::bridge_step::{
-    acquire_bridge_step_own, bridge_reply, observe_bridge_phase, open_member_bridge,
-    publish_member_bridge, release_member_bridge, retained_prepare_step, retire_member_old_custody,
-    BridgeStepOwn, NativeBridgeMemberSteps,
+    accept_member_host_command, acquire_bridge_step_own, bridge_reply, observe_bridge_phase,
+    open_member_bridge, publish_member_bridge, release_member_bridge, retained_prepare_step,
+    retire_member_old_custody, BridgeStepOwn, NativeBridgeHostCommand, NativeBridgeMemberSteps,
 };
 use crate::distribution_range_handoff::{
     NativeJointHandoffStepOperationV1 as StepOperation, NativeJointHandoffStepOutcomeV1,
@@ -56,9 +56,26 @@ impl NativeRegisteredReplicaAdmission {
                 "joint bridge step committed birth differs from this original receiver",
             ));
         }
+        let mut writer_audit = None;
         let (outcome, anchor) = match &request.operation {
-            StepOperation::BridgePhaseObserve { kind, .. } => {
-                observe_bridge_phase(&steps, peer, request, *kind, fresh, token)?
+            StepOperation::BridgePhaseObserve { kind, .. } => observe_bridge_phase(
+                &steps,
+                peer,
+                request,
+                *kind,
+                fresh,
+                &mut writer_audit,
+                token,
+            )?,
+            // Both transitions drain and rebind the listener serving this
+            // very request and replace this host's DATA owner: they belong
+            // to the host thread. The step records the command only.
+            StepOperation::BridgeWriterPolicy { .. } | StepOperation::TargetServe { .. } => {
+                let commands = self
+                    .host_commands
+                    .upgrade()
+                    .ok_or_else(|| invalid("joint bridge step original host command slot ended"))?;
+                accept_member_host_command(&steps, &commands, request, fresh, token)?
             }
             StepOperation::BridgePrepare { .. } => {
                 self.prepare_registered_bridge(&backend, &steps, request, fresh, token)?
@@ -118,8 +135,32 @@ impl NativeRegisteredReplicaAdmission {
             birth,
             outcome,
             anchor,
+            writer_audit,
             token,
         )
+    }
+
+    /// The same receiver after its host became a DATA owner and rebound its
+    /// socket. Only what cannot change this member's install or bridge state
+    /// is served there: read-only phase observations and the two host
+    /// commands (whose retained outcome the coordinator reads back).
+    pub(crate) fn advance_joint_bridge_step_as_data_owner(
+        self: &Arc<Self>,
+        peer: &MetadataReadParticipant,
+        request: &NativeJointHandoffStepRequestV1,
+        parent: &CancellationToken,
+    ) -> Result<NativeJointHandoffStepReplyV1> {
+        if !matches!(
+            &request.operation,
+            StepOperation::BridgePhaseObserve { .. }
+                | StepOperation::BridgeWriterPolicy { .. }
+                | StepOperation::TargetServe { .. }
+        ) {
+            return Err(invalid(
+                "joint handoff step refused: this original receiver is a DATA owner and serves only bridge observations and its host commands",
+            ));
+        }
+        self.advance_joint_handoff_step(peer, request, parent)
     }
 
     /// The same target-local preparation the owning driver runs in-process:
@@ -213,8 +254,116 @@ impl NativeRegisteredReplicaAdmission {
     }
 }
 
+impl NativeMetadataControlHost {
+    /// The host thread's half of the two host commands of the added member.
+    /// Called from the owning process loop at a point where no request of
+    /// this thread is in flight. Performs at most one pending command and
+    /// retains its outcome in the slot the step receiver reads; returns
+    /// whether a command ran. `process` is the process lifetime; each
+    /// command runs under its own bounded budget.
+    pub(in crate::distribution_native_host) fn advance_joint_bridge_host_commands(
+        &mut self,
+        process: &CancellationToken,
+    ) -> Result<bool> {
+        process.check()?;
+        let Some(commands) = self
+            .replica
+            .as_ref()
+            .map(|receiver| receiver.host_commands.clone())
+        else {
+            return Ok(false);
+        };
+        let Some(command) = commands.pending() else {
+            return Ok(false);
+        };
+        let token = process.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        let result = if command.serves() {
+            self.serve_registered_joint_target(&command, &token)
+                .map(Some)
+        } else {
+            self.install_registered_joint_writer_policy(&command, &token)
+                .map(|()| None)
+        }
+        .map_err(|error| error.to_string());
+        // Retained BEFORE anything else can fail.
+        commands.finish(&command, result.clone());
+        result.map(|_| true).map_err(|text| invalid(&text))
+    }
+
+    /// `BridgeWriterPolicy` on the added member: this member's own remote
+    /// all-released admission (own observations plus one validated WRITER
+    /// AUDIT frame of every other NEW member), the unchanged first DATA
+    /// policy installation, then a second window that must report every
+    /// other member unchanged. A repeated run reconciles the installed
+    /// policy under a fresh admission instead of installing another.
+    fn install_registered_joint_writer_policy(
+        &mut self,
+        command: &NativeBridgeHostCommand,
+        token: &CancellationToken,
+    ) -> Result<()> {
+        let range = command.request.range_id;
+        let release = self
+            .replica
+            .as_ref()
+            .ok_or_else(|| invalid("actual Registered receiver absent"))?
+            .bridge_steps
+            .released_member(range)?;
+        // The decision this member itself protected, never request DATA.
+        command.request.require_decision(release.data())?;
+        let transport = self.backend.transport.clone();
+        let leader = self
+            .backend
+            .lock_metadata(token)?
+            .status()
+            .leader_id
+            .ok_or_else(|| invalid("joint writer policy metadata leader unknown"))?;
+        let business = Uuid::now_v7();
+        let own = transport.acquire_host_metadata_observation(
+            &leader,
+            business,
+            Duration::from_secs(5),
+            token,
+        )?;
+        let (admission, observed) =
+            release.acquire_remote_writer_policy(&transport, &leader, &own, business, token)?;
+        self.install_registered_serving_data_policy(range, Arc::new(admission), token)?;
+        release.confirm_remote_release_second_window(&observed, &transport, &leader, token)?;
+        token.check()
+    }
+
+    /// `TargetServe` on the added member: the unchanged transfer of its
+    /// retained first policy to its ordinary DATA socket, then the unchanged
+    /// guarded ingress publication. Both continue an earlier partial run.
+    fn serve_registered_joint_target(
+        &mut self,
+        command: &NativeBridgeHostCommand,
+        token: &CancellationToken,
+    ) -> Result<u64> {
+        let release = self
+            .replica
+            .as_ref()
+            .ok_or_else(|| invalid("actual Registered receiver absent"))?
+            .bridge_steps
+            .released_member(command.request.range_id)?;
+        command.request.require_decision(release.data())?;
+        self.open_registered_joined_data(token)?;
+        let recovered = self.publish_joined_data(token)?;
+        token.check()?;
+        Ok(recovered as u64)
+    }
+}
+
 #[cfg(test)]
 impl NativeMetadataControlHost {
+    /// What the host command slot of this original receiver retains.
+    pub(crate) fn test_registered_bridge_host_commands(&self) -> Result<serde_json::Value> {
+        Ok(self
+            .replica
+            .as_ref()
+            .ok_or_else(|| invalid("actual Registered receiver absent"))?
+            .host_commands
+            .test_evidence())
+    }
     /// Historical identity of the preparation this original Registered
     /// receiver retained; grants nothing.
     pub(crate) fn test_registered_bridge_preparation(

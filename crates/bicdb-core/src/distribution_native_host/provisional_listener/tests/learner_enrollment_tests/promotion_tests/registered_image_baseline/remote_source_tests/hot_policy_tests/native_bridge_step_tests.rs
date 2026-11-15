@@ -100,6 +100,16 @@ fn source_retire_operation(data: &NativeJointDecisionData) -> StepOperation {
         decision_sha256: data.checksum_sha256().into(),
     }
 }
+fn writer_policy_operation(data: &NativeJointDecisionData) -> StepOperation {
+    StepOperation::BridgeWriterPolicy {
+        decision_sha256: data.checksum_sha256().into(),
+    }
+}
+fn target_serve_operation(data: &NativeJointDecisionData) -> StepOperation {
+    StepOperation::TargetServe {
+        decision_sha256: data.checksum_sha256().into(),
+    }
+}
 fn observe_operation(data: &NativeJointDecisionData, kind: PhaseKind) -> StepOperation {
     StepOperation::BridgePhaseObserve {
         decision_sha256: data.checksum_sha256().into(),
@@ -157,6 +167,12 @@ fn exchange(
             .request_native_joint_bridge_phase_observation(
                 member, data, *kind, &request, &own, &parent,
             ),
+        StepOperation::BridgeWriterPolicy { .. } => {
+            client.request_native_joint_bridge_writer_policy(member, data, &request, &own, &parent)
+        }
+        StepOperation::TargetServe { .. } => {
+            client.request_native_joint_target_serve(member, data, &request, &own, &parent)
+        }
         StepOperation::SourceRetire { .. }
         | StepOperation::TargetInstall { .. }
         | StepOperation::SourceExportRetire { .. } => {
@@ -363,9 +379,9 @@ fn retained(
 pub(super) fn exercise(
     case: SourceCase,
     decision: NativeJointDurableDecision,
-    controls: &[NativeMetadataControlHost],
+    controls: &mut [NativeMetadataControlHost],
     all_clients: &[Arc<TcpClusterRelocationTransport>],
-    target_control: &NativeMetadataControlHost,
+    target_control: &mut NativeMetadataControlHost,
     current: &ClusterTopology,
     selected: crate::RangeId,
     output: &std::path::Path,
@@ -374,6 +390,9 @@ pub(super) fn exercise(
     metadata: &[Arc<Mutex<crate::MetadataConsensusStore>>],
     template: &crate::DistributionConfig,
     services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
+    original_gateway: &crate::ClusterEventClient,
+    factory: &Arc<crate::distribution_native_host::NativeUnassignedLearnerFactory>,
+    acknowledged: &[serde_json::Value],
 ) {
     assert!(is_case(case));
     let data = decision.data().clone();
@@ -450,6 +469,11 @@ pub(super) fn exercise(
                 template,
                 services,
                 &outsider,
+                current,
+                original_gateway,
+                factory,
+                acknowledged,
+                output,
                 &mut ledger,
             );
         }
@@ -1200,8 +1224,8 @@ fn exercise_release(
     new: &[ClusterNodeId],
     clients: &BTreeMap<ClusterNodeId, Arc<TcpClusterRelocationTransport>>,
     all_clients: &[Arc<TcpClusterRelocationTransport>],
-    controls: &[NativeMetadataControlHost],
-    target_control: &NativeMetadataControlHost,
+    controls: &mut [NativeMetadataControlHost],
+    target_control: &mut NativeMetadataControlHost,
     bystander: &ClusterNodeId,
     donor: usize,
     selected: crate::RangeId,
@@ -1209,10 +1233,18 @@ fn exercise_release(
     template: &crate::DistributionConfig,
     services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
     outsider: &ClusterNodeId,
+    current: &ClusterTopology,
+    original_gateway: &crate::ClusterEventClient,
+    factory: &Arc<crate::distribution_native_host::NativeUnassignedLearnerFactory>,
+    acknowledged: &[serde_json::Value],
+    output: &std::path::Path,
     ledger: &mut Ledger<'_>,
 ) {
-    let evidence_of =
-        |member: &ClusterNodeId| publication(controls, target_control, member, selected);
+    macro_rules! evidence_of {
+        ($member:expr) => {
+            publication(&*controls, &*target_control, $member, selected)
+        };
+    }
     let foreign = |operation: StepOperation| {
         NativeJointHandoffStepRequestV1::from_decision(data, operation, Uuid::now_v7(), 5000)
             .unwrap()
@@ -1292,7 +1324,7 @@ fn exercise_release(
         assert_eq!(outcome.released, Some(false));
         assert!(outcome.released_generation.is_none());
         assert_eq!(
-            evidence_of(member).unwrap()["durable_activation_sha256"],
+            evidence_of!(member).unwrap()["durable_activation_sha256"],
             serde_json::json!(outcome.activation_sha256)
         );
         identities.insert(member.clone(), outcome.writer_identity_sha256.clone());
@@ -1307,7 +1339,7 @@ fn exercise_release(
         ledger,
     );
     assert!(error.contains("still retains OLD custody"), "{error}");
-    let after = evidence_of(bystander).unwrap();
+    let after = evidence_of!(bystander).unwrap();
     assert_eq!(after["preparation_custody_retained"], true);
     assert_eq!(after["release_pending"], false);
     assert_eq!(observe(bystander, ledger).released, Some(false));
@@ -1364,7 +1396,7 @@ fn exercise_release(
                 Some(&activations[member])
             );
         }
-        let after = evidence_of(member).unwrap();
+        let after = evidence_of!(member).unwrap();
         assert_eq!(after["old_custody_retired"], true);
         // Retirement ends OLD memory custody only.
         assert_eq!(after["preparation_custody_retained"], true);
@@ -1400,7 +1432,7 @@ fn exercise_release(
     assert!(!frame.outcome().complete);
     assert_eq!(frame.outcome().stage, StepStage::BridgeRelease);
     assert!(frame.outcome().released.is_none());
-    let unconfirmed = evidence_of(&target).unwrap();
+    let unconfirmed = evidence_of!(&target).unwrap();
     assert_eq!(unconfirmed["release_pending"], true);
     assert_eq!(unconfirmed["release_confirmed"], false);
     assert_eq!(unconfirmed["preparation_custody_retained"], false);
@@ -1419,7 +1451,7 @@ fn exercise_release(
             Some(&bridges[member])
         );
         let generation = outcome.released_generation.unwrap();
-        let after = evidence_of(member).unwrap();
+        let after = evidence_of!(member).unwrap();
         assert_eq!(after["release_pending"], false);
         assert_eq!(after["release_confirmed"], true);
         assert_eq!(after["released_generation"], serde_json::json!(generation));
@@ -1452,6 +1484,60 @@ fn exercise_release(
                     || error.contains("still has an actual Frozen or unarmed owner"),
                 "{error}"
             );
+            // The writer policy needs EVERY member released as well: the
+            // step-route form of the in-process early-policy refusal.
+            if *member == target {
+                // The target's step only records the command; its host
+                // thread runs it, fails closed and retains the failure.
+                let frame = exchange(
+                    &clients[&target],
+                    &target,
+                    data,
+                    writer_policy_operation(data),
+                    ledger,
+                )
+                .unwrap();
+                assert!(!frame.outcome().complete);
+                assert_eq!(frame.outcome().stage, StepStage::BridgeHostCommand);
+                assert!(frame.outcome().host_command_error.is_none());
+                let error = target_control
+                    .advance_joint_bridge_host_commands(&budget(5000))
+                    .err()
+                    .expect("an actual Frozen member cannot count as released")
+                    .to_string();
+                assert!(error.contains("Frozen or unarmed"), "{error}");
+                assert!(!factory.database.read().commit_admission_ready());
+                assert!(target_control
+                    .test_registered_first_policy_evidence()
+                    .is_err());
+            } else {
+                let error = raw(
+                    &clients[member],
+                    member,
+                    &foreign(writer_policy_operation(data)),
+                    "bridge_writer_policy_while_a_member_is_frozen",
+                    ledger,
+                );
+                assert!(error.contains("Frozen or unarmed"), "{error}");
+                let frozen = new
+                    .iter()
+                    .find(|n| !generations.contains_key(*n) && *n != member)
+                    .unwrap();
+                let error = raw(
+                    &clients[frozen],
+                    frozen,
+                    &foreign(writer_policy_operation(data)),
+                    "bridge_writer_policy_before_own_release",
+                    ledger,
+                );
+                assert!(error.contains("holds no confirmed release"), "{error}");
+                assert_eq!(
+                    controls[index(member)]
+                        .test_initial_bridge_writer_policy(selected)
+                        .unwrap()["policy_confirmed"],
+                    false
+                );
+            }
         }
         ledger.record(serde_json::json!({"operation":"member_released_own_freeze",
             "member":member,"released_generation":generation,
@@ -1467,6 +1553,348 @@ fn exercise_release(
             Some(&activations[member])
         );
     }
+    // 6a. Refusals before any writer policy exists.
+    let policy = |member: &ClusterNodeId, ledger: &mut Ledger<'_>| {
+        exchange(
+            &clients[member],
+            member,
+            data,
+            writer_policy_operation(data),
+            ledger,
+        )
+        .unwrap()
+    };
+    for (name, recipient, operation) in [
+        (
+            "bridge_writer_policy_from_non_initiator_new_member",
+            &other,
+            writer_policy_operation(data),
+        ),
+        (
+            "target_writer_policy_from_non_initiator_new_member",
+            &target,
+            writer_policy_operation(data),
+        ),
+        (
+            "target_serve_from_non_initiator_new_member",
+            &target,
+            target_serve_operation(data),
+        ),
+    ] {
+        let error = raw(
+            &all_clients[index(bystander)],
+            recipient,
+            &foreign(operation),
+            name,
+            ledger,
+        );
+        assert!(error.contains("not an admitted initiator"), "{error}");
+    }
+    let error = raw(
+        &clients[&target],
+        &target,
+        &foreign(target_serve_operation(data)),
+        "target_serve_before_writer_policy",
+        ledger,
+    );
+    assert!(
+        error.contains("holds no confirmed writer policy"),
+        "{error}"
+    );
+    let error = raw(
+        &clients[&other],
+        &other,
+        &foreign(target_serve_operation(data)),
+        "target_serve_sent_to_a_survivor",
+        ledger,
+    );
+    assert!(
+        error.contains("requires the original Registered target"),
+        "{error}"
+    );
+    // 6b. The WRITER AUDIT observation carries the member's own audit of the
+    // very observation behind its frame; a RELEASE observation carries none.
+    let audit_of = |member: &ClusterNodeId, ledger: &mut Ledger<'_>| {
+        let frame = exchange(
+            &clients[member],
+            member,
+            data,
+            observe_operation(data, PhaseKind::WriterAudit),
+            ledger,
+        )
+        .unwrap();
+        let audit = frame
+            .reply()
+            .writer_audit
+            .clone()
+            .expect("a released member carries its own audit");
+        assert_eq!(
+            audit["evidence"]["context_id"],
+            serde_json::json!(frame.metadata_anchor().2)
+        );
+        assert_eq!(
+            audit["request"]["requester_node_id"],
+            serde_json::json!(member)
+        );
+        assert_eq!(
+            frame.outcome().released_generation,
+            Some(generations[member])
+        );
+        audit
+    };
+    assert!(exchange(
+        &clients[bystander],
+        bystander,
+        data,
+        observe_operation(data, PhaseKind::Release),
+        ledger,
+    )
+    .unwrap()
+    .reply()
+    .writer_audit
+    .is_none());
+    // An audit of ANOTHER member than the authenticated peer, then the
+    // peer's own audit of ANOTHER observation than the frame's: the
+    // collecting member refuses both before any durable write.
+    let foreign_audit = audit_of(&other, ledger);
+    let stale_audit = audit_of(bystander, ledger);
+    for (name, substitute, expected) in [
+        (
+            "bridge_writer_policy_audit_of_another_member",
+            foreign_audit,
+            "all-released/post-MQ audit changed",
+        ),
+        (
+            "bridge_writer_policy_audit_anchor_differs_from_frame",
+            stale_audit,
+            "differs from the anchor of its frame",
+        ),
+    ] {
+        crate::distribution_native_host::provisional_listener::registration::test_arm_writer_audit_substitute(
+            bystander,
+            &activations[bystander],
+            substitute,
+        );
+        let error = raw(
+            &clients[&other],
+            &other,
+            &foreign(writer_policy_operation(data)),
+            name,
+            ledger,
+        );
+        assert!(error.contains(expected), "{error}");
+        let state = controls[index(&other)]
+            .test_initial_bridge_writer_policy(selected)
+            .unwrap();
+        assert_eq!(state["policy_confirmed"], false, "{state}");
+    }
+    // 6c. Every survivor publishes its own Serving policy. On the first one
+    // the durable policy exists and its second window then reports a changed
+    // member: fail closed, report nothing, the next call reconciles it.
+    test_arm_bridge_second_window_fault(
+        &other,
+        data.checksum_sha256(),
+        NativeBridgeSecondWindowFault::ChangedIdentity,
+    );
+    let frame = policy(&other, ledger);
+    assert!(!frame.outcome().complete);
+    assert_eq!(frame.outcome().stage, StepStage::BridgeWriterPolicy);
+    assert!(frame.outcome().writer_policy_installed.is_none());
+    let state = controls[index(&other)]
+        .test_initial_bridge_writer_policy(selected)
+        .unwrap();
+    assert_eq!(state["policy_pending"], true, "{state}");
+    assert_eq!(state["policy_confirmed"], false, "{state}");
+    let writer_policy = |member: &ClusterNodeId, ledger: &mut Ledger<'_>| {
+        for _ in 0..4 {
+            let frame = policy(member, ledger);
+            if frame.outcome().complete {
+                return frame;
+            }
+            assert_eq!(frame.outcome().stage, StepStage::BridgeWriterPolicy);
+        }
+        panic!("member {member} did not confirm its writer policy in four bounded steps");
+    };
+    for member in &survivors {
+        let started = Instant::now();
+        let outcome = writer_policy(member, ledger).outcome().clone();
+        assert_eq!(outcome.writer_policy_installed, Some(true));
+        assert!(outcome.target_recovered_ranges.is_none());
+        assert_eq!(outcome.released_generation, Some(generations[member]));
+        assert_eq!(
+            outcome.activation_sha256.as_ref(),
+            Some(&activations[member])
+        );
+        let state = controls[index(member)]
+            .test_initial_bridge_writer_policy(selected)
+            .unwrap();
+        assert_eq!(state["policy_pending"], false, "{state}");
+        assert_eq!(state["policy_confirmed"], true, "{state}");
+        // An identical retry returns the SAME outcome and writes nothing.
+        assert_eq!(writer_policy(member, ledger).outcome(), &outcome);
+        // No survivor's policy installs a writer on the target.
+        assert!(!factory.database.read().commit_admission_ready());
+        ledger.record(
+            serde_json::json!({"operation":"survivor_published_own_writer_policy",
+            "member":member,"elapsed_ms":started.elapsed().as_millis() as u64,
+            "identical_retry":true}),
+        );
+    }
+    // 6d. The target. Its step records the command for its host thread and
+    // reports what the early attempt retained; the command is armed again.
+    let frame = policy(&target, ledger);
+    assert!(!frame.outcome().complete);
+    assert_eq!(frame.outcome().stage, StepStage::BridgeHostCommand);
+    assert!(
+        frame
+            .outcome()
+            .host_command_error
+            .as_deref()
+            .is_some_and(|text| text.contains("Frozen or unarmed")),
+        "{:?}",
+        frame.outcome()
+    );
+    // While a receiver-driven install step holds the shared custody the host
+    // cannot become the DATA owner: retained, reported, retryable.
+    let in_flight = target_control
+        .test_hold_registered_install_step_in_flight()
+        .unwrap();
+    let error = target_control
+        .advance_joint_bridge_host_commands(&budget(5000))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("install step in flight; retry the DATA owner transition"),
+        "{error}"
+    );
+    drop(in_flight);
+    assert!(!factory.database.read().commit_admission_ready());
+    let frame = policy(&target, ledger);
+    assert_eq!(frame.outcome().stage, StepStage::BridgeHostCommand);
+    assert!(
+        frame
+            .outcome()
+            .host_command_error
+            .as_deref()
+            .is_some_and(|text| text.contains("install step in flight")),
+        "{:?}",
+        frame.outcome()
+    );
+    // The call the owning process loop makes.
+    let started = Instant::now();
+    assert!(target_control
+        .advance_joint_bridge_host_commands(&budget(5000))
+        .unwrap());
+    assert!(factory.database.read().commit_admission_ready());
+    assert_eq!(
+        target_control
+            .test_registered_first_policy_evidence()
+            .unwrap()["stage"],
+        "Installed"
+    );
+    assert!(!target_control
+        .advance_joint_bridge_host_commands(&budget(5000))
+        .unwrap());
+    // The coordinator reads the retained outcome on the rebound socket.
+    let target_policy = policy(&target, ledger).outcome().clone();
+    assert!(target_policy.complete);
+    assert_eq!(target_policy.writer_policy_installed, Some(true));
+    assert!(target_policy.target_recovered_ranges.is_none());
+    assert_eq!(
+        target_policy.released_generation,
+        Some(generations[&target])
+    );
+    assert_eq!(policy(&target, ledger).outcome(), &target_policy);
+    ledger.record(
+        serde_json::json!({"operation":"target_host_thread_installed_first_writer_policy",
+        "elapsed_ms":started.elapsed().as_millis() as u64,
+        "host_commands":target_control.test_registered_bridge_host_commands().unwrap(),
+        "outcome_read_on_rebound_assigned_closed_socket":true}),
+    );
+    // 6e. Target serve, and what the in-process driver asserts at its end.
+    let serve = |ledger: &mut Ledger<'_>| {
+        exchange(
+            &clients[&target],
+            &target,
+            data,
+            target_serve_operation(data),
+            ledger,
+        )
+        .unwrap()
+        .outcome()
+        .clone()
+    };
+    let mut served = None;
+    super::data_tests::exercise_with_serve(
+        "NativeBridgeStepRelease",
+        data.activation_range().leader != target,
+        target_control,
+        controls,
+        original_gateway,
+        services,
+        current,
+        data,
+        acknowledged,
+        output,
+        &mut |control| {
+            let pending = serve(ledger);
+            assert!(!pending.complete);
+            assert_eq!(pending.stage, StepStage::BridgeHostCommand);
+            assert!(pending.host_command_error.is_none());
+            // One host command at a time: while this one is pending even a
+            // replay of the completed writer policy is refused.
+            let error = raw(
+                &clients[&target],
+                &target,
+                &foreign(writer_policy_operation(data)),
+                "target_writer_policy_replay_while_serve_is_pending",
+                ledger,
+            );
+            assert!(
+                error.contains("another command of this member is pending"),
+                "{error}"
+            );
+            assert!(control
+                .advance_joint_bridge_host_commands(&budget(5000))
+                .unwrap());
+            // The socket is now the ordinary DATA listener on the same
+            // address; the same original receiver answers the repeated step.
+            let outcome = serve(ledger);
+            assert!(outcome.complete);
+            assert_eq!(outcome.writer_policy_installed, Some(true));
+            assert!(outcome.target_recovered_ranges.is_some());
+            assert_eq!(serve(ledger), outcome);
+            assert_eq!(policy(&target, ledger).outcome(), &target_policy);
+            assert!(!control
+                .advance_joint_bridge_host_commands(&budget(5000))
+                .unwrap());
+            served = Some(outcome);
+        },
+    );
+    let served = served.unwrap();
+    eprintln!(
+        "NATIVE_BRIDGE_TARGET_SERVED activation_leader={} target_recovered_ranges={:?}",
+        data.activation_range().leader,
+        served.target_recovered_ranges
+    );
+    assert!(factory.database.read().commit_admission_ready());
+    let selected_record = acknowledged[0]["record_id"].as_str().unwrap();
+    let actual_selected = factory
+        .database
+        .read()
+        .get(crate::CLUSTER_EVENTS_COLLECTION, selected_record)
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(actual_selected.as_ref().unwrap()).unwrap(),
+        acknowledged[0]["actual_full_record"]
+    );
+    ledger.record(
+        serde_json::json!({"operation":"target_serves_after_step_driven_move",
+        "target_recovered_ranges":served.target_recovered_ranges,
+        "activation_leader":data.activation_range().leader,
+        "host_commands":target_control.test_registered_bridge_host_commands().unwrap(),
+        "original_client_acks_strong_read_and_new_append_acknowledged":true}),
+    );
     // 7. The coordinator (the metadata leader; in this fixture it holds no
     // replica of the moved range, so it is outside the new set) observes
     // the all-released quorum over its own transport. Its digest is the

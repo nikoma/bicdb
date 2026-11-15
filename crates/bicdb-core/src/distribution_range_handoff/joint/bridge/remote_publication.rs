@@ -80,15 +80,19 @@ fn require_phase_frame(
             != (outcome.bridge_receipt_sha256.is_some() && outcome.bridge_anchor.is_some())
         || (kind == NativeJointBridgePhaseKindV1::Preparation
             && (outcome.bridge_receipt_sha256.is_some() || outcome.bridge_anchor.is_some()))
-        || (kind == NativeJointBridgePhaseKindV1::Release)
+        || kind.reports_release()
             != (outcome.activation_sha256.is_some() && outcome.released.is_some())
-        || (kind != NativeJointBridgePhaseKindV1::Release
+        || (!kind.reports_release()
             && (outcome.activation_sha256.is_some()
                 || outcome.released.is_some()
                 || outcome.released_generation.is_some()))
         || outcome.released_generation.is_some() != (outcome.released == Some(true))
         || !outcome.complete
         || outcome.decision_sha256.as_deref() != Some(data.checksum_sha256())
+        // Only a released member's WRITER AUDIT frame carries an audit.
+        || reply.writer_audit.is_some()
+            != (kind == NativeJointBridgePhaseKindV1::WriterAudit
+                && outcome.released == Some(true))
     {
         return Err(invalid(
             "remote preparation frame differs from authenticated NEW member/decision/phase",

@@ -1785,6 +1785,19 @@ fn handle_cluster_data_connection(
             })?;
             let parent =
                 CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            // An original Registered receiver whose host became a DATA owner
+            // and rebound this socket keeps serving its own bridge
+            // observations and host commands, and nothing else.
+            let continued = match (initial_data, assigned_closed) {
+                (Some(joined), _) => joined.registered_bridge_receiver(),
+                (None, Some(assigned)) => assigned.registered_bridge_receiver(),
+                (None, None) => None,
+            };
+            if let Some(original) = continued {
+                let reply =
+                    original.advance_joint_bridge_step_as_data_owner(peer, &request, &parent)?;
+                return Ok(ClusterDataResponse::NativeJointHandoffStep(reply));
+            }
             if let Some(survivor) = initial_data {
                 // A surviving original member serves only the bridge steps of
                 // a committed decision; it refuses the install operation.

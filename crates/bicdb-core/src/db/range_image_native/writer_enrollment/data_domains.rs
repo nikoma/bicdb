@@ -490,6 +490,53 @@ struct ServingMemberAudit {
     released_generation: Uuid,
     local_node_id: crate::ClusterNodeId,
 }
+/// Everything the durable record requires of ONE member's entry on its own:
+/// a self-consistent quorum read by exactly that member at its decision
+/// incarnation, inside the decision's metadata domain, released and armed.
+fn require_serving_member_audit(
+    node: &crate::ClusterNodeId,
+    member: &ServingMemberAudit,
+    decision: &NativeJointDecisionData,
+) -> Result<()> {
+    let digest = |s: &str| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit());
+    member.metadata.validate(&member.metadata.request)?;
+    decision.require_metadata_domain(
+        &member.metadata.evidence.committed_topology,
+        member.metadata.evidence.restore_activation.as_ref(),
+    )?;
+    if &member.local_node_id != node
+        || &member.metadata.request.requester_node_id != node
+        || decision.new_members().get(node).is_none_or(|actual| {
+            member.metadata.request.requester_incarnation != actual.incarnation
+        })
+        || member.released_generation.is_nil()
+        || !digest(&member.native_bridge_sha256)
+        || !digest(&member.catalogue_activation_sha256)
+    {
+        return Err(invalid(
+            "writer Serving historical all-released/post-MQ audit changed",
+        ));
+    }
+    Ok(())
+}
+/// The same per-member validation, for one member's entry a member of
+/// another process supplied as DATA. `node` is the peer the caller's own
+/// exchange authenticated. Returns the metadata anchor the entry states, for
+/// the caller to compare with the anchor of the frame that carried it.
+/// Validation constructs no capability, quorum or role.
+pub(crate) fn require_remote_serving_member_audit(
+    node: &crate::ClusterNodeId,
+    entry: &serde_json::Value,
+    decision: &NativeJointDecisionData,
+) -> Result<(u64, u64, Uuid)> {
+    let member: ServingMemberAudit = serde_json::from_value(entry.clone())?;
+    require_serving_member_audit(node, &member, decision)?;
+    Ok((
+        member.metadata.evidence.term,
+        member.metadata.evidence.read_index,
+        member.metadata.evidence.context_id,
+    ))
+}
 fn require_serving_quorum_audit(
     record: &ServingDomainRecord,
     decision: &NativeJointDecisionData,
@@ -513,21 +560,9 @@ fn require_serving_quorum_audit(
             "writer Serving historical audit omits or changes actual NEW members",
         ));
     }
-    let digest = |s: &str| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit());
     for (node, member) in &audit.members {
-        member.metadata.validate(&member.metadata.request)?;
-        decision.require_metadata_domain(
-            &member.metadata.evidence.committed_topology,
-            member.metadata.evidence.restore_activation.as_ref(),
-        )?;
-        if &member.local_node_id != node
-            || &member.metadata.request.requester_node_id != node
-            || member.metadata.request.requester_incarnation
-                != decision.new_members()[node].incarnation
-            || member.released_generation.is_nil()
-            || !digest(&member.native_bridge_sha256)
-            || !digest(&member.catalogue_activation_sha256)
-            || post.evidence.term < member.metadata.evidence.term
+        require_serving_member_audit(node, member, decision)?;
+        if post.evidence.term < member.metadata.evidence.term
             || post.evidence.read_index < member.metadata.evidence.read_index
             || post.evidence.context_id == member.metadata.evidence.context_id
         {

@@ -320,6 +320,58 @@ impl TcpClusterRelocationTransport {
         self.request_native_joint_bridge_step(recipient, data, request, own, parent)
     }
 
+    /// Coordinator -> released NEW member. The member publishes its own
+    /// writer DATA policy for the final membership after collecting, itself,
+    /// one validated WRITER AUDIT observation of every other NEW member
+    /// before and a RELEASE observation of each after its durable write. A
+    /// surviving member completes inside the step; the added member records
+    /// the command for its host thread and reports `BridgeHostCommand` until
+    /// that thread retained the outcome, so the coordinator repeats the step.
+    pub(crate) fn request_native_joint_bridge_writer_policy(
+        &self,
+        recipient: &ClusterNodeId,
+        data: &dyn NativeJointBridgeDecision,
+        request: &NativeJointHandoffStepRequestV1,
+        own: &HostMetadataReadObservation,
+        parent: &CancellationToken,
+    ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
+        if !matches!(
+            &request.operation,
+            NativeJointHandoffStepOperationV1::BridgeWriterPolicy { .. }
+        ) {
+            return Err(transport_error(
+                "joint bridge writer policy exchange carries another operation",
+            ));
+        }
+        self.request_native_joint_bridge_step(recipient, data, request, own, parent)
+    }
+
+    /// Coordinator -> the added member holding its own confirmed writer
+    /// policy. Its host thread moves the retained first policy to its
+    /// ordinary DATA socket and publishes its guarded ingress; the step
+    /// reports `BridgeHostCommand` until that thread retained the outcome.
+    /// The member's socket is rebound meanwhile: a repeated step reaches the
+    /// same address and the same original receiver.
+    pub(crate) fn request_native_joint_target_serve(
+        &self,
+        recipient: &ClusterNodeId,
+        data: &dyn NativeJointBridgeDecision,
+        request: &NativeJointHandoffStepRequestV1,
+        own: &HostMetadataReadObservation,
+        parent: &CancellationToken,
+    ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
+        if !matches!(
+            &request.operation,
+            NativeJointHandoffStepOperationV1::TargetServe { .. }
+        ) || data.old_members().contains_key(recipient)
+        {
+            return Err(transport_error(
+                "joint target serve exchange carries another operation or addresses an original member",
+            ));
+        }
+        self.request_native_joint_bridge_step(recipient, data, request, own, parent)
+    }
+
     /// Coordinator -> the RETIRED source of the committed decision. The
     /// source records its own retirement on its own committed metadata read;
     /// the frame reports that durable record.

@@ -289,6 +289,10 @@ impl NativeJoinedDataHost {
                     self.parts.store.clone(),
                     &self.life,
                     Arc::clone(&self.published),
+                    match &self.registered {
+                        Some(_) => Arc::downgrade(&self.parts.admission),
+                        None => std::sync::Weak::new(),
+                    },
                 )));
             }
         }

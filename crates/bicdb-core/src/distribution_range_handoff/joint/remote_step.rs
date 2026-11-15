@@ -14,6 +14,12 @@ const MAX_STEP_REPLY_BYTES: usize = 64 * 1024;
 /// A reply that returns the recipient's original source manifest DATA is
 /// bounded like every other message that carries that manifest.
 const MAX_STEP_MANIFEST_REPLY_BYTES: usize = 2 * 1024 * 1024 + MAX_STEP_REPLY_BYTES;
+/// The member's own metadata read audit is bounded where it is produced.
+pub(crate) const MAX_STEP_WRITER_AUDIT_BYTES: usize = 256 * 1024;
+/// A reply that carries that audit is bounded like the audit plus a reply.
+const MAX_STEP_AUDIT_REPLY_BYTES: usize = MAX_STEP_WRITER_AUDIT_BYTES + MAX_STEP_REPLY_BYTES;
+/// A retained host command failure is reported as bounded text DATA.
+pub(crate) const MAX_STEP_HOST_COMMAND_ERROR_BYTES: usize = 1024;
 
 /// Operations are added by later phases (decision, bridge, serve). Each one
 /// is an instruction for the recipient's own bounded work, never authority.
@@ -72,6 +78,19 @@ pub(crate) enum NativeJointHandoffStepOperationV1 {
     /// committed metadata read, or confirms the record it already holds.
     /// No row is deleted and no fence is released.
     SourceRetire { decision_sha256: String },
+    /// A released member publishes its own first ordinary writer DATA policy
+    /// for the final membership. The member itself collects, before its own
+    /// durable write, one authenticated WRITER AUDIT observation from every
+    /// other NEW member (each released and armed, each carrying that
+    /// member's own metadata read audit as DATA) and re-observes every other
+    /// member afterwards. On the added member the transition belongs to its
+    /// host thread: the step records the command and reports it pending.
+    BridgeWriterPolicy { decision_sha256: String },
+    /// The added member, holding its own confirmed writer policy, moves its
+    /// retained first policy to its ordinary DATA socket and publishes its
+    /// guarded ingress. Performed by its host thread; the step records the
+    /// command and reports it pending until the host retained an outcome.
+    TargetServe { decision_sha256: String },
 }
 impl NativeJointHandoffStepOperationV1 {
     /// The donor and target attempt of an install-family operation, which
@@ -92,6 +111,8 @@ impl NativeJointHandoffStepOperationV1 {
             | Self::RetireOldCustody { .. }
             | Self::BridgeRelease { .. }
             | Self::SourceRetire { .. }
+            | Self::BridgeWriterPolicy { .. }
+            | Self::TargetServe { .. }
             | Self::BridgePhaseObserve { .. } => None,
         }
     }
@@ -106,6 +127,8 @@ impl NativeJointHandoffStepOperationV1 {
             | Self::RetireOldCustody { decision_sha256 }
             | Self::BridgeRelease { decision_sha256 }
             | Self::SourceRetire { decision_sha256 }
+            | Self::BridgeWriterPolicy { decision_sha256 }
+            | Self::TargetServe { decision_sha256 }
             | Self::BridgePhaseObserve {
                 decision_sha256, ..
             } => Some(decision_sha256),
@@ -122,8 +145,14 @@ impl NativeJointHandoffStepOperationV1 {
             | Self::BridgeOpen { .. }
             | Self::RetireOldCustody { .. }
             | Self::BridgeRelease { .. }
+            | Self::BridgeWriterPolicy { .. }
+            | Self::TargetServe { .. }
             | Self::SourceRetire { .. } => false,
         }
+    }
+    /// The added member's serving transition, as opposed to a writer policy.
+    pub(crate) fn target_serve(&self) -> bool {
+        matches!(self, Self::TargetServe { .. })
     }
 }
 
@@ -133,6 +162,16 @@ pub(crate) enum NativeJointBridgePhaseKindV1 {
     Preparation,
     Open,
     Release,
+    /// A RELEASE observation that additionally carries, as checksummed DATA
+    /// of the reply, the member's own metadata read audit of the observation
+    /// behind it, when the member is released and armed.
+    WriterAudit,
+}
+impl NativeJointBridgePhaseKindV1 {
+    /// Both kinds report the member's durable activation and release state.
+    pub(crate) fn reports_release(self) -> bool {
+        matches!(self, Self::Release | Self::WriterAudit)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -245,6 +284,8 @@ impl NativeJointHandoffStepRequestV1 {
             | NativeJointHandoffStepOperationV1::RetireOldCustody { decision_sha256 }
             | NativeJointHandoffStepOperationV1::BridgeRelease { decision_sha256 }
             | NativeJointHandoffStepOperationV1::SourceRetire { decision_sha256 }
+            | NativeJointHandoffStepOperationV1::BridgeWriterPolicy { decision_sha256 }
+            | NativeJointHandoffStepOperationV1::TargetServe { decision_sha256 }
             | NativeJointHandoffStepOperationV1::BridgePhaseObserve {
                 decision_sha256, ..
             } => {
@@ -306,6 +347,8 @@ impl NativeJointHandoffStepRequestV1 {
             | NativeJointHandoffStepOperationV1::RetireOldCustody { .. }
             | NativeJointHandoffStepOperationV1::BridgeRelease { .. }
             | NativeJointHandoffStepOperationV1::SourceRetire { .. }
+            | NativeJointHandoffStepOperationV1::BridgeWriterPolicy { .. }
+            | NativeJointHandoffStepOperationV1::TargetServe { .. }
             | NativeJointHandoffStepOperationV1::BridgePhaseObserve { .. } => {
                 // A Pending plan names no decision. Bridge operations are
                 // bound only by `require_decision` to a committed decision.
@@ -388,6 +431,12 @@ pub(crate) enum NativeJointHandoffStepStageV1 {
     /// The member's release is not confirmed; same resumption rule as
     /// `BridgePublication`. The freeze may already be dropped and armed.
     BridgeRelease,
+    /// The member's writer DATA policy is not confirmed; same resumption
+    /// rule as `BridgePublication`. The durable policy may already exist.
+    BridgeWriterPolicy,
+    /// The step was accepted and recorded for the member's host thread,
+    /// which has not retained a successful outcome for it yet.
+    BridgeHostCommand,
     Complete,
 }
 
@@ -494,6 +543,18 @@ pub(crate) struct NativeJointHandoffStepOutcomeV1 {
     /// outcome: the retired source prepared nothing for the new membership.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_retirement: Option<NativeJointSourceRetirementDataV1>,
+    /// Complete `BridgeWriterPolicy` and `TargetServe` only: the recipient's
+    /// own writer DATA policy for the final membership is installed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub writer_policy_installed: Option<bool>,
+    /// Complete `TargetServe` only: the ranges the recipient recovered as
+    /// their leader when it published its guarded ingress.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_recovered_ranges: Option<u64>,
+    /// Pending host command only: the text of the failure its previous
+    /// attempt on the host thread retained. The command is armed again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_command_error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub phase_kind: Option<NativeJointBridgePhaseKindV1>,
     /// What was left of the recipient's own fresh metadata observation when
@@ -533,6 +594,9 @@ impl NativeJointHandoffStepOutcomeV1 {
             released_generation: None,
             old_custody_retired: None,
             source_retirement: None,
+            writer_policy_installed: None,
+            target_recovered_ranges: None,
+            host_command_error: None,
             phase_kind: None,
             window_remaining_ms: None,
         }
@@ -578,6 +642,25 @@ impl NativeJointHandoffStepOutcomeV1 {
     ) -> Result<()> {
         self.require_shape()?;
         let later_none = self.released.is_none() && self.old_custody_retired.is_none();
+        let policy_family = matches!(
+            operation,
+            NativeJointHandoffStepOperationV1::BridgeWriterPolicy { .. }
+                | NativeJointHandoffStepOperationV1::TargetServe { .. }
+        );
+        if (self.writer_policy_installed.is_some()
+            || self.target_recovered_ranges.is_some()
+            || self.host_command_error.is_some()
+            || matches!(
+                self.stage,
+                NativeJointHandoffStepStageV1::BridgeWriterPolicy
+                    | NativeJointHandoffStepStageV1::BridgeHostCommand
+            ))
+            && !policy_family
+        {
+            return Err(invalid(
+                "joint handoff step outcome DATA answers another operation",
+            ));
+        }
         if self.source_retirement.is_some()
             != matches!(
                 operation,
@@ -640,6 +723,27 @@ impl NativeJointHandoffStepOutcomeV1 {
                             | NativeJointHandoffStepStageV1::Complete
                     )
             }
+            NativeJointHandoffStepOperationV1::BridgeWriterPolicy { decision_sha256 }
+            | NativeJointHandoffStepOperationV1::TargetServe { decision_sha256 } => {
+                let serve = operation.target_serve();
+                self.decision_sha256.as_ref() == Some(decision_sha256)
+                    && self.phase_kind.is_none()
+                    && self.bridge_anchor.is_none()
+                    && self.old_custody_retired.is_none()
+                    && self.bridge_receipt_sha256.is_some() == self.complete
+                    && self.activation_sha256.is_some() == self.complete
+                    && self.released == self.complete.then_some(true)
+                    && self.writer_policy_installed == self.complete.then_some(true)
+                    && self.target_recovered_ranges.is_some() == (self.complete && serve)
+                    && (self.host_command_error.is_none()
+                        || self.stage == NativeJointHandoffStepStageV1::BridgeHostCommand)
+                    && match self.stage {
+                        NativeJointHandoffStepStageV1::Complete
+                        | NativeJointHandoffStepStageV1::BridgeHostCommand => true,
+                        NativeJointHandoffStepStageV1::BridgeWriterPolicy => !serve,
+                        _ => false,
+                    }
+            }
             NativeJointHandoffStepOperationV1::BridgeOpen { decision_sha256 } => {
                 self.decision_sha256.as_ref() == Some(decision_sha256)
                     && later_none
@@ -673,8 +777,7 @@ impl NativeJointHandoffStepOutcomeV1 {
                 self.decision_sha256.as_ref() == Some(decision_sha256)
                     && self.phase_kind == Some(*kind)
                     && self.old_custody_retired.is_none()
-                    && self.activation_sha256.is_some()
-                        == (*kind == NativeJointBridgePhaseKindV1::Release)
+                    && self.activation_sha256.is_some() == kind.reports_release()
                     && self.released.is_some() == self.activation_sha256.is_some()
                     && self.bridge_receipt_sha256.is_some()
                         != (*kind == NativeJointBridgePhaseKindV1::Preparation)
@@ -707,8 +810,17 @@ impl NativeJointHandoffStepOutcomeV1 {
                         | NativeJointHandoffStepStageV1::BridgePublication
                         | NativeJointHandoffStepStageV1::BridgeActivation
                         | NativeJointHandoffStepStageV1::BridgeRelease
+                        | NativeJointHandoffStepStageV1::BridgeWriterPolicy
+                        | NativeJointHandoffStepStageV1::BridgeHostCommand
                         | NativeJointHandoffStepStageV1::Complete
                 )
+                || (self.writer_policy_installed.is_some()
+                    && (!complete || self.writer_policy_installed != Some(true)))
+                || (self.target_recovered_ranges.is_some()
+                    && self.writer_policy_installed.is_none())
+                || self.host_command_error.as_deref().is_some_and(|text| {
+                    complete || text.is_empty() || text.len() > MAX_STEP_HOST_COMMAND_ERROR_BYTES
+                })
                 || fields
                     .iter()
                     .any(|present| *present != (complete && self.source_retirement.is_none()))
@@ -774,6 +886,9 @@ impl NativeJointHandoffStepOutcomeV1 {
             || self.released_generation.is_some()
             || self.old_custody_retired.is_some()
             || self.source_retirement.is_some()
+            || self.writer_policy_installed.is_some()
+            || self.target_recovered_ranges.is_some()
+            || self.host_command_error.is_some()
             || self.phase_kind.is_some()
             || self.window_remaining_ms.is_some()
             || matches!(
@@ -783,6 +898,8 @@ impl NativeJointHandoffStepOutcomeV1 {
                     | NativeJointHandoffStepStageV1::BridgePublication
                     | NativeJointHandoffStepStageV1::BridgeActivation
                     | NativeJointHandoffStepStageV1::BridgeRelease
+                    | NativeJointHandoffStepStageV1::BridgeWriterPolicy
+                    | NativeJointHandoffStepStageV1::BridgeHostCommand
             )
         {
             return Err(invalid("joint handoff step outcome DATA is inconsistent"));
@@ -827,14 +944,23 @@ pub(crate) struct NativeJointHandoffStepReplyV1 {
     /// every member that later receives it compares it with its own facts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_manifest: Option<crate::distribution_range_image::NativeRemoteImageManifestV1>,
+    /// The recipient's own metadata read audit of the observation behind
+    /// this reply, returned by a WRITER AUDIT phase observation of a released
+    /// member only. Historical DATA covered by the checksum: the member that
+    /// receives it validates it completely and never treats it as authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub writer_audit: Option<serde_json::Value>,
     pub checksum_sha256: String,
 }
 impl NativeJointHandoffStepReplyV1 {
     pub(crate) fn checksum(&self) -> Result<String> {
         let mut value = self.clone();
         value.checksum_sha256.clear();
+        // Only a reply that carries the larger DATA gets the larger bound.
         let bound = if value.source_manifest.is_some() {
             MAX_STEP_MANIFEST_REPLY_BYTES
+        } else if value.writer_audit.is_some() {
+            MAX_STEP_AUDIT_REPLY_BYTES
         } else {
             MAX_STEP_REPLY_BYTES
         };
@@ -847,6 +973,27 @@ impl NativeJointHandoffStepReplyV1 {
     }
     pub(crate) fn require_request(&self, request: &NativeJointHandoffStepRequestV1) -> Result<()> {
         self.outcome.require_operation(&request.operation)?;
+        let audited = matches!(
+            &request.operation,
+            NativeJointHandoffStepOperationV1::BridgePhaseObserve {
+                kind: NativeJointBridgePhaseKindV1::WriterAudit,
+                ..
+            }
+        ) && self.outcome.released == Some(true);
+        if self.writer_audit.is_some() != audited
+            || self.writer_audit.as_ref().is_some_and(|audit| {
+                !audit.is_object()
+                    || crate::distribution_range_image::bounded_json(
+                        audit,
+                        MAX_STEP_WRITER_AUDIT_BYTES,
+                    )
+                    .is_err()
+            })
+        {
+            return Err(invalid(
+                "joint handoff step reply writer audit DATA differs from its operation",
+            ));
+        }
         match (request.operation.install_identity(), &self.source_manifest) {
             (_, None)
                 if !matches!(

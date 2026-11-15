@@ -265,6 +265,8 @@ impl NativeRegisteredReplicaAdmission {
             | StepOperation::BridgeOpen { .. }
             | StepOperation::RetireOldCustody { .. }
             | StepOperation::BridgeRelease { .. }
+            | StepOperation::BridgeWriterPolicy { .. }
+            | StepOperation::TargetServe { .. }
             | StepOperation::SourceRetire { .. } => {
                 // Bridge operations run after the membership is final and
                 // prove themselves against the committed decision, not a
@@ -414,6 +416,7 @@ impl NativeRegisteredReplicaAdmission {
             metadata_read_index: observed.1,
             metadata_context_id: observed.2,
             source_manifest: None,
+            writer_audit: None,
             checksum_sha256: String::new(),
         };
         reply.checksum_sha256 = reply.checksum()?;
@@ -513,6 +516,7 @@ impl NativeRegisteredReplicaAdmission {
             metadata_read_index: own.read_index(),
             metadata_context_id: own.context_id(),
             source_manifest: Some(manifest),
+            writer_audit: None,
             checksum_sha256: String::new(),
         };
         reply.checksum_sha256 = reply.checksum()?;
@@ -612,7 +616,9 @@ impl NativeRegisteredReplicaAdmission {
             | Stage::BridgePreparation
             | Stage::BridgePublication
             | Stage::BridgeActivation
-            | Stage::BridgeRelease => {
+            | Stage::BridgeRelease
+            | Stage::BridgeWriterPolicy
+            | Stage::BridgeHostCommand => {
                 return Err(invalid(
                     "joint handoff step target install has no bridge stage",
                 ))

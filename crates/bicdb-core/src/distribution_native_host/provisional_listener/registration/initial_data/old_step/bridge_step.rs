@@ -182,6 +182,20 @@ impl NativeInitialDataAdmission {
             request.require_decision(custody.data())?;
             return Ok((step.prepare_outcome(Stage::Complete)?, anchor));
         }
+        // First part: this member confirms the decision into its OWN
+        // catalogue, from its own committed metadata and its own protected
+        // native decision record. A member that took part in the decision
+        // in-process already holds exactly this confirmation and nothing is
+        // written; another confirmed decision refuses. The CLOSED writer
+        // transition below and the preparation both require it.
+        ClusterDataNodeService::confirm_committed_native_joint_decision(
+            &owners.service,
+            &fresh.own,
+            fresh.business,
+            request.relocation_id,
+            range,
+            token,
+        )?;
         let domains = self
             .writer_data_domains
             .upgrade()

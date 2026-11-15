@@ -173,6 +173,18 @@ impl NativeRegisteredReplicaAdmission {
                 "joint bridge step retained owner has another actual service",
             ));
         }
+        // First part: this member confirms the decision into its OWN
+        // catalogue, from its own committed metadata and its own protected
+        // native decision record, under its live retained Registered owner.
+        // An already confirmed decision writes nothing; another one refuses.
+        ClusterDataNodeService::confirm_committed_native_joint_decision(
+            &backend.service,
+            &fresh.own,
+            fresh.business,
+            request.relocation_id,
+            range,
+            token,
+        )?;
         // The real freeze the retained owner itself still holds; never one
         // rebuilt from a plan, a number or request DATA.
         let lease = NativeJointServingLease::Registered {

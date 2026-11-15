@@ -401,6 +401,39 @@ pub(super) fn exercise(
         certificate.checksum_sha256().unwrap()
     };
     assert_eq!(hosts.commits, 0);
+    // Before the certification is committed no member confirms anything:
+    // its own committed metadata records no handoff of this relocation.
+    {
+        let survivor = old
+            .iter()
+            .find(|id| Some(*id) != relocation.source.as_ref())
+            .unwrap();
+        let i = index_of(survivor);
+        let token = budget(5000);
+        let business = Uuid::now_v7();
+        let own = clients[i]
+            .acquire_host_metadata_observation(&node(0), business, Duration::from_secs(5), &token)
+            .unwrap();
+        let before = services[i].lock().test_catalogue_joint_decision(range.id);
+        let error = crate::ClusterDataNodeService::confirm_committed_native_joint_decision(
+            &services[i],
+            &own,
+            business,
+            relocation.id,
+            range.id,
+            &token,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            error.contains("joint decision confirmation has no committed handoff record"),
+            "{error}"
+        );
+        assert_eq!(
+            services[i].lock().test_catalogue_joint_decision(range.id),
+            before
+        );
+    }
     let activation = handoff
         .backend()
         .decision_certificate()
@@ -639,6 +672,86 @@ pub(super) fn exercise(
             "{member} holds bridge custody"
         );
     }
+    // A member confirms the committed decision into its own catalogue only
+    // from its own protected native decision record and its own committed
+    // metadata. The remote decision round wrote the former and no catalogue
+    // acknowledgement.
+    {
+        let survivor = new.iter().find(|id| **id != node(4)).unwrap();
+        let i = index_of(survivor);
+        let other = new.iter().find(|id| *id != survivor && **id != node(4));
+        let confirm = |reader: usize, named: Option<&str>| {
+            let token = budget(5000);
+            let business = Uuid::now_v7();
+            let own = clients[reader]
+                .acquire_host_metadata_observation(
+                    &node(0),
+                    business,
+                    Duration::from_secs(5),
+                    &token,
+                )
+                .unwrap();
+            match named {
+                Some(digest) => {
+                    crate::ClusterDataNodeService::test_confirm_native_joint_decision_named(
+                        &services[i],
+                        &own,
+                        business,
+                        relocation.id,
+                        range.id,
+                        digest,
+                        &token,
+                    )
+                }
+                None => crate::ClusterDataNodeService::confirm_committed_native_joint_decision(
+                    &services[i],
+                    &own,
+                    business,
+                    relocation.id,
+                    range.id,
+                    &token,
+                ),
+            }
+        };
+        let state = || services[i].lock().test_catalogue_joint_decision(range.id);
+        let before = state();
+        assert_eq!(
+            before.clone().and_then(|(decision, _)| decision),
+            None,
+            "the remote decision round acknowledged nothing in the catalogue"
+        );
+        // A committed digest that is not this member's native record.
+        let error = confirm(i, Some(&"a".repeat(64))).unwrap_err().to_string();
+        assert!(
+            error.contains("holds no protected native decision record")
+                && error.contains("differs from committed correlation"),
+            "{error}"
+        );
+        assert_eq!(state(), before);
+        // Another member's metadata read is not this member's own.
+        if let Some(other) = other {
+            let error = confirm(index_of(other), None).unwrap_err().to_string();
+            assert!(
+                error.contains("not this member's own")
+                    || error
+                        .contains("owned metadata member requires actual independently fresh OWN"),
+                "{error}"
+            );
+            assert_eq!(state(), before);
+        }
+        assert!(
+            confirm(i, None).unwrap(),
+            "the confirmation is written once"
+        );
+        let confirmed = state().unwrap();
+        assert_eq!(confirmed.0.as_deref(), Some(&*decision_sha256));
+        assert!(confirmed.1.is_some());
+        assert!(
+            !confirm(i, None).unwrap(),
+            "a confirmed decision is a no-op"
+        );
+        assert_eq!(state().unwrap(), confirmed);
+    }
     const RELEASE: &str = "remote joined handoff backend: bridge release is not implemented";
     // What the durable state of every new member shows after a drive, and
     // what the backend retained of the members' answers.
@@ -703,52 +816,17 @@ pub(super) fn exercise(
         serde_json::json!({"case":format!("{case:?}"),"ms":started.elapsed().as_millis(),
             "error":error})
     );
-    if !error.contains(RELEASE) {
-        // KNOWN GAP between the remote decision round and the bridge steps,
-        // outside this backend: a member that published the decision through
-        // the remote decision round holds the native decision record only;
-        // its range catalogue was never told the decision, and every
-        // member's own bridge preparation requires exactly that. The
-        // coordinator therefore reaches the first new member and is refused
-        // by that member's own check. Nothing durable is written, with or
-        // without coordinator memory. When the members confirm a remote
-        // decision in their catalogue, this branch is no longer taken and
-        // the assertions below it apply.
-        const BLOCKED: &str = "joint bridge catalogue/native decisions disagree";
-        let blocked = |hosts: &CommitHosts, error: &str| {
-            assert!(
-                error.contains("remote joined handoff backend")
-                    || error.contains("joined data handoff: bridge preparation of"),
-                "{error}"
-            );
-            assert!(
-                error.contains("bridge preparation of") && error.contains(BLOCKED),
-                "{error}"
-            );
-            for member in &new {
-                if let Some(evidence) = evidence_of(member) {
-                    assert!(evidence["durable_bridge"].is_null(), "{member}: {evidence}");
-                    assert!(evidence["durable_activation_sha256"].is_null());
-                    assert_eq!(evidence["bridge_confirmed"], false);
-                    assert_eq!(evidence["activation_confirmed"], false);
-                }
-            }
-            assert_eq!(hosts.commits, 3);
-            assert_eq!(hosts.committed_topology().unwrap(), committed);
-        };
-        blocked(&hosts, &error);
-        assert!(handoff.backend().bridge_publication().is_none());
-        assert!(handoff.backend().bridge_opened().is_empty());
-        let mut amnesic = coordinated(range.id, 0);
-        let error = amnesic
-            .drive_until(&mut hosts, None, &budget(300_000))
-            .unwrap_err()
-            .to_string();
-        blocked(&hosts, &error);
-        assert!(amnesic.backend().decision_certificate().is_none());
-        assert!(amnesic.backend().committed_decision().is_some());
-        assert!(amnesic.backend().bridge_publication().is_none());
-        return;
+    // Every new member confirmed the remotely published decision into its
+    // own catalogue as the first part of its own preparation, so the drive
+    // passes preparation, publication and Open on all of them.
+    assert!(error.contains(RELEASE), "{error}");
+    for member in &new {
+        let (decision, native) = services[index_of(member)]
+            .lock()
+            .test_catalogue_joint_decision(range.id)
+            .expect("confirmed catalogue decision");
+        assert_eq!(decision.as_deref(), Some(&*decision_sha256), "{member}");
+        assert!(native.is_some(), "{member}");
     }
     let first = activated(&handoff);
     assert_eq!(hosts.commits, 3);

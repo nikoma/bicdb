@@ -1062,10 +1062,11 @@ pub(super) fn retire_joint_source(
         anchor,
         ..
     } = fresh;
-    let retired = ClusterDataNodeService::retire_actual_native_joint_source(
+    let retired = ClusterDataNodeService::retire_confirmed_native_joint_source(
         service,
         &own,
         business,
+        request.relocation_id,
         request.range_id,
         token,
     )?;

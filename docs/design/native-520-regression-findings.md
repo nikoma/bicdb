@@ -4,6 +4,62 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
+### Source4f: compiled; native runtime failed, remaining workspace pending
+
+Candidate **1.0.520-beta / `4f33a8b016a999d43410ca8698270dc01fbeffd6`**,
+tree `4c87ba7caed1e5a9043eac854d7bdf15ac00b15d`, executed at actual PR
+checkout `2f42e67a11c5d8f81d79e170edd0814d4a741d2d` with the same tree.
+At **2026-11-15 23:30 UTC**, normal
+[Tests43767288668](https://github.com/nikoma/bicdb/actions/runs/43767288668)
+still has a useful remaining-workspace job running. The native job is terminal
+and failed; the candidate remains draft and unmerged. Main is still
+**1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+
+| Scope | Classification | Observed result and limit |
+| --- | --- | --- |
+| All-target and no-default consumer compilation | Passed | Both checks ran successfully. Compilation does not establish runtime HA |
+| Nonserial Core | Passed within scope | 1,875/0/16 across 138 main-suite summaries plus one separately isolated child pass. The serial native namespaces are excluded |
+| SQL | Passed within scope | 2,682/0/4 across 282 summaries. Two integration targets share a bare test name and both actually ran |
+| PGwire | Passed within scope | 511/0/2, including separate Oracle HR 50/0 and embedded HA 11/0; not a complete Oracle-profile qualification |
+| Rails | Passed within scope | 20 runs/100 assertions, no failures/errors/skips; 24 reports and cable messages. Standalone application acceptance, not distributed HA |
+| Serial native job `132975184551` | **Failed** | 387 passed / 84 failed / 1 ignored, 989 filtered, 2,971.93 seconds. All 472 listed cases accounted for; 67 FIRST failures and 17 learner/hot-policy failures |
+| Registry Known/Unknown correction | Passed within component scope | Both new actual-native-outcome controls passed, as did the original cancellation/old-Store control. This does not establish the original CLI availability gate |
+| Remaining workspace and original CLI availability | Inconclusive while running | No terminal result is inferred from earlier passes or native component controls |
+| Physical expansion, complete corpus, convergence, capacity and production admission | Not tested by this run | Original Azure qualification remains failed; no new VMs |
+
+Native full raw log: **206,768,590 bytes**, SHA256
+`b2c2ccb8bb005fbd8970824f90a962ccb02c56882571b5297aef05b485efd5c4`;
+gzip SHA256 `5e7c581c16af9f3e295202c5ec9bacd8ca163a275e639ce4ef7af641067f0db8`.
+Independent whole-log outcome inventory SHA256
+`3a1fef2bf4e14be7baeb159a083dc27df46209d4136fb5cbec5af2444ee77c07`
+and independently matched FIRST actual-cut projection SHA256
+`2cefb4dc4497e3ec367c9a8420a0b61d7f42b42333d48e0e6b64ddb3f8e31dea`
+retain exact case names, raw offsets, original errors and reached operations.
+Direct stderr and libtest output interleave: an adjacent test name alone is not
+used to attribute a diagnostic. Failed scenarios remain failed; intended fault
+phases not reached remain not tested. No timeout or assertion has been relaxed.
+
+The source-pinned issue reports below describe observed failures, not passing
+fixes. Corrective implementation and its future execution remain separate.
+
+| Issue and reproducible trigger | Evidence and source cause | Next smallest deterministic test |
+| --- | --- | --- |
+| Activation rejects a lawful allocated range before FIRST starts | 26 cases stop during post-allocation writer refresh with `activation decision differs from actual native serving/history`. [Serving publication](../../crates/bicdb-core/src/db/range_image_native/serving_configuration.rs) verifies the actual SAME-State allocation and records the effective three DATA voters; [activation construction](../../crates/bicdb-core/src/db/range_image_native/serving_configuration/activation_decision.rs) records the full metadata range, including its learner, then directly compares that four-entry descriptor to the native three-voter descriptor. This confirmed descriptor mismatch is not proof of data loss | Perform actual allocation, completion and activation with unchanged full metadata/learner scope and verified effective native voters; require both exact descriptors, fresh role and original authority. Negative shape/epoch/authority cases must refuse before new decision IO. Existing later handoff controls must then reach their actual cuts |
+| Finite metadata maintenance loses its bounded wait before status/publication | Three allocation controls fail setup with `native control status service busy`; two others fail publication with `control service busy before publication`. The [operator maintenance](../../crates/bicdb-core/src/distribution_native_host/operator.rs) calls status with the original uncancelable parent after an internally bounded controller operation. [Committed publication](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/control_backend.rs) uses an immediate service try-lock. These are observed early lock refusals, not demonstrated native sync Unknown outcomes | Hold the actual service guard, start one finite original operation, then separately release, cancel or expire it. Preserve the original end-to-end deadline and issued operation; do not reissue a committed metadata proposal or replace a positive availability assertion with refusal |
+| Concurrent initial DATA startup refuses singleton cleanup initialization | One allocation control fails its fixture prerequisite with `initial DATA cleanup worker is being initialized; retry`; the process-global worker is still initializing. No underlying worker startup failure is demonstrated | Contend actual initialization with concurrent ordinary host startup under their original finite parents; start exactly one worker, retain real startup errors and verify bounded cancellation/expiry without holding service/DB locks while waiting |
+| Learner/hot-policy acceptance does not finish | 17 failed cases include actual `QueryTimedOut`, an unreached native boundary and an unfired expected fault cut. Their source causes are still under investigation; a common explanation is not established | Isolate the first failed original operation and actual reached phase before changing code. Preserve all original 5-second policy, 2-second SDK and injected-fault assertions; execute the later fault only after its real prerequisite succeeds |
+
+The unchanged serial-job reproducer is recorded below, **not run locally**:
+
+```sh
+python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required-ci-pressure/native.jsonl" -- cargo test --config 'profile.dev.package."*".opt-level=2' --config profile.dev.opt-level=1 -p bicdb-core --lib --locked -- distribution_native_host:: range_image_native::rf3_fixture:: --test-threads=1
+```
+
+The workflow's existing chaos-helper build remains a prerequisite. No manual
+dispatch, rerun or cancellation was used. Complete final run/artifact inventory
+is not claimed while the remaining workspace job is live. Passing components
+and earlier revisions cannot qualify this failed assembled native candidate.
+
 ### Local corrective source after the complete d3 failure
 
 The corrective composition at `0bc9f88e3a5fb89951d2b4ea8937e4ab1baf8bab`

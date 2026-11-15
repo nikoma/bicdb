@@ -137,6 +137,10 @@ const HOST_COMMAND_POLL: Duration = Duration::from_millis(100);
 /// The target rebinds its listener while it runs a command, so a few
 /// requests in a row may find no listener.
 const HOST_COMMAND_FAILURES: usize = 20;
+/// How often one call repeats the activation observation while a member
+/// answers that its own data service is busy, and the pause between two.
+const ACTIVATION_BUSY_REPEATS: usize = 40;
+const ACTIVATION_BUSY_PAUSE: Duration = Duration::from_millis(100);
 /// The target's refusal of a host command while its release is durable but
 /// not confirmed by its second window. Such a target is not a DATA owner
 /// yet: its release step is still served and confirms it.
@@ -873,6 +877,44 @@ impl RemoteJoinedHandoffBackend {
             }
         }
     }
+    /// Every voter of the committed range answers the read-only probe and
+    /// none holds an unfinished native command of the range.
+    fn require_no_unfinished_command(
+        &self,
+        range: &RangeDescriptor,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        for replica in &range.replicas {
+            if replica.role != RangeReplicaRole::Voter {
+                continue;
+            }
+            let node = &replica.node_id;
+            match self.probe(node, range, &bounded(parent, REQUEST)) {
+                Ok(NativeRangeMoveProbeRoleV1::Voter {
+                    unfinished_command: false,
+                    ..
+                }) => {}
+                Ok(NativeRangeMoveProbeRoleV1::Voter { .. }) => {
+                    return Err(remote_error(format!(
+                        "refused before the target fence and the source cut: old voter {node} holds an unfinished write command of range {} (a write was in flight when the learner allocation committed, and the range's changed writer policy does not let it finish). Its source Close would be refused on every repetition. Nothing was sent, so the move can still be aborted: abort it (move-range --abort) to return the range to its original voters, let the write finish, then start the move again",
+                        range.id
+                    )))
+                }
+                Ok(NativeRangeMoveProbeRoleV1::RegisteredReplicaReceiver) => {
+                    return Err(remote_error(format!(
+                        "refused before the target fence and the source cut: old voter {node} answered as a registered replica receiver, not as a data owner"
+                    )))
+                }
+                Err(error) => {
+                    parent.check()?;
+                    return Err(remote_error(format!(
+                        "refused before the target fence and the source cut: old voter {node} did not answer the read-only probe: {error}"
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
     /// The authenticated Close frames of the last source round.
     pub(crate) fn closed_frames(
         &self,
@@ -1095,7 +1137,7 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         let unreadable =
             |error: String| remote_error(format!("old voter {node} epoch is unreadable: {error}"));
         match self.probe(node, range, &token).map_err(unreadable)? {
-            NativeRangeMoveProbeRoleV1::Voter { durable_epoch } => Ok(durable_epoch),
+            NativeRangeMoveProbeRoleV1::Voter { durable_epoch, .. } => Ok(durable_epoch),
             NativeRangeMoveProbeRoleV1::RegisteredReplicaReceiver => Err(unreadable(
                 "it answered as a registered replica receiver, not as a voter of the range".into(),
             )),
@@ -1203,9 +1245,9 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
             }
             let token = bounded(parent, REQUEST);
             match self.probe(&replica.node_id, range, &token) {
-                Ok(NativeRangeMoveProbeRoleV1::Voter { durable_epoch })
+                Ok(NativeRangeMoveProbeRoleV1::Voter { durable_epoch, .. })
                     if durable_epoch <= range.epoch => {}
-                Ok(NativeRangeMoveProbeRoleV1::Voter { durable_epoch }) => {
+                Ok(NativeRangeMoveProbeRoleV1::Voter { durable_epoch, .. }) => {
                     return Err(refused(
                         &replica.node_id,
                         "voter",
@@ -1446,6 +1488,17 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         ) {
             self.cut_started = resumed;
             return Err(error);
+        }
+        // Still before the target is fenced or any old member is closed: a
+        // voter that holds an unfinished write command refuses its Close on
+        // every repetition, and after a started source round the move could
+        // not be aborted either. Asked read-only; nothing was sent by this
+        // call, so it started no cut and the abort stays possible.
+        if !resumed {
+            if let Err(error) = self.require_no_unfinished_command(range, parent) {
+                self.cut_started = resumed;
+                return Err(error);
+            }
         }
         let donor = Self::select_donor(&plan)?;
         let target_attempt = Self::target_attempt(&plan)?;
@@ -1797,14 +1850,31 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
             remote_error("the activation record has no committed handoff record of this handoff")
         })?;
         let body = self.committed_decision_body(members, range, relocation, &digest, parent)?;
-        self.activation = Some(
-            NativeRemoteJointActivationCertificate::observe_as_outside_coordinator(
+        // This is the first observation made while the range serves client
+        // requests again. A member reads its own state without waiting for
+        // its data service and answers "busy" while a client request holds
+        // it; that refusal asks for a repetition. The whole window is
+        // observed again each time: nothing of a refused one is kept.
+        let mut busy = 0;
+        let certificate = loop {
+            match NativeRemoteJointActivationCertificate::observe_as_outside_coordinator(
                 &body,
                 &self.transport,
                 &members.metadata_leader,
                 parent,
-            )?,
-        );
+            ) {
+                Ok(certificate) => break certificate,
+                Err(BicDbError::Cluster(refusal))
+                    if busy < ACTIVATION_BUSY_REPEATS && refusal.contains("busy") =>
+                {
+                    parent.check()?;
+                    busy += 1;
+                    std::thread::sleep(ACTIVATION_BUSY_PAUSE);
+                }
+                Err(error) => return Err(error),
+            }
+        };
+        self.activation = Some(certificate);
         Ok(())
     }
 

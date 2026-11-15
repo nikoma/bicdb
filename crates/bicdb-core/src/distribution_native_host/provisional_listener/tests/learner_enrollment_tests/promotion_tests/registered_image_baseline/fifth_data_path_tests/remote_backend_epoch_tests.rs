@@ -115,6 +115,30 @@ fn native_remote_backend_old_epoch_preflight_and_abort_over_rpc() {
             assert_eq!(*in_process, original.epoch);
             assert_eq!(over_rpc, &Ok(*in_process), "old voter {i}: {after:?}");
         }
+        // The probe's own answers: a voter reports no unfinished command of
+        // the range (no write was in flight), the target answers as a live
+        // registered replica receiver.
+        use crate::distribution_transport::NativeRangeMoveProbeRoleV1 as Role;
+        for &i in &voters {
+            let reply = five.clients[leader]
+                .native_range_move_probe(&node(i), range.id, range.epoch, &budget(5000))
+                .unwrap();
+            assert_eq!(
+                reply.role,
+                Role::Voter {
+                    durable_epoch: original.epoch,
+                    unfinished_command: false
+                },
+                "old voter {i}"
+            );
+        }
+        assert_eq!(
+            five.clients[leader]
+                .native_range_move_probe(&node(4), range.id, range.epoch, &budget(5000))
+                .unwrap()
+                .role,
+            Role::RegisteredReplicaReceiver
+        );
         // Still only the range leader, and only the committed epoch.
         for (_, _, over_rpc) in read(five, other, &voters, &range) {
             assert!(over_rpc.unwrap_err().contains("is not the leader of range"));

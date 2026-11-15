@@ -10,7 +10,8 @@
 //!   configuration; no other member is answered;
 //! - a registered replica receiver whose admission is live answers that it is
 //!   one; an original data owner that is a voter of the range answers the
-//!   durable epoch of its own range log.
+//!   durable epoch of its own range log and whether it holds an unfinished
+//!   native command of the range.
 //!
 //! The probe creates and changes nothing, takes no fence, and its reply is
 //! historical DATA: it grants no role, quorum or permission to anyone. The
@@ -27,8 +28,13 @@ use crate::distribution::RangeReplicaRole;
 #[serde(rename_all = "snake_case")]
 pub(crate) enum NativeRangeMoveProbeRoleV1 {
     /// An original data owner that is a voter of the range, with the durable
-    /// epoch of its own range log.
-    Voter { durable_epoch: u64 },
+    /// epoch of its own range log and whether its database holds an
+    /// unfinished native command of the range (a write that was accepted and
+    /// neither finished nor resolved). A source Close refuses such a voter.
+    Voter {
+        durable_epoch: u64,
+        unfinished_command: bool,
+    },
     /// A registered replica receiver whose admission is live.
     RegisteredReplicaReceiver,
 }
@@ -82,11 +88,14 @@ pub(super) fn answer(
                 "range move probe: this member is a data owner but not a voter of range {range_id}, and it is not a registered replica receiver"
             )));
         }
-        let durable_epoch = service
+        let (durable_epoch, unfinished_command) = service
             .try_lock_for(Duration::from_millis(500))
             .ok_or_else(|| transport_error("range move probe: data service busy; repeat"))?
-            .range_durable_epoch_for_leader(&range, peer.node_id())?;
-        NativeRangeMoveProbeRoleV1::Voter { durable_epoch }
+            .range_move_voter_facts_for_leader(&range, peer.node_id())?;
+        NativeRangeMoveProbeRoleV1::Voter {
+            durable_epoch,
+            unfinished_command,
+        }
     } else {
         return Err(transport_error(
             "range move probe: this member is neither a data owner nor a registered replica receiver",

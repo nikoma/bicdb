@@ -77,6 +77,25 @@ impl NativeJointOldCloseRecordData {
         }
         Ok(())
     }
+    /// Pure comparison only; this cannot create an OLD owner or plan.
+    pub(crate) fn require_metadata_owner_catalogue_scope(
+        &self,
+        plan: &crate::distribution_range_handoff::NativeMetadataOwnerCatalogueScope,
+    ) -> Result<()> {
+        let r = self.record()?;
+        if r.scope_sha256 != plan.checksum_sha256()?
+            || !r.promise.same_request(plan.promise())
+            || !plan.old_members().contains_key(&r.local_node_id)
+            || plan.enrolled_birth(&r.local_node_id)?.node_incarnation() != r.local_incarnation
+            || plan.enrolled_birth(&r.local_node_id)?.birth_id() != r.birth_id
+            || plan.enrolled_birth(&r.local_node_id)?.birth_sha256() != r.birth_sha256
+        {
+            return Err(invalid(
+                "exact native OLD record changed original plan/birth/session",
+            ));
+        }
+        Ok(())
+    }
     #[cfg(feature = "tls-replication")]
     pub(crate) fn require_source_manifest(
         &self,

@@ -183,6 +183,32 @@ impl NativeSourceExportBindingV1 {
         }
         Ok(())
     }
+    /// Pure comparison only; this cannot create an OLD owner or plan.
+    pub(crate) fn require_metadata_owner_catalogue_scope(
+        &self,
+        plan: &crate::distribution_range_handoff::NativeMetadataOwnerCatalogueScope,
+    ) -> Result<()> {
+        self.require_shape()?;
+        let p = plan.promise();
+        if self.scope_sha256 != plan.checksum_sha256()?
+            || self.range_id != plan.old_range().id
+            || self.range_epoch != plan.old_range().epoch
+            || self.relocation_id != p.relocation_id
+            || self.plan_id != p.plan_id
+            || self.handoff_session != p.session_id
+            || self.nonce != p.nonce
+            || !plan.old_members().contains_key(&self.source_id)
+            || plan.old_members().contains_key(&self.target_id)
+            || !plan.new_members().contains_key(&self.target_id)
+            || plan.enrolled_birth(&self.source_id)? != &self.source_birth
+            || plan.enrolled_birth(&self.target_id)? != &self.target_birth
+        {
+            return Err(invalid(
+                "export retirement differs from actual retained OLD plan",
+            ));
+        }
+        Ok(())
+    }
 }
 fn request_shape(
     version: u32,

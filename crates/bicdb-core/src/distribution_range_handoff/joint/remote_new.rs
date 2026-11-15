@@ -7,6 +7,8 @@ use crate::distribution_range_image::{NativeRemoteImageManifestV1, NativeSourceE
 use crate::CancellationToken;
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
+mod catalogue_scope;
+pub(crate) use catalogue_scope::NativeMetadataOwnerCatalogueScope;
 mod catalogue;
 pub(crate) use catalogue::{
     NativeRemoteCatalogueDecisionV1, NativeRemoteCatalogueRound, NativeRemoteDualDurableDecision,

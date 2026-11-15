@@ -42,6 +42,7 @@ enum Case {
     CatalogueDuplicate,
     CatalogueWrongExpected,
     CatalogueStale,
+    CatalogueScope,
 }
 fn is_catalogue_case(case: Case) -> bool {
     matches!(
@@ -57,6 +58,7 @@ fn is_catalogue_case(case: Case) -> bool {
             | Case::CatalogueDuplicate
             | Case::CatalogueWrongExpected
             | Case::CatalogueStale
+            | Case::CatalogueScope
     )
 }
 #[derive(Clone, Copy, Debug)]
@@ -401,6 +403,11 @@ impl Five {
     }
 }
 
+#[test]
+fn native_first_actual_metadata_owner_catalogue_scope_keeps_range_authority_and_refuses_stale_owner(
+) {
+    run(Case::CatalogueScope);
+}
 #[test]
 fn native_first_remote_catalogue_actual_recipients_and_metadata_certified() {
     run(Case::Catalogue);
@@ -1325,6 +1332,7 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                     | Case::CatalogueDuplicate
                     | Case::CatalogueWrongExpected
                     | Case::CatalogueStale
+                    | Case::CatalogueScope
             ) {
                 // Same five retained normal hosts; real range leader directly
                 // observes OLD/survivor/Registered NEW, donor remains neither leader.
@@ -1768,6 +1776,29 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         report.event(serde_json::json!({"actual_collection_control":denied,"target_before":before,"target_after":after}));
                         assert_eq!(denied["count_refused"], true);
                         assert_eq!(denied["raw_frame_fabricated"], false);
+                        assert_eq!(before["native"], after["native"]);
+                        assert_eq!(before["catalogue"], after["catalogue"]);
+                    }
+                    if case == Case::CatalogueScope {
+                        let intent = five.sources[coordinator]
+                            .first_catalogue_certification_intent(selected.id)?;
+                        let actual_meta = (0..4).find(|i| node(*i) == metadata_leader).unwrap();
+                        let before = native_command(&owner_send, selected.id, None)?;
+                        let actual = report.data_call(
+                            "actual_distinct_metadata_owner_scope_controls",
+                            || {
+                                five.sources[actual_meta].test_metadata_owner_catalogue_scope(
+                                    &five.sources[coordinator],
+                                    &intent,
+                                    &five.lifetime,
+                                )
+                            },
+                        )?;
+                        let after = native_command(&owner_send, selected.id, None)?;
+                        report.event(serde_json::json!({"actual_metadata_scope_controls":actual,"target_before":before,"target_after":after}));
+                        assert_eq!(actual["all_actual_refusals_reached"], true);
+                        assert_eq!(actual["actual_distinct_purpose_hash_match"], true);
+                        assert_eq!(actual["metadata_scope_minted_native_grant"], false);
                         assert_eq!(before["native"], after["native"]);
                         assert_eq!(before["catalogue"], after["catalogue"]);
                     }

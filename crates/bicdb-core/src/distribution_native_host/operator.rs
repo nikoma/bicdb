@@ -164,6 +164,25 @@ impl NativeMetadataHost {
             .ok_or_else(|| invalid("actual FIRST control owner absent"))?
             .test_first_catalogue_collection_refusal(range, mode, parent)
     }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_metadata_owner_catalogue_scope(
+        &self,
+        range_leader: &Self,
+        intent: &super::provisional_listener::NativeFirstCatalogueCertificationIntent,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual metadata scope owner absent"))?
+            .test_metadata_owner_catalogue_scope(
+                range_leader
+                    .control
+                    .as_ref()
+                    .ok_or_else(|| invalid("actual range scope owner absent"))?,
+                intent,
+                parent,
+            )
+    }
     pub fn start_fresh_metadata_only(
         root: &Path,
         plan: NativeMetadataBootstrapPlan,

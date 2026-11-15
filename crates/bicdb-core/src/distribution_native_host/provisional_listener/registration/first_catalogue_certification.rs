@@ -2,7 +2,7 @@
 //! Immutable coordinator input is intent DATA, never a forwarded quorum.
 use super::*;
 use crate::distribution_range_handoff::{
-    NativeJointOldRound, NativeRemoteCatalogueRound, NativeRemoteNewFactSetV1,
+    NativeMetadataOwnerCatalogueScope, NativeRemoteCatalogueRound, NativeRemoteNewFactSetV1,
     NativeRemoteNewOperationV1, NativeRemoteNewRequestV1,
 };
 use crate::distribution_range_image::NativeRemoteImageManifestV1;
@@ -120,20 +120,32 @@ impl NativeMetadataControlHost {
             );
         }
         if original.candidate.is_none() {
-            let read_business = Uuid::now_v7();
-            let range = backend.transport.acquire_metadata_read_observation(
-                &backend.node_id,
-                read_business,
-                intent.manifest.capture_range.id,
-                intent.manifest.capture_range.epoch,
-                remaining_finite(&token)?,
+            let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+                &backend.service,
+                &initial,
+                business,
                 &token,
-            )?;
-            let plan =
-                NativeJointOldRound::begin(range, read_business, intent.manifest.relocation_id)?
-                    .plan();
-            let mut round = NativeRemoteCatalogueRound::begin(
-                plan,
+            )?
+            .ok_or_else(|| invalid("FIRST catalogue scope needs actual protected MStore point"))?;
+            let open = backend
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("FIRST catalogue scope actual service busy"))?
+                .listener_open_guard();
+            let scope = {
+                let store = backend.lock_metadata(&token)?;
+                NativeMetadataOwnerCatalogueScope::from_actual_metadata_owner(
+                    initial,
+                    business,
+                    point,
+                    open,
+                    &store,
+                    &intent.manifest,
+                    &token,
+                )?
+            };
+            let mut round = NativeRemoteCatalogueRound::begin_for_metadata_owner(
+                scope,
                 intent.manifest.clone(),
                 intent.facts.clone(),
                 intent.decision_sha256.clone(),
@@ -221,6 +233,14 @@ impl NativeMetadataControlHost {
             let mut store = backend.lock_metadata(&token)?;
             store.require_listener_database(&open)?;
             store.require_native_control_leader(&fresh, fresh_business)?;
+            proof.require_metadata_owner_proposal(
+                &fresh,
+                fresh_business,
+                &point,
+                &open,
+                &store,
+                &token,
+            )?;
             // Complete allocation and position calculation BEFORE the final
             // fresh request/point check. Actual candidate/position are then
             // retained without a fallible gap before the existing proposal.
@@ -302,3 +322,6 @@ fn now_finite_ms() -> u64 {
         .try_into()
         .unwrap_or(u64::MAX)
 }
+
+#[cfg(test)]
+mod scope_tests;

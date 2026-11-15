@@ -57,6 +57,16 @@ impl ActualNativeJointMetadataPoint {
         self.member.require_current(&metadata)?;
         self.require_current_memory()
     }
+    /// Necessary comparison against an ALREADY held actual MStore. No latch
+    /// acquisition, Role, publication or database permission is issued here.
+    pub(crate) fn require_current_metadata_store(
+        &self,
+        actual: &crate::MetadataConsensusStore,
+    ) -> Result<()> {
+        actual.require_listener_database(&self.database)?;
+        self.member.require_current(actual)?;
+        self.require_current_memory()
+    }
     /// Immutable protected owner/open/birth/namespaces + actual version. This
     /// does NOT relabel require_database_point as a current-MStore check.
     pub(crate) fn require_native_point(&self, db: &BicDb) -> Result<()> {

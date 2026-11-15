@@ -72,8 +72,39 @@ impl NativeRemoteCatalogueDecisionV1 {
 
 /// A DIFFERENT opaque remote proof, never NativeJointDurableDecision. Actual
 /// recipient native+catalogue returns enter only through pinned exchanges.
+#[derive(Clone)]
+enum CatalogueComparison {
+    Range(std::sync::Arc<NativeJointHandoffPlan>),
+    MetadataOwner(std::sync::Arc<NativeMetadataOwnerCatalogueScope>),
+}
+impl CatalogueComparison {
+    fn require_live(&self) -> Result<()> {
+        match self {
+            Self::Range(p) => p.require_live(),
+            Self::MetadataOwner(p) => p.require_live(),
+        }
+    }
+    fn require_manifest(&self, mf: &NativeRemoteImageManifestV1) -> Result<()> {
+        match self {
+            Self::Range(p) => require_manifest_plan(mf, p),
+            Self::MetadataOwner(p) => p.require_manifest(mf),
+        }
+    }
+    fn promise(&self) -> &RangeHandoffPromise {
+        match self {
+            Self::Range(p) => p.promise(),
+            Self::MetadataOwner(p) => p.promise(),
+        }
+    }
+    fn old_range(&self) -> &crate::RangeDescriptor {
+        match self {
+            Self::Range(p) => p.old_range(),
+            Self::MetadataOwner(p) => p.old_range(),
+        }
+    }
+}
 pub(crate) struct NativeRemoteCatalogueRound {
-    plan: std::sync::Arc<NativeJointHandoffPlan>,
+    plan: CatalogueComparison,
     manifest: std::sync::Arc<NativeRemoteImageManifestV1>,
     facts: NativeRemoteNewFactSetV1,
     expected_decision_sha256: String,
@@ -107,7 +138,39 @@ impl NativeRemoteCatalogueRound {
             ));
         }
         Ok(Self {
-            plan,
+            plan: CatalogueComparison::Range(plan),
+            retained_bytes: crate::distribution_range_image::bounded_json(
+                &manifest,
+                MAX_NEW_REQUEST_BYTES,
+            )?
+            .len(),
+            manifest: std::sync::Arc::new(manifest),
+            facts,
+            expected_decision_sha256,
+            observer: None,
+            caller: parent.child(),
+            frames: BTreeMap::new(),
+            summary: None,
+        })
+    }
+    pub(crate) fn begin_for_metadata_owner(
+        plan: std::sync::Arc<NativeMetadataOwnerCatalogueScope>,
+        manifest: NativeRemoteImageManifestV1,
+        facts: NativeRemoteNewFactSetV1,
+        expected_decision_sha256: String,
+        parent: &CancellationToken,
+    ) -> Result<Self> {
+        parent.check()?;
+        plan.require_live()?;
+        plan.require_manifest(&manifest)?;
+        facts.require_manifest(&manifest)?;
+        if !is_digest(&expected_decision_sha256) {
+            return Err(invalid(
+                "catalogue round expected original native body absent",
+            ));
+        }
+        Ok(Self {
+            plan: CatalogueComparison::MetadataOwner(plan),
             retained_bytes: crate::distribution_range_image::bounded_json(
                 &manifest,
                 MAX_NEW_REQUEST_BYTES,
@@ -179,7 +242,7 @@ impl NativeRemoteCatalogueRound {
     fn require_current(&self) -> Result<()> {
         self.caller.check()?;
         self.plan.require_live()?;
-        require_manifest_plan(&self.manifest, &self.plan)?;
+        self.plan.require_manifest(&self.manifest)?;
         self.facts.require_manifest(&self.manifest)?;
         let old = self
             .frames
@@ -209,6 +272,25 @@ impl NativeRemoteDualDurableDecision {
     pub(crate) fn require_current(&self) -> Result<()> {
         self.actual.require_current()
     }
+    /// Metadata-owner lane requires its SAME original physical owner and a
+    /// separate fresh protected proposal admission. No native Role is issued.
+    pub(crate) fn require_metadata_owner_proposal(
+        &self,
+        own: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        point: &crate::distribution_data::ActualNativeJointMetadataPoint,
+        open: &crate::distribution_data::ClusterServiceOpenGuard,
+        store: &crate::MetadataConsensusStore,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.require_current()?;
+        match &self.actual.plan {
+            CatalogueComparison::Range(_) => Ok(()),
+            CatalogueComparison::MetadataOwner(original) => {
+                original.require_fresh_proposal_owner(own, business, point, open, store, parent)
+            }
+        }
+    }
     pub(crate) fn retained_encoded_bytes(&self) -> usize {
         self.actual.retained_bytes
     }
@@ -233,7 +315,7 @@ impl NativeRemoteDualDurableDecision {
 /// Scope and physical summary from actual native+catalogue acknowledgements.
 /// NOT local NativeJointDecisionData; private constructor needs a real frame.
 pub(crate) struct NativeRemoteDecisionSummary {
-    plan: std::sync::Arc<NativeJointHandoffPlan>,
+    plan: CatalogueComparison,
     manifest: std::sync::Arc<NativeRemoteImageManifestV1>,
     decision_sha256: String,
     source_b: u64,
@@ -241,7 +323,7 @@ pub(crate) struct NativeRemoteDecisionSummary {
 }
 impl NativeRemoteDecisionSummary {
     fn from_actual_frame(
-        plan: std::sync::Arc<NativeJointHandoffPlan>,
+        plan: CatalogueComparison,
         manifest: std::sync::Arc<NativeRemoteImageManifestV1>,
         actual: &NativeRemoteCatalogueDecisionV1,
     ) -> Self {

@@ -11,12 +11,16 @@ use crate::distribution_range_image::{
 };
 use crate::distribution_transport::AuthenticatedNativeRemoteImageSourceFrame;
 mod constraint_then_close_tests;
+mod remote_backend_tests;
 mod source_discovery_tests;
 mod source_export_retirement_tests;
 pub(super) mod two_range_stall_tests;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum SourceCase {
+    RemoteBackendCloseRound,
+    RemoteBackendResync,
+    RemoteBackendDriverStub,
     TwoRangeSourceReplyStall,
     TargetRemoteOldDecisionRetiree,
     TargetRemoteOldDecisionSurvivor,
@@ -1258,6 +1262,10 @@ pub(super) fn exercise(
 ) {
     for source in controls {
         source.bind_initial_image_source_process(process).unwrap();
+    }
+    if remote_backend_tests::is_case(case) {
+        remote_backend_tests::exercise(case, clients, services, metadata, pending, ranges);
+        return;
     }
     let target_before = state(&factory.database, pending, &node(4), ranges).unwrap();
     let mut journal = Vec::new();

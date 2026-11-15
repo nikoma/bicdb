@@ -33,7 +33,8 @@
 //! committed metadata, the abort boundary, the resume rules and the metadata
 //! commits. Everything that touches a member (its service, runtime, transport
 //! client) and the custody above sit behind `JoinedHandoffBackend`.
-//! `local_backend` is the in-process implementation. The stage logic itself
+//! `local_backend` is the in-process implementation; `remote_backend` is the
+//! beginning of the one that asks the members over RPC. The stage logic itself
 //! reaches the hosts only through `JoinedHandoffMetadataHosts` (committed
 //! metadata reads and commits); each backend names its own host surface as
 //! `JoinedHandoffBackend::Hosts`, and a backend without in-process custody
@@ -62,6 +63,10 @@ mod local_backend;
 pub(crate) use local_backend::LocalJoinedHandoffBackend;
 #[cfg(test)]
 pub(crate) use local_backend::TestHandoffCustodyCut;
+mod remote_backend;
+pub(crate) use remote_backend::{
+    RemoteJoinedHandoffBackend, RemoteMembers, RemoteOldCutObservation,
+};
 
 /// Per-request network budget of one metadata or role acquisition.
 const REQUEST: Duration = Duration::from_secs(5);
@@ -248,6 +253,18 @@ pub(crate) trait JoinedHandoffBackend {
     ) -> Result<()> {
         Ok(())
     }
+    /// Re-derive `cut_started` from the members before an abort is decided.
+    /// An error refuses the abort. The in-process backend answers
+    /// `cut_started` from memory and needs nothing.
+    fn resync_before_abort(
+        &mut self,
+        _hosts: &mut Self::Hosts,
+        _range: &RangeDescriptor,
+        _relocation: &RangeRelocation,
+        _parent: &CancellationToken,
+    ) -> Result<()> {
+        Ok(())
+    }
     /// No finalized image, publication round or durable decision is held.
     fn cut_required(&self) -> bool;
     /// Source cut, transfer and verification onto the target.
@@ -411,6 +428,14 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
         {
             return Err(handoff_error(
                 "the committed relocation is past its bare learner allocation; the handoff can only be resumed",
+            ));
+        }
+        // A backend without memory of its own asks the members first.
+        self.backend
+            .resync_before_abort(hosts, &range, &relocation, parent)?;
+        if self.backend.cut_started() {
+            return Err(handoff_error(
+                "a source round was started and a permanent handoff promise may exist; the handoff can only be resumed",
             ));
         }
         // Durable truth, independent of this object's memory: a source close

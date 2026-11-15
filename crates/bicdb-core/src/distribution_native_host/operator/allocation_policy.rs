@@ -62,6 +62,24 @@ impl NativeMetadataHost {
             .test_initial_allocation_native_point(range)
     }
     #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_allocation_activation_domain_comparison(
+        &self,
+        owner: &Self,
+        range: crate::RangeId,
+        mode: u8,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        let actual_writer = owner
+            .control
+            .as_ref()
+            .ok_or_else(|| invalid("actual allocation comparison owner control absent"))?
+            .test_retained_initial_data_writer_guard()?;
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual allocation comparison destination control absent"))?
+            .test_allocation_activation_domain_comparison(&actual_writer, range, mode, parent)
+    }
+    #[cfg(test)]
     pub(in crate::distribution_native_host) fn test_initial_allocation_foreign_owner(
         &self,
         foreign: &Self,

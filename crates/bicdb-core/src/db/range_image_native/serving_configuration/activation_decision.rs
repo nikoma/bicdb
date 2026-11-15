@@ -7,6 +7,9 @@ use crate::distribution_range_recovery::{
     RecoveryObservationRoleAdmission,
 };
 
+#[cfg(all(test, feature = "tls-replication"))]
+mod allocation_probe;
+
 const ACTIVATION_DECISION_VERSION: u32 = 1;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -145,6 +148,36 @@ impl NativeActivationDecisionRecord {
         let actual = db.current_native_range_source_lineage(self.scope.range_id)?;
         self.require_native_binding_from_lineage(db, native, current_serving, &actual)
     }
+    // `range` remains the FULL metadata descriptor checked by every role
+    // and observer consumer. Only actual SAME-State allocation authority can
+    // relate it to the independently protected native voter descriptor. The
+    // original caller invokes this ONLY at its lazy current-serving equality
+    // check; historical and earlier failure ordering remains unchanged.
+    fn current_native_range_matches(
+        &self,
+        db: &BicDb,
+        actual: &SourceRangeImageLineage,
+    ) -> Result<bool> {
+        let native_range = actual.native_write_range()?;
+        if canonical(native_range) == self.range {
+            return Ok(true);
+        }
+        #[cfg(feature = "tls-replication")]
+        {
+            if !matches!(
+                self.scope.purpose,
+                MetadataRecoveryRolePurpose::NormalRecovery
+            ) {
+                return Ok(false);
+            }
+            db.require_actual_allocation_native_serving_match(&self.range, native_range)?;
+            Ok(true)
+        }
+        #[cfg(not(feature = "tls-replication"))]
+        {
+            Ok(false)
+        }
+    }
     fn require_native_binding_from_lineage(
         &self,
         db: &BicDb,
@@ -223,7 +256,7 @@ impl NativeActivationDecisionRecord {
             || serving.local_visibility_at_activation != self.local_visibility_sequence
             || (current_serving
                 && (!serving.binds_current_base(&actual.base)
-                    || canonical(actual.native_write_range()?) != self.range))
+                    || !self.current_native_range_matches(db, actual)?))
         {
             return Err(invalid(
                 "activation decision differs from actual native serving/history",

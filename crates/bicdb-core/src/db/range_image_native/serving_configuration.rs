@@ -708,10 +708,8 @@ impl BicDb {
             .any(|r| r.role != RangeReplicaRole::Voter)
         {
             let writer = store.native_writer_host_state()?;
-            writer.require_allocation_native_range(self, fresh.current_range())?;
-            canonical_range
-                .replicas
-                .retain(|r| r.role == RangeReplicaRole::Voter);
+            let allocation = writer.allocation_serving_domain(self, fresh.current_range())?;
+            canonical_range = allocation.effective_native_range(self)?.clone();
         }
         let mut record = NativeRecoveredServingConfiguration {
             format_version: 1,

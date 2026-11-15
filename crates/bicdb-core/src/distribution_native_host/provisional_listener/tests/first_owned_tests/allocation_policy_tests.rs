@@ -1,6 +1,7 @@
 //! Genuine normal TLS host objects and running process workers. These are
 //! source definitions, not executed results or an end-to-end controller claim.
 use super::*;
+mod activation_domain_tests;
 #[test]
 fn native_initial_live_allocation_preserves_state_worker_and_real_sdk_strong() {
     run(0);

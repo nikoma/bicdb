@@ -503,6 +503,43 @@ impl InstalledNativeWriterHostGuard {
 }
 
 impl NativeWriterHostState {
+    /// Necessary identity of the actual VERIFIED allocation extension. This
+    /// reads RAM only; no DTO/cold record can construct its owning State.
+    /// Every use requires the same immutable native audit, version/purpose,
+    /// original policy/registration/coordinator/DB/Store and actual issued XID.
+    pub(in crate::db::range_image_native::writer_enrollment) fn allocation_projection_audit_identity(
+        &self,
+    ) -> Result<(u32, u64, String)> {
+        let cache = self
+            .registry_extension
+            .try_read()
+            .ok_or_else(|| invalid("allocation projection original audit busy"))?;
+        let record = &cache
+            .as_ref()
+            .ok_or_else(|| invalid("allocation projection verified audit absent"))?
+            .0;
+        if record.version != 2
+            || record.purpose != Some(ExtensionPurpose::AllocationEpoch)
+            || record.original_policy_sha256 != self.record.checksum_sha256
+            || record.registration_generation != self.record.generation
+            || record.coordinator_id != self.record.coordinator_id
+            || record.database_incarnation != self.record.database_incarnation
+            || record.store_open_id != self.record.store_open_id
+            || record.native_page_xid == 0
+        {
+            return Err(invalid(
+                "allocation projection changed verified audit purpose or original owner",
+            ));
+        }
+        Ok((
+            record.sequence,
+            record.native_page_xid,
+            record.checksum_sha256.clone(),
+        ))
+    }
+}
+
+impl NativeWriterHostState {
     /// Exact effective descriptor from the SAME successfully published native
     /// audit. This performs no IO write/reconciliation and grants no Ready.
     pub(crate) fn require_allocation_native_range(

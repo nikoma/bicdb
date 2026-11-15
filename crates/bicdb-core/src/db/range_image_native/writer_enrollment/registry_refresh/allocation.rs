@@ -13,6 +13,7 @@ enum Outcome {
     Known(u64),
     Unknown,
 }
+#[derive(Debug)]
 pub(in crate::db::range_image_native::writer_enrollment) struct RetainedAllocationAttempt {
     record: RegistryExtensionRecord,
     previous_facts: HostWriterPolicyFacts,
@@ -501,6 +502,7 @@ impl NativeWriterHostState {
 }
 
 #[cfg(test)]
+#[derive(Debug)]
 pub(in crate::db::range_image_native::writer_enrollment) struct AllocationCut {
     mode: u8,
     parent_live: bool,

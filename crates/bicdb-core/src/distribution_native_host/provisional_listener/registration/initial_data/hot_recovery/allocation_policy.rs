@@ -381,7 +381,7 @@ impl NativeHotRecoveryMaintenance {
     /// Read-only bounded observation of the real process worker. Never runs a
     /// mutator, replaces enrollment or retries an SDK operation. Return DATA is
     /// not a Ready grant; each subsequent APP/Strong performs its real proofs.
-    pub(super) fn observe_allocation_epoch(
+    pub(in crate::distribution_native_host::provisional_listener::registration::initial_data) fn observe_allocation_epoch(
         &self,
         range: crate::RangeId,
         parent: &CancellationToken,

@@ -1,6 +1,7 @@
 //! Adversarial scheduling of real producers. No synthesized receipt, changed
 //! quorum, forced generation, schema import or released Frozen owner.
 use super::*;
+#[path = "open_adversarial_tests/combined_domain_tests.rs"]
 mod combined_domain_tests;
 use crate::distribution_range_consensus::RangeWriteStore;
 use std::cell::{Cell, RefCell};

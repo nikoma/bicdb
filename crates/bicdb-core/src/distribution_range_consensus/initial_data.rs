@@ -238,6 +238,9 @@ fn initial_read_failure(
     }
     impl std::fmt::Write for Prefix {
         fn write_str(&mut self, text: &str) -> std::fmt::Result {
+            if !self.complete {
+                return Ok(());
+            }
             let mut end = (4096 - self.text.len()).min(text.len());
             while !text.is_char_boundary(end) {
                 end -= 1;

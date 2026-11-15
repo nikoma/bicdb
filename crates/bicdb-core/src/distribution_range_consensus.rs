@@ -39,8 +39,10 @@ use crate::distribution_range_mutation::{
 use crate::distribution_supervisor::ClusterBackupMetadata;
 use crate::error::{BicDbError, Result};
 
+mod bounded_leadership;
 mod current_joint_recovery;
 mod native_image_base;
+use bounded_leadership::{recovery_lock, recovery_parent_check};
 use current_joint_recovery::{CurrentJointRecoveryState, CURRENT_JOINT_CATALOG_FORMAT};
 #[cfg(test)]
 pub(crate) use native_prefix::test_validate_ordinary_native_intent;
@@ -2215,6 +2217,31 @@ pub trait RangeWriteTransport: std::fmt::Debug + Send + Sync + 'static {
         range_id: RangeId,
         range_epoch: u64,
     ) -> Result<RangeWriteProgress>;
+    /// Distinct cancellable observation. A transport must implement its actual
+    /// IO bound; the default never falls back to an unbounded legacy call.
+    fn range_write_progress_cancellable(
+        &self,
+        _destination: &ClusterNodeId,
+        _range_id: RangeId,
+        _range_epoch: u64,
+        _parent: &CancellationToken,
+    ) -> Result<RangeWriteProgress> {
+        Err(range_write_error(
+            "cancellable range progress transport is not wired",
+        ))
+    }
+    fn probe_range_write_cancellable(
+        &self,
+        _source: &ClusterNodeId,
+        _range_id: RangeId,
+        _range_epoch: u64,
+        _index: u64,
+        _parent: &CancellationToken,
+    ) -> Result<RangeWriteProbe> {
+        Err(range_write_error(
+            "cancellable range probe transport is not wired",
+        ))
+    }
     fn apply_range_write_repair(
         &self,
         destination: &ClusterNodeId,
@@ -2963,7 +2990,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         let mut completed = 0usize;
         let mut failures = Vec::new();
         for range in ranges {
-            if let Err(error) = self.recover_one_range_leadership(&range) {
+            if let Err(error) = self.recover_one_range_leadership(&range, None) {
                 failures.push(format!("{}: {error}", range.id));
             } else {
                 self.recovered_epochs.lock().insert(range.id, range.epoch);
@@ -2986,22 +3013,46 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         Ok(completed)
     }
 
-    fn recover_one_range_leadership(&self, range: &RangeDescriptor) -> Result<()> {
-        self.require_local_schema_compatibility(range)?;
+    fn recover_one_range_leadership(
+        &self,
+        range: &RangeDescriptor,
+        parent: Option<&CancellationToken>,
+    ) -> Result<()> {
+        recovery_parent_check(parent)?;
+        if parent.is_some() && !self.native_image_mode {
+            return Err(range_write_error(
+                "bounded native recovery cannot select legacy repair",
+            ));
+        }
+        self.require_local_schema_compatibility_for_recovery(range, parent)?;
         let mutation = self.range_mutations.try_enter(range.id)?;
         let authority = &RangeMutationAuthority::Mutation(&mutation);
-        let _reservation = self.try_reserve_range(range.id)?;
+        let _reservation = self.try_reserve_range_for_recovery(range.id, parent)?;
+        self.recover_one_range_leadership_held(range, authority, parent)
+    }
+    fn recover_one_range_leadership_held(
+        &self,
+        range: &RangeDescriptor,
+        authority: &RangeMutationAuthority<'_>,
+        parent: Option<&CancellationToken>,
+    ) -> Result<()> {
+        recovery_parent_check(parent)?;
+        if parent.is_some() && !self.native_image_mode {
+            return Err(range_write_error(
+                "bounded native recovery cannot select legacy repair",
+            ));
+        }
         let voters = range
             .replicas
             .iter()
             .filter(|replica| replica.role == RangeReplicaRole::Voter)
             .map(|replica| replica.node_id.clone())
             .collect::<Vec<_>>();
-        self.recover_leader_prefix(range, &voters, authority)?;
-        self.recover_leader_tail(range, &voters, authority)?;
+        self.recover_leader_prefix(range, &voters, authority, parent)?;
+        self.recover_leader_tail(range, &voters, authority, parent)?;
+        recovery_parent_check(parent)?;
         let still_current = self
-            .topology
-            .read_recursive()
+            .recovery_topology(parent)?
             .range_by_id(range.id)
             .is_some_and(|current| {
                 current.epoch == range.epoch && current.leader == self.local_node_id
@@ -3026,11 +3077,19 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
     }
 
     fn require_local_schema_compatibility(&self, range: &RangeDescriptor) -> Result<()> {
+        self.require_local_schema_compatibility_for_recovery(range, None)
+    }
+    fn require_local_schema_compatibility_for_recovery(
+        &self,
+        range: &RangeDescriptor,
+        parent: Option<&CancellationToken>,
+    ) -> Result<()> {
+        recovery_parent_check(parent)?;
         if !self.require_schema_compatibility {
             return Ok(());
         }
         let (required, pending_target, advertised, advertised_pending) = {
-            let topology = self.topology.read_recursive();
+            let topology = self.recovery_topology(parent)?;
             let current = topology
                 .range_by_id(range.id)
                 .filter(|current| {
@@ -3091,7 +3150,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 range.id, self.local_node_id
             )));
         }
-        let service = self.local_service.lock();
+        let service = self.recovery_service(parent)?;
         if !service.schema_compatibility_allows(&required, pending_target.as_deref()) {
             return Err(range_write_error(format!(
                 "range {} schema fence requires active {required}, pending {}, but node {} has verified {}",
@@ -3146,7 +3205,14 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         &self,
         range_id: RangeId,
     ) -> Result<RangeAdmissionReservation<'_, Transport>> {
-        let mut active = self.active_ranges.lock();
+        self.try_reserve_range_for_recovery(range_id, None)
+    }
+    fn try_reserve_range_for_recovery(
+        &self,
+        range_id: RangeId,
+        parent: Option<&CancellationToken>,
+    ) -> Result<RangeAdmissionReservation<'_, Transport>> {
+        let mut active = recovery_lock(&self.active_ranges, parent)?;
         if let Some(command_id) = active.get(&range_id) {
             return Err(range_write_error(format!(
                 "range {range_id} is still applying command {command_id}; leadership recovery deferred"
@@ -3242,17 +3308,51 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         range: &RangeDescriptor,
         voters: &[ClusterNodeId],
         authority: &RangeMutationAuthority<'_>,
+        parent: Option<&CancellationToken>,
     ) -> Result<()> {
+        recovery_parent_check(parent)?;
         let quorum = voters.len() / 2 + 1;
         let mut progress_by_node = BTreeMap::new();
-        let local = self.local_service.lock().range_write_progress(range.id);
+        let local = self
+            .recovery_service(parent)?
+            .range_write_progress(range.id);
         progress_by_node.insert(self.local_node_id.clone(), local.clone());
-        for voter in voters.iter().filter(|node| **node != self.local_node_id) {
-            if let Ok(progress) = self
-                .transport
-                .range_write_progress(voter, range.id, range.epoch)
-            {
-                if progress.node_id != *voter
+        let remotes = voters
+            .iter()
+            .filter(|node| **node != self.local_node_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        let replies: Box<
+            dyn Iterator<Item = (ClusterNodeId, Option<Result<RangeWriteProgress>>)> + '_,
+        > = if let Some(parent) = parent {
+            Box::new(
+                voter_fan_out(&remotes, true, |voter| {
+                    let peer = parent.child();
+                    self.transport.range_write_progress_cancellable(
+                        voter,
+                        range.id,
+                        range.epoch,
+                        &peer,
+                    )
+                })
+                .into_iter(),
+            )
+        } else {
+            // Lazy legacy iteration preserves original call/validation order.
+            Box::new(remotes.iter().map(|voter| {
+                (
+                    voter.clone(),
+                    Some(
+                        self.transport
+                            .range_write_progress(voter, range.id, range.epoch),
+                    ),
+                )
+            }))
+        };
+        for (voter, reply) in replies {
+            recovery_parent_check(parent)?;
+            if let Some(Ok(progress)) = reply {
+                if progress.node_id != voter
                     || progress.range_id != range.id
                     || progress.current_epoch > range.epoch
                 {
@@ -3282,6 +3382,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         }
         let mut local_resolved = local.resolved_through;
         for _ in 0..self.repair_limits.max_batches_per_admission {
+            recovery_parent_check(parent)?;
             if local_resolved >= quorum_resolved {
                 return Ok(());
             }
@@ -3378,34 +3479,60 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
         range: &RangeDescriptor,
         voters: &[ClusterNodeId],
         authority: &RangeMutationAuthority<'_>,
+        parent: Option<&CancellationToken>,
     ) -> Result<()> {
+        recovery_parent_check(parent)?;
         let quorum = voters.len() / 2 + 1;
         let command_budget = self
             .repair_limits
             .max_commands_per_batch
             .saturating_mul(self.repair_limits.max_batches_per_admission);
         for _ in 0..command_budget {
+            recovery_parent_check(parent)?;
             let index = self
-                .local_service
-                .lock()
+                .recovery_service(parent)?
                 .range_write_progress(range.id)
                 .resolved_through
                 .saturating_add(1);
             let mut probes = Vec::new();
-            for voter in voters {
-                let probe = if *voter == self.local_node_id {
-                    self.local_service.lock().probe_range_write_for_peer(
+            let contact = |voter: &ClusterNodeId| -> Result<RangeWriteProbe> {
+                recovery_parent_check(parent)?;
+                if *voter == self.local_node_id {
+                    self.recovery_service(parent)?.probe_range_write_for_peer(
                         range,
                         &self.local_node_id,
                         index,
                     )
+                } else if let Some(parent) = parent {
+                    let peer = parent.child();
+                    self.transport.probe_range_write_cancellable(
+                        voter,
+                        range.id,
+                        range.epoch,
+                        index,
+                        &peer,
+                    )
                 } else {
                     self.transport
                         .probe_range_write(voter, range.id, range.epoch, index)
-                };
-                if let Ok(probe) = probe {
+                }
+            };
+            let replies: Box<
+                dyn Iterator<Item = (ClusterNodeId, Option<Result<RangeWriteProbe>>)> + '_,
+            > = if parent.is_some() {
+                Box::new(voter_fan_out(voters, true, &contact).into_iter())
+            } else {
+                Box::new(
+                    voters
+                        .iter()
+                        .map(|voter| (voter.clone(), Some(contact(voter)))),
+                )
+            };
+            for (voter, reply) in replies {
+                recovery_parent_check(parent)?;
+                if let Some(Ok(probe)) = reply {
                     probe.validate()?;
-                    if probe.node_id != *voter
+                    if probe.node_id != voter
                         || probe.range_id != range.id
                         || probe.route_epoch != range.epoch
                         || probe.index != index

@@ -5706,12 +5706,19 @@ impl TcpClusterRelocationTransport {
         Option<crate::distribution::NativeStoreBirthV1>,
     )> {
         cancellation.check()?;
-        let numeric_metadata_read = (classify_peer_io
+        let bounded_native_leadership_read = cancellation.deadline().is_some()
             && matches!(
                 &request,
-                ClusterDataRequest::ApplyNativeOrigin { .. }
-                    | ClusterDataRequest::ObserveNativeOrigin { .. }
-            ))
+                ClusterDataRequest::RangeWriteProgress { .. }
+                    | ClusterDataRequest::ProbeRangeWrite { .. }
+            );
+        let numeric_metadata_read = bounded_native_leadership_read
+            || (classify_peer_io
+                && matches!(
+                    &request,
+                    ClusterDataRequest::ApplyNativeOrigin { .. }
+                        | ClusterDataRequest::ObserveNativeOrigin { .. }
+                ))
             || matches!(
                 &request,
                 ClusterDataRequest::NativeRemoteImageSourceFrame { .. }
@@ -5781,7 +5788,17 @@ impl TcpClusterRelocationTransport {
                     "cluster node {destination_node_id} is decommissioned"
                 )));
             }
-            if request.requires_native_metadata_destination() {
+            if bounded_native_leadership_read
+                && node
+                    .native_store_birth_v1
+                    .as_ref()
+                    .is_none_or(|b| b.writer_enforcement_version() != 1)
+            {
+                return Err(transport_error(
+                    "bounded native leadership peer lacks enforced native birth",
+                ));
+            }
+            if request.requires_native_metadata_destination() || bounded_native_leadership_read {
                 if let Some(birth) = &node.native_store_birth_v1 {
                     birth.validate_for(topology.range_image_bootstrap_id, node.incarnation)?;
                 }
@@ -5791,7 +5808,8 @@ impl TcpClusterRelocationTransport {
                 node.tls_certificate_sha256.clone(),
                 node.pending_tls_certificate_sha256.clone(),
                 node.incarnation,
-                if request.requires_native_metadata_destination() {
+                if request.requires_native_metadata_destination() || bounded_native_leadership_read
+                {
                     node.native_store_birth_v1.clone()
                 } else {
                     None
@@ -6373,6 +6391,61 @@ impl RangeWriteTransport for TcpClusterRelocationTransport {
         }
     }
 
+    fn range_write_progress_cancellable(
+        &self,
+        destination: &ClusterNodeId,
+        range_id: crate::distribution::RangeId,
+        range_epoch: u64,
+        parent: &CancellationToken,
+    ) -> Result<RangeWriteProgress> {
+        parent.check()?;
+        if parent.deadline().is_none() {
+            return Err(transport_error(
+                "bounded native progress needs an original deadline",
+            ));
+        }
+        match self.call_cancellable(
+            parent,
+            destination,
+            ClusterDataRequest::RangeWriteProgress {
+                range_id,
+                range_epoch,
+            },
+        )? {
+            ClusterDataResponse::RangeWriteProgress(progress) => Ok(progress),
+            response => Err(unexpected_response(
+                "bounded range-write progress",
+                response,
+            )),
+        }
+    }
+    fn probe_range_write_cancellable(
+        &self,
+        source: &ClusterNodeId,
+        range_id: crate::distribution::RangeId,
+        range_epoch: u64,
+        index: u64,
+        parent: &CancellationToken,
+    ) -> Result<RangeWriteProbe> {
+        parent.check()?;
+        if parent.deadline().is_none() {
+            return Err(transport_error(
+                "bounded native probe needs an original deadline",
+            ));
+        }
+        match self.call_cancellable(
+            parent,
+            source,
+            ClusterDataRequest::ProbeRangeWrite {
+                range_id,
+                range_epoch,
+                index,
+            },
+        )? {
+            ClusterDataResponse::RangeWriteProbe(probe) => Ok(probe),
+            response => Err(unexpected_response("bounded range-write probe", response)),
+        }
+    }
     fn range_write_progress(
         &self,
         destination: &ClusterNodeId,

@@ -242,6 +242,7 @@ impl NativeMetadataControlHost {
         stale.test_original_request_live()?;
         let denied =
             stale.require_fresh_proposal_owner(&post, business, &point, &open, &store, &token);
+        drop(store);
         note(
             &mut events,
             serde_json::json!({"cut":"actual_later_MStore_version_before_certification_proposal","ok":denied.is_ok(),"error":denied.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),"actual_current_term":post.term(),"actual_read_index":post.read_index()}),

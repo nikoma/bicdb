@@ -591,7 +591,9 @@
       }
     ],
     "negative_controls": "Actual corrupted original ZIP/gzip copies in RAM refused; same hash-check function passes original and rejects altered expectedSHA. Canonical bytes untouched.",
-    "public_scope": "This committed packet contains a logical whitelist projection and hashes only; full logs/ZIPs remain in referenced private custody. Private local modes do not guarantee public-repository GitHub artifact confidentiality. No DB/engine opened or repaired."
+    "public_scope": "This committed packet contains a logical whitelist projection and hashes only; full logs/ZIPs remain in referenced private custody. Private local modes do not guarantee public-repository GitHub artifact confidentiality. No DB/engine opened or repaired.",
+    "native_fixture_DB_bundle_uploaded": false,
+    "complete_upload_is_not_complete_database_state_proof": true
   },
   "future_source_and_remaining_gates": {
     "later_source_NOT_tested_by_this_run": [

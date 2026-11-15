@@ -64,7 +64,10 @@ The frozen canonical archive is retained outside Git at
 `/root/bicdb-ha-private-evidence/native516-pr204-2d379154a-run43662386840`:
 85 files, 11 complete gzip logs, 8 original unique artifact ZIPs and 28 verified
 members; 56,586,240 allocated bytes, zero unavailable captures and zero partials.
-The directory is 0700 and files 0600. No DB was opened or repaired.
+The directory is 0700 and files 0600. No DB was opened or repaired. These
+uploaded artifacts contain no native fixture/DB bundle; complete uploaded
+custody is not complete native database-state proof. The two markerless effects
+remain unresolved by an independent physical database recheck.
 
 | Exact object | SHA256 |
 | --- | --- |

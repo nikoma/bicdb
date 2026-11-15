@@ -99,14 +99,21 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
                 .ok_or(BicDbError::QueryTimedOut)
         };
         let business = Uuid::now_v7();
-        let first = self.transport.acquire_metadata_read_observation(
-            metadata_leader,
-            business,
-            range.id,
-            range.epoch,
-            remaining()?,
-            parent,
-        )?;
+        let first = self
+            .transport
+            .acquire_metadata_read_observation(
+                metadata_leader,
+                business,
+                range.id,
+                range.epoch,
+                remaining()?,
+                parent,
+            )
+            .map_err(|error| {
+                #[cfg(test)]
+                initial_read_failure("first_metadata", &self.local_node_id, range, parent, &error);
+                error
+            })?;
         {
             let service = loop {
                 parent.check()?;
@@ -125,16 +132,45 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
         // pending/control checks come from the existing sealed read producer.
         // A decoded list, raw progress0, or NativeOriginStatus cannot replace it.
         let collected = runtime
-            .acquire_native_read_candidate(first, business, Uuid::now_v7(), parent)?
-            .into_initial_data_genesis(genesis)?;
-        let final_metadata = self.transport.acquire_metadata_read_observation(
-            metadata_leader,
-            business,
-            range.id,
-            range.epoch,
-            remaining()?,
-            parent,
-        )?;
+            .acquire_native_read_candidate(first, business, Uuid::now_v7(), parent)
+            .map_err(|error| {
+                #[cfg(test)]
+                initial_read_failure(
+                    "actual_native_read_candidate",
+                    &self.local_node_id,
+                    range,
+                    parent,
+                    &error,
+                );
+                error
+            })?
+            .into_initial_data_genesis(genesis)
+            .map_err(|error| {
+                #[cfg(test)]
+                initial_read_failure(
+                    "initial_genesis_comparison",
+                    &self.local_node_id,
+                    range,
+                    parent,
+                    &error,
+                );
+                error
+            })?;
+        let final_metadata = self
+            .transport
+            .acquire_metadata_read_observation(
+                metadata_leader,
+                business,
+                range.id,
+                range.epoch,
+                remaining()?,
+                parent,
+            )
+            .map_err(|error| {
+                #[cfg(test)]
+                initial_read_failure("final_metadata", &self.local_node_id, range, parent, &error);
+                error
+            })?;
         let service = loop {
             parent.check()?;
             if let Some(service) = self.local_service.try_lock_for(Duration::from_millis(5)) {
@@ -183,4 +219,24 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
             })
             && self.recovered_epochs.lock().get(&range.id) == Some(&range.epoch)
     }
+}
+
+#[cfg(test)]
+fn initial_read_failure(
+    stage: &str,
+    node: &ClusterNodeId,
+    range: &RangeDescriptor,
+    parent: &CancellationToken,
+    error: &BicDbError,
+) {
+    eprintln!(
+        "INITIAL_NATIVE_READ_FAILURE {}",
+        serde_json::json!({
+            "stage":stage,"node":node,"range":range.id,"epoch":range.epoch,
+            "actual_original_remaining_us":parent.deadline().map(|d|d.saturating_duration_since(Instant::now()).as_micros()),
+            "actual_original_cancelled":parent.is_cancel_requested(),
+            "error":crate::distribution_native_host::remote_first::error_data(error),
+            "diagnostic_only_not_authority_or_no_effect":true,
+        })
+    );
 }

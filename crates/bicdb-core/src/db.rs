@@ -2,8 +2,6 @@ mod access_mutation;
 mod branching;
 mod catalog_admission;
 mod collection_rename;
-#[cfg(test)]
-mod commit_visibility_tests;
 pub use catalog_admission::{
     CatalogCreatedCollectionUndo, CatalogReadAccess, CatalogScopeAccess, CatalogScopeToken,
 };

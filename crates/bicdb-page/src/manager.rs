@@ -2928,6 +2928,7 @@ pub fn convert_extent_layout(
         )
     };
     let target = PageStore {
+        physical_gate: source.physical_gate.clone(),
         backup_format: AtomicBool::new(source.backup_format.load(Ordering::Acquire)),
         extent_tracker: Mutex::new(None),
         backup: Mutex::new(None),

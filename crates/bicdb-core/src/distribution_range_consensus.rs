@@ -4116,7 +4116,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 };
                 let validation = current_range
                     .ok_or_else(|| range_write_error("native callback range disappeared"))
-                    .and_then(|range| self.require_native_writer_host_context(database,&range))
+                    .and_then(|range| self.require_native_writer_host_context_applying(database,&range,&native.pending))
                     .and_then(|()| database.validate_native_wal_apply_receipt(receipt)).and_then(|()| {
                     if database.incarnation_id() != self.local_incarnation
                         || receipt.transaction_id() != evidence.transaction_id

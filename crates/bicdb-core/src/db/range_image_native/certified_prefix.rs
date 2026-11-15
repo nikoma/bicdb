@@ -139,6 +139,11 @@ pub(crate) struct NativeRangePendingApply {
     pending: PendingNativeRangeCommand,
     _scope: NativeCommandScopeLease,
 }
+impl NativeRangePendingApply {
+    pub(in crate::db::range_image_native) fn range_id(&self) -> RangeId {
+        self.pending.range_id
+    }
+}
 
 /// Destructive-install guard observation. Invalidating source visibility does
 /// not erase these irreversible native lower bounds. It is neither a source
@@ -930,6 +935,41 @@ impl BicDb {
         }
         self.check_recovery_state()?;
         journal.require_database(self)?;
+        Ok(lineage)
+    }
+    /// Lineage for the writer applying exactly `own`: the one case where a
+    /// pending command is expected. The stored pending record must be that
+    /// command, byte for byte apart from its materialization mark, from this
+    /// database open, and must extend the returned lineage. Any other pending
+    /// record, or none, is refused; every other caller keeps the strict read.
+    pub(in crate::db::range_image_native) fn native_range_source_lineage_applying(
+        &self,
+        own: &NativeRangePendingApply,
+    ) -> Result<SourceRangeImageLineage> {
+        if own.database_incarnation != self.incarnation {
+            return Err(invalid(
+                "applying native command belongs to another database open",
+            ));
+        }
+        let range_id = own.pending.range_id;
+        let lineage = self.native_range_source_lineage_contract(range_id)?;
+        let stored: PendingNativeRangeCommand = self
+            .read_native_range_image_record(&pending_key(range_id))?
+            .ok_or_else(|| invalid("applying native command has no pending record"))?;
+        stored.validate()?;
+        let mut unsigned = stored.clone();
+        unsigned.materialized = None;
+        unsigned.checksum_sha256 = unsigned.checksum()?;
+        if unsigned != own.pending
+            || stored.birth_id != lineage.birth.birth_id
+            || stored.previous_index != lineage.range_index()
+            || stored.previous_receipt_sha256 != lineage.native_receipt_sha256()
+        {
+            return Err(invalid(
+                "unfinished native command; source range image unavailable",
+            ));
+        }
+        self.check_recovery_state()?;
         Ok(lineage)
     }
     pub(crate) fn current_native_range_source_lineage(

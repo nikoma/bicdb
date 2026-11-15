@@ -398,6 +398,16 @@ fn require_serving_record_current(
     writer: &NativeWriterHostState,
     record: &ServingDomainRecord,
 ) -> Result<()> {
+    require_serving_record_current_applying(db, writer, record, None)
+}
+/// `applying` is the command this writer's own commit callback is completing
+/// for this record's range, if any; see `native_range_source_lineage_applying`.
+fn require_serving_record_current_applying(
+    db: &BicDb,
+    writer: &NativeWriterHostState,
+    record: &ServingDomainRecord,
+    applying: Option<&crate::db::NativeRangePendingApply>,
+) -> Result<()> {
     record.validate(&writer.record)?;
     if !crate::format::native_writer_data_domain_active(db.data_path())? {
         return Err(invalid("writer Serving audit lost sticky reader fence"));
@@ -424,7 +434,12 @@ fn require_serving_record_current(
     }
     require_original_metadata_store(db, &closed)?;
     require_serving_quorum_audit(record, &closed.decision, &writer.record)?;
-    let actual = db.current_native_range_source_lineage(record.range.id)?;
+    let actual = match applying {
+        Some(own) if own.range_id() == record.range.id => {
+            db.native_range_source_lineage_applying(own)?
+        }
+        _ => db.current_native_range_source_lineage(record.range.id)?,
+    };
     if actual.base.checksum_sha256 != record.local.physical_base_sha256
         || actual.base.local_namespace_ids != record.local.namespace_ids
         || actual.history_generation() != record.local.history_generation
@@ -556,10 +571,18 @@ impl NativeWriterHostState {
         Ok(Some(verified.record.range.clone()))
     }
     pub(super) fn require_serving_data_database(&self, db: &BicDb, range: RangeId) -> Result<()> {
+        self.require_serving_data_database_applying(db, range, None)
+    }
+    pub(super) fn require_serving_data_database_applying(
+        &self,
+        db: &BicDb,
+        range: RangeId,
+        applying: Option<&crate::db::NativeRangePendingApply>,
+    ) -> Result<()> {
         self.effective_serving_data_range(range)?;
         let cached = self.data_domains.read().serving.get(&range).cloned();
         if let Some(verified) = cached {
-            require_serving_record_current(db, self, &verified.record)?;
+            require_serving_record_current_applying(db, self, &verified.record, applying)?;
             verified.continuity.released_generation()?;
         }
         Ok(())

@@ -321,6 +321,22 @@ impl NativeWriterHostState {
         self.require_original_database(database, range)?;
         self.require_verified_registry_database(database)
     }
+    /// Same proof from the commit callback that is completing `applying`,
+    /// the only caller for which that exact pending command is expected.
+    pub(crate) fn require_database_applying(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+        applying: &crate::db::NativeRangePendingApply,
+    ) -> Result<()> {
+        self.require_original_identity_database(database)?;
+        self.require_range(range)?;
+        #[cfg(feature = "tls-replication")]
+        self.require_serving_data_database_applying(database, range.id, Some(applying))?;
+        #[cfg(not(feature = "tls-replication"))]
+        let _ = applying;
+        self.require_verified_registry_database(database)
+    }
     // Only registry publication may reconcile a durable-but-unpublished audit.
     // This still proves the actual original DB/hook/policy/open, not a role.
     fn require_original_identity_database(&self, database: &BicDb) -> Result<()> {

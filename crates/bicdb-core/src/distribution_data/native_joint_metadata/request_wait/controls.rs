@@ -47,6 +47,29 @@ impl ClusterDataNodeService {
         mode: u8,
         call: impl FnOnce(&CancellationToken) -> Result<T>,
     ) -> Result<serde_json::Value> {
+        Self::test_actual_service_wait_inner(service, parent, mode, None, call)
+    }
+    pub(crate) fn test_actual_request_service_wait_cancel_own<T: serde::Serialize>(
+        service: &Arc<Mutex<Self>>,
+        parent: &CancellationToken,
+        own: &HostMetadataReadObservation,
+        call: impl FnOnce(&CancellationToken) -> Result<T>,
+    ) -> Result<serde_json::Value> {
+        Self::test_actual_service_wait_inner(
+            service,
+            parent,
+            1,
+            Some(own.original_request_cancellation()),
+            call,
+        )
+    }
+    fn test_actual_service_wait_inner<T: serde::Serialize>(
+        service: &Arc<Mutex<Self>>,
+        parent: &CancellationToken,
+        mode: u8,
+        cancel_own: Option<CancellationToken>,
+        call: impl FnOnce(&CancellationToken) -> Result<T>,
+    ) -> Result<serde_json::Value> {
         parent.check()?;
         if mode > 2 || parent.deadline().is_none() {
             return Err(data_error("invalid actual finite service-wait control"));
@@ -85,9 +108,10 @@ impl ClusterDataNodeService {
                 service: Arc::downgrade(service),
                 action: Box::new(move |actual| {
                     let now = Instant::now();
+                    let live = actual.check().is_ok();
                     *observed.lock() = Some(serde_json::json!({
                         "actual_failed_service_slice":true,
-                        "parent_live_before_action":actual.check().is_ok(),
+                        "parent_live_before_action":live,
                         "parent_cancelled_before_action":actual.is_cancel_requested(),
                         "parent_deadline_identity":format!("{:?}",actual.deadline()),
                         "parent_remaining_us":actual.deadline().map(|d|d.saturating_duration_since(now).as_micros())
@@ -96,7 +120,10 @@ impl ClusterDataNodeService {
                         0 => release_after_contention.send(()).map_err(|_| {
                             data_error("actual service-holder ended before release")
                         })?,
-                        1 => actual.cancel(),
+                        1 if live => match &cancel_own {
+                            Some(original_own) => original_own.cancel(),
+                            None => actual.cancel(),
+                        },
                         _ => {}
                     }
                     Ok(())

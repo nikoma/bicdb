@@ -55,7 +55,7 @@ impl NativeJointOldObservation {
                 std::thread::sleep(std::time::Duration::from_millis(5));
                 continue;
             }
-            #[cfg(test)]
+            #[cfg(all(test, feature = "tls-replication"))]
             ClusterDataNodeService::test_after_actual_request_service_contention(
                 &self.service,
                 parent,

@@ -19,6 +19,42 @@ pub(super) struct RemoteNewRecipientMetadata {
     database: ClusterServiceOpenGuard,
 }
 impl RemoteNewRecipientMetadata {
+    fn identity_request(
+        parent: &CancellationToken,
+        own: &HostMetadataReadObservation,
+        role: Option<&RecoveryRoleAdmission>,
+    ) -> CancellationToken {
+        parent
+            .child_linked_to(&own.original_request_cancellation())
+            .child_with_deadline(
+                role.map_or(own.deadline(), |role| role.deadline().min(own.deadline())),
+            )
+    }
+    #[cfg(test)]
+    pub(super) fn test_identity_own_cancel(
+        service: &Arc<Mutex<ClusterDataNodeService>>,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        own.require_live_request(business)?;
+        let actual = ClusterDataNodeService::test_actual_request_service_wait_cancel_own(
+            service,
+            parent,
+            own,
+            |original| {
+                let identity = Self::identity_request(original, own, None);
+                ClusterDataNodeService::capture_actual_listener_identity_waiting(service, &identity)
+                    .map(|_| ())
+            },
+        );
+        Ok(serde_json::json!({"actual_control":actual.as_ref().ok(),
+            "original_control_error":actual.as_ref().err().map(ToString::to_string),
+            "outer_caller_still_live":parent.check().is_ok(),
+            "actual_OWN_original_cancelled":own.original_request_cancellation().is_cancel_requested(),
+            "actual_OWN_live_after":own.require_live_request(business).is_ok(),
+            "actual_OWN_context":own.context_id(),"no_fresh_OWN_or_Role_issued_during_wait":true}))
+    }
     #[allow(clippy::too_many_arguments)]
     pub(super) fn acquire(
         provider: &Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
@@ -121,10 +157,7 @@ impl RemoteNewRecipientMetadata {
         }
         // No table/service/DB/MStore guard is held. Preserve this exact
         // acquisition's caller, OWN and (when present) witnessed Role window.
-        let identity = parent.child_with_deadline(
-            role.as_ref()
-                .map_or(own.deadline(), |role| role.deadline().min(own.deadline())),
-        );
+        let identity = Self::identity_request(parent, &own, role.as_deref());
         let database =
             ClusterDataNodeService::capture_actual_listener_identity_waiting(service, &identity)?;
         own.require_live_request(business)?;

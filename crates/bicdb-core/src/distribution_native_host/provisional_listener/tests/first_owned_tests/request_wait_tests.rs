@@ -2,6 +2,49 @@
 //! no failed SourceStart/Describe may create missing capture custody.
 use super::*;
 #[test]
+fn native_first_actual_remote_new_identity_own_cancel_refuses_while_caller_live() {
+    run(Case::RemoteNewOwnCancel);
+}
+pub(super) fn own_cancel(
+    host: &NativeMetadataHost,
+    range: crate::RangeId,
+    report: &mut Report,
+    parent: &CancellationToken,
+) -> Result<()> {
+    let data = report.data_call(
+        "actual_RemoteNEW_identity_OWN_cancel_same_original_caller",
+        || host.test_first_metadata_identity_own_cancel(range, parent),
+    )?;
+    assert!(data["original_control_error"].is_null());
+    assert!(data["before_diagnostic_error"].is_null());
+    assert!(data["after_diagnostic_error"].is_null());
+    let identity = &data["identity_control"];
+    assert!(identity["original_control_error"].is_null());
+    assert_eq!(identity["outer_caller_still_live"], true);
+    assert_eq!(identity["actual_OWN_original_cancelled"], true);
+    assert_eq!(identity["actual_OWN_live_after"], false);
+    let actual = &identity["actual_control"];
+    assert_eq!(actual["cut"]["actual_failed_service_slice"], true);
+    assert_eq!(actual["cut"]["parent_live_before_action"], true);
+    assert_eq!(actual["actual_returned_ok"], false);
+    assert_eq!(actual["original_error_class"], "QueryCanceled");
+    assert_eq!(actual["holder_still_held_at_original_return"], true);
+    assert!(actual["cleanup_error"].is_null());
+    for field in ["native_next_xid", "native_next_lsn", "native_durable_lsn"] {
+        assert!(data["before_native"]["actual_native_storage"][field].is_number());
+        assert_eq!(
+            data["before_native"]["actual_native_storage"][field],
+            data["after_native"]["actual_native_storage"][field]
+        );
+    }
+    assert!(data["before_native"]["actual_source_lineage"].is_object());
+    assert_eq!(
+        data["before_native"]["actual_source_lineage"],
+        data["after_native"]["actual_source_lineage"]
+    );
+    Ok(())
+}
+#[test]
 fn native_first_actual_retained_maintenance_state_release_same_request() {
     run(Case::HotRequestWait);
 }

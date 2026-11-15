@@ -1,6 +1,34 @@
 //! Test-only DATA facades on the actual control owner; no raw owner escapes.
 use super::*;
 impl NativeMetadataControlHost {
+    pub(in crate::distribution_native_host) fn test_first_metadata_identity_own_cancel(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        let original = self
+            .first_coordinators
+            .get(&range)
+            .ok_or_else(|| invalid("OWN cancellation control requires original FIRST"))?;
+        let request = parent
+            .child_linked_to(&original.process)
+            .child_with_deadline(Instant::now() + Duration::from_secs(5));
+        let (own, business) = original.own(&request)?;
+        let before = self.test_first_cross_protocol_native_snapshot(range, true);
+        let actual =
+            super::super::remote_new_metadata::RemoteNewRecipientMetadata::test_identity_own_cancel(
+                &original.backend.service,
+                &own,
+                business,
+                &request,
+            );
+        let after = self.test_first_cross_protocol_native_snapshot(range, true);
+        Ok(serde_json::json!({"identity_control":actual.as_ref().ok(),
+            "original_control_error":actual.as_ref().err().map(ToString::to_string),
+            "before_native":before.as_ref().ok(),"after_native":after.as_ref().ok(),
+            "before_diagnostic_error":before.as_ref().err().map(ToString::to_string),
+            "after_diagnostic_error":after.as_ref().err().map(ToString::to_string)}))
+    }
     pub(in crate::distribution_native_host) fn test_first_metadata_identity_wait(
         &self,
         range: crate::RangeId,

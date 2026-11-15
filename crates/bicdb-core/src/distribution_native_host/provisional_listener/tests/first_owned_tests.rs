@@ -27,6 +27,7 @@ mod release_tests;
 mod request_wait_tests;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Case {
+    RemoteNewOwnCancel,
     HotRequestWait,
     HotRequestCancel,
     HotRequestExpiry,
@@ -873,6 +874,14 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
             &five.lifetime,
         )
     })?;
+    if case == Case::RemoteNewOwnCancel {
+        return request_wait_tests::own_cancel(
+            &five.sources[coordinator],
+            selected.id,
+            report,
+            &five.lifetime,
+        );
+    }
     if matches!(
         case,
         Case::MetadataIdentityWait | Case::MetadataIdentityCancel | Case::MetadataIdentityExpiry

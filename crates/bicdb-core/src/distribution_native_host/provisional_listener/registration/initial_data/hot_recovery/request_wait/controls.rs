@@ -74,14 +74,15 @@ impl NativeHotRecoveryMaintenance {
             let cut = Cut {
                 owner: self.as_ref(),
                 action: Box::new(move |actual| {
+                    let live = actual.check().is_ok();
                     *observed.lock() = Some(serde_json::json!({"actual_failed_State_slice":true,
-                    "parent_live_before_action":actual.check().is_ok(),
+                        "parent_live_before_action":live,
                     "parent_deadline_identity":format!("{:?}",actual.deadline())}));
                     match mode {
                         0 => release_after_contention
                             .send(())
                             .map_err(|_| invalid("State holder ended"))?,
-                        1 => actual.cancel(),
+                        1 if live => actual.cancel(),
                         _ => {}
                     }
                     Ok(())

@@ -524,7 +524,7 @@ impl NativeRemoteNewParticipant {
             let route = self
                 .remote_release
                 .try_lock()
-                .map_err(|_| invalid("remote release readonly route busy"))?
+                .ok_or_else(|| invalid("remote release readonly route busy"))?
                 .clone();
             if let Some(route) = route {
                 let original = route.upgrade().ok_or_else(|| {

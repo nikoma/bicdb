@@ -358,7 +358,41 @@ pub(super) fn exercise(
                             &lifetime,
                         )
                     });
-                assert!(read.is_err(), "Dropped alone is not armed released Open");
+                // Preserve BOTH the actual returned transport error and the
+                // same owner's state after this readonly denial, before any
+                // assertion/reconciliation. A busy/expired/transport refusal
+                // is an unreached cut, never the expected negative result.
+                let after_denial = report.data_call(
+                    "actual_drop_owner_and_native_after_ObserveReleased_denial",
+                    || target_control(target, range, phase, false, None),
+                );
+                report.event(serde_json::json!({
+                    "actual_ObserveReleased_error":read.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+                    "actual_after_denial":after_denial.as_ref().ok(),
+                    "actual_after_denial_error":after_denial.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+                    "separate_memory_storage_snapshots_non_atomic":true,
+                }));
+                let error = read.expect_err("Dropped alone is not armed released Open");
+                // Exact real mapping: released_generation emits Cluster;
+                // server response stores its Display as remote.message with
+                // cluster_data_operation_failed, then the pinned RPC client
+                // maps that envelope back into Cluster with this full body.
+                let expected = format!(
+                    "cluster node {} rejected RPC cluster_data_operation_failed: cluster error: joint observed owner has not released",
+                    node(4)
+                );
+                assert!(
+                    matches!(&error, BicDbError::Cluster(body) if body == &expected),
+                    "required protected unarmed-continuity denial was not reached: {error:?}"
+                );
+                let after_denial = after_denial?;
+                same_native(&retained, &after_denial);
+                assert_eq!(
+                    retained["queue"], after_denial["queue"],
+                    "readonly denial cannot clear or replace original release uncertainty"
+                );
+                assert_eq!(retained["actual_successor"], after_denial["actual_successor"],
+                    "readonly denial must retain the same dropped owner/history and original API errors");
                 let resolved =
                     report.data_call("actual_same_operation_typed_ReconcileRelease", || {
                         coordinator.drive_finite_remote_release(

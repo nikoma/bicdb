@@ -9,7 +9,20 @@ use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use std::sync::Weak;
 
 mod closed_fence;
+mod no_domain;
+mod remote_attempt;
+mod remote_image;
 pub(crate) use closed_fence::NativeAssignedRegisteredClosedFence;
+pub(crate) use no_domain::NativeRegisteredSelectedRangeNoDomain;
+pub(crate) use remote_attempt::NativeRegisteredRemoteProposalPoint;
+pub(crate) use remote_attempt::NativeRegisteredRemoteTransactionRequest;
+pub(crate) use remote_attempt::{
+    NativeRegisteredRemoteInstallPreflight, NativeRegisteredRemoteJointOwner,
+    NativeRegisteredRemoteJointReleaseOwner, NativeRegisteredRemoteJointTarget,
+    NativeRegisteredServingDataPolicyOrigin,
+};
+pub(crate) use remote_image::NativeRegisteredRemoteImageStep;
+pub(crate) use remote_image::NativeRegisteredRemoteTransferRequest;
 mod assigned_policy;
 pub(crate) use assigned_policy::NativeAssignedDataPolicyOrigin;
 
@@ -28,6 +41,8 @@ pub struct NativeRegisteredReplicaReceiverStatus {
     pub data_serving: bool,
 }
 
+type RegisteredJointTargets =
+    Mutex<std::collections::BTreeMap<crate::RangeId, Arc<NativeRegisteredRemoteJointOwner>>>;
 pub(crate) struct NativeRegisteredReplicaAdmission {
     service: Weak<Mutex<ClusterDataNodeService>>,
     runtime: Weak<RangeRecoveryRuntime>,
@@ -42,8 +57,15 @@ pub(crate) struct NativeRegisteredReplicaAdmission {
     factory: Weak<NativeUnassignedLearnerFactory>,
     original_hook: crate::db::NativeRegisteredReceiverHook,
     closed_fence_ready: Weak<AtomicBool>,
+    joint_targets: Weak<RegisteredJointTargets>,
 }
 impl NativeRegisteredReplicaAdmission {
+    #[cfg(test)]
+    pub(crate) fn test_keep_original_registration(
+        &self,
+    ) -> Result<impl std::any::Any + Send + Sync> {
+        self.original_hook.test_keep_original_registration()
+    }
     pub(crate) fn require_live(&self) -> Result<()> {
         if !self
             .live
@@ -89,6 +111,15 @@ pub(super) struct NativeRegisteredReplicaReceiver {
     drained: Option<DrainedClusterDataListener>,
     listener: Option<ClusterDataServerHandle>,
     stopping: bool,
+    remote_attempts: std::collections::BTreeMap<
+        crate::RangeId,
+        remote_attempt::NativeRegisteredRemoteInstallAttempt,
+    >,
+    remote_joint_targets: Arc<RegisteredJointTargets>,
+    remote_images: std::collections::BTreeMap<
+        crate::RangeId,
+        crate::db::NativeRegisteredRemoteImageInstallation,
+    >,
 }
 #[derive(Clone)]
 pub(super) struct RegisteredAssignedParts {
@@ -229,6 +260,7 @@ impl NativeRegisteredReplicaReceiver {
         );
         let life = Arc::new(AtomicBool::new(true));
         let closed_fence_ready = Arc::new(AtomicBool::new(false));
+        let remote_joint_targets = Arc::new(Mutex::new(std::collections::BTreeMap::new()));
         let admission = Arc::new(NativeRegisteredReplicaAdmission {
             service: Arc::downgrade(&backend.service),
             runtime: Arc::downgrade(&runtime),
@@ -243,6 +275,7 @@ impl NativeRegisteredReplicaReceiver {
             factory: Arc::downgrade(factory),
             original_hook,
             closed_fence_ready: Arc::downgrade(&closed_fence_ready),
+            joint_targets: Arc::downgrade(&remote_joint_targets),
         });
         admission.require_listener(&backend.service, &runtime)?;
         parent.check()?;
@@ -257,6 +290,9 @@ impl NativeRegisteredReplicaReceiver {
             drained: None,
             listener: None,
             stopping: false,
+            remote_attempts: Default::default(),
+            remote_images: Default::default(),
+            remote_joint_targets,
         })
     }
     fn advance(

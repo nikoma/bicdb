@@ -9,6 +9,9 @@ use crate::distribution_range_consensus::{
 use crate::distribution_range_mutation::RangeMutationAuthority;
 use parking_lot::RwLock;
 
+#[cfg(feature = "tls-replication")]
+mod registered_hook_lifetime;
+
 fn config() -> DbConfig {
     DbConfig::default()
         .with_fsync(true)

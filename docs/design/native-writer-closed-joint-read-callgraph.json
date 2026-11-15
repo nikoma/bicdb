@@ -1,0 +1,116 @@
+{
+  "schema": "closed-pre-serving-joint-read-callgraph-v1",
+  "baseline": "a5911ec99d0564c011d916309bda64b6ae62a9dc",
+  "prior_frozen_leaf": "d793680c8ff904c9b79697054a4aa9b0b504d712",
+  "classification": "SOURCE ONLY; no compilation or runtime proof",
+  "paths": [
+    {
+      "stage": "writer CLOSED native audit",
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/data_domains/closed.rs",
+      "entry": "advance_closed_with_store",
+      "source_sha256": "f5c4611b0f6823b80ae3f7723ef70bd07ff221df893eb71bf0f66a918b1cf983",
+      "boundary": "Transition-only typed historical scope; Uncertain requires exact native CURRENT/archive; actual helper outcome/bytes retained"
+    },
+    {
+      "stage": "Closed observation provenance",
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff/bridge.rs",
+      "entry": "observe_joint_decision_with_writer_domain_and_point",
+      "source_sha256": "cfc89325fac1fdc52a082856060deef975972f419322036f1247a18ca15f8de9",
+      "boundary": "Only real Closed producer carries same actual Closed Arc; Installed and Registered producers retain None"
+    },
+    {
+      "stage": "fresh committed observation",
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/committed.rs",
+      "entry": "from_actual_service",
+      "source_sha256": "dde40e94ddeae5141322aa67ae79f84f9430b01b1f56d6b2ce6d6d4c9e4c23b5",
+      "boundary": "Private actual-domain retention; constructor rejects other enum variants or different decision; existing require_current/durable-fact semantics remain strict native/MQ"
+    },
+    {
+      "stage": "initial preparation and preactivation refresh",
+      "path": "crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/bridge.rs",
+      "entry": "require_native_joint_bridge_base",
+      "source_sha256": "62d65b015f9586a2416a242d260b3b1f44027087d5f452ee67f549784046abf5",
+      "boundary": "Actual Closed original survivor identity+exact Frozen allocation+fresh committed OWN/native/MStore point permits ONLY joint historical image absence; all catalogue/OLD/abort/history checks retained; None remains generic strict"
+    },
+    {
+      "stage": "prepared catalogue revalidation",
+      "path": "crates/bicdb-core/src/db/range_image_native/serving_configuration/joint_handoff/bridge/publication_scope.rs",
+      "entry": "publication_read_scope",
+      "source_sha256": "9b82c0839d331ed9f5d0ec817bda016131741d525c5e086b7271ea665efd163a",
+      "boundary": "Unchanged: catalogue.require_current reaches same typed joint helper under original journal/frozen; complete retained command history remains checked"
+    },
+    {
+      "stage": "actualHost Open re-fsync",
+      "path": "crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/activation.rs",
+      "entry": "refsync_joint_activation_from_actual_host",
+      "source_sha256": "8a678aadf6a49f6f1a2dd2459237f4b37e9c94f183df14b9831fb16a189ca4af",
+      "boundary": "Actual original writer_domain checked against protected native decision; Closed no longer incorrectly demands ordinary Serving; exact existing activation/native bytes and full fsync still mandatory"
+    },
+    {
+      "stage": "fresh Open and activation recovery",
+      "path": "crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/activation/fresh.rs",
+      "entry": "persist_fresh_native_joint_activation",
+      "source_sha256": "cfc1cc2b5df563af1836bc44bae5ff0abaccf0a0c860bb217077099ccd5f84a9",
+      "boundary": "Unchanged: actual original domain, fresh OWN/MStore gate, exact protected native bridge/complete catalogue, original Frozen; no ordinary Serving check"
+    },
+    {
+      "stage": "activation retry",
+      "path": "crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/activation.rs",
+      "entry": "refsync_native_joint_catalogue_activation",
+      "source_sha256": "8a678aadf6a49f6f1a2dd2459237f4b37e9c94f183df14b9831fb16a189ca4af",
+      "boundary": "Unchanged: existing actual original writer_domain handles Closed; exact persisted native/catalogue activation and fsync remain"
+    },
+    {
+      "stage": "ALL Open release",
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff/bridge/release.rs",
+      "entry": "require_current_with_store_scope",
+      "source_sha256": "de40a03469cd5f353332a9ae5c3c54b305633f2ad55403f4b412a1469d7da0f9",
+      "boundary": "Unchanged: actual Closed domain/current native audit, fresh per-member committed observation, native activation and exact Frozen or released generation; no ordinary range admission"
+    },
+    {
+      "stage": "source export / OLD observation retirement",
+      "path": "crates/bicdb-core/src/distribution_range_image/remote_source.rs",
+      "entry": "retire_old_export_custody_after_joint_open",
+      "source_sha256": "8114fd4943e69042d6f61da57b78e8d277425100794ad6e8f9fdf91afd238950",
+      "boundary": "Unchanged: original certificate/owner and genuine ALL-Open retirement; no selected ordinary writer check"
+    },
+    {
+      "stage": "SAME State Serving policy",
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/data_domains/serving.rs",
+      "entry": "advance",
+      "source_sha256": "dff050a05a28c51b0949a25ed9e92f9bd74492139ee346bda0314a51d1122200",
+      "boundary": "Unchanged: real ALL-released quorum+independent fresh post-quorum authority+actual native/catalogue/open generation; ordinary range remains pending until verified Serving publication"
+    },
+    {
+      "stage": "ordinary recovery / Ready",
+      "path": "crates/bicdb-core/src/db/range_image_native/serving_configuration/joint_handoff/bridge/activation/recovery.rs",
+      "entry": "observe_current_joint_recovery_domain_inner",
+      "source_sha256": "a499439ab61cd703edbd0c6b6f4d90c5d09007b65b137bb9379e6fe01219ab06",
+      "boundary": "UNCHANGED STRICT: ordinary no-image and writer.require_database; must happen AFTER Serving, never substituted by historical scope"
+    },
+    {
+      "stage": "ordinary current-joint recovery catalogue",
+      "path": "crates/bicdb-core/src/distribution_range_consensus/current_joint_recovery.rs",
+      "entry": "current_joint_local_handoff_promise",
+      "source_sha256": "6482e8b435eae6d026daa5249c265dd419edca1be2c3f7578e463a936c07b780",
+      "boundary": "UNCHANGED STRICT: no-image ordinary admission; not a joint-only pre-Serving producer"
+    },
+    {
+      "stage": "ordinary no-image guard",
+      "path": "crates/bicdb-core/src/distribution_range_consensus/image_install_state.rs",
+      "entry": "require_no_image_install",
+      "source_sha256": "d19f69dabc0baa37dce2d53dbf350d2cce04f84834cd3f16b3a07edda82dc2ed",
+      "boundary": "BYTE-UNCHANGED: selected writer DATA Serving still required"
+    }
+  ],
+  "notes": [
+    "No native DATA record or persisted catalogue constructs a Closed owner.",
+    "No generic committed/Installed/Registered observer obtains a Closed owner.",
+    "Original Frozen is tracked as Weak allocation identity; no extra strong permit pin or refreeze acceptance.",
+    "Post-activation epoch-only catalogue history remains validated via existing actual native scope.",
+    "APP, Strong, ordinary recovery/Ready and selected Serving guards are unchanged.",
+    "Synchronous service/journal/native IO does not establish independent-other-range progress or bounded kernel IO.",
+    "No original failure is reclassified; actual new control execution remains pending."
+  ],
+  "source_review_successor_reason": "bounded formatter now stops prefix retention after the first truncation while streaming all later chunks into SHA256; split-chunk UTF8 regression added, not executed"
+}

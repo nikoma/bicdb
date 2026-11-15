@@ -9,7 +9,11 @@ use crate::distribution_data::{
 use crate::distribution_range_consensus::RangeWriteCoordinator;
 use crate::distribution_range_recovery::RangeRecoveryRuntime;
 use std::sync::Weak;
+mod registered_serving;
+pub(super) use registered_serving::NativeRegisteredJoinedDataTransfer;
+use registered_serving::RegisteredServingPolicy;
 mod cleanup;
+mod writer_data_domain;
 use cleanup::{AssignedCleanup, AssignedCleanupSender};
 
 pub(crate) struct NativeAssignedDataAdmission {
@@ -72,6 +76,7 @@ impl NativeAssignedDataAdmission {
 }
 pub(super) struct NativeAssignedDataHost {
     parts: registered_replica::RegisteredAssignedParts,
+    registered: Option<RegisteredServingPolicy>,
     coordinator: Option<Arc<RangeWriteCoordinator<TcpClusterRelocationTransport>>>,
     attempt: Option<NativeAssignedWriterInstallAttempt>,
     image: Option<NativeJointServingLease>,
@@ -81,6 +86,7 @@ pub(super) struct NativeAssignedDataHost {
     life: Arc<AtomicBool>,
     stopping: bool,
     cleanup: Option<AssignedCleanupSender>,
+    writer_data_domains: super::writer_data_domain::NativeHostWriterDataDomains,
 }
 impl NativeAssignedDataHost {
     fn new(
@@ -101,6 +107,7 @@ impl NativeAssignedDataHost {
         }
         let range = actual.base().intended_activation_range().clone();
         Ok(Self {
+            registered: None,
             parts,
             coordinator: None,
             attempt: None,
@@ -111,9 +118,13 @@ impl NativeAssignedDataHost {
             life: Arc::new(AtomicBool::new(true)),
             stopping: false,
             cleanup: None,
+            writer_data_domains: Default::default(),
         })
     }
     fn install_closed(&mut self, parent: &CancellationToken) -> Result<()> {
+        if self.registered.is_some() {
+            return self.install_registered_serving(parent);
+        }
         parent.check()?;
         if self.stopping {
             return Err(invalid("stopping Assigned DATA owner cannot restart"));
@@ -326,6 +337,9 @@ impl NativeAssignedDataHost {
             std::thread::sleep(Duration::from_millis(5));
         }
         if let Some(attempt) = &self.attempt {
+            if self.writer_data_domains.unresolved() {
+                return Err(invalid("Assigned unknown DATA-domain publication retained; explicit reconciliation required"));
+            }
             if attempt.unresolved_native_publication() {
                 return Err(invalid("Assigned unknown native policy retained CLOSED; explicit reconciliation required"));
             }

@@ -297,6 +297,8 @@ impl MetadataConsensusStore {
                     match_index: BTreeMap::new(),
                     last_leader_contact_ms: unix_time_ms(),
                     native_owner: owner,
+                    publication_version:
+                        super::super::publication_version::MetadataPublicationVersion::new(),
                 });
             }
             let store = retained.as_mut().unwrap();
@@ -352,7 +354,8 @@ impl MetadataConsensusStore {
         // Restrictive same-state refsync on retry; preserve term/vote/log/index.
         store.persist()?;
         observed.require_live_request(business)?;
-        token.check()
+        token.check()?;
+        store.finish_publication_version_initialization()
     }
 }
 

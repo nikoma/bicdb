@@ -33,11 +33,15 @@ mod remote_source;
 mod remote_target;
 #[cfg(feature = "tls-replication")]
 pub(crate) use remote_source::{
-    ActualNativeRemoteImageSourceFrame, NativeRemoteImageManifestV1,
-    NativeRemoteImageSourceOperationV1, NativeRemoteImageSourcePayloadV1,
-    NativeRemoteImageSourceRegistry, NativeRemoteImageSourceReplyV1,
-    NativeRemoteImageSourceRequestV1, NativeRemoteImageSourceSession,
-    NativeRetainedRemoteImageSource,
+    ActualNativeRemoteImageSourceFrame, ActualNativeSourceDiscovery,
+    NativeObserveRegisteredNewRequestV1, NativeRegisteredNewExportReplyV1,
+    NativeRemoteImageManifestV1, NativeRemoteImageSourceOperationV1,
+    NativeRemoteImageSourcePayloadV1, NativeRemoteImageSourceRegistry,
+    NativeRemoteImageSourceReplyV1, NativeRemoteImageSourceRequestV1,
+    NativeRemoteImageSourceSession, NativeRetainedRemoteImageSource,
+    NativeSourceDiscoveryOperationV1, NativeSourceDiscoveryReplyV1, NativeSourceDiscoveryRequestV1,
+    NativeSourceExportBindingV1, NativeSourceExportOperationV1, NativeSourceExportReplyV1,
+    NativeSourceExportRequestV1, NativeSourceExportRetiredV1,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use remote_target::{NativeRemoteImageFact, NativeRemoteImageStep};

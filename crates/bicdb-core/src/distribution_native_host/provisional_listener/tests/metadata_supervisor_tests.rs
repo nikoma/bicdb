@@ -171,6 +171,17 @@ impl Drop for Network {
         }
         if std::thread::panicking() {
             self.fixture._root.disable_cleanup(true);
+            for (node_index, worker) in self.workers.iter().enumerate() {
+                if let Some(worker) = worker {
+                    eprintln!(
+                        "NATIVE_METADATA_SUPERVISOR_OBSERVATIONS {}",
+                        serde_json::json!({
+                            "node_index":node_index,"data":worker.test_observation().snapshot(),
+                            "source":"original owned supervisor; snapshot after stop attempts",
+                        })
+                    );
+                }
+            }
             eprintln!(
                 "NATIVE_METADATA_SUPERVISOR_PRIVATE {}",
                 self.fixture._root.path().display()
@@ -492,3 +503,5 @@ fn native_owned_metadata_supervisor_strict_metadata_reopen_preserves_protected_u
         id
     );
 }
+
+mod snapshot_reader_tests;

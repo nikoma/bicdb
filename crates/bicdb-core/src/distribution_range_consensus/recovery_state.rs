@@ -1003,7 +1003,10 @@ impl RangeWriteStore {
         self.require_no_image_install(scope.range_id)?;
         self.require_active_recovery_scope_record(scope)
     }
-    fn require_active_recovery_scope_record(&self, scope: &RecoveryFenceScope) -> Result<()> {
+    pub(super) fn require_active_recovery_scope_record(
+        &self,
+        scope: &RecoveryFenceScope,
+    ) -> Result<()> {
         let saved = self
             .catalog
             .recovery_fences

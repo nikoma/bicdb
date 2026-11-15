@@ -277,7 +277,7 @@ enum CurrentJointBorrowedReadScope<'borrow, 'scope> {
 impl BicDb {
     /// Actual protected LOCAL original-promise proof, independent of a plan's
     /// request cut. The old TTL is historical; no fresh authority comes from it.
-    fn require_current_joint_local_promise(
+    pub(in crate::db::range_image_native) fn require_current_joint_local_promise(
         &self,
         native: &NativeRecoveryAdmission,
         data: &NativeJointDecisionData,

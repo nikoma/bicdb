@@ -18,6 +18,7 @@ pub(super) struct NativeInitialDataCleanup {
     hot_recovery: Option<Arc<NativeHotRecoveryMaintenance>>,
     dispatcher: Option<Arc<NativeStrongEventDispatcher>>,
     listeners: Vec<ClusterDataServerHandle>,
+    writer_data_domains: super::super::writer_data_domain::NativeHostWriterDataDomains,
 }
 impl NativeInitialDataCleanup {
     pub(super) fn take_from(owner: &mut NativeInitialDataHost) -> Self {
@@ -27,6 +28,7 @@ impl NativeInitialDataCleanup {
             runtime: owner.runtime.take(),
             hot_recovery: owner.hot_recovery.take(),
             dispatcher: owner.dispatcher.take(),
+            writer_data_domains: std::mem::take(&mut owner.writer_data_domains),
             listeners: [owner.listener.take(), owner.old_listener.take()]
                 .into_iter()
                 .flatten()
@@ -57,6 +59,7 @@ impl NativeInitialDataCleanup {
             .as_ref()
             .is_none_or(|dispatcher| dispatcher.try_clear_for_cleanup());
         if !drained
+            || self.writer_data_domains.unresolved()
             || !binding_cleared
             || self
                 .dispatcher

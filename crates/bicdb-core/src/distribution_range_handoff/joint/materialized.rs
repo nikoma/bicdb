@@ -30,6 +30,10 @@ pub(crate) struct NativeJointMaterializedFacts {
 }
 
 pub(crate) enum NativeJointNewObservation {
+    #[cfg(feature = "tls-replication")]
+    Registered {
+        actual: crate::distribution_data::ActualServiceNativeRegisteredJointNewEvidence,
+    },
     Survivor {
         old: Arc<NativeJointOldObservation>,
         role: crate::distribution_range_recovery::RecoveryRoleAdmission,
@@ -40,6 +44,13 @@ pub(crate) enum NativeJointNewObservation {
     },
 }
 impl NativeJointNewObservation {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn from_registered_actual_target(
+        actual: crate::distribution_data::ActualServiceNativeRegisteredJointNewEvidence,
+    ) -> Result<Self> {
+        actual.require_current()?;
+        Ok(Self::Registered { actual })
+    }
     pub(crate) fn from_finalized_actual_target(
         actual: ActualServiceNativeJointNewEvidence,
         service: Arc<Mutex<ClusterDataNodeService>>,
@@ -54,6 +65,8 @@ impl NativeJointNewObservation {
     }
     pub(crate) fn require_current(&self) -> Result<()> {
         match self {
+            #[cfg(feature = "tls-replication")]
+            Self::Registered { actual } => actual.require_current(),
             Self::Survivor { old, .. } => old.require_current(),
             Self::Target { actual, service } => {
                 let local = service
@@ -63,14 +76,35 @@ impl NativeJointNewObservation {
             }
         }
     }
+    /// Called only after an actual preparation refusal, outside engine guards.
+    #[cfg(test)]
+    pub(super) fn test_issuance_clock(
+        &self,
+        entered: std::time::Instant,
+        returned: std::time::Instant,
+    ) -> serde_json::Value {
+        match self {
+            #[cfg(feature = "tls-replication")]
+            Self::Registered { actual } => serde_json::json!({"variant":"Registered",
+                "actual":actual.test_joint_issuance_clock(entered,returned)}),
+            Self::Survivor { role, .. } => serde_json::json!({"variant":"Survivor",
+                "actual":role.test_joint_issuance_clock(entered,returned)}),
+            Self::Target { actual, .. } => serde_json::json!({"variant":"Target",
+                "actual":actual.test_joint_issuance_clock(entered,returned)}),
+        }
+    }
     pub(super) fn require_live_issuance(&self) -> Result<()> {
         match self {
+            #[cfg(feature = "tls-replication")]
+            Self::Registered { actual } => actual.require_issuance_current(),
             Self::Survivor { old, role } => old.require_new_member_role(role),
             Self::Target { actual, .. } => actual.require_issuance_current(),
         }
     }
     pub(super) fn facts(&self) -> NativeJointMaterializedFacts {
         match self {
+            #[cfg(feature = "tls-replication")]
+            Self::Registered { actual } => actual.facts().clone(),
             Self::Survivor { old, role } => {
                 let mut facts = old.materialized_facts();
                 facts.metadata_term = role.metadata_term();
@@ -84,18 +118,30 @@ impl NativeJointNewObservation {
 }
 
 pub(crate) struct NativeJointNewRound {
-    old: Arc<NativeJointOldClosedQuorum>,
+    old: NativeJointOldDecisionOwners,
     observations: BTreeMap<ClusterNodeId, NativeJointNewObservation>,
 }
 pub(crate) struct NativeJointMaterializedQuorums {
-    pub(super) old: Arc<NativeJointOldClosedQuorum>,
+    pub(super) old: NativeJointOldDecisionOwners,
     pub(super) new: BTreeMap<ClusterNodeId, NativeJointNewObservation>,
 }
 impl NativeJointNewRound {
     pub(crate) fn begin(old: Arc<NativeJointOldClosedQuorum>) -> Result<Self> {
         old.require_current()?;
         Ok(Self {
-            old,
+            old: NativeJointOldDecisionOwners::Local(old),
+            observations: BTreeMap::new(),
+        })
+    }
+    /// The certificate is not cast into a local quorum. Every actual recipient
+    /// owner must independently match the authenticated historical response.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn begin_remote_actual(
+        certificate: Arc<NativeRemoteOldCutCertificate>,
+        recipients: BTreeMap<ClusterNodeId, Arc<NativeJointOldObservation>>,
+    ) -> Result<Self> {
+        Ok(Self {
+            old: NativeJointOldDecisionOwners::from_remote_actual(certificate, recipients)?,
             observations: BTreeMap::new(),
         })
     }
@@ -127,8 +173,7 @@ impl NativeJointNewRound {
         self.observations.insert(facts.node_id, observation);
         Ok(())
     }
-    pub(crate) fn finish(self) -> Result<NativeJointMaterializedQuorums> {
-        self.old.require_current()?;
+    fn require_complete_membership(&self) -> Result<()> {
         let plan = self.old.plan();
         if self.observations.len() < plan.new_members().len() / 2 + 1
             || !self
@@ -140,6 +185,11 @@ impl NativeJointNewRound {
                 "actual NEW data materialization needs a distinct majority and its intended leader",
             ));
         }
+        Ok(())
+    }
+    pub(crate) fn finish(self) -> Result<NativeJointMaterializedQuorums> {
+        self.old.require_current()?;
+        self.require_complete_membership()?;
         for observation in self.observations.values() {
             observation.require_live_issuance()?;
             observation.require_current()?;
@@ -148,6 +198,20 @@ impl NativeJointNewRound {
             old: self.old,
             new: self.observations,
         })
+    }
+
+    /// Consume the original collected owners directly at the complete decision
+    /// validation boundary. No intermediate materialized quorum escapes with a
+    /// currentness claim. The ordinary preparation still checks ALL actual
+    /// owners and every original issuance before draining any capture pin, and
+    /// repeats its final complete current check before returning a capability.
+    pub(crate) fn prepare_decision(self) -> Result<NativeJointPreparedDecision> {
+        self.require_complete_membership()?;
+        NativeJointMaterializedQuorums {
+            old: self.old,
+            new: self.observations,
+        }
+        .prepare_decision()
     }
 }
 impl NativeJointMaterializedQuorums {
@@ -167,8 +231,20 @@ impl NativeJointMaterializedQuorums {
 }
 
 impl NativeJointNewObservation {
+    #[cfg(feature = "tls-replication")]
+    pub(super) fn actual_service_for_metadata(
+        &self,
+    ) -> &Arc<parking_lot::Mutex<crate::distribution_data::ClusterDataNodeService>> {
+        match self {
+            Self::Registered { actual } => actual.service(),
+            Self::Survivor { old, .. } => old.actual_service(),
+            Self::Target { service, .. } => service,
+        }
+    }
     pub(super) fn release_capture_pin_for_decision(&self) -> Result<()> {
         match self {
+            #[cfg(feature = "tls-replication")]
+            Self::Registered { actual } => actual.release_capture_pin_for_decision(),
             Self::Survivor { old, .. } => old.release_capture_pin_for_decision(),
             Self::Target { actual, service } => {
                 let service = service
@@ -187,6 +263,10 @@ impl NativeJointNewObservation {
         parent: &crate::CancellationToken,
     ) -> Result<crate::db::NativeJointDecisionReceipt> {
         match self {
+            #[cfg(feature = "tls-replication")]
+            Self::Registered { .. } => Err(invalid(
+                "Registered decision needs original actual current-metadata publication/count path",
+            )),
             Self::Survivor { old, .. } => old.publish_decision(admission, parent),
             Self::Target { actual, service } => {
                 let mut service = service
@@ -204,6 +284,8 @@ impl NativeJointNewObservation {
         receipt: &crate::db::NativeJointDecisionReceipt,
     ) -> Result<()> {
         match self {
+            #[cfg(feature = "tls-replication")]
+            Self::Registered { actual } => actual.require_decision_receipt(receipt),
             Self::Survivor { old, .. } => old.require_decision_receipt(receipt),
             Self::Target { service, .. } => service
                 .try_lock()

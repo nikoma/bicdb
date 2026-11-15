@@ -1,0 +1,219 @@
+{
+  "affected_original_cases": [
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activated_anchor_archive_tests::native_current_joint_actual_image_target_anchor_r3_at_r4_refuses_missing_serving_archive"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_caller_cancel_and_exact_fresh_recovery"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_foreign_db_and_store_refused"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_missing_decision_archive_refused"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::activation_scope_cut_tests::native_current_joint_activation_scope_actual_postcat_writer_replacement_refused"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::closed_policy_baseline_tests::native_joint_policy_original_writer_reaches_actual_decision_without_reinstall_baseline"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::current_joint_authority_tests::native_current_joint_actual_authority_and_original_writer_cannot_rebase_recovery"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_activation_idempotence_tests::native_post_joint_actual_activation_idempotence_after_fresh_activation_ack4_and_strong"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_actual_complete_image_target_becomes_leader_ack_and_strong_read"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_open_phase_reconciles_exact_target_epoch_and_lost_catalogue_reply_while_frozen"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_phase_refuses_expired_original_caller_with_later_long_budget"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::native_joint_fresh_preparation_phase_publishes_all_final_members_after_original_expiry"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::observer_scope_cut_tests::native_current_joint_observer_scope_actual_foreign_identity_cancel_and_hook_cuts"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_final_sweep_foreign_actual_writer_reenrollment_refuses_old_phase"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_original_caller_cancel_cannot_start_fresh_phase"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::open_adversarial_tests::native_joint_open_post_fsync_step_cancel_recovers_exact_fact_with_original_caller_live"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_image_release_refuses_hot_writer_reinstallation_before_owner_drop"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::original_release_writer_tests::native_joint_original_survivor_release_refuses_hot_writer_reinstallation_before_owner_drop"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::post_joint_no_data_tests::native_post_joint_actual_new_domain_prepare_only_recovers_then_ack4_and_strong"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::writer_data_domain_fact_tests::native_writer_data_domain_actual_decided_closed_points_preserve_original_policy"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs:598:14:",
+      "name": "db::range_image_native::rf3_fixture::native_historical_tls::native_strong_point_tests::joint_old_closure_tests::complete_joint_tests::writer_data_domain_fact_tests::native_writer_data_domain_actual_foreign_mstore_refuses_without_native_change"
+    },
+    {
+      "classification": "FAILED at shared DECISION prerequisite; later named acceptance cut not established",
+      "error": "protected native DECISION requires actual fresh OWN/current-MStore version",
+      "location": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/fifth_data_path_tests.rs:955:14:",
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::fifth_data_path_tests::native_fifth_data_path_receives_image_becomes_voter_and_serves_after_one_original_stops"
+    }
+  ],
+  "checks": [
+    "Direct rustfmt --edition2021 --check skip_children=true on two changed Rust files PASS",
+    "Version consistency check 29 packages=1.0.510-beta PASS",
+    "git diff --check PASS"
+  ],
+  "diagnosis": "Callers selected role-only publisher, which explicitly leaves metadata_point=None. Existing protected native sink refuses absence; this is missing actual OWN context at fixture callers, not observed stale supplied metadata.",
+  "failed_source": "d8115fedf13b0bd7107cfddd2664f2c6ea2f261f",
+  "fix_scope": "Only two existing fixture publication loops plus diagnosis docs. Acquire actual recipient-local HostOWN using same Role business; child request deadline capped by original Role; existing publish_actual_owned_member captures real registered current MStore. Production guards unchanged.",
+  "not_run": [
+    "Cargo",
+    "compilation",
+    "tests",
+    "CI/workflow dispatch",
+    "physical/Azure experiment"
+  ],
+  "original_failure_blocks_sha256": "fd6479a130fb3ff9285bf54032da575571ee8f1fa6228e1cf911736265102da9",
+  "original_job": 132380250977,
+  "original_native_result": [
+    "test result: FAILED. 273 passed; 47 failed; 1 ignored; 0 measured; 924 filtered out; finished in 2239.32s"
+  ],
+  "original_raw_log_sha256": "07463b09c7df9ed59fe828d1813aaa81b65798cff5be6980f0d2b78dac568e3f",
+  "original_run": 43572675143,
+  "preserved": [
+    "Original Role object, business, caller ancestry and finite Role deadline",
+    "Recipient local transport identity and authenticated actual HostOWN",
+    "Actual attached listener/MStore/open/Store/version/native publication constraints",
+    "Original tests, assertions, fault cuts and nominal budgets",
+    "No retries, new Role, metadata point from DTO, initialization downgrade or unknown-outcome clear"
+  ],
+  "runtime_status": "NOT TESTED on successor; original22 remain failures, original47 cohort unchanged",
+  "schema": "bicdb-native-joint-decision-owned-context-regression-v1",
+  "source_files": [
+    {
+      "base_blob": "153ea1fe033304d851297039df6a25f00f7a05e0",
+      "base_sha256": "3a6a2f628bfe469265de9bc65ae0d86e2f42200c559c00a723c6c98486e205a2",
+      "identical_to_failed_source": true,
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/decision.rs"
+    },
+    {
+      "base_blob": "a6a3afa4599c9b006ffaefc770e3df36ac378508",
+      "base_sha256": "4e27ae079d2b430511b4572b8218f6365fcf6ee7395d5b9e9f3ecef4ce910cac",
+      "identical_to_failed_source": true,
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_metadata.rs"
+    },
+    {
+      "base_blob": "e23855b8b173ccd033ffa42ece2d5ff3045f9c0c",
+      "base_sha256": "930a5e14f7608a171f4c50bb8c864337698b53ad577cd7c6ee2f9141a6f08c02",
+      "identical_to_failed_source": true,
+      "path": "crates/bicdb-core/src/distribution_range_recovery.rs"
+    },
+    {
+      "base_blob": "c0041c778ac613993ebf8ea02e90765215ba8ec5",
+      "base_sha256": "12b7f981b7e2f1f6e7c376f9816a03d6039c107f9154d7ca25637e41bf7753c7",
+      "identical_to_failed_source": true,
+      "path": "crates/bicdb-core/src/distribution_transport/host_metadata.rs"
+    },
+    {
+      "base_blob": "4c2ab74390ff71b72f3950f03e04fac023ee9404",
+      "base_sha256": "26d795e1f583b33430a54488c289eae321ae29448806ad2d1354b0afc16f33d5",
+      "identical_to_failed_source": true,
+      "path": "crates/bicdb-core/src/distribution_transport.rs"
+    },
+    {
+      "base_blob": "7bba38f66062ded8a0c956cb75f94527680839c5",
+      "base_sha256": "477c5fc0c9177f2ba959807c28681d0747a3dbc1452b685983aecb7a45ffc2cb",
+      "identical_to_failed_source": true,
+      "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_strong_point_tests.rs"
+    },
+    {
+      "base_blob": "9166c4edbd70b82c814d544bc1df06f71a3f9dcb",
+      "base_sha256": "62ed2f978b9a81293ebf0a1ed0a6872bb6c21579caca994ea45037ebb8c76ed9",
+      "identical_to_failed_source": true,
+      "path": "crates/bicdb-core/src/db/range_image_native/rf3_fixture/native_historical_tls/native_joint_old_closure_tests/complete_joint_tests.rs"
+    },
+    {
+      "base_blob": "407ac0ffe2d1e685b256da49fda1b859167b0997",
+      "base_sha256": "93de28c66bcfe0f236f709fdd857c574828ae106202216b6d5a704291fb7fa0c",
+      "identical_to_failed_source": true,
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/fifth_data_path_tests.rs"
+    }
+  ],
+  "source_version": "1.0.510-beta unchanged",
+  "successor_base": "9feb898176e2c9c58c7df509784077e538c4e330"
+}

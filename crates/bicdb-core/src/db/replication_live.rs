@@ -371,6 +371,10 @@ impl BicDb {
         let Some(_native_wal_cut) = self.tx_log.native_wal_cut_guard()? else {
             return Ok(());
         };
+        registered_row_retention::require_no_outstanding(
+            &self.path,
+            self.paged_records.as_deref(),
+        )?;
         // Every caller excludes core committers (through &mut self or commit
         // admission). Drain before replacing the inode, and invalidate here,
         // rather than relying on each checkpoint/close caller to remember it.

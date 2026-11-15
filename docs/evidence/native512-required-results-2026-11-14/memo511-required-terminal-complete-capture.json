@@ -1,0 +1,686 @@
+{
+  "run": 43580010702,
+  "run_type": "Actual normal pull_request requiredCI; no ad-hoc qualifier",
+  "source_head": "2ec5f7545b5bb3706b2e229151a17c2569103bfe",
+  "source_version": "1.0.511-beta",
+  "actual_checkout": "62d4f066af62945747ead2c0c9fa43fb10c30ae0",
+  "actual_checkout_tree": "87e34c5d45cf423914af4bdd500464279c0d6a15",
+  "head_tree_equal": true,
+  "actual_merge_parents": [
+    "7ad192a7d01ba1e0c1967bc4f1bc79d176a4c385",
+    "2ec5f7545b5bb3706b2e229151a17c2569103bfe"
+  ],
+  "tests_conclusion": "failure",
+  "rails_conclusion": "success",
+  "jobs": [
+    {
+      "id": 132402522675,
+      "name": "Formatting",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:19:36Z",
+      "completed_at": "2026-11-14T09:20:12Z"
+    },
+    {
+      "id": 132402522833,
+      "name": "Public repository has no private dependencies",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:19:36Z",
+      "completed_at": "2026-11-14T09:20:22Z"
+    },
+    {
+      "id": 132402522866,
+      "name": "Validate focused test selectors",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:19:36Z",
+      "completed_at": "2026-11-14T09:19:40Z"
+    },
+    {
+      "id": 132402522873,
+      "name": "Licensing invariants",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:19:36Z",
+      "completed_at": "2026-11-14T09:19:49Z"
+    },
+    {
+      "id": 132402522911,
+      "name": "Community-only workspace compiles, tests included",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:19:36Z",
+      "completed_at": "2026-11-14T09:24:13Z"
+    },
+    {
+      "id": 132402546382,
+      "name": "rest of workspace",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:19:42Z",
+      "completed_at": "2026-11-14T10:44:01Z"
+    },
+    {
+      "id": 132402546387,
+      "name": "bicdb-core native multi-node (serial)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:19:42Z",
+      "completed_at": "2026-11-14T09:48:05Z"
+    },
+    {
+      "id": 132402546393,
+      "name": "bicdb-sql",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:19:42Z",
+      "completed_at": "2026-11-14T09:58:20Z"
+    },
+    {
+      "id": 132402546401,
+      "name": "bicdb-pgwire",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:19:42Z",
+      "completed_at": "2026-11-14T09:31:24Z"
+    },
+    {
+      "id": 132402546409,
+      "name": "bicdb-core",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-11-14T09:19:42Z",
+      "completed_at": "2026-11-14T09:37:55Z"
+    },
+    {
+      "id": 132402547263,
+      "name": "Focused PGwire library (${{ inputs.pgwire_filter }})",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-11-14T09:19:40Z",
+      "completed_at": "2026-11-14T09:19:40Z"
+    },
+    {
+      "id": 132402547335,
+      "name": "Focused CLI integration (${{ inputs.cli_target }})",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-11-14T09:19:40Z",
+      "completed_at": "2026-11-14T09:19:40Z"
+    },
+    {
+      "id": 132402547610,
+      "name": "Focused Core integration target (${{ inputs.core_target }} x${{ inputs.core_target_repeat }})",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-11-14T09:19:40Z",
+      "completed_at": "2026-11-14T09:19:40Z"
+    },
+    {
+      "id": 132402547678,
+      "name": "Focused Core library (${{ inputs.core_filter }})",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-11-14T09:19:40Z",
+      "completed_at": "2026-11-14T09:19:40Z"
+    },
+    {
+      "id": 132402522555,
+      "name": "Rails 8.1.4 with stock PostgreSQL adapter",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-14T09:19:36Z",
+      "completed_at": "2026-11-14T09:27:14Z"
+    }
+  ],
+  "component_reports": [
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/memo511-core-one-failure-capture.json",
+      "bytes": 1854,
+      "sha256": "481bb5899769e4e235e62a351eea7245426e76d23a437665e5ba075a00b7a9fb"
+    },
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/memo511-native-success-capture.json",
+      "bytes": 52502,
+      "sha256": "9e71b39a154d235b3b82cf0fa9d1a9cdf94cadb98c834cc6b54d82771a16799f"
+    },
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/memo511-pgwire-success-capture.json",
+      "bytes": 12028,
+      "sha256": "520ac2f72f8e7fb74e54b29ef8f652ad9a8ee55f430705a02a47e79c23ba9e5b"
+    },
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/memo511-rails-success-capture.json",
+      "bytes": 5672,
+      "sha256": "ed5c29c47ed0b5e1babffa1e0abab6e4720562628120d3f238013d6a333ed97e"
+    },
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/memo511-rest-success-capture.json",
+      "bytes": 81428,
+      "sha256": "49263ea4ffb638084cd0060075aa8d206f3c71eb4a8a74863c846315ecf789bf"
+    },
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/memo511-sql-success-capture.json",
+      "bytes": 178200,
+      "sha256": "0ce6ae70b9b49b1a21930b5d688a145d6f8c82d41a744be7343711a5f27e8443"
+    },
+    {
+      "path": "/tmp/bicdb-native-foundations-ci/memo511-workspace-success-capture.json",
+      "bytes": 899,
+      "sha256": "e62b18e04bfe4aec37e9fbdd53a95936383a855b57e5ad1a9f41e011f33a8bcc"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 14110901814,
+      "name": "required-ci-pressure-4-62d4f066af62945747ead2c0c9fa43fb10c30ae0-1",
+      "zip_bytes": 45095,
+      "zip_sha256": "cf116d75e5b9634c7f17f5fc02f78f219a3fdd865c2e6e16740073565feb905b",
+      "members": [
+        {
+          "path": "workspace.jsonl",
+          "bytes": 638989,
+          "sha256": "70a20c5abbb492877de8c9b69320d7fe170968b5c7b1b193d0f01970c4026a4c"
+        }
+      ],
+      "pressure": [
+        {
+          "member": "workspace.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 2493,
+            "completed": 1
+          },
+          "command": [
+            "python3",
+            "scripts/platform/run_workspace_tests_bounded.py",
+            "--exclude",
+            "bicdb-core",
+            "--exclude",
+            "bicdb-sql",
+            "--exclude",
+            "bicdb-pgwire"
+          ],
+          "minimum_available_bytes": 9352945664,
+          "minimum_swap_free_bytes": 2442579968,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 4987.228318615,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        }
+      ]
+    },
+    {
+      "id": 14110237776,
+      "name": "rest-cli-evidence-62d4f066af62945747ead2c0c9fa43fb10c30ae0-1",
+      "zip_bytes": 99075,
+      "zip_sha256": "9a4cae22c5dea1e33370987a76f739a77c56e147864c2ec2f6e81bd39de78e45",
+      "members": [
+        {
+          "path": "rpc-journals/client-01a1d998-cc0d-7592-be41-b0e295dcd37c/journal.jsonl",
+          "bytes": 326140,
+          "sha256": "5991d9dbf10c107c11df02fd38ab40faf287a340d219e43d9065da6041536f39"
+        },
+        {
+          "path": "rpc-journals/client-01a1d998-0d4a-7c23-9c16-208f4f65ea2c/journal.jsonl",
+          "bytes": 2445452,
+          "sha256": "8526d3d00d24e6c6ac30f716242c774dd0e49652f5ad95f1ccdee7612fbf787d"
+        },
+        {
+          "path": "rpc-journals/client-01a1d999-3d44-7333-abde-f0cc11078512/journal.jsonl",
+          "bytes": 85680,
+          "sha256": "1436f3c6286398777cfa25964e83830a50ddef4c732773aa020e2178d31f9cf8"
+        }
+      ],
+      "pressure": []
+    },
+    {
+      "id": 14109152119,
+      "name": "required-ci-pressure-2-62d4f066af62945747ead2c0c9fa43fb10c30ae0-1",
+      "zip_bytes": 18816,
+      "zip_sha256": "faf699db01f9774a82fefbeadbc5e1f438f9a321853ef5c0b20675029668692a",
+      "members": [
+        {
+          "path": "sql.jsonl",
+          "bytes": 281102,
+          "sha256": "9d288ccc1df7451457e082dbf64bf03fcd22b9ef288927f1f033cd8a85b318a4"
+        }
+      ],
+      "pressure": [
+        {
+          "member": "sql.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 1126,
+            "completed": 1
+          },
+          "command": [
+            "./scripts/run-cargo-test-targets-bounded.sh",
+            "bicdb-sql"
+          ],
+          "minimum_available_bytes": 9082155008,
+          "minimum_swap_free_bytes": 3221221376,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 2252.794023685,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        }
+      ]
+    },
+    {
+      "id": 14108896941,
+      "name": "required-ci-pressure-1-62d4f066af62945747ead2c0c9fa43fb10c30ae0-1",
+      "zip_bytes": 13703,
+      "zip_sha256": "e94887e7e731e3a96ec0fa26203e34f74b4cac6839e9adf8d6fc30e907411035",
+      "members": [
+        {
+          "path": "helper.jsonl",
+          "bytes": 59264,
+          "sha256": "12ecc244fd516ad05c47cd27a5c05683fb619ce99b10566a3f2b24206169b324"
+        },
+        {
+          "path": "native.jsonl",
+          "bytes": 143597,
+          "sha256": "a78125571c2cc121f57321f29669483a1c844fe43fb920bdc73895155dfa31e7"
+        }
+      ],
+      "pressure": [
+        {
+          "member": "helper.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 237,
+            "completed": 1
+          },
+          "command": [
+            "cargo",
+            "build",
+            "--config",
+            "profile.dev.package.\"*\".opt-level=2",
+            "-p",
+            "bicdb-core",
+            "--example",
+            "chaos_child",
+            "--locked"
+          ],
+          "minimum_available_bytes": 11529420800,
+          "minimum_swap_free_bytes": 3221221376,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 474.099844335,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        },
+        {
+          "member": "native.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 575,
+            "completed": 1
+          },
+          "command": [
+            "cargo",
+            "test",
+            "--config",
+            "profile.dev.package.\"*\".opt-level=2",
+            "-p",
+            "bicdb-core",
+            "--lib",
+            "--locked",
+            "--",
+            "distribution_native_host::",
+            "range_image_native::rf3_fixture::",
+            "--test-threads=1"
+          ],
+          "minimum_available_bytes": 10682908672,
+          "minimum_swap_free_bytes": 3221221376,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 1150.207843488,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        }
+      ]
+    },
+    {
+      "id": 14108880933,
+      "name": "required-ci-pressure-0-62d4f066af62945747ead2c0c9fa43fb10c30ae0-1",
+      "zip_bytes": 9715,
+      "zip_sha256": "c9a33294cacbee0c86d700c7be2c91f6f6583e97193663c41063314c101f7a38",
+      "members": [
+        {
+          "path": "core.jsonl",
+          "bytes": 51700,
+          "sha256": "cf527013bf73f2309f33f518935e8d45cb995922f89310cdaefb3da67daf1b09"
+        },
+        {
+          "path": "helper.jsonl",
+          "bytes": 77431,
+          "sha256": "60fc5c1b2ea9f3d576166f98b3d9f8743f665834d0f932cbfd3a5076eb0b49af"
+        }
+      ],
+      "pressure": [
+        {
+          "member": "core.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 200,
+            "completed": 1
+          },
+          "command": [
+            "cargo",
+            "test",
+            "--config",
+            "profile.dev.package.\"*\".opt-level=2",
+            "-p",
+            "bicdb-core",
+            "--locked",
+            "--",
+            "--test-threads=4",
+            "--skip",
+            "distribution_native_host::",
+            "--skip",
+            "range_image_native::rf3_fixture::"
+          ],
+          "minimum_available_bytes": 10968461312,
+          "minimum_swap_free_bytes": 3221131264,
+          "completed": {
+            "child_returncode": 101,
+            "elapsed_seconds": 400.2535867910001,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 101,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        },
+        {
+          "member": "helper.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 310,
+            "completed": 1
+          },
+          "command": [
+            "cargo",
+            "build",
+            "--config",
+            "profile.dev.package.\"*\".opt-level=2",
+            "-p",
+            "bicdb-core",
+            "--example",
+            "chaos_child",
+            "--locked"
+          ],
+          "minimum_available_bytes": 11895877632,
+          "minimum_swap_free_bytes": 3221221376,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 620.1479620160001,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        }
+      ]
+    },
+    {
+      "id": 14108411227,
+      "name": "required-ci-pressure-build-62d4f066af62945747ead2c0c9fa43fb10c30ae0-1",
+      "zip_bytes": 2934,
+      "zip_sha256": "74611ed7dab2fe3dc67eae10ba60f66a3dcf65e0af28150c326538bcb3463fb4",
+      "members": [
+        {
+          "path": "alltargets.jsonl",
+          "bytes": 26734,
+          "sha256": "e565daf809e93b75939589d6d14bf9cadc1e0458f91aa5ea51e613eb70c0e678"
+        },
+        {
+          "path": "consumer.jsonl",
+          "bytes": 3953,
+          "sha256": "ee14689c27a3b0c736cc0d6eb4140afbb601fd84d11e8251e3c183dfaf46a61f"
+        }
+      ],
+      "pressure": [
+        {
+          "member": "alltargets.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 106,
+            "completed": 1
+          },
+          "command": [
+            "cargo",
+            "check",
+            "--workspace",
+            "--all-targets",
+            "--locked"
+          ],
+          "minimum_available_bytes": 11921371136,
+          "minimum_swap_free_bytes": 3221221376,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 212.04246698900002,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        },
+        {
+          "member": "consumer.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 14,
+            "completed": 1
+          },
+          "command": [
+            "cargo",
+            "check",
+            "-p",
+            "bicdb-workflow",
+            "--all-targets",
+            "--locked"
+          ],
+          "minimum_available_bytes": 13266874368,
+          "minimum_swap_free_bytes": 3221221376,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 28.006812329000013,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        }
+      ]
+    },
+    {
+      "id": 14107754601,
+      "name": "required-ci-pressure-3-62d4f066af62945747ead2c0c9fa43fb10c30ae0-1",
+      "zip_bytes": 7176,
+      "zip_sha256": "a814f4b3be4ea6cf6383cae3d8f5dffd2434747660c45720adc8b43ada2667cf",
+      "members": [
+        {
+          "path": "pgwire.jsonl",
+          "bytes": 79685,
+          "sha256": "a6eb6c47fe887b8efa88ae80fae0ef1269ba83157b17610924059f6b812cb719"
+        }
+      ],
+      "pressure": [
+        {
+          "member": "pgwire.jsonl",
+          "events": {
+            "started": 1,
+            "sample": 314,
+            "completed": 1
+          },
+          "command": [
+            "cargo",
+            "test",
+            "-p",
+            "bicdb-pgwire",
+            "--locked",
+            "--",
+            "--test-threads=4"
+          ],
+          "minimum_available_bytes": 9227628544,
+          "minimum_swap_free_bytes": 2918666240,
+          "completed": {
+            "child_returncode": 0,
+            "elapsed_seconds": 628.247490868,
+            "event": "completed",
+            "final_group_signal_before_leader_reap": true,
+            "guard_returncode": 0,
+            "omitted_sample_records": 0
+          },
+          "omitted_sample_records": 0,
+          "CPU_childRSS": "NOT COLLECTED"
+        }
+      ]
+    },
+    {
+      "id": 14108017176,
+      "name": "rails-team-board-evidence",
+      "zip_bytes": 13239,
+      "zip_sha256": "bddb11bebc7ac4cb74377329c0f657eeec8f6398b9c65bbabbc0ce10df299501",
+      "members": [
+        {
+          "path": "bicdb.log",
+          "bytes": 47061,
+          "sha256": "91c839cebb51418a97e15ef576b43cb284462a319d9bf3ca4b455a9e80b78fdc"
+        },
+        {
+          "path": "job-receipt.json",
+          "bytes": 536,
+          "sha256": "004e25ea5074a1b276fcb081993706cb20bcedd0142f535dee7aad97daa6754f"
+        },
+        {
+          "path": "http.log",
+          "bytes": 161,
+          "sha256": "c1a1ff6be1339f34b0d0c07f5db0b53df19a0f8212b5909fe3eb64c84d18b2c9"
+        },
+        {
+          "path": "migration-reapply.log",
+          "bytes": 2193,
+          "sha256": "3c84cc4a926e77c07c752f13a8be49ad0844c08dcabeffc5c25cf66e488ccc2c"
+        },
+        {
+          "path": "migration-rollback.log",
+          "bytes": 2206,
+          "sha256": "846adc626c94b7e7e7e3ff28e4c955fb30e2ed60943e8743e40280ed1d0528e0"
+        },
+        {
+          "path": "prepare-idempotent.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "prepare.log",
+          "bytes": 522,
+          "sha256": "0a5637344a5879aa9e109349672def25bcff39f1f5e1a809c5376cda02777673"
+        },
+        {
+          "path": "queue-completed.log",
+          "bytes": 537,
+          "sha256": "9fa3bbc5f29cbe410d6e3ce637a74eef265f2d11dff11b909374e7f7ccefcfce"
+        },
+        {
+          "path": "queue-pending.log",
+          "bytes": 230,
+          "sha256": "ac300fd85c5e09f78aea1863a560d4f438ec22991515356f4a663da0f461cc98"
+        },
+        {
+          "path": "queue-recovered.log",
+          "bytes": 69,
+          "sha256": "558a285b7d55891147989b7fed99194d4737a609caeec5ab9196625e31564e0d"
+        },
+        {
+          "path": "report.json",
+          "bytes": 1555,
+          "sha256": "9c45e182abf2b71792af1e8aebbe1950ca5fff6876c79331cc57a5db5ae32abf"
+        },
+        {
+          "path": "seed-idempotent.log",
+          "bytes": 66,
+          "sha256": "4804dcaad20deecf22137a84b3f7196c5c748498d5cdb1d228c69cf00910235f"
+        },
+        {
+          "path": "seed.log",
+          "bytes": 66,
+          "sha256": "4804dcaad20deecf22137a84b3f7196c5c748498d5cdb1d228c69cf00910235f"
+        },
+        {
+          "path": "tests.log",
+          "bytes": 223,
+          "sha256": "bcd0d8967badf5b0dbe03295e953a19d12b564e88bc0682c2e27d4b1fc22ae64"
+        },
+        {
+          "path": "web.log",
+          "bytes": 27179,
+          "sha256": "0ceb04a2eebe41ff4d589f9d898bc5a28b796b85f6cbc313cc5ef6ace20c03b2"
+        },
+        {
+          "path": "workers.log",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ],
+      "pressure": []
+    }
+  ],
+  "log_capture_attempts": {
+    "132402522675": 1,
+    "132402522833": 1,
+    "132402522866": 1,
+    "132402522873": 1,
+    "132402522911": 1,
+    "132402522555": 1,
+    "132402546401": 1,
+    "132402546409": 1,
+    "132402546387": 1,
+    "132402546393": 1,
+    "132402546382": 1
+  },
+  "missing_non_skipped_logs": [],
+  "unavailable_artifacts": [],
+  "capture_complete": true,
+  "limits": [
+    "Skipped jobs are not executed test results and logs were not requested; transient actual terminal log failures retried separately.",
+    "Every component result applies only to exact source; passingother-sourcecase never erases priorfailure or provescause.",
+    "No per-operation external-ledger/coldreplay/physicalHA/scaling/production qualification inferred from CI PASS.",
+    "No engineopen/sourcechanges/reruns/cancellation by capture observer.",
+    "Resource files do not collectCPU/childRSS; functionaldurationnotRTO. Local0700/0600 doesnotguaranteeupstreamGitHubconfidentiality."
+  ]
+}

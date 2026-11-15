@@ -280,28 +280,71 @@ fn native_birth_snapshot_cache_and_reopen_preserve_known_bindings() {
         .next()
         .unwrap()
         .native_store_birth_v1 = None;
-    assert!(store
-        .install_snapshot(MetadataSnapshot {
+    // Snapshot installation is an INNER part of the actual append operation.
+    // Test the public receiver boundary, which owns the original authority
+    // operation and durable persistence, rather than mutating without it.
+    let snapshot_request = |topology| MetadataAppendRequest {
+        cluster_id: initial.cluster_id.clone(),
+        term: 2,
+        leader_id: ClusterNodeId::new("n1").unwrap(),
+        prev_log_index: 10,
+        prev_log_term: 2,
+        entries: Vec::new(),
+        leader_commit: 10,
+        snapshot: Some(MetadataSnapshot {
             last_included_index: 10,
             last_included_term: 2,
-            topology: wrong,
-            restore_activation: None
-        })
-        .is_err());
+            topology,
+            restore_activation: None,
+        }),
+    };
+    let state_before_invalid = store.state.clone();
+    let version_before_invalid = store.test_actual_publication_version_evidence().unwrap();
+    let invalid = store.handle_append_request(snapshot_request(wrong));
+    let version_after_invalid = store.test_actual_publication_version_evidence().unwrap();
+    eprintln!(
+        "NATIVE_BIRTH_SNAPSHOT_INVALID_BEFORE_ASSERTIONS {}",
+        serde_json::json!({
+        "actual_error":invalid.as_ref().err().map(ToString::to_string),
+        "version_before":version_before_invalid,"version_after":version_after_invalid,
+        "state_unchanged":store.state==state_before_invalid,
+        "metadata_DATA_unit_not_authenticated_network_or_HA":true})
+    );
+    assert!(invalid.is_err());
+    assert_eq!(store.state, state_before_invalid);
+    assert_eq!(version_before_invalid, version_after_invalid);
+    assert_eq!(version_after_invalid["version"]["failed"], false);
+    assert_eq!(version_after_invalid["version"]["ready"], true);
+    assert_eq!(version_after_invalid["version"]["active_operations"], 0);
     let mut added = initial.clone();
     added.generation += 1;
     let id = learner(&mut added);
     let node = added.nodes.get_mut(&id).unwrap();
     node.metadata_role = MetadataMemberRole::Voter;
     node.native_store_birth_v1 = Some(binding(initial.range_image_bootstrap_id.unwrap(), 1));
-    store
-        .install_snapshot(MetadataSnapshot {
-            last_included_index: 10,
-            last_included_term: 2,
-            topology: added.clone(),
-            restore_activation: None,
-        })
-        .unwrap();
+    let accepted = store.handle_append_request(snapshot_request(added.clone()));
+    let version_after_valid = store.test_actual_publication_version_evidence().unwrap();
+    eprintln!(
+        "NATIVE_BIRTH_SNAPSHOT_VALID_BEFORE_ASSERTIONS {}",
+        serde_json::json!({
+        "actual_error":accepted.as_ref().err().map(ToString::to_string),
+        "actual_reply":accepted.as_ref().ok(),"version_after":version_after_valid,
+        "committed_topology_matches":store.committed_topology()==&added,
+        "metadata_DATA_unit_not_authenticated_network_or_HA":true})
+    );
+    assert!(accepted.unwrap().success);
+    assert_eq!(store.committed_topology(), &added);
+    assert_eq!(version_after_valid["version"]["failed"], false);
+    assert_eq!(version_after_valid["version"]["ready"], true);
+    assert_eq!(version_after_valid["version"]["active_operations"], 0);
+    assert!(
+        version_after_valid["version"]["generation"]
+            .as_u64()
+            .unwrap()
+            > version_after_invalid["version"]["generation"]
+                .as_u64()
+                .unwrap()
+    );
     store.persist().unwrap();
     drop(store);
     assert_eq!(open(root.path(), &initial).committed_topology(), &added);

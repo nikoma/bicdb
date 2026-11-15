@@ -1,0 +1,102 @@
+{
+  "review": "independent source-only Registered empty-slot lifetime review",
+  "baseline": "1742776ab02957a053aded2ad4f665500d9325bf",
+  "source": "5341f819797400d45aef64349a1b73c88ed24f8f",
+  "reviewer": "/root/ha_policy_continuation",
+  "status": "no confirmed blocker in examined source; compilation and runtime not tested",
+  "changed_source_pins": [
+    {
+      "path": "crates/bicdb-core/src/db/commit_admission_hook.rs",
+      "git_blob": "a62d70db2acc268b1b350e04f75cd1f5a7466843",
+      "sha256": "ae1ecf7738fd574b28d98a1488d8e12b4ec2417ecbe8bcd76fd02ce93777d72c",
+      "bytes": 4744
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment.rs",
+      "git_blob": "7111e87b177205a2a9b528419cee7208ce2c6bb8",
+      "sha256": "30f9383200feb4c5cea1c71bb794cdcda9930a365c83405193e234d6441b15af",
+      "bytes": 41506
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/tests.rs",
+      "git_blob": "3ef6c0540a91c162b34beec57dfcffa0bf83c7ff",
+      "sha256": "e246fe8001ba486872628e67f4275e62948ed4f6045f391c535973051911e1e5",
+      "bytes": 22120
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/tests/registered_hook_lifetime.rs",
+      "git_blob": "2f8429c820ccd2e5f6938cde9955dcab4c43e457",
+      "sha256": "e2cfc76e1eef4af7e05141046740fbe7a1e5d4b1d3d01dd25faab64400ae80c3",
+      "bytes": 4450
+    },
+    {
+      "path": "docs/design/native-registered-hook-continuity.md",
+      "git_blob": "6cf58af692e5d4bb085c7ec4c8856cee6eee467b",
+      "sha256": "af72d07a77733053199861798d4c56c79edb816efefefb04c6f3b87bb9a7aec5",
+      "bytes": 4152
+    }
+  ],
+  "unchanged_checked": [
+    {
+      "path": "crates/bicdb-core/src/db.rs",
+      "byte_identical": true,
+      "pin": {
+        "path": "crates/bicdb-core/src/db.rs",
+        "git_blob": "eb9bba6622f9cb0b172abf601c7d91f0d9f3a30a",
+        "sha256": "ab3865caa2bc6a80ec5f9364f73d9339a2f7785885f7b01e7f7e902c5aef572c",
+        "bytes": 1458492
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/assigned_install.rs",
+      "byte_identical": true,
+      "pin": {
+        "path": "crates/bicdb-core/src/db/range_image_native/writer_enrollment/assigned_install.rs",
+        "git_blob": "3e0d92d83c2347a06fc17b3d5f816ee0ef38b67d",
+        "sha256": "0ba0626b0dbb59d5249c8ee178dec068b67e2c96e05da53ee4312cebd511f689",
+        "bytes": 28487
+      }
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data.rs",
+      "byte_identical": true,
+      "pin": {
+        "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data.rs",
+        "git_blob": "004fedc448102c746d3eca3d295a41c481ed4f87",
+        "sha256": "9c011d95b5fd77e20590e8edc462135f08a4a4b8e7caf45298966beac3c3ca6a",
+        "bytes": 59299
+      }
+    }
+  ],
+  "findings": [
+    {
+      "classification": "source-confirmed contradiction corrected",
+      "detail": "Original remote NEW memory validator required active=true while genuine empty receiver capture/full borrowed validator require inactive, absent authority/native writer. New necessary memory check requires inactive, not revoked, and original open alive."
+    },
+    {
+      "classification": "source-reviewed revocation coverage",
+      "detail": "empty constructor and fresh native registration constructors start unrevoked. install/clear, enrolled replacement, retaining enrolled swap and Slot Drop revoke original monotonically. Slot has no Clone/destructure field-move caller. Retaining swap returns old whole Slot; its later Drop revokes only that original registration. No marker reset exists."
+    },
+    {
+      "classification": "source-reviewed authority preservation",
+      "detail": "Full borrowed validator still checks actual open Weak identity, Arc-equal original registration/current slot, None authority, None native writer, inactive and unrevoked. Native never-installed-record checks and lexical hook/admission/journal scopes remain independent. Marker supplies no grant."
+    },
+    {
+      "classification": "private producer invariant retained",
+      "detail": "install_enrolled and retaining replacement accept registrations only from the two sealed native producers. Ordinary enrolled install creates fresh registration per call. Assigned publication retains unpublished registration across NativeReadBack and rejects advance after Installed. Rebinding same/current/retired registration is not a supported producer; no setter API change or revocation reset added."
+    },
+    {
+      "classification": "source-reviewed in-place fence",
+      "detail": "deactivate_native_writer changes active only, preserving identity of genuine current empty registration while native policy publication can fail. Actual native-record absence checks still reject uncertain or previously installed receiver; successful replacement revokes original."
+    },
+    {
+      "classification": "not tested",
+      "detail": "Four added born-database tests cover current inactive empty/deactivate, repeated None replacement with externally retained old Arc, public trusted install/clear and actual database Drop/open end while registration retained. Tests have not been compiled or executed in this review; thirteen remote pipeline cuts remain unvalidated on this fix."
+    }
+  ],
+  "limits": [
+    "No Cargo, test, CI, build, push or source mutation performed.",
+    "No successful NEW/DECISION/Serving, other-range progress, cold recovery, physical scale-out, RPO/RTO or production qualification result follows from source review.",
+    "Atomic memory continuity checks alone are necessary refusal checks; full authority and protected mutation checks remain mandatory."
+  ]
+}

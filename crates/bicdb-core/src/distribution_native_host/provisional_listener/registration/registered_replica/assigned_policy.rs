@@ -17,6 +17,29 @@ pub(crate) struct NativeAssignedDataPolicyOrigin {
     _local: std::marker::PhantomData<std::rc::Rc<()>>,
 }
 impl NativeAssignedDataPolicyOrigin {
+    /// This local-image provenance is still a protected native metadata
+    /// origin. Immutable DB identity alone is never current MStore authority.
+    pub(crate) fn require_native_metadata_point(&self, db: &BicDb) -> Result<()> {
+        self.parent.check()?;
+        self.phase.check()?;
+        self.original.database.require_live()?;
+        self.original.store.require_live()?;
+        self.member.require_database_point(db)?;
+        self.member.publication_version().require_current_memory()
+    }
+    /// Memory/request liveness only under the final publication guard; full
+    /// original image/lease/native checks precede it and remain lexical.
+    pub(crate) fn publication_version_guard(
+        &self,
+    ) -> Result<crate::distribution_consensus::NativeMetadataPublicationGuard<'_>> {
+        self.parent.check()?;
+        self.phase.check()?;
+        self.original.database.require_live()?;
+        self.original.store.require_live()?;
+        let guard = self.member.publication_version().try_publication_guard()?;
+        self.policy.require_live()?;
+        Ok(guard)
+    }
     pub(crate) fn with_publication_service<R>(
         &self,
         database: &BicDb,

@@ -24,6 +24,8 @@ use crate::distribution_range_handoff::{
     NativeJointHandoffPlan, NativeJointHandoffRuntime, NativeJointOldObservation,
 };
 
+mod custody_retry_tests;
+
 type Transport = Arc<TcpClusterRelocationTransport>;
 
 struct Five {

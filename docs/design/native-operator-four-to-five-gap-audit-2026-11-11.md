@@ -28,6 +28,7 @@ from compilation or Rails.
 | Retained registry correction | Current source retains the original publisher/native outcome and separates maintenance identity from strict APP/Strong admission | **Not tested at runtime:** current all-target compilation passed; the source-reviewed correction, two new component controls and original CLI ten-second health gate still require execution |
 | Registered fifth replica receiver | Fresh/registered retained receiver and public join path exist | **Passed within predecessor scope:** d3's CLI receiver case passed with DATA serving false. Receiver ingress or metadata voting does not establish populated DATA ownership |
 | Native image/joint/Open/policy/release steps | Finite internal native host consumers exist, including actual remote-serving participants | **Inconclusive as a complete assembled operation:** existence and source review do not prove successful end-to-end relocation, cleanup, cold recovery or replacement |
+| Multiple native ranges on the joining target | The inspected FIRST planner requires a target with no range replicas; FIRST receiver enrollment rejects an existing DATA owner or another retained receive attempt | **Not implemented by iterating FIRST:** a populated-target admission/continuation producer is still required. This does not claim a first complete handoff passed |
 | Automatic native DATA placement and repair after one join | The public operator loop maintains metadata and initial writer/hot recovery; finite native relocation consumers are not a complete periodic placement controller | **Not implemented as the complete native operator path inspected here; not tested** for automatic full-range four-to-five convergence. This is a functional integration gap as well as a qualification gap |
 | Complete external campaign and capacity comparison | Bounded SDK/receipt/reconciliation components exist | **Not tested:** no current full-dataset physical expansion, complete campaign-wide ledger or stable post-convergence throughput gain |
 
@@ -73,6 +74,23 @@ Source anchors for the current native operator boundary are:
   Strong value preceded the fifth voter; later reads were Unavailable and fresh
   writes had no ACK. No false absence was observed. Unavailable reads prove
   neither acknowledged-data loss nor survival.
+
+Two further source boundaries prevent treating this as only a missing scheduler.
+[The FIRST allocation planner](../../crates/bicdb-core/src/distribution_native_host/joined_data_handoff.rs)
+rejects a target already holding any range replica. [FIRST receiver enrollment](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/first_receive.rs)
+rejects an existing DATA owner or another retained attempt/image/step/target.
+Those are deliberate restrictions of this initial lane. A normal expansion
+that assigns several ranges to the same new node needs actual populated-target
+admission and per-range continuation; deleting these checks or looping the first
+control is not that producer. This does not imply all 64 ranges must move.
+
+The [alternate remote joined-handoff backend](../../crates/bicdb-core/src/distribution_native_host/joined_data_handoff/remote_backend.rs)
+also contains explicit unimplemented source transfer, decision, candidate,
+activation and serving stages. It cannot substitute for the finite FIRST
+consumers or complete the operator by being selected. [The actual FIRST
+allocation acceptance facade](../../crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/first_coordinator/acceptance.rs)
+is a test-only module; its real metadata proposal/heartbeat/read observations
+do not constitute a public automatic placement caller.
 
 The next operator gate remains a complete automatic operation, not a manual
 sequence of finite internal calls: one ordinary join, actual assigned image and

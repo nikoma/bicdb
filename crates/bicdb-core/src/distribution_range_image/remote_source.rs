@@ -972,7 +972,21 @@ impl NativeRemoteImageSourceRegistry {
             .ok_or_else(|| invalid("source image operation already active"))?;
         let result = actual.observe_frame(target, request, &own, request.business, &token);
         #[cfg(test)]
-        actual.test_record_frame_wait_return(&result, request, &own, request.business, &token);
+        {
+            let returned = actual.test_take_frame_wait_return(
+                &result,
+                request,
+                &own,
+                request.business,
+                &token,
+            );
+            // The callback can publish a test completion signal. Release the
+            // actual session first so observers can take their strict snapshot.
+            drop(actual);
+            if let Some((callback, facts)) = returned {
+                callback(facts);
+            }
+        }
         result
     }
 }

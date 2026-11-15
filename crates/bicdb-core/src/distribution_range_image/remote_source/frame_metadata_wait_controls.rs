@@ -54,14 +54,14 @@ impl NativeRemoteImageSourceSession {
             callback(parent, self.frame_wait_facts(own, business, parent));
         }
     }
-    pub(super) fn test_record_frame_wait_return(
+    pub(super) fn test_take_frame_wait_return(
         &self,
         actual: &Result<ActualNativeRemoteImageSourceFrame>,
         request: &NativeRemoteImageSourceRequestV1,
         own: &HostMetadataReadObservation,
         business: Uuid,
         registry_request: &CancellationToken,
-    ) {
+    ) -> Option<(Returned, serde_json::Value)> {
         let callback = self
             .frame_metadata_wait
             .get()
@@ -77,7 +77,11 @@ impl NativeRemoteImageSourceSession {
             .into();
             facts["request_is_outer_registry_parent"] = true.into();
             facts["actual_request"] = serde_json::to_value(request).unwrap();
-            callback(facts);
+            // Facts reflect the original return cut. Delivery must wait until
+            // the registry releases the actual source-session guard.
+            Some((callback, facts))
+        } else {
+            None
         }
     }
 }

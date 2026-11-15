@@ -192,7 +192,7 @@ mod actual {
         elapsed_us: u128,
         stage_elapsed_us: Option<u128>,
         parent_remaining_us: Option<i128>,
-        parent_cancelled: bool,
+        parent_cancelled_at_insertion: bool,
         admission_remaining_us: Option<i128>,
         all_phase_remaining_us: Option<i128>,
         post_own_remaining_us: Option<i128>,
@@ -211,6 +211,7 @@ mod actual {
         events: Vec<Event>,
         omitted: u64,
         last_native: Option<NativeState>,
+        latest_actual_issued_xid: Option<u64>,
         root_return: Option<(bool, Option<ErrorData>)>,
         root_operation_returned_us: Option<u128>,
     }
@@ -236,6 +237,7 @@ mod actual {
                     "root_actual_return":actual.root_return,"root_operation_returned_us":actual.root_operation_returned_us,
                     "trace_lifetime_us":actual.start.elapsed().as_micros(),
                     "events":actual.events,"omitted":actual.omitted,"latest_actual_native_state":actual.last_native,
+                    "latest_actual_issued_xid":actual.latest_actual_issued_xid,
                     "DATA_only_not_Ready_or_outcome_resolution":true,
                     "stderr_and_kernel_IO_not_hard_preemptible":true,
                 });
@@ -263,6 +265,9 @@ mod actual {
             if let Some(native) = &native {
                 trace.last_native = Some(native.clone());
             }
+            if let Some(xid) = xid {
+                trace.latest_actual_issued_xid = Some(xid);
+            }
             if trace.events.len() == MAX_EVENTS {
                 trace.omitted = trace.omitted.saturating_add(1);
                 return;
@@ -284,7 +289,7 @@ mod actual {
                 stage_elapsed_us: span
                     .map(|(start, returned)| returned.duration_since(start).as_micros()),
                 parent_remaining_us: remaining(trace.seed.parent.deadline(), now),
-                parent_cancelled: trace.seed.parent.is_cancel_requested(),
+                parent_cancelled_at_insertion: trace.seed.parent.is_cancel_requested(),
                 admission_remaining_us: remaining(clocks.admission, now),
                 all_phase_remaining_us: remaining(clocks.all_phase, now),
                 post_own_remaining_us: remaining(clocks.post_own, now),
@@ -306,6 +311,7 @@ mod actual {
             events: Vec::with_capacity(MAX_EVENTS),
             omitted: 0,
             last_native: None,
+            latest_actual_issued_xid: None,
             root_return: None,
             root_operation_returned_us: None,
         };

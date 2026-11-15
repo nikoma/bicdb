@@ -36,7 +36,9 @@ prefix is explicitly unavailable. The root prefix is not independent evidence
 of a nested stage's error body. No records, payloads, per-range histograms or authority
 objects are serialized. Native DATA contains only the real retained attempt
 enum, native XID, registration/coordinator identity and actual DB open. The
-latest native state and actual root result remain separate from event truncation.
+latest native state, latest actual issued transaction XID, and actual root
+result remain separate from event truncation. Issuing an XID is not a put,
+commit or durability proof.
 
 Entry/return spans cover actual full admission validation, real install-table
 busy refusal, fresh metadata read, origin preparation, coordinator/attempt,
@@ -48,7 +50,8 @@ actual API result, not a new WAL/fsync or outcome-resolution certificate. A
 successful put alone cannot establish commit; NativeUncertain stays uncertain.
 
 Return timestamps are sampled immediately after the original operation, before
-error formatting. Parent, admission, ALL-release-phase, post-OWN and fresh
+error formatting. Cancellation is explicitly sampled at event insertion, not
+claimed to be the bit at the earlier return timestamp. Parent, admission, ALL-release-phase, post-OWN and fresh
 origin-OWN remaining times are signed, so overdue windows are visible. The local
 ALL-release admission has no separate Role object: its Role clock is explicitly
 unavailable. ALL-phase timing is the actual combined phase cancellation deadline,

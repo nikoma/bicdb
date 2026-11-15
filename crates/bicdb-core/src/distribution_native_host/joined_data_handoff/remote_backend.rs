@@ -16,8 +16,10 @@
 //!   range leader or the metadata leader, and the target's fence binds every
 //!   later target step to the node that issued it;
 //! - the read-only OLD observation is admitted from an old member only;
-//! - the old voter epoch read is answered to the range leader only, and only
-//!   while the voter's installed writer policy is the asked descriptor;
+//! - the read-only range move probe (the target's readiness before the
+//!   learner allocation, an old voter's durable epoch before an abort) is
+//!   answered to the leader of the range in the answering member's own
+//!   committed configuration only;
 //! - metadata candidates are proposed in the metadata leader's process only.
 //! One node satisfies all of them: the node that is both the metadata leader
 //! and the leader of the moved range. `resync` and `cut_and_ship` refuse any
@@ -37,7 +39,8 @@
 //! record alone and addresses the new members with the committed decision
 //! identity. Only the certification itself needs the actual certificate.
 //!
-//! Implemented: target admission (committed metadata only), the source cut
+//! Implemented: target admission (committed metadata, then the read-only
+//! pre-flight of the target and every voter), the source cut
 //! with the target fence, the Close round, the target install and the export
 //! retirement, the joint decision, the three membership candidates, the
 //! activation (bridge preparation, bridge publication, catalogue activation,
@@ -82,22 +85,24 @@ use crate::distribution_data::{
     NativeJointSourceRetired, NativeJointSourceRetirementProof,
     NativeRemoteJointSourceRetirementCertificate,
 };
-use crate::distribution_range_consensus::{RangeWriteTransport, RecoveryFenceScope};
+use crate::distribution_range_consensus::RecoveryFenceScope;
 use crate::distribution_range_handoff::{
     NativeJointBridgeDecision, NativeJointBridgePhaseKindV1, NativeJointCommittedDecision,
     NativeJointDecisionData, NativeJointHandoffPlan, NativeJointHandoffStepOperationV1,
     NativeJointHandoffStepOutcomeV1, NativeJointHandoffStepRequestV1, NativeJointOldRound,
     NativeRemoteBridgePublicationCertificate, NativeRemoteBridgePublicationCertificateRound,
     NativeRemoteJointActivationCertificate, NativeRemoteJointDecisionCertificate,
-    NativeRemoteOldOperationV1, NativeRemoteOldRequestV1,
+    NativeRemoteNewFactSetV1, NativeRemoteOldOperationV1, NativeRemoteOldRequestV1,
 };
 use crate::distribution_range_image::NativeRemoteImageManifestV1;
 use crate::distribution_range_recovery::RecoveryEpochFenceRequest;
 use crate::distribution_transport::{
     AuthenticatedNativeJointBridgeStepFrame, AuthenticatedNativeJointHandoffStep,
-    AuthenticatedNativeRemoteOldFrame,
+    AuthenticatedNativeRemoteOldFrame, NativeRangeMoveProbeRoleV1,
 };
 use std::collections::BTreeMap;
+
+mod complete_decision;
 
 /// Receiver-side budget of one target step or fence; receivers bound it to 5 s.
 const TARGET_REQUEST_MS: u64 = 4000;
@@ -132,6 +137,10 @@ const HOST_COMMAND_POLL: Duration = Duration::from_millis(100);
 /// The target rebinds its listener while it runs a command, so a few
 /// requests in a row may find no listener.
 const HOST_COMMAND_FAILURES: usize = 20;
+/// How often one call repeats the activation observation while a member
+/// answers that its own data service is busy, and the pause between two.
+const ACTIVATION_BUSY_REPEATS: usize = 40;
+const ACTIVATION_BUSY_PAUSE: Duration = Duration::from_millis(100);
 /// The target's refusal of a host command while its release is durable but
 /// not confirmed by its second window. Such a target is not a DATA owner
 /// yet: its release step is still served and confirms it.
@@ -380,10 +389,19 @@ pub(crate) struct RemoteJoinedHandoffBackend {
     activation: Option<NativeRemoteJointActivationCertificate>,
     /// The retired source's retirement, for the completion record.
     retired: Option<RemoteSourceRetirement>,
+    /// The fact set of the decision phase this object ran, with that phase.
+    /// Request DATA: a repeated publication towards a member that missed the
+    /// decision names exactly this set again.
+    decision_facts: Option<(Uuid, NativeRemoteNewFactSetV1)>,
     /// Test only: end the activation after the named part, as a
     /// coordinator that stops there would.
     #[cfg(test)]
     stop_after: Option<RemoteTestStop>,
+    /// Test only: while it names a member, the publication of the decision
+    /// is not sent to that member, as a request that timed out would not
+    /// have reached it.
+    #[cfg(test)]
+    decision_publish_fault: Option<Arc<Mutex<Option<ClusterNodeId>>>>,
 }
 
 impl RemoteJoinedHandoffBackend {
@@ -423,8 +441,11 @@ impl RemoteJoinedHandoffBackend {
             decision_body: None,
             activation: None,
             retired: None,
+            decision_facts: None,
             #[cfg(test)]
             stop_after: None,
+            #[cfg(test)]
+            decision_publish_fault: None,
         }
     }
     /// Give the backend this coordinator's OWN data service: the service of
@@ -830,6 +851,70 @@ impl RemoteJoinedHandoffBackend {
             .node_id()
             .clone()
     }
+    /// One read-only probe of `node` for `range`, bounded by `token`. A busy
+    /// member is asked again inside the same bound.
+    fn probe(
+        &self,
+        node: &ClusterNodeId,
+        range: &RangeDescriptor,
+        token: &CancellationToken,
+    ) -> std::result::Result<NativeRangeMoveProbeRoleV1, String> {
+        let mut round = 0;
+        loop {
+            round += 1;
+            match self
+                .transport
+                .native_range_move_probe(node, range.id, range.epoch, token)
+            {
+                Ok(reply) => return Ok(reply.role),
+                Err(error) => {
+                    let text = error.to_string();
+                    if round >= 3 || !text.contains("busy") || token.check().is_err() {
+                        return Err(text);
+                    }
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+            }
+        }
+    }
+    /// Every voter of the committed range answers the read-only probe and
+    /// none holds an unfinished native command of the range.
+    fn require_no_unfinished_command(
+        &self,
+        range: &RangeDescriptor,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        for replica in &range.replicas {
+            if replica.role != RangeReplicaRole::Voter {
+                continue;
+            }
+            let node = &replica.node_id;
+            match self.probe(node, range, &bounded(parent, REQUEST)) {
+                Ok(NativeRangeMoveProbeRoleV1::Voter {
+                    unfinished_command: false,
+                    ..
+                }) => {}
+                Ok(NativeRangeMoveProbeRoleV1::Voter { .. }) => {
+                    return Err(remote_error(format!(
+                        "refused before the target fence and the source cut: old voter {node} holds an unfinished write command of range {} (a write was in flight when the learner allocation committed, and the range's changed writer policy does not let it finish). Its source Close would be refused on every repetition. Nothing was sent, so the move can still be aborted: abort it (move-range --abort) to return the range to its original voters, let the write finish, then start the move again",
+                        range.id
+                    )))
+                }
+                Ok(NativeRangeMoveProbeRoleV1::RegisteredReplicaReceiver) => {
+                    return Err(remote_error(format!(
+                        "refused before the target fence and the source cut: old voter {node} answered as a registered replica receiver, not as a data owner"
+                    )))
+                }
+                Err(error) => {
+                    parent.check()?;
+                    return Err(remote_error(format!(
+                        "refused before the target fence and the source cut: old voter {node} did not answer the read-only probe: {error}"
+                    )));
+                }
+            }
+        }
+        Ok(())
+    }
     /// The authenticated Close frames of the last source round.
     pub(crate) fn closed_frames(
         &self,
@@ -1036,28 +1121,27 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         self.cut_started
     }
 
-    /// The durable range-log epoch the old voter reports over the existing
-    /// range-write progress request. The voter answers its current range
-    /// leader only, and only for the range epoch it has published; every
-    /// refusal is an error here.
+    /// The durable range-log epoch the old voter reports to the read-only
+    /// range move probe. The voter answers the leader of the range in its
+    /// own committed configuration only, and only for the range epoch that
+    /// configuration records; every refusal is an error here. The probe is
+    /// not tied to the voter's installed writer policy, so it is answered
+    /// after the learner allocation too, which is when an abort needs it.
     fn old_epoch(
         &self,
         _hosts: &Self::Hosts,
         node: &ClusterNodeId,
         range: &RangeDescriptor,
     ) -> Result<u64> {
-        let progress = self
-            .transport
-            .range_write_progress(node, range.id, range.epoch)
-            .map_err(|error| {
-                remote_error(format!("old voter {node} epoch is unreadable: {error}"))
-            })?;
-        if &progress.node_id != node || progress.range_id != range.id {
-            return Err(remote_error(format!(
-                "old voter {node} answered the epoch read for another node or range"
-            )));
+        let token = bounded(&CancellationToken::uncancelable(), REQUEST);
+        let unreadable =
+            |error: String| remote_error(format!("old voter {node} epoch is unreadable: {error}"));
+        match self.probe(node, range, &token).map_err(unreadable)? {
+            NativeRangeMoveProbeRoleV1::Voter { durable_epoch, .. } => Ok(durable_epoch),
+            NativeRangeMoveProbeRoleV1::RegisteredReplicaReceiver => Err(unreadable(
+                "it answered as a registered replica receiver, not as a voter of the range".into(),
+            )),
         }
-        Ok(progress.current_epoch)
     }
 
     fn forget_aborted_allocation(&mut self) {
@@ -1068,13 +1152,11 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         self.committed = None;
     }
 
-    /// Verify, on committed metadata only, that the target can be admitted;
-    /// nothing is created and no member is asked. The target is admitted as
-    /// a registered replica receiver by its own operator action, and no
-    /// product request reads that receiver's state from another node. Its
-    /// absence is therefore reported by the first request that needs it,
-    /// the target fence, which precedes the Close of any old member: a
-    /// target that cannot be fenced ends the source stage before the cut.
+    /// Verify, on committed metadata, that the target can be admitted;
+    /// nothing is created. The target is admitted as a registered replica
+    /// receiver by its own operator action; whether that receiver is open
+    /// is asked by `preflight`, which the stage logic calls after this
+    /// while no relocation is committed.
     ///
     /// This is also where a coordinator that is not the metadata leader is
     /// refused, before the learner allocation is proposed. The range leader
@@ -1104,6 +1186,89 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
                 "target {} is not an active enrolled member with a native store birth",
                 self.target
             )));
+        }
+        Ok(())
+    }
+
+    /// Before the learner allocation is proposed: ask the target and every
+    /// voter of the range, read-only, whether the move can start. The target
+    /// must answer as a live registered replica receiver and every voter
+    /// must answer with its durable epoch; each answers this coordinator
+    /// only as the leader of the range in its own committed configuration.
+    /// A member that does not answer so refuses the move here, by name, and
+    /// nothing is committed.
+    fn preflight(
+        &mut self,
+        _hosts: &mut Self::Hosts,
+        range: &RangeDescriptor,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        let coordinator = self.coordinator();
+        if coordinator != range.leader {
+            return Err(remote_error(format!(
+                "coordinator {coordinator} is not the leader {} of range {}; a move is coordinated by the node that is both the metadata leader and the leader of the range, and nothing was committed",
+                range.leader, range.id
+            )));
+        }
+        let refused = |member: &ClusterNodeId, what: &str, error: String| {
+            remote_error(format!(
+                "the move of range {} onto {} cannot start: {what} {member} is not ready: {error}. Nothing was committed",
+                range.id, self.target
+            ))
+        };
+        let token = bounded(parent, REQUEST);
+        match self.probe(&self.target, range, &token) {
+            Ok(NativeRangeMoveProbeRoleV1::RegisteredReplicaReceiver) => {}
+            Ok(NativeRangeMoveProbeRoleV1::Voter { .. }) => {
+                return Err(refused(
+                    &self.target,
+                    "target",
+                    "it answered as a voter of the range, not as a registered replica receiver"
+                        .into(),
+                ))
+            }
+            Err(error) => {
+                parent.check()?;
+                return Err(refused(
+                    &self.target,
+                    "target",
+                    format!(
+                        "it did not answer as a registered replica receiver (open its replica receiver first): {error}"
+                    ),
+                ));
+            }
+        }
+        for replica in &range.replicas {
+            if replica.role != RangeReplicaRole::Voter {
+                continue;
+            }
+            let token = bounded(parent, REQUEST);
+            match self.probe(&replica.node_id, range, &token) {
+                Ok(NativeRangeMoveProbeRoleV1::Voter { durable_epoch, .. })
+                    if durable_epoch <= range.epoch => {}
+                Ok(NativeRangeMoveProbeRoleV1::Voter { durable_epoch, .. }) => {
+                    return Err(refused(
+                        &replica.node_id,
+                        "voter",
+                        format!(
+                        "its range log is at epoch {durable_epoch}, beyond the committed epoch {}",
+                        range.epoch
+                    ),
+                    ))
+                }
+                Ok(NativeRangeMoveProbeRoleV1::RegisteredReplicaReceiver) => {
+                    return Err(refused(
+                        &replica.node_id,
+                        "voter",
+                        "it answered as a registered replica receiver, not as a data owner".into(),
+                    ))
+                }
+                Err(error) => {
+                    parent.check()?;
+                    return Err(refused(&replica.node_id, "voter", error.to_string()));
+                }
+            }
         }
         Ok(())
     }
@@ -1324,6 +1489,17 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
             self.cut_started = resumed;
             return Err(error);
         }
+        // Still before the target is fenced or any old member is closed: a
+        // voter that holds an unfinished write command refuses its Close on
+        // every repetition, and after a started source round the move could
+        // not be aborted either. Asked read-only; nothing was sent by this
+        // call, so it started no cut and the abort stays possible.
+        if !resumed {
+            if let Err(error) = self.require_no_unfinished_command(range, parent) {
+                self.cut_started = resumed;
+                return Err(error);
+            }
+        }
         let donor = Self::select_donor(&plan)?;
         let target_attempt = Self::target_attempt(&plan)?;
         let mut fence_refusal = None;
@@ -1380,51 +1556,11 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         self.certificate.is_some() || self.committed_decision.is_some()
     }
 
-    /// Obtain the decision certificate. A decision that is already durable
-    /// (a coordinator that lost its memory after the publication) is found
-    /// by the read-only collection, which publishes nothing and creates no
-    /// participant; otherwise the complete round runs: materialize, prepare,
-    /// publish, then the same read-only collection.
+    /// Obtain the decision certificate; see `complete_decision` for the rule
+    /// that every member which later needs the decision must hold it before
+    /// the certificate is retained.
     fn decide(&mut self, members: &RemoteMembers, parent: &CancellationToken) -> Result<()> {
-        parent.check()?;
-        let (Some(plan), Some(manifest)) = (self.plan.clone(), self.manifest.clone()) else {
-            return Err(remote_error(
-                "the joint decision needs the retained plan and source manifest of the installed image",
-            ));
-        };
-        let phase = Self::decision_phase(&plan, &manifest)?;
-        let mut publishers = members.old_voters.clone();
-        publishers.push(self.target.clone());
-        let token = bounded(parent, DECISION_ROUND);
-        let certificate = match self.transport.recollect_remote_joint_decision_certificate(
-            plan,
-            &manifest,
-            phase,
-            &publishers,
-            &members.metadata_leader,
-            &token,
-        ) {
-            Ok(certificate) => certificate,
-            Err(_) => {
-                parent.check()?;
-                // The round issues new work: it starts under a live plan.
-                let plan = self
-                    .renewed_plan(members, parent)
-                    .map_err(|error| stage_error("joint decision metadata", error))?;
-                self.transport
-                    .run_remote_joint_decision_round(
-                        plan,
-                        &manifest,
-                        phase,
-                        &publishers,
-                        &members.metadata_leader,
-                        &token,
-                    )
-                    .map_err(|error| stage_error("joint decision", error))?
-            }
-        };
-        self.certificate = Some(certificate);
-        Ok(())
+        self.decide_on_every_member(members, parent)
     }
 
     /// The retained certificate, or the certified decision of the committed
@@ -1714,14 +1850,31 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
             remote_error("the activation record has no committed handoff record of this handoff")
         })?;
         let body = self.committed_decision_body(members, range, relocation, &digest, parent)?;
-        self.activation = Some(
-            NativeRemoteJointActivationCertificate::observe_as_outside_coordinator(
+        // This is the first observation made while the range serves client
+        // requests again. A member reads its own state without waiting for
+        // its data service and answers "busy" while a client request holds
+        // it; that refusal asks for a repetition. The whole window is
+        // observed again each time: nothing of a refused one is kept.
+        let mut busy = 0;
+        let certificate = loop {
+            match NativeRemoteJointActivationCertificate::observe_as_outside_coordinator(
                 &body,
                 &self.transport,
                 &members.metadata_leader,
                 parent,
-            )?,
-        );
+            ) {
+                Ok(certificate) => break certificate,
+                Err(BicDbError::Cluster(refusal))
+                    if busy < ACTIVATION_BUSY_REPEATS && refusal.contains("busy") =>
+                {
+                    parent.check()?;
+                    busy += 1;
+                    std::thread::sleep(ACTIVATION_BUSY_PAUSE);
+                }
+                Err(error) => return Err(error),
+            }
+        };
+        self.activation = Some(certificate);
         Ok(())
     }
 

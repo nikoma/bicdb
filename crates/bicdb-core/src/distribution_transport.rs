@@ -98,6 +98,8 @@ pub(crate) use native_source_discovery::AuthenticatedNativeSourceDiscovery;
 pub(crate) use native_source_export::AuthenticatedRegisteredExportNew;
 mod native_handoff_step;
 mod native_new;
+mod native_range_move_probe;
+pub(crate) use native_range_move_probe::{NativeRangeMoveProbeReplyV1, NativeRangeMoveProbeRoleV1};
 mod native_old;
 use crate::distribution_native_host::{
     NativeInitialBirthOfferRequest, NativeInitialBirthOfferResponse,
@@ -525,6 +527,12 @@ enum ClusterDataRequest {
         range_id: crate::distribution::RangeId,
         range_epoch: u64,
     },
+    /// Read-only: what this member is for the range, answered to the range
+    /// leader of this member's own committed configuration only.
+    NativeRangeMoveProbe {
+        range_id: crate::distribution::RangeId,
+        range_epoch: u64,
+    },
     ApplyRangeWriteRepair {
         batch: RangeWriteRepairBatch,
         limits: RangeWriteRepairLimits,
@@ -572,6 +580,7 @@ impl ClusterDataRequest {
             | Self::NativeRemoteOld { .. }
             | Self::NativeRemoteNew { .. }
             | Self::NativeJointHandoffStep { .. }
+            | Self::NativeRangeMoveProbe { .. }
             | Self::NativeObserveRegisteredExportNew { .. }
             | Self::NativeSourceExportRetirement { .. }
             | Self::NativeSourceDiscovery { .. }
@@ -688,6 +697,7 @@ enum ClusterDataResponse {
     NativeRemoteOld(crate::distribution_range_handoff::NativeRemoteOldReplyV1),
     NativeRemoteNew(crate::distribution_range_handoff::NativeRemoteNewReplyV1),
     NativeJointHandoffStep(crate::distribution_range_handoff::NativeJointHandoffStepReplyV1),
+    NativeRangeMoveProbe(NativeRangeMoveProbeReplyV1),
     NativeSourceDiscovery(crate::distribution_range_image::NativeSourceDiscoveryReplyV1),
     NativeDecisionSourceProvenance(crate::distribution_range_image::NativeSourceDiscoveryReplyV1),
     NativeObserveRegisteredExportNew(
@@ -1816,6 +1826,27 @@ fn handle_cluster_data_connection(
             }
             return Ok(ClusterDataResponse::NativeJointHandoffStep(reply));
         }
+        if let ClusterDataRequest::NativeRangeMoveProbe {
+            range_id,
+            range_epoch,
+        } = request.request
+        {
+            let peer = authenticated_caller.as_ref().ok_or_else(|| {
+                transport_error("range move probe requires actual authenticated caller")
+            })?;
+            // Both admissions were proved live above; the probe is read-only.
+            return native_range_move_probe::answer(
+                peer,
+                &local_node_id,
+                topology,
+                service,
+                initial_data.is_some(),
+                registered_replica.is_some(),
+                range_id,
+                range_epoch,
+            )
+            .map(ClusterDataResponse::NativeRangeMoveProbe);
+        }
         if let ClusterDataRequest::HostMetadataReadAcquire { request } = request.request {
             let provider = metadata_read_provider
                 .ok_or_else(|| transport_error("fresh host metadata provider is not active"))?;
@@ -2654,6 +2685,9 @@ fn dispatch_cluster_data_request(
         )),
         ClusterDataRequest::NativeJointHandoffStep { .. } => Err(transport_error(
             "joint handoff step requires its actual before-latch owner",
+        )),
+        ClusterDataRequest::NativeRangeMoveProbe { .. } => Err(transport_error(
+            "range move probe requires its actual before-latch owner",
         )),
         ClusterDataRequest::NativeEventGet(_) => Err(transport_error(
             "typed Get requires the before-latch dispatcher",

@@ -5,6 +5,13 @@
 //! hosts' status files, the authenticated bootstrap read and the event client.
 //!
 //! The final assertions are one marked block switched by `EXPECT_COMPLETION`.
+//!
+//! Availability of the moved range is MEASURED, not asserted: a second
+//! client does one Strong read and one append on the moved range about every
+//! 100 ms from before `move-range` until after completion, and the test
+//! prints when reads and writes were refused and at which stage. Asserted:
+//! reads and writes succeed again after completion, and every append that
+//! was acknowledged before or during the move is readable afterwards.
 use bicdb_core::{
     cluster_event_record_id, ClusterBootstrapSnapshot, ClusterEventClient, ClusterEventOperation,
     ClusterEventRequest, ClusterId, ClusterNetworkTransportConfig, ClusterNode, ClusterNodeId,
@@ -20,7 +27,9 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::net::TcpListener;
 use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, Output, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// THE switch of the final assertion block. `false`: the move must reach at
@@ -61,6 +70,32 @@ const MOVE_TIMEOUT: Duration = Duration::from_secs(300);
 /// further attempts.
 const STABLE_POLLS: u32 = 8;
 const STABLE_REPEATS: u64 = 2;
+/// With `EXPECT_COMPLETION` a stable error must also have lasted this long
+/// before the move is called blocked: a stage may be refused for a while and
+/// then pass.
+const BLOCK_PATIENCE: Duration = Duration::from_secs(90);
+/// The availability client's extra pause after a round in which a request
+/// failed, as a client that backs off does. Members read their own state
+/// without waiting for their data service and answer "busy" to a handoff
+/// step while a client request holds it, so a client that hammers a refusing
+/// range slows the very move it waits for. The outage boundaries are
+/// therefore measured to about half a second.
+const CLIENT_BACKOFF: Duration = Duration::from_millis(400);
+/// What the availability client appends while the first move attempt runs.
+///
+/// `true`: it appends through the whole move, from before `move-range`. An
+/// append that is in flight on the range leader when the learner allocation
+/// commits is refused half-way by the changed writer policy and leaves an
+/// unfinished native command there, and a source Close refuses such a voter
+/// on every repetition. The coordinator asks before it fences or closes
+/// anything and reports the move blocked before the cut. The test then does
+/// what the operator does: `move-range --abort`, wait until the range
+/// acknowledges appends again, and `move-range` again, this time with the
+/// client's appends paused until the allocation is committed.
+///
+/// `false`: the client pauses its appends around the first allocation too,
+/// so no append is in flight while it commits. It reads throughout.
+const APPENDS_DURING_ALLOCATION: bool = false;
 
 fn node(i: usize) -> ClusterNodeId {
     ClusterNodeId::new(format!("n{i}")).unwrap()
@@ -240,6 +275,123 @@ impl Cluster {
             stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
             status,
         }
+    }
+    /// The operator CLI alone, with an explicit sequence: no bookkeeping and
+    /// no wait for the host.
+    fn cli(&self, i: usize, subcommand: &str, sequence: u64, arguments: &[&str]) -> Output {
+        let (command, status) = self.paths(i);
+        binary()
+            .args(["cluster", "native-metadata", subcommand, "--command-file"])
+            .arg(&command)
+            .arg("--status-file")
+            .arg(&status)
+            .arg("--sequence")
+            .arg(sequence.to_string())
+            .args(arguments)
+            .output()
+            .unwrap()
+    }
+    /// The command-file rules on node `i`: a reused sequence and a skipped
+    /// one are refused by the CLI before anything is sent, and a skipped
+    /// sequence written to the command file directly is refused by the host,
+    /// recorded in its status, and does not end it.
+    fn command_file_rules(&mut self, i: usize) {
+        let applied = self.sequences[i];
+        assert!(applied > 0 || i == FIFTH);
+        let before = self.status(i).unwrap();
+        assert_eq!(before["sequence"].as_u64(), Some(applied));
+        if applied > 0 {
+            let reused = self.cli(i, "step", applied, &["--action", "status"]);
+            let stderr = String::from_utf8_lossy(&reused.stderr).into_owned();
+            assert!(
+                !reused.status.success()
+                    && stderr.contains(&format!("sequence {applied} was already used")),
+                "node{i}: a reused sequence must fail in the CLI: {stderr}"
+            );
+        }
+        let skipped = self.cli(
+            i,
+            "step",
+            applied + 5,
+            &["--action", "status", "--timeout-ms", "300"],
+        );
+        let stderr = String::from_utf8_lossy(&skipped.stderr).into_owned();
+        assert!(
+            !skipped.status.success()
+                && stderr.contains(&format!("sequence {} skips ahead", applied + 5)),
+            "node{i}: a skipped sequence must fail in the CLI: {stderr}"
+        );
+        assert_eq!(
+            self.status(i).unwrap()["sequence"].as_u64(),
+            Some(applied),
+            "node{i}: the CLI sent nothing"
+        );
+        // Written past the CLI: the host itself refuses and keeps running.
+        let (command, _) = self.paths(i);
+        let temporary = command.with_extension("typo");
+        std::fs::write(
+            &temporary,
+            serde_json::to_vec(&serde_json::json!({
+                "version": 1, "sequence": applied + 7, "action": "status", "budget_ms": 1000,
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        std::fs::rename(&temporary, &command).unwrap();
+        let what = format!("node{i} to record the refused sequence {}", applied + 7);
+        let refused = self.wait(&what, Duration::from_secs(10), |cluster| {
+            match cluster.status(i) {
+                Some(status)
+                    if status["error"].as_str().is_some_and(|error| {
+                        error.contains(&format!(
+                            "operator command with sequence {} refused and ignored",
+                            applied + 7
+                        ))
+                    }) =>
+                {
+                    Ok(status)
+                }
+                other => Err(format!("{:?}", other.map(|status| status["error"].clone()))),
+            }
+        });
+        assert_eq!(refused["sequence"].as_u64(), Some(applied));
+        std::thread::sleep(PRODUCT_TICK * 2);
+        self.require_alive("a skipped operator sequence was refused");
+        // The next sequence is accepted and clears the refusal.
+        self.accepted(i, "step", &["--action", "status"]);
+        println!(
+            "{} XPROC_M node{i} command-file rules hold (reused and skipped sequences refused, host alive)",
+            stamp(self.started)
+        );
+    }
+    /// An operator command that must be accepted, repeated while the host
+    /// answers that one of its owners is busy: the host reads its status
+    /// without waiting, and a client request may hold the service then.
+    fn accepted_patiently(&mut self, i: usize, subcommand: &str, arguments: &[&str]) -> Reply {
+        for _ in 0..40 {
+            let reply = self.operator(i, subcommand, arguments);
+            if reply.ok && reply.status["error"].is_null() {
+                println!(
+                    "{} XPROC_M node{i} accepted `{subcommand} {}`",
+                    stamp(self.started),
+                    arguments.join(" ")
+                );
+                return reply;
+            }
+            let error = reply.status["error"].to_string();
+            assert!(
+                error.contains("busy"),
+                "node{i} refused `{subcommand} {}`: cli stderr: {}; host error: {error}",
+                arguments.join(" "),
+                reply.stderr.trim()
+            );
+            println!(
+                "{} XPROC_M node{i} answered `{subcommand}` with a busy owner; repeated: {error}",
+                stamp(self.started)
+            );
+            std::thread::sleep(POLL);
+        }
+        panic!("node{i} stayed busy for `{subcommand}`");
     }
     /// An operator command that must be accepted.
     fn accepted(&mut self, i: usize, subcommand: &str, arguments: &[&str]) -> Reply {
@@ -498,6 +650,249 @@ fn assignment(topology: &ClusterTopology, range: RangeId) -> Value {
     })
 }
 
+/// One attempt of the availability client against the moved range.
+struct Attempt {
+    /// Seconds since the cluster started (the same clock as `stamp`).
+    at: f64,
+    write: bool,
+    key: String,
+    ok: bool,
+    error: String,
+    /// "stage>next" of the coordinator's `range_move` status at that time.
+    stage: String,
+}
+struct Availability {
+    stop: Arc<AtomicBool>,
+    /// While set the client does not append (it still reads).
+    quiet: Arc<AtomicBool>,
+    /// Set by the test once the move completed: the client then ends after
+    /// one more successful read and one more successful write.
+    completed: Arc<Mutex<Option<Instant>>>,
+    worker: Option<std::thread::JoinHandle<Vec<Attempt>>>,
+}
+impl Drop for Availability {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+impl Availability {
+    /// A second product client: one Strong read of `read_key` and one append
+    /// of a fresh key of `range` about every 100 ms.
+    fn start(
+        config: DistributionConfig,
+        topology: ClusterTopology,
+        range: RangeId,
+        read_key: String,
+        coordinator_status: PathBuf,
+        started: Instant,
+    ) -> Self {
+        let stop = Arc::new(AtomicBool::new(false));
+        let quiet = Arc::new(AtomicBool::new(false));
+        let completed = Arc::new(Mutex::new(None::<Instant>));
+        let (stopped, done, silent) = (
+            Arc::clone(&stop),
+            Arc::clone(&completed),
+            Arc::clone(&quiet),
+        );
+        let worker = std::thread::spawn(move || {
+            let gateway = ClusterEventClient::new(&config, topology.clone())
+                .unwrap()
+                .with_request_timeout(Duration::from_secs(1))
+                .unwrap();
+            let stage = || {
+                std::fs::read(&coordinator_status)
+                    .ok()
+                    .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+                    .map(|status| {
+                        let current = &status["host"]["range_move"];
+                        if current.is_null() {
+                            "no-move".to_string()
+                        } else {
+                            format!(
+                                "{}>{}",
+                                current["stage"].as_str().unwrap_or("none"),
+                                current["next_stage"].as_str().unwrap_or("done")
+                            )
+                        }
+                    })
+                    .unwrap_or_else(|| "status-unreadable".into())
+            };
+            let mut attempts = Vec::new();
+            let mut candidate = 0u64;
+            let (mut read_after, mut write_after) = (false, false);
+            while !stopped.load(Ordering::SeqCst) {
+                let round = Instant::now();
+                let finished = *done.lock().unwrap();
+                if let Some(finished) = finished {
+                    if (read_after && write_after) || finished.elapsed() > Duration::from_secs(60)
+                    {
+                        break;
+                    }
+                }
+                // Reads and writes of this round both start after `finished`
+                // was read, so a success counts as after completion.
+                let at = started.elapsed().as_secs_f64();
+                let now = stage();
+                let read = gateway.get_strong("items", &read_key);
+                let ok = matches!(&read, Ok(Some(value)) if value == &row_value(&read_key));
+                attempts.push(Attempt {
+                    at,
+                    write: false,
+                    key: read_key.clone(),
+                    ok,
+                    error: match &read {
+                        Ok(Some(_)) if ok => String::new(),
+                        Ok(other) => format!("unexpected value {other:?}"),
+                        Err(error) => error.to_string(),
+                    },
+                    stage: now,
+                });
+                read_after |= ok && finished.is_some();
+                let read_failed = !ok;
+                if silent.load(Ordering::SeqCst) {
+                    if read_failed {
+                        let _ = gateway.refresh();
+                        std::thread::sleep(CLIENT_BACKOFF);
+                    }
+                    if let Some(rest) = POLL.checked_sub(round.elapsed()) {
+                        std::thread::sleep(rest);
+                    }
+                    continue;
+                }
+                let key = loop {
+                    let key = format!("during-move-{candidate}");
+                    candidate += 1;
+                    if range_of(&topology, &key) == range {
+                        break key;
+                    }
+                };
+                let at = started.elapsed().as_secs_f64();
+                let now = stage();
+                let write = gateway.append("items", &key, row_value(&key));
+                let ok = write.is_ok();
+                attempts.push(Attempt {
+                    at,
+                    write: true,
+                    key,
+                    ok,
+                    error: write.err().map(|error| error.to_string()).unwrap_or_default(),
+                    stage: now,
+                });
+                write_after |= ok && finished.is_some();
+                if read_failed || !ok {
+                    let _ = gateway.refresh();
+                    std::thread::sleep(CLIENT_BACKOFF);
+                }
+                if let Some(rest) = POLL.checked_sub(round.elapsed()) {
+                    std::thread::sleep(rest);
+                }
+            }
+            attempts
+        });
+        Self {
+            stop,
+            quiet,
+            completed,
+            worker: Some(worker),
+        }
+    }
+    /// Tell the client that the move completed and collect its attempts.
+    fn finish(mut self) -> Vec<Attempt> {
+        *self.completed.lock().unwrap() = Some(Instant::now());
+        self.worker.take().unwrap().join().unwrap()
+    }
+}
+
+/// Print what the availability client saw. `origin` is the time of the
+/// accepted `move-range`, `end` the time the move was seen completed, both
+/// on the cluster clock. Returns the acknowledged append keys.
+fn availability_summary(attempts: &[Attempt], origin: f64, end: f64) -> Vec<String> {
+    for (write, name) in [(false, "READ "), (true, "WRITE")] {
+        let own = attempts
+            .iter()
+            .filter(|attempt| attempt.write == write)
+            .collect::<Vec<_>>();
+        let failed = own.iter().filter(|attempt| !attempt.ok).count();
+        // An outage: from the first failed attempt to the next success.
+        let mut outages: Vec<(f64, f64, String, String, String, usize)> = Vec::new();
+        let mut open: Option<(f64, String, String, usize)> = None;
+        for attempt in &own {
+            match (&mut open, attempt.ok) {
+                (None, false) => {
+                    open = Some((attempt.at, attempt.stage.clone(), attempt.error.clone(), 1))
+                }
+                (Some(outage), false) => outage.3 += 1,
+                (Some(_), true) => {
+                    let (from, stage, error, count) = open.take().unwrap();
+                    outages.push((from, attempt.at, stage, attempt.stage.clone(), error, count));
+                }
+                (None, true) => {}
+            }
+        }
+        if let Some((from, stage, error, count)) = open.take() {
+            let last = own.last().unwrap();
+            outages.push((from, last.at, stage, format!("{} (never recovered)", last.stage), error, count));
+        }
+        let total: f64 = outages.iter().map(|outage| outage.1 - outage.0).sum();
+        let first = own.iter().find(|attempt| !attempt.ok);
+        let last = own.iter().rev().find(|attempt| !attempt.ok);
+        println!(
+            "XPROC_M AVAILABILITY {name} attempts={} failed={failed} first_failure={} last_failure={} unavailable_total={total:.3}s outages={} (times are seconds after the accepted move-range; the move completed at +{:.3}s)",
+            own.len(),
+            first.map_or("none".into(), |attempt| format!("{:+.3}s", attempt.at - origin)),
+            last.map_or("none".into(), |attempt| format!("{:+.3}s", attempt.at - origin)),
+            outages.len(),
+            end - origin
+        );
+        for (from, to, began, ended, error, count) in &outages {
+            println!(
+                "XPROC_M AVAILABILITY {name} outage {:+.3}s..{:+.3}s ({:.3}s, {count} failed attempts) began at stage {began}, ended at stage {ended}; first error: {}",
+                from - origin,
+                to - origin,
+                to - from,
+                error.chars().take(400).collect::<String>()
+            );
+        }
+        // Every distinct error text (digits ignored) with its stage span.
+        let mut texts: BTreeMap<String, (usize, String, String)> = BTreeMap::new();
+        for attempt in own.iter().filter(|attempt| !attempt.ok) {
+            let text = attempt
+                .error
+                .chars()
+                .map(|c| if c.is_ascii_digit() { '#' } else { c })
+                .take(300)
+                .collect::<String>();
+            let entry = texts
+                .entry(text)
+                .or_insert((0, attempt.stage.clone(), attempt.stage.clone()));
+            entry.0 += 1;
+            entry.2 = attempt.stage.clone();
+        }
+        for (text, (count, from, to)) in texts {
+            println!("XPROC_M AVAILABILITY {name} error x{count} stages {from} .. {to}: {text}");
+        }
+    }
+    attempts
+        .iter()
+        .filter(|attempt| attempt.write && attempt.ok)
+        .map(|attempt| attempt.key.clone())
+        .collect()
+}
+
+/// The first value stored under `key` anywhere inside `value`.
+fn find_key<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
+    match value {
+        Value::Object(map) => map
+            .get(key)
+            .or_else(|| map.values().find_map(|inner| find_key(inner, key))),
+        Value::Array(items) => items.iter().find_map(|inner| find_key(inner, key)),
+        _ => None,
+    }
+}
+
 enum MoveOutcome {
     Completed,
     /// The same error at the same stage, reproduced by repeated attempts.
@@ -723,13 +1118,62 @@ fn native_range_move_five_process_operator_sequence() {
         stamp(started)
     );
 
+    // The operator command-file rules, on an initial member that does not
+    // coordinate and on the fifth node (the two host loops).
+    let bystander = (0..INITIAL_MEMBERS).find(|i| *i != l).unwrap();
+    cluster.command_file_rules(bystander);
+    cluster.command_file_rules(FIFTH);
+
+    // The availability client of the moved range, from before the move.
+    let availability = Availability::start(
+        client_config.clone(),
+        before.topology.clone(),
+        range,
+        rows[&range][0].clone(),
+        cluster.paths(l).1,
+        started,
+    );
+    std::thread::sleep(Duration::from_secs(2));
+    if !APPENDS_DURING_ALLOCATION {
+        // No append is in flight while the allocation commits: the client's
+        // request timeout is one second.
+        availability.quiet.store(true, Ordering::SeqCst);
+        std::thread::sleep(Duration::from_millis(1500));
+    }
+
     // (e) Start the move on the coordinator and follow its status section.
     let range_text = range.get().to_string();
-    let requested = cluster.accepted(
+    // The origin of every "+s" below: the first time the command is sent.
+    // The host starts the move then, even when it answers "busy" for its
+    // status read and the command is repeated.
+    let move_origin = started.elapsed().as_secs_f64();
+    let requested = cluster.accepted_patiently(
         l,
         "move-range",
         &["--range-id", &range_text, "--target-node-id", "n4"],
     );
+    // While this host's move runs, its metadata leadership is not handed
+    // away: the operator's transfer is refused and changes nothing.
+    {
+        let to = node(bystander).as_str().to_string();
+        let refused = cluster.operator(l, "transfer-metadata-leadership", &["--to", &to]);
+        assert!(
+            !refused.ok
+                && refused.status["error"]
+                    .as_str()
+                    .is_some_and(|error| error.contains("metadata leadership transfer refused")),
+            "a transfer away from the coordinator of a running move must be refused: ok={} error={} stderr={}",
+            refused.ok,
+            refused.status["error"],
+            refused.stderr.trim()
+        );
+        assert_eq!(refused.status["host"]["metadata"]["role"], "leader");
+        println!(
+            "{} XPROC_M transfer-metadata-leadership refused during the move: {}",
+            stamp(started),
+            refused.status["error"]
+        );
+    }
     assert_eq!(
         requested.stdout, requested.status["host"]["range_move"],
         "the command prints the host's range_move section"
@@ -742,6 +1186,8 @@ fn native_range_move_five_process_operator_sequence() {
     let mut stable_polls = 0u32;
     let mut stable_key: Option<(String, String)> = None;
     let mut stable_since_attempts = 0u64;
+    let mut stable_since = Instant::now();
+    let mut retried = 0u32;
     let mut last = Value::Null;
     let outcome = loop {
         cluster.require_alive("the range move runs");
@@ -756,7 +1202,7 @@ fn native_range_move_five_process_operator_sequence() {
                 let line = format!(
                     "{} RANGE_MOVE +{:.3}s stage={} next={} attempts={} in_flight={} completed={} paused={} last_error={}",
                     stamp(started),
-                    move_started.elapsed().as_secs_f64(),
+                    (started.elapsed().as_secs_f64() - move_origin),
                     current["stage"],
                     current["next_stage"],
                     current["attempts"],
@@ -770,6 +1216,83 @@ fn native_range_move_five_process_operator_sequence() {
                 shown = view;
             }
             assert_eq!(current["aborted"], false, "nobody aborted the move");
+            // The move is blocked before the cut by an unfinished write
+            // command on a voter: the operator's procedure.
+            if EXPECT_COMPLETION
+                && retried < 2
+                && current["step_in_flight"] == false
+                && current["last_error"]
+                    .as_str()
+                    .is_some_and(|error| error.contains("holds an unfinished write command"))
+            {
+                retried += 1;
+                let blocked_at = started.elapsed().as_secs_f64();
+                println!(
+                    "{} XPROC_M BLOCKED BEFORE THE CUT (+{:.3}s after move-range): {}",
+                    stamp(started),
+                    blocked_at - move_origin,
+                    current["last_error"]
+                );
+                let aborted =
+                    cluster.accepted_patiently(l, "move-range", &["--range-id", &range_text, "--abort"]);
+                assert_eq!(
+                    aborted.status["host"]["range_move"]["aborted"], true,
+                    "the abort before the cut must be committed: {}",
+                    aborted.status["host"]["range_move"]
+                );
+                let abort_at = started.elapsed().as_secs_f64();
+                // The range is back on its original voters: an append is
+                // acknowledged again once the unfinished command is settled.
+                let mut n = 0;
+                let what = "an append on the range to be acknowledged after the abort";
+                cluster.wait(what, Duration::from_secs(90), |_| {
+                    let _ = gateway.refresh();
+                    let key = loop {
+                        let key = format!("after-abort-{retried}-{n}");
+                        n += 1;
+                        if range_of(&before.topology, &key) == range {
+                            break key;
+                        }
+                    };
+                    gateway
+                        .append("items", &key, row_value(&key))
+                        .map(|_| ())
+                        .map_err(|error| error.to_string())
+                });
+                let writable_at = started.elapsed().as_secs_f64();
+                println!(
+                    "{} XPROC_M ABORTED BEFORE THE CUT: abort committed +{:.3}s after move-range ({:.3}s after the block was seen); appends acknowledged again {:.3}s after the abort",
+                    stamp(started),
+                    abort_at - move_origin,
+                    abort_at - blocked_at,
+                    writable_at - abort_at
+                );
+                // The second attempt: no append in flight at the allocation.
+                availability.quiet.store(true, Ordering::SeqCst);
+                std::thread::sleep(Duration::from_millis(1500));
+                cluster.accepted_patiently(
+                    l,
+                    "move-range",
+                    &["--range-id", &range_text, "--target-node-id", "n4"],
+                );
+                println!(
+                    "{} XPROC_M SECOND move-range accepted +{:.3}s after the first",
+                    stamp(started),
+                    started.elapsed().as_secs_f64() - move_origin
+                );
+                stable_key = None;
+                stable_polls = 0;
+                shown = Value::Null;
+                continue;
+            }
+            if current["stage"]
+                .as_str()
+                .and_then(|stage| STAGES.iter().position(|name| *name == stage))
+                .is_some_and(|reached| reached >= 1)
+            {
+                // The learner allocation is committed: appends resume.
+                availability.quiet.store(false, Ordering::SeqCst);
+            }
             let attempts = current["attempts"].as_u64().unwrap_or(0);
             if current["completed"] == true {
                 last = current;
@@ -790,6 +1313,7 @@ fn native_range_move_five_process_operator_sequence() {
             } else {
                 stable_polls = 0;
                 stable_since_attempts = attempts;
+                stable_since = Instant::now();
                 stable_key = key;
             }
             last = current;
@@ -797,6 +1321,7 @@ fn native_range_move_five_process_operator_sequence() {
                 && attempts >= 1
                 && stable_polls >= STABLE_POLLS
                 && attempts >= stable_since_attempts + STABLE_REPEATS
+                && (!EXPECT_COMPLETION || stable_since.elapsed() >= BLOCK_PATIENCE)
             {
                 break MoveOutcome::Blocked;
             }
@@ -813,7 +1338,7 @@ fn native_range_move_five_process_operator_sequence() {
     println!(
         "{} XPROC_M move outcome after {:.3}s: {} stage={stage:?} next={} attempts={} last_error={}",
         stamp(started),
-        move_started.elapsed().as_secs_f64(),
+        (started.elapsed().as_secs_f64() - move_origin),
         match outcome {
             MoveOutcome::Completed => "COMPLETED",
             MoveOutcome::Blocked => "BLOCKED (stable error)",
@@ -826,6 +1351,52 @@ fn native_range_move_five_process_operator_sequence() {
     println!("XPROC_M STAGE TRANSITIONS ({}):", transitions.len());
     for line in &transitions {
         println!("XPROC_M   {line}");
+    }
+    let move_end = started.elapsed().as_secs_f64();
+    if !matches!(outcome, MoveOutcome::Completed) {
+        // Reported, not asserted: what the operator can still do.
+        let abort = cluster.operator(l, "move-range", &["--range-id", &range_text, "--abort"]);
+        println!(
+            "{} XPROC_M NOT COMPLETED: move-range --abort: ok={} host error={} range_move={}",
+            stamp(started),
+            abort.ok,
+            abort.status["error"],
+            abort.status["host"]["range_move"]
+        );
+        std::thread::sleep(Duration::from_secs(5));
+        if let Some(status) = cluster.status(l) {
+            println!(
+                "{} XPROC_M NOT COMPLETED: coordinator range_move 5 s later: {}",
+                stamp(started),
+                status["host"]["range_move"]
+            );
+        }
+    }
+    // The availability client ends after one more successful read and write
+    // (or 60 s); its record is printed whatever the outcome.
+    let attempts = if matches!(outcome, MoveOutcome::Completed) {
+        availability.finish()
+    } else {
+        availability.stop.store(true, Ordering::SeqCst);
+        availability.finish()
+    };
+    let acknowledged = availability_summary(&attempts, move_origin, move_end);
+    // Reported, not asserted: each initial member's last writer registry
+    // refresh after the move (its 500 ms maintenance).
+    std::thread::sleep(PRODUCT_TICK * 3);
+    for i in 0..INITIAL_MEMBERS {
+        println!(
+            "XPROC_M node{i} registry_refresh_last_attempt after the move: {}",
+            cluster
+                .status(i)
+                .as_ref()
+                .and_then(|status| find_key(status, "registry_refresh_last_attempt"))
+                .map_or("absent".to_string(), |value| value
+                    .to_string()
+                    .chars()
+                    .take(500)
+                    .collect())
+        );
     }
     let _ = gateway.refresh();
     let untouched = rows
@@ -938,6 +1509,51 @@ fn native_range_move_five_process_operator_sequence() {
                 "Strong read of {key} after the move"
             );
         }
+        // The availability client: after completion a Strong read and an
+        // append on the moved range succeeded again, and no acknowledged
+        // append was lost, whenever during the move it was acknowledged.
+        for (write, name) in [(false, "Strong read"), (true, "append")] {
+            assert!(
+                attempts
+                    .iter()
+                    .any(|attempt| attempt.write == write && attempt.ok && attempt.at > move_end),
+                "no {name} on the moved range succeeded after the move completed"
+            );
+        }
+        // A Strong read that answers, answers the acknowledged row: an
+        // absence or another value is never an availability matter.
+        let wrong = attempts
+            .iter()
+            .filter(|a| !a.write && !a.ok && a.error.starts_with("unexpected value"))
+            .map(|a| format!("+{:.3}s {} {}", a.at - move_origin, a.stage, a.error))
+            .collect::<Vec<_>>();
+        assert!(
+            wrong.is_empty(),
+            "a Strong read of an acknowledged row answered without that row: {wrong:?}"
+        );
+        let (before_move, during_move) = (
+            attempts
+                .iter()
+                .filter(|a| a.write && a.ok && a.at < move_origin)
+                .count(),
+            attempts
+                .iter()
+                .filter(|a| a.write && a.ok && a.at >= move_origin && a.at <= move_end)
+                .count(),
+        );
+        for key in &acknowledged {
+            assert_eq!(
+                strong_read(&gateway, key, Duration::from_secs(30)),
+                Ok(Some(row_value(key))),
+                "an acknowledged append ({key}) of the moved range is lost after the move"
+            );
+        }
+        println!(
+            "{} XPROC_M AVAILABILITY all {} acknowledged appends are Strong-readable after the move ({before_move} acknowledged before move-range, {during_move} during the move, {} after)",
+            stamp(started),
+            acknowledged.len(),
+            acknowledged.len() - before_move - during_move
+        );
         // A write after the move, on the moved range, is acknowledged.
         let current = cluster.snapshot(FIFTH).unwrap().topology;
         let fresh = (0..10_000)

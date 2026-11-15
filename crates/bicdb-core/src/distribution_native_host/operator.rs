@@ -1,7 +1,8 @@
 //! Public metadata-only owner. Configuration DTOs never become birth/vote/data
 //! proofs; every action consumes the existing actual native producer.
 use super::range_move::{
-    request_range_move, request_range_move_abort, NativeRangeMoveSlot, NativeRangeMoveStatus,
+    request_range_move, request_range_move_abort, require_no_running_range_move,
+    NativeRangeMoveSlot, NativeRangeMoveStatus,
 };
 use super::*;
 use crate::distribution::RangeId;
@@ -511,11 +512,12 @@ impl NativeMetadataHost {
                 request_range_move_abort(&mut self.range_move, range, &token)?;
             }
             NativeMetadataHostAction::TransferMetadataLeadership { to } => {
-                let outcome = self
-                    .control
-                    .as_ref()
-                    .ok_or_else(|| {
-                        invalid("metadata leadership transfer requires the owned native metadata control (enable-control)")
+                // Checked first: a transfer would strand this host's move.
+                let outcome = require_no_running_range_move(self.range_move.as_ref())
+                    .and_then(|()| {
+                        self.control.as_ref().ok_or_else(|| {
+                            invalid("metadata leadership transfer requires the owned native metadata control (enable-control)")
+                        })
                     })
                     .and_then(|control| control.transfer_metadata_leadership(&to, &token));
                 self.last_metadata_leadership_transfer = Some(match &outcome {

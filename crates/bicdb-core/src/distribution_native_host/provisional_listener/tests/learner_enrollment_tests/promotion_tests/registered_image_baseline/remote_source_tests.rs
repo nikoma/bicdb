@@ -26,6 +26,8 @@ pub(super) enum SourceCase {
     RemoteBackendFullDrive,
     RemoteBackendRedrive,
     RemoteBackendOneDrive,
+    RemoteBackendDecisionMissingNewMember,
+    RemoteBackendDecisionMissingSource,
     RemoteBackendControllerWalk,
     RemoteBackendNotRangeLeader,
     TwoRangeSourceReplyStall,

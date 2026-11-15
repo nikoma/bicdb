@@ -255,6 +255,19 @@ pub(crate) trait JoinedHandoffBackend {
     /// socket; a backend whose target stays a registered replica receiver
     /// until release admits it as such.
     fn admit_target(&mut self, hosts: &mut Self::Hosts, parent: &CancellationToken) -> Result<()>;
+    /// Called after `admit_target` while no relocation of the range onto
+    /// the target is committed, so always before the learner allocation is
+    /// proposed: ask the members, read-only, whether the move can start. An
+    /// error refuses the move with nothing committed. The in-process backend
+    /// holds its members' handles and needs nothing.
+    fn preflight(
+        &mut self,
+        _hosts: &mut Self::Hosts,
+        _range: &RangeDescriptor,
+        _parent: &CancellationToken,
+    ) -> Result<()> {
+        Ok(())
+    }
     /// Resolve the participating members of the committed relocation.
     fn members(
         &self,
@@ -646,11 +659,19 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
         self.backend
             .admit_target(hosts, parent)
             .map_err(|error| stage_error("target admission", error))?;
+        let mut topology = hosts.committed_topology()?;
+        if self.relocation(&topology).is_none() {
+            // Nothing is committed for this move yet: the members are asked
+            // before the allocation below can be proposed.
+            let range = self.range(&topology)?;
+            self.backend
+                .preflight(hosts, &range, parent)
+                .map_err(|error| stage_error("target admission", error))?;
+        }
         if until == Some(Stage::TargetAdmitted) {
             return Ok(Some(Stage::TargetAdmitted));
         }
         // Step 2: the committed learner allocation.
-        let mut topology = hosts.committed_topology()?;
         if self.relocation(&topology).is_none() {
             let candidate = plan_learner_allocation(&topology, self.range, &self.target)?;
             hosts

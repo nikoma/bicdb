@@ -35,6 +35,14 @@ unresolved. The [exact regression findings](design/native-520-regression-finding
 record source identities, raw-log hashes, passed/failed/inconclusive/not-tested
 boundaries, unexecuted source/test corrections and next deterministic controls.
 
+The subsequent correction batch is locally composed but has no new executed
+result at this checkpoint. It retains distinct range-leader and metadata-owner
+authority, original request windows, and genuine new refusal/ownership controls.
+Same-attempt bootstrap namespace and preimage protection do not supply missing
+cross-call target intent or cold replaced-tree association. Those remain open
+recovery blockers. Source review and formatting/version checks are not runtime
+qualification.
+
 The candidate remains unmerged. Complete remote Serving, bounded automatic
 controller convergence, cold recovery, physical four-to-five expansion and
 post-convergence throughput gain remain open. The original Azure qualification

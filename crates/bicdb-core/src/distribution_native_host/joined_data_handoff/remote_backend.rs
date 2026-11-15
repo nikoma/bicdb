@@ -764,9 +764,9 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
     /// nothing is created and no member is asked. The target is admitted as
     /// a registered replica receiver by its own operator action, and no
     /// product request reads that receiver's state from another node. Its
-    /// absence is therefore reported by the first request that needs it: the
-    /// target fence and every target step are served by that receiver alone
-    /// and are refused, changing nothing, when it is not open.
+    /// absence is therefore reported by the first request that needs it,
+    /// the target fence, which precedes the Close of any old member: a
+    /// target that cannot be fenced ends the source stage before the cut.
     ///
     /// This is also where a coordinator that is not the metadata leader is
     /// refused, before the learner allocation is proposed. The range leader

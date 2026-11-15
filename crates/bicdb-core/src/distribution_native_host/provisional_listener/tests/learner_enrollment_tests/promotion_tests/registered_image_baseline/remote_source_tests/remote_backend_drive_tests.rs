@@ -11,6 +11,9 @@ use crate::distribution_native_host::joined_data_handoff::{
     NativeJoinedDataHandoffStage as Stage, NativeJoinedDataPlanningView,
     RemoteJoinedHandoffBackend,
 };
+use crate::distribution_range_handoff::{
+    NativeJointHandoffStepOperationV1, NativeJointHandoffStepRequestV1,
+};
 
 pub(in super::super) fn is_case(case: SourceCase) -> bool {
     matches!(
@@ -341,6 +344,44 @@ pub(super) fn exercise(
         );
         assert_eq!(donor_state["source"]["capture_retained"], false);
         assert!(!donor_state["source"]["export_retirement"]["completed"].is_null());
+        // The export retirement step never starts or replaces an install:
+        // another attempt than the completed one is refused, changing nothing.
+        let parent = budget(5000);
+        let business = Uuid::now_v7();
+        let own = clients[0]
+            .acquire_host_metadata_observation(&node(0), business, Duration::from_secs(5), &parent)
+            .unwrap();
+        let request = NativeJointHandoffStepRequestV1::from_plan(
+            plan,
+            NativeJointHandoffStepOperationV1::SourceExportRetire {
+                donor: donor.clone(),
+                target_attempt: Uuid::now_v7(),
+            },
+            business,
+            4000,
+        )
+        .unwrap();
+        let error = clients[0]
+            .request_native_joint_handoff_step(&node(4), plan, &request, &own, &parent)
+            .err()
+            .expect("an export retirement of another attempt must be refused")
+            .to_string();
+        assert!(
+            error.contains("names another donor/attempt than the retained target install"),
+            "{error}"
+        );
+        assert_eq!(
+            target_control
+                .test_joint_handoff_step_state(range.id)
+                .unwrap(),
+            step
+        );
+        assert_eq!(
+            controls[index_of(donor)]
+                .test_source_discovery_state(range.id)
+                .unwrap(),
+            donor_state
+        );
     }
     assert_eq!(hosts.commits, 0);
     assert_eq!(

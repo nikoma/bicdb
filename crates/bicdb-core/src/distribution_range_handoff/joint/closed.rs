@@ -55,6 +55,23 @@ impl NativeJointOldObservation {
         // acquire the range gate, and must never run under that guard.
         Ok(dropped)
     }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn borrow_remote_all_open_retirement(
+        &self,
+        phase: &crate::distribution_range_handoff::NativeRemoteAllOpenRetirementAdmission<'_>,
+    ) -> Result<crate::distribution_range_mutation::FrozenRangeCurrentPublication<'_>> {
+        phase.require_original_frozen_owner(self.node_id(), self.frozen.owner())?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("ALL Open original OLD pin busy"))?;
+        if pin.is_some() {
+            return Err(invalid(
+                "ALL Open cannot retire original OLD with an outstanding capture pin",
+            ));
+        }
+        self.frozen.try_current_publication()
+    }
     pub(super) fn actual_service(&self) -> &Arc<Mutex<ClusterDataNodeService>> {
         &self.service
     }
@@ -464,6 +481,51 @@ impl NativeJointOldObservation {
             ));
         }
         Ok(())
+    }
+    /// Actual read of the original permanent closure under the same hook,
+    /// native journal and fresh post-membership metadata constraints. It does
+    /// not revive the old OLD-role request or mint a serving lease.
+    pub(super) fn observe_remote_serving_decision<R>(
+        &self,
+        writer: &Arc<crate::db::NativeWriterHostState>,
+        scope: &crate::distribution_range_handoff::NativeRemoteServingReadAdmission<'_>,
+        inspect: impl FnOnce(
+            &crate::BicDb,
+            &crate::distribution_range_consensus::RangeWriteStore,
+            &FrozenRangeMutationPermit,
+        ) -> Result<R>,
+    ) -> Result<R> {
+        scope.require_memory_current()?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("serving original OLD pin busy"))?;
+        if pin.is_some() {
+            return Err(invalid(
+                "serving native decision read requires actual prior pin handoff",
+            ));
+        }
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("serving original OLD service busy"))?;
+        let database = service.database();
+        let db = database
+            .try_read()
+            .ok_or_else(|| invalid("serving original OLD DB busy"))?;
+        service.require_native_catalog_database(&db)?;
+        service.with_writer_data_domain_store(&db, |store| {
+            db.with_original_old_serving_read(
+                writer,
+                &self.plan,
+                &self.native,
+                &self.promise,
+                &self.frozen,
+                store,
+                scope,
+                || inspect(&db, store, &self.frozen),
+            )
+        })
     }
     pub(super) fn confirm_remote_decision_catalogue(
         &self,

@@ -60,6 +60,7 @@ pub(super) fn require_request(request: &ClusterDataRequest) -> Result<()> {
         | ClusterDataRequest::NativeFirstReceive { .. }
         // The target performs its own bounded install work; the request is identity DATA.
         | ClusterDataRequest::NativeJointHandoffStep { .. }
+        | ClusterDataRequest::NativeRemoteServing { .. }
         | ClusterDataRequest::NativeEventGet(_) => Ok(()),
         _ => Err(transport_error("registered native replica-only receiver refuses APP/Strong serving and generic snapshot/import/repair; actual placement/image/joint admission is still required")),
     }

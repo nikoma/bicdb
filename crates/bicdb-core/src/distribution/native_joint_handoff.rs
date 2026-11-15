@@ -718,6 +718,138 @@ impl DistributionStore {
     }
 }
 
+#[cfg(feature = "tls-replication")]
+impl DistributionStore {
+    /// Membership-only transition from the SAME actual metadata owner's
+    /// certified history. The scope has no DTO constructor and does not mint a
+    /// physical preparation, Open, writer, or release grant.
+    pub(crate) fn advance_native_remote_membership_frozen(
+        &mut self,
+        scope: &crate::distribution_native_host::NativeRemoteMembershipScope<'_>,
+        actor: &ClusterNodeId,
+        now_ms: u64,
+    ) -> Result<u64> {
+        if !self.ephemeral {
+            return Err(cluster_error(
+                "remote membership requires actual consensus proposal view",
+            ));
+        }
+        self.ensure_actor(actor)?;
+        scope.require_view(&self.topology, actor)?;
+        let mf = scope.manifest();
+        let plan = self
+            .topology
+            .relocations
+            .get(&mf.relocation_id)
+            .ok_or_else(|| cluster_error("remote membership original relocation absent"))?;
+        let record = plan
+            .native_joint_handoff_v1
+            .as_ref()
+            .ok_or_else(|| cluster_error("remote membership actual certification absent"))?;
+        if record.immutable_binding() != scope.certified().immutable_binding()
+            || plan.plan_id != mf.plan_id
+            || plan.range_id != mf.capture_range.id
+            || plan.learner_epoch != mf.capture_range.epoch
+            || plan.target != mf.target_id
+            || plan
+                .handoff_session
+                .as_ref()
+                .is_none_or(|s| s.session_id != mf.handoff_session || s.nonce != mf.nonce)
+        {
+            return Err(cluster_error(
+                "remote membership changed original certified plan/decision",
+            ));
+        }
+        let canonical = |r: &RangeDescriptor| {
+            let mut r = r.clone();
+            r.approximate_bytes = 0;
+            r.approximate_qps = 0;
+            r.replicas.sort_by_key(|x| x.id);
+            r
+        };
+        let mut union = mf.capture_range.clone();
+        let target = union
+            .replicas
+            .iter_mut()
+            .find(|r| r.id == plan.target_replica_id && r.node_id == mf.target_id)
+            .ok_or_else(|| cluster_error("remote membership original target replica absent"))?;
+        if target.role != RangeReplicaRole::Learner {
+            return Err(cluster_error(
+                "remote membership original target was not learner",
+            ));
+        }
+        target.role = RangeReplicaRole::Voter;
+        union.epoch = union
+            .epoch
+            .checked_add(1)
+            .ok_or_else(|| cluster_error("remote union epoch overflow"))?;
+        union.leader = mf.activation_range.leader.clone();
+        let current = self
+            .topology
+            .range_by_id(mf.capture_range.id)
+            .ok_or_else(|| cluster_error("remote membership original range absent"))?;
+        let (expected, next, stage, phase) = match record.stage {
+            NativeJointHandoffStageV1::Certified => (
+                &mf.capture_range,
+                union.clone(),
+                NativeJointHandoffStageV1::PromotedFrozen,
+                RelocationPhase::Promoted,
+            ),
+            NativeJointHandoffStageV1::PromotedFrozen => (
+                &union,
+                mf.activation_range.clone(),
+                NativeJointHandoffStageV1::AwaitingActivation,
+                RelocationPhase::CleaningUp,
+            ),
+            _ => {
+                return Err(cluster_error(
+                    "remote membership is not at the exact original frozen predecessor stage",
+                ))
+            }
+        };
+        if canonical(current) != canonical(expected)
+            || next.epoch
+                != current
+                    .epoch
+                    .checked_add(1)
+                    .ok_or_else(|| cluster_error("remote membership epoch overflow"))?
+        {
+            return Err(cluster_error(
+                "remote membership changed exact original current/next configuration",
+            ));
+        }
+        let epoch = next.epoch;
+        let range = self
+            .topology
+            .ranges
+            .values_mut()
+            .find(|r| r.id == mf.capture_range.id)
+            .unwrap();
+        *range = next;
+        let plan = self
+            .topology
+            .relocations
+            .get_mut(&mf.relocation_id)
+            .unwrap();
+        plan.phase = phase;
+        plan.promoted_epoch = Some(epoch);
+        plan.updated_at_ms = now_ms;
+        plan.native_joint_handoff_v1.as_mut().unwrap().stage = stage;
+        // Fresh request remains mandatory after planning/allocation. Physical
+        // permissions remain fenced throughout both metadata-only stages.
+        scope.require_request()?;
+        self.commit_change(
+            actor.clone(),
+            now_ms,
+            format!(
+                "{} native remote membership {stage:?}; all writers remain frozen",
+                mf.relocation_id
+            ),
+        )?;
+        Ok(epoch)
+    }
+}
+
 impl DistributionStore {
     pub(super) fn require_legacy_relocation_mutation(
         &self,

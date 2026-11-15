@@ -19,6 +19,7 @@ pub(crate) use bridge::{
     NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
     NativeJointHistoricalCutScope, NativeJointPreparedPublicationScope,
     NativeJointServingBridgeReceipt, NativeJointServingPreparation,
+    NativeRemoteJointPreparationAttempt,
 };
 
 /// Actual physical preflight under an owned/drained handoff freeze. No serde,
@@ -520,3 +521,6 @@ pub(crate) use decision::NativeJointDecisionReceipt;
 pub(crate) use decision::NativeRegisteredJointDecisionAttempt;
 #[cfg(feature = "tls-replication")]
 pub(crate) use decision::{NativeRemoteCataloguePhysicalPoint, NativeRemoteJointDecisionAttempt};
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use bridge::NativeRemoteJointBridgeAttempt;

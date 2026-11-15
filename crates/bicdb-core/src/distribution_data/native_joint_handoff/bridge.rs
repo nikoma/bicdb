@@ -85,6 +85,10 @@ pub(crate) struct ActualServiceNativeJointPreparedEvidence {
     pub(super) pin: parking_lot::Mutex<Option<SourceCaptureReadPin>>,
 }
 impl ActualServiceNativeJointPreparedEvidence {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_remote_preparation_participant(&self, sha: &str) -> Result<()> {
+        self.origin.require_remote_participant(sha)
+    }
     pub(crate) fn require_original_preparation_session(&self) -> Result<()> {
         self.origin.require_session()
     }
@@ -1267,5 +1271,71 @@ impl ClusterDataNodeService {
             ));
         }
         receipt.require_current(&database)
+    }
+}
+
+#[cfg(feature = "tls-replication")]
+impl ActualServiceNativeJointPreparedEvidence {
+    /// Fixed readonly wire-final boundary: full same-owner physical proof stays
+    /// lexically held through the short memory-only metadata publication guard.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn require_remote_prepared_wire_boundary(
+        &self,
+        service: &ClusterDataNodeService,
+        fresh: &CommittedNativeJointDecisionObservation,
+        custody: &crate::distribution_range_handoff::NativeJointPreparationCustody,
+        role: &RecoveryRoleAdmission,
+        own: &crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        metadata: &ActualNativeJointMetadataPoint,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let history = PreparedHistory::Custody(custody);
+        let database = checked_database_read(&service.db, &service.storage_policy)?;
+        service.require_native_catalog_database(&database)?;
+        history.require_current(self, &database)?;
+        fresh.require_current(&database)?;
+        role.require_own_host_metadata(own, business)?;
+        metadata.require_request(own, business)?;
+        metadata.require_native_store_point(&database, &service.range_writes)?;
+        let scope = self.prepared.publication_read_scope(
+            &database,
+            &service.range_writes,
+            fresh,
+            &self.catalogue,
+            self.lease.image(),
+            self.lease.try_frozen()?,
+        )?;
+        self.require_original_phase_owner_with_publication_scope(&scope, &service.range_writes)?;
+        fresh.require_current_with_publication_scope(&scope)?;
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| data_error("remote prepared final pin owner busy"))?;
+        if let Some(pin) = pin.as_ref() {
+            database
+                .range_mutation_gate()
+                .validate_source_capture_read_pin(fresh.data().old_range().id, pin)?;
+        } else {
+            database
+                .range_mutation_gate()
+                .validate_quiescent_frozen(fresh.data().old_range().id, self.lease.try_frozen()?)?;
+        }
+        parent.check()?;
+        role.require_live_request()?;
+        own.require_live_request(business)?;
+        self.origin.require_actual(self)?;
+        let version = metadata.try_publication_guard()?;
+        // No hashing, topology validation, callback, IO, or serialization below.
+        parent.check()?;
+        role.require_live_request()?;
+        own.require_live_request(business)?;
+        metadata.require_current_memory()?;
+        fresh.require_publication_point_memory()?;
+        self.origin.require_actual(self)?;
+        drop(version);
+        drop(pin);
+        drop(scope);
+        Ok(())
     }
 }

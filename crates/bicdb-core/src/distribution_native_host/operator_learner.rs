@@ -47,6 +47,34 @@ enum NativeLearnerLifecycle {
     Cold(NativeColdLearnerMetadataHost),
 }
 impl NativeMetadataLearnerHost {
+    pub(crate) fn poll_finite_remote_serving(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<usize> {
+        parent.check()?;
+        if self.stopped {
+            return Err(invalid("remote serving original learner host stopped"));
+        }
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host)=>host.poll_finite_remote_serving(parent),
+            NativeLearnerLifecycle::Cold(_)=>Err(invalid("remote serving finite continuation needs original Fresh owner; cold reconstruction unsupported")),
+        }
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_preparation_control(
+        &mut self,
+        range: crate::RangeId,
+        arm: Option<u8>,
+    ) -> Result<serde_json::Value> {
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control_mut()?
+                .test_remote_preparation_control(range, arm),
+            NativeLearnerLifecycle::Cold(_) => Err(invalid(
+                "remote preparation control cannot cast cold owner to Fresh",
+            )),
+        }
+    }
     /// Receive-only queue service on this SAME actual node-owner thread.
     /// Each entry still owns its original authenticated request deadline.
     /// This never chooses placement or initiates an OLD freeze automatically.

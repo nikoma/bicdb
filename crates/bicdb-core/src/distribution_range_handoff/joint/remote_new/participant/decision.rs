@@ -3,6 +3,8 @@ use super::*;
 use crate::distribution_range_handoff::{NativeJointDecisionData, NativeRemoteDecisionReceiptV1};
 use crate::distribution_transport::AuthenticatedNativeRemoteDecisionSource;
 mod catalogue;
+mod serving_read;
+pub(crate) use serving_read::NativeRemoteServingReadAdmission;
 
 struct DecisionContext {
     frames: AuthenticatedNativeRemoteNewFactSet,
@@ -193,12 +195,11 @@ impl NativeRemoteDecisionAdmission<'_> {
     ) -> Result<()> {
         match &self.participant.original {
             OriginalParticipant::Old {
-                actual,
-                writer: original,
-                ..
-            } if std::ptr::eq(original.as_ref(), writer) => {
-                actual.require_remote_decision_predecessor(db, writer)
-            }
+                writer: original, ..
+            } if std::ptr::eq(original.as_ref(), writer) => self
+                .participant
+                .original_old()?
+                .require_remote_decision_predecessor(db, writer),
             _ => Err(invalid(
                 "remote OLD predecessor changed original participant/State",
             )),
@@ -213,12 +214,11 @@ impl NativeRemoteDecisionAdmission<'_> {
     ) -> Result<()> {
         match &self.participant.original {
             OriginalParticipant::Old {
-                actual,
-                writer: original,
-                ..
-            } if std::ptr::eq(original.as_ref(), writer) => {
-                actual.require_remote_decision_parts(native, promise, frozen)
-            }
+                writer: original, ..
+            } if std::ptr::eq(original.as_ref(), writer) => self
+                .participant
+                .original_old()?
+                .require_remote_decision_parts(native, promise, frozen),
             _ => Err(invalid(
                 "remote OLD decision changed genuine original participant/writer",
             )),
@@ -288,6 +288,81 @@ impl NativeRemoteDecisionAdmission<'_> {
     }
 }
 impl NativeRemoteNewParticipant {
+    pub(super) fn require_all_open_known_decision(
+        &self,
+        phase: &NativeRemoteAllOpenRetirementAdmission<'_>,
+    ) -> Result<()> {
+        let held = self
+            .decision
+            .try_lock()
+            .ok_or_else(|| invalid("ALL Open original native outcome busy"))?;
+        let completed = held
+            .completed
+            .as_ref()
+            .ok_or_else(|| invalid("ALL Open original actual native receipt absent"))?;
+        let native = held
+            .native
+            .as_ref()
+            .ok_or_else(|| invalid("ALL Open original actual native attempt absent"))?;
+        if held.expected.as_ref() != Some(completed.data()) {
+            return Err(invalid(
+                "ALL Open changed exact original retained native decision",
+            ));
+        }
+        phase.require_native_decision(self, completed, native)
+    }
+
+    /// Necessary SAME private native/body/process binding, never permission to
+    /// prepare/activate or bypass a physical/current catalogue validation.
+    pub(crate) fn serving_queue_for_original(
+        &self,
+        request: &crate::distribution_native_host::NativeRemoteServingRequestV1,
+        role: &RecoveryRoleAdmission,
+        own: &HostMetadataReadObservation,
+        business: Uuid,
+        metadata: &ActualNativeJointMetadataPoint,
+    ) -> Result<Arc<crate::distribution_native_host::NativeRemoteServingQueue>> {
+        request.require_shape()?;
+        self.require_lifetime_memory()?;
+        role.require_own_host_metadata(own, business)?;
+        metadata.require_request(own, business)?;
+        if role.purpose() != &request.purpose()
+            || request.phase_id != self.snapshot.phase_id
+            || request.manifest.checksum_sha256 != self.snapshot.binding.manifest_sha256
+            || crate::distribution_range_image::bounded_json(&request.manifest, 2 * 1024 * 1024)?
+                != self.manifest_bytes
+            || role.local_node_id() != &self.snapshot.node_id
+        {
+            return Err(invalid(
+                "serving continuation substituted original participant/MF/phase",
+            ));
+        }
+        let held = self
+            .decision
+            .try_lock()
+            .ok_or_else(|| invalid("serving original native decision busy"))?;
+        let actual = held.completed.as_ref().ok_or_else(|| {
+            invalid("serving continuation lacks actual known native helper return")
+        })?;
+        let native = held
+            .native
+            .as_ref()
+            .ok_or_else(|| invalid("serving continuation original native attempt absent"))?;
+        native.actual_committed_xid()?;
+        if actual.decision_sha256() != request.decision_sha256
+            || held.expected.as_ref() != Some(actual.data())
+            || held.catalogue.is_none()
+        {
+            return Err(invalid(
+                "serving continuation changed original known native/catalogue custody",
+            ));
+        }
+        actual.data().require_metadata_domain(
+            own.committed_topology(business)?,
+            own.restore_activation(business)?,
+        )?;
+        Ok(self.serving_queue.clone())
+    }
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn observe_known_remote_decision(
         &self,
@@ -354,9 +429,9 @@ impl NativeRemoteNewParticipant {
         };
         admission.require_current()?;
         let receipt=match &self.original {
-            OriginalParticipant::Registered {target,service,frozen,..}=>crate::distribution_data::ClusterDataNodeService::recover_known_remote_registered_decision(
-                service,target,frozen.try_as_frozen()?,&admission,parent)?,
-            OriginalParticipant::Old {actual,writer,..}=>actual.recover_known_remote_decision(writer,&admission,parent)?,
+            OriginalParticipant::Registered {target,service,..}=>crate::distribution_data::ClusterDataNodeService::recover_known_remote_registered_decision(
+                service,target,self.original_registered_freeze()?.try_as_frozen()?,&admission,parent)?,
+            OriginalParticipant::Old {writer,..}=>self.original_old()?.recover_known_remote_decision(writer,&admission,parent)?,
         };
         // NEW actual successful fresh helper return, retained before outer
         // checks. Original failed call/outcome/XID are never rewritten.
@@ -528,9 +603,9 @@ impl NativeRemoteNewParticipant {
             owner.require_first_policy_attempt_lifetime()?;
         }
         let receipt=match &self.original {
-            OriginalParticipant::Registered {target,service,frozen,..}=>crate::distribution_data::ClusterDataNodeService::publish_remote_registered_decision(
-                service,target,frozen.try_as_frozen()?,&admission,retained.native.as_mut().unwrap(),parent)?,
-            OriginalParticipant::Old {actual,writer,..}=>actual.publish_remote_decision(writer,&admission,retained.native.as_mut().unwrap(),parent)?,
+            OriginalParticipant::Registered {target,service,..}=>crate::distribution_data::ClusterDataNodeService::publish_remote_registered_decision(
+                service,target,self.original_registered_freeze()?.try_as_frozen()?,&admission,retained.native.as_mut().unwrap(),parent)?,
+            OriginalParticipant::Old {writer,..}=>self.original_old()?.publish_remote_decision(writer,&admission,retained.native.as_mut().unwrap(),parent)?,
         };
         // The actual sink return is retained before all outer fallible checks.
         // It never replaces the native attempt/outcome or its original XID.
@@ -608,7 +683,9 @@ impl NativeRemoteNewParticipant {
                     .ok_or_else(|| invalid("remote DECISION observation target DB busy"))?;
                 db.observe_remote_native_decision(target.native(), attempt)?
             }
-            OriginalParticipant::Old { actual, .. } => actual.observe_remote_decision(attempt)?,
+            OriginalParticipant::Old { .. } => {
+                self.original_old()?.observe_remote_decision(attempt)?
+            }
         };
         if receipt.data() != expected
             || receipt.decision_sha256() != expected.checksum_sha256()
@@ -764,8 +841,8 @@ impl NativeRemoteNewParticipant {
     }
     pub(crate) fn test_remote_decision_evidence(&self) -> Result<serde_json::Value> {
         let predecessor = match &self.original {
-            OriginalParticipant::Old { actual, .. } => {
-                Some(actual.test_remote_decision_predecessor()?)
+            OriginalParticipant::Old { .. } => {
+                Some(self.original_old()?.test_remote_decision_predecessor()?)
             }
             _ => None,
         };

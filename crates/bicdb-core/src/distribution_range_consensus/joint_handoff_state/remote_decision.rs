@@ -462,3 +462,75 @@ fn read_actual_catalogue_bytes(store: &RangeWriteStore) -> Result<Vec<u8>> {
     }
     Ok(bytes)
 }
+
+impl NativeRemoteDecisionCataloguePublication {
+    /// Read-only selected decision under a DISTINCT fresh Serving request.
+    /// This cannot publish, re-fsync, clear uncertainty, or recover an owner.
+    pub(crate) fn observe_for_serving(
+        &self,
+        db: &crate::BicDb,
+        store: &RangeWriteStore,
+        phase: &crate::distribution_range_handoff::NativeRemoteServingReadAdmission<'_>,
+    ) -> Result<String> {
+        phase.require_native(db, store)?;
+        let receipt = phase.receipt();
+        if self.owns_uncertainty
+            || self.verified_generation.is_none()
+            || self
+                .outcomes
+                .last()
+                .is_none_or(|o| o.returned_ok != Some(true))
+            || store.open_id != self.store_open
+            || db.incarnation_id() != self.database_open
+            || db.native_abort_catalogue_store_id()? != Some(self.catalogue_id)
+            || phase.original_participant_sha256() != self.participant_sha256
+            || receipt.checksum_sha256() != self.native_sha256
+            || receipt.decision_sha256() != self.decision_sha256
+            || !store.fsync
+            || db.data_path().canonicalize()? != store.root.canonicalize()?
+            || !range_write_catalog_format_supported(store.catalog.format_version)
+            || !crate::format::native_remote_joint_decision_active(db.data_path())?
+        {
+            return Err(range_write_error(
+                "serving read lost original successful owned catalogue/native identity",
+            ));
+        }
+        store.require_native_catalog_durability(db.data_path())?;
+        let range = phase.data().old_range().id;
+        if store
+            .catalog
+            .native_joint_handoffs
+            .as_ref()
+            .and_then(|m| m.get(&range))
+            != self
+                .candidate
+                .native_joint_handoffs
+                .as_ref()
+                .and_then(|m| m.get(&range))
+        {
+            return Err(range_write_error(
+                "serving read original selected durable decision changed",
+            ));
+        }
+        let actual = self.require_disk(store, false)?;
+        phase.require_native(db, store)?;
+        Ok(actual)
+    }
+}
+
+impl NativeRemoteDecisionCataloguePublication {
+    pub(crate) fn require_original_successful_publication(&self) -> Result<()> {
+        if self.owns_uncertainty
+            || self.verified_generation.is_none()
+            || self
+                .outcomes
+                .last()
+                .is_none_or(|o| o.returned_ok != Some(true))
+        {
+            return Err(range_write_error(
+                "serving original catalogue helper success absent; Unknown cannot advance",
+            ));
+        }
+        Ok(())
+    }
+}

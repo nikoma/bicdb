@@ -3,10 +3,38 @@
 use super::*;
 
 pub(in crate::distribution_data::native_joint_handoff) struct PreparingOrigin {
-    session: CancellationToken,
+    lifetime: ProducerLifetime,
+}
+enum ProducerLifetime {
+    Original(CancellationToken),
+    #[cfg(feature = "tls-replication")]
+    Remote(Arc<crate::distribution_native_host::NativeRemotePreparationProcess>),
+}
+impl ProducerLifetime {
+    fn require_memory(&self) -> Result<()> {
+        match self {
+            Self::Original(session) => session.check(),
+            #[cfg(feature = "tls-replication")]
+            Self::Remote(process) => process.require_memory(),
+        }
+    }
+    fn bound_request(&self, parent: &CancellationToken) -> CancellationToken {
+        match self {
+            Self::Original(session) => parent.child_linked_to(session),
+            #[cfg(feature = "tls-replication")]
+            Self::Remote(process) => process.bound_request(parent),
+        }
+    }
+    fn memory_lifetime(&self) -> crate::cancellation::CancellationLifetime {
+        match self {
+            Self::Original(session) => session.retain_memory_lifetime(),
+            #[cfg(feature = "tls-replication")]
+            Self::Remote(process) => process.memory_lifetime(),
+        }
+    }
 }
 pub(in crate::distribution_data::native_joint_handoff) struct CompletedPreparationOrigin {
-    session: CancellationToken,
+    lifetime: ProducerLifetime,
     preparation_sha256: String,
     decision_sha256: String,
     local_decision_sha256: String,
@@ -19,8 +47,17 @@ impl PreparingOrigin {
         parent: &CancellationToken,
     ) -> Self {
         Self {
-            session: parent.child(),
+            lifetime: ProducerLifetime::Original(parent.child()),
         }
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(in crate::distribution_data::native_joint_handoff) fn begin_remote(
+        process: Arc<crate::distribution_native_host::NativeRemotePreparationProcess>,
+    ) -> Result<Self> {
+        process.require_memory()?;
+        Ok(Self {
+            lifetime: ProducerLifetime::Remote(process),
+        })
     }
     /// The actual native receipt is available only after successful native
     /// preparation/readback. No error/status/serialized body can seal this.
@@ -30,7 +67,7 @@ impl PreparingOrigin {
         committed: &CommittedNativeJointDecisionObservation,
     ) -> CompletedPreparationOrigin {
         CompletedPreparationOrigin {
-            session: self.session,
+            lifetime: self.lifetime,
             preparation_sha256: prepared.checksum_sha256().into(),
             decision_sha256: committed.data().checksum_sha256().into(),
             local_decision_sha256: committed.native_receipt().checksum_sha256().into(),
@@ -41,19 +78,32 @@ impl PreparingOrigin {
 }
 impl CompletedPreparationOrigin {
     pub(super) fn require_session(&self) -> Result<()> {
-        self.session.check()
+        self.lifetime.require_memory()
     }
     pub(super) fn bound_request(&self, parent: &CancellationToken) -> CancellationToken {
-        parent.child_linked_to(&self.session)
+        self.lifetime.bound_request(parent)
     }
     pub(super) fn memory_lifetime(&self) -> crate::cancellation::CancellationLifetime {
-        self.session.retain_memory_lifetime()
+        self.lifetime.memory_lifetime()
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(super) fn require_remote_participant(&self, sha: &str) -> Result<()> {
+        match &self.lifetime {
+            ProducerLifetime::Remote(process) => process.require_participant(sha),
+            _ => Err(data_error(
+                "remote preparation observation cannot cast a legacy/local producer",
+            )),
+        }
     }
     pub(super) fn require_actual(
         &self,
         actual: &ActualServiceNativeJointPreparedEvidence,
     ) -> Result<()> {
         self.require_session()?;
+        #[cfg(feature = "tls-replication")]
+        if let ProducerLifetime::Remote(process) = &self.lifetime {
+            process.require_prepared(&actual.prepared)?;
+        }
         actual.committed.require_captured_native_open_identity()?;
         if self.preparation_sha256 != actual.prepared.checksum_sha256()
             || self.decision_sha256 != actual.committed.data().checksum_sha256()

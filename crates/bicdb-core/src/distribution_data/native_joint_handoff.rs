@@ -16,8 +16,16 @@ mod registered_target;
 #[cfg(feature = "tls-replication")]
 mod remote_decision;
 #[cfg(feature = "tls-replication")]
+mod remote_serving_bridge;
+#[cfg(feature = "tls-replication")]
+mod remote_serving_preparation;
+#[cfg(feature = "tls-replication")]
 pub(crate) use registered_target::ActualServiceNativeRegisteredJointNewEvidence;
 mod source_retirement;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_serving_bridge::NativeRemoteServiceBridge;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_serving_preparation::NativeRemoteServicePreparation;
 pub(crate) use source_retirement::NativeJointSourceRetired;
 mod bridge;
 pub(crate) use bridge::{

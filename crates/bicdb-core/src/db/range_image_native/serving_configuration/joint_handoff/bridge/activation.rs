@@ -2,6 +2,10 @@
 //! Native publication precedes catalogue/open activation. This historical
 //! record alone cannot release a freeze or admit an application operation.
 use super::*;
+#[cfg(feature = "tls-replication")]
+mod remote_bridge;
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_bridge::NativeRemoteJointBridgeAttempt;
 mod continuity;
 #[cfg(test)]
 mod failure_diagnostics;
@@ -1211,5 +1215,15 @@ impl BicDb {
             .require_native_publication_metadata(self, store)?;
         let _version = admission.committed().native_publication_guard()?;
         Ok(Some(receipt))
+    }
+}
+
+impl NativeJointPreparedPublicationScope<'_> {
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn require_remote_bridge_current(
+        &self,
+        actual: &NativeJointServingBridgeReceipt,
+    ) -> Result<()> {
+        self.require_bridge_postcondition(actual, None)
     }
 }

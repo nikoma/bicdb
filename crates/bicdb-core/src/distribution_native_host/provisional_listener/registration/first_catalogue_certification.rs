@@ -1,17 +1,44 @@
 //! Actual metadata-leader owner independently reads recipient dual durability.
 //! Immutable coordinator input is intent DATA, never a forwarded quorum.
 use super::*;
+mod preparation;
+mod serving;
+#[cfg(test)]
+pub(in crate::distribution_native_host) mod test_cuts;
 use crate::distribution_range_handoff::{
     NativeMetadataOwnerCatalogueScope, NativeRemoteCatalogueRound, NativeRemoteNewFactSetV1,
     NativeRemoteNewOperationV1, NativeRemoteNewRequestV1,
 };
 use crate::distribution_range_image::NativeRemoteImageManifestV1;
+pub(crate) use serving::NativeRemoteMembershipScope;
 
 #[derive(Clone)]
 pub(crate) struct NativeFirstCatalogueCertificationIntent {
     pub(super) manifest: NativeRemoteImageManifestV1,
     pub(super) facts: NativeRemoteNewFactSetV1,
     pub(super) decision_sha256: String,
+}
+#[cfg(test)]
+impl NativeFirstCatalogueCertificationIntent {
+    pub(in crate::distribution_native_host) fn relocation_id(
+        &self,
+    ) -> crate::distribution::RelocationId {
+        self.manifest.relocation_id
+    }
+    pub(in crate::distribution_native_host) fn phase_id(&self) -> Uuid {
+        self.facts.phase_id
+    }
+    pub(in crate::distribution_native_host) fn final_member_ids(&self) -> Vec<ClusterNodeId> {
+        self.manifest.new_members.keys().cloned().collect()
+    }
+    pub(in crate::distribution_native_host) fn participant_count(&self) -> usize {
+        self.manifest
+            .old_members
+            .keys()
+            .chain(self.manifest.new_members.keys())
+            .collect::<std::collections::BTreeSet<_>>()
+            .len()
+    }
 }
 pub(super) struct NativeFirstCatalogueCertificationAttempt {
     manifest_sha256: String,
@@ -23,6 +50,11 @@ pub(super) struct NativeFirstCatalogueCertificationAttempt {
     expected_proposal: Option<(u64, u64)>,
     proposal: Option<crate::distribution_consensus::MetadataLogEntry>,
     actual_proposal_return: Option<serde_json::Value>,
+    certified: Option<serving::NativeFirstCertifiedHistory>,
+    membership: Option<serving::NativeFirstMembershipAttempt>,
+    membership_history: Vec<serving::NativeFirstMembershipAttempt>,
+    pub(super) stopped: bool,
+    serving: Option<preparation::NativeFirstServingCoordinator>,
 }
 impl NativeMetadataControlHost {
     /// Finite operator component on the REAL metadata owner. It is not a
@@ -74,6 +106,11 @@ impl NativeMetadataControlHost {
                     expected_proposal: None,
                     proposal: None,
                     actual_proposal_return: None,
+                    certified: None,
+                    membership: None,
+                    membership_history: Vec::new(),
+                    stopped: false,
+                    serving: None,
                 },
             );
         }
@@ -111,6 +148,25 @@ impl NativeMetadataControlHost {
                 return Err(invalid(
                     "FIRST certification current metadata has another native decision",
                 ));
+            }
+            // Lost commit/reply resolution is allowed only for this owner's
+            // retained actual proposal and proof, never from the record alone.
+            if original.certified.is_none() && original.proposal.is_some() {
+                let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+                    &backend.service,
+                    &initial,
+                    business,
+                    &token,
+                )?
+                .ok_or_else(|| {
+                    invalid("FIRST selected certification needs actual current MStore")
+                })?;
+                let store = backend.lock_metadata(&token)?;
+                point.require_current_memory()?;
+                original.certified =
+                    Some(serving::NativeFirstCertifiedHistory::from_actual_commit(
+                        &intent, original, &store, &initial, business,
+                    )?);
             }
             // Fresh historical committed DATA only; never recreate owners or
             // use an expired aggregate for a new mutation.
@@ -287,17 +343,46 @@ impl NativeMetadataControlHost {
         }
         // No service/DB/native/MStore guard spans actual network replication.
         backend.heartbeat(&token)?;
+        #[cfg(test)]
+        test_cuts::after_commit(
+            &backend,
+            &self.config,
+            intent.manifest.capture_range.id,
+            &token,
+        )?;
         let (post, post_business) = own_request(&token)?;
-        let candidate = original.candidate.as_ref().unwrap();
-        if post.committed_topology(post_business)? != candidate {
-            return Err(invalid(
-                "FIRST actual catalogue certification not committed; original proposal retained",
-            ));
-        }
-        let record = candidate.relocations[&intent.manifest.relocation_id]
+        let current = post.committed_topology(post_business)?;
+        let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+            &backend.service,
+            &post,
+            post_business,
+            &token,
+        )?
+        .ok_or_else(|| invalid("FIRST committed certification needs actual current MStore"))?;
+        let store = backend.lock_metadata(&token)?;
+        point.require_current_memory()?;
+        store.require_native_remote_selected_commit(
+            original.proposal.as_ref().unwrap(),
+            intent.manifest.relocation_id,
+            &post,
+            post_business,
+        )?;
+        let record = current.relocations[&intent.manifest.relocation_id]
             .native_joint_handoff_v1
             .as_ref()
             .ok_or_else(|| invalid("FIRST committed certification record absent"))?;
+        // This constructor is private to the actual metadata owner. A decoded
+        // stage or a historical-only reply above cannot create this custody.
+        if original.certified.is_none() {
+            original.certified = Some(serving::NativeFirstCertifiedHistory::from_actual_commit(
+                &intent,
+                original,
+                &store,
+                &post,
+                post_business,
+            )?);
+        }
+        drop(store);
         token.check()?;
         Ok(
             serde_json::json!({"actual_committed_record":record,"actual_original_proposal":original.proposal,

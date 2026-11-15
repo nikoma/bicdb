@@ -102,6 +102,8 @@ pub(crate) use native_source_export::AuthenticatedRegisteredExportNew;
 mod native_first;
 mod native_handoff_step;
 mod native_new;
+mod native_serving;
+pub(crate) use native_serving::AuthenticatedNativeRemoteServingFrame;
 mod native_old;
 use crate::distribution_native_host::{
     NativeInitialBirthOfferRequest, NativeInitialBirthOfferResponse,
@@ -564,11 +566,15 @@ enum ClusterDataRequest {
     NativeFirstReceive {
         request: Box<crate::distribution_native_host::NativeFirstReceiveRequestV1>,
     },
+    NativeRemoteServing {
+        request: Box<crate::distribution_native_host::NativeRemoteServingRequestV1>,
+    },
 }
 
 impl ClusterDataRequest {
     fn range_id_for_schema_fence(&self) -> Option<RangeId> {
         match self {
+            Self::NativeRemoteServing { request } => Some(request.manifest.capture_range.id),
             Self::ApplicationEvent(request) => Some(request.range_id),
             Self::NativeEventGet(_)
             | Self::NativeRemoteImageSourceFrame { .. }
@@ -679,6 +685,7 @@ impl ClusterDataRequest {
                 | Self::NativeSourceExportRetirement { .. }
                 | Self::NativeSourceDiscovery { .. }
                 | Self::NativeFirstReceive { .. }
+                | Self::NativeRemoteServing { .. }
                 | Self::NativeDecisionSourceProvenance { .. }
         )
     }
@@ -750,6 +757,7 @@ enum ClusterDataResponse {
     RangeDigestBucket(RangeDigestBucketScanStep),
     RangeDigestRepairState(RangeDigestRepairState),
     NativeFirstReceive(Box<crate::distribution_native_host::NativeFirstReceiveReplyV1>),
+    NativeRemoteServing(Box<crate::distribution_native_host::NativeRemoteServingReplyV1>),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1760,6 +1768,27 @@ fn handle_cluster_data_connection(
                 actual.into_reply(),
             ));
         }
+        if let ClusterDataRequest::NativeRemoteServing { request } = request.request {
+            // Actual peer VALUE is moved into this original recipient's sealed
+            // ingress. Neither a selector nor MF DATA constructs a host.
+            let peer = authenticated_caller.ok_or_else(|| {
+                transport_error("serving needs actual authenticated coordinator/observer")
+            })?;
+            let parent =
+                CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
+            let reply = if let Some(original) = initial_data {
+                original
+                    .receive_remote_serving_from_authenticated_dispatch(peer, *request, &parent)?
+            } else if let Some(original) = registered_replica {
+                original
+                    .receive_remote_serving_from_authenticated_dispatch(peer, *request, &parent)?
+            } else {
+                return Err(transport_error(
+                    "serving requires original immutable INITIAL/Registered profile",
+                ));
+            };
+            return Ok(ClusterDataResponse::NativeRemoteServing(Box::new(reply)));
+        }
         if let ClusterDataRequest::NativeFirstReceive { request } = request.request {
             let receiver = registered_replica.ok_or_else(|| {
                 transport_error("FIRST receive requires original Registered receiver")
@@ -2685,6 +2714,9 @@ fn dispatch_cluster_data_request(
         )),
         ClusterDataRequest::NativeFirstReceive { .. } => Err(transport_error(
             "FIRST receive requires original before-latch receiver ingress",
+        )),
+        ClusterDataRequest::NativeRemoteServing { .. } => Err(transport_error(
+            "native serving requires original authenticated before-latch recipient owner",
         )),
         ClusterDataRequest::NativeRemoteOld { .. } => Err(transport_error(
             "native OLD requires its actual before-latch owner",
@@ -5690,6 +5722,7 @@ impl TcpClusterRelocationTransport {
                     | ClusterDataRequest::NativeSourceExportRetirement { .. }
                     | ClusterDataRequest::NativeSourceDiscovery { .. }
                     | ClusterDataRequest::NativeFirstReceive { .. }
+                    | ClusterDataRequest::NativeRemoteServing { .. }
                     | ClusterDataRequest::NativeDecisionSourceProvenance { .. }
                     | ClusterDataRequest::MetadataReadProbe { .. }
                     | ClusterDataRequest::MetadataReadAcquire { .. }

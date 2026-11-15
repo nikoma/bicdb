@@ -868,6 +868,11 @@ pub(super) fn validate_ordinary_fence_for_role(
                 "read-only observation role cannot collect mutation fences",
             ));
         }
+        MetadataRecoveryRolePurpose::NativeJointServingPhase { .. } => {
+            return Err(invalid(
+                "serving phase intent cannot collect recovery mutation fences",
+            ));
+        }
     };
     if progress.node_id != *observation.node_id()
         || progress.range_id != scope.range_id

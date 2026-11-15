@@ -11,7 +11,9 @@ mod phase;
 mod preparation_custody;
 mod publication;
 pub(crate) use phase::{NativeJointPreparationPhaseQuorum, NativeJointPreparationPhaseRound};
-pub(crate) use preparation_custody::NativeJointPreparationCustody;
+pub(crate) use preparation_custody::{
+    NativeJointPreparationCustody, NativeRemotePreparedObservation,
+};
 pub(crate) use publication::{
     NativeJointActivatedQuorum, NativeJointOpenAdmission, NativeJointOpenPhaseQuorum,
     NativeJointOpenPhaseRound, NativeJointPublishedServingQuorum, NativeJointReleaseAdmission,
@@ -851,3 +853,6 @@ impl NativeJointActivationAdmission {
         Ok(result)
     }
 }
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use preparation_custody::NativeRemoteBridgeAdmission;

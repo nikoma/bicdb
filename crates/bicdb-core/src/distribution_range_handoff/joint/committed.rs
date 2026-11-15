@@ -182,6 +182,19 @@ impl CommittedNativeJointDecisionObservation {
             None => Err(invalid("protected native joint publication requires an actual current-MStore version captured outside engine locks")),
         }
     }
+    /// Necessary immutable request/open/current-version checks only. No
+    /// topology validation, hash/serde, physical receipt or grant is created.
+    pub(crate) fn require_publication_point_memory(&self) -> Result<()> {
+        self.metadata.require_live_request(self.business)?;
+        self.require_captured_native_open_identity()?;
+        match &self.metadata_point {
+            Some(point) => point.require_current_memory(),
+            None if self.native.native_metadata_initialization_version() == 0 => Ok(()),
+            None => Err(invalid(
+                "protected joint observation current metadata point absent",
+            )),
+        }
+    }
     pub(crate) fn require_publication_request_memory(&self) -> Result<()> {
         self.metadata.require_live_request(self.business)
     }

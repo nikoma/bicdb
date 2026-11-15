@@ -4,6 +4,7 @@ use super::*;
 mod export_new;
 mod first_data_policy;
 mod remote_new;
+mod remote_serving;
 pub(crate) use first_data_policy::NativeRegisteredServingDataPolicyOrigin;
 mod release;
 use crate::db::{

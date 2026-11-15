@@ -149,6 +149,17 @@ pub(crate) enum MetadataRecoveryRolePurpose {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         current_joint_decision_sha256: Option<String>,
     },
+    /// Fresh phase-control intent only. It never authorizes recovery fencing,
+    /// image adoption, native preparation/Open/release or writer installation
+    /// without the recipient's SAME retained private native/owner evidence.
+    /// Appended for wire compatibility: old peers reject the unknown variant.
+    NativeJointServingPhase {
+        relocation_id: crate::distribution::RelocationId,
+        session_id: Uuid,
+        nonce: Uuid,
+        decision_sha256: String,
+        readonly: bool,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -219,6 +230,26 @@ impl MetadataRecoveryRoleRequest {
                 return Err(metadata_error(
                     "invalid protected current-joint intent digest",
                 ));
+            }
+        }
+        if let MetadataRecoveryRolePurpose::NativeJointServingPhase {
+            relocation_id,
+            session_id,
+            nonce,
+            decision_sha256,
+            ..
+        } = &self.purpose
+        {
+            if relocation_id.get() == 0
+                || session_id.is_nil()
+                || nonce.is_nil()
+                || *nonce != self.recovery_nonce
+                || decision_sha256.len() != 64
+                || !decision_sha256
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            {
+                return Err(metadata_error("invalid native joint serving phase intent"));
             }
         }
         if let MetadataRecoveryRolePurpose::ObserveFencedRecovery {
@@ -315,6 +346,44 @@ impl MetadataRecoveryRoleRequest {
             .iter()
             .any(|r| r.node_id == recipient.id && r.role == RangeReplicaRole::Voter);
         match &self.purpose {
+            MetadataRecoveryRolePurpose::NativeJointServingPhase {
+                relocation_id,
+                session_id,
+                nonce,
+                decision_sha256,
+                readonly,
+            } => {
+                let plan = topology
+                    .relocations
+                    .get(relocation_id)
+                    .ok_or_else(invalid)?;
+                let session = plan.handoff_session.as_ref().ok_or_else(invalid)?;
+                let record = plan.native_joint_handoff_v1.as_ref().ok_or_else(invalid)?;
+                let observer = range
+                    .replicas
+                    .iter()
+                    .any(|r| r.node_id == initiator.id && r.role == RangeReplicaRole::Voter)
+                    || plan.source.as_ref() == Some(&initiator.id);
+                if ((!*readonly
+                    && range.leader != initiator.id
+                    && metadata_leader != &initiator.id)
+                    || (*readonly && !observer && metadata_leader != &initiator.id))
+                    || (!recipient_voter
+                        && !(*readonly && plan.source.as_ref() == Some(&recipient.id)))
+                    || plan.range_id != range.id
+                    || plan.phase != RelocationPhase::CleaningUp
+                    || plan.promoted_epoch != Some(range.epoch)
+                    || record.stage()
+                        != crate::distribution::NativeJointHandoffStageV1::AwaitingActivation
+                    || record.decision_sha256() != decision_sha256
+                    || record.session_id() != *session_id
+                    || record.nonce() != *nonce
+                    || session.session_id != *session_id
+                    || session.nonce != *nonce
+                {
+                    return Err(invalid());
+                }
+            }
             MetadataRecoveryRolePurpose::NormalRecovery
             | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => {
                 if range.leader != initiator.id || !recipient_voter {
@@ -2090,6 +2159,13 @@ impl MetadataConsensusStore {
         &mut self,
         topology: ClusterTopology,
     ) -> Result<MetadataLogEntry> {
+        self.propose_topology_checked_inner(topology, || Ok(()))
+    }
+    fn propose_topology_checked_inner(
+        &mut self,
+        topology: ClusterTopology,
+        before_effect: impl FnOnce() -> Result<()>,
+    ) -> Result<MetadataLogEntry> {
         self.require_native_metadata_actor_current(true)?;
         if self.state.role != MetadataConsensusRole::Leader {
             return Err(metadata_error("only the leader can propose topology"));
@@ -2133,8 +2209,12 @@ impl MetadataConsensusStore {
             topology,
             restore_activation: None,
         };
+        let retained_entry = entry.clone();
+        // The owner-specific request must survive all candidate validation and
+        // allocation. Ordinary topology proposals keep the original behavior.
+        before_effect()?;
         self.invalidate_authority_before_change()?;
-        self.state.log.push(entry.clone());
+        self.state.log.push(retained_entry);
         self.match_index
             .insert(self.state.node_id.clone(), entry.index);
         self.maybe_commit_leader_proposal()?;

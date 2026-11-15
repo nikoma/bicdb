@@ -1,6 +1,15 @@
 //! Existing Registered member control transition; never a fresh-voter factory.
 use super::*;
 impl NativeUnassignedLearnerHost {
+    pub(in crate::distribution_native_host) fn poll_finite_remote_serving(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<usize> {
+        match self.metadata_transition.control.as_mut() {
+            Some(control) => control.poll_finite_remote_serving(parent),
+            None => Ok(0),
+        }
+    }
     pub(in crate::distribution_native_host) fn poll_native_first_receiver(
         &mut self,
         parent: &CancellationToken,

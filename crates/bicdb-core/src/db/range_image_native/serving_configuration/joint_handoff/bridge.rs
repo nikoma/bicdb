@@ -7,13 +7,22 @@ use crate::distribution_range_image_install::NativeJointImageMaterialization;
 
 mod activation;
 mod publication_scope;
+mod remote_preparation;
 pub(in crate::db::range_image_native) use activation::NativeJointServingDomain;
+#[cfg(feature = "tls-replication")]
+pub(crate) use activation::NativeRemoteJointBridgeAttempt;
 pub(crate) use activation::{
     NativeCurrentJointBinding, NativeCurrentJointRecoveryDomain, NativeJointBridgeReadScope,
     NativeJointHistoricalCutScope, NativeJointServingBridgeReceipt,
 };
 pub(crate) use publication_scope::NativeJointPreparedPublicationScope;
+pub(crate) use remote_preparation::NativeRemoteJointPreparationAttempt;
 
+struct PreparationEffect<'a> {
+    check: &'a dyn Fn() -> Result<()>,
+    #[cfg(test)]
+    cancel_original_after_native: &'a dyn Fn() -> serde_json::Value,
+}
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct NativeJointServingPreparationRecord {
@@ -282,7 +291,110 @@ impl BicDb {
         frozen: &FrozenRangeMutationPermit,
         parent: &CancellationToken,
     ) -> Result<NativeJointServingPreparation> {
+        self.prepare_native_joint_serving_inner(
+            committed, store, catalogue, image, frozen, parent, None, None,
+        )
+    }
+    /// The original owner retains the actual attempt before this call. Only a
+    /// known original helper success may later be independently read back; an
+    /// IO error/unknown never selects another native transaction.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn prepare_remote_native_joint_serving(
+        &self,
+        committed: &CommittedNativeJointDecisionObservation,
+        store: &RangeWriteStore,
+        catalogue: &NativeJointBridgeCatalogue,
+        image: Option<&dyn NativeJointImageMaterialization>,
+        frozen: &FrozenRangeMutationPermit,
+        parent: &CancellationToken,
+        retained: &mut NativeRemoteJointPreparationAttempt,
+        admission: &crate::distribution_native_host::NativeRemotePreparationAdmission<'_>,
+    ) -> Result<NativeJointServingPreparation> {
+        admission.require_current(committed)?;
+        let check = || admission.require_memory_current();
+        #[cfg(test)]
+        let cancel = || admission.test_cancel_original_server_request();
+        let effect = PreparationEffect {
+            check: &check,
+            #[cfg(test)]
+            cancel_original_after_native: &cancel,
+        };
+        self.prepare_native_joint_serving_inner(
+            committed,
+            store,
+            catalogue,
+            image,
+            frozen,
+            parent,
+            Some(retained),
+            Some(&effect),
+        )
+    }
+    /// Read SAME original known preparation after a new actual readonly
+    /// request. No transaction, Controlled permit, put, format write or replay.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn read_known_remote_joint_preparation(
+        &self,
+        committed: &CommittedNativeJointDecisionObservation,
+        store: &RangeWriteStore,
+        catalogue: &NativeJointBridgeCatalogue,
+        image: Option<&dyn NativeJointImageMaterialization>,
+        frozen: &FrozenRangeMutationPermit,
+        parent: &CancellationToken,
+        retained: &mut NativeRemoteJointPreparationAttempt,
+        admission: &crate::distribution_native_host::NativeRemotePreparationReadAdmission<'_>,
+    ) -> Result<NativeJointServingPreparation> {
         parent.check()?;
+        admission.require_current(committed)?;
+        retained.require_entry(self, store, committed, frozen)?;
+        let record = retained.original_known_record()?.clone();
+        let _registered_identity = image
+            .and_then(|i| i.registered_target())
+            .map(|t| self.borrow_registered_joint_identity(t.clone()))
+            .transpose()?;
+        catalogue.require_current(store, self, committed, image, frozen)?;
+        self.range_mutation_gate()
+            .validate_quiescent_frozen(committed.data().old_range().id, frozen)?;
+        let member = committed
+            .data()
+            .new_members()
+            .get(committed.native_receipt().local_node_id())
+            .ok_or_else(|| invalid("known preparation read actual NEW member absent"))?;
+        let native = self.native_recovery_admission(
+            committed.data().cluster_id(),
+            committed.data().bootstrap_id(),
+            committed.native_receipt().local_node_id(),
+            member.incarnation,
+        )?;
+        let receipt = NativeJointServingPreparation { native, record };
+        receipt.require_current(self, store, committed, catalogue, image, frozen)?;
+        committed.require_native_publication_metadata(self, store)?;
+        let physical =
+            receipt.publication_read_scope(self, store, committed, catalogue, image, frozen)?;
+        admission.require_memory_current()?;
+        let _version = committed.native_publication_guard()?;
+        admission.require_memory_current()?;
+        drop(_version);
+        drop(physical);
+        retained.retain_verified_readback(self, frozen, &receipt.record)?;
+        parent.check()?;
+        Ok(receipt)
+    }
+    fn prepare_native_joint_serving_inner(
+        &self,
+        committed: &CommittedNativeJointDecisionObservation,
+        store: &RangeWriteStore,
+        catalogue: &NativeJointBridgeCatalogue,
+        image: Option<&dyn NativeJointImageMaterialization>,
+        frozen: &FrozenRangeMutationPermit,
+        parent: &CancellationToken,
+        mut retained: Option<&mut NativeRemoteJointPreparationAttempt>,
+        original_effect: Option<&PreparationEffect<'_>>,
+    ) -> Result<NativeJointServingPreparation> {
+        parent.check()?;
+        if let Some(attempt) = retained.as_deref() {
+            attempt.require_entry(self, store, committed, frozen)?;
+        }
         #[cfg(feature = "tls-replication")]
         let _registered_identity = image
             .and_then(|i| i.registered_target())
@@ -367,6 +479,9 @@ impl BicDb {
             checksum_sha256: String::new(),
         };
         record.require_binding(self, &native, committed, catalogue)?;
+        if let Some(attempt) = retained.as_deref() {
+            attempt.require_candidate(&record)?;
+        }
         catalogue.require_current(store, self, committed, image, frozen)?;
         drop(pin);
         // Frozen is read-only. The owned counted control spans the actual
@@ -394,9 +509,23 @@ impl BicDb {
                     "joint preparation retry changed physical point or regressed metadata",
                 ));
             }
+            if let Some(attempt) = retained.as_deref() {
+                attempt.require_readback(&old)?;
+            }
             record = old;
         } else {
-            self.in_paged_transaction(|paged, xid| {
+            if let Some(attempt) = retained.as_deref() {
+                attempt.require_no_previous_effect()?;
+            }
+            #[cfg(test)]
+            let mut actual_sync_fault = None;
+            let actual_native_return = self.in_paged_transaction(|paged, xid| {
+                if let Some(attempt) = retained.as_deref_mut() {
+                    attempt.retain_issued_xid(xid)?;
+                }
+                if let Some(effect) = original_effect {
+                    (effect.check)()?;
+                }
                 committed.require_native_publication_metadata(self, store)?;
                 record.native_page_xid = xid;
                 record.checksum_sha256 = record.checksum()?;
@@ -413,18 +542,61 @@ impl BicDb {
                     ));
                 }
                 let bytes = bounded_json(&record, MAX_NATIVE_RECEIPT_BYTES)?;
+                if let Some(attempt) = retained.as_deref_mut() {
+                    // Retain the exact issued candidate before the first put.
+                    attempt.enter_native(self, frozen, &record)?;
+                }
                 for key in [archive, preparation_key(id)] {
                     paged
                         .store()
                         .put(xid, &native_key(&key), &bytes)
                         .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
                 }
+                #[cfg(test)]
+                if retained
+                    .as_deref_mut()
+                    .is_some_and(|a| a.test_take_sync_fault())
+                {
+                    actual_sync_fault = Some(bicdb_page::test_faults::arm_io_failure(
+                        "page_log.sync",
+                        self.data_path(),
+                        1,
+                        false,
+                    ));
+                }
                 Ok(())
-            })?
-            .ok_or_else(|| invalid("joint preparation requires actual native page store"))?;
+            });
+            // Capture the REAL native API outcome before any readback, guard,
+            // cancellation or outer helper check. Visible bytes are not this
+            // successful helper return. Err/unframed remains non-replayable.
+            if let Some(attempt) = retained.as_deref_mut() {
+                attempt.retain_native_return(&actual_native_return);
+                #[cfg(test)]
+                {
+                    attempt.test_record_sync_fault(
+                        actual_sync_fault.as_ref().map(|f| f.fired()).unwrap_or(0),
+                    );
+                    if attempt.test_take_cancel_after_return() {
+                        if let Some(effect) = original_effect {
+                            attempt
+                                .test_record_cancel_event((effect.cancel_original_after_native)());
+                        }
+                    }
+                }
+            }
+            #[cfg(test)]
+            drop(actual_sync_fault);
+            actual_native_return?
+                .ok_or_else(|| invalid("joint preparation requires actual native page store"))?;
+        }
+        if let Some(effect) = original_effect {
+            (effect.check)()?;
         }
         let receipt = NativeJointServingPreparation { native, record };
         receipt.require_record_current(self, committed, catalogue)?;
+        if let Some(attempt) = retained.as_deref_mut() {
+            attempt.retain_verified_readback(self, frozen, &receipt.record)?;
+        }
         drop(journal);
         drop(controlled);
         catalogue.require_current(store, self, committed, image, frozen)?;
@@ -436,6 +608,9 @@ impl BicDb {
         let physical =
             receipt.publication_read_scope(self, store, committed, catalogue, image, frozen)?;
         let version = committed.native_publication_guard()?;
+        if let Some(effect) = original_effect {
+            (effect.check)()?;
+        }
         drop(version);
         drop(physical);
         Ok(receipt)
@@ -533,6 +708,57 @@ impl BicDb {
         Ok(
             serde_json::json!({"original_current":current,"removed_archive":archive,
             "actual_fault_xid":xid,"actual_archive_absent":absent,"grant":false}),
+        )
+    }
+}
+
+#[cfg(test)]
+impl BicDb {
+    /// DATA-only after-error forensics, deliberately not a receipt/current or
+    /// health grant. Visible bytes/status do not prove a failed old fsync.
+    pub(crate) fn test_remote_preparation_forensics(
+        &self,
+        range: RangeId,
+        sha: Option<&str>,
+        xid: Option<u64>,
+    ) -> Result<serde_json::Value> {
+        let paged = self
+            .paged_records
+            .as_ref()
+            .ok_or_else(|| invalid("preparation forensic actual native pager absent"))?;
+        let read = |key: String| -> serde_json::Value {
+            match paged
+                .store()
+                .get_as_of(&paged.latest_snapshot(), &native_key(&key))
+            {
+                Ok(Some(bytes)) => {
+                    let digest = hex::encode(sha2::Sha256::digest(&bytes));
+                    if bytes.len() > MAX_NATIVE_RECEIPT_BYTES {
+                        return serde_json::json!({"bytes":bytes.len(),"sha256":digest,"omitted":true});
+                    }
+                    let decoded = serde_json::from_slice::<serde_json::Value>(&bytes);
+                    serde_json::json!({"bytes":bytes.len(),"sha256":digest,"decoded":decoded.as_ref().ok(),"decode_error":decoded.as_ref().err().map(ToString::to_string)})
+                }
+                Ok(None) => serde_json::Value::Null,
+                Err(error) => serde_json::json!({"raw_read_error":error.to_string()}),
+            }
+        };
+        let bridge = read(format!("joint-handoff/serving-bridge/current/{range}"));
+        let bridge_archive = bridge["decoded"]["checksum_sha256"]
+            .as_str()
+            .filter(|s| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+            .map(|sha| {
+                read(format!(
+                    "joint-handoff/serving-bridge/history/{range}/{sha}"
+                ))
+            });
+        let health = self.check_recovery_state();
+        Ok(
+            serde_json::json!({"bridge_current":bridge,"bridge_archive":bridge_archive,"native_next_xid":paged.store().transactions().next_xid(),"native_next_lsn":paged.store().wal().next_lsn(),
+            "native_durable_lsn":paged.store().wal().durable_lsn(),"health_error":health.err().map(|e|e.to_string()),
+            "original_xid_status":xid.map(|x|format!("{:?}",paged.store().transactions().status(x))),
+            "current":read(preparation_key(range)),"archive":sha.filter(|s|s.len()==64&&s.bytes().all(|b|b.is_ascii_hexdigit())).map(|s|read(preparation_history_key(range,s))),
+            "DATA_only_not_authority":true,"visible_bytes_or_status_not_old_fsync_success":true}),
         )
     }
 }

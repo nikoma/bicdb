@@ -31,7 +31,7 @@ pub(crate) use joint_handoff::{
     NativeJointDecisionReceipt, NativeJointHistoricalCutScope, NativeJointOldCloseReceipt,
     NativeJointOldCloseRecordData, NativeJointOldPhysicalProof,
     NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
-    NativeJointServingPreparation,
+    NativeJointServingPreparation, NativeRemoteJointPreparationAttempt,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint_handoff::{
@@ -823,3 +823,6 @@ mod activated_anchor_tests;
 
 #[cfg(test)]
 mod serving_read_scope_tests;
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint_handoff::NativeRemoteJointBridgeAttempt;

@@ -9,6 +9,12 @@ use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 mod catalogue_scope;
 pub(crate) use catalogue_scope::NativeMetadataOwnerCatalogueScope;
+mod prepared;
+pub(crate) use prepared::{NativeRemotePreparedQuorum, NativeRemotePreparedRound};
+mod all_open;
+pub(crate) use all_open::{
+    NativeRemoteAllOpenQuorum, NativeRemoteAllOpenRetirementAdmission, NativeRemoteAllOpenRound,
+};
 mod catalogue;
 pub(crate) use catalogue::{
     NativeRemoteCatalogueDecisionV1, NativeRemoteCatalogueRound, NativeRemoteDualDurableDecision,
@@ -22,9 +28,11 @@ pub(crate) use certificate::{
 pub(crate) use decision::{
     NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,
     NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1,
+    NativeRemoteServingReadAdmission,
 };
 pub(crate) use participant::{
     NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit, NativeRemoteNewTargetPinIssuance,
+    NativeRemoteOldRetirementSlot,
 };
 
 const MAX_NEW_WIRE_BYTES: usize = 4 * 1024 * 1024;

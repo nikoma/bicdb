@@ -4,6 +4,7 @@ use super::*;
 mod constraint_step;
 mod remote_new;
 mod remote_old;
+mod remote_serving;
 pub(crate) use constraint_step::NativeInitialOldConstraintStep;
 #[cfg(test)]
 mod first_reply_loss;
@@ -66,7 +67,8 @@ impl NativeInitialDataAdmission {
                     let held = held
                         .try_lock()
                         .ok_or_else(|| invalid("OLD predecessor original owner busy"))?;
-                    if held.plan_sha256 != plan.checksum_sha256()?
+                    if held.remote_retired
+                        || held.plan_sha256 != plan.checksum_sha256()?
                         || !Arc::ptr_eq(&held.writer, writer)
                     {
                         return Err(invalid(
@@ -334,6 +336,7 @@ impl NativeInitialOldStep<'_> {
 /// An uncertain producer never removes this owner or invents an observation.
 pub(super) struct RetainedInitialOld {
     remote_new: Option<Arc<crate::distribution_range_handoff::NativeRemoteNewParticipant>>,
+    remote_retired: bool,
     predecessor: Option<Arc<crate::db::NativeWriterHistoricalPredecessor>>,
     writer: Arc<crate::db::NativeWriterHostState>,
     plan_sha256: String,
@@ -374,7 +377,9 @@ impl NativeInitialDataHost {
         let owner = owner
             .try_lock()
             .ok_or_else(|| invalid("actual OLD donor closure still active"))?;
-        if !Arc::ptr_eq(&owner.writer, &self.admission_for_old_step()?.writer()) {
+        if owner.remote_retired
+            || !Arc::ptr_eq(&owner.writer, &self.admission_for_old_step()?.writer())
+        {
             return Err(invalid("retained OLD source original writer replaced"));
         }
         let actual = owner
@@ -424,6 +429,7 @@ impl NativeInitialDataHost {
                 }
                 let owner = Arc::new(Mutex::new(RetainedInitialOld {
                     remote_new: None,
+                    remote_retired: false,
                     predecessor: Some(step.predecessor.clone()),
                     writer: step.writer.clone(),
                     plan_sha256: digest.clone(),
@@ -441,7 +447,8 @@ impl NativeInitialDataHost {
         let mut owner = retained
             .try_lock()
             .ok_or_else(|| invalid("actual OLD operation already active"))?;
-        if owner.plan_sha256 != digest
+        if owner.remote_retired
+            || owner.plan_sha256 != digest
             || !Arc::ptr_eq(&owner.runtime, &runtime)
             || !Arc::ptr_eq(&owner.writer, &step.writer)
         {
@@ -544,6 +551,109 @@ impl NativeMetadataControlHost {
 }
 
 impl NativeInitialDataAdmission {
+    /// Consume only obsolete original-phase references after genuine remote
+    /// ALL Open. The SAME table entry keeps runtime, participant, native
+    /// outcome/status and cleanup custody; None can never mean fresh work.
+    pub(crate) fn retire_remote_old_original_after_all_open(
+        &self,
+        slot: &mut crate::distribution_range_handoff::NativeRemoteOldRetirementSlot<'_>,
+        phase: &crate::distribution_range_handoff::NativeRemoteAllOpenRetirementAdmission<'_>,
+    ) -> Result<()> {
+        let participant = slot.participant();
+        phase.require_current()?;
+        phase.require_original_participant(participant)?;
+        let table = self
+            .old_closures
+            .upgrade()
+            .ok_or_else(|| invalid("ALL Open original OLD table ended"))?;
+        let entry = table
+            .try_lock()
+            .ok_or_else(|| invalid("ALL Open original OLD table busy"))?
+            .get(&phase.manifest().capture_range.id)
+            .cloned()
+            .ok_or_else(|| invalid("ALL Open original OLD entry absent"))?;
+        let mut entry = entry
+            .try_lock()
+            .ok_or_else(|| invalid("ALL Open original OLD operation busy"))?;
+        self.require_remote_new_original_memory(&entry.writer)?;
+        if entry
+            .remote_new
+            .as_ref()
+            .is_none_or(|p| !std::ptr::eq(p.as_ref(), participant))
+        {
+            return Err(invalid(
+                "ALL Open replaced original retained remote participant",
+            ));
+        }
+        if entry.remote_retired {
+            if !slot.is_empty() {
+                return Err(invalid(
+                    "ALL Open retired participant recovered original OLD reference",
+                ));
+            }
+            return Ok(());
+        }
+        let actual = entry
+            .actual
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| invalid("ALL Open original host OLD absent"))?;
+        slot.require_actual(&actual)?;
+        if entry
+            .actual
+            .as_ref()
+            .is_none_or(|old| !Arc::ptr_eq(old, &actual))
+            || entry.outcome.is_some()
+        {
+            return Err(invalid(
+                "ALL Open cannot retire replaced or uncertain OLD outcome",
+            ));
+        }
+        // The actual admission holds the SAME listener/open/slot; bind the
+        // newly captured metadata point to those physical owners outside the
+        // short gate, without reviving original OLD Role/current Pending.
+        {
+            let service = self
+                .service
+                .upgrade()
+                .ok_or_else(|| invalid("ALL Open original service ended"))?;
+            let service = service
+                .try_lock()
+                .ok_or_else(|| invalid("ALL Open original service busy"))?;
+            let database = service.database();
+            let db = database
+                .try_read()
+                .ok_or_else(|| invalid("ALL Open original DB busy"))?;
+            service.with_writer_data_domain_store(&db, |store| {
+                phase.require_database_store(&db, store)
+            })?;
+        }
+        let survivor = phase.manifest().new_members.contains_key(actual.node_id());
+        let frozen = actual.borrow_remote_all_open_retirement(phase)?;
+        let removed = {
+            let _version = phase.publication_guard()?;
+            phase.require_memory_current()?;
+            slot.participant().require_lifetime_memory()?;
+            self.require_remote_new_original_memory(&entry.writer)?;
+            // Only final survivors drain the host's OLD and constraint
+            // observation Arcs. Retired sources retain CLOSED cleanup owners.
+            let old = if survivor { entry.actual.take() } else { None };
+            let constraints = if survivor {
+                entry.constraint_owner.take()
+            } else {
+                None
+            };
+            let original = slot.take_and_retire();
+            entry.remote_retired = true;
+            (old, constraints, original)
+        };
+        drop(frozen);
+        drop(entry);
+        // All actual destructors run outside metadata, gate and table guards.
+        drop(removed);
+        drop(actual);
+        Ok(())
+    }
     pub(super) fn retained_actual_old_source(
         &self,
         range: crate::RangeId,
@@ -562,7 +672,7 @@ impl NativeInitialDataAdmission {
         let owner = owner
             .try_lock()
             .ok_or_else(|| invalid("actual OLD donor closure still active"))?;
-        if !Arc::ptr_eq(&owner.writer, &self.writer()) {
+        if owner.remote_retired || !Arc::ptr_eq(&owner.writer, &self.writer()) {
             return Err(invalid("retained OLD source original writer replaced"));
         }
         let actual = owner
@@ -618,7 +728,7 @@ impl NativeMetadataControlHost {
             "constraints":held.constraints,
             "constraint_frozen":held.constraint_owner.as_ref().map(|p|p.test_original_frozen_custody()),
             "actual_closed_frozen":held.actual.as_ref().map(|p|p.test_original_frozen_custody()),
-            "actual_close_present":held.actual.is_some(),"outcome_present":held.outcome.is_some()}))
+            "actual_close_present":held.actual.is_some(),"original_remote_retired":held.remote_retired,"outcome_present":held.outcome.is_some()}))
     }
 }
 

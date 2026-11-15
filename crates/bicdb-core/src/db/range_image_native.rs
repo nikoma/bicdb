@@ -126,6 +126,7 @@ pub(crate) use serving_configuration::{
     NativeJointOldCloseRecordData, NativeJointOldPhysicalProof,
     NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
     NativeJointServingPreparation, NativeReadyObserverReadScope, NativeRecoveredServingReceipt,
+    NativeRemoteJointPreparationAttempt,
 };
 use serving_configuration::{
     NativeClosedWriterFact, NativeClosedWriterPoint, NativeJointServingDomain,
@@ -2375,3 +2376,6 @@ pub(crate) use writer_enrollment::NativeRemoteOldDecisionWriterScope;
 
 #[cfg(feature = "tls-replication")]
 pub(crate) use writer_enrollment::NativeJoinedJointExclusionScope;
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use serving_configuration::NativeRemoteJointBridgeAttempt;

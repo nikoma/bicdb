@@ -585,7 +585,8 @@ impl RecoveryRoleAdmission {
         let relocation = match purpose {
             MetadataRecoveryRolePurpose::NormalRecovery
             | MetadataRecoveryRolePurpose::CurrentJointRecovery { .. } => None,
-            MetadataRecoveryRolePurpose::CommittedHandoff { relocation_id, .. } => Some(
+            MetadataRecoveryRolePurpose::CommittedHandoff { relocation_id, .. }
+            | MetadataRecoveryRolePurpose::NativeJointServingPhase { relocation_id, .. } => Some(
                 topology
                     .relocations
                     .get(relocation_id)
@@ -921,6 +922,11 @@ impl RecoveryObservationRoleAdmission {
             }),
             MetadataRecoveryRolePurpose::ObserveFencedRecovery { .. } => {
                 return Err(invalid("recursive observation scope refused"))
+            }
+            MetadataRecoveryRolePurpose::NativeJointServingPhase { .. } => {
+                return Err(invalid(
+                    "serving phase intent cannot mint recovery observation scope",
+                ));
             }
         };
         Ok(MetadataRecoveryRolePurpose::ObserveFencedRecovery {

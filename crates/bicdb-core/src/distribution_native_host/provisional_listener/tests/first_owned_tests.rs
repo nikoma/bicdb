@@ -16,6 +16,9 @@ use crate::distribution_range_image::{
 use std::io::Write as _;
 use std::sync::mpsc;
 use std::time::Instant;
+mod bridge_tests;
+mod metadata_head_tests;
+mod preparation_tests;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Case {
     Normal,
@@ -43,6 +46,12 @@ enum Case {
     CatalogueWrongExpected,
     CatalogueStale,
     CatalogueScope,
+    CatalogueMetadataHeadDrift,
+    Preparation,
+    PreparationCancelledAfterNative,
+    PreparationCommitUnknown,
+    Bridge,
+    BridgeMissingPrepared,
 }
 fn is_catalogue_case(case: Case) -> bool {
     matches!(
@@ -59,6 +68,12 @@ fn is_catalogue_case(case: Case) -> bool {
             | Case::CatalogueWrongExpected
             | Case::CatalogueStale
             | Case::CatalogueScope
+            | Case::CatalogueMetadataHeadDrift
+            | Case::Preparation
+            | Case::PreparationCancelledAfterNative
+            | Case::PreparationCommitUnknown
+            | Case::Bridge
+            | Case::BridgeMissingPrepared
     )
 }
 #[derive(Clone, Copy, Debug)]
@@ -69,6 +84,11 @@ enum SetupCut {
 
 enum OwnerCommand {
     Snapshot(mpsc::SyncSender<serde_json::Value>),
+    PreparationControl(
+        crate::RangeId,
+        Option<u8>,
+        mpsc::SyncSender<serde_json::Value>,
+    ),
     NativeDecision(
         crate::RangeId,
         Option<u8>,
@@ -412,6 +432,10 @@ fn native_first_actual_metadata_owner_catalogue_scope_keeps_range_authority_and_
 fn native_first_remote_catalogue_actual_recipients_and_metadata_certified() {
     run(Case::Catalogue);
 }
+#[test]
+fn native_first_metadata_selected_commit_survives_actual_other_range_head_changes() {
+    run(Case::CatalogueMetadataHeadDrift);
+}
 
 #[test]
 fn native_first_remote_catalogue_actual_known_commit_late_error_fresh_readback() {
@@ -740,6 +764,11 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
             while !active.load(Ordering::Acquire) && parent.check().is_ok() {
                 while let Ok(command)=owner_receive.try_recv() {
                     match command {
+                    OwnerCommand::PreparationControl(range,arm,send)=> {
+                        let actual=target.test_remote_preparation_control(range,arm);
+                        let _=send.try_send(serde_json::json!({"ok":actual.is_ok(),"data":actual.as_ref().ok(),
+                            "error":actual.as_ref().err().map(crate::distribution_native_host::remote_first::error_data)}));
+                    },
                     OwnerCommand::NativeDecision(range,arm,send)=> {
                         let actual=target.test_first_native_decision(range,arm);
                         let _=send.try_send(serde_json::json!({"ok":actual.is_ok(),"data":actual.as_ref().ok(),
@@ -758,6 +787,12 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         );
                     } else {
                         worker_omitted += 1;
+                    }
+                }
+                if matches!(case,Case::Preparation|Case::PreparationCancelledAfterNative|Case::PreparationCommitUnknown|Case::Bridge|Case::BridgeMissingPrepared) {
+                    if let Err(error)=target.poll_finite_remote_serving(&parent) {
+                        if worker_errors.len()<64 {worker_errors.push(crate::distribution_native_host::remote_first::error_data(&error));}
+                        else {worker_omitted+=1;}
                     }
                 }
                 std::thread::sleep(Duration::from_millis(2));
@@ -1333,6 +1368,12 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                     | Case::CatalogueWrongExpected
                     | Case::CatalogueStale
                     | Case::CatalogueScope
+                    | Case::CatalogueMetadataHeadDrift
+                    | Case::Preparation
+                    | Case::PreparationCancelledAfterNative
+                    | Case::PreparationCommitUnknown
+                    | Case::Bridge
+                    | Case::BridgeMissingPrepared
             ) {
                 // Same five retained normal hosts; real range leader directly
                 // observes OLD/survivor/Registered NEW, donor remains neither leader.
@@ -1805,16 +1846,55 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                     let intent = five.sources[coordinator]
                         .first_catalogue_certification_intent(selected.id)?;
                     let actual_meta = (0..4).find(|i| node(*i) == metadata_leader).unwrap();
-                    let certified = report.data_call(
-                        "actual_metadata_owner_independent_dual_durability_certification",
-                        || {
-                            five.sources[actual_meta]
-                                .certify_finite_remote_catalogue(intent, &five.lifetime)
-                        },
-                    )?;
-                    report.event(serde_json::json!({"actual_certified_only":certified,"automatic_initiation":false,
+                    if case == Case::CatalogueMetadataHeadDrift {
+                        metadata_head_tests::exercise(
+                            five,
+                            actual_meta,
+                            selected.id,
+                            intent,
+                            &owner_send,
+                            report,
+                        )?;
+                    } else {
+                        let preparation_scope = matches!(
+                            case,
+                            Case::Preparation
+                                | Case::PreparationCancelledAfterNative
+                                | Case::PreparationCommitUnknown
+                                | Case::Bridge
+                                | Case::BridgeMissingPrepared
+                        )
+                        .then(|| {
+                            (
+                                intent.relocation_id(),
+                                intent.phase_id(),
+                                intent.final_member_ids(),
+                            )
+                        });
+                        let certified = report.data_call(
+                            "actual_metadata_owner_independent_dual_durability_certification",
+                            || {
+                                five.sources[actual_meta]
+                                    .certify_finite_remote_catalogue(intent, &five.lifetime)
+                            },
+                        )?;
+                        report.event(serde_json::json!({"actual_certified_only":certified,"automatic_initiation":false,
                         "global_Open_release_Serving":false,"later_epoch_producers_implemented":false}));
-                    assert_eq!(certified["actual_committed_record"]["stage"], "Certified");
+                        assert_eq!(certified["actual_committed_record"]["stage"], "Certified");
+                        if let Some((relocation, phase, final_members)) = preparation_scope {
+                            preparation_tests::exercise(
+                                five,
+                                actual_meta,
+                                relocation,
+                                phase,
+                                selected.id,
+                                &final_members,
+                                &owner_send,
+                                report,
+                                case,
+                            )?;
+                        }
+                    }
                 }
             }
             Ok(())
@@ -1894,4 +1974,27 @@ fn sdk(
         "actual original SDK full value"
     );
     Ok(())
+}
+
+#[test]
+fn native_first_remote_registered_prepare_uses_actual_owner_and_tls_caller() {
+    run(Case::Preparation);
+}
+#[test]
+fn native_first_remote_prepare_actual_postcommit_server_cancel_known_read_no_replay() {
+    run(Case::PreparationCancelledAfterNative);
+}
+#[test]
+fn native_first_remote_prepare_actual_commit_sync_unknown_cannot_be_read_as_success() {
+    run(Case::PreparationCommitUnknown);
+}
+
+#[test]
+fn native_first_remote_all_actual_preparations_then_target_native_bridge() {
+    run(Case::Bridge);
+}
+
+#[test]
+fn native_first_remote_bridge_refuses_actual_unprepared_final_member() {
+    run(Case::BridgeMissingPrepared);
 }

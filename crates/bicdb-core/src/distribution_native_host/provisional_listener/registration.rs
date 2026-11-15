@@ -12,9 +12,14 @@ use std::time::Instant;
 mod assigned_data;
 mod first_catalogue_certification;
 mod first_coordinator;
+#[cfg(test)]
+pub(in crate::distribution_native_host) use first_catalogue_certification::test_cuts::arm as test_arm_remote_metadata_head_drift;
 pub(crate) use first_catalogue_certification::NativeFirstCatalogueCertificationIntent;
+pub(crate) use first_catalogue_certification::NativeRemoteMembershipScope;
 mod initial_data;
 mod remote_new_metadata;
+mod remote_serving_metadata;
+mod remote_serving_owner;
 pub(crate) use assigned_data::NativeAssignedDataAdmission;
 use assigned_data::NativeAssignedDataHost;
 pub(crate) use first_coordinator::NativeFirstCoordinatorAction;
@@ -420,6 +425,11 @@ pub(crate) struct NativeMetadataControlHost {
     backend: Arc<NativeMetadataControlBackend>,
     data: Option<NativeInitialDataHost>,
     data_process: std::sync::OnceLock<CancellationToken>,
+    remote_serving_process: std::sync::OnceLock<CancellationToken>,
+    #[cfg(test)]
+    remote_preparation_test: BTreeMap<crate::RangeId, u8>,
+    remote_serving:
+        BTreeMap<(crate::RangeId, Uuid), remote_serving_owner::NativeRemoteLocalServing>,
     replica: Option<NativeRegisteredReplicaReceiver>,
     assigned: Option<NativeAssignedDataHost>,
     joined: Option<NativeJoinedDataHost>,
@@ -448,6 +458,10 @@ impl NativeMetadataControlHost {
             ))),
             data: None,
             data_process: std::sync::OnceLock::new(),
+            remote_serving_process: std::sync::OnceLock::new(),
+            remote_serving: BTreeMap::new(),
+            #[cfg(test)]
+            remote_preparation_test: BTreeMap::new(),
             replica: None,
             assigned: None,
             joined: None,
@@ -471,6 +485,10 @@ impl NativeMetadataControlHost {
             backend: Arc::new(backend),
             data: None,
             data_process: std::sync::OnceLock::new(),
+            remote_serving_process: std::sync::OnceLock::new(),
+            remote_serving: BTreeMap::new(),
+            #[cfg(test)]
+            remote_preparation_test: BTreeMap::new(),
             replica: None,
             assigned: None,
             joined: None,
@@ -824,6 +842,39 @@ impl NativeMetadataControlHost {
         }
         Ok(())
     }
+    pub(in crate::distribution_native_host) fn capture_remote_preparation_process(
+        &self,
+        participant: &Arc<crate::distribution_range_handoff::NativeRemoteNewParticipant>,
+        original_step: &crate::distribution_native_host::remote_serving::NativeRemoteServingIngress,
+    ) -> Result<Arc<crate::distribution_native_host::NativeRemotePreparationProcess>> {
+        original_step.require_request()?;
+        participant.serving_queue_for_original(
+            &original_step.request,
+            &original_step.role,
+            &original_step.own,
+            original_step.business,
+            &original_step.point,
+        )?;
+        participant.require_lifetime_memory()?;
+        if participant.snapshot().node_id != self.backend.node_id {
+            return Err(invalid(
+                "remote preparation producer is not this actual recipient host",
+            ));
+        }
+        let actual = self
+            .data_process
+            .get()
+            .ok_or_else(|| invalid("remote preparation original host process absent"))?;
+        actual.check()?;
+        let process = self.remote_serving_process.get_or_init(|| actual.child());
+        process.check()?;
+        crate::distribution_native_host::NativeRemotePreparationProcess::capture_from_original(
+            process,
+            &self.backend.service,
+            participant,
+            &original_step.request.decision_sha256,
+        )
+    }
     pub(crate) fn maintain_joins(
         &self,
         parent: &CancellationToken,
@@ -869,6 +920,13 @@ impl NativeMetadataControlHost {
         self.backend.heartbeat(parent)
     }
     pub(crate) fn stop(&mut self, parent: &CancellationToken) -> Result<()> {
+        // Revoke continuation use before any fallible worker/listener stop.
+        if let Some(process) = self.remote_serving_process.get() {
+            process.cancel();
+        }
+        for attempt in self.remote_catalogue_certifications.values_mut() {
+            attempt.stopped = true;
+        }
         for operation in self.first_coordinators.values() {
             operation.stop_original_process();
         }

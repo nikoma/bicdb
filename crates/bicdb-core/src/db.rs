@@ -192,6 +192,7 @@ pub(crate) use range_image_native::{
     NativeJointOldCloseRecordData, NativeJointOldPhysicalProof,
     NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
     NativeJointServingPreparation, NativeReadyObserverReadScope,
+    NativeRemoteJointPreparationAttempt,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::{
@@ -36817,3 +36818,6 @@ pub(crate) use range_image_native::{
 
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeJoinedJointExclusionScope;
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::NativeRemoteJointBridgeAttempt;

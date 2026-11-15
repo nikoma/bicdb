@@ -141,6 +141,7 @@ impl NativeInitialDataAdmission {
                     let actual_runtime = Arc::new(NativeJointHandoffRuntime::new(service.clone())?);
                     let held = Arc::new(Mutex::new(RetainedInitialOld {
                         remote_new: None,
+                        remote_retired: false,
                         predecessor: Some(step.historical_predecessor().clone()),
                         writer: step.writer.clone(),
                         plan_sha256: request.scope_sha256.clone(),
@@ -158,7 +159,9 @@ impl NativeInitialDataAdmission {
             let mut held = retained
                 .try_lock()
                 .ok_or_else(|| invalid("OLD source operation already active"))?;
-            if held.plan_sha256 != request.scope_sha256 || !Arc::ptr_eq(&held.writer, &step.writer)
+            if held.remote_retired
+                || held.plan_sha256 != request.scope_sha256
+                || !Arc::ptr_eq(&held.writer, &step.writer)
             {
                 return Err(invalid("OLD source retains another exact session"));
             }
@@ -292,6 +295,7 @@ impl NativeInitialDataAdmission {
                 let runtime = Arc::new(NativeJointHandoffRuntime::new(service.clone())?);
                 let owner = Arc::new(Mutex::new(RetainedInitialOld {
                     remote_new: None,
+                    remote_retired: false,
                     predecessor: Some(step.historical_predecessor().clone()),
                     writer: Arc::clone(step.writer_snapshot()),
                     plan_sha256: request.scope_sha256.clone(),
@@ -310,7 +314,8 @@ impl NativeInitialDataAdmission {
             let mut held = retained
                 .try_lock()
                 .ok_or_else(|| invalid("OLD constraint operation already active"))?;
-            if held.plan_sha256 != request.scope_sha256
+            if held.remote_retired
+                || held.plan_sha256 != request.scope_sha256
                 || !Arc::ptr_eq(&held.writer, step.writer_snapshot())
                 || held.actual.is_some()
                 || held.outcome.is_some()
@@ -376,7 +381,7 @@ impl NativeInitialDataAdmission {
             let held = held
                 .try_lock()
                 .ok_or_else(|| invalid("OLD source retained operation busy at observation"))?;
-            if held.plan_sha256 != request.scope_sha256 {
+            if held.remote_retired || held.plan_sha256 != request.scope_sha256 {
                 return Err(invalid("OLD observation changed retained scope"));
             }
             (

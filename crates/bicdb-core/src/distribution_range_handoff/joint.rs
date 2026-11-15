@@ -50,14 +50,7 @@ pub(crate) use materialized::{
 mod remote_new;
 #[cfg(feature = "tls-replication")]
 pub(crate) use remote_new::{
-    NativeMetadataOwnerCatalogueScope, NativeRemoteCatalogueDecisionV1, NativeRemoteCatalogueRound,
-    NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,
-    NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1,
-    NativeRemoteDualDurableDecision, NativeRemoteJointDecisionCertificate,
-    NativeRemoteJointDecisionCertificateRound, NativeRemoteNewFactSetV1, NativeRemoteNewHandoffV1,
-    NativeRemoteNewMaterializedQuorum, NativeRemoteNewOperationV1, NativeRemoteNewParticipant,
-    NativeRemoteNewPinHandoffPermit, NativeRemoteNewReplyV1, NativeRemoteNewRequestV1,
-    NativeRemoteNewRound, NativeRemoteNewSnapshotV1, NativeRemoteNewTargetPinIssuance,
+    NativeMetadataOwnerCatalogueScope, NativeRemoteCatalogueDecisionV1, NativeRemoteCatalogueRound, NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1, NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1, NativeRemoteDualDurableDecision, NativeRemoteJointDecisionCertificate, NativeRemoteJointDecisionCertificateRound, NativeRemoteNewFactSetV1, NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum, NativeRemoteNewOperationV1, NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit, NativeRemoteNewReplyV1, NativeRemoteNewRequestV1, NativeRemoteNewRound, NativeRemoteNewSnapshotV1, NativeRemoteNewTargetPinIssuance, NativeRemoteAllOpenQuorum, NativeRemoteAllOpenRetirementAdmission, NativeRemoteAllOpenRound, NativeRemoteOldRetirementSlot, NativeRemotePreparedQuorum, NativeRemotePreparedRound, NativeRemoteServingReadAdmission,
 };
 
 #[cfg(feature = "tls-replication")]
@@ -84,10 +77,13 @@ pub(crate) use bridge::{
     NativeJointPreparedServingVoteData, NativeJointPublishedServingQuorum,
     NativeJointReleaseAdmission, NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum,
     NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
-    NativeJointServingPublicationRound,
+    NativeJointServingPublicationRound, NativeRemotePreparedObservation,
 };
 
 #[cfg(test)]
 mod trace;
 #[cfg(test)]
 pub(crate) use trace::{NativeJointPhaseTrace, NativeRefreshTraceContext};
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use bridge::NativeRemoteBridgeAdmission;

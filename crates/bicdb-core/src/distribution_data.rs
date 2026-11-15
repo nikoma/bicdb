@@ -83,6 +83,8 @@ mod registered_remote_catalogue;
 mod registered_remote_installing;
 pub(crate) use native_durability::ClusterServiceOpenGuard;
 use native_durability::{checked_database_read, checked_database_write, ServiceStoragePolicy};
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_joint_handoff::NativeRemoteServicePreparation;
 pub(crate) use native_joint_handoff::{
     ActualServiceNativeJointCaptureInputs, ActualServiceNativeJointCommittedEvidence,
     ActualServiceNativeJointConstraints, ActualServiceNativeJointNewEvidence,
@@ -4252,3 +4254,6 @@ mod tests {
         // above it), so a label below the commit delivers it.
     }
 }
+
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_joint_handoff::NativeRemoteServiceBridge;

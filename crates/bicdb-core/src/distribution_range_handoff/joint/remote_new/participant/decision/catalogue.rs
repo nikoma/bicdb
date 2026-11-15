@@ -111,9 +111,9 @@ impl NativeRemoteNewParticipant {
         };
         admission.require_current()?;
         let result=match &self.original {
-            OriginalParticipant::Registered {target,service,frozen,..}=>crate::distribution_data::ClusterDataNodeService::confirm_remote_registered_decision_catalogue(
-                service,target,frozen.try_as_frozen()?,&admission,catalogue,observe,parent),
-            OriginalParticipant::Old {actual,writer,..}=>actual.confirm_remote_decision_catalogue(writer,&admission,catalogue,observe,parent),
+            OriginalParticipant::Registered {target,service,..}=>crate::distribution_data::ClusterDataNodeService::confirm_remote_registered_decision_catalogue(
+                service,target,self.original_registered_freeze()?.try_as_frozen()?,&admission,catalogue,observe,parent),
+            OriginalParticipant::Old {writer,..}=>self.original_old()?.confirm_remote_decision_catalogue(writer,&admission,catalogue,observe,parent),
         };
         #[cfg(test)]
         {

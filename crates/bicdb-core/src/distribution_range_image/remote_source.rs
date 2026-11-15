@@ -1140,6 +1140,88 @@ impl NativeRetainedRemoteImageSource {
         source.old = retired;
         Ok(())
     }
+    /// Distinct remote ALL-Open path. Only the obsolete certificate/capture
+    /// reference retires; a source leaving NEW keeps its actual CLOSED runtime
+    /// and storage. No native mutation or Frozen release is performed here.
+    pub(crate) fn retire_remote_old_export_after_all_open(
+        &self,
+        phase: &crate::distribution_range_handoff::NativeRemoteAllOpenRetirementAdmission<'_>,
+    ) -> Result<()> {
+        phase.require_current()?;
+        self.registry.require_original_process()?;
+        self.require_completed_export_manifest(phase.manifest())?;
+        let old = {
+            let source = self
+                .session
+                .try_lock()
+                .ok_or_else(|| invalid("remote ALL Open source custody busy"))?;
+            match &source.old {
+                ActualSourceOld::Remote(old) => old.clone(),
+                ActualSourceOld::RetiredJoint { .. } => return Ok(()),
+                _ => return Err(invalid("remote ALL Open cannot cast a local OLD quorum")),
+            }
+        };
+        phase.require_source_certificate(&old)?;
+        // Allocate identity-only replacement BEFORE the final short guard.
+        let replacement = ActualSourceOld::RetiredJoint {
+            plan: old.plan(),
+            source: old.selected_source_id().clone(),
+        };
+        let mut source = self
+            .session
+            .try_lock()
+            .ok_or_else(|| invalid("remote ALL Open source exporter still active"))?;
+        if source.capture.is_some()
+            || !source.published
+            || source.source_session != phase.manifest().source_session
+            || source.target_attempt != phase.manifest().target_attempt
+            || source
+                .manifest
+                .as_ref()
+                .is_none_or(|m| m.checksum_sha256 != phase.manifest().checksum_sha256)
+            || !matches!(&source.old, ActualSourceOld::Remote(actual) if Arc::ptr_eq(actual, &old))
+        {
+            return Err(invalid("remote ALL Open changed actual source session/certificate or retained export reader"));
+        }
+        // Bind the fresh point to this actual DB/Store outside the version
+        // guard. The same session latch prevents replacement until the take.
+        {
+            let service = source
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("remote ALL Open source service busy"))?;
+            let database = service.database();
+            let db = database
+                .try_read()
+                .ok_or_else(|| invalid("remote ALL Open source DB busy"))?;
+            service.with_writer_data_domain_store(&db, |store| {
+                phase.require_database_store(&db, store)
+            })?;
+        }
+        let removed = {
+            let _version = phase.publication_guard()?;
+            phase.require_memory_current()?;
+            self.registry.require_original_process()?;
+            source
+                .actual_open
+                .as_ref()
+                .ok_or_else(|| invalid("remote ALL Open source open identity absent"))?
+                .require_live()?;
+            source
+                .slot
+                .as_ref()
+                .ok_or_else(|| invalid("remote ALL Open source Store identity absent"))?
+                .require_live()?;
+            source.original_session.cancel();
+            std::mem::replace(&mut source.old, replacement)
+        };
+        drop(source);
+        // Destruction may take range/native locks. Never perform it under the
+        // metadata guard or exporter latch. Late failures cannot restore OLD.
+        drop(removed);
+        drop(old);
+        Ok(())
+    }
     /// Revokes only this actual source session's child, never its process or
     /// siblings. This is refusal-only; it creates no replacement identity.
     pub(crate) fn request_cancel(&self) {

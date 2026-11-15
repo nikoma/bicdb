@@ -15,8 +15,8 @@ use crate::distribution_native_host::joined_data_handoff::{
     JoinedHandoffBackend, RemoteJoinedHandoffBackend,
 };
 use crate::distribution_native_host::range_move::{
-    request_range_move, request_range_move_abort, NativeRangeMoveController, NativeRangeMoveHosts,
-    NativeRangeMoveSlot, NativeRangeMoveStatus,
+    request_range_move, request_range_move_abort, require_no_running_range_move,
+    NativeRangeMoveController, NativeRangeMoveHosts, NativeRangeMoveSlot, NativeRangeMoveStatus,
 };
 use std::collections::VecDeque;
 
@@ -631,6 +631,26 @@ fn native_range_move_controller_lifecycle_with_scripted_backend() {
             .unwrap_err()
             .to_string();
         assert!(refused.contains("the move is complete"), "{refused}");
+        // A completed relocation names a past source. It does not make that
+        // node the coordinator of the range again: the range is led by the
+        // target now, and a new controller is refused like on any other node.
+        assert_eq!(
+            hosts.topology.relocations.values().next().unwrap().source,
+            Some(local.clone())
+        );
+        let refused =
+            NativeRangeMoveController::new(local.clone(), range.id, node(4), &hosts, fake(&state))
+                .err()
+                .unwrap()
+                .to_string();
+        assert!(
+            refused.contains(&format!(
+                "this node ({local}) is not the leader of range {} ({})",
+                range.id,
+                node(4)
+            )),
+            "{refused}"
+        );
     });
 }
 
@@ -723,6 +743,21 @@ fn native_range_move_abort_before_cut_commits_and_a_new_move_is_accepted() {
         })
         .unwrap();
         assert_eq!(slot.as_ref().unwrap().status().attempts, 2);
+        // A metadata leadership transfer away from this host would strand
+        // the unfinished move: refused while it runs.
+        let refused = require_no_running_range_move(slot.as_ref())
+            .unwrap_err()
+            .to_string();
+        assert!(
+            refused.contains("metadata leadership transfer refused")
+                && refused.contains(&format!(
+                    "the unfinished move of range {} onto {}",
+                    range.id,
+                    node(4)
+                ))
+                && refused.contains("last completed stage: learner_allocated"),
+            "{refused}"
+        );
         let refused = request_range_move_abort(&mut slot, another, &budget(5000))
             .unwrap_err()
             .to_string();
@@ -749,10 +784,13 @@ fn native_range_move_abort_before_cut_commits_and_a_new_move_is_accepted() {
                 aborted.generation
             );
         }
-        // An aborted move does nothing on later steps.
+        // An aborted move does nothing on later steps, and no longer
+        // refuses a leadership transfer.
         let status = step(&mut slot);
         assert_eq!(status.attempts, 2);
         assert_eq!(committed(five), aborted);
+        require_no_running_range_move(slot.as_ref()).unwrap();
+        require_no_running_range_move(None::<&NativeRangeMoveSlot<FakeBackend>>).unwrap();
 
         // A new move is accepted and starts from the beginning.
         request_range_move(&mut slot, range.id, &node(4), &budget(5000), || {
@@ -765,6 +803,121 @@ fn native_range_move_abort_before_cut_commits_and_a_new_move_is_accepted() {
             (false, 0, Some("target_admitted"))
         );
         assert_eq!(step(&mut slot).stage, Some("target_admitted"));
+
+        // The allocation is proposed and its commit wait ends while the
+        // entry is still in the log: the step is blocked, nothing is
+        // committed yet, and the hosts keep the entry as outstanding.
+        slot.as_ref()
+            .unwrap()
+            .test_hosts(|hosts| hosts.test_abandon_next_commit());
+        let status = step(&mut slot);
+        assert!(
+            status
+                .last_error
+                .as_deref()
+                .is_some_and(|error| error.starts_with("blocked at learner_allocated: ")
+                    && error.contains("did not commit in time")),
+            "{status:?}"
+        );
+        assert_eq!(committed(five), aborted);
+        slot.as_ref().unwrap().test_hosts(|hosts| {
+            assert!(hosts.test_outstanding().is_some());
+            hosts.test_hold_proposal(true);
+        });
+        // While the fate of that entry is unknown the abort is not reported
+        // as done: the entry may still commit.
+        let refused = request_range_move_abort(&mut slot, range.id, &budget(30_000))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            refused.contains("abort not decided") && refused.contains("unresolved proposal"),
+            "{refused}"
+        );
+        let status = slot.as_ref().unwrap().status();
+        assert!(!status.aborted, "{status:?}");
+        assert!(
+            status
+                .last_error
+                .as_deref()
+                .is_some_and(|error| error.contains("unresolved proposal")),
+            "{status:?}"
+        );
+        assert_eq!(committed(five), aborted);
+        // The fate is learned: the entry commits, so the learner allocation
+        // IS committed. The abort acts on that truth and commits the original
+        // descriptor again; it does not report an abort without a commit.
+        slot.as_ref()
+            .unwrap()
+            .test_hosts(|hosts| hosts.test_hold_proposal(false));
+        request_range_move_abort(&mut slot, range.id, &budget(30_000)).unwrap();
+        let status = slot.as_ref().unwrap().status();
+        assert!(status.aborted && !status.completed, "{status:?}");
+        let again = committed(five);
+        assert_eq!(
+            again.generation,
+            aborted.generation + 2,
+            "the late allocation committed, then its abort"
+        );
+        assert_eq!(again.range_by_id(range.id).unwrap(), &range);
+        assert!(again
+            .relocations
+            .values()
+            .all(|plan| plan.range_id != range.id));
+        slot.as_ref()
+            .unwrap()
+            .test_hosts(|hosts| assert_eq!(hosts.test_outstanding(), None));
+        assert_eq!(state.lock().forgotten, 2);
+
+        // The mirror case: the abort's own commit wait ends undecided. The
+        // move is neither aborted nor driven until its fate is known.
+        request_range_move(&mut slot, range.id, &node(4), &budget(5000), || {
+            start(five, range.id, &state)
+        })
+        .unwrap();
+        assert_eq!(step(&mut slot).stage, Some("target_admitted"));
+        assert_eq!(step(&mut slot).stage, Some("learner_allocated"));
+        let pending = committed(five);
+        assert_eq!(pending.generation, again.generation + 1);
+        slot.as_ref().unwrap().test_hosts(|hosts| {
+            hosts.test_abandon_next_commit();
+            hosts.test_hold_proposal(true);
+        });
+        let refused = request_range_move_abort(&mut slot, range.id, &budget(30_000))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            refused.contains("abort not decided") && refused.contains("unresolved proposal"),
+            "{refused}"
+        );
+        assert!(!slot.as_ref().unwrap().status().aborted);
+        assert_eq!(committed(five), pending);
+        let status = step(&mut slot);
+        assert!(!status.aborted, "{status:?}");
+        assert_eq!(status.attempts, 2, "nothing is driven: {status:?}");
+        assert!(
+            status
+                .last_error
+                .as_deref()
+                .is_some_and(|error| error.starts_with("abort not decided: ")),
+            "{status:?}"
+        );
+        assert_eq!(committed(five), pending);
+        slot.as_ref()
+            .unwrap()
+            .test_hosts(|hosts| hosts.test_hold_proposal(false));
+        let status = step(&mut slot);
+        assert!(status.aborted && !status.completed, "{status:?}");
+        assert_eq!(
+            status.last_error.as_deref(),
+            Some("abort committed after its commit wait had ended")
+        );
+        let last = committed(five);
+        assert_eq!(last.generation, pending.generation + 1);
+        assert_eq!(last.range_by_id(range.id).unwrap(), &range);
+        assert!(last
+            .relocations
+            .values()
+            .all(|plan| plan.range_id != range.id));
         slot.as_mut().unwrap().stop(&budget(5000)).unwrap();
     });
 }

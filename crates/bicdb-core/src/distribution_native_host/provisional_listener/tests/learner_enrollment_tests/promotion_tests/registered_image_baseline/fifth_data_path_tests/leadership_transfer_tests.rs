@@ -7,7 +7,9 @@
 //! as every serving process does; the other members only answer.
 use super::*;
 use crate::distribution_native_host::joined_data_handoff::RemoteJoinedHandoffBackend;
-use crate::distribution_native_host::range_move::{NativeRangeMoveSlot, NativeRangeMoveStatus};
+use crate::distribution_native_host::range_move::{
+    require_no_running_range_move, NativeRangeMoveSlot, NativeRangeMoveStatus,
+};
 use crate::MetadataConsensusRole;
 
 fn supervise(five: &Five, i: usize) -> NativeMetadataSupervisor {
@@ -100,6 +102,19 @@ fn native_metadata_leadership_transfer_lets_the_range_leader_coordinate_its_move
             .find(|range| range.leader == node(0))
             .map(|range| NativeRangeMoveSlot::start(&five.controls[0], range.id, node(4)).unwrap());
 
+        // The operator's transfer action is refused while this host's own
+        // move is unfinished and running (the operator guard is checked here;
+        // the transfer below is the control host's, which the guard precedes).
+        if let Some(own) = own.as_ref() {
+            let refused = require_no_running_range_move(Some(own))
+                .unwrap_err()
+                .to_string();
+            assert!(
+                refused.contains("metadata leadership transfer refused"),
+                "{refused}"
+            );
+        }
+
         let report = five.controls[0]
             .transfer_metadata_leadership(&leader, &budget(5000))
             .unwrap();
@@ -132,6 +147,9 @@ fn native_metadata_leadership_transfer_lets_the_range_leader_coordinate_its_move
                 "{status:?}"
             );
             assert_eq!(status.attempts, 0);
+            // A paused move does not refuse a transfer: transferring back is
+            // how its coordinator becomes the metadata leader again.
+            require_no_running_range_move(Some(&*own)).unwrap();
             own.stop(&budget(5000)).unwrap();
         }
         // The old leader still refuses the range, now naming the new leader.

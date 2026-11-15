@@ -16,6 +16,14 @@
 //! carried the commit: `success`, `match_index >= entry` and
 //! `leader_commit >= entry`. The acknowledgement is recorded by the owned
 //! store first, which refuses a reply the pinned transport did not mint.
+//!
+//! An unresolved proposal. `commit_topology` can end while its entry is
+//! still in the log: its wait ended, or leadership changed. That entry may
+//! commit later. Its index and term are kept here, and nothing new is
+//! proposed, and no caller is told what the committed configuration "is",
+//! until `resolve_proposal` has read its fate from this node's own store:
+//! committed-or-replaced at that index, or provably superseded. Then the
+//! committed configuration is the truth for the caller.
 use super::*;
 use crate::distribution_native_host::joined_data_handoff::{
     JoinedHandoffMetadataHosts, NativeJoinedDataPlanningView,
@@ -37,6 +45,17 @@ pub(in crate::distribution_native_host) struct NativeLeaderRangeMoveHosts {
     /// A committed entry index and the participating members that have not
     /// yet acknowledged it. Kept across calls: a later call waits again.
     unsettled: Option<(u64, BTreeSet<ClusterNodeId>)>,
+    /// Index and term of an entry this object proposed and did not see
+    /// decided. See the module documentation.
+    outstanding: Option<(u64, u64)>,
+    /// Test only: the next `commit_topology` ends right after its proposal,
+    /// as a commit wait that ran out would.
+    #[cfg(test)]
+    abandon_next_commit: bool,
+    /// Test only: `resolve_proposal` reads the fate once and sends nothing,
+    /// as it would while no member answers.
+    #[cfg(test)]
+    hold_proposal: bool,
 }
 
 impl NativeMetadataControlHost {
@@ -54,6 +73,11 @@ impl NativeMetadataControlHost {
                 .clone()
                 .ok_or_else(|| invalid("range move requires the owned metadata control"))?,
             unsettled: None,
+            outstanding: None,
+            #[cfg(test)]
+            abandon_next_commit: false,
+            #[cfg(test)]
+            hold_proposal: false,
         })
     }
     /// Generation of the routing table this host's DATA client reads.
@@ -97,6 +121,66 @@ impl NativeLeaderRangeMoveHosts {
             .iter()
             .flat_map(|(_, members)| members.iter().cloned())
             .collect()
+    }
+
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_abandon_next_commit(&mut self) {
+        self.abandon_next_commit = true;
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_hold_proposal(&mut self, hold: bool) {
+        self.hold_proposal = hold;
+    }
+    #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_outstanding(&self) -> Option<(u64, u64)> {
+        self.outstanding
+    }
+
+    /// Wait, bounded, until the fate of the entry recorded as outstanding is
+    /// known from this node's own store. While this node leads, the wait
+    /// replicates by the ordinary heartbeat rounds. An error leaves the
+    /// entry recorded: it may still commit.
+    pub(in crate::distribution_native_host) fn resolve_proposal(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let Some((index, term)) = self.outstanding else {
+            return Ok(());
+        };
+        let token = parent.child_with_deadline(Instant::now() + ROUTE_WAIT);
+        let mut last = String::from("no heartbeat round finished");
+        loop {
+            #[cfg(test)]
+            let hold = self.hold_proposal;
+            #[cfg(not(test))]
+            let hold = false;
+            // This node's own store, read under its own short bound so that
+            // the fate is still read once when the wait has just run out.
+            let read = CancellationToken::uncancelable()
+                .child_with_deadline(Instant::now() + Duration::from_secs(1));
+            let fate = self.store(&read)?.proposal_fate(index, term);
+            if fate != crate::distribution_consensus::MetadataProposalFate::Pending {
+                self.outstanding = None;
+                return Ok(());
+            }
+            if hold || token.check().is_err() {
+                if parent.is_cancel_requested() {
+                    parent.check()?;
+                }
+                return Err(hosts_error(format!(
+                    "unresolved proposal: the configuration this node proposed at metadata index {index} (term {term}) is neither committed nor superseded yet and may still commit: {last}"
+                )));
+            }
+            let leads = self.store(&read)?.status().role == MetadataConsensusRole::Leader;
+            if leads {
+                if let Err(error) = self.backend().heartbeat(&token) {
+                    last = error.to_string();
+                }
+            } else {
+                last = "this node does not lead metadata now; the entry is decided by the current leader".into();
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
 
     /// One append to `peer` and whether its accepted acknowledgement proves
@@ -213,6 +297,8 @@ impl JoinedHandoffMetadataHosts for NativeLeaderRangeMoveHosts {
         parent: &CancellationToken,
     ) -> Result<()> {
         parent.check()?;
+        // Nothing is proposed beside an entry whose fate is unknown.
+        self.resolve_proposal(parent)?;
         let token = parent.child_with_deadline(Instant::now() + COMMIT_WAIT);
         let local = self.local();
         let business = Uuid::now_v7();
@@ -228,18 +314,31 @@ impl JoinedHandoffMetadataHosts for NativeLeaderRangeMoveHosts {
             let before = store.committed_topology().clone();
             (store.propose_topology(candidate.clone())?, before)
         };
+        // Recorded until this node's own store shows the entry decided.
+        self.outstanding = Some((entry.index, entry.term));
         let mut last = String::from("no heartbeat round finished");
         loop {
+            #[cfg(test)]
+            if std::mem::take(&mut self.abandon_next_commit) {
+                return Err(hosts_error(format!(
+                    "the proposed configuration (metadata index {}) did not commit in time: test: the commit wait was abandoned",
+                    entry.index
+                )));
+            }
             // Transient refusals (a busy owner, an unreachable member) are
             // repeated; the commit itself is read from the owned store below.
             if let Err(error) = self.backend().heartbeat(&token) {
                 last = error.to_string();
             }
             {
-                let store = self.store(&token)?;
-                let status = store.status();
+                let (status, proposed) = {
+                    let store = self.store(&token)?;
+                    (store.status(), store.committed_topology() == &candidate)
+                };
                 if status.commit_index >= entry.index {
-                    if store.committed_topology() != &candidate {
+                    // Decided, as this entry or as another one.
+                    self.outstanding = None;
+                    if !proposed {
                         return Err(hosts_error(
                             "the committed configuration is not the proposed one",
                         ));

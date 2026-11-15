@@ -1317,6 +1317,14 @@ pub struct MetadataConsensusStatus {
     pub learners: Vec<ClusterNodeId>,
 }
 
+/// See `MetadataConsensusStore::proposal_fate`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MetadataProposalFate {
+    Decided,
+    Superseded,
+    Pending,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MetadataConsensusState {
     format_version: u32,
@@ -2700,6 +2708,27 @@ impl MetadataConsensusStore {
             .last()
             .map(|entry| entry.term)
             .unwrap_or(self.state.base_term)
+    }
+
+    /// What this node's own durable state says about an entry it proposed
+    /// at `index` in `term`. Read-only.
+    ///
+    /// `Decided`: this node's commit index covers `index`, so whichever entry
+    /// holds that index is final and the committed configuration is the
+    /// truth. `Superseded`: the entry is no longer in this node's log and an
+    /// entry of a later term is committed below it; no log that contains
+    /// that later entry can hold a `term` entry after it, so the proposal
+    /// can never commit. `Pending`: anything else, including an entry this
+    /// node lost without such a commit, which another member may still hold
+    /// and a later leader may still commit.
+    pub(crate) fn proposal_fate(&self, index: u64, term: u64) -> MetadataProposalFate {
+        if self.state.commit_index >= index {
+            return MetadataProposalFate::Decided;
+        }
+        if self.term_at(index) != Some(term) && self.state.base_term > term {
+            return MetadataProposalFate::Superseded;
+        }
+        MetadataProposalFate::Pending
     }
 
     fn term_at(&self, index: u64) -> Option<u64> {

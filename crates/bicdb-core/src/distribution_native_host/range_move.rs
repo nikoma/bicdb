@@ -39,7 +39,7 @@ use super::joined_data_handoff::{
 };
 use super::provisional_listener::NativeLeaderRangeMoveHosts;
 use super::*;
-use crate::distribution::{RangeId, RelocationPhase};
+use crate::distribution::{RangeId, RelocationId, RelocationPhase};
 use parking_lot::Mutex;
 use serde::Serialize;
 use std::thread::JoinHandle;
@@ -125,13 +125,24 @@ pub(crate) trait NativeRangeMoveHosts {
     fn settle(&mut self, _parent: &CancellationToken) -> Result<()> {
         Ok(())
     }
+    /// Learn, bounded, the fate of a configuration an earlier commit of
+    /// these hosts proposed and did not see decided. `Ok` means that the
+    /// committed configuration is the truth: nothing of these hosts is
+    /// still in the log. An error means that such an entry may still commit.
+    fn resolve_proposal(&mut self, _parent: &CancellationToken) -> Result<()> {
+        Ok(())
+    }
 }
 impl NativeRangeMoveHosts for NativeLeaderRangeMoveHosts {
     fn metadata(&mut self) -> &mut (dyn JoinedHandoffMetadataHosts + 'static) {
         self
     }
     fn settle(&mut self, parent: &CancellationToken) -> Result<()> {
+        NativeLeaderRangeMoveHosts::resolve_proposal(self, parent)?;
         self.settle_routing(parent)
+    }
+    fn resolve_proposal(&mut self, parent: &CancellationToken) -> Result<()> {
+        NativeLeaderRangeMoveHosts::resolve_proposal(self, parent)
     }
 }
 
@@ -176,9 +187,14 @@ fn coordinating(
             "range {range} is absent from the committed metadata"
         ))
     })?;
+    // Only an unfinished relocation keeps its source as the coordinator. A
+    // completed one names a past source: it proves nothing about now.
     if &descriptor.leader == local
         || topology.relocations.values().any(|plan| {
-            plan.range_id == range && &plan.target == target && plan.source.as_ref() == Some(local)
+            plan.range_id == range
+                && &plan.target == target
+                && plan.phase != RelocationPhase::Completed
+                && plan.source.as_ref() == Some(local)
         })
     {
         return Ok(topology);
@@ -241,9 +257,24 @@ fn advice(
     )
 }
 fn unfinished(topology: &ClusterTopology, range: RangeId, target: &ClusterNodeId) -> bool {
-    topology.relocations.values().any(|plan| {
-        plan.range_id == range && &plan.target == target && plan.phase != RelocationPhase::Completed
-    })
+    unfinished_relocation(topology, range, target).is_some()
+}
+/// The committed relocation of the range onto the target that is not
+/// `Completed`. The driver, `coordinating` and `advice` all mean this one.
+fn unfinished_relocation(
+    topology: &ClusterTopology,
+    range: RangeId,
+    target: &ClusterNodeId,
+) -> Option<RelocationId> {
+    topology
+        .relocations
+        .values()
+        .find(|plan| {
+            plan.range_id == range
+                && &plan.target == target
+                && plan.phase != RelocationPhase::Completed
+        })
+        .map(|plan| plan.id)
 }
 
 pub(crate) struct NativeRangeMoveController<B>
@@ -266,6 +297,12 @@ where
     backoff: (Duration, Duration),
     completed: bool,
     aborted: bool,
+    /// The unfinished relocation of this move, once this controller saw it
+    /// committed. A completed relocation is this move's only by this id.
+    relocation: Option<RelocationId>,
+    /// An abort was requested and the fate of its commit is unknown. Nothing
+    /// is driven until it is known.
+    abort_pending: bool,
 }
 
 impl<B> NativeRangeMoveController<B>
@@ -289,11 +326,7 @@ where
                 "refused: {reason}; the coordinator must be both the metadata leader and the leader of the range"
             ))
         })?;
-        if !topology
-            .relocations
-            .values()
-            .any(|plan| plan.range_id == range && plan.target == target)
-        {
+        if !unfinished(&topology, range, &target) {
             plan_learner_allocation(&topology, range, &target)
                 .map_err(|error| move_error(format!("refused: {error}")))?;
         }
@@ -313,6 +346,8 @@ where
             backoff: (BACKOFF_BASE, BACKOFF_CAP),
             completed: false,
             aborted: false,
+            relocation: None,
+            abort_pending: false,
         })
     }
     #[cfg(test)]
@@ -380,8 +415,39 @@ where
         if self.finished() {
             return;
         }
-        if let Err(refusal) = coordinating(hosts.metadata(), &self.local, self.range, &self.target)
-        {
+        if self.abort_pending {
+            self.settle_abort(hosts, parent);
+            return;
+        }
+        let coordinated = coordinating(hosts.metadata(), &self.local, self.range, &self.target);
+        if let Ok(topology) = &coordinated {
+            if let Some(id) = unfinished_relocation(topology, self.range, &self.target) {
+                self.relocation = Some(id);
+            }
+        }
+        if let Err(refusal) = coordinated {
+            // The relocation this controller drove is completed in the
+            // committed metadata: the move is complete, whoever committed
+            // its last stage. No other completed relocation counts.
+            if refusal.lost
+                && self.relocation.is_some_and(|id| {
+                    hosts.metadata().committed_topology().is_ok_and(|topology| {
+                        topology
+                            .relocations
+                            .get(&id)
+                            .is_some_and(|plan| plan.phase == RelocationPhase::Completed)
+                    })
+                })
+            {
+                self.completed = true;
+                self.reached = Some(Stage::SourceRetired);
+                self.handoff = None;
+                self.paused = None;
+                self.waiting = None;
+                self.last_error = None;
+                self.retry_at = None;
+                return;
+            }
             if refusal.lost {
                 // Identity data only while another node is named: the driver
                 // and whatever its backend retained are dropped, and the
@@ -447,9 +513,44 @@ where
         }
     }
 
-    /// Abort before the source cut. A move without a committed relocation is
-    /// cancelled without a commit. Otherwise the driver's `abort_before_cut`
-    /// decides, and its refusal is returned verbatim.
+    /// An abort whose commit was left undecided: learn its fate, then act
+    /// on the committed configuration. Nothing is driven meanwhile.
+    fn settle_abort(&mut self, hosts: &mut dyn NativeRangeMoveHosts, parent: &CancellationToken) {
+        if let Err(error) = hosts.resolve_proposal(parent) {
+            self.last_error = Some(format!("abort not decided: {error}"));
+            return;
+        }
+        match hosts.metadata().committed_topology() {
+            Ok(topology) if !unfinished(&topology, self.range, &self.target) => {
+                self.abort_pending = false;
+                self.finish_abort(Some(
+                    "abort committed after its commit wait had ended".into(),
+                ));
+            }
+            Ok(_) => {
+                self.abort_pending = false;
+                self.last_error = Some(
+                    "the abort was not committed: its proposal was superseded. The move continues; request the abort again to abort it"
+                        .into(),
+                );
+            }
+            Err(error) => {
+                self.last_error = Some(format!(
+                    "abort not decided: the committed metadata is unreadable: {error}"
+                ));
+            }
+        }
+    }
+
+    /// Abort before the source cut. First the fate of any configuration
+    /// these hosts proposed and did not see decided is learned: while it is
+    /// unknown the abort is refused as "unresolved proposal", never reported
+    /// as done, because that entry may still commit. Then the committed
+    /// configuration decides: a move without a committed relocation is
+    /// cancelled without a commit; otherwise the driver's `abort_before_cut`
+    /// decides, and its refusal is returned verbatim. An abort commit whose
+    /// own fate stays unknown leaves the move neither aborted nor driven
+    /// until a later step has learned it.
     pub(crate) fn abort(
         &mut self,
         hosts: &mut dyn NativeRangeMoveHosts,
@@ -461,19 +562,32 @@ where
         if self.completed {
             return Err(move_error("the move is complete; nothing to abort"));
         }
+        if let Err(error) = hosts.resolve_proposal(parent) {
+            self.last_error = Some(format!("abort not decided: {error}"));
+            return Err(move_error(format!("abort not decided: {error}")));
+        }
+        if self.abort_pending {
+            // The earlier abort's commit is decided now.
+            self.settle_abort(hosts, parent);
+            if self.aborted {
+                return Ok(());
+            }
+        }
         let topology = coordinating(hosts.metadata(), &self.local, self.range, &self.target)
             .map_err(|refusal| move_error(format!("abort refused: {}", refusal.reason)))?;
         if !unfinished(&topology, self.range, &self.target) {
-            if topology
-                .relocations
-                .values()
-                .any(|plan| plan.range_id == self.range && plan.target == self.target)
-            {
+            if self.relocation.is_some_and(|id| {
+                topology
+                    .relocations
+                    .get(&id)
+                    .is_some_and(|plan| plan.phase == RelocationPhase::Completed)
+            }) {
                 return Err(move_error(
                     "the committed relocation is complete; nothing to abort",
                 ));
             }
-            // Nothing was committed for this move.
+            // Nothing is committed for this move, and nothing these hosts
+            // proposed is still in the log.
             self.finish_abort(None);
             return Ok(());
         }
@@ -484,7 +598,15 @@ where
                 Ok(())
             }
             Err(error) => {
-                // The abort commit may be committed although its wait failed.
+                // The abort commit may be in the log although its wait
+                // failed: its fate first, then the committed configuration.
+                if let Err(unresolved) = hosts.resolve_proposal(parent) {
+                    self.abort_pending = true;
+                    self.last_error = Some(format!("abort not decided: {unresolved}"));
+                    return Err(move_error(format!(
+                        "abort not decided: {unresolved}; the move is not driven until this is known"
+                    )));
+                }
                 let committed = hosts
                     .metadata()
                     .committed_topology()
@@ -500,6 +622,7 @@ where
     }
     fn finish_abort(&mut self, note: Option<String>) {
         self.aborted = true;
+        self.abort_pending = false;
         self.handoff = None;
         self.waiting = None;
         self.paused = None;
@@ -635,6 +758,11 @@ where
         }
         self.reap()
     }
+    /// Test only: the metadata hosts of this slot, between two steps.
+    #[cfg(test)]
+    pub(crate) fn test_hosts(&self, change: impl FnOnce(&mut NativeLeaderRangeMoveHosts)) {
+        change(&mut self.driven.lock().hosts);
+    }
     /// Abort before the source cut, after the step in flight has finished.
     pub(crate) fn abort(&mut self, parent: &CancellationToken) -> Result<()> {
         let mut driven = loop {
@@ -656,6 +784,30 @@ where
         }
         self.wait_step(parent)
     }
+}
+
+/// A metadata leadership transfer away from this host is refused while the
+/// host's own range move is unfinished and running. The coordinator must be
+/// the metadata leader; after a transfer its controller only pauses, and
+/// nothing on the new leader continues the move. A move that is already
+/// paused (this host does not coordinate it now) does not refuse: the
+/// transfer may be the way to make the coordinator the leader again.
+pub(crate) fn require_no_running_range_move<B>(slot: Option<&NativeRangeMoveSlot<B>>) -> Result<()>
+where
+    B: JoinedHandoffBackend<Hosts = dyn JoinedHandoffMetadataHosts> + Send + 'static,
+{
+    let Some(status) = slot.map(NativeRangeMoveSlot::status) else {
+        return Ok(());
+    };
+    if status.completed || status.aborted || status.paused.is_some() {
+        return Ok(());
+    }
+    Err(move_error(format!(
+        "metadata leadership transfer refused: this host coordinates the unfinished move of range {} onto {} (last completed stage: {}), and the coordinator must stay the metadata leader until the move is complete. Wait for the move to complete, or abort it first (move-range --abort, possible before the source cut)",
+        status.range,
+        status.target,
+        status.stage.unwrap_or("none")
+    )))
 }
 
 /// Operator request to move `range` onto `target`. One move at a time per

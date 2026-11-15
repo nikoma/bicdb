@@ -559,7 +559,7 @@ fn native_first_partial_normal_setup_error_and_panic_stop_returned_supervisors()
                 observed["actual_state_after"]["supervisor_slot_present"],
                 false
             );
-            assert_eq!(observed["actual_state_after"]["phase"], "Stopped");
+            assert_eq!(observed["actual_state_after"]["phase"], "stopped");
             assert_eq!(
                 observed["actual_state_after"]["control_listener_running"],
                 false

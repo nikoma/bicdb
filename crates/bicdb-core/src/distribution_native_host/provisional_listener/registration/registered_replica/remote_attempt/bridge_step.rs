@@ -102,6 +102,11 @@ impl NativeRegisteredReplicaAdmission {
                 &|| Ok(()),
                 token,
             )?,
+            StepOperation::SourceRetire { .. } => {
+                return Err(invalid(
+                    "joint source retirement requires the retired original member",
+                ))
+            }
             StepOperation::TargetInstall { .. } => {
                 return Err(invalid("joint bridge step received an install operation"))
             }

@@ -312,6 +312,10 @@ pub(super) fn acquire_bridge_step_own(
             "joint bridge step actual peer/credential differs from committed member",
         ));
     }
+    let retiring = matches!(
+        &request.operation,
+        crate::distribution_range_handoff::NativeJointHandoffStepOperationV1::SourceRetire { .. }
+    );
     let relocation = topology
         .relocations
         .get(&request.relocation_id)
@@ -338,7 +342,19 @@ pub(super) fn acquire_bridge_step_own(
         || record.decision_sha256() != decision
         || record.session_id() != request.session_id
         || record.nonce() != request.nonce
-        || !voter(local.node_id())
+        || if retiring {
+            // The retired source: named by the committed relocation, absent
+            // from the committed final membership, after the recorded
+            // activation of every member of the new set.
+            relocation.source.as_ref() != Some(local.node_id())
+                || range
+                    .replicas
+                    .iter()
+                    .any(|replica| &replica.node_id == local.node_id())
+                || record.stage() < crate::distribution::NativeJointHandoffStageV1::AwaitingCleanup
+        } else {
+            !voter(local.node_id())
+        }
     {
         return Err(invalid(
             "joint bridge step differs from the decision committed in own metadata",
@@ -1022,6 +1038,67 @@ pub(super) fn release_member_bridge(
     }
     token.check()?;
     Ok((complete(generation), anchor))
+}
+
+/// The retired source records its OWN retirement from the range on its own
+/// fresh committed metadata read, through the unchanged service function
+/// (which confirms an existing record instead of rewriting it). The reply
+/// reports that durable record; no row is deleted and no fence is released.
+pub(super) fn retire_joint_source(
+    service: &Arc<Mutex<ClusterDataNodeService>>,
+    local: &ClusterNodeId,
+    request: &NativeJointHandoffStepRequestV1,
+    fresh: BridgeStepOwn,
+    token: &CancellationToken,
+) -> Result<(NativeJointHandoffStepOutcomeV1, (u64, u64, Uuid))> {
+    let decision = request
+        .operation
+        .bridge_decision_sha256()
+        .ok_or_else(|| invalid("joint bridge step needs a committed decision identity"))?
+        .to_owned();
+    let BridgeStepOwn {
+        own,
+        business,
+        anchor,
+        ..
+    } = fresh;
+    let retired = ClusterDataNodeService::retire_actual_native_joint_source(
+        service,
+        &own,
+        business,
+        request.range_id,
+        token,
+    )?;
+    if retired.node_id() != local
+        || retired.relocation_id() != request.relocation_id
+        || retired.range_id() != request.range_id
+        || retired.session_id() != request.session_id
+        || retired.nonce() != request.nonce
+        || retired.decision_sha256() != decision
+    {
+        return Err(invalid(
+            "joint source retirement record differs from the requested committed decision",
+        ));
+    }
+    let data = crate::distribution_range_handoff::NativeJointSourceRetirementDataV1 {
+        cluster_id: retired.cluster_id().clone(),
+        node_id: retired.node_id().clone(),
+        node_incarnation: retired.node_incarnation(),
+        relocation_id: retired.relocation_id(),
+        range_id: retired.range_id(),
+        session_id: retired.session_id(),
+        nonce: retired.nonce(),
+        activation_epoch: retired.activation_epoch(),
+        decision_sha256: retired.decision_sha256().to_owned(),
+        activated_quorum_sha256: retired.activated_quorum_sha256().to_owned(),
+        checksum_sha256: retired.checksum_sha256().to_owned(),
+    };
+    retired.require_current()?;
+    token.check()?;
+    Ok((
+        NativeJointHandoffStepOutcomeV1::source_retired(request.binding()?, decision, data),
+        anchor,
+    ))
 }
 
 pub(super) fn bridge_reply(

@@ -631,11 +631,12 @@ impl DistributionStore {
     /// Record the retired source's own durable retirement from the range and
     /// complete the relocation. The proof is the receipt the source's service
     /// issued after ITS OWN committed metadata read showed the recorded
-    /// activation quorum. Membership does not change and no row is deleted.
+    /// activation quorum: held in this process, or reported by the source
+    /// in an exchange the pinned transport authenticated (sealed trait). Membership does not change and no row is deleted.
     /// Returns false, committing nothing, when it is already recorded.
     pub(crate) fn complete_native_joint_source_retirement(
         &mut self,
-        proof: &crate::distribution_data::NativeJointSourceRetired,
+        proof: &dyn crate::distribution_data::NativeJointSourceRetirementProof,
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         actor: &ClusterNodeId,

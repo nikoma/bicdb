@@ -29,6 +29,7 @@ pub(crate) use remote_step::{
     NativeJointBridgePhaseKindV1, NativeJointHandoffStepOperationV1,
     NativeJointHandoffStepOutcomeV1, NativeJointHandoffStepReplyV1,
     NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
+    NativeJointSourceRetirementDataV1,
 };
 #[cfg(feature = "tls-replication")]
 mod remote_bridge_certificate;

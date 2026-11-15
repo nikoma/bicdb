@@ -54,6 +54,11 @@ pub(crate) enum NativeJointHandoffStepOperationV1 {
     /// own same-open generation. The member itself collects fresh RELEASE
     /// observations of every other NEW member before and after its release.
     BridgeRelease { decision_sha256: String },
+    /// The RETIRED source (an original member absent from the final
+    /// membership) records its own retirement from the range on its own
+    /// committed metadata read, or confirms the record it already holds.
+    /// No row is deleted and no fence is released.
+    SourceRetire { decision_sha256: String },
 }
 impl NativeJointHandoffStepOperationV1 {
     /// The committed decision a bridge operation is bound to; `None` for the
@@ -66,6 +71,7 @@ impl NativeJointHandoffStepOperationV1 {
             | Self::BridgeOpen { decision_sha256 }
             | Self::RetireOldCustody { decision_sha256 }
             | Self::BridgeRelease { decision_sha256 }
+            | Self::SourceRetire { decision_sha256 }
             | Self::BridgePhaseObserve {
                 decision_sha256, ..
             } => Some(decision_sha256),
@@ -190,6 +196,7 @@ impl NativeJointHandoffStepRequestV1 {
             | NativeJointHandoffStepOperationV1::BridgeOpen { decision_sha256 }
             | NativeJointHandoffStepOperationV1::RetireOldCustody { decision_sha256 }
             | NativeJointHandoffStepOperationV1::BridgeRelease { decision_sha256 }
+            | NativeJointHandoffStepOperationV1::SourceRetire { decision_sha256 }
             | NativeJointHandoffStepOperationV1::BridgePhaseObserve {
                 decision_sha256, ..
             } => {
@@ -249,6 +256,7 @@ impl NativeJointHandoffStepRequestV1 {
             | NativeJointHandoffStepOperationV1::BridgeOpen { .. }
             | NativeJointHandoffStepOperationV1::RetireOldCustody { .. }
             | NativeJointHandoffStepOperationV1::BridgeRelease { .. }
+            | NativeJointHandoffStepOperationV1::SourceRetire { .. }
             | NativeJointHandoffStepOperationV1::BridgePhaseObserve { .. } => {
                 // A Pending plan names no decision. Bridge operations are
                 // bound only by `require_decision` to a committed decision.
@@ -334,6 +342,44 @@ pub(crate) enum NativeJointHandoffStepStageV1 {
     Complete,
 }
 
+/// What the retired source's own durable retirement record states. Reported
+/// DATA: the completing metadata stage compares every field with the
+/// committed relocation and takes the member from the authenticated peer.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct NativeJointSourceRetirementDataV1 {
+    pub cluster_id: crate::distribution::ClusterId,
+    pub node_id: ClusterNodeId,
+    pub node_incarnation: u64,
+    pub relocation_id: RelocationId,
+    pub range_id: RangeId,
+    pub session_id: Uuid,
+    pub nonce: Uuid,
+    pub activation_epoch: u64,
+    pub decision_sha256: String,
+    pub activated_quorum_sha256: String,
+    /// Checksum of the source's own durable retirement record.
+    pub checksum_sha256: String,
+}
+impl NativeJointSourceRetirementDataV1 {
+    pub(crate) fn require_shape(&self) -> Result<()> {
+        if self.node_id.as_str().is_empty()
+            || self.node_id.as_str().len() > 1024
+            || self.relocation_id.get() == 0
+            || self.range_id.get() == 0
+            || self.session_id.is_nil()
+            || self.nonce.is_nil()
+            || self.activation_epoch == 0
+            || !is_digest(&self.decision_sha256)
+            || !is_digest(&self.activated_quorum_sha256)
+            || !is_digest(&self.checksum_sha256)
+        {
+            return Err(invalid("invalid joint source retirement DATA"));
+        }
+        Ok(())
+    }
+}
+
 /// Retained once by the recipient and returned unchanged to every retry of
 /// the same logical step. Historical identity only.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -395,6 +441,10 @@ pub(crate) struct NativeJointHandoffStepOutcomeV1 {
     /// of this decision any more.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub old_custody_retired: Option<bool>,
+    /// Complete `SourceRetire` only, and the only member DATA of that
+    /// outcome: the retired source prepared nothing for the new membership.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_retirement: Option<NativeJointSourceRetirementDataV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub phase_kind: Option<NativeJointBridgePhaseKindV1>,
     /// What was left of the recipient's own fresh metadata observation when
@@ -433,6 +483,7 @@ impl NativeJointHandoffStepOutcomeV1 {
             released: None,
             released_generation: None,
             old_custody_retired: None,
+            source_retirement: None,
             phase_kind: None,
             window_remaining_ms: None,
         }
@@ -445,6 +496,20 @@ impl NativeJointHandoffStepOutcomeV1 {
     ) -> Self {
         let mut result = Self::install(binding_sha256, stage, None, None);
         result.decision_sha256 = Some(decision_sha256);
+        result
+    }
+    /// The retired source's complete outcome.
+    pub(crate) fn source_retired(
+        binding_sha256: String,
+        decision_sha256: String,
+        retirement: NativeJointSourceRetirementDataV1,
+    ) -> Self {
+        let mut result = Self::bridge_progress(
+            binding_sha256,
+            NativeJointHandoffStepStageV1::Complete,
+            decision_sha256,
+        );
+        result.source_retirement = Some(retirement);
         result
     }
     fn bridge_fields(&self) -> [bool; 6] {
@@ -464,7 +529,27 @@ impl NativeJointHandoffStepOutcomeV1 {
     ) -> Result<()> {
         self.require_shape()?;
         let later_none = self.released.is_none() && self.old_custody_retired.is_none();
+        if self.source_retirement.is_some()
+            != matches!(
+                operation,
+                NativeJointHandoffStepOperationV1::SourceRetire { .. }
+            )
+        {
+            return Err(invalid(
+                "joint handoff step outcome DATA answers another operation",
+            ));
+        }
         let matches = match operation {
+            NativeJointHandoffStepOperationV1::SourceRetire { decision_sha256 } => {
+                self.decision_sha256.as_ref() == Some(decision_sha256)
+                    && later_none
+                    && self.complete
+                    && self.phase_kind.is_none()
+                    && self
+                        .source_retirement
+                        .as_ref()
+                        .is_some_and(|retirement| &retirement.decision_sha256 == decision_sha256)
+            }
             NativeJointHandoffStepOperationV1::TargetInstall { .. } => {
                 self.decision_sha256.is_none()
             }
@@ -574,7 +659,16 @@ impl NativeJointHandoffStepOutcomeV1 {
                         | NativeJointHandoffStepStageV1::BridgeRelease
                         | NativeJointHandoffStepStageV1::Complete
                 )
-                || fields.iter().any(|present| *present != complete)
+                || fields
+                    .iter()
+                    .any(|present| *present != (complete && self.source_retirement.is_none()))
+                || self.source_retirement.as_ref().is_some_and(|retirement| {
+                    !complete
+                        || retirement.require_shape().is_err()
+                        || self.bridge_receipt_sha256.is_some()
+                        || self.old_custody_retired.is_some()
+                        || self.phase_kind.is_some()
+                })
                 || (self.released.is_some() && self.activation_sha256.is_none())
                 || self.released_generation.is_some() != (self.released == Some(true))
                 || self.released_generation.is_some_and(|x| x.is_nil())
@@ -629,6 +723,7 @@ impl NativeJointHandoffStepOutcomeV1 {
             || self.released.is_some()
             || self.released_generation.is_some()
             || self.old_custody_retired.is_some()
+            || self.source_retirement.is_some()
             || self.phase_kind.is_some()
             || self.window_remaining_ms.is_some()
             || matches!(

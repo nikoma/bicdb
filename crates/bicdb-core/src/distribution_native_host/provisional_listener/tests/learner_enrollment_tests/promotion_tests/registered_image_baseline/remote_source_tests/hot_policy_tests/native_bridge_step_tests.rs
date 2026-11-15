@@ -95,6 +95,11 @@ fn release_operation(data: &NativeJointDecisionData) -> StepOperation {
         decision_sha256: data.checksum_sha256().into(),
     }
 }
+fn source_retire_operation(data: &NativeJointDecisionData) -> StepOperation {
+    StepOperation::SourceRetire {
+        decision_sha256: data.checksum_sha256().into(),
+    }
+}
 fn observe_operation(data: &NativeJointDecisionData, kind: PhaseKind) -> StepOperation {
     StepOperation::BridgePhaseObserve {
         decision_sha256: data.checksum_sha256().into(),
@@ -152,7 +157,9 @@ fn exchange(
             .request_native_joint_bridge_phase_observation(
                 member, data, *kind, &request, &own, &parent,
             ),
-        StepOperation::TargetInstall { .. } => unreachable!(),
+        StepOperation::SourceRetire { .. } | StepOperation::TargetInstall { .. } => {
+            unreachable!()
+        }
     };
     ledger.record(serde_json::json!({
         "operation":"native_joint_bridge_step","request":request,"recipient":member,
@@ -1549,6 +1556,20 @@ fn exercise_release(
         }
         changed
     };
+    // The retired source refuses to retire before the activation record is
+    // committed in ITS OWN metadata.
+    assert!(!new.contains(outsider));
+    let error = raw(
+        &all_clients[0],
+        outsider,
+        &foreign(source_retire_operation(data)),
+        "source_retire_before_activation_record",
+        ledger,
+    );
+    assert!(
+        error.contains("differs from the decision committed in own metadata"),
+        "{error}"
+    );
     assert!(record());
     assert_eq!(
         stage_of(),
@@ -1574,28 +1595,68 @@ fn exercise_release(
         .unwrap();
     assert_eq!(by_member.checksum_sha256(), expected);
     drop(by_member);
-    // 9. NOT a step RPC: no source-retirement step exists yet, so the
-    // retired source's own service is called in-process here, exactly as the
-    // in-process driver does. It acts on ITS OWN committed metadata read,
-    // which now shows the remotely certified activation record, and the
-    // existing completion stage finishes the relocation from its receipt.
-    let source = index(outsider);
-    assert!(!new.contains(outsider));
+    // 9. The retired source records its own retirement by one step RPC.
+    // Refused from a non-initiator and on a member of the final membership.
+    let error = raw(
+        &all_clients[index(bystander)],
+        outsider,
+        &foreign(source_retire_operation(data)),
+        "source_retire_from_non_initiator_new_member",
+        ledger,
+    );
+    assert!(error.contains("not an admitted initiator"), "{error}");
+    let error = raw(
+        &clients[bystander],
+        bystander,
+        &foreign(source_retire_operation(data)),
+        "source_retire_sent_to_a_final_member",
+        ledger,
+    );
+    assert!(
+        error.contains("differs from the decision committed in own metadata"),
+        "{error}"
+    );
+    let retire_source = |parent: &CancellationToken, ledger: &mut Ledger<'_>| {
+        let business = Uuid::now_v7();
+        let observed = all_clients[0]
+            .acquire_host_metadata_observation(&node(0), business, Duration::from_secs(5), parent)
+            .unwrap();
+        let request = NativeJointHandoffStepRequestV1::from_decision(
+            data,
+            source_retire_operation(data),
+            business,
+            5000,
+        )
+        .unwrap();
+        let frame = all_clients[0]
+            .request_native_joint_source_retire(outsider, data, &request, &observed, parent)
+            .unwrap();
+        ledger.record(
+            serde_json::json!({"operation":"native_joint_source_retire_step",
+            "request":request,"recipient":outsider,"actual_initiator":node(0),
+            "outcome":frame.outcome(),"reply_is_checksummed_DATA_not_authority":true}),
+        );
+        assert_eq!(frame.actual_peer(), outsider);
+        assert_eq!(
+            frame.actual_peer_incarnation(),
+            data.old_members()[outsider].incarnation
+        );
+        frame
+    };
     let parent = budget(5000);
-    let (source_own, source_business) = own(&all_clients[source], &parent);
-    let retired = crate::ClusterDataNodeService::retire_actual_native_joint_source(
-        &services[source],
-        &source_own,
-        source_business,
-        selected,
-        &parent,
-    )
-    .unwrap();
-    assert_eq!(retired.activated_quorum_sha256(), expected);
-    assert_eq!(retired.decision_sha256(), data.checksum_sha256());
     let (mut view, fresh, business, _root) = planning(&parent);
+    let frame = retire_source(&parent, ledger);
+    let reported = frame.outcome().source_retirement.clone().unwrap();
+    assert_eq!(&reported.node_id, outsider);
+    assert_eq!(reported.activated_quorum_sha256, expected);
+    assert_eq!(reported.decision_sha256, data.checksum_sha256());
+    let certificate =
+        crate::distribution_data::NativeRemoteJointSourceRetirementCertificate::from_frame(
+            data, frame,
+        )
+        .unwrap();
     assert!(view
-        .complete_native_joint_source_retirement(&retired, &fresh, business, &node(0), 205)
+        .complete_native_joint_source_retirement(&certificate, &fresh, business, &node(0), 205)
         .unwrap());
     commit_candidate(
         controls,
@@ -1607,14 +1668,38 @@ fn exercise_release(
     let committed = metadata[0].lock().committed_topology().clone();
     let plan = &committed.relocations[&relocation];
     assert_eq!(plan.phase, crate::distribution::RelocationPhase::Completed);
+    let cleaned = plan.native_joint_handoff_v1.as_ref().unwrap();
     assert_eq!(
-        plan.native_joint_handoff_v1.as_ref().unwrap().stage(),
+        cleaned.stage(),
         crate::distribution::NativeJointHandoffStageV1::Cleaned
     );
+    // The source's own store holds exactly the record it reported.
+    let parent = budget(5000);
+    let (source_own, source_business) = own(&all_clients[index(outsider)], &parent);
+    let held = crate::ClusterDataNodeService::retire_actual_native_joint_source(
+        &services[index(outsider)],
+        &source_own,
+        source_business,
+        selected,
+        &parent,
+    )
+    .unwrap();
+    assert_eq!(held.checksum_sha256(), reported.checksum_sha256);
+    // A repeated step reports the SAME record and completes nothing more.
+    let (mut view, fresh, business, _root) = planning(&parent);
+    let again = retire_source(&parent, ledger);
+    assert_eq!(again.outcome().source_retirement.as_ref(), Some(&reported));
+    let certificate =
+        crate::distribution_data::NativeRemoteJointSourceRetirementCertificate::from_frame(
+            data, again,
+        )
+        .unwrap();
+    assert!(!view
+        .complete_native_joint_source_retirement(&certificate, &fresh, business, &node(0), 206)
+        .unwrap());
     ledger.record(
-        serde_json::json!({"operation":"relocation_completed_from_remote_activation_record",
-        "retired_source":outsider,"source_retirement_sha256":retired.checksum_sha256(),
-        "source_retirement_called_in_process_not_by_step_rpc":true,
-        "phase":"Completed","stage":"Cleaned"}),
+        serde_json::json!({"operation":"relocation_completed_from_remote_frames",
+        "retired_source":outsider,"source_retirement_sha256":reported.checksum_sha256,
+        "phase":"Completed","stage":"Cleaned","repeated_step_same_record":true}),
     );
 }

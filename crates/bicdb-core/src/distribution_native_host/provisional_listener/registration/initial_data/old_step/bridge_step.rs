@@ -8,7 +8,8 @@ use crate::distribution_metadata_read_provider::MetadataReadProvider;
 use crate::distribution_native_host::provisional_listener::registration::bridge_step::{
     acquire_bridge_step_own, bridge_remaining, bridge_reply, observe_bridge_phase,
     open_member_bridge, publish_member_bridge, release_member_bridge, retained_prepare_step,
-    retire_member_old_custody, BridgeStepOwn, NativeBridgeMemberSteps, MIN_BRIDGE_SUBSTEP_BUDGET,
+    retire_joint_source, retire_member_old_custody, BridgeStepOwn, NativeBridgeMemberSteps,
+    MIN_BRIDGE_SUBSTEP_BUDGET,
 };
 use crate::distribution_native_host::provisional_listener::registration::NativeDataOwnerAdmission;
 use crate::distribution_range_handoff::{
@@ -138,6 +139,11 @@ impl NativeInitialDataAdmission {
                 },
                 &token,
             )?,
+            // Only the retired source passes the authorisation above for
+            // this operation; a member of the final membership never does.
+            StepOperation::SourceRetire { .. } => {
+                retire_joint_source(&owners.service, local.node_id(), request, fresh, &token)?
+            }
             StepOperation::TargetInstall { .. } => unreachable!("refused above"),
         };
         self.require_listener(&owners.service, &owners.runtime)?;

@@ -282,6 +282,7 @@ impl ActivationMarker {
 #[derive(Debug)]
 pub struct TieredManifestCatalog {
     root: PathBuf,
+    physical_gate: crate::physical_gate::PhysicalGate,
     generations: PathBuf,
     activations: PathBuf,
     fsync: bool,
@@ -291,11 +292,15 @@ impl TieredManifestCatalog {
     pub fn open(root: impl AsRef<Path>, fsync: bool) -> Result<Self> {
         let root = root.as_ref().to_path_buf();
         create_safe_directory(&root, "generation catalog")?;
+        let physical_gate =
+            crate::physical_gate::PhysicalGate::for_file(&root.join(".manifest-bind"))?;
+        let _physical = physical_gate.shared()?;
         let generations = root.join(GENERATIONS_DIRECTORY);
         let activations = root.join(ACTIVATIONS_DIRECTORY);
         create_safe_directory(&generations, "generation manifests")?;
         create_safe_directory(&activations, "generation activations")?;
         Ok(Self {
+            physical_gate,
             root,
             generations,
             activations,
@@ -312,6 +317,7 @@ impl TieredManifestCatalog {
         manifest_limits: &TieredManifestLimits,
         storage_limits: &TieredStorageLimits,
     ) -> Result<Option<ActivePageGeneration>> {
+        let _physical = self.physical_gate.shared()?;
         manifest_limits.validate()?;
         storage_limits.validate()?;
         let markers = self.activation_markers(manifest_limits)?;
@@ -341,6 +347,7 @@ impl TieredManifestCatalog {
         manifest_limits: &TieredManifestLimits,
         storage_limits: &TieredStorageLimits,
     ) -> Result<Vec<ActivePageGeneration>> {
+        let _physical = self.physical_gate.shared()?;
         if retain == 0 || retain > manifest_limits.max_activation_markers {
             return Err(manifest_error(
                 "retained generation count is outside the activation bound",
@@ -383,6 +390,7 @@ impl TieredManifestCatalog {
         manifest_limits: &TieredManifestLimits,
         storage_limits: &TieredStorageLimits,
     ) -> Result<ActivePageGeneration> {
+        let _physical = self.physical_gate.shared()?;
         self.publish_inner(
             store,
             manifest,
@@ -405,6 +413,7 @@ impl TieredManifestCatalog {
     where
         F: FnOnce() -> Result<()>,
     {
+        let _physical = self.physical_gate.shared()?;
         manifest.validate(manifest_limits, storage_limits)?;
         let manifest_bytes = serde_json::to_vec(manifest)
             .map_err(|error| manifest_error(format!("cannot encode manifest: {error}")))?;
@@ -496,6 +505,7 @@ impl TieredManifestCatalog {
         manifest: &PageGenerationManifest,
         storage_limits: &TieredStorageLimits,
     ) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         let previous: BTreeMap<(u64, u64), _> = current
             .into_iter()
             .flat_map(|active| active.manifest.extents.iter())
@@ -518,6 +528,7 @@ impl TieredManifestCatalog {
         manifest_limits: &TieredManifestLimits,
         storage_limits: &TieredStorageLimits,
     ) -> Result<ActivePageGeneration> {
+        let _physical = self.physical_gate.shared()?;
         let path = self.generations.join(manifest_filename(
             marker.generation,
             &marker.manifest_sha256,
@@ -545,6 +556,7 @@ impl TieredManifestCatalog {
         &self,
         limits: &TieredManifestLimits,
     ) -> Result<BTreeMap<u64, (PathBuf, String)>> {
+        let _physical = self.physical_gate.shared()?;
         let mut markers = BTreeMap::new();
         let entries = fs::read_dir(&self.activations)
             .map_err(|error| PageError::io(&self.activations, error))?;
@@ -580,6 +592,7 @@ impl TieredManifestCatalog {
     }
 
     fn cleanup_incomplete(&self, max_files: usize) -> Result<usize> {
+        let _physical = self.physical_gate.shared()?;
         let mut removed = 0_usize;
         for directory in [&self.generations, &self.activations] {
             for entry in fs::read_dir(directory).map_err(|error| PageError::io(directory, error))? {
@@ -615,6 +628,7 @@ impl TieredManifestCatalog {
         minimum_generation: u64,
         max_files: usize,
     ) -> Result<usize> {
+        let _physical = self.physical_gate.shared()?;
         if minimum_generation == 0 || max_files == 0 {
             return Err(manifest_error("generation prune bounds are invalid"));
         }

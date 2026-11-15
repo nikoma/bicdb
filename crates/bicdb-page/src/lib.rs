@@ -34,6 +34,7 @@ pub mod mvcc;
 pub mod overflow;
 pub mod page;
 pub mod paged;
+pub mod physical_gate;
 mod pio;
 pub mod pool;
 pub mod slotted;

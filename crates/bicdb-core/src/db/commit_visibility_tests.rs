@@ -4,6 +4,7 @@ use super::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+mod legacy_standard_backup_tests;
 mod visibility_wait_tests;
 
 type Hook = Box<dyn FnOnce(u64)>;

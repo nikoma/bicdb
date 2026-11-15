@@ -12,6 +12,11 @@ rust-version.workspace = true
 # benchmarkable, and licence-auditable on its own, and keeping the edge
 # one-directional stops record semantics leaking into the storage layer.
 
+[features]
+default = []
+# Passive selected-thread DATA; never part of the normal production build.
+physical-gate-observation = []
+
 [dependencies]
 crc32fast.workspace = true
 # `flock` for exclusive store-directory ownership; see src/lock.rs for why an OS

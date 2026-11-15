@@ -59,6 +59,7 @@ zstd = { workspace = true, optional = true }
 libc.workspace = true
 
 [dev-dependencies]
+bicdb-page = { path = "../bicdb-page", version = "1.0.520-beta", features = ["physical-gate-observation"] }
 crossbeam-skiplist.workspace = true
 protobuf.workspace = true
 rcgen = "0.13"

@@ -346,7 +346,9 @@ impl BicDb {
                 .paged_records
                 .as_ref()
                 .ok_or_else(|| invalid("Registered decision requires actual native page WAL"))?;
-            let _write = paged.write_guard();
+            let _write = paged
+                .write_guard()
+                .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
             self.require_registered_joint_decision_storage_healthy()?;
             // Known stale before begin cannot consume a native xid.
             metadata.require_current_memory()?;

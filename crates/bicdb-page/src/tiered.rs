@@ -166,6 +166,7 @@ pub trait ImmutableExtentStore: Send + Sync {
 #[derive(Debug)]
 pub struct LocalImmutableExtentStore {
     root: PathBuf,
+    physical_gate: crate::physical_gate::PhysicalGate,
     fsync: bool,
 }
 
@@ -175,11 +176,18 @@ impl LocalImmutableExtentStore {
         reject_symlink_if_exists(&root, "extent provider root")?;
         fs::create_dir_all(&root).map_err(|error| PageError::io(&root, error))?;
         reject_symlink(&root, "extent provider root")?;
+        let physical_gate =
+            crate::physical_gate::PhysicalGate::for_file(&root.join(".extent-bind"))?;
+        let _physical = physical_gate.shared()?;
         let namespace = root.join(OBJECT_NAMESPACE);
         reject_symlink_if_exists(&namespace, "extent namespace")?;
         fs::create_dir_all(&namespace).map_err(|error| PageError::io(&namespace, error))?;
         reject_symlink(&namespace, "extent namespace")?;
-        Ok(Self { root, fsync })
+        Ok(Self {
+            root,
+            fsync,
+            physical_gate,
+        })
     }
 
     pub fn root(&self) -> &Path {
@@ -194,6 +202,7 @@ impl LocalImmutableExtentStore {
         prefix: u8,
         max_entries: usize,
     ) -> Result<Vec<ExtentObjectInventoryEntry>> {
+        let _physical = self.physical_gate.shared()?;
         if max_entries == 0 || max_entries > 10_000_000 {
             return Err(tier_error(
                 "extent inventory limit must be within 1..=10,000,000",
@@ -252,11 +261,13 @@ impl LocalImmutableExtentStore {
     }
 
     fn object_path(&self, key: &ExtentObjectKey) -> Result<PathBuf> {
+        let _physical = self.physical_gate.shared()?;
         key.validate()?;
         Ok(self.root.join(key.as_str()))
     }
 
     fn ensure_object_parent(&self, key: &ExtentObjectKey) -> Result<PathBuf> {
+        let _physical = self.physical_gate.shared()?;
         let path = self.object_path(key)?;
         let parent = path
             .parent()
@@ -274,6 +285,7 @@ impl LocalImmutableExtentStore {
         expected_bytes: u64,
         limits: &TieredStorageLimits,
     ) -> Result<ExtentObjectMetadata> {
+        let _physical = self.physical_gate.shared()?;
         let file = open_regular_no_follow(path, "extent object")?;
         let (bytes, sha256) = hash_exact(file, expected_bytes, limits)?;
         if sha256 != key.sha256()? {
@@ -303,6 +315,7 @@ impl LocalImmutableExtentStore {
         buffer: &mut [u8],
         limits: &TieredStorageLimits,
     ) -> Result<PageHeader> {
+        let _physical = self.physical_gate.shared()?;
         limits.validate()?;
         metadata.validate(limits)?;
         if buffer.is_empty() {
@@ -355,6 +368,7 @@ impl LocalImmutableExtentStore {
         staging_path: &Path,
         limits: &TieredStorageLimits,
     ) -> Result<ExtentObjectMetadata> {
+        let _physical = self.physical_gate.shared()?;
         limits.validate()?;
         key.validate()?;
         if staging_path.parent() != Some(self.root.as_path()) {
@@ -408,6 +422,7 @@ impl ImmutableExtentStore for LocalImmutableExtentStore {
         source: &mut dyn Read,
         limits: &TieredStorageLimits,
     ) -> Result<ExtentObjectMetadata> {
+        let _physical = self.physical_gate.shared()?;
         limits.validate()?;
         key.validate()?;
         if expected_bytes == 0 || expected_bytes > limits.max_extent_bytes {
@@ -504,6 +519,7 @@ impl ImmutableExtentStore for LocalImmutableExtentStore {
         destination: &mut dyn Write,
         limits: &TieredStorageLimits,
     ) -> Result<()> {
+        let _physical = self.physical_gate.shared()?;
         limits.validate()?;
         metadata.validate(limits)?;
         let path = self.object_path(&metadata.key)?;
@@ -558,6 +574,7 @@ impl ImmutableExtentStore for LocalImmutableExtentStore {
     }
 
     fn delete(&self, key: &ExtentObjectKey) -> Result<bool> {
+        let _physical = self.physical_gate.shared()?;
         let path = self.object_path(key)?;
         match fs::symlink_metadata(&path) {
             Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {

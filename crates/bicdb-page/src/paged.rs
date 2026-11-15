@@ -697,6 +697,12 @@ pub struct VersionChainRepairReport {
 
 /// A crash-recoverable keyed store over first-party pages.
 #[derive(Debug)]
+/// Holds physical exclusion before the original reentrant writer mutex.
+pub struct PagedWriteGuard<'a> {
+    _writer: ReentrantMutexGuard<'a, ()>,
+    _physical: crate::physical_gate::PhysicalWriteGuard,
+}
+
 pub struct PagedStore {
     pool: Arc<BufferPool>,
     heap: HeapFile,
@@ -849,6 +855,7 @@ impl PagedStore {
         journal_path: &std::path::Path,
         limits: crate::backup::PageBackupLimits,
     ) -> Result<PagedBackupCapture> {
+        let _physical = self.wal.physical_gate().shared()?;
         let deadline = std::time::Instant::now()
             + std::time::Duration::from_millis(limits.max_coordination_millis);
         let _writer = self
@@ -920,6 +927,8 @@ impl PagedStore {
         }
         std::fs::create_dir_all(dir).map_err(|e| PageError::io(dir, e))?;
         let paths = PagedPaths::in_dir(dir);
+        let physical_gate = crate::physical_gate::PhysicalGate::for_file(&paths.pages)?;
+        let _physical_open = physical_gate.shared()?;
 
         // Before recovery, and before any page is read or written: recovery
         // itself mutates the file, so two concurrent openers would replay and
@@ -1163,6 +1172,7 @@ impl PagedStore {
     /// that is now an interior node of a larger tree, and silently see a
     /// fraction of the data.
     fn write_meta(&self) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         let mut guard = self.pool.get_mut(self.meta_page)?;
         let page = guard.bytes_mut();
         let header = crate::page::PageHeader::new(
@@ -1207,6 +1217,7 @@ impl PagedStore {
 
     /// Record any root that moved during an operation.
     fn sync_roots(&self) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         if self.index.take_root_changed() || self.catalog.take_root_changed() {
             self.write_meta()?;
         }
@@ -1219,6 +1230,7 @@ impl PagedStore {
     /// detection remains exact: short, normal chains use stack storage and only
     /// pathological chains allocate a visited-locator map.
     pub fn inspect_version_chain(&self, key: &[u8]) -> Result<VersionChainInspection> {
+        let _physical = self.wal.physical_gate().shared()?;
         let _structure = self.structure.read();
         let encoded = self.index.get(key)?;
         self.inspect_version_chain_locked(
@@ -1234,6 +1246,7 @@ impl PagedStore {
         limit: usize,
         sample_limit: usize,
     ) -> Result<VersionChainInspection> {
+        let _physical = self.wal.physical_gate().shared()?;
         let Some(encoded_head) = encoded_head else {
             return Ok(VersionChainInspection {
                 head: None,
@@ -1334,6 +1347,7 @@ impl PagedStore {
     /// visited set, so the verification remains practical for very large
     /// stores while still detecting cycles exactly.
     pub fn verify_integrity(&self, max_fault_samples: usize) -> Result<PagedIntegrityReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         let _structure = self.structure.read();
         let btree = self.index.verify()?;
         let mut version_chains = VersionChainVerifyReport::default();
@@ -1399,11 +1413,13 @@ impl PagedStore {
         cursor: BTreeVerifyCursor,
         limits: BTreeVerifyLimits,
     ) -> Result<BTreeVerifyStepReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         let _structure = self.structure.read();
         self.index.verify_step(cursor, limits)
     }
 
     pub fn validate_new_btree_verify_limits(&self, limits: &BTreeVerifyLimits) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.index.validate_new_verify_limits(limits)
     }
 
@@ -1421,6 +1437,7 @@ impl PagedStore {
         cursor: VersionChainVerifyCursor,
         limits: VersionChainVerifyLimits,
     ) -> Result<VersionChainVerifyStepReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         limits.validate()?;
         if cursor
             .next_key
@@ -1562,6 +1579,7 @@ impl PagedStore {
         expected_head: TupleLocator,
         value: &[u8],
     ) -> Result<VersionChainRepairReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         let (transaction, replacement_head, inspection) = {
             let _guard = self.write_lock.lock();
             let _structure = self.structure.write();
@@ -1668,8 +1686,13 @@ impl PagedStore {
     /// The lock is reentrant, so the per-operation acquisitions inside the
     /// guarded region (including a `checkpoint` triggered by a commit crossing
     /// the WAL ceiling) re-enter rather than deadlock.
-    pub fn write_guard(&self) -> ReentrantMutexGuard<'_, ()> {
-        self.write_lock.lock()
+    pub fn write_guard(&self) -> Result<PagedWriteGuard<'_>> {
+        let physical = self.wal.physical_gate().shared()?;
+        let writer = self.write_lock.lock();
+        Ok(PagedWriteGuard {
+            _writer: writer,
+            _physical: physical,
+        })
     }
 
     /// Begin a transaction, returning its id and read snapshot.
@@ -1708,6 +1731,7 @@ impl PagedStore {
         releases_before: u64,
         result: &Result<T>,
     ) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         let Err(error) = result else {
             return Ok(());
         };
@@ -1735,6 +1759,7 @@ impl PagedStore {
     /// At an operation boundary, durably log the complete unlogged closure
     /// before admitting more mutations. No transaction is exempt.
     fn admit_write(&self, _transaction: Xid) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.wal.health().check()?;
         if self.pool.unlogged_pressure().is_some() {
             self.log_unlogged_pages_as_committed_unit()?;
@@ -1768,6 +1793,7 @@ impl PagedStore {
     /// retention is what makes rollback free: if this transaction never commits,
     /// the old version is still the visible one.
     pub fn put(&self, transaction: Xid, key: &[u8], value: &[u8]) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.put_returning_locator(transaction, key, value)
             .map(|_| ())
     }
@@ -1783,6 +1809,7 @@ impl PagedStore {
         key: &[u8],
         value: &[u8],
     ) -> Result<TupleLocator> {
+        let _physical = self.wal.physical_gate().shared()?;
         let _guard = self.write_lock.lock();
         let _structure = self.structure.write();
         self.admit_write(transaction)?;
@@ -1802,6 +1829,7 @@ impl PagedStore {
     }
 
     fn put_admitted(&self, transaction: Xid, key: &[u8], value: &[u8]) -> Result<TupleLocator> {
+        let _physical = self.wal.physical_gate().shared()?;
         let head = self.index.get(key)?.and_then(|b| TupleLocator::decode(&b));
         // Chain the new version onto the newest version that is not aborted:
         // an aborted (or crash-orphaned) head is dead weight, and stamping it
@@ -1844,6 +1872,7 @@ impl PagedStore {
         transaction: Xid,
         head: Option<TupleLocator>,
     ) -> Result<Option<TupleLocator>> {
+        let _physical = self.wal.physical_gate().shared()?;
         let mut cursor = head;
         for _ in 0..MAX_VERSION_CHAIN {
             let Some(locator) = cursor else {
@@ -1892,6 +1921,7 @@ impl PagedStore {
         locator: TupleLocator,
         key: &[u8],
     ) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         let stored = match self.heap.get(locator) {
             Ok(stored) => stored,
             // Nothing readable there: no established writer to conflict with.
@@ -1929,6 +1959,7 @@ impl PagedStore {
 
     /// Stamp `xmax` on an existing version.
     fn mark_deleted(&self, locator: TupleLocator, transaction: Xid) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         let mut current = match self.heap.get(locator) {
             Ok(current) => current,
             // The superseded version was vacuumed away — and its slot may
@@ -1950,6 +1981,7 @@ impl PagedStore {
 
     /// Read the version of `key` visible to the latest committed state.
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.get_as_of(&self.latest_snapshot(), key)
     }
 
@@ -1959,6 +1991,7 @@ impl PagedStore {
     /// version. Newest-first is deliberate: a reader at the current snapshot
     /// stops immediately, and only readers holding older snapshots pay to walk.
     pub fn get_as_of(&self, snapshot: &Snapshot, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let _physical = self.wal.physical_gate().shared()?;
         let _structure = self.structure.read();
         self.get_as_of_locked(snapshot, key)
     }
@@ -1968,6 +2001,7 @@ impl PagedStore {
     /// holding either side races concurrent splits; that is the bug the lock
     /// exists to prevent.
     fn get_as_of_locked(&self, snapshot: &Snapshot, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let _physical = self.wal.physical_gate().shared()?;
         let Some(bytes) = self.index.get(key)? else {
             return Ok(None);
         };
@@ -1992,6 +2026,7 @@ impl PagedStore {
         snapshot: &Snapshot,
         cursor: Option<TupleLocator>,
     ) -> Result<Option<Vec<u8>>> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.walk_chain_as_of_bounded(snapshot, cursor, MAX_VERSION_CHAIN)
     }
 
@@ -2001,6 +2036,7 @@ impl PagedStore {
         mut cursor: Option<TupleLocator>,
         value_prefix_bytes: usize,
     ) -> Result<Option<Vec<u8>>> {
+        let _physical = self.wal.physical_gate().shared()?;
         let Some(head) = cursor else {
             return Ok(None);
         };
@@ -2052,6 +2088,7 @@ impl PagedStore {
         mut cursor: Option<TupleLocator>,
         limit: usize,
     ) -> Result<Option<Vec<u8>>> {
+        let _physical = self.wal.physical_gate().shared()?;
         let Some(head) = cursor else {
             return Ok(None);
         };
@@ -2129,6 +2166,7 @@ impl PagedStore {
         hint: TupleLocator,
         expected_xmin: Xid,
     ) -> Result<HintedRead> {
+        let _physical = self.wal.physical_gate().shared()?;
         // Structure read lock: vacuum relocates tuples only under the write
         // side, so this keeps the hinted locator (and every prev link we
         // follow) from moving mid-walk.
@@ -2180,6 +2218,7 @@ impl PagedStore {
     /// still entitled to see it — a snapshot-isolation violation dressed up as a
     /// delete.
     pub fn delete(&self, transaction: Xid, key: &[u8]) -> Result<bool> {
+        let _physical = self.wal.physical_gate().shared()?;
         let _guard = self.write_lock.lock();
         let _structure = self.structure.write();
         self.admit_write(transaction)?;
@@ -2195,6 +2234,7 @@ impl PagedStore {
     }
 
     fn delete_admitted(&self, transaction: Xid, key: &[u8]) -> Result<bool> {
+        let _physical = self.wal.physical_gate().shared()?;
         let Some(bytes) = self.index.get(key)? else {
             return Ok(false);
         };
@@ -2229,6 +2269,7 @@ impl PagedStore {
 
     /// Make a transaction's writes durable.
     pub fn commit(&self, transaction: Xid) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.commit_with_sync(transaction, true).map(|_| ())
     }
 
@@ -2241,10 +2282,12 @@ impl PagedStore {
     /// cannot replay. A transaction that frees pages still syncs: segment
     /// adoption rewrites the free map, which must not run ahead of the log.
     pub fn commit_deferred(&self, transaction: Xid) -> Result<Lsn> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.commit_with_sync(transaction, false)
     }
 
     fn commit_with_sync(&self, transaction: Xid, sync: bool) -> Result<Lsn> {
+        let _physical = self.wal.physical_gate().shared()?;
         // Log page images once per transaction rather than once per operation.
         //
         // A page stays dirty across a whole transaction, so logging after every
@@ -2363,6 +2406,7 @@ impl PagedStore {
     /// pages may hold a half-done structure, the store is already fenced,
     /// and the abort returns that failure.
     pub fn abort(&self, transaction: Xid) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         // Serialize the abort record with checkpoint publication/reset. An
         // abort does not mutate a page, but it does append to the same WAL a
         // checkpoint may truncate.
@@ -2394,6 +2438,7 @@ impl PagedStore {
     /// Log every page with unlogged changes under a fresh transaction and
     /// commit it durably. Called with the writer gate held.
     fn log_unlogged_pages_as_committed_unit(&self) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         if self.pool.unlogged_pages() == 0 {
             return Ok(());
         }
@@ -2428,6 +2473,7 @@ impl PagedStore {
     /// The descriptor records next_xid itself, so no separate xid-floor
     /// record is needed. Caller holds the writer gate.
     fn log_checkpoint_descriptor(&self) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         let logged: Vec<_> = self
             .pool
             .pages_needing_log()
@@ -2455,6 +2501,7 @@ impl PagedStore {
     /// long-running transaction pins the watermark. A failure leaves the
     /// resident table and the intact log untouched.
     fn persist_status_spill(&self) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         let outcomes = self.transactions.terminal_outcomes();
         let frozen_xid = self.transactions.frozen_xid();
         self.spill
@@ -2484,6 +2531,7 @@ impl PagedStore {
 
     /// See [`crate::manager::PageStore::begin_extent_migration`].
     pub fn begin_extent_migration(&self, extent_bytes: u64) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.pool.store().begin_extent_migration(extent_bytes)
     }
 
@@ -2492,6 +2540,7 @@ impl PagedStore {
         &self,
         max_pages: u64,
     ) -> Result<crate::manager::ExtentMigrationReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.pool.store().advance_extent_migration(max_pages)
     }
 
@@ -2502,16 +2551,19 @@ impl PagedStore {
 
     /// See [`crate::wal::Wal::enable_archive_retention`].
     pub fn enable_wal_archive_retention(&self) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.wal.enable_archive_retention()
     }
 
     /// See [`crate::wal::Wal::disable_archive_retention`].
     pub fn disable_wal_archive_retention(&self) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.wal.disable_archive_retention()
     }
 
     /// See [`crate::wal::Wal::mark_archived_through`].
     pub fn mark_wal_archived_through(&self, sequence: u64) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.wal.mark_archived_through(sequence)
     }
 
@@ -2521,6 +2573,7 @@ impl PagedStore {
     /// every page write the copy could have observed. Errors on stores whose
     /// WAL segmentation is disabled (legacy monolithic layout).
     pub fn seal_wal_for_backup(&self) -> Result<Vec<std::path::PathBuf>> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.wal.seal_active()?;
         Ok(self.wal.sealed_segment_paths())
     }
@@ -2536,6 +2589,7 @@ impl PagedStore {
     /// `beyond` is still in progress — finish or abort those first and
     /// re-run.
     pub fn advance_transaction_floor(&self, beyond: Xid) -> Result<(Xid, Xid)> {
+        let _physical = self.wal.physical_gate().shared()?;
         {
             let _guard = self.write_lock.lock();
             let allocated_before = self.transactions.next_xid();
@@ -2581,6 +2635,7 @@ impl PagedStore {
         field: HeaderStampField,
         expected: Xid,
     ) -> Result<HeaderRepair> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.guarded_maintenance(|| self.repair_version_header_stamp_inner(key, field, expected))
     }
 
@@ -2590,6 +2645,7 @@ impl PagedStore {
         field: HeaderStampField,
         expected: Xid,
     ) -> Result<HeaderRepair> {
+        let _physical = self.wal.physical_gate().shared()?;
         if expected == 0 {
             return Err(PageError::HeaderRepairRefused {
                 key: String::from_utf8_lossy(key).into_owned(),
@@ -2643,6 +2699,7 @@ impl PagedStore {
     }
 
     pub fn checkpoint(&self) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         // Same lock as the writers: a checkpoint rewrites the meta page and
         // flushes frames, so running it alongside a `put` mid-split would
         // checkpoint a half-modified tree.
@@ -2715,6 +2772,7 @@ impl PagedStore {
         cursor: PagedCheckpointCursor,
         limits: PagedCheckpointLimits,
     ) -> Result<PagedCheckpointStepReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         cursor.validate()?;
         limits.validate(self.options.page_size)?;
         if cursor.phase == PagedCheckpointPhase::Complete {
@@ -2980,6 +3038,7 @@ impl PagedStore {
         cursor: WritebackCursor,
         limits: WritebackLimits,
     ) -> Result<WritebackStepReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.pool.writeback_step_logged_only(cursor, limits)
     }
 
@@ -3011,6 +3070,7 @@ impl PagedStore {
     /// Return interior free-page bytes to the filesystem; see
     /// [`crate::manager::PageStore::punch_free_pages_bounded`].
     pub fn punch_free_pages(&self, max_pages: u64) -> Result<crate::manager::HolePunchReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.pool.store().punch_free_pages_bounded(max_pages)
     }
 
@@ -3021,6 +3081,7 @@ impl PagedStore {
         max_pages: u64,
         max_read_bytes: u64,
     ) -> Result<Option<crate::FreePageExtents>> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.pool
             .store()
             .free_page_extents(max_pages, max_read_bytes)
@@ -3033,12 +3094,14 @@ impl PagedStore {
         max_read_bytes: u64,
         continue_scan: impl FnMut() -> bool,
     ) -> Result<Option<crate::FreePageExtents>> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.pool
             .store()
             .free_page_extents_while(max_pages, max_read_bytes, continue_scan)
     }
 
     pub fn vacuum(&self, max_pages: usize) -> Result<VacuumReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.vacuum_step(
             VacuumCursor::default(),
             VacuumLimits {
@@ -3059,6 +3122,7 @@ impl PagedStore {
     /// crash before its caller checkpoints the report safely repeats the last
     /// page instead of skipping it.
     pub fn vacuum_step(&self, cursor: VacuumCursor, limits: VacuumLimits) -> Result<VacuumReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         limits.validate(self.pool.page_size())?;
         let started = Instant::now();
         let mut report = self.vacuum_step_with_expiry(cursor, limits, || {
@@ -3071,6 +3135,7 @@ impl PagedStore {
     /// Validate a maintenance envelope against the store's actual durable page
     /// size without beginning a maintenance pass.
     pub fn validate_vacuum_limits(&self, limits: &VacuumLimits) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         limits.validate(self.pool.page_size())
     }
 
@@ -3094,6 +3159,7 @@ impl PagedStore {
         cursor: FreeReclaimCursor,
         limits: FreeReclaimLimits,
     ) -> Result<FreeReclaimReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         limits.validate(self.pool.page_size())?;
         let started = Instant::now();
         let expired = || started.elapsed().as_millis() >= u128::from(limits.max_duration_millis);
@@ -3208,6 +3274,7 @@ impl PagedStore {
 
     /// Validate a free-reclaim envelope without beginning a pass.
     pub fn validate_free_reclaim_limits(&self, limits: &FreeReclaimLimits) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         limits.validate(self.pool.page_size())
     }
 
@@ -3217,6 +3284,7 @@ impl PagedStore {
         limits: VacuumLimits,
         time_exhausted: impl FnMut() -> bool,
     ) -> Result<VacuumReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.guarded_maintenance(|| {
             self.vacuum_step_with_expiry_inner(cursor, limits, time_exhausted)
         })
@@ -3228,6 +3296,7 @@ impl PagedStore {
         limits: VacuumLimits,
         mut time_exhausted: impl FnMut() -> bool,
     ) -> Result<VacuumReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         limits.validate(self.pool.page_size())?;
         // Reclamation rewrites slots and free space, so it is a writer like any
         // other and must not interleave with `put` — or with readers.
@@ -3434,6 +3503,7 @@ impl PagedStore {
     /// can still reach: no previous version, a vacuumed one, or one deleted
     /// for everyone (and so is everything older than it).
     fn nothing_needed_below(&self, prev: Option<TupleLocator>, oldest_active: Xid) -> Result<bool> {
+        let _physical = self.wal.physical_gate().shared()?;
         let Some(prev) = prev else {
             return Ok(true);
         };
@@ -3469,10 +3539,12 @@ impl PagedStore {
     /// interleave, so remove-while-iterating is safe via the two-phase
     /// collect-then-remove below. Returns the number of keys removed.
     pub fn sweep_dead_index_entries(&self, max_keys: usize) -> Result<u64> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.guarded_maintenance(|| self.sweep_dead_index_entries_inner(max_keys))
     }
 
     fn sweep_dead_index_entries_inner(&self, max_keys: usize) -> Result<u64> {
+        let _physical = self.wal.physical_gate().shared()?;
         let _guard = self.write_lock.lock();
         let _structure = self.structure.write();
         // Phase 1: collect removable keys (bounded).
@@ -3522,6 +3594,7 @@ impl PagedStore {
     /// exclusive structure guard still excludes readers, make that replacement
     /// durable before releasing any page from the old overflow chain.
     fn release_retired_overflow_at_boundary(&self) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         let retired = self.heap.take_retired_overflow();
         if retired.is_empty() {
             return Ok(());
@@ -3536,6 +3609,7 @@ impl PagedStore {
     /// Every maintenance mutation must either finish a complete structure,
     /// or fence before a later cut could persist its partial result.
     fn guarded_maintenance<T>(&self, operation: impl FnOnce() -> Result<T>) -> Result<T> {
+        let _physical = self.wal.physical_gate().shared()?;
         let _guard = self.write_lock.lock();
         self.admit_write(0)?;
         let releases = self.pool.write_guard_releases();
@@ -3557,6 +3631,7 @@ impl PagedStore {
     /// (the commit, or a sync for structural images) is in the log; until
     /// then they stay unlogged, so no-steal keeps them out of the page file.
     fn log_dirty_pages(&self, transaction: u64) -> Result<Vec<(PageId, u64)>> {
+        let _physical = self.wal.physical_gate().shared()?;
         let dirty = self.pool.pages_needing_log();
         for &(page_id, _) in &dirty {
             let image = {
@@ -3582,6 +3657,7 @@ impl PagedStore {
     /// with the caller's own durability (the caller syncs, or for a deferred
     /// commit the deferred-commit sync covers it), names an xid above them.
     fn log_xid_floor_above(&self, transaction: Xid) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         // Only writers matter: a live transaction that wrote nothing has no
         // versions in any page, and reusing its xid would expose nothing.
         let highest_live = self.live_writers.lock().iter().next_back().copied();
@@ -3619,6 +3695,7 @@ impl PagedStore {
         transaction: u64,
         extra: &[PageId],
     ) -> Result<Vec<(PageId, u64)>> {
+        let _physical = self.wal.physical_gate().shared()?;
         let mut pages = self.pool.take_pending_frees(transaction);
         pages.extend_from_slice(extra);
         pages.sort_unstable();
@@ -3657,6 +3734,7 @@ impl PagedStore {
 
     /// Publish segments from [`Self::prepare_free_adoption`] in order.
     fn adopt_free_segments(&self, segments: &[(PageId, u64)]) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         for (head, count) in segments {
             self.pool.store().adopt_free_pages(*head, *count)?;
         }
@@ -3669,6 +3747,7 @@ impl PagedStore {
     /// replacing them is durable, but leaving them only in memory until some
     /// later checkpoint would leak space after a clean shutdown.
     fn finalize_structural_frees(&self) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.log_unlogged_pages_as_committed_unit()?;
         let adoption = self.prepare_free_adoption(0, &[])?;
         if !adoption.is_empty() {
@@ -3691,6 +3770,7 @@ impl PagedStore {
     /// `snapshot`, so a long verification pass sees one consistent state rather
     /// than a smear of whatever committed while it ran.
     pub fn scan_from<'a>(&'a self, snapshot: &Snapshot, start: &[u8]) -> Result<PagedScan<'a>> {
+        let _physical = self.wal.physical_gate().shared()?;
         // The initial descent to the start leaf is a structure read.
         let entries = {
             let _structure = self.structure.read();
@@ -3712,6 +3792,7 @@ impl PagedStore {
         start: &[u8],
         max_candidates: usize,
     ) -> Result<PagedLocalityBatch> {
+        let _physical = self.wal.physical_gate().shared()?;
         struct Candidate {
             ordinal: usize,
             key: Vec<u8>,
@@ -3797,6 +3878,7 @@ impl PagedStore {
         snapshot: &Snapshot,
         keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>> {
+        let _physical = self.wal.physical_gate().shared()?;
         struct Candidate {
             ordinal: usize,
             head: Option<TupleLocator>,
@@ -3865,6 +3947,7 @@ impl PagedStore {
         snapshot: &Snapshot,
         bound: Option<&[u8]>,
     ) -> Result<PagedScanRev<'a>> {
+        let _physical = self.wal.physical_gate().shared()?;
         // The initial descent to the bound leaf is a structure read.
         let entries = {
             let _structure = self.structure.read();
@@ -3884,6 +3967,7 @@ impl PagedStore {
         snapshot: &Snapshot,
         start: &[u8],
     ) -> Result<PagedScanHeads<'a>> {
+        let _physical = self.wal.physical_gate().shared()?;
         let entries = {
             let _structure = self.structure.read();
             self.index.range(start)?
@@ -3906,6 +3990,7 @@ impl PagedStore {
         _snapshot: &Snapshot,
         start: &[u8],
     ) -> Result<impl Iterator<Item = Result<Vec<u8>>> + 'a> {
+        let _physical = self.wal.physical_gate().shared()?;
         fn key_only(entry: Result<(Vec<u8>, Vec<u8>)>) -> Result<Vec<u8>> {
             entry.map(|(key, _)| key)
         }
@@ -3927,6 +4012,7 @@ impl PagedStore {
         start: &[u8],
         value_prefix_bytes: usize,
     ) -> Result<VisibleKeyPrefixScan<'a>> {
+        let _physical = self.wal.physical_gate().shared()?;
         let entries = {
             let _structure = self.structure.read();
             self.index.range(start)?
@@ -3941,6 +4027,7 @@ impl PagedStore {
 
     /// A bounded cursor over every visible row.
     pub fn scan<'a>(&'a self, snapshot: &Snapshot) -> Result<PagedScan<'a>> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.scan_from(snapshot, b"")
     }
 
@@ -3950,6 +4037,7 @@ impl PagedStore {
     /// small collections; use [`Self::scan`] for anything whose size is not
     /// known in advance.
     pub fn keys(&self) -> Result<Vec<Vec<u8>>> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.index
             .iter()?
             .map(|entry| entry.map(|(key, _)| key))
@@ -3957,10 +4045,12 @@ impl PagedStore {
     }
 
     pub fn len(&self) -> Result<usize> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.index.len()
     }
 
     pub fn is_empty(&self) -> Result<bool> {
+        let _physical = self.wal.physical_gate().shared()?;
         Ok(self.len()? == 0)
     }
 
@@ -3973,6 +4063,7 @@ impl PagedStore {
     }
 
     pub fn validate_checkpoint_limits(&self, limits: PagedCheckpointLimits) -> Result<()> {
+        let _physical = self.wal.physical_gate().shared()?;
         limits.validate(self.options.page_size)
     }
 
@@ -3988,6 +4079,7 @@ impl PagedStore {
     }
 
     pub fn read_ahead_step(&self, limits: ReadAheadLimits) -> Result<ReadAheadStepReport> {
+        let _physical = self.wal.physical_gate().shared()?;
         self.pool.read_ahead_step(limits)
     }
 
@@ -4003,6 +4095,7 @@ impl PagedStore {
 
     /// Return scrape-safe paged-storage telemetry without walking user data.
     pub fn snapshot(&self) -> Result<PagedStoreSnapshot> {
+        let _physical = self.wal.physical_gate().shared()?;
         let page_store = self.pool.store();
         let page_size = page_store.page_size();
         let page_count = page_store.page_count();
@@ -4120,6 +4213,10 @@ impl Iterator for PagedScan<'_> {
     type Item = Result<(Vec<u8>, Vec<u8>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let _physical = match self.store.wal.physical_gate().shared() {
+            Ok(scope) => scope,
+            Err(error) => return Some(Err(error)),
+        };
         loop {
             // One structure-read acquisition covers both the cursor advance
             // (which may refill from the next leaf — a tree descent) and the
@@ -4188,6 +4285,10 @@ impl VisibleKeyPrefixScan<'_> {
     /// invisible key has `None`. Callers can therefore check cancellation
     /// even across long runs of deleted or uncommitted keys.
     pub fn next_candidate(&mut self) -> Option<Result<(Vec<u8>, Option<Vec<u8>>)>> {
+        let _physical = match self.store.wal.physical_gate().shared() {
+            Ok(scope) => scope,
+            Err(error) => return Some(Err(error)),
+        };
         let _structure = self.store.structure.read();
         let (key, value) = match self.entries.next()? {
             Ok(entry) => entry,
@@ -4209,6 +4310,10 @@ impl Iterator for VisibleKeyPrefixScan<'_> {
     type Item = Result<(Vec<u8>, Vec<u8>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let _physical = match self.store.wal.physical_gate().shared() {
+            Ok(scope) => scope,
+            Err(error) => return Some(Err(error)),
+        };
         loop {
             match self.next_candidate()? {
                 Ok((key, Some(prefix))) => return Some(Ok((key, prefix))),
@@ -4236,6 +4341,10 @@ impl Iterator for PagedScanHeads<'_> {
     type Item = Result<(Vec<u8>, Vec<u8>, TupleLocator, Xid)>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let _physical = match self.store.wal.physical_gate().shared() {
+            Ok(scope) => scope,
+            Err(error) => return Some(Err(error)),
+        };
         loop {
             // Same locking contract as `PagedScan::next` — one structure-read
             // acquisition covers the cursor advance and the chain walk.
@@ -4281,6 +4390,10 @@ impl Iterator for PagedScanRev<'_> {
     type Item = Result<(Vec<u8>, Vec<u8>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let _physical = match self.store.wal.physical_gate().shared() {
+            Ok(scope) => scope,
+            Err(error) => return Some(Err(error)),
+        };
         loop {
             let _structure = self.store.structure.read();
             let (key, value) = match self.entries.next()? {
@@ -4314,6 +4427,10 @@ impl Iterator for KeyScan<'_> {
     type Item = Result<Vec<u8>>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let _physical = match self.store.wal.physical_gate().shared() {
+            Ok(scope) => scope,
+            Err(error) => return Some(Err(error)),
+        };
         let _structure = self.store.structure.read();
         self.keys.next()
     }

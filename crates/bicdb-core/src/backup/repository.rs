@@ -786,11 +786,18 @@ pub(super) fn restore(
     durable_create_dir_all(target)?;
     let mut ownership = RestoreOwnership::acquire(target)?;
     let existing = fs::read_dir(target)?.collect::<std::io::Result<Vec<_>>>()?;
-    if !options.force && existing.iter().any(|e| e.file_name() != "store.lock") {
+    if !options.force
+        && existing.iter().any(|e| {
+            e.file_name() != "store.lock"
+                && e.file_name() != storage::BACKUP_ONLINE_LOCK
+                && e.file_name() != storage::BACKUP_WRITE_GATE
+        })
+    {
         return Err(error(
             "restore target is not empty; pass --force to replace an inactive database",
         ));
     }
+    ownership.enter_physical(target)?;
     let marker = target.join("backup-restore.pending");
     storage::write_atomic(
         &marker,

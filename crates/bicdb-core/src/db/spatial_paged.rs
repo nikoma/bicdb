@@ -560,6 +560,10 @@ impl BicDb {
         demand: ResourceDemand,
         now_ms: u64,
     ) -> Result<CompactionReport> {
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         let permit = governor.try_admit(ResourceLane::Compaction, demand, now_ms)?;
         let result = self.compact_with_options(options);
         drop(permit);
@@ -1027,6 +1031,10 @@ impl BicDb {
     }
 
     pub fn compact_with_options(&mut self, options: CompactionOptions) -> Result<CompactionReport> {
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         let started = Instant::now();
         let pause_started = Instant::now();
         if !options.allow_pending {
@@ -1240,6 +1248,10 @@ impl BicDb {
     }
 
     pub fn compact_collection(&mut self, collection: &str) -> Result<CompactionReport> {
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         self.ensure_no_pending_transactions()?;
         self.ensure_collection(collection)?;
         let started = Instant::now();
@@ -1511,7 +1523,9 @@ impl BicDb {
         // core-committed batches could interleave puts and commits, producing
         // spurious conflicts, orphaned versions, and stubs pinned to
         // transactions that do not contain their own rows.
-        let _guard = paged.write_guard();
+        let _guard = paged
+            .write_guard()
+            .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
         self.check_recovery_state()?;
         // Every page apply uses the same structural admission. The logical
         // decision controls recovery/error handling, never an eviction waiver.
@@ -1680,6 +1694,10 @@ impl BicDb {
     }
 
     pub fn flush(&self) -> Result<()> {
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         if self.config.fsync {
             return Ok(());
         }
@@ -2101,6 +2119,10 @@ impl BicDb {
     }
 
     pub fn close(self) -> Result<()> {
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         self.check_recovery_state()?;
         self.tx_log.flush_pending()?;
         // Paged mode: bound the core transaction log at the session boundary,
@@ -2637,6 +2659,12 @@ impl BicDb {
             .then(|| self.serializable_commit_admission.read());
         let _serializable_exclusive = (tx.isolation == TransactionIsolation::Serializable)
             .then(|| self.serializable_commit_admission.write());
+        // Same order as branch/owned capture: Core admission, root gate, then
+        // page/pool/WAL locks. Still before any sequence or durable decision.
+        let physical_commit = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         self.check_recovery_state()?;
         self.require_enforced_transaction_preflight(tx)?;
         self.validate_transaction_collection_incarnations(tx)?;
@@ -3069,6 +3097,10 @@ impl BicDb {
         // Publish visibility only after this seq's records are fully applied; the
         // watermark advances across the contiguous applied prefix (see above).
         self.mark_committed_seq(commit_seq);
+        // The physical apply/marker cut is complete. Preserve the actual205
+        // outcome/local-completion path below, without holding physical SH
+        // across visibility waits or external/test observation callbacks.
+        drop(physical_commit);
         // Keep row-lock waiters behind the original bounded visibility wait.
         // If it expires, release this finished apply's locks with an uncertain
         // completion; no successful receipt or thread floor is published.

@@ -102,6 +102,14 @@ impl DeferredMaterializer {
     /// Sync the page WAL through every queued commit at or below the applied
     /// watermark, then write their markers. Returns the number written.
     pub(crate) fn materialize(&self) -> Result<u64> {
+        // Before the materializer mutex, page-WAL sync and marker publication.
+        let _physical = self
+            .paged
+            .store()
+            .wal()
+            .physical_gate()
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         let _pass = self.pass.lock();
         self.passes.fetch_add(1, AtomicOrdering::Relaxed);
         let watermark = self.applied_watermark.load(AtomicOrdering::SeqCst);

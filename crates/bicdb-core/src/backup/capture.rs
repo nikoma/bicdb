@@ -250,6 +250,13 @@ pub(crate) fn capture(
         format::enable_online_backup_extent_tracking(root)?;
     }
     owner.acquire_snapshot_gate(root)?;
+    // Borrow the actual EX before entering any Page lock. Reentrant physical
+    // writes retain its descriptor rather than trying to acquire SH under EX.
+    let physical_cut = owner
+        .snapshot_gate
+        .as_ref()
+        .ok_or_else(|| error("online backup lost actual physical gate"))?
+        .borrow()?;
     // Holding the stable owner lock proves that no prior process still owns
     // these transient before-images. A crash never makes them recovery data.
     for entry in fs::read_dir(root)? {
@@ -326,6 +333,7 @@ pub(crate) fn capture(
     }
     // The owner lock prevents another backup, but copying needs no physical
     // write exclusion. Release this before returning to the host.
+    drop(physical_cut);
     drop(owner.snapshot_gate.take());
     Ok(OnlineBackupSnapshot {
         source_id,

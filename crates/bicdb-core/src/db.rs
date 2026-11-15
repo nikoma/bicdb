@@ -2,6 +2,8 @@ mod access_mutation;
 mod branching;
 mod catalog_admission;
 mod collection_rename;
+#[cfg(test)]
+mod commit_visibility_tests;
 pub use catalog_admission::{
     CatalogCreatedCollectionUndo, CatalogReadAccess, CatalogScopeAccess, CatalogScopeToken,
 };
@@ -4091,6 +4093,9 @@ impl PagedReadAheadHandle {
 #[derive(Debug)]
 pub struct BicDb {
     path: PathBuf,
+    // Actual immutable gate identity retained for this open, including memory
+    // mode. Later calls cannot silently enroll a replacement inode.
+    physical_gate: bicdb_page::physical_gate::PhysicalGate,
     /// Fail-closed durability state, shared with the transaction log and the
     /// page store. The first durability-critical write or sync failure, or a
     /// durable decision whose materialization failed, moves it to
@@ -10857,6 +10862,15 @@ impl BicDb {
                 path.display()
             ))
         })?;
+        // Acquire before any recovery or physical lock. Initialization alone
+        // cannot enroll an older live writer: DirectoryLock is held here and
+        // the mandatory FORMAT capability is made durable below.
+        storage::initialize_backup_write_gate(&path)?;
+        let physical_gate = bicdb_page::physical_gate::PhysicalGate::at_root(&path)
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
+        let _physical_open = physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         native_origin::complete_authorized_restore(&path, &directory_lock)?;
         let native_origin = native_origin::load_active(&path, &directory_lock)?;
         // A core fence protects raw SQL and every other opener, not merely the
@@ -10890,6 +10904,7 @@ impl BicDb {
         // Format migration and cleanup can write. Do them only after ownership
         // and the restore marker have been checked under the directory lock.
         format::ensure_open_compatible_in_mode(&path, config.fsync, effective_mode.clone())?;
+        format::enable_physical_backup_gate(&path)?;
         fs::create_dir_all(path.join(DEFAULT_SEGMENTS_DIR))?;
         // This inode must exist before recovery or any foreground append. A
         // backup takes it exclusively while every physical writer holds it
@@ -11857,6 +11872,7 @@ impl BicDb {
             _ => None,
         };
         let mut db = Self {
+            physical_gate,
             path,
             durability: durability.clone(),
             incarnation: incarnation.clone(),
@@ -14634,6 +14650,10 @@ impl BicDb {
     }
 
     pub(super) fn drop_collection_inner(&mut self, name: &str) -> Result<bool> {
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         validate_collection_name(name)?;
         if !self.collections.contains_key(name) {
             return Ok(false);
@@ -22589,7 +22609,9 @@ fn apply_unmaterialized_transaction_log(
             // the live commit path.
             let paged_ctx = match paged {
                 Some(paged) => {
-                    let _guard = paged.write_guard();
+                    let _guard = paged
+                        .write_guard()
+                        .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
                     // Logical replay uses the same structural admission as
                     // every writer; durable redo never grants a steal waiver.
                     let (xid, _) = paged.begin();

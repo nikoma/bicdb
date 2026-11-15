@@ -1074,6 +1074,10 @@ impl BicDb {
         trusted_keys: &BTreeMap<String, [u8; 32]>,
         limits: ClusterSchemaStageLimits,
     ) -> Result<bool> {
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         let path = self.path.join(DEFAULT_CLUSTER_SCHEMA_STAGE);
         if !path.exists() {
             return Ok(false);
@@ -1359,6 +1363,10 @@ impl BicDb {
         trusted_keys: &BTreeMap<String, [u8; 32]>,
         limits: ClusterSchemaActivationLimits,
     ) -> Result<bool> {
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         let path = self.path.join(DEFAULT_CLUSTER_SCHEMA_ACTIVATION);
         if !path.exists() {
             return Ok(false);
@@ -1537,6 +1545,10 @@ impl BicDb {
         trusted_keys: &BTreeMap<String, [u8; 32]>,
         limits: ClusterSchemaActivationLimits,
     ) -> Result<()> {
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         let activation_path = self.path.join(DEFAULT_CLUSTER_SCHEMA_ACTIVATION);
         let stage_path = self.path.join(DEFAULT_CLUSTER_SCHEMA_STAGE);
         if path_entry_exists(&activation_path)? {

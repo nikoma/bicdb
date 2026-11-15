@@ -2431,6 +2431,10 @@ impl BicDb {
     const MIN_COMPACT_FRAMES: u64 = 256;
 
     pub fn checkpoint_begin(&self) -> Result<CheckpointPlan> {
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         self.check_recovery_state()?;
         self.tx_log.flush_pending()?;
         let keep_from = self.wal_bytes();
@@ -2487,6 +2491,10 @@ impl BicDb {
     /// the write is atomic (append fsync, or rewrite temp + rename), so a crash
     /// leaves a complete old or new segment.
     pub fn checkpoint_write_segments(&self, plan: &CheckpointPlan) -> Result<()> {
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         // The fuzzy checkpoint advances segments past the last full-compact snapshot,
         // so that binary snapshot is now stale. Drop its commit marker; the next open
         // falls back to segments until a full `compact` re-publishes a fresh snapshot.
@@ -2666,6 +2674,10 @@ impl BicDb {
     /// [`Self::checkpoint_truncate_wal`] for callers that exclude committers
     /// through the commit gate instead of `&mut self`.
     fn truncate_checkpointed_wal(&self, keep_from_offset: u64) -> Result<(u64, u64)> {
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         let before = self.wal_bytes();
         // Catalog/index catalog must be durable and consistent with the segments
         // before we drop the log frames that would otherwise re-create them.
@@ -2755,6 +2767,10 @@ impl BicDb {
         event_log_bytes_before: u64,
         sync_log_bytes_before: u64,
     ) -> Result<()> {
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         let now = unix_timestamp();
         let manifest = CompactionCheckpointManifest {
             checkpoint_id: checkpoint_id.to_string(),
@@ -2789,6 +2805,10 @@ impl BicDb {
         &mut self,
         collection: &str,
     ) -> Result<CollectionCompactionReport> {
+        let _physical = self
+            .physical_gate
+            .shared()
+            .map_err(|e| BicDbError::Backup(e.to_string()))?;
         // In paged mode segments carry no rows, so there is nothing to rewrite —
         // and rewriting would serialize every row back INTO a segment, quietly
         // re-creating the on-disk duplication this mode exists to end. The page

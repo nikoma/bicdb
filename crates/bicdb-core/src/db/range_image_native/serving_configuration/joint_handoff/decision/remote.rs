@@ -491,7 +491,9 @@ impl BicDb {
                 .paged_records
                 .as_ref()
                 .ok_or_else(|| invalid("remote DECISION native page store absent"))?;
-            let _writer = paged.write_guard();
+            let _writer = paged
+                .write_guard()
+                .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
             self.require_registered_joint_decision_storage_healthy()?;
             admission.require_memory_current()?;
             let (xid, _) = paged.begin();

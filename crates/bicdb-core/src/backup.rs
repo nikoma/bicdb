@@ -413,6 +413,8 @@ const NODE_LOCAL_FILES: &[&str] = &[
 pub(crate) fn copy_open_database_files(db_path: &Path, target: &Path, fsync: bool) -> Result<()> {
     let mut checkpoint = OnlineBackupCheckpoint::begin_open_database(db_path)?;
     checkpoint.acquire_snapshot_gate(db_path)?;
+    let mut target_owner = RestoreOwnership::acquire(target)?;
+    target_owner.enter_physical(target)?;
     for file in collect_source_files(db_path, None)? {
         let relative = file.entry.path.as_str();
         if NODE_LOCAL_FILES.contains(&relative) {
@@ -858,6 +860,7 @@ pub fn restore_backup(
         )));
     }
 
+    ownership.enter_physical(target_path)?;
     let marker = target_path.join("backup-restore.pending");
     storage::write_atomic(
         &marker,
@@ -1217,6 +1220,10 @@ fn write_streaming_backup<W: Write>(
         recovery,
     };
     verify_archive_header(&archive_header)?;
+    #[cfg(test)]
+    if matches!(mode, BackupSourceMode::Standard) {
+        legacy_standard_observation::after_manifest(db_path, &archive_header.manifest)?;
+    }
 
     let mut salt = [0_u8; SALT_LEN];
     let mut nonce_prefix = [0_u8; NONCE_PREFIX_LEN];
@@ -2264,13 +2271,18 @@ impl OnlineBackupCheckpoint {
         // supply its own protocol; Standard still refuses a changed file.
         match BicDb::open_with_config(db_path, config_for(db_path)?) {
             Ok(db) => db.flush()?,
-            Err(error) if already_open(&error) => {}
+            Err(error) if already_open(&error) => {
+                // A marker alone cannot make a running old writer obey SH.
+                // Closed legacy roots are enrolled by the successful open above.
+                format::require_physical_backup_gate(db_path)?;
+            }
             Err(error) => return Err(error),
         }
         Ok(checkpoint)
     }
 
     pub(crate) fn begin_open_database(db_path: &Path) -> Result<Self> {
+        format::require_physical_backup_gate(db_path)?;
         let path = db_path.join(storage::BACKUP_ONLINE_LOCK);
         let mut lock_file = open_backup_lock_file(&path)?;
         lock_file.set_len(0)?;
@@ -2290,6 +2302,13 @@ impl OnlineBackupCheckpoint {
             ));
         }
         self.snapshot_gate = Some(storage::acquire_database_backup_exclusive_guard(db_path)?);
+        // Recheck at the actual EX cut. A Core FORMAT flag can have become
+        // durable before an attempted open failed against an old Page owner.
+        format::require_physical_backup_gate(db_path)?;
+        if format::storage_mode(db_path)? == format::StorageMode::ServerPaged {
+            bicdb_page::manager::require_physical_gate_profile(&db_path.join("paged/store.pages"))
+                .map_err(|e| BicDbError::Backup(e.to_string()))?;
+        }
         Ok(())
     }
 }
@@ -2744,7 +2763,11 @@ fn target_has_entries(path: &Path) -> Result<bool> {
         return Ok(false);
     }
     for entry in fs::read_dir(path)? {
-        if entry?.file_name() != "store.lock" {
+        let name = entry?.file_name();
+        if name != "store.lock"
+            && name != storage::BACKUP_ONLINE_LOCK
+            && name != storage::BACKUP_WRITE_GATE
+        {
             return Ok(true);
         }
     }
@@ -3144,6 +3167,8 @@ fn runtime_lock_path(path: &str) -> bool {
 /// Both root and child store ownership matter: a narrow storage handle can
 /// keep the child engine alive after its enclosing BicDb has been dropped.
 struct RestoreOwnership {
+    physical: Option<storage::BackupWriteGuard>,
+    _backup_owner: File,
     _root: bicdb_page::DirectoryLock,
     paged: Option<bicdb_page::DirectoryLock>,
 }
@@ -3151,7 +3176,12 @@ impl RestoreOwnership {
     fn acquire(root: &Path) -> Result<Self> {
         let root_lock = bicdb_page::DirectoryLock::acquire(root)
             .map_err(|e| BicDbError::Backup(e.to_string()))?;
+        // Exclude an active physical backup too. Only this actual closed
+        // target owner may initialize the archive-omitted gate inode.
+        let backup_owner = open_backup_lock_file(&root.join(storage::BACKUP_ONLINE_LOCK))?;
         let mut ownership = Self {
+            physical: None,
+            _backup_owner: backup_owner,
             _root: root_lock,
             paged: None,
         };
@@ -3162,6 +3192,18 @@ impl RestoreOwnership {
             Err(e) => return Err(e.into()),
         }
         Ok(ownership)
+    }
+    fn enter_physical(&mut self, root: &Path) -> Result<()> {
+        if self.physical.is_none() {
+            // Only this actual closed-target owner may initialize an inode
+            // omitted from an authenticated archive. Generic opens do not.
+            self.physical = Some(
+                bicdb_page::physical_gate::PhysicalGate::at_root(root)
+                    .and_then(|gate| gate.shared())
+                    .map_err(|e| BicDbError::Backup(e.to_string()))?,
+            );
+        }
+        Ok(())
     }
     fn ensure_paged(&mut self, root: &Path) -> Result<()> {
         if self.paged.is_none() {
@@ -3187,13 +3229,20 @@ fn remove_restore_entry(path: &Path) -> Result<()> {
 fn clear_restore_payloads(root: &Path) -> Result<()> {
     for entry in fs::read_dir(root)? {
         let entry = entry?;
-        if entry.file_name() == "store.lock" || entry.file_name() == "backup-restore.pending" {
+        if entry.file_name() == "store.lock"
+            || entry.file_name() == "backup-restore.pending"
+            || entry.file_name() == storage::BACKUP_WRITE_GATE
+            || entry.file_name() == storage::BACKUP_ONLINE_LOCK
+        {
             continue;
         }
         if entry.file_name() == "paged" && entry.file_type()?.is_dir() {
             for child in fs::read_dir(entry.path())? {
                 let child = child?;
-                if child.file_name() != "store.lock" {
+                if child.file_name() != "store.lock"
+                    && child.file_name() != storage::BACKUP_WRITE_GATE
+                    && child.file_name() != storage::BACKUP_ONLINE_LOCK
+                {
                     remove_restore_entry(&child.path())?;
                 }
             }
@@ -3202,4 +3251,63 @@ fn clear_restore_payloads(root: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// One-shot passive Standard manifest observation; the original gate remains
+/// held by write_streaming_backup. No owned capture or fuzzy mode is selected.
+#[cfg(test)]
+pub(crate) mod legacy_standard_observation {
+    use super::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    #[derive(Clone, Debug)]
+    pub(crate) struct Observation {
+        pub(crate) root: PathBuf,
+        pub(crate) manifest_sha256: String,
+        pub(crate) page_wal: Option<(u64, String, bool)>,
+    }
+    type Callback = Box<dyn FnOnce(Observation) -> Result<()>>;
+    struct Selected {
+        root: PathBuf,
+        callback: Callback,
+    }
+    thread_local! { static SELECTED: RefCell<Option<Selected>> = const { RefCell::new(None) }; }
+    struct SelectedGuard(std::marker::PhantomData<Rc<()>>);
+    impl Drop for SelectedGuard {
+        fn drop(&mut self) {
+            SELECTED.with(|slot| {
+                slot.borrow_mut().take();
+            });
+        }
+    }
+    pub(crate) fn arm(root: &Path, callback: Callback) -> Result<impl Drop> {
+        let root = root.canonicalize()?;
+        SELECTED.with(|slot| {
+            assert!(
+                slot.borrow().is_none(),
+                "actual Standard manifest observer already armed"
+            );
+            *slot.borrow_mut() = Some(Selected { root, callback });
+        });
+        Ok(SelectedGuard(std::marker::PhantomData))
+    }
+    pub(super) fn after_manifest(root: &Path, manifest: &BackupManifest) -> Result<()> {
+        let selected = SELECTED.with(|slot| {
+            let mut selected = slot.borrow_mut();
+            if selected.as_ref().is_some_and(|s| s.root == root) {
+                selected.take()
+            } else {
+                None
+            }
+        });
+        if let Some(selected) = selected {
+            let wal = manifest.files.iter().find(|f| f.path == "paged/store.wal");
+            (selected.callback)(Observation {
+                root: root.to_path_buf(),
+                manifest_sha256: manifest.manifest_hash.clone(),
+                page_wal: wal.map(|f| (f.size, f.sha256.clone(), f.fuzzy)),
+            })?;
+        }
+        Ok(())
+    }
 }

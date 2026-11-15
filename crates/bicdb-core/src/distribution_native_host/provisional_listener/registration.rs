@@ -603,6 +603,21 @@ impl NativeMetadataControlHost {
         step.require_live()?;
         Ok(result)
     }
+    /// This host's own write coordinator, when it is an open INITIAL DATA
+    /// owner: the one that admits the writes of the ranges this node leads.
+    pub(in crate::distribution_native_host) fn initial_range_write_coordinator(
+        &self,
+    ) -> Option<
+        Arc<
+            crate::distribution_range_consensus::RangeWriteCoordinator<
+                TcpClusterRelocationTransport,
+            >,
+        >,
+    > {
+        self.data
+            .as_ref()
+            .and_then(|data| data.range_write_coordinator())
+    }
     pub(crate) fn bind_initial_image_source_process(
         &self,
         process: &CancellationToken,

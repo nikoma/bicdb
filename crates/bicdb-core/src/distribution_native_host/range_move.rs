@@ -679,14 +679,23 @@ impl NativeRangeMoveSlot<RemoteJoinedHandoffBackend> {
         // This node's own data service: the move retires this node's own
         // replica, and a node never sends a step request to itself.
         let service = hosts.local_service();
+        // This node's own write coordinator: the coordinator of a move leads
+        // the moved range, and the learner allocation is proposed under its
+        // admission hold of that range.
+        let writer = control.initial_range_write_coordinator();
         let remote = target.clone();
         Self::start_with(
             hosts,
             range,
             target,
             Box::new(move || {
-                RemoteJoinedHandoffBackend::new(remote.clone(), Arc::clone(&transport))
-                    .with_local_service(Arc::clone(&service))
+                let backend =
+                    RemoteJoinedHandoffBackend::new(remote.clone(), Arc::clone(&transport))
+                        .with_local_service(Arc::clone(&service));
+                match &writer {
+                    Some(writer) => backend.with_local_writer(Arc::clone(writer)),
+                    None => backend,
+                }
             }),
         )
     }

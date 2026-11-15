@@ -332,6 +332,20 @@ impl NativeInitialDataHost {
             .ok_or_else(|| invalid("published DATA host lost retained maintenance owner"))?
             .start(process)
     }
+    /// The write coordinator of the ranges this open DATA owner leads.
+    pub(super) fn range_write_coordinator(
+        &self,
+    ) -> Option<
+        Arc<
+            crate::distribution_range_consensus::RangeWriteCoordinator<
+                TcpClusterRelocationTransport,
+            >,
+        >,
+    > {
+        self.enrollment
+            .as_ref()
+            .map(|enrollment| Arc::clone(&enrollment.coordinator))
+    }
     pub(super) fn is_running(&self) -> bool {
         // A failed finite drain retains the owner/handle for retry, but must
         // not let the CLI restart a metadata supervisor on a stopping socket.
@@ -1415,6 +1429,15 @@ impl NativeMetadataControlHost {
             data.runtime.as_ref().unwrap().clone(),
             data.initial.transport.clone(),
         ))
+    }
+    /// One attempt of the hot DATA maintenance on the calling thread. No
+    /// process worker is bound or started.
+    pub(crate) fn test_hot_recovery_attempt(&self, parent: &CancellationToken) -> Result<()> {
+        self.data
+            .as_ref()
+            .and_then(|d| d.hot_recovery.as_ref())
+            .ok_or_else(|| invalid("published DATA host has no hot maintenance owner"))?
+            .tick(parent)
     }
     pub(crate) fn test_hot_worker_started(&self) -> bool {
         self.data

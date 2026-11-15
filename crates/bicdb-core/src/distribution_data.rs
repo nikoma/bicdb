@@ -2040,8 +2040,9 @@ impl ClusterDataNodeService {
         Ok(self.range_writes.progress(range.id))
     }
 
-    /// The durable epoch of this voter's own range log, and whether its
-    /// database holds an unfinished native command of the range, answered to
+    /// The durable epoch of this voter's own range log, whether its database
+    /// holds an unfinished native command of the range, and whether its
+    /// range catalogue holds an unfinished normal recovery of it, answered to
     /// the leader of `range` (the caller's descriptor is this member's own
     /// published committed one). Read-only: unlike
     /// `range_write_progress_for_peer` it does not require the installed
@@ -2051,7 +2052,7 @@ impl ClusterDataNodeService {
         &self,
         range: &RangeDescriptor,
         caller: &ClusterNodeId,
-    ) -> Result<(u64, bool)> {
+    ) -> Result<(u64, bool, bool)> {
         self.require_catalog_storage_policy()?;
         if &range.leader != caller {
             return Err(data_error(format!(
@@ -2075,6 +2076,7 @@ impl ClusterDataNodeService {
         Ok((
             self.range_writes.progress(range.id).current_epoch,
             unfinished,
+            self.range_writes.normal_recovery_unfinished(range.id),
         ))
     }
 

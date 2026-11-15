@@ -285,6 +285,29 @@ pub(crate) trait JoinedHandoffBackend {
     ) -> Result<()> {
         Ok(())
     }
+    /// Called immediately before the learner allocation of `range` is
+    /// proposed, with nothing committed for the move. A backend whose
+    /// coordinator leads the range makes sure here that no write command of
+    /// the range straddles the commit; an error ends the call with nothing
+    /// committed. `after_allocation` follows every successful call.
+    fn before_allocation(
+        &mut self,
+        _hosts: &mut Self::Hosts,
+        _range: &RangeDescriptor,
+        _parent: &CancellationToken,
+    ) -> Result<()> {
+        Ok(())
+    }
+    /// The commit attempt that followed `before_allocation` is over.
+    /// `range` is the descriptor before the allocation; `committed` is false
+    /// when the proposal failed or its outcome is not known.
+    fn after_allocation(
+        &mut self,
+        _range: &RangeDescriptor,
+        _committed: bool,
+        _parent: &CancellationToken,
+    ) {
+    }
     /// Resolve the participating members of the committed relocation.
     fn members(
         &self,
@@ -691,10 +714,15 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
         // Step 2: the committed learner allocation.
         if self.relocation(&topology).is_none() {
             let candidate = plan_learner_allocation(&topology, self.range, &self.target)?;
+            let before = self.range(&topology)?;
+            self.backend
+                .before_allocation(hosts, &before, parent)
+                .map_err(|error| stage_error("learner allocation", error))?;
             let started = Instant::now();
-            hosts
-                .commit_topology(candidate, parent)
-                .map_err(|error| stage_error("learner allocation commit", error))?;
+            let committed = hosts.commit_topology(candidate, parent);
+            self.backend
+                .after_allocation(&before, committed.is_ok(), parent);
+            committed.map_err(|error| stage_error("learner allocation commit", error))?;
             trace(started, || "learner allocation commit".into());
             topology = hosts.committed_topology()?;
         }

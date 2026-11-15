@@ -221,27 +221,41 @@ impl NativeMetadataControlHost {
             let mut store = backend.lock_metadata(&token)?;
             store.require_listener_database(&open)?;
             store.require_native_control_leader(&fresh, fresh_business)?;
-            point.require_current_memory()?;
-            proof.require_current()?;
-            token.check()?;
-            // Exact intent and actual next position BEFORE propose can mutate
-            // or persist. An error retains this candidate and forbids new one.
+            // Complete allocation and position calculation BEFORE the final
+            // fresh request/point check. Actual candidate/position are then
+            // retained without a fallible gap before the existing proposal.
             let status = store.status();
-            original.expected_proposal = Some((
+            let expected = (
                 status.current_term,
                 status
                     .last_log_index
                     .checked_add(1)
                     .ok_or_else(|| invalid("FIRST metadata proposal index overflow"))?,
-            ));
-            original.candidate = Some(candidate.clone());
-            let result = store.propose_topology(candidate);
-            original.actual_proposal_return = Some(
-                serde_json::json!({"returned_ok":result.is_ok(),"entry":result.as_ref().ok(),
-                "error":result.as_ref().err().map(crate::distribution_native_host::remote_first::error_data)}),
             );
-            let entry = result?;
-            original.proposal = Some(entry);
+            let retained_candidate = candidate.clone();
+            point.require_current_memory()?;
+            proof.require_current()?;
+            token.check()?;
+            original.expected_proposal = Some(expected);
+            original.candidate = Some(retained_candidate);
+            let result = store.propose_topology(candidate);
+            match result {
+                Ok(entry) => {
+                    // Retain the actual typed successful return BEFORE even
+                    // allocating diagnostic JSON or any later postcheck.
+                    original.proposal = Some(entry);
+                    original.actual_proposal_return = Some(serde_json::json!({
+                        "returned_ok":true,"entry":original.proposal,"error":null
+                    }));
+                }
+                Err(error) => {
+                    original.actual_proposal_return = Some(serde_json::json!({
+                        "returned_ok":false,"entry":null,
+                        "error":crate::distribution_native_host::remote_first::error_data(&error)
+                    }));
+                    return Err(error);
+                }
+            }
             let entry = original.proposal.as_ref().unwrap();
             if Some((entry.term, entry.index)) != original.expected_proposal {
                 return Err(invalid("FIRST actual proposal changed retained term/index"));

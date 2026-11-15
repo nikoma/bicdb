@@ -116,6 +116,22 @@ impl NativeJointHandoffStepOperationV1 {
             | Self::BridgePhaseObserve { .. } => None,
         }
     }
+    /// Short name for diagnostic text.
+    pub(crate) fn trace_name(&self) -> &'static str {
+        match self {
+            Self::TargetInstall { .. } => "target-install",
+            Self::SourceExportRetire { .. } => "source-export-retire",
+            Self::BridgePrepare { .. } => "prepare",
+            Self::BridgePublish { .. } => "publish",
+            Self::BridgeOpen { .. } => "open",
+            Self::BridgePhaseObserve { .. } => "observe",
+            Self::RetireOldCustody { .. } => "retire-old-custody",
+            Self::BridgeRelease { .. } => "release",
+            Self::BridgeWriterPolicy { .. } => "writer-policy",
+            Self::TargetServe { .. } => "target-serve",
+            Self::SourceRetire { .. } => "source-retire",
+        }
+    }
     /// The committed decision a bridge operation is bound to; `None` for the
     /// operations that run against the Pending plan before any decision.
     pub(crate) fn bridge_decision_sha256(&self) -> Option<&str> {

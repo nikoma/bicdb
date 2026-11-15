@@ -19,7 +19,20 @@ use std::time::Duration;
 
 /// A further sub-step starts only with this much of the request left. The
 /// first sub-step of a call always runs so every call can make progress.
-pub(super) const MIN_BRIDGE_SUBSTEP_BUDGET: Duration = Duration::from_millis(1500);
+///
+/// The receiver's deadline is the smaller of the request's own budget and
+/// the listener's I/O timeout, which the operator hosts set to 2 s. The
+/// first sub-step of a publication, Open, release or writer policy (own
+/// metadata, one observation of every other member, the durable write) was
+/// measured at 0.5 to 0.65 s between five processes and its confirmation
+/// window at about 0.25 s. With the former 1.5 s the confirmation window
+/// started only when the first sub-step had finished within 0.5 s: a member
+/// that needed 0.52 s answered "not complete" on every repetition (23 in a
+/// row, 18 s, in one measured move). 750 ms leaves the first sub-step 1.25 s
+/// of a 2 s deadline and the confirmation window three times its measured
+/// time. A window that still runs out fails closed as before: the durable
+/// state exists, nothing is reported, and the same step is repeated.
+pub(super) const MIN_BRIDGE_SUBSTEP_BUDGET: Duration = Duration::from_millis(750);
 
 /// One member's retained bridge custody for one range. Created by the first
 /// authorised `BridgePrepare` and kept by the member's own host: the later
@@ -867,6 +880,9 @@ pub(super) fn publish_member_bridge(
             "NATIVE_BRIDGE_PUBLISH_UNCONFIRMED node={} error={_error}",
             custody.local_node_id()
         );
+        crate::distribution_native_host::range_move_trace(Instant::now(), || {
+            format!("member step PUBLISH second window unconfirmed: {_error}")
+        });
         return Ok((incomplete(), anchor));
     }
     {
@@ -1033,6 +1049,9 @@ pub(super) fn open_member_bridge(
             "NATIVE_BRIDGE_OPEN_UNCONFIRMED node={} error={_error}",
             custody.local_node_id()
         );
+        crate::distribution_native_host::range_move_trace(Instant::now(), || {
+            format!("member step OPEN second window unconfirmed: {_error}")
+        });
         return Ok((incomplete(), anchor));
     }
     // This member's own release continuation entry, from the real freeze
@@ -1270,6 +1289,9 @@ pub(super) fn release_member_bridge(
                     "NATIVE_BRIDGE_RELEASE_UNCONFIRMED node={} error={_error}",
                     release.local_node_id()
                 );
+                crate::distribution_native_host::range_move_trace(Instant::now(), || {
+                    format!("member step RELEASE second window unconfirmed: {_error}")
+                });
                 return Ok((incomplete(), anchor));
             }
         };
@@ -1554,6 +1576,12 @@ pub(super) fn publish_member_writer_policy(
         Ok(after) if after == generation && published()? => {}
         _result => {
             // Fail closed: the durable policy exists but is not reported.
+            crate::distribution_native_host::range_move_trace(Instant::now(), || {
+                format!(
+                    "member step WRITER_POLICY second window unconfirmed: {:?}",
+                    _result.as_ref().map_err(|error| error.to_string())
+                )
+            });
             #[cfg(test)]
             eprintln!(
                 "NATIVE_BRIDGE_WRITER_POLICY_UNCONFIRMED node={} result={:?}",

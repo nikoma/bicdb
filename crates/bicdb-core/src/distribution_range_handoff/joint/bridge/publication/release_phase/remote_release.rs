@@ -19,6 +19,10 @@ use crate::distribution_transport::TcpClusterRelocationTransport;
 mod remote_policy;
 pub(super) use remote_policy::RemotePolicyBacking;
 
+/// How long a release observation waits for this member's own data service
+/// to read its durable activation before it answers "busy".
+const RELEASE_FACT_SERVICE_WAIT: std::time::Duration = std::time::Duration::from_millis(200);
+
 /// The real freeze owner this member retained for its own release.
 pub(crate) enum NativeJointMemberReleaseOwner {
     /// A surviving original member: the runtime that owns its OLD freeze.
@@ -456,10 +460,20 @@ impl NativeJointMemberRelease {
         let member = self.member();
         let activation_sha256 = evidence.activation().activation_sha256()?;
         // The durable catalogue fact, re-read from this member's own store.
+        // Once the range serves again, ordinary client requests hold this
+        // member's data service for the time of one apply. This read was
+        // the most frequent "busy" refusal of a release observation under
+        // client traffic, and a refused observation fails the whole window
+        // of whoever observes. It therefore waits, bounded, instead of
+        // refusing at once. This member's data service is not held here
+        // (the lock is not reentrant and is taken on the next line), no
+        // network request is made while waiting, and the wait is bounded,
+        // so a holder that in turn needed something of this caller would
+        // delay it by the bound and never block it.
         let durable = {
             let service = member
                 .service
-                .try_lock()
+                .try_lock_for(RELEASE_FACT_SERVICE_WAIT)
                 .ok_or_else(|| invalid("release phase durable activation service busy"))?;
             service.durable_native_joint_activation_sha256(member.native.clone())?
         };

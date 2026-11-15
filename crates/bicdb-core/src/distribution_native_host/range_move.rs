@@ -32,7 +32,11 @@
 //! Scheduling. `NativeRangeMoveSlot` runs each step on its own owned worker
 //! thread with its own budget, because one stage (the image transfer) cannot
 //! be cut into supervisor-sized pieces: the process loop only starts a step
-//! when none is in flight and never waits for it.
+//! when none is in flight and never waits for it. The loop starts a step on
+//! its supervisor tick; after a step that completed its stage it starts the
+//! next one at once (`step_due`), because between the source cut and the
+//! target's serving the range is unavailable and a tick per stage only adds
+//! to that. A blocked, waiting or paused move keeps the tick and its backoff.
 use super::joined_data_handoff::{
     plan_learner_allocation, JoinedHandoffBackend, JoinedHandoffMetadataHosts,
     NativeJoinedDataHandoff, NativeJoinedDataHandoffStage as Stage, RemoteJoinedHandoffBackend,
@@ -473,9 +477,20 @@ where
             self.blocked("route confirmation", error);
             return;
         }
+        let started = Instant::now();
         let driven = self
             .driver()
             .drive_until(hosts.metadata(), Some(next), parent);
+        super::joined_data_handoff::trace(started, || {
+            format!(
+                "step to {} -> {}",
+                stage_name(next),
+                match &driven {
+                    Ok(stage) => format!("reached {}", stage_name(*stage)),
+                    Err(error) => format!("error {error}"),
+                }
+            )
+        });
         match driven {
             Ok(stage) => {
                 self.reached = Some(self.reached.map_or(stage, |reached| reached.max(stage)));
@@ -745,6 +760,26 @@ where
         self.worker = Some(worker);
         self.step = Some(token);
         Ok(())
+    }
+    /// True when no step is in flight and the last one completed its stage:
+    /// the next stage has nothing to wait for, so the process loop may start
+    /// it at once instead of on its next supervisor tick. A blocked, waiting
+    /// or paused move keeps the tick cadence and its backoff.
+    pub(crate) fn step_due(&self) -> bool {
+        if self
+            .worker
+            .as_ref()
+            .is_some_and(|worker| !worker.is_finished())
+        {
+            return false;
+        }
+        let status = self.published.lock();
+        !status.completed
+            && !status.aborted
+            && status.stage.is_some()
+            && status.last_error.is_none()
+            && status.waiting.is_none()
+            && status.paused.is_none()
     }
     /// Wait for the step in flight, bounded by `parent`.
     pub(crate) fn wait_step(&mut self, parent: &CancellationToken) -> Result<()> {

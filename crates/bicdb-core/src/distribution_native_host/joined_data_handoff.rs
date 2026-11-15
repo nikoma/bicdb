@@ -107,6 +107,23 @@ fn stage_error(stage: &str, error: BicDbError) -> BicDbError {
 fn bounded(parent: &CancellationToken, budget: Duration) -> CancellationToken {
     parent.child_with_deadline(Instant::now() + budget)
 }
+/// Operator diagnosis of where a move spends its time: one line per timed
+/// part on the host's standard error when `BICDB_RANGE_MOVE_TRACE` is set.
+/// Diagnostic text only; nothing reads it back.
+pub(crate) fn trace_enabled() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("BICDB_RANGE_MOVE_TRACE").is_some())
+}
+pub(crate) fn trace(started: Instant, what: impl FnOnce() -> String) {
+    if trace_enabled() {
+        eprintln!(
+            "RANGE_MOVE_TRACE unix_ms={} took_ms={} {}",
+            now_ms(),
+            started.elapsed().as_millis(),
+            what()
+        );
+    }
+}
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -674,9 +691,11 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
         // Step 2: the committed learner allocation.
         if self.relocation(&topology).is_none() {
             let candidate = plan_learner_allocation(&topology, self.range, &self.target)?;
+            let started = Instant::now();
             hosts
                 .commit_topology(candidate, parent)
                 .map_err(|error| stage_error("learner allocation commit", error))?;
+            trace(started, || "learner allocation commit".into());
             topology = hosts.committed_topology()?;
         }
         let mut relocation = self
@@ -781,6 +800,7 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
         parent: &CancellationToken,
     ) -> Result<()> {
         let actor = hosts.metadata_leader()?;
+        let started = Instant::now();
         let NativeJoinedDataPlanningView {
             mut view,
             fresh,
@@ -788,12 +808,25 @@ impl<B: JoinedHandoffBackend> NativeJoinedDataHandoff<B> {
         } = hosts
             .planning_view(&bounded(parent, REQUEST))
             .map_err(|error| stage_error("membership planning view", error))?;
+        trace(started, || {
+            format!("membership {committed:?} planning view")
+        });
         let now = now_ms();
+        let started = Instant::now();
         self.backend
             .stage_candidate(committed, &mut view, &fresh, business, &actor, now)?;
-        hosts
+        trace(started, || format!("membership {committed:?} candidate"));
+        let started = Instant::now();
+        let committed_result = hosts
             .commit_topology(view.topology().clone(), parent)
-            .map_err(|error| stage_error("membership commit", error))
+            .map_err(|error| stage_error("membership commit", error));
+        trace(started, || {
+            format!(
+                "membership {committed:?} commit ok={}",
+                committed_result.is_ok()
+            )
+        });
+        committed_result
     }
 }
 

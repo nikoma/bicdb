@@ -61,8 +61,8 @@ pub use error::{PageError, Result};
 pub use health::{ArchiveHealth, DurabilityHealth, DurabilityState, WriteFailure};
 pub use heap::{HeapFile, HeapOptions, HeapScan, HeapSnapshot};
 pub use lock::{
-    physical_directory_birth, probe_directory_lock, DirectoryLock, DirectoryLockProbe,
-    DirectoryPhysicalBirth,
+    physical_directory_birth, probe_directory_lock, DirectoryHandleObservation, DirectoryLock,
+    DirectoryLockProbe, DirectoryPhysicalBirth,
 };
 pub use manager::{
     convert_extent_layout, repair_interrupted_relayout, ExtentMigrationReport, FaultInjection,

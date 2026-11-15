@@ -146,3 +146,70 @@ fn absent_or_spent_claim_cannot_reopen_or_mutate_the_actual_store() {
         Some(b"actual committed payload".to_vec())
     );
 }
+
+#[test]
+fn retained_directory_handle_is_readonly_and_refuses_wrong_moved_or_replaced_names() {
+    use bicdb_page::DirectoryHandleObservation;
+    let parent = tempfile::tempdir().unwrap();
+    let original = parent.path().join("original");
+    let wrong = parent.path().join("wrong");
+    std::fs::create_dir(&original).unwrap();
+    std::fs::create_dir(&wrong).unwrap();
+    let observed = DirectoryHandleObservation::capture(&original).unwrap();
+    assert!(
+        inventory(&original).is_empty(),
+        "observation creates no claim"
+    );
+    let claim = DirectoryLock::acquire(&original).unwrap();
+    let other = DirectoryLock::acquire(&wrong).unwrap();
+    let before_original = inventory(&original);
+    let before_wrong = inventory(&wrong);
+    claim
+        .require_directory_observation(&original, &observed)
+        .unwrap();
+    let substituted = other.require_directory_observation(&wrong, &observed);
+    eprintln!("ACTUAL_DIRECTORY_HANDLE_WRONG_OWNER {substituted:?}");
+    assert!(matches!(substituted, Err(PageError::Io { source, .. })
+        if source.kind() == std::io::ErrorKind::InvalidInput));
+    assert!(claim
+        .require_directory_observation(&wrong, &observed)
+        .is_err());
+    assert_eq!(inventory(&original), before_original);
+    assert_eq!(inventory(&wrong), before_wrong);
+    assert!(matches!(
+        DirectoryLock::acquire(&original),
+        Err(PageError::AlreadyOpen { .. })
+    ));
+    drop(claim);
+    let moved = parent.path().join("moved");
+    std::fs::rename(&original, &moved).unwrap();
+    let moved_claim = DirectoryLock::acquire(&moved).unwrap();
+    assert!(
+        matches!(moved_claim.require_directory_observation(&moved, &observed),
+        Err(PageError::Io { source, .. }) if source.kind() == std::io::ErrorKind::InvalidInput)
+    );
+    std::fs::create_dir(&original).unwrap();
+    let mut replacement = Some(DirectoryLock::acquire(&original).unwrap());
+    assert!(
+        matches!(replacement.as_ref().unwrap().require_directory_observation(&original, &observed),
+        Err(PageError::Io { source, .. }) if source.kind() == std::io::ErrorKind::InvalidInput)
+    );
+    // The observation neither owns nor spends the real new claim. Only the
+    // existing linear API can transfer that actual claim into a writer.
+    let (store, _) = PagedStore::open_with_directory_claim(
+        &original,
+        PagedStoreOptions::default().with_buffer_pool_bytes(1024 * 1024),
+        &mut replacement,
+    )
+    .unwrap();
+    let xid = store.begin();
+    store
+        .put(xid, b"new-real-owner", b"complete replacement payload")
+        .unwrap();
+    store.commit(xid).unwrap();
+    assert_eq!(
+        store.get(b"new-real-owner").unwrap(),
+        Some(b"complete replacement payload".to_vec())
+    );
+    assert!(replacement.is_none());
+}

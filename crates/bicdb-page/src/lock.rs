@@ -82,6 +82,107 @@ pub struct DirectoryPhysicalBirth {
     created_nanos: u32,
 }
 
+/// An actual retained directory handle for necessary identity comparison only.
+/// This acquires no store claim and cannot transfer or mint writer permission.
+/// In particular it never opens a second Unix `store.lock` descriptor.
+#[derive(Debug)]
+pub struct DirectoryHandleObservation {
+    directory: File,
+    path: PathBuf,
+    identity: crate::physical_gate::Identity,
+}
+
+impl DirectoryHandleObservation {
+    pub fn capture(path: &Path) -> Result<Self> {
+        let directory = open_directory_observation(path)?;
+        let identity = crate::physical_gate::identity(&directory, path)?;
+        let canonical = path.canonicalize().map_err(|e| PageError::io(path, e))?;
+        let observed = Self {
+            directory,
+            path: canonical,
+            identity,
+        };
+        observed.require_named(path)?;
+        Ok(observed)
+    }
+
+    fn require_named(&self, expected: &Path) -> Result<()> {
+        let current = open_directory_observation(expected)?;
+        let canonical = expected
+            .canonicalize()
+            .map_err(|e| PageError::io(expected, e))?;
+        if canonical != self.path
+            || crate::physical_gate::identity(&self.directory, &self.path)? != self.identity
+            || crate::physical_gate::identity(&current, expected)? != self.identity
+        {
+            return Err(PageError::io(
+                expected,
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "directory observation does not match its original named directory",
+                ),
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn open_directory_observation(path: &Path) -> Result<File> {
+    let metadata = std::fs::symlink_metadata(path).map_err(|e| PageError::io(path, e))?;
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return Err(PageError::io(
+            path,
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "directory observation requires an actual non-symlink directory",
+            ),
+        ));
+    }
+    let mut options = OpenOptions::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_DIRECTORY | libc::O_CLOEXEC);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options
+            .access_mode(0)
+            .share_mode(0x7)
+            .custom_flags(0x0200_0000 | 0x0020_0000);
+    }
+    #[cfg(not(any(unix, windows)))]
+    options.read(true);
+    let file = options.open(path).map_err(|e| PageError::io(path, e))?;
+    let opened = file.metadata().map_err(|e| PageError::io(path, e))?;
+    if !opened.is_dir() {
+        return Err(PageError::io(
+            path,
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "directory observation opened a non-directory",
+            ),
+        ));
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if opened.file_attributes() & 0x400 != 0 {
+            return Err(PageError::io(
+                path,
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "directory observation refuses a reparse point",
+                ),
+            ));
+        }
+    }
+    Ok(file)
+}
+
 /// Read-only refusal preflight. A positive observation acquires no claim.
 pub fn physical_directory_birth(dir: &Path) -> Result<Option<DirectoryPhysicalBirth>> {
     #[cfg(unix)]
@@ -122,6 +223,18 @@ fn process_locks_guard() -> std::sync::MutexGuard<'static, HashSet<DirectoryIden
 }
 
 impl DirectoryLock {
+    /// Necessary same-object observation; this does not admit a writer or
+    /// replace the existing strict directory/lock-inode validator.
+    pub fn require_directory_observation(
+        &self,
+        expected: &Path,
+        observed: &DirectoryHandleObservation,
+    ) -> Result<()> {
+        self.require_directory(expected)?;
+        observed.require_named(expected)?;
+        self.require_directory(expected)
+    }
+
     /// Take the lock for `dir`, or fail if another store already holds it.
     ///
     /// Never blocks. Waiting would turn "you have a bug" into "your process

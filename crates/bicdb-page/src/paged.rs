@@ -702,6 +702,13 @@ pub struct PagedWriteGuard<'a> {
     _physical: crate::physical_gate::PhysicalWriteGuard,
 }
 
+impl Drop for PagedWriteGuard<'_> {
+    fn drop(&mut self) {
+        // Core exposes this as an opaque Drop guard. Rust drops the owned
+        // fields after this body, releasing the writer before physical scope.
+    }
+}
+
 /// A crash-recoverable keyed store over first-party pages.
 #[derive(Debug)]
 pub struct PagedStore {

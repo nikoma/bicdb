@@ -491,7 +491,7 @@ impl PagedRecords {
     /// Hold the store's writer lock across a whole multi-operation
     /// transaction — see `PagedStore::write_guard` for why interleaving two
     /// mirrored commit batches is corruption rather than mere contention.
-    pub fn write_guard(&self) -> Result<bicdb_page::paged::PagedWriteGuard<'_>> {
+    pub fn write_guard(&self) -> Result<impl Drop + '_> {
         self.store.write_guard().map_err(page_error)
     }
 

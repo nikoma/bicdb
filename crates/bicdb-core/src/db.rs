@@ -535,6 +535,9 @@ pub struct DbConfig {
     /// row. The catalog remains durable and is loaded normally on the next
     /// ordinary open. Foreground mutations are refused on this handle; it
     /// cannot admit writes without the complete secondary constraint catalog.
+    /// Recovery/checkpoint I/O still uses real physical guards. Such an open
+    /// does not newly enroll a legacy Core FORMAT for Standard live backup;
+    /// an existing enrollment remains mandatory and is durably confirmed.
     pub load_secondary_indexes: bool,
     /// Document-range partitions a single ranked full-text query is split
     /// across. This is intra-QUERY parallelism: one query using many cores,
@@ -10937,7 +10940,7 @@ impl BicDb {
         // Format migration and cleanup can write. Do them only after ownership
         // and the restore marker have been checked under the directory lock.
         format::ensure_open_compatible_in_mode(&path, config.fsync, effective_mode.clone())?;
-        format::enable_physical_backup_gate(&path)?;
+        format::prepare_physical_backup_gate_for_open(&path, config.load_secondary_indexes)?;
         fs::create_dir_all(path.join(DEFAULT_SEGMENTS_DIR))?;
         // This inode must exist before recovery or any foreground append. A
         // backup takes it exclusively while every physical writer holds it

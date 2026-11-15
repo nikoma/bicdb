@@ -2201,6 +2201,39 @@ mod joined_unsupported_reader_tests {
     }
 }
 
+/// Called only after actual root/Page ownership and root physical SH. A
+/// primary-record-only export must not upgrade the legacy FORMAT contract.
+/// This does not omit recovery I/O or grant Standard live-backup admission.
+pub(crate) fn prepare_physical_backup_gate_for_open(root: &Path, enroll_new: bool) -> Result<()> {
+    if enroll_new {
+        return enable_physical_backup_gate(root);
+    }
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(PHYSICAL_BACKUP_GATE_FEATURE_FLAG)
+    {
+        return Ok(());
+    }
+    // Preserve the exact existing bytes, but never promote a visible flag
+    // from an earlier failed sync to durable enrollment without a NEW actual
+    // file/directory barrier. Existing missing-gate refusal already ran.
+    let path = root.join(FORMAT_METADATA_FILE);
+    // Existing-only and nontruncating; writable access also permits the
+    // actual FlushFileBuffers barrier on Windows. No content is written.
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&path)?;
+    bicdb_page::test_faults::io_fault("physical_gate.existing.file_sync", &path)?;
+    file.sync_all()?;
+    bicdb_page::test_faults::io_fault("physical_gate.existing.dir_sync", &path)?;
+    storage::sync_parent_directory(&path)
+}
+
 /// Called only after actual directory ownership and root physical SH admission.
 pub(crate) fn enable_physical_backup_gate(root: &Path) -> Result<()> {
     let lock = feature_flags_lock(root);
@@ -2495,5 +2528,71 @@ mod physical_backup_gate_tests {
         require_physical_backup_gate(directory.path()).unwrap();
         bicdb_page::manager::require_physical_gate_profile(&paged_dir.join("store.pages")).unwrap();
         db.close().unwrap();
+    }
+
+    #[test]
+    fn primary_only_existing_enrollment_requires_real_unchanged_format_sync() {
+        for site in [
+            "physical_gate.existing.file_sync",
+            "physical_gate.existing.dir_sync",
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let config = crate::DbConfig::default()
+                .with_storage_mode(StorageMode::ServerPaged)
+                .with_paged_buffer_pool_bytes(1024 * 1024)
+                .with_fsync(true);
+            let mut db = crate::BicDb::open_with_config(directory.path(), config.clone()).unwrap();
+            db.create_collection("enrolled_export").unwrap();
+            let original = crate::Record::new("before_export")
+                .with_metadata(serde_json::json!({"full":[null,true,19]}));
+            db.insert("enrolled_export", original.clone()).unwrap();
+            db.close().unwrap();
+            let before = std::fs::read(directory.path().join(FORMAT_METADATA_FILE)).unwrap();
+            require_physical_backup_gate(directory.path()).unwrap();
+            let failure = bicdb_page::test_faults::arm_io_failure(site, directory.path(), 1, true);
+            for _ in 0..2 {
+                let error = crate::BicDb::open_with_config(
+                    directory.path(),
+                    config.clone().with_secondary_indexes(false),
+                )
+                .err()
+                .expect("actual enrolled sync failure must refuse the primary-only open");
+                eprintln!(
+                    "PRIMARY_ONLY_EXISTING_ENROLLMENT_REFUSAL site={site} error={error:?} fired={}",
+                    failure.fired()
+                );
+                assert!(
+                    matches!(error, crate::BicDbError::Io(_)),
+                    "actual sync error must remain typed IO"
+                );
+                assert!(
+                    failure.fired() > 0,
+                    "actual selected enrollment sync cut was not reached"
+                );
+                assert_eq!(
+                    std::fs::read(directory.path().join(FORMAT_METADATA_FILE)).unwrap(),
+                    before
+                );
+            }
+            drop(failure);
+            let db = crate::BicDb::open_with_config(
+                directory.path(),
+                config.with_secondary_indexes(false),
+            )
+            .unwrap();
+            assert_eq!(
+                db.get("enrolled_export", &original.id)
+                    .unwrap()
+                    .unwrap()
+                    .as_ref(),
+                &original
+            );
+            require_physical_backup_gate(directory.path()).unwrap();
+            db.close().unwrap();
+            assert_eq!(
+                std::fs::read(directory.path().join(FORMAT_METADATA_FILE)).unwrap(),
+                before
+            );
+        }
     }
 }

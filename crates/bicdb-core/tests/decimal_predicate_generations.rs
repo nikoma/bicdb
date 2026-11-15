@@ -503,3 +503,126 @@ fn every_upgrade_catalog_replacement_step_fails_closed_and_recovers_the_ack() {
         }
     }
 }
+
+#[test]
+fn actual_legacy_primary_only_opens_preserve_format_and_refuse_standard_live_backup() {
+    let root = tempfile::tempdir().unwrap();
+    let archive = tempfile::tempdir().unwrap();
+    actual_legacy_fixture(root.path());
+    let original_format = std::fs::read(root.path().join("format.json")).unwrap();
+    let original_indexes = std::fs::read(root.path().join("indexes.json")).unwrap();
+    for attempt in 0..2 {
+        let db = BicDb::open_with_config(
+            root.path(),
+            config(StorageMode::ServerPaged).with_secondary_indexes(false),
+        )
+        .unwrap();
+        assert!(!db
+            .format_metadata()
+            .unwrap()
+            .feature_flags
+            .contains("physical_backup_gate_v1"));
+        assert_eq!(
+            db.get("precision_probe", "acknowledged")
+                .unwrap()
+                .unwrap()
+                .metadata,
+            acknowledged().metadata
+        );
+        let error = bicdb_core::create_backup(
+            root.path(),
+            archive
+                .path()
+                .join(format!("unenrolled-{attempt}.bicbackup")),
+            bicdb_core::BackupCreateOptions {
+                passphrase: "actual unenrolled export refusal".into(),
+                base_backup: None,
+            },
+        )
+        .unwrap_err();
+        eprintln!("ACTUAL_LEGACY_PRIMARY_ONLY_STANDARD_REFUSAL attempt={attempt} error={error:?}");
+        assert!(matches!(&error,bicdb_core::BicDbError::Backup(body) if body ==
+            "an already-open legacy writer is not enrolled in the physical backup gate; close and reopen with a supporting writer before a Standard live backup"),
+            "wrong earlier error does not reach the genuine unenrolled Standard admission: {error:?}");
+        assert_eq!(
+            std::fs::read(root.path().join("format.json")).unwrap(),
+            original_format
+        );
+        assert_eq!(
+            std::fs::read(root.path().join("indexes.json")).unwrap(),
+            original_indexes
+        );
+        assert_eq!(
+            db.get("precision_probe", "acknowledged")
+                .unwrap()
+                .unwrap()
+                .metadata,
+            acknowledged().metadata
+        );
+        db.close().unwrap();
+        assert_eq!(
+            std::fs::read(root.path().join("format.json")).unwrap(),
+            original_format
+        );
+        assert_eq!(
+            std::fs::read(root.path().join("indexes.json")).unwrap(),
+            original_indexes
+        );
+    }
+}
+
+#[test]
+fn primary_only_open_does_not_replace_an_existing_enrolled_gate_inode() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = BicDb::open_with_config(root.path(), config(StorageMode::ServerPaged)).unwrap();
+    db.create_collection("enrolled").unwrap();
+    let original = Record::new("retained").with_metadata(json!({"full":[null,true,71]}));
+    db.insert("enrolled", original.clone()).unwrap();
+    assert!(db
+        .format_metadata()
+        .unwrap()
+        .feature_flags
+        .contains("physical_backup_gate_v1"));
+    db.close().unwrap();
+    let original_format = std::fs::read(root.path().join("format.json")).unwrap();
+    let gate = root.path().join(".backup-write.lock");
+    let retained_original_inode = root.path().join("actual-original-gate-inode");
+    std::fs::rename(&gate, &retained_original_inode).unwrap();
+    let error = BicDb::open_with_config(
+        root.path(),
+        config(StorageMode::ServerPaged).with_secondary_indexes(false),
+    )
+    .err()
+    .expect("a primary-only config cannot replace an enrolled missing physical inode");
+    eprintln!("ACTUAL_PRIMARY_ONLY_MISSING_ENROLLED_GATE {error:?}");
+    assert!(
+        matches!(&error,bicdb_core::BicDbError::Backup(body) if body ==
+        "enrolled physical backup gate is missing; refusing replacement inode"),
+        "{error:?}"
+    );
+    assert!(
+        !gate.exists(),
+        "refused open must not mint a replacement inode"
+    );
+    assert_eq!(
+        std::fs::read(root.path().join("format.json")).unwrap(),
+        original_format
+    );
+    // Restore the SAME actual inode for a distinct open; no new gate or
+    // enrollment is manufactured to turn the preceding error into success.
+    std::fs::rename(retained_original_inode, &gate).unwrap();
+    let db = BicDb::open_with_config(
+        root.path(),
+        config(StorageMode::ServerPaged).with_secondary_indexes(false),
+    )
+    .unwrap();
+    assert_eq!(
+        db.get("enrolled", &original.id).unwrap().unwrap().as_ref(),
+        &original
+    );
+    db.close().unwrap();
+    assert_eq!(
+        std::fs::read(root.path().join("format.json")).unwrap(),
+        original_format
+    );
+}

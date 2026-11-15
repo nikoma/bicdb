@@ -133,6 +133,25 @@ struct Candidate {
     destination: ClusterNodeId,
     next_index: u64,
     attempts: usize,
+    ready_at: Instant,
+}
+
+// A refused/reset TCP connection can fail much faster than the listener can
+// finish rebinding. Pace only those existing retries, without occupying a
+// worker or renewing the original context. Rejected ACK/catch-up retries keep
+// their existing scheduling and still require the real consensus predicates.
+fn socket_retry_delay(error: &BicDbError, completed_attempts: usize) -> Duration {
+    match error {
+        BicDbError::Io(error)
+            if matches!(
+                error.kind(),
+                io::ErrorKind::ConnectionRefused | io::ErrorKind::ConnectionReset
+            ) =>
+        {
+            Duration::from_millis(5 * (1u64 << completed_attempts.saturating_sub(1).min(2)))
+        }
+        _ => Duration::ZERO,
+    }
 }
 
 impl MetadataReadProvider {
@@ -402,6 +421,7 @@ impl MetadataReadProvider {
                 destination,
                 next_index: context.read_index().saturating_add(1),
                 attempts: 0,
+                ready_at: Instant::now(),
             })
             .collect::<VecDeque<_>>();
         let workers = self.limits.workers_per_context.min(candidates.len());
@@ -463,9 +483,15 @@ impl MetadataReadProvider {
                 }
             }
             while outstanding.len() < workers {
-                let Some(mut candidate) = candidates.pop_front() else {
+                // Delayed retries do not block an untried or ready voter.
+                // The queue is bounded by max_voters; no worker sleeps here.
+                let now = Instant::now();
+                let Some(ready) = candidates.iter().position(|next| next.ready_at <= now) else {
                     break;
                 };
+                let mut candidate = candidates.remove(ready).ok_or_else(|| {
+                    acquisition_error("bounded ready-candidate queue invariant failed")
+                })?;
                 // Reserve time for every queued voter instead of allowing
                 // the first sorted silent peers to occupy all workers until
                 // the context expires. Each attempt is a child of the SAME
@@ -488,14 +514,25 @@ impl MetadataReadProvider {
                     .map_err(|_| acquisition_error("bounded probe queue invariant failed"))?;
                 outstanding.insert(candidate.destination.clone(), candidate);
             }
-            if outstanding.is_empty() {
+            if outstanding.is_empty() && candidates.is_empty() {
                 #[cfg(test)]
                 probe_diagnostics.report_exhausted();
                 return Err(acquisition_error(
                     "fresh joint quorum unavailable within bounded probe attempts",
                 ));
             }
-            match results_rx.recv_timeout(Duration::from_millis(10)) {
+            // Waiting is guard-free and bounded by both the original token
+            // and the earliest eligible retry. Pending retries are not an
+            // exhausted voter set. Results from healthy voters remain live.
+            let now = Instant::now();
+            let mut wait =
+                Duration::from_millis(10).min(context.deadline().saturating_duration_since(now));
+            if outstanding.len() < workers {
+                if let Some(next) = candidates.iter().map(|next| next.ready_at).min() {
+                    wait = wait.min(next.saturating_duration_since(now));
+                }
+            }
+            match results_rx.recv_timeout(wait) {
                 Ok((voter, result)) => {
                     let mut candidate = outstanding
                         .remove(&voter)
@@ -511,6 +548,11 @@ impl MetadataReadProvider {
                             probe_observed_at,
                         );
                     }
+                    let retry_delay = result
+                        .as_ref()
+                        .err()
+                        .map(|error| socket_retry_delay(error, candidate.attempts))
+                        .unwrap_or(Duration::ZERO);
                     let retry = if let Ok(ack) = result {
                         let accepted = self
                             .lock_consensus(&token)?
@@ -536,6 +578,8 @@ impl MetadataReadProvider {
                     };
                     if retry && candidate.attempts < self.limits.max_attempts_per_voter {
                         // Retries join the tail behind all not-yet-tried voters.
+                        // Even a delayed retry remains inside this SAME round.
+                        candidate.ready_at = (Instant::now() + retry_delay).min(context.deadline());
                         candidates.push_back(candidate);
                     }
                 }

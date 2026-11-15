@@ -96,6 +96,41 @@ mod actual {
         prefix_incomplete: bool,
         formatting_complete: bool,
     }
+    /// No error formatter is invoked while an original guarded stage runs.
+    /// Debug strings are produced only by serialization during root flush.
+    struct StageError {
+        discriminant: std::mem::Discriminant<BicDbError>,
+        io_kind: Option<std::io::ErrorKind>,
+        io_os_code: Option<i32>,
+    }
+    impl serde::Serialize for StageError {
+        fn serialize<S: serde::Serializer>(
+            &self,
+            serializer: S,
+        ) -> std::result::Result<S::Ok, S::Error> {
+            use serde::ser::SerializeStruct as _;
+            let mut value = serializer.serialize_struct("StageError", 5)?;
+            value.serialize_field("discriminant", &format!("{:?}", self.discriminant))?;
+            value.serialize_field("io_kind", &self.io_kind.map(|kind| format!("{kind:?}")))?;
+            value.serialize_field("io_os_code", &self.io_os_code)?;
+            value.serialize_field("display_prefix_available", &false)?;
+            value.serialize_field("root_prefix_is_not_independent_stage_cause", &true)?;
+            value.end()
+        }
+    }
+    fn stage_error(error: &BicDbError) -> StageError {
+        StageError {
+            discriminant: std::mem::discriminant(error),
+            io_kind: match error {
+                BicDbError::Io(io) => Some(io.kind()),
+                _ => None,
+            },
+            io_os_code: match error {
+                BicDbError::Io(io) => io.raw_os_error(),
+                _ => None,
+            },
+        }
+    }
     fn error_data(error: &BicDbError) -> ErrorData {
         struct Prefix {
             text: String,
@@ -165,7 +200,7 @@ mod actual {
         role_own_remaining_us: Option<i128>,
         origin_own_remaining_us: Option<i128>,
         actual_result_ok: Option<bool>,
-        error: Option<ErrorData>,
+        error: Option<StageError>,
         native: Option<NativeState>,
         actual_issued_xid: Option<u64>,
     }
@@ -216,7 +251,7 @@ mod actual {
         stage: &'static str,
         point: &'static str,
         span: Option<(Instant, Instant)>,
-        result: Option<(bool, Option<ErrorData>)>,
+        result: Option<(bool, Option<StageError>)>,
         native: Option<NativeState>,
         xid: Option<u64>,
     ) {
@@ -306,7 +341,7 @@ mod actual {
             stage,
             "return",
             Some((start, returned)),
-            Some((original.is_ok(), original.as_ref().err().map(error_data))),
+            Some((original.is_ok(), original.as_ref().err().map(stage_error))),
             None,
             None,
         );

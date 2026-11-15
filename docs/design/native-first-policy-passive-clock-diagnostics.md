@@ -27,9 +27,13 @@ becomes successful diagnostic evidence. Actual IO/stderr and joins are not hard
 preemptible.
 
 The thread-local trace retains at most 96 events, with an explicit omitted
-counter. Error projection is a contiguous 768-byte UTF-8 prefix, with truncation
-and formatting flags, original discriminant, and actual IO kind/OS code where
-the error retains them. No records, payloads, per-range histograms or authority
+counter. Only the root Result, after its operation's guards unwind, receives a
+contiguous 768-byte UTF-8 Display prefix with truncation and formatting flags.
+Guarded stage failures capture only the original typed discriminant, IO kind
+and OS-code scalars, with no error Display, Debug, JSON or IO at that boundary.
+Their scalar Debug serialization happens during root flush, and their Display
+prefix is explicitly unavailable. The root prefix is not independent evidence
+of a nested stage's error body. No records, payloads, per-range histograms or authority
 objects are serialized. Native DATA contains only the real retained attempt
 enum, native XID, registration/coordinator identity and actual DB open. The
 latest native state and actual root result remain separate from event truncation.
@@ -53,11 +57,13 @@ backing reports its actual privately retained Role/OWN scalar deadlines and
 leaves an unavailable separate ALL-frame deadline null. No clock creates scope,
 authority, a renewed window, a caller token getter, or Ready permission.
 
-Only bounded DATA is appended during guarded work. No JSON, stderr or full
-record formatting occurs under the actual journal, metadata or short version
-guard. Root flushing follows unwinding of its operation's guards. Error-prefix
-formatting on a failed nested call is bounded and occurs outside the short
-version guard. Test instrumentation still consumes time; measurements include
+Only bounded DATA is appended during guarded work. No error formatting, JSON
+or stderr occurs under the actual journal, metadata or short version guard.
+Root flushing and the root-only bounded error prefix follow unwinding of the
+operation's guards. The initial ceced/2baf implementation formatted stage errors;
+the corrective child preserves those leaves and removes that guarded formatter.
+This was found by source review, not by executed failure. Test instrumentation
+still consumes time; measurements include
 observer overhead and are not an uninstrumented latency qualification.
 
 Local OLD retirement records its real original-source validation, actual

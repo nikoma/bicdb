@@ -246,6 +246,14 @@ impl HostWriterPolicyFacts {
     }
     pub(crate) fn require_range(&self, range: &RangeDescriptor) -> Result<()> {
         if self.ranges.get(&range.id) != Some(&canonical_range(range)) {
+            #[cfg(test)]
+            eprintln!(
+                "NATIVE_WRITER_RANGE_POLICY_MISMATCH {}",
+                serde_json::json!({"actual_policy_node":self.local_node_id,
+                    "range_id":range.id,"installed_range":self.ranges.get(&range.id),
+                    "requested_canonical_range":canonical_range(range),
+                    "diagnostic_only_no_policy_refresh_or_authority":true})
+            );
             return Err(invalid(
                 "range configuration changed; refresh actual host metadata policy",
             ));

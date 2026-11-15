@@ -11,7 +11,19 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Latest execution checkpoint — candidate520 failed, 2026-11-15 UTC
+## Latest execution checkpoint — composed520 compilation failed, 2026-11-15 UTC
+
+Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Composed520 source `8bc2df66361a3d4307b2943439a8a9d2b4fa0b92` failed its normal
+Tests43693587297 and Rails43693587277 workflows on a shared Page E0308 decoder
+argument mismatch. Core and Native helper builds failed before any test cases;
+SQL, PGwire/Oracle, Rails runtime and the nondefault check were not reached.
+Five earlier remaining-workspace Lua cases passed. Full evidence is frozen and
+independently verified in the [regression findings](design/native-520-regression-findings.md).
+The local call-order/checksum correction and its new genuine corruption control
+are uncompiled and unexecuted. No HA, physical or production gate is cleared.
+
+## Earlier execution checkpoint — candidate326 failed, 2026-11-15 UTC
 
 Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
 Its completed post-merge Tests run43677527718 failed the application-state

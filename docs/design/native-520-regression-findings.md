@@ -4,6 +4,18 @@ This record covers candidate **1.0.520-beta / `326c363477477950f76bdb51fe6425cab
 
 ## Actual execution
 
+### Later composed head8bc: compilation failed before HA acceptance
+
+Composed source **`8bc2df66361a3d4307b2943439a8a9d2b4fa0b92`**, tree `ce2dcceb3f8c0fddb34ce64dfc7566018c848637`, failed [Tests43693587297](https://github.com/nikoma/bicdb/actions/runs/43693587297) and [Rails43693587277](https://github.com/nikoma/bicdb/actions/runs/43693587277). Actual checkout `6b96f5507e0619bef1c7284282885dd2372eb9f2` has that exact tree. Seven jobs failed the same production Page `E0308`: `manager.rs:2841` passed `decode_superblock(path, &bytes, size)` while its actual signature at line2748 requires bytes, path, size. This is an executed compiler failure, not failed HA assertions or unavailable CI.
+
+Core and Native failed while building their projection helper, with **zero actual case or summary lines** and their test steps skipped. PGwire/Oracle, SQL, Rails runtime and the nondefault consumer check were not reached. Remaining-workspace retained five earlier successful Lua runtime/workflow cases before hitting the same Page compile error; CLI election, original app-port and new port-owner diagnostics were not reached. Older326 passes below cannot be inherited by changed8bc source.
+
+The complete8bc archive is frozen: 86 premanifest files, 89 total, 11 full gzip logs, six original ZIPs/six members, no missing/partial captures. Manifest SHA-256: `e2db464029f39830458c18f96199a4be8f4f130d7f68c5623efbc12fb64bf18f`; independent full-archive verification receipt SHA-256: `0f0b0020eb55fcbb7d72f5cb96050c60da37825632277977cbecd613e40db575`. Raw Core log: 109,705 bytes, SHA-256 `1a008f0b229143caeb218b50e179f2632de1c916432450eca81e28f0a804df0a`; Native: 110,193 bytes, SHA-256 `d684e10250e6ee87e75296c26ea9330cc1f04ebb3a64bbc0d7b1ba801285ab05`. The collector exited naturally; no useful job was cancelled or restarted.
+
+Local successor **`327a8935f15dc3a3deba018ed1722a5321a17680`** corrects the argument order. Source review also found a separate missing precondition: the shared decoder assumes a page whose checksum/trailer was already verified. The reader-fence helper now calls the actual page verifier before decoding. A genuine fsynced Page file under actual EX is checked, damaged in its body while preserving profile/size, required to return `ChecksumMismatch` without repair, restored and reopened. This corruption control is **not executed**, and the missing check is a source finding rather than observed corruption. The successor has formatting/preservation review only; compilation and all original/new acceptance remain pending.
+
+### Earlier source326: executed runtime results
+
 [Tests run 43682851011](https://github.com/nikoma/bicdb/actions/runs/43682851011) passed all-target and nondefault-consumer compilation, Core, SQL and PGwire/Oracle checks. [Rails run 43682850892](https://github.com/nikoma/bicdb/actions/runs/43682850892) passed its actual application checks. These are separate scopes.
 
 [Native job 132717026027](https://github.com/nikoma/bicdb/actions/runs/43682851011/job/132717026027) failed: **372 passed, 27 failed, 1 ignored**, with 956 filtered out, in 2,334.11 seconds. All 400 individual result lines and the complete raw log were independently verified. The raw log is 35,508,424 bytes, SHA-256 `3deb1461fa4fb269c54e3a6adacafa91623e8f6c69ba221fae7777ca06e38046`; its retained gzip is 3,239,240 bytes, SHA-256 `4d1f868fec4fc19118f3b236d34d75572ba261359a58ab97c2e4fa2a7ad2f4f2`. Independent result receipt SHA-256: `9a214208afd00ddf37d714e1f6a17428d99408d41bd5d97f0db0405238c34942`.

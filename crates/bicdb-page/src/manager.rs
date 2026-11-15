@@ -2805,7 +2805,8 @@ pub(crate) fn decode_superblock(
 }
 
 /// Verify the mandatory Page reader fence without opening a Page writer or
-/// mutating recovery state. The caller must retain its actual root EX cut.
+/// mutating recovery state. Backup callers retain their actual root EX cut;
+/// enrollment callers retain their actual Page claim and physical scope.
 pub fn require_physical_gate_profile(path: &Path) -> Result<()> {
     use std::io::Read;
     let mut options = OpenOptions::new();

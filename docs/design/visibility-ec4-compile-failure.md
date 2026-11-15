@@ -1,4 +1,4 @@
-# Visibility ec4 candidate: compilation failed
+# Visibility ec4 candidate: failed acceptance
 
 Source **1.0.518-beta / `ec4c5a937e22e18d86b947d24d6813bc9fdf0ccb`**, tree
 `d850d150352a46cbb29d732efa8cfeaf1329be4d`, failed the normal
@@ -19,6 +19,7 @@ are in `db/commit_visibility_tests/visibility_wait_tests.rs` (baseline lines
 | New Core/native regression execution in this job | Not tested | Compilation did not reach test execution |
 | Separate Core library and native multi-node jobs | Failed compilation | Both reported the same eight `E0373` errors; neither started a test binary or reported a Rust test summary |
 | Separate SQL job and new generic post-commit cleanup control | Passed on ec4 | The actual SQL control executed; this is not a timed-Unknown or native test result |
+| Remaining-workspace job | Failed at runtime | The app-runtime schedule test reached its row/identity assertions, then its original disable call refused nonquiescent admission |
 | Earlier formatting, version, legal and source reviews | Passed within their static scope | They did not detect or establish Rust lifetime correctness |
 | Production runtime correctness or physical qualification | Not established | Absence of a production-code diagnostic does not prove a successful complete build or runtime behavior |
 
@@ -59,6 +60,56 @@ the separate test-capture correction. This remains an ec4 result, not an
 execution of the corrected candidate; the three compilation failures remain
 failed and the remaining-workspace job was still running at this later cut.
 
+## Separate remaining-workspace failure
+
+The [remaining-workspace job](https://github.com/nikoma/bicdb/actions/runs/43659820277/job/132646406097)
+subsequently failed at 2026-11-15 01:41:56 UTC. This was an actual runtime
+failure, not another instance of the eight compilation errors.
+`script_workflow::route_tests::script_schedules_fire_as_the_schedule_identity_and_write_declared_sql`
+failed at `crates/bicdb-app-runtime/src/script_route_tests.rs:690:30` on its
+original `runtime.disable("notes").unwrap()` call. The returned error was
+`NotReady("catalog change requires quiescent application invocations; retry after draining traffic")`.
+The target reported 158 passed, one failed and one ignored. The workspace
+runner retained 57 completed target summaries before stopping; it did not
+complete the remaining workspace.
+
+The schedule had already satisfied the original nonempty-row, actor and run-ID
+assertions. The actual `disable` producer checks lifecycle admission before
+lifecycle/file/catalogue mutation. Its refusal condition is an active lifecycle
+or nonzero invocation count. The original log does not identify that branch or
+record the live counter. A visible SQL row is not proof that the schedule
+thread has finished durable completion and released its invocation lease.
+Relevant app-runtime sources were unchanged from source881 and main514; this
+does not prove timing causality or execution equivalence across those builds.
+
+The complete original REST raw log is 36,346,990 bytes, SHA-256
+`63b5aa01a166a25861e1c4e20a9de1baab7c5f0d34c358dd7c46cb54e285f425`;
+the 3,899,728-byte gzip has SHA-256
+`03f28f3db65d328731647dbc3aa0a08a1d26744e3416070e995d8df91c101e39`.
+The separate test correction stops and joins the actual background supervisors
+after all original row/identity assertions and before the unchanged disable
+assertion. It uses the existing stop/join teardown outside the supervisor-map
+lock. It does not clear invocation counters, relax admission, retry or accept
+`NotReady`, remove assertions, or change production behavior or timeouts.
+This correction remains **not tested** until its exact source executes.
+
+## Complete original capture
+
+All ec4 jobs are terminal. The complete original capture verifies 85 manifest
+files, 11 lossless original logs and seven original ZIPs containing 24 members,
+with zero missing captures or partial files. API artifact digests and sizes,
+stored/raw hashes and ZIP CRCs matched. Root independently repeated those
+checks and hashed every member without extraction or opening a database.
+
+The manifest SHA-256 is
+`1cfd304f53f130d38929789b914694757b4f921d02fac9b8cd1d105d4430dbf6`;
+complete-capture verification is
+`25dc3a9b9f17ae1a172a7cb7766eb057990d3c70f1444ee8c25526faa32f796e`;
+root independent verification is
+`3318dcc32a948a72ad02127b97ac2339231ab1e8825e111fcf376065bfcd76c1`.
+The original failed source and bytes remain unchanged by either correction.
+Passing SQL, PGwire, Rails and static jobs do not repair failed acceptance.
+
 ## Separate correction and next deterministic checks
 
 Test-only correction `779cecab20e61ef9d69c0e3ad572916a9af9a9d5` changes those
@@ -74,10 +125,12 @@ code, manifests, features and workflows are unchanged by that correction.
 Formatting and independent source review passed; **the correction has not
 compiled or executed** at this source checkpoint.
 
-Let the current useful jobs finish and retain their exact results. Then allow
-automatic repository CI on the corrected frozen head: all-target compilation and the
+After retaining the terminal original results, allow automatic repository CI
+on the corrected frozen head: all-target compilation and the
 non-default consumer must pass, followed by actual execution of the eight
 ordinary controls, native component, SQL cleanup control and broad regressions.
+The app-runtime schedule case and the rest of the workspace must also complete
+with their original assertions and deadlines.
 No source-review receipt or unchanged assertion substitutes for those results.
 
 No binary, release, deployment, five-node expansion, RPO/RTO or capacity gain

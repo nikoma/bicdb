@@ -246,6 +246,15 @@ impl NativeJointServingPreparation {
         self.record.validate()?;
         self.record
             .require_binding(database, &self.native, committed, catalogue)?;
+        self.require_original_protected_records(database)?;
+        #[cfg(test)]
+        trace.complete();
+        Ok(())
+    }
+    /// Necessary original preparation refusal, never a physical-lineage or
+    /// publication permission. Keep the original count's exact CURRENT/archive
+    /// diagnostics when its final full validation uses a borrowed journal scope.
+    pub(crate) fn require_original_protected_records(&self, database: &BicDb) -> Result<()> {
         let current: NativeJointServingPreparationRecord = database
             .read_native_range_image_record(&preparation_key(self.record.range_id))?
             .ok_or_else(|| invalid("NEW joint preparation native pointer missing"))?;
@@ -260,8 +269,6 @@ impl NativeJointServingPreparation {
         if current != self.record || archive != self.record {
             return Err(invalid("NEW joint preparation current/archive changed"));
         }
-        #[cfg(test)]
-        trace.complete();
         Ok(())
     }
 }

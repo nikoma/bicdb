@@ -33,6 +33,9 @@ pub(crate) use joint::{
     NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
     NativeJointServingPublicationRound,
 };
+pub(crate) use joint::{
+    NativeJointBridgeDecision, NativeJointCertifiedScope, NativeJointCommittedDecision,
+};
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{
     NativeJointBridgePhaseKindV1, NativeJointHandoffStepOperationV1,

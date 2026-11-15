@@ -106,33 +106,255 @@ fn stage_candidate(
         config_template: template.clone(),
         metadata_leader_id: Some(node(0)),
     };
-    let root = tempfile::tempdir().unwrap();
-    let config = crate::provision_cluster_member_directory(
-        root.path(),
-        &snapshot,
-        &node(0),
-        template.transport.clone(),
-        true,
-    )
-    .unwrap();
-    let mut view = crate::DistributionStore::open(root.path(), config, true)
-        .unwrap()
-        .fork_ephemeral();
+    // Every candidate is built on its own planning view of the same fresh
+    // committed configuration.
+    let open_view = || {
+        let root = tempfile::tempdir().unwrap();
+        let config = crate::provision_cluster_member_directory(
+            root.path(),
+            &snapshot,
+            &node(0),
+            template.transport.clone(),
+            true,
+        )
+        .unwrap();
+        crate::DistributionStore::open(root.path(), config, true)
+            .unwrap()
+            .fork_ephemeral()
+    };
+    let relocation = proof.data().promise().relocation_id;
+    let mut view = open_view();
+    // The same stage from the committed record alone, with no proof.
+    let mut committed = open_view();
     match stage {
-        0 => assert!(view
-            .certify_native_joint_handoff(proof, &fresh, business, &node(0), 301)
-            .unwrap()),
+        0 => {
+            // Nothing is certified yet: the committed record cannot stand in
+            // for the proof of the certification.
+            for error in [
+                committed
+                    .promote_certified_native_joint_handoff_frozen(
+                        relocation,
+                        &fresh,
+                        business,
+                        &node(0),
+                        301,
+                    )
+                    .unwrap_err(),
+                committed
+                    .finalize_certified_native_joint_membership_frozen(
+                        relocation,
+                        &fresh,
+                        business,
+                        &node(0),
+                        301,
+                    )
+                    .unwrap_err(),
+            ] {
+                assert!(
+                    error.to_string().contains("joint decision not committed"),
+                    "{error}"
+                );
+            }
+            assert_eq!(committed.topology(), &snapshot.topology);
+            assert!(view
+                .certify_native_joint_handoff(proof, &fresh, business, &node(0), 301)
+                .unwrap());
+            certified_scope_validators(view.topology(), relocation, proof);
+        }
         1 => {
-            view.promote_native_joint_handoff_frozen(proof, &fresh, business, &node(0), 302)
+            // The final membership is not built on a merely certified record.
+            let error = committed
+                .finalize_certified_native_joint_membership_frozen(
+                    relocation,
+                    &fresh,
+                    business,
+                    &node(0),
+                    302,
+                )
+                .unwrap_err()
+                .to_string();
+            assert!(
+                error.contains("requires its exact frozen union decision"),
+                "{error}"
+            );
+            assert_eq!(committed.topology(), &snapshot.topology);
+            let epoch = view
+                .promote_native_joint_handoff_frozen(proof, &fresh, business, &node(0), 302)
                 .unwrap();
+            assert_eq!(
+                committed
+                    .promote_certified_native_joint_handoff_frozen(
+                        relocation,
+                        &fresh,
+                        business,
+                        &node(0),
+                        302,
+                    )
+                    .unwrap(),
+                epoch
+            );
         }
         2 => {
-            view.finalize_native_joint_membership_frozen(proof, &fresh, business, &node(0), 303)
+            let error = committed
+                .promote_certified_native_joint_handoff_frozen(
+                    relocation,
+                    &fresh,
+                    business,
+                    &node(0),
+                    303,
+                )
+                .unwrap_err()
+                .to_string();
+            assert!(
+                error.contains("requires its exact certified decision"),
+                "{error}"
+            );
+            assert_eq!(committed.topology(), &snapshot.topology);
+            let epoch = view
+                .finalize_native_joint_membership_frozen(proof, &fresh, business, &node(0), 303)
                 .unwrap();
+            assert_eq!(
+                committed
+                    .finalize_certified_native_joint_membership_frozen(
+                        relocation,
+                        &fresh,
+                        business,
+                        &node(0),
+                        303,
+                    )
+                    .unwrap(),
+                epoch
+            );
         }
         _ => unreachable!(),
     }
+    if stage != 0 {
+        // The proof path and the committed-record path build the same
+        // candidate, byte for byte.
+        assert_eq!(committed.topology(), view.topology());
+        assert_eq!(
+            serde_json::to_vec(committed.topology()).unwrap(),
+            serde_json::to_vec(view.topology()).unwrap()
+        );
+    }
     view.topology().clone()
+}
+
+/// The certified record carries exactly the proof's scope, and its
+/// validators refuse a record whose scope is missing or was altered.
+fn certified_scope_validators(
+    certified: &ClusterTopology,
+    relocation: crate::RelocationId,
+    proof: &dyn NativeJointDecisionProof,
+) {
+    use crate::distribution_range_handoff::{
+        NativeJointBridgeDecision, NativeJointCommittedDecision,
+    };
+    let plan = &certified.relocations[&relocation];
+    let record = plan.native_joint_handoff_v1.as_ref().unwrap();
+    let data = proof.data();
+    let scope = record.certified_scope().expect("certified with its scope");
+    assert_eq!(*scope, data.certified_scope());
+    assert_eq!(scope.activation_range(), data.activation_range());
+    assert_eq!(scope.old_range(), data.old_range());
+    record.validate_for(plan).unwrap();
+    certified.validate().unwrap();
+    // The committed decision identity equals the decision body's.
+    let committed = NativeJointCommittedDecision::from_committed(plan)
+        .unwrap()
+        .unwrap();
+    assert_eq!(committed.checksum_sha256(), data.checksum_sha256());
+    assert_eq!(
+        committed.plan_sha256().unwrap(),
+        data.plan_sha256().unwrap()
+    );
+    assert_eq!(
+        NativeJointBridgeDecision::promise(&committed),
+        data.promise()
+    );
+    assert_eq!(
+        NativeJointBridgeDecision::new_members(&committed),
+        data.new_members()
+    );
+    let json = serde_json::to_value(plan).unwrap();
+    let refused = |name: &str, change: &dyn Fn(&mut serde_json::Value)| {
+        let mut altered = json.clone();
+        change(&mut altered["native_joint_handoff_v1"]);
+        let Ok(altered) = serde_json::from_value::<crate::distribution::RangeRelocation>(altered)
+        else {
+            return;
+        };
+        let record = altered.native_joint_handoff_v1.as_ref().unwrap();
+        assert!(
+            record.validate_for(&altered).is_err(),
+            "{name}: the record validator must refuse"
+        );
+        let mut next = certified.clone();
+        next.relocations.insert(relocation, altered);
+        assert!(next.validate().is_err(), "{name}: the topology must refuse");
+        assert!(
+            crate::distribution::test_validate_native_joint_handoff_preservation(certified, &next)
+                .is_err(),
+            "{name}: a later configuration may not change the certified record"
+        );
+    };
+    assert!(json["native_joint_handoff_v1"]["certified_scope"]["activation_range"].is_object());
+    refused("missing scope", &|record| {
+        record.as_object_mut().unwrap().remove("certified_scope");
+    });
+    refused("activation epoch", &|record| {
+        let epoch = &mut record["certified_scope"]["activation_range"]["epoch"];
+        *epoch = serde_json::json!(epoch.as_u64().unwrap() + 1);
+    });
+    refused("activation leader", &|record| {
+        let old = record["certified_scope"]["old_range"]["leader"].clone();
+        let leader = &mut record["certified_scope"]["activation_range"]["leader"];
+        assert_ne!(*leader, old, "the fixture retires the range leader");
+        *leader = old;
+    });
+    refused("activation replica dropped", &|record| {
+        record["certified_scope"]["activation_range"]["replicas"]
+            .as_array_mut()
+            .unwrap()
+            .pop();
+    });
+    refused("another session", &|record| {
+        record["certified_scope"]["promise"]["nonce"] =
+            serde_json::json!(Uuid::now_v7().to_string());
+    });
+    refused("another new configuration", &|record| {
+        record["certified_scope"]["promise"]["new_config_sha256"] =
+            serde_json::json!("0".repeat(64));
+    });
+    refused("another target", &|record| {
+        let source = record["certified_scope"]["old_source"].clone();
+        record["certified_scope"]["target"] = source;
+    });
+    // Removing the scope together with the version it requires yields a
+    // well-formed record of the earlier version; it is still not the record
+    // that was certified.
+    let mut legacy = json.clone();
+    legacy["native_joint_handoff_v1"]
+        .as_object_mut()
+        .unwrap()
+        .remove("certified_scope");
+    legacy["native_joint_handoff_v1"]["version"] = serde_json::json!(1);
+    let legacy: crate::distribution::RangeRelocation = serde_json::from_value(legacy).unwrap();
+    legacy
+        .native_joint_handoff_v1
+        .as_ref()
+        .unwrap()
+        .validate_for(&legacy)
+        .unwrap();
+    assert!(NativeJointCommittedDecision::from_committed(&legacy)
+        .unwrap()
+        .is_none());
+    let mut next = certified.clone();
+    next.relocations.insert(relocation, legacy);
+    assert!(
+        crate::distribution::test_validate_native_joint_handoff_preservation(certified, &next)
+            .is_err()
+    );
 }
 
 #[allow(clippy::too_many_arguments)]

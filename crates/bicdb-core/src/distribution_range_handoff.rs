@@ -15,7 +15,7 @@ mod joint;
 pub(crate) use joint::NativeJointReadOnlyPlanIdentity;
 pub(crate) use joint::{
     CommittedNativeJointDecisionObservation, NativeJointActivationAdmission,
-    NativeJointDecisionData, NativeJointDecisionPublicationAdmission,
+    NativeJointDecisionData, NativeJointDecisionProof, NativeJointDecisionPublicationAdmission,
     NativeJointDecisionPublicationRound, NativeJointDurableDecision, NativeJointHandoffPlan,
     NativeJointHandoffRuntime, NativeJointMaterializedFacts, NativeJointMaterializedQuorums,
     NativeJointNewObservation, NativeJointNewRound, NativeJointOldClosedQuorum,
@@ -35,11 +35,12 @@ pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{
     NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,
-    NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1, NativeRemoteNewFactSetV1,
-    NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum, NativeRemoteNewOperationV1,
-    NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit, NativeRemoteNewReplyV1,
-    NativeRemoteNewRequestV1, NativeRemoteNewRound, NativeRemoteNewSnapshotV1,
-    NativeRemoteNewTargetPinIssuance,
+    NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1,
+    NativeRemoteJointDecisionCertificate, NativeRemoteJointDecisionCertificateRound,
+    NativeRemoteNewFactSetV1, NativeRemoteNewHandoffV1, NativeRemoteNewMaterializedQuorum,
+    NativeRemoteNewOperationV1, NativeRemoteNewParticipant, NativeRemoteNewPinHandoffPermit,
+    NativeRemoteNewReplyV1, NativeRemoteNewRequestV1, NativeRemoteNewRound,
+    NativeRemoteNewSnapshotV1, NativeRemoteNewTargetPinIssuance,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{

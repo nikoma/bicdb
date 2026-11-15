@@ -7,8 +7,12 @@ use crate::distribution_range_image::{NativeRemoteImageManifestV1, NativeSourceE
 use crate::CancellationToken;
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
+mod certificate;
 mod decision;
 mod participant;
+pub(crate) use certificate::{
+    NativeRemoteJointDecisionCertificate, NativeRemoteJointDecisionCertificateRound,
+};
 pub(crate) use decision::{
     NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1, NativeRemoteDecisionReceiptV1,
     NativeRemoteDecisionSourceData, NativeRemoteDecisionSourceRequestV1,
@@ -69,6 +73,10 @@ pub(crate) enum NativeRemoteNewOperationV1 {
     PublishDecision {
         facts: NativeRemoteNewFactSetV1,
     },
+    /// Read-only: re-prove and return this recipient's ALREADY durable native
+    /// DECISION receipt and exact body. Never writes, pins, votes or retries a
+    /// publication; ordinary `Observe` callbacks stay byte-for-byte unchanged.
+    ObserveDecision,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -364,6 +372,10 @@ pub(crate) struct NativeRemoteNewReplyV1 {
     pub handoff: Option<NativeRemoteNewHandoffV1>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub native_decision: Option<NativeRemoteDecisionReceiptV1>,
+    /// Exact durable DECISION body, returned ONLY by `ObserveDecision`. DATA:
+    /// it is hash-bound to the authenticated receipt and grants nothing alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_decision_body: Option<NativeJointDecisionData>,
     pub metadata_term: u64,
     pub metadata_read_index: u64,
     pub metadata_context_id: Uuid,
@@ -435,8 +447,37 @@ impl NativeRemoteNewReplyV1 {
             (NativeRemoteNewOperationV1::PublishDecision { .. }, None) => {
                 return Err(invalid("native DECISION outcome not proved"))
             }
+            (NativeRemoteNewOperationV1::ObserveDecision, Some(receipt)) => {
+                let handoff = self.handoff.as_ref().ok_or_else(|| {
+                    invalid("observed native DECISION has no original pin handoff outcome")
+                })?;
+                receipt.require_observation(request, &handoff.fact_set_sha256)?;
+                let body = self
+                    .native_decision_body
+                    .as_ref()
+                    .ok_or_else(|| invalid("observed native DECISION body not returned"))?;
+                body.validate()?;
+                if receipt.node_id != self.snapshot.node_id
+                    || body.checksum_sha256() != receipt.decision_sha256
+                {
+                    return Err(invalid(
+                        "observed DECISION receipt/body differs from authenticated snapshot recipient",
+                    ));
+                }
+            }
+            (NativeRemoteNewOperationV1::ObserveDecision, None) => {
+                return Err(invalid("durable native DECISION observation not proved"))
+            }
             (_, None) => {}
             _ => return Err(invalid("unrequested native DECISION outcome")),
+        }
+        if self.native_decision_body.is_some()
+            && !matches!(
+                request.operation,
+                NativeRemoteNewOperationV1::ObserveDecision
+            )
+        {
+            return Err(invalid("unrequested native DECISION body"));
         }
         Ok(())
     }

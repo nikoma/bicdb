@@ -263,6 +263,7 @@ pub(in super::super) fn exercise(
             ranges,
             acknowledged,
             output,
+            template,
             process,
         );
         return;

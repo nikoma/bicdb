@@ -163,7 +163,7 @@ pub(crate) fn validate_native_joint_handoff_preservation(
 
 impl NativeJointHandoffMetadataV1 {
     pub(crate) fn from_actual_decision(
-        proof: &crate::distribution_range_handoff::NativeJointDurableDecision,
+        proof: &dyn crate::distribution_range_handoff::NativeJointDecisionProof,
     ) -> Result<Self> {
         proof.require_current()?;
         let actual = proof.data();
@@ -257,7 +257,7 @@ impl NativeJointHandoffMetadataV1 {
 impl DistributionStore {
     fn require_joint_metadata_observation(
         &self,
-        proof: &crate::distribution_range_handoff::NativeJointDurableDecision,
+        proof: &dyn crate::distribution_range_handoff::NativeJointDecisionProof,
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
     ) -> Result<()> {
@@ -280,7 +280,7 @@ impl DistributionStore {
     /// and target DB sequence equality is deliberately absent from this path.
     pub(crate) fn certify_native_joint_handoff(
         &mut self,
-        proof: &crate::distribution_range_handoff::NativeJointDurableDecision,
+        proof: &dyn crate::distribution_range_handoff::NativeJointDecisionProof,
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         actor: &ClusterNodeId,
@@ -350,7 +350,7 @@ impl DistributionStore {
     }
     pub(crate) fn promote_native_joint_handoff_frozen(
         &mut self,
-        proof: &crate::distribution_range_handoff::NativeJointDurableDecision,
+        proof: &dyn crate::distribution_range_handoff::NativeJointDecisionProof,
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         actor: &ClusterNodeId,
@@ -419,7 +419,7 @@ impl DistributionStore {
     /// pending-activation/cleanup stage prevents false convergence reporting.
     pub(crate) fn finalize_native_joint_membership_frozen(
         &mut self,
-        proof: &crate::distribution_range_handoff::NativeJointDurableDecision,
+        proof: &dyn crate::distribution_range_handoff::NativeJointDecisionProof,
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         actor: &ClusterNodeId,

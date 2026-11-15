@@ -116,6 +116,11 @@ pub(crate) struct AuthenticatedNativeRemoteNewFrame {
     reply: NativeRemoteNewReplyV1,
     original_request: CancellationToken,
     actual_observer: ClusterNodeId,
+    // What THIS exchange's pinned TLS/native handshake proved about the
+    // replying member. Never copied from, or overridable by, reply DATA.
+    actual_peer: ClusterNodeId,
+    actual_peer_incarnation: u64,
+    actual_peer_birth: crate::distribution::NativeStoreBirthV1,
 }
 /// Genuine original target->source Describe result. This proves only that
 /// the exact S2 export reference already retired; it grants no OLD release.
@@ -147,6 +152,215 @@ impl AuthenticatedNativeRemoteNewFrame {
     }
     pub(crate) fn actual_observer(&self) -> &ClusterNodeId {
         &self.actual_observer
+    }
+    /// The member this exchange actually authenticated (pinned certificate).
+    pub(crate) fn actual_peer(&self) -> &ClusterNodeId {
+        &self.actual_peer
+    }
+    pub(crate) fn actual_peer_incarnation(&self) -> u64 {
+        self.actual_peer_incarnation
+    }
+    pub(crate) fn actual_peer_birth(&self) -> &crate::distribution::NativeStoreBirthV1 {
+        &self.actual_peer_birth
+    }
+    /// Test control only: altered decoded reply DATA under the UNCHANGED
+    /// authenticated exchange identity, to prove consumers trust the latter.
+    #[cfg(test)]
+    pub(crate) fn test_replace_decoded_reply(mut self, reply: NativeRemoteNewReplyV1) -> Self {
+        self.reply = reply;
+        self
+    }
+}
+impl TcpClusterRelocationTransport {
+    /// One coordinator exchange under its own fresh committed observation.
+    pub(crate) fn remote_joint_decision_exchange(
+        &self,
+        metadata_leader: &ClusterNodeId,
+        recipient: &ClusterNodeId,
+        manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
+        phase_id: Uuid,
+        operation: NativeRemoteNewOperationV1,
+        parent: &CancellationToken,
+    ) -> Result<AuthenticatedNativeRemoteNewFrame> {
+        parent.check()?;
+        let remaining = match parent.deadline() {
+            Some(deadline) => deadline
+                .checked_duration_since(Instant::now())
+                .ok_or(BicDbError::QueryTimedOut)?,
+            None => Duration::from_secs(5),
+        };
+        let own_business = Uuid::now_v7();
+        let own = self.acquire_host_metadata_observation(
+            metadata_leader,
+            own_business,
+            remaining.min(Duration::from_secs(5)),
+            parent,
+        )?;
+        let request = NativeRemoteNewRequestV1 {
+            version: 1,
+            manifest: manifest.clone(),
+            phase_id,
+            operation,
+            business: Uuid::now_v7(),
+            challenge: Uuid::now_v7(),
+            budget_ms: remaining.as_millis().clamp(1, 4000) as u64,
+        };
+        self.request_remote_native_new(recipient, &request, &own, own_business, parent)
+    }
+    fn require_decision_round_members(
+        manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
+        members: &[ClusterNodeId],
+    ) -> Result<()> {
+        let unique = members.iter().collect::<std::collections::BTreeSet<_>>();
+        if members.is_empty()
+            || unique.len() != members.len()
+            || members.iter().any(|id| {
+                !manifest.old_members.contains_key(id) && !manifest.new_members.contains_key(id)
+            })
+        {
+            return Err(transport_error(
+                "remote decision round members are not distinct fixed OLD/NEW participants",
+            ));
+        }
+        Ok(())
+    }
+    fn decision_round_error(error: BicDbError, failures: &[String]) -> BicDbError {
+        if failures.is_empty() {
+            error
+        } else {
+            transport_error(format!(
+                "{error}; unreachable/refusing members: {}",
+                failures.join(" | ")
+            ))
+        }
+    }
+    /// Coordinator side of the remote decision: `Materialize`, then
+    /// `PrepareDecision`, then `PublishDecision` against the given members, and
+    /// finally the read-only durable observation that builds the certificate.
+    /// A member that fails a step is skipped; the certificate itself enforces
+    /// the OLD and NEW majorities (and new leader) from authenticated frames.
+    pub(crate) fn run_remote_joint_decision_round(
+        &self,
+        plan: std::sync::Arc<crate::distribution_range_handoff::NativeJointHandoffPlan>,
+        manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
+        phase_id: Uuid,
+        members: &[ClusterNodeId],
+        metadata_leader: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteJointDecisionCertificate> {
+        Self::require_decision_round_members(manifest, members)?;
+        let mut failures = Vec::new();
+        let mut round = crate::distribution_range_handoff::NativeRemoteNewRound::begin(
+            plan.clone(),
+            manifest.clone(),
+            phase_id,
+            parent,
+        )?;
+        let mut materialized = Vec::new();
+        for id in members {
+            match self.remote_joint_decision_exchange(
+                metadata_leader,
+                id,
+                manifest,
+                phase_id,
+                NativeRemoteNewOperationV1::Materialize,
+                parent,
+            ) {
+                Ok(frame) => {
+                    if manifest.new_members.contains_key(id) {
+                        round.record(frame)?;
+                    }
+                    materialized.push(id);
+                }
+                Err(error) => failures.push(format!("{id} materialize: {error}")),
+            }
+        }
+        let facts = round
+            .finish()
+            .map_err(|error| Self::decision_round_error(error, &failures))?
+            .facts()
+            .clone();
+        let mut prepared = Vec::new();
+        for id in materialized {
+            match self.remote_joint_decision_exchange(
+                metadata_leader,
+                id,
+                manifest,
+                phase_id,
+                NativeRemoteNewOperationV1::PrepareDecision {
+                    facts: facts.clone(),
+                },
+                parent,
+            ) {
+                Ok(_) => prepared.push(id),
+                Err(error) => failures.push(format!("{id} prepare: {error}")),
+            }
+        }
+        for id in prepared {
+            // A lost reply may still be durable: the observation below, not
+            // this reply, is what the certificate counts.
+            if let Err(error) = self.remote_joint_decision_exchange(
+                metadata_leader,
+                id,
+                manifest,
+                phase_id,
+                NativeRemoteNewOperationV1::PublishDecision {
+                    facts: facts.clone(),
+                },
+                parent,
+            ) {
+                failures.push(format!("{id} publish: {error}"));
+            }
+        }
+        self.recollect_remote_joint_decision_certificate(
+            plan,
+            manifest,
+            phase_id,
+            members,
+            metadata_leader,
+            parent,
+        )
+        .map_err(|error| Self::decision_round_error(error, &failures))
+    }
+    /// Rebuild the certificate from read-only authenticated observations of
+    /// each member's ALREADY durable native DECISION (for example after the
+    /// coordinator restarted). Publishes nothing and creates no participant.
+    pub(crate) fn recollect_remote_joint_decision_certificate(
+        &self,
+        plan: std::sync::Arc<crate::distribution_range_handoff::NativeJointHandoffPlan>,
+        manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
+        phase_id: Uuid,
+        members: &[ClusterNodeId],
+        metadata_leader: &ClusterNodeId,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteJointDecisionCertificate> {
+        Self::require_decision_round_members(manifest, members)?;
+        let mut failures = Vec::new();
+        let mut round =
+            crate::distribution_range_handoff::NativeRemoteJointDecisionCertificateRound::begin(
+                plan,
+                manifest.clone(),
+                phase_id,
+                parent,
+            )?;
+        for id in members {
+            match self.remote_joint_decision_exchange(
+                metadata_leader,
+                id,
+                manifest,
+                phase_id,
+                NativeRemoteNewOperationV1::ObserveDecision,
+                parent,
+            ) {
+                // An authenticated but inconsistent observation is never
+                // skipped: it refuses the whole certificate.
+                Ok(frame) => round.record(frame)?,
+                Err(error) => failures.push(format!("{id} observe decision: {error}")),
+            }
+        }
+        round
+            .finish()
+            .map_err(|error| Self::decision_round_error(error, &failures))
     }
 }
 impl TcpClusterRelocationTransport {
@@ -465,10 +679,15 @@ impl TcpClusterRelocationTransport {
         }
         token.check()?;
         own.require_live_request(own_business)?;
+        let actual_peer_birth = actual_birth
+            .ok_or_else(|| transport_error("remote NEW actual native recipient birth absent"))?;
         Ok(AuthenticatedNativeRemoteNewFrame {
             reply,
             original_request: token,
             actual_observer: self.caller_node_id.clone(),
+            actual_peer: peer.node_id().clone(),
+            actual_peer_incarnation: peer.member_incarnation(),
+            actual_peer_birth,
         })
     }
 }

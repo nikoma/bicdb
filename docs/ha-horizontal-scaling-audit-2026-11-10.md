@@ -16,9 +16,12 @@ scaling and fault-safe rebalance of the current artifact remain unqualified.
 Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
 Current draft520 `6de646beb603accf39358017d8e0c83c39c741b1` passed workspace /
 no-default compilation, PGwire511/0/2 and Rails20 runs/100 assertions. Core
-subsequently failed legacy primary-record-only FORMAT preservation. Native and
-remaining-workspace are pending; SQL completed2,682/0/4. Compilation does not execute
-the new native controls or qualify the original failed cases.
+subsequently failed legacy primary-record-only FORMAT preservation. Native
+completed375/37/1 and failed; remaining-workspace is pending. SQL completed
+2,682/0/4. The native failures include twenty setup prerequisites, one later
+Strong-read timeout and sixteen later policy/retry/retirement failures. A
+same-service identity expiry component passed; its release/cancellation controls
+failed setup. Compilation and partial component passes do not qualify full HA.
 
 Preceding520 candidate `7c77418656a41ec6e25c7601319e061c328f48e1` passed workspace
 and no-default compilation, PGwire511/0/2 and Rails20 runs/100 assertions.

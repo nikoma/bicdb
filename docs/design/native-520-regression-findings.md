@@ -4,7 +4,7 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
-### Source6de: Core failed; compilation, PGwire and Rails passed
+### Source6de: Core and Native failed; compilation, SQL, PGwire and Rails passed
 
 Current draft PR207 source is **1.0.520-beta /
 `6de646beb603accf39358017d8e0c83c39c741b1`**, tree
@@ -17,8 +17,8 @@ Workspace/all-target and no-default consumer compilation passed. PGwire complete
 100 assertions, zero failures/errors/skips, including actual process-kill queue
 and cache recovery, 24 completed reports and 24 cable messages. Core has failed
 at the legacy primary-record-only format-preservation assertion described below.
-SQL has completed 2,682/0/4; Native and remaining-workspace are still pending
-at this checkpoint. No overall
+SQL has completed 2,682/0/4. Native completed 375/37/1; remaining-workspace is
+still pending at this checkpoint. No overall
 pass or inherited Native acceptance is claimed.
 
 This successor composes the two backup-vector expectations, all-worker INITIAL
@@ -96,6 +96,28 @@ The real known-committed error/DDL cleanup control passed at raw12418 and the
 SQLSTATE mapping control at11875. This is component acceptance on source6de;
 it does not test the later primary-only correction or remote Serving composition,
 establish general distributed SQL, or override the failed Core job.
+
+Source6de Native job132814521759 completed **375 passed / 37 failed / one
+ignored**, 413 unique case-result rows, in 3,033.13 seconds. This is a failed CI
+cohort, not a physical failover measurement. Complete raw log: 103,678,832 bytes,
+SHA-256 `aec6a2b77679171285c9210039b7359df71339c604f0f189d1bef588bb27754d`;
+gzip SHA-256 `3ab11e1e4093f1b3a5d9689b21f342bae840e0bc41a5733565e7bfb87c15215b`.
+Independent complete raw-hash, summary and unique-case receipt SHA-256:
+`4352596d7ac6d5c3d1369e5eca8501bf7b9cc5055c8e53a3673dcadf4a70f06a`.
+
+| Actual boundary | Classification | Result and next evidence needed |
+| --- | --- | --- |
+| FIRST setup prerequisites | **Failed** | Twenty cases stop during setup: nineteen connection resets and one `service busy publishing Strong dispatcher`. These do not execute their intended later faults. Preserve the new all-worker returns and identify the first failing actor before changing timeouts. |
+| FIRST over-512 exercise | **Failed** | Initial SDK work is reached, then the original full Strong RPC times out before the intended relocation exercise. Its budget and assertions remain intact; the cause is not established. |
+| Hot Registered continuation | **Failed** | Fourteen cases reach actual Open then fail the first Registered policy helper; one fails a fresh same-candidate policy retry; one large unrelated-catalogue case reaches survivor OLD-observation retirement before failing. These are distinct cuts, not sixteen Open failures. The later source-only serving corrections have not executed. |
+| Same-service identity wait expiry | **Passed, component CI scope** | The actual held-service/original-parent expiry control passes. It stops before ALL-OLD effects and establishes no full relocation acceptance. |
+| Same-service identity wait release/cancellation | **Inconclusive for intended control** | Their cases fail setup: release on dispatcher publication contention and cancellation on connection reset. Intended held-lock outcomes are not tested by those failed executions. |
+| Integrated bounded recovery, automatic convergence and physical expansion | **Not tested** | New source composition is outside source6de. No physical loss, RPO/RTO, routing or capacity gate is cleared. |
+
+The counts alone do not prove an improvement over source7c: source6de defines
+four additional controls, and the reached failure cuts differ. Per-case cause
+classification remains in progress. No error/no-effect, lost-ACK or stale-route
+cause is inferred from a timeout or a missing diagnostic marker.
 
 ### Completed source7c: Core and Native failed; workspace and application components passed
 

@@ -76,6 +76,13 @@ impl NativeLeaderRangeMoveHosts {
     ) -> Arc<TcpClusterRelocationTransport> {
         Arc::clone(&self.backend().transport)
     }
+    /// The coordinator's OWN data service: what this node does itself (its
+    /// own native decision record, its own source retirement) runs on it.
+    pub(in crate::distribution_native_host) fn local_service(
+        &self,
+    ) -> Arc<Mutex<ClusterDataNodeService>> {
+        Arc::clone(&self.backend().service)
+    }
     fn store<'a>(
         &'a self,
         parent: &CancellationToken,

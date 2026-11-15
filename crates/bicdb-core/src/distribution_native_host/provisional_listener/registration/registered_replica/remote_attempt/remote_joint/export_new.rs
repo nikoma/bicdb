@@ -289,6 +289,70 @@ impl NativeRegisteredRemoteJointOwner {
             .validate_source_capture_read_pin(binding.range_id, actual)?;
         Ok(actual.clone())
     }
+    /// End this added member's obsolete participation custody of the REMOTE
+    /// decision round: the participant (its retained materialization and
+    /// decision attempt) and the export observation record. Both keep a
+    /// reference to this member's real freeze, which its own release needs
+    /// to own alone; in the in-process route the driver drops the equivalent
+    /// decision custody before the release.
+    ///
+    /// Only custody whose native pin the decision preparation already handed
+    /// off is ended, and only under this member's own proof that every final
+    /// member is durably open and after its own release continuation took
+    /// the freeze. Custody that still holds a pin is left exactly as it is;
+    /// the release then refuses by its own unchanged check. The protected
+    /// native decision record is untouched, no freeze is released and no
+    /// new participant can be created afterwards (its creation needs the
+    /// freeze this owner no longer holds). Absent custody is success.
+    pub(crate) fn retire_remote_decision_custody_after_remote_joint_open(
+        &self,
+        proof: &crate::distribution_range_handoff::NativeJointRemoteOldRetirementProof,
+    ) -> Result<()> {
+        let manifest = self.target.manifest();
+        proof.require_added_member_decision_custody_retirement(
+            self.target.native().local_node_id(),
+            manifest.relocation_id,
+            manifest.handoff_session,
+            manifest.nonce,
+        )?;
+        if self
+            .release
+            .try_lock()
+            .ok_or_else(|| invalid("Registered release continuation busy"))?
+            .is_none()
+        {
+            return Err(invalid(
+                "Registered decision custody retirement precedes its own release continuation",
+            ));
+        }
+        let mut participant = self
+            .remote_new
+            .try_lock()
+            .ok_or_else(|| invalid("remote NEW original Registered participant busy"))?;
+        let mut export = self
+            .export_new
+            .try_lock()
+            .ok_or_else(|| invalid("Registered original export pin custody busy"))?;
+        let ended_participant = if participant
+            .as_ref()
+            .is_some_and(|phase| phase.handoff_started())
+        {
+            participant.take()
+        } else {
+            None
+        };
+        let ended_export = if export.as_ref().is_some_and(|entry| entry.pin.is_none()) {
+            export.take()
+        } else {
+            None
+        };
+        drop(export);
+        drop(participant);
+        // The real drops happen outside both custody latches.
+        drop(ended_export);
+        drop(ended_participant);
+        Ok(())
+    }
     pub(crate) fn handoff_remote_new_export_pin(
         &self,
         permit: &crate::distribution_range_handoff::NativeRemoteNewPinHandoffPermit<'_>,

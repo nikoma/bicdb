@@ -289,6 +289,35 @@ impl NativeJointRemoteOldRetirementProof {
         }
         self.require_every_member_open()
     }
+    /// The added member held no OLD custody. What it can still hold of the
+    /// decision round is its own participation custody of the remote
+    /// decision (the retained materialization and decision attempt). It is
+    /// obsolete under the same proof: this member is the added member of
+    /// exactly this decision's relocation and session, and every final
+    /// member is durably open.
+    pub(crate) fn require_added_member_decision_custody_retirement(
+        &self,
+        local: &ClusterNodeId,
+        relocation: crate::distribution::RelocationId,
+        session: Uuid,
+        nonce: Uuid,
+    ) -> Result<()> {
+        self.require_live()?;
+        let data = self.release.data();
+        let promise = data.promise();
+        if local != &self.release.local
+            || !data.new_members().contains_key(local)
+            || data.old_members().contains_key(local)
+            || promise.relocation_id != relocation
+            || promise.session_id != session
+            || promise.nonce != nonce
+        {
+            return Err(invalid(
+                "joint retirement is not the added member's own decision participation",
+            ));
+        }
+        self.require_every_member_open()
+    }
     /// Same rule as the in-process phase for a survivor's own observation.
     pub(crate) fn require_actual_old_owner_retirement(
         &self,

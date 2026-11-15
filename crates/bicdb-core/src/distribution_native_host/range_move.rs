@@ -503,6 +503,9 @@ impl NativeRangeMoveSlot<RemoteJoinedHandoffBackend> {
     ) -> Result<Self> {
         let hosts = control.range_move_hosts()?;
         let transport = hosts.transport();
+        // This node's own data service: the move retires this node's own
+        // replica, and a node never sends a step request to itself.
+        let service = hosts.local_service();
         let remote = target.clone();
         Self::start_with(
             hosts,
@@ -510,6 +513,7 @@ impl NativeRangeMoveSlot<RemoteJoinedHandoffBackend> {
             target,
             Box::new(move || {
                 RemoteJoinedHandoffBackend::new(remote.clone(), Arc::clone(&transport))
+                    .with_local_service(Arc::clone(&service))
             }),
         )
     }

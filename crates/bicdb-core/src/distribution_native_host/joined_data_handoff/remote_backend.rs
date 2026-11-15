@@ -39,19 +39,37 @@
 //!
 //! Implemented: target admission (committed metadata only), the source cut
 //! with the target fence, the Close round, the target install and the export
-//! retirement, the joint decision, the three membership candidates, and the
-//! first part of the activation: every new member's bridge preparation,
-//! bridge publication and catalogue activation (Open), by step requests.
-//! The rest (bridge release, writer policy, serving, activation record,
-//! source retirement) answers a "not implemented" error.
+//! retirement, the joint decision, the three membership candidates, the
+//! activation up to and including every new member's release (bridge
+//! preparation, bridge publication, catalogue activation, OLD custody
+//! retirement and release, all by step requests), the activation record and
+//! the source retirement.
+//!
+//! Not implemented, because the member steps do not exist yet: the writer
+//! policy of the new members and the target's serving. `activate` stops at
+//! `bridge_writer_policy_hook` and `serve` at `target_serve_hook`, each with
+//! a "not implemented" error, and nothing further is committed.
+//!
+//! The coordinator's own data service. A handoff retires the coordinator's
+//! own replica (the pre-handoff range leader), and a member never sends a
+//! step request to itself. The backend is therefore optionally given this
+//! node's own data service, for exactly two things this node does itself:
+//! reading its own protected native decision record (the decision body of a
+//! coordinator without memory) and recording its own source retirement. It
+//! is never another member's service.
 use super::*;
 use crate::distribution_consensus::{MetadataRecoveryRolePurpose, MetadataRecoveryRoleRequest};
+use crate::distribution_data::{
+    NativeJointSourceRetired, NativeJointSourceRetirementProof,
+    NativeRemoteJointSourceRetirementCertificate,
+};
 use crate::distribution_range_consensus::{RangeWriteTransport, RecoveryFenceScope};
 use crate::distribution_range_handoff::{
-    NativeJointBridgeDecision, NativeJointCommittedDecision, NativeJointHandoffPlan,
-    NativeJointHandoffStepOperationV1, NativeJointHandoffStepOutcomeV1,
-    NativeJointHandoffStepRequestV1, NativeJointOldRound, NativeRemoteBridgePublicationCertificate,
-    NativeRemoteBridgePublicationCertificateRound, NativeRemoteJointDecisionCertificate,
+    NativeJointBridgeDecision, NativeJointBridgePhaseKindV1, NativeJointCommittedDecision,
+    NativeJointDecisionData, NativeJointHandoffPlan, NativeJointHandoffStepOperationV1,
+    NativeJointHandoffStepOutcomeV1, NativeJointHandoffStepRequestV1, NativeJointOldRound,
+    NativeRemoteBridgePublicationCertificate, NativeRemoteBridgePublicationCertificateRound,
+    NativeRemoteJointActivationCertificate, NativeRemoteJointDecisionCertificate,
     NativeRemoteOldOperationV1, NativeRemoteOldRequestV1,
 };
 use crate::distribution_range_image::NativeRemoteImageManifestV1;
@@ -85,6 +103,28 @@ const BRIDGE_STEP_CALLS: usize = 32;
 /// A bridge step that fails this many times in a row ends the call. The
 /// member continues the same step on the next call.
 const BRIDGE_STEP_FAILURES: usize = 4;
+
+/// A member's refusal of the read-only RELEASE observation while it holds no
+/// confirmed catalogue activation: its Open has not completed. As for the
+/// OLD observation there is no typed "not yet" answer.
+const RELEASE_NOT_OPEN: &str =
+    "joint bridge phase observation of this kind has no retained member state yet";
+/// The retired source's durable retirement, as the completing metadata stage
+/// reads it.
+enum RemoteSourceRetirement {
+    /// This coordinator is the retired source: its own service's receipt.
+    Local(NativeJointSourceRetired),
+    /// Another node is: its authenticated reply to this coordinator.
+    Remote(NativeRemoteJointSourceRetirementCertificate),
+}
+impl RemoteSourceRetirement {
+    fn proof(&self) -> &dyn NativeJointSourceRetirementProof {
+        match self {
+            Self::Local(retired) => retired,
+            Self::Remote(certificate) => certificate,
+        }
+    }
+}
 
 /// Receiver-side budget of one OLD request; the receiver bounds it to 5 s.
 const OLD_REQUEST_MS: u64 = 4000;
@@ -253,8 +293,40 @@ pub(crate) struct RemoteJoinedHandoffBackend {
     /// evidence only; a new object collects it again from the members.
     bridge_publication: Option<NativeRemoteBridgePublicationCertificate<RemoteBridgeDecision>>,
     /// What every new member answered for its completed Open, in the order
-    /// the members were asked. Historical DATA.
+    /// the members were asked. Historical DATA. Empty when this object found
+    /// every member already open and sent no Open.
     bridge_opened: Vec<(ClusterNodeId, NativeJointHandoffStepOutcomeV1)>,
+    /// What every new member answered to the read-only RELEASE observation
+    /// at the start of the last activation: `None` while its Open is not
+    /// complete, otherwise whether it is released. Historical DATA.
+    bridge_observed: Vec<(ClusterNodeId, Option<bool>)>,
+    /// The members this object asked to retire their OLD custody.
+    bridge_retired: Vec<ClusterNodeId>,
+    /// What every new member answered for its completed release, in the
+    /// order the members were asked. Historical DATA.
+    bridge_released: Vec<(ClusterNodeId, NativeJointHandoffStepOutcomeV1)>,
+    /// This node's own data service, when the caller supplied it. See the
+    /// module documentation.
+    local: Option<Arc<Mutex<ClusterDataNodeService>>>,
+    /// Range, relocation and decision digest of the committed handoff record
+    /// the last `resync` read.
+    committed_record: Option<(RangeId, RelocationId, String)>,
+    /// The decision body, checked against the committed digest: of the
+    /// retained certificate, or of this node's own native decision record.
+    decision_body: Option<NativeJointDecisionData>,
+    /// The all-released observation of the new set, for the activation
+    /// record. It lives inside one bounded window.
+    activation: Option<NativeRemoteJointActivationCertificate>,
+    /// The retired source's retirement, for the completion record.
+    retired: Option<RemoteSourceRetirement>,
+    /// Test only: pass the two hooks of the member steps that do not exist
+    /// yet. It exists only until those steps land; then it is removed.
+    #[cfg(test)]
+    skip_unimplemented_member_steps: bool,
+    /// Test only: end the activation after every member's Open, as a
+    /// coordinator that stops there would.
+    #[cfg(test)]
+    stop_after_open: bool,
 }
 
 impl RemoteJoinedHandoffBackend {
@@ -281,7 +353,59 @@ impl RemoteJoinedHandoffBackend {
             committed_decision: None,
             bridge_publication: None,
             bridge_opened: Vec::new(),
+            bridge_observed: Vec::new(),
+            bridge_retired: Vec::new(),
+            bridge_released: Vec::new(),
+            local: None,
+            committed_record: None,
+            decision_body: None,
+            activation: None,
+            retired: None,
+            #[cfg(test)]
+            skip_unimplemented_member_steps: false,
+            #[cfg(test)]
+            stop_after_open: false,
         }
+    }
+    /// Give the backend this coordinator's OWN data service: the service of
+    /// the node whose transport it was built with. It is used only for what
+    /// this node does itself (see the module documentation); a service of
+    /// another node is refused by that service's own check of the metadata
+    /// read, which is this transport's.
+    pub(crate) fn with_local_service(
+        mut self,
+        service: Arc<Mutex<ClusterDataNodeService>>,
+    ) -> Self {
+        self.local = Some(service);
+        self
+    }
+    /// Test only, and only until the writer-policy and target-serve member
+    /// steps exist: pass their two hooks so that the remainder of the drive
+    /// (activation record, source retirement) can be exercised end to end.
+    /// Without it the drive stops at the first hook.
+    #[cfg(test)]
+    pub(crate) fn test_skip_unimplemented_member_steps(mut self) -> Self {
+        self.skip_unimplemented_member_steps = true;
+        self
+    }
+    /// Test only: this object's activation ends after every member's Open.
+    #[cfg(test)]
+    pub(crate) fn test_stop_after_open(mut self) -> Self {
+        self.stop_after_open = true;
+        self
+    }
+    /// What every new member answered to the RELEASE observation at the
+    /// start of the last activation.
+    pub(crate) fn bridge_observed(&self) -> &[(ClusterNodeId, Option<bool>)] {
+        &self.bridge_observed
+    }
+    /// The members this object asked to retire their OLD custody.
+    pub(crate) fn bridge_retired(&self) -> &[ClusterNodeId] {
+        &self.bridge_retired
+    }
+    /// Every new member's completed release outcome, in request order.
+    pub(crate) fn bridge_released(&self) -> &[(ClusterNodeId, NativeJointHandoffStepOutcomeV1)] {
+        &self.bridge_released
     }
     /// The certified decision as the committed record names it.
     pub(crate) fn committed_decision(&self) -> Option<&NativeJointCommittedDecision> {
@@ -986,6 +1110,7 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         let recorded = Self::recorded(relocation);
         self.require_coordinator(members, range, recorded)?;
         self.relocation_id = Some(relocation.id);
+        self.committed_record = None;
         self.committed_decision = None;
         self.certificate_unrecoverable = None;
         match recorded {
@@ -997,6 +1122,10 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
             Some(stage) => {
                 // A certified decision exists only after a source cut.
                 self.cut_started = true;
+                self.committed_record = relocation
+                    .native_joint_handoff_v1
+                    .as_ref()
+                    .map(|record| (range.id, relocation.id, record.decision_sha256().to_owned()));
                 self.committed_decision = NativeJointCommittedDecision::from_committed(relocation)
                     .map_err(|error| stage_error("committed decision record", error))?;
                 if self.certificate.is_some() {
@@ -1220,8 +1349,9 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
     }
 
     /// The three membership candidates, built from the retained certificate
-    /// by the same stage functions the in-process backend uses. The two
-    /// completion records belong to the bridge phases.
+    /// by the same stage functions the in-process backend uses, and the two
+    /// completion records, built from the proofs `prove_activation` and
+    /// `retire_source` retained.
     fn stage_candidate(
         &mut self,
         committed: Option<NativeJointHandoffStageV1>,
@@ -1233,10 +1363,26 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
     ) -> Result<()> {
         match committed {
             Some(NativeJointHandoffStageV1::AwaitingActivation) => {
-                return Err(not_implemented("activation record"))
+                let proof = self.activation.as_ref().ok_or_else(|| {
+                    remote_error("activation proof absent before the activation record")
+                })?;
+                view.record_native_joint_activation(proof, fresh, business, actor, now)
+                    .map_err(|error| stage_error("activation record", error))?;
+                return Ok(());
             }
             Some(NativeJointHandoffStageV1::AwaitingCleanup) => {
-                return Err(not_implemented("source retirement record"))
+                let retired = self.retired.as_ref().ok_or_else(|| {
+                    remote_error("source retirement receipt absent before completion")
+                })?;
+                view.complete_native_joint_source_retirement(
+                    retired.proof(),
+                    fresh,
+                    business,
+                    actor,
+                    now,
+                )
+                .map_err(|error| stage_error("source retirement record", error))?;
+                return Ok(());
             }
             _ => {}
         }
@@ -1300,10 +1446,10 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         Ok(())
     }
 
-    /// The first part of the activation, by step requests to every new
+    /// The activation up to the release, by step requests to every new
     /// member, in the orders of the in-process driver (preparation and
-    /// publication in node order; Open on the target first, then on the
-    /// surviving members in node order):
+    /// publication in node order; Open and release on the target first, then
+    /// on the surviving members in node order):
     /// 1. `BridgePrepare`: the member prepares its own joint serving. A
     ///    surviving member closes its writer DATA domain over its own
     ///    retained source closure, under a policy it reads from its own
@@ -1318,7 +1464,18 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
     ///    are counted into the publication certificate.
     /// 3. `BridgeOpen`: the member persists its own catalogue activation
     ///    after reading every other member's bridge itself.
-    /// Then the release, which is not implemented.
+    /// 4. `RetireOldCustody`: the member retires the OLD custody it still
+    ///    holds after proving, itself, every new member durably open.
+    /// 5. `BridgeRelease`: the member releases its own freeze, repeated
+    ///    while the member answers "not complete".
+    /// Then the writer policy, which is not implemented.
+    ///
+    /// A repeated activation first asks every member, read-only, for its
+    /// RELEASE observation. A member answers it only once its own Open is
+    /// confirmed. When every member answers, parts 1 to 3 are not sent
+    /// again: a released member has ended its preparation custody and
+    /// refuses a repeated publication or Open. A member that is observed
+    /// released is not asked to retire custody again either.
     ///
     /// Nothing is retained that a new object could not obtain again: the
     /// decision identity comes from the committed record, and a member
@@ -1376,8 +1533,126 @@ impl JoinedHandoffBackend for RemoteJoinedHandoffBackend {
         self.activate_new_members(decision, members, parent)
     }
 
-    fn serve(&mut self, _hosts: &mut Self::Hosts, _parent: &CancellationToken) -> Result<usize> {
-        Err(not_implemented("target serving"))
+    fn serve(&mut self, _hosts: &mut Self::Hosts, parent: &CancellationToken) -> Result<usize> {
+        self.target_serve_hook(parent)
+    }
+
+    fn records_completion(&self) -> bool {
+        true
+    }
+
+    /// Observe every member of the new set released and open, as the
+    /// coordinator outside the new set: one authenticated RELEASE frame of
+    /// every member inside one bounded window over this coordinator's own
+    /// transport. The decision the observation is made for is the body
+    /// whose checksum is the committed digest.
+    fn prove_activation(
+        &mut self,
+        members: &RemoteMembers,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        self.activation = None;
+        let (range, relocation, digest) = self.committed_record.clone().ok_or_else(|| {
+            remote_error("the activation record has no committed handoff record of this handoff")
+        })?;
+        let body = self.committed_decision_body(members, range, relocation, &digest, parent)?;
+        self.activation = Some(
+            NativeRemoteJointActivationCertificate::observe_as_outside_coordinator(
+                &body,
+                &self.transport,
+                &members.metadata_leader,
+                parent,
+            )?,
+        );
+        Ok(())
+    }
+
+    /// The retired source records its own retirement on its own committed
+    /// metadata read. Nothing of the earlier stages is needed, so a new
+    /// object finishes it.
+    ///
+    /// When this coordinator is the retired source (the handoff retires the
+    /// pre-handoff range leader, which coordinates), its own data service
+    /// records it: the same confirmation and retirement the step receiver
+    /// runs, on this node's own metadata read. Otherwise the source is
+    /// asked by a `SourceRetire` step and its authenticated reply is kept.
+    fn retire_source(
+        &mut self,
+        members: &RemoteMembers,
+        range: &RangeDescriptor,
+        relocation: &RangeRelocation,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        self.retired = None;
+        let source = relocation
+            .source
+            .clone()
+            .ok_or_else(|| remote_error("the committed relocation names no source"))?;
+        if range
+            .replicas
+            .iter()
+            .any(|replica| replica.node_id == source)
+        {
+            return Err(remote_error(
+                "the source is still a replica of the committed range",
+            ));
+        }
+        let coordinator = self.coordinator();
+        if coordinator != members.metadata_leader {
+            return Err(remote_error(format!(
+                "coordinator {coordinator} is not the metadata leader {}; the retired source admits its retirement step from the metadata leader or the committed range leader only",
+                members.metadata_leader
+            )));
+        }
+        if source == coordinator {
+            let local = self.local.clone().ok_or_else(|| {
+                remote_error(format!(
+                    "coordinator {coordinator} is the retired source and was not given its own data service; its own retirement cannot be recorded by a request to itself"
+                ))
+            })?;
+            let retired = retry_timed_out(|| {
+                let token = bounded(parent, REQUEST);
+                let business = Uuid::now_v7();
+                let own = self.transport.acquire_host_metadata_observation(
+                    &members.metadata_leader,
+                    business,
+                    REQUEST,
+                    &token,
+                )?;
+                ClusterDataNodeService::retire_confirmed_native_joint_source(
+                    &local,
+                    &own,
+                    business,
+                    relocation.id,
+                    range.id,
+                    &token,
+                )
+            })
+            .map_err(|error| stage_error("source retirement", error))?;
+            self.retired = Some(RemoteSourceRetirement::Local(retired));
+            return Ok(());
+        }
+        let digest = relocation
+            .native_joint_handoff_v1
+            .as_ref()
+            .map(|record| record.decision_sha256().to_owned())
+            .ok_or_else(|| remote_error("the committed relocation records no joint decision"))?;
+        let body =
+            self.committed_decision_body(members, range.id, relocation.id, &digest, parent)?;
+        let operation = NativeJointHandoffStepOperationV1::SourceRetire {
+            decision_sha256: digest,
+        };
+        let phase = bounded(parent, BRIDGE_PHASE);
+        let frame = self
+            .complete_bridge_step(members, &body, &source, &operation, &phase)
+            .map_err(|error| stage_error(&format!("source retirement of {source}"), error))?;
+        self.retired = Some(RemoteSourceRetirement::Remote(
+            NativeRemoteJointSourceRetirementCertificate::from_frame(&body, frame)
+                .map_err(|error| stage_error("source retirement certificate", error))?,
+        ));
+        Ok(())
     }
 }
 
@@ -1416,6 +1691,22 @@ impl RemoteJoinedHandoffBackend {
             NativeJointHandoffStepOperationV1::BridgeOpen { .. } => self
                 .transport
                 .request_native_joint_bridge_open(recipient, decision, &request, &own, &token),
+            NativeJointHandoffStepOperationV1::BridgePhaseObserve { kind, .. } => self
+                .transport
+                .request_native_joint_bridge_phase_observation(
+                    recipient, decision, *kind, &request, &own, &token,
+                ),
+            NativeJointHandoffStepOperationV1::RetireOldCustody { .. } => self
+                .transport
+                .request_native_joint_bridge_retire_old_custody(
+                    recipient, decision, &request, &own, &token,
+                ),
+            NativeJointHandoffStepOperationV1::BridgeRelease { .. } => self
+                .transport
+                .request_native_joint_bridge_release(recipient, decision, &request, &own, &token),
+            NativeJointHandoffStepOperationV1::SourceRetire { .. } => self
+                .transport
+                .request_native_joint_source_retire(recipient, decision, &request, &own, &token),
             _ => Err(remote_error("not a bridge step of the activation")),
         }
     }
@@ -1478,23 +1769,170 @@ impl RemoteJoinedHandoffBackend {
                 "coordinator {coordinator} is a new member of the moved range; its own bridge steps would have to run locally, which is not implemented. A handoff that retires the coordinator's replica is the supported case"
             )));
         }
-        // Open: the target first, then the surviving members in node order.
-        // Preparation and publication: node order.
+        // Open and release: the target first, then the surviving members in
+        // node order. Preparation, publication and custody retirement: node
+        // order.
         let mut order = vec![self.target.clone()];
         order.extend(new.iter().filter(|node| **node != self.target).cloned());
         let decision_sha256 = decision.checksum_sha256().to_owned();
 
-        let operation = NativeJointHandoffStepOperationV1::BridgePrepare {
+        // What the members already hold decides what is sent.
+        let phase = bounded(parent, BRIDGE_PHASE);
+        let mut observed = Vec::new();
+        for node in &new {
+            let answer = self
+                .observe_member_release(members, &decision, node, &decision_sha256, &phase)
+                .map_err(|error| stage_error(&format!("release observation of {node}"), error))?;
+            observed.push((node.clone(), answer));
+        }
+        self.bridge_observed = observed.clone();
+        let every_open = observed.iter().all(|(_, answer)| answer.is_some());
+        if !every_open {
+            if let Some((released, _)) = observed.iter().find(|(_, answer)| *answer == Some(true)) {
+                let (behind, _) = observed
+                    .iter()
+                    .find(|(_, answer)| answer.is_none())
+                    .expect("a member without a confirmed Open exists");
+                // A member releases only after it observed every other
+                // member durably open, so this member lost what it retained.
+                return Err(remote_error(format!(
+                    "new member {behind} reports no confirmed Open although {released} is already released; {behind} no longer retains its bridge state, and no bridge step is sent again"
+                )));
+            }
+            self.prepare_publish_open(&decision, members, &new, &order, &decision_sha256, parent)?;
+            #[cfg(test)]
+            if self.stop_after_open {
+                return Err(remote_error("test stop after Open"));
+            }
+        }
+        let released = |node: &ClusterNodeId| {
+            every_open
+                && observed
+                    .iter()
+                    .any(|(member, answer)| member == node && *answer == Some(true))
+        };
+
+        let operation = NativeJointHandoffStepOperationV1::RetireOldCustody {
             decision_sha256: decision_sha256.clone(),
         };
         let phase = bounded(parent, BRIDGE_PHASE);
-        for node in &new {
+        let mut retired = Vec::new();
+        for node in new.iter().filter(|node| !released(node)) {
             self.complete_bridge_step(members, &decision, node, &operation, &phase)
+                .map_err(|error| {
+                    stage_error(&format!("OLD custody retirement of {node}"), error)
+                })?;
+            retired.push(node.clone());
+        }
+        self.bridge_retired = retired;
+
+        // A released member answers the repeated request from what it
+        // retained, re-read under its own lock.
+        let operation = NativeJointHandoffStepOperationV1::BridgeRelease { decision_sha256 };
+        let phase = bounded(parent, BRIDGE_PHASE);
+        let mut outcomes = Vec::new();
+        for node in &order {
+            let frame = self
+                .complete_bridge_step(members, &decision, node, &operation, &phase)
+                .map_err(|error| stage_error(&format!("bridge release of {node}"), error))?;
+            if frame.outcome().released != Some(true) {
+                return Err(remote_error(format!(
+                    "new member {node} completed its release step without reporting itself released"
+                )));
+            }
+            outcomes.push((node.clone(), frame.outcome().clone()));
+        }
+        self.bridge_released = outcomes;
+
+        self.bridge_writer_policy_hook(&decision, members, parent)
+    }
+
+    /// HOOK for the member step that does not exist yet: the writer policy
+    /// of every surviving member and of the target, after every new member
+    /// is released. The step requests belong here, in the order of the
+    /// in-process driver: the surviving members, then the target.
+    fn bridge_writer_policy_hook(
+        &mut self,
+        _decision: &RemoteBridgeDecision,
+        _members: &RemoteMembers,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        parent.check()?;
+        #[cfg(test)]
+        if self.skip_unimplemented_member_steps {
+            return Ok(());
+        }
+        Err(not_implemented("bridge writer policy"))
+    }
+
+    /// HOOK for the member step that does not exist yet: the target recovers
+    /// the leadership of the range and opens its ingress. The step request
+    /// belongs here; it returns the ranges the target recovered.
+    fn target_serve_hook(&mut self, parent: &CancellationToken) -> Result<usize> {
+        parent.check()?;
+        #[cfg(test)]
+        if self.skip_unimplemented_member_steps {
+            return Ok(0);
+        }
+        Err(not_implemented("target serve"))
+    }
+
+    /// One member's read-only RELEASE observation: `None` while the member
+    /// holds no confirmed catalogue activation, otherwise whether it is
+    /// released. Any other refusal is repeated a bounded number of times
+    /// and then returned: an unknown answer never counts as "not open".
+    fn observe_member_release(
+        &self,
+        members: &RemoteMembers,
+        decision: &RemoteBridgeDecision,
+        node: &ClusterNodeId,
+        decision_sha256: &str,
+        phase: &CancellationToken,
+    ) -> Result<Option<bool>> {
+        let operation = NativeJointHandoffStepOperationV1::BridgePhaseObserve {
+            decision_sha256: decision_sha256.to_owned(),
+            kind: NativeJointBridgePhaseKindV1::Release,
+        };
+        let mut failures = 0;
+        loop {
+            phase.check()?;
+            match self.bridge_step(members, decision, node, &operation, phase) {
+                Ok(frame) => return Ok(Some(frame.outcome().released == Some(true))),
+                Err(error) if error.to_string().contains(RELEASE_NOT_OPEN) => return Ok(None),
+                Err(error) => {
+                    phase.check()?;
+                    failures += 1;
+                    if failures >= BRIDGE_STEP_FAILURES {
+                        return Err(error);
+                    }
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+            }
+        }
+    }
+
+    /// Preparation, publication and Open on every new member.
+    fn prepare_publish_open(
+        &mut self,
+        decision: &RemoteBridgeDecision,
+        members: &RemoteMembers,
+        new: &[ClusterNodeId],
+        order: &[ClusterNodeId],
+        decision_sha256: &str,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let coordinator = self.coordinator();
+        let operation = NativeJointHandoffStepOperationV1::BridgePrepare {
+            decision_sha256: decision_sha256.to_owned(),
+        };
+        let phase = bounded(parent, BRIDGE_PHASE);
+        for node in new {
+            self.complete_bridge_step(members, decision, node, &operation, &phase)
                 .map_err(|error| stage_error(&format!("bridge preparation of {node}"), error))?;
         }
 
         let operation = NativeJointHandoffStepOperationV1::BridgePublish {
-            decision_sha256: decision_sha256.clone(),
+            decision_sha256: decision_sha256.to_owned(),
         };
         let phase = bounded(parent, BRIDGE_PHASE);
         let mut round = NativeRemoteBridgePublicationCertificateRound::begin(
@@ -1502,9 +1940,9 @@ impl RemoteJoinedHandoffBackend {
             coordinator,
             &phase,
         )?;
-        for node in &new {
+        for node in new {
             let frame = self
-                .complete_bridge_step(members, &decision, node, &operation, &phase)
+                .complete_bridge_step(members, decision, node, &operation, &phase)
                 .map_err(|error| stage_error(&format!("bridge publication of {node}"), error))?;
             // Counted inside the frame's own freshness window.
             round
@@ -1517,21 +1955,85 @@ impl RemoteJoinedHandoffBackend {
                 .map_err(|error| stage_error("bridge publication certificate", error))?,
         );
 
-        let operation = NativeJointHandoffStepOperationV1::BridgeOpen { decision_sha256 };
+        let operation = NativeJointHandoffStepOperationV1::BridgeOpen {
+            decision_sha256: decision_sha256.to_owned(),
+        };
         let phase = bounded(parent, BRIDGE_PHASE);
         let mut opened = Vec::new();
-        for node in &order {
+        for node in order {
             let frame = self
-                .complete_bridge_step(members, &decision, node, &operation, &phase)
+                .complete_bridge_step(members, decision, node, &operation, &phase)
                 .map_err(|error| stage_error(&format!("bridge open of {node}"), error))?;
             opened.push((node.clone(), frame.outcome().clone()));
         }
         self.bridge_opened = opened;
+        Ok(())
+    }
 
-        // The next parts continue here, in this order: every member's
-        // custody retirement and bridge release, then its writer policy.
-        // Serving, the activation record and the source retirement have
-        // their own trait entries.
-        Err(not_implemented("bridge release"))
+    /// The decision body whose checksum is the committed digest `digest`.
+    ///
+    /// The certified record of the committed metadata carries the decision's
+    /// scope only. The body also holds every old member's closed facts, the
+    /// observed irrevocable bounds, every new member's materialized facts,
+    /// the selected source and the decided point; none of them is in the
+    /// committed record, so the body cannot be rebuilt from it. It is taken
+    /// from the retained certificate, or, for a coordinator without memory,
+    /// read from this node's own protected native decision record (this
+    /// node published the decision as an old member), which its own service
+    /// returns only when the record's body checksum is the digest of this
+    /// node's own committed metadata read. Otherwise it is refused.
+    fn committed_decision_body(
+        &mut self,
+        members: &RemoteMembers,
+        range: RangeId,
+        relocation: RelocationId,
+        digest: &str,
+        parent: &CancellationToken,
+    ) -> Result<NativeJointDecisionData> {
+        if let Some(body) = self
+            .decision_body
+            .as_ref()
+            .filter(|body| body.checksum_sha256() == digest)
+        {
+            return Ok(body.clone());
+        }
+        self.decision_body = None;
+        let body = match self
+            .certificate
+            .as_ref()
+            .map(|certificate| certificate.data())
+            .filter(|data| data.checksum_sha256() == digest)
+        {
+            Some(data) => data.clone(),
+            None => {
+                let local = self.local.clone().ok_or_else(|| {
+                    remote_error(
+                        "the decision body is needed and is held neither as a retained decision certificate nor readable from this node's own native decision record (no own data service was supplied); the committed record carries the decision's scope only",
+                    )
+                })?;
+                let body = retry_timed_out(|| {
+                    let token = bounded(parent, REQUEST);
+                    let business = Uuid::now_v7();
+                    let own = self.transport.acquire_host_metadata_observation(
+                        &members.metadata_leader,
+                        business,
+                        REQUEST,
+                        &token,
+                    )?;
+                    ClusterDataNodeService::committed_native_joint_decision_body(
+                        &local, &own, business, relocation, range, &token,
+                    )
+                })
+                .map_err(|error| stage_error("committed decision body", error))?;
+                if body.checksum_sha256() != digest {
+                    return Err(remote_error(
+                        "this node's own native decision record is not the committed decision",
+                    ));
+                }
+                body
+            }
+        };
+        self.decision_body = Some(body.clone());
+        Ok(body)
     }
 }

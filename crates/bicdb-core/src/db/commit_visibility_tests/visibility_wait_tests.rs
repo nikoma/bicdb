@@ -197,12 +197,16 @@ fn exercise_visibility_wait_with_actual_owner(
                 sequence: lower_sequence
             }
         );
-        let higher = scope.spawn(|| {
+        let higher_db = &db;
+        let higher_record = &original_b;
+        let higher = scope.spawn(move || {
+            let db = higher_db;
+            let original_b = higher_record;
             let thread_floor_before = db.last_commit_seq_on_this_thread();
             let mut transaction = db.begin_transaction().unwrap();
             assert_eq!(transaction.isolation(), TransactionIsolation::ReadCommitted);
             transaction
-                .insert(B_COLLECTION, original_b.clone())
+                .insert(B_COLLECTION, (*original_b).clone())
                 .unwrap();
             let transaction_id = transaction.id();
             let observer = transaction.observe_outcome();
@@ -466,7 +470,9 @@ fn actual_derived_memory_write_unknown_retains_original_identity_without_worker_
         let lower_sequence = receive(&lower_durable, "lower WAL before actual worker");
         let (derived_applied_sender, derived_applied) = mpsc::channel();
         let (worker_return_sender, worker_return) = mpsc::channel();
-        let worker = scope.spawn(|| {
+        let worker_db = &db;
+        let worker = scope.spawn(move || {
+            let db = worker_db;
             let thread_floor_before = db.last_commit_seq_on_this_thread();
             let _hook = arm_after_actual_apply(Box::new(move |sequence| {
                 derived_applied_sender.send(sequence).unwrap();
@@ -634,7 +640,9 @@ fn actual_unknown_job_format_before_rename_failure_keeps_status_unpublished_and_
         let (c_sender, c_apply) = mpsc::channel();
         let (worker_sender, worker_result) = mpsc::channel();
         let format_path = db.data_path().join(crate::format::FORMAT_METADATA_FILE);
-        let worker = scope.spawn(|| {
+        let worker_db = &db;
+        let worker = scope.spawn(move || {
+            let db = worker_db;
             let fault = Rc::new(RefCell::new(None));
             let hook_fault = fault.clone();
             let _hook = arm_after_actual_apply(Box::new(move |sequence| {
@@ -737,7 +745,9 @@ fn actual_older_pending_worker_snapshot_cannot_replay_after_other_worker_retains
         let (release_old_sender, release_old_receiver) = mpsc::channel();
         let mut release_old = ReleaseLower(Some(release_old_sender));
         let (old_sender, old_result) = mpsc::channel();
-        let older = scope.spawn(|| {
+        let old_worker_db = &db;
+        let older = scope.spawn(move || {
+            let db = old_worker_db;
             let _hook = arm_after_memory_job_selection(Box::new(move |ids| {
                 selected_sender.send(ids).unwrap();
                 release_old_receiver
@@ -767,7 +777,9 @@ fn actual_older_pending_worker_snapshot_cannot_replay_after_other_worker_retains
         let a_sequence = receive(&a_wal, "A WAL for selected-cohort race");
         let (c_sender, c_apply) = mpsc::channel();
         let (new_sender, new_result) = mpsc::channel();
-        let newer = scope.spawn(|| {
+        let new_worker_db = &db;
+        let newer = scope.spawn(move || {
+            let db = new_worker_db;
             let _hook = arm_after_actual_apply(Box::new(move |sequence| {
                 c_sender.send(sequence).unwrap();
             }));
@@ -864,7 +876,9 @@ fn actual_held_memory_job_claim_allows_other_eligible_job_at_same_limit_one() {
         let (release_sender, release_receiver) = mpsc::channel();
         let mut release_first = ReleaseLower(Some(release_sender));
         let (first_sender, first_result) = mpsc::channel();
-        let first_worker = scope.spawn(|| {
+        let first_worker_db = &db;
+        let first_worker = scope.spawn(move || {
+            let db = first_worker_db;
             let _hook = arm_after_memory_job_claim(Box::new(move |ids| {
                 claimed_sender.send(ids).unwrap();
                 release_receiver
@@ -890,7 +904,9 @@ fn actual_held_memory_job_claim_allows_other_eligible_job_at_same_limit_one() {
         assert_eq!(paged.store().transactions().next_xid(), before_xid);
         assert_eq!(paged.store().wal().next_lsn(), before_lsn);
         let (second_sender, second_result) = mpsc::channel();
-        let second_worker = scope.spawn(|| {
+        let second_worker_db = &db;
+        let second_worker = scope.spawn(move || {
+            let db = second_worker_db;
             // The identical requested limit is the regression: selecting the
             // first busy Pending ID again would starve this eligible other ID.
             second_sender.send(db.process_memory_index_jobs(1)).unwrap();

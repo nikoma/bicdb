@@ -145,7 +145,15 @@ fn native_local_rf3_real_follower_apply_completes_before_other_range_global_gap_
         let (b_sender, b_return) = mpsc::channel();
         let (public_probe_sender, public_probe) = mpsc::channel();
         let target_open = fixture.databases[&n1].read().incarnation_id().to_owned();
-        let higher = scope.spawn(|| {
+        let higher_fixture = &fixture;
+        let higher_origin = &n0;
+        let higher_target = &n1;
+        let higher_record = &b;
+        let higher = scope.spawn(move || {
+            let fixture = higher_fixture;
+            let n0 = higher_origin;
+            let n1 = higher_target;
+            let b = higher_record;
             // Selection uses the actual target open, never an authority DTO.
             // The private native finalizer validates its real producer before
             // this DATA-only probe invokes the wrong public API on the same Tx.
@@ -153,16 +161,16 @@ fn native_local_rf3_real_follower_apply_completes_before_other_range_global_gap_
                 target_open,
                 Box::new(move |data| public_probe_sender.send(data).unwrap()),
             );
-            let target_floor_before = fixture.databases[&n1]
+            let target_floor_before = fixture.databases[n1]
                 .read()
                 .last_commit_seq_on_this_thread();
-            let database = fixture.databases[&n0].read();
+            let database = fixture.databases[n0].read();
             let mut transaction = database.begin_transaction().unwrap();
-            transaction.insert("items", b.clone()).unwrap();
+            transaction.insert("items", (*b).clone()).unwrap();
             let started = Instant::now();
             let result = transaction.commit_with_sequence();
             let elapsed = started.elapsed();
-            let target_floor_after = fixture.databases[&n1]
+            let target_floor_after = fixture.databases[n1]
                 .read()
                 .last_commit_seq_on_this_thread();
             b_sender

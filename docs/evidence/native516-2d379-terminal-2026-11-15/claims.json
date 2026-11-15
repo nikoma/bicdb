@@ -1,0 +1,614 @@
+{
+  "schema": 1,
+  "kind": "historical_failed_PR204_acceptance_NOT_physical_qualification",
+  "source": {
+    "head": "2d379154a67eca6d6ed5f8f9b5dbe8d7a9c987bd",
+    "version": "1.0.516-beta",
+    "actual_GitHub_merge_checkout": "5bd1cba6f47c037d095411131a9e911c69536b0d",
+    "actual_checkout_tree": "adfbf752ac0ff5c2ce4aed0476b942d61354a6c7",
+    "head_checkout_tree_equal": true,
+    "run": 43662386840,
+    "Rails_run": 43662386744,
+    "PR": 204,
+    "source_version_is_not_current_main_or_release_claim": true
+  },
+  "observed_results": {
+    "Native": {
+      "passed": 330,
+      "failed": 16,
+      "ignored": 1,
+      "executed_or_ignored_names": 347,
+      "filtered_out": 941,
+      "seconds": 4041.25
+    },
+    "Native_conclusion": "FAILED",
+    "other_executed_required_jobs": "PASS",
+    "focused_optional_jobs": "four SKIPPED; not extra executed tests",
+    "receipt_schema_integration_target": {
+      "job": 132654339614,
+      "actual_executed": 7,
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "cases": [
+        {
+          "name": "receipt_schema::tests::all_action_receipt_typed_values_are_preserved",
+          "outcome": "ok"
+        },
+        {
+          "name": "receipt_schema::tests::first_row_explicit_null_is_valid_but_missing_previous_hash_is_refused",
+          "outcome": "ok"
+        },
+        {
+          "name": "receipt_schema::tests::derived_duplicate_field_refusal_survives_raw_field_set_validation",
+          "outcome": "ok"
+        },
+        {
+          "name": "receipt_schema::tests::each_action_requires_all_own_fields_and_refuses_unknown_fields",
+          "outcome": "ok"
+        },
+        {
+          "name": "receipt_schema::tests::parser_refuses_mismatched_action_or_non_object_receipt",
+          "outcome": "ok"
+        },
+        {
+          "name": "receipt_schema::tests::start_and_input_refuse_each_forbidden_row_field_even_when_null",
+          "outcome": "ok"
+        },
+        {
+          "name": "receipt_schema::tests::typed_integer_fields_refuse_boolean_fractional_or_null_values",
+          "outcome": "ok"
+        }
+      ],
+      "scope": "Normal Core integration target executed parser controls. Does not execute external SDK workload/collector or qualify physical writes."
+    }
+  },
+  "failure_groups": {
+    "publication_timeout_known_actual_commit": 10,
+    "publication_timeout_no_postwal_marker_effect_inconclusive": 2,
+    "foreign_archive_exact_diagnostic_assertion_mismatch": 1,
+    "fresh_missing_archive_unwrap_actual_refusal": 1,
+    "s2_start_rpc_deadline_prerequisite": 1,
+    "remote_native_first_api_timeout_actual_private_commit": 1
+  },
+  "failed_cases": [
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_contention_same_own_progress",
+      "kind": "publication_timeout_known_actual_commit",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.1759826Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_contention_same_own_progress' (132384) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:876:10:",
+        "2026-11-15T02:35:57.1761395Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T02:35:57.1761885Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace",
+        "2026-11-15T02:35:57.1762221Z "
+      ],
+      "reached_boundary": "Fresh collection/activation reached; common local publication fails before later Open/ALL release/FIRST policy/JoinedAPP/Strong. Earlier CLOSED controls may be reached; no blanket unreach claim.",
+      "actual_control": {},
+      "post_wal_summary": [
+        {
+          "actual_line": 18787,
+          "stage": "local_publication_scope",
+          "new_native_commit_returned_this_call": true,
+          "expected_xid": 36,
+          "local_node_id": "n2",
+          "own_past_deadline_us": 139846,
+          "current_archive_equal": true,
+          "current_xid": 36,
+          "current_checksum_matches_expected": true,
+          "raw_current_archive_sha_equal": true,
+          "gate_controlled": 0,
+          "actual_frozen_retained": true,
+          "gate_poisoned": false
+        }
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_wait_expired_own_refuses",
+      "kind": "publication_timeout_no_postwal_marker_effect_inconclusive",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.1883841Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_metadata_tests::native_registered_fifth_remote_hot_closed_actual_mstore_wait_expired_own_refuses' (134450) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:876:10:",
+        "2026-11-15T02:35:57.1885474Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T02:35:57.1885695Z "
+      ],
+      "reached_boundary": "Fresh collection/activation reached; common local publication fails before later Open/ALL release/FIRST policy/JoinedAPP/Strong. Earlier CLOSED controls may be reached; no blanket unreach claim.",
+      "actual_control": {},
+      "post_wal_summary": []
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_tests::native_registered_fifth_remote_hot_closed_audit_native_reply_lost_same_attempt_retry",
+      "kind": "publication_timeout_known_actual_commit",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.2034945Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::closed_tests::native_registered_fifth_remote_hot_closed_audit_native_reply_lost_same_attempt_retry' (136531) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:876:10:",
+        "2026-11-15T02:35:57.2036453Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T02:35:57.2036645Z "
+      ],
+      "reached_boundary": "Fresh collection/activation reached; common local publication fails before later Open/ALL release/FIRST policy/JoinedAPP/Strong. Earlier CLOSED controls may be reached; no blanket unreach claim.",
+      "actual_control": {},
+      "post_wal_summary": [
+        {
+          "actual_line": 19202,
+          "stage": "local_publication_scope",
+          "new_native_commit_returned_this_call": true,
+          "expected_xid": 36,
+          "local_node_id": "n2",
+          "own_past_deadline_us": 41674,
+          "current_archive_equal": true,
+          "current_xid": 36,
+          "current_checksum_matches_expected": true,
+          "raw_current_archive_sha_equal": true,
+          "gate_controlled": 0,
+          "actual_frozen_retained": true,
+          "gate_poisoned": false
+        }
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_foreign_archive_after_collection_refuses_publication",
+      "kind": "foreign_archive_exact_diagnostic_assertion_mismatch",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.2374834Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_foreign_archive_after_collection_refuses_publication' (140617) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests/collection_binding_tests.rs:111:13:",
+        "2026-11-15T02:35:57.2376475Z assertion failed: matches!(error, BicDbError::Cluster(ref d) if d ==",
+        "2026-11-15T02:35:57.2376849Z     \"native range image: NEW joint preparation immutable archive missing\")",
+        "2026-11-15T02:35:57.2377228Z "
+      ],
+      "reached_boundary": "Actual foreign archive removal + publication refusal reached; exact diagnostic assertion failed. No publication success.",
+      "actual_control": {
+        "case": "TargetCollectionForeignArchive",
+        "publisher_error": "cluster error: native range image: publication scope lost actual preparation pointer/archive",
+        "publisher_returned_success": false,
+        "control_error": null,
+        "full_fresh_collection_and_activation_returned": true
+      },
+      "post_wal_summary": []
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_first_policy_real_caller_expiry_fresh_same_xid",
+      "kind": "publication_timeout_known_actual_commit",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.2470391Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_first_policy_real_caller_expiry_fresh_same_xid' (150778) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:876:10:",
+        "2026-11-15T02:35:57.2470525Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T02:35:57.2470528Z "
+      ],
+      "reached_boundary": "Fresh collection/activation reached; common local publication fails before later Open/ALL release/FIRST policy/JoinedAPP/Strong. Earlier CLOSED controls may be reached; no blanket unreach claim.",
+      "actual_control": {},
+      "post_wal_summary": [
+        {
+          "actual_line": 19664,
+          "stage": "local_publication_scope",
+          "new_native_commit_returned_this_call": true,
+          "expected_xid": 36,
+          "local_node_id": "n2",
+          "own_past_deadline_us": 25942,
+          "current_archive_equal": true,
+          "current_xid": 36,
+          "current_checksum_matches_expected": true,
+          "raw_current_archive_sha_equal": true,
+          "gate_controlled": 0,
+          "actual_frozen_retained": true,
+          "gate_poisoned": false
+        }
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready",
+      "kind": "publication_timeout_known_actual_commit",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.2529139Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_follower_binds_without_fake_leader_ready' (152785) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:876:10:",
+        "2026-11-15T02:35:57.2529270Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T02:35:57.2529274Z "
+      ],
+      "reached_boundary": "Fresh collection/activation reached; common local publication fails before later Open/ALL release/FIRST policy/JoinedAPP/Strong. Earlier CLOSED controls may be reached; no blanket unreach claim.",
+      "actual_control": {},
+      "post_wal_summary": [
+        {
+          "actual_line": 19952,
+          "stage": "local_publication_scope",
+          "new_native_commit_returned_this_call": true,
+          "expected_xid": 29,
+          "local_node_id": "n1",
+          "own_past_deadline_us": 104685,
+          "current_archive_equal": true,
+          "current_xid": 29,
+          "current_checksum_matches_expected": true,
+          "raw_current_archive_sha_equal": true,
+          "gate_controlled": 0,
+          "actual_frozen_retained": true,
+          "gate_poisoned": false
+        }
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt",
+      "kind": "publication_timeout_known_actual_commit",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.2587462Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_lost_committed_decision_reply_keeps_same_attempt' (154848) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:876:10:",
+        "2026-11-15T02:35:57.2587600Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T02:35:57.2587605Z "
+      ],
+      "reached_boundary": "Fresh collection/activation reached; common local publication fails before later Open/ALL release/FIRST policy/JoinedAPP/Strong. Earlier CLOSED controls may be reached; no blanket unreach claim.",
+      "actual_control": {},
+      "post_wal_summary": [
+        {
+          "actual_line": 20146,
+          "stage": "local_publication_scope",
+          "new_native_commit_returned_this_call": true,
+          "expected_xid": 36,
+          "local_node_id": "n2",
+          "own_past_deadline_us": 38641,
+          "current_archive_equal": true,
+          "current_xid": 36,
+          "current_checksum_matches_expected": true,
+          "raw_current_archive_sha_equal": true,
+          "gate_controlled": 0,
+          "actual_frozen_retained": true,
+          "gate_poisoned": false
+        }
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_original_client_ack_and_full_strong",
+      "kind": "publication_timeout_known_actual_commit",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.2631880Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::data_tests::native_registered_fifth_remote_hot_data_original_client_ack_and_full_strong' (156883) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:876:10:",
+        "2026-11-15T02:35:57.2632009Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T02:35:57.2632013Z "
+      ],
+      "reached_boundary": "Fresh collection/activation reached; common local publication fails before later Open/ALL release/FIRST policy/JoinedAPP/Strong. Earlier CLOSED controls may be reached; no blanket unreach claim.",
+      "actual_control": {},
+      "post_wal_summary": [
+        {
+          "actual_line": 20327,
+          "stage": "local_publication_scope",
+          "new_native_commit_returned_this_call": true,
+          "expected_xid": 36,
+          "local_node_id": "n2",
+          "own_past_deadline_us": 43458,
+          "current_archive_equal": true,
+          "current_xid": 36,
+          "current_checksum_matches_expected": true,
+          "raw_current_archive_sha_equal": true,
+          "gate_controlled": 0,
+          "actual_frozen_retained": true,
+          "gate_poisoned": false
+        }
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::fresh_collection_tests::native_registered_fifth_prepared_fresh_actual_expired_round_then_new_collection",
+      "kind": "publication_timeout_known_actual_commit",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.2686214Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::fresh_collection_tests::native_registered_fifth_prepared_fresh_actual_expired_round_then_new_collection' (158953) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:876:10:",
+        "2026-11-15T02:35:57.2686355Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T02:35:57.2686358Z "
+      ],
+      "reached_boundary": "Fresh collection/activation reached; common local publication fails before later Open/ALL release/FIRST policy/JoinedAPP/Strong. Earlier CLOSED controls may be reached; no blanket unreach claim.",
+      "actual_control": {},
+      "post_wal_summary": [
+        {
+          "actual_line": 20579,
+          "stage": "local_publication_scope",
+          "new_native_commit_returned_this_call": true,
+          "expected_xid": 36,
+          "local_node_id": "n2",
+          "own_past_deadline_us": 67681,
+          "current_archive_equal": true,
+          "current_xid": 36,
+          "current_checksum_matches_expected": true,
+          "raw_current_archive_sha_equal": true,
+          "gate_controlled": 0,
+          "actual_frozen_retained": true,
+          "gate_poisoned": false
+        }
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::fresh_collection_tests::native_registered_fifth_prepared_fresh_actual_missing_archive_refuses_count",
+      "kind": "fresh_missing_archive_unwrap_actual_refusal",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.2718669Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::fresh_collection_tests::native_registered_fifth_prepared_fresh_actual_missing_archive_refuses_count' (164932) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests/fresh_collection_tests.rs:96:28:",
+        "2026-11-15T02:35:57.2718970Z called `Result::unwrap()` on an `Err` value: Cluster(\"native range image: publication scope lost actual preparation pointer/archive\")",
+        "2026-11-15T02:35:57.2719026Z "
+      ],
+      "reached_boundary": "Actual missing archive refused counting with publication scope pointer/archive error at96; later assertions unreached.",
+      "actual_control": {},
+      "post_wal_summary": []
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_policy_readback_refuses_hook",
+      "kind": "publication_timeout_no_postwal_marker_effect_inconclusive",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.2756965Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::local_term_tests::native_registered_fifth_remote_hot_local_term_after_policy_readback_refuses_hook' (170586) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:876:10:",
+        "2026-11-15T02:35:57.2757173Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T02:35:57.2757177Z "
+      ],
+      "reached_boundary": "Fresh collection/activation reached; common local publication fails before later Open/ALL release/FIRST policy/JoinedAPP/Strong. Earlier CLOSED controls may be reached; no blanket unreach claim.",
+      "actual_control": {},
+      "post_wal_summary": []
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy",
+      "kind": "publication_timeout_known_actual_commit",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.2816062Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_actual_original_a_through_first_policy' (174504) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:876:10:",
+        "2026-11-15T02:35:57.2816193Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T02:35:57.2816198Z "
+      ],
+      "reached_boundary": "Fresh collection/activation reached; common local publication fails before later Open/ALL release/FIRST policy/JoinedAPP/Strong. Earlier CLOSED controls may be reached; no blanket unreach claim.",
+      "actual_control": {},
+      "post_wal_summary": [
+        {
+          "actual_line": 21198,
+          "stage": "local_publication_scope",
+          "new_native_commit_returned_this_call": true,
+          "expected_xid": 36,
+          "local_node_id": "n2",
+          "own_past_deadline_us": 55441,
+          "current_archive_equal": true,
+          "current_xid": 36,
+          "current_checksum_matches_expected": true,
+          "raw_current_archive_sha_equal": true,
+          "gate_controlled": 0,
+          "actual_frozen_retained": true,
+          "gate_poisoned": false
+        }
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses",
+      "kind": "publication_timeout_known_actual_commit",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.2859512Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_early_all_released_admission_refuses' (178177) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:876:10:",
+        "2026-11-15T02:35:57.2859646Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T02:35:57.2859650Z "
+      ],
+      "reached_boundary": "Fresh collection/activation reached; common local publication fails before later Open/ALL release/FIRST policy/JoinedAPP/Strong. Earlier CLOSED controls may be reached; no blanket unreach claim.",
+      "actual_control": {},
+      "post_wal_summary": [
+        {
+          "actual_line": 21326,
+          "stage": "local_publication_scope",
+          "new_native_commit_returned_this_call": true,
+          "expected_xid": 36,
+          "local_node_id": "n2",
+          "own_past_deadline_us": 33413,
+          "current_archive_equal": true,
+          "current_xid": 36,
+          "current_checksum_matches_expected": true,
+          "raw_current_archive_sha_equal": true,
+          "gate_controlled": 0,
+          "actual_frozen_retained": true,
+          "gate_poisoned": false
+        }
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_lost_committed_decision_reply_same_native_attempt",
+      "kind": "publication_timeout_known_actual_commit",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.2912132Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::native_registered_fifth_remote_hot_policy_lost_committed_decision_reply_same_native_attempt' (180239) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs:876:10:",
+        "2026-11-15T02:35:57.2912264Z called `Result::unwrap()` on an `Err` value: QueryTimedOut",
+        "2026-11-15T02:35:57.2912269Z "
+      ],
+      "reached_boundary": "Fresh collection/activation reached; common local publication fails before later Open/ALL release/FIRST policy/JoinedAPP/Strong. Earlier CLOSED controls may be reached; no blanket unreach claim.",
+      "actual_control": {},
+      "post_wal_summary": [
+        {
+          "actual_line": 21545,
+          "stage": "local_publication_scope",
+          "new_native_commit_returned_this_call": true,
+          "expected_xid": 36,
+          "local_node_id": "n2",
+          "own_past_deadline_us": 66774,
+          "current_archive_equal": true,
+          "current_xid": 36,
+          "current_checksum_matches_expected": true,
+          "raw_current_archive_sha_equal": true,
+          "gate_controlled": 0,
+          "actual_frozen_retained": true,
+          "gate_poisoned": false
+        }
+      ]
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_materialization_independent_fetch_all_pin_owners",
+      "kind": "s2_start_rpc_deadline_prerequisite",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.2917866Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_materialization_independent_fetch_all_pin_owners' (247973) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests.rs:275:9:",
+        "2026-11-15T02:35:57.2918163Z actual S2 Start: Err(Io(Custom { kind: TimedOut, error: \"cluster RPC deadline expired\" }))",
+        "2026-11-15T02:35:57.2918167Z "
+      ],
+      "reached_boundary": "Actual S2 Start failed before NEW materialization/fetch/pin-owner intended control.",
+      "actual_control": {},
+      "post_wal_summary": []
+    },
+    {
+      "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_donor_provenance_and_native_target_record",
+      "kind": "remote_native_first_api_timeout_actual_private_commit",
+      "panic_and_error": [
+        "2026-11-15T02:35:57.2940266Z thread 'distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_donor_provenance_and_native_target_record' (253086) panicked at crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests/remote_decision_tests.rs:118:14:",
+        "2026-11-15T02:35:57.2940508Z actual native publication must succeed before reader-fence controls: QueryTimedOut",
+        "2026-11-15T02:35:57.2940512Z ",
+        "2026-11-15T02:35:57.2940515Z "
+      ],
+      "reached_boundary": "First actual nativeD API returned QueryTimedOut at118; actual compact readback retains native22Committed/Healthy. Reader-fence controls after initial success assertion unreached.",
+      "actual_control": {},
+      "post_wal_summary": []
+    }
+  ],
+  "comparison_with_881": {
+    "same_347_names": true,
+    "previous_counts": {
+      "passed": 325,
+      "failed": 21,
+      "ignored": 1
+    },
+    "actual_outcome_changes": [
+      {
+        "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_controlled_writer_after_collection_refuses_publication",
+        "881": "FAILED",
+        "2d379": "ok"
+      },
+      {
+        "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::collection_binding_tests::native_registered_fifth_collection_actual_store_aba_after_collection_refuses_publication",
+        "881": "FAILED",
+        "2d379": "ok"
+      },
+      {
+        "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::fresh_collection_tests::native_registered_fifth_prepared_fresh_actual_original_session_cancel_refuses",
+        "881": "FAILED",
+        "2d379": "ok"
+      },
+      {
+        "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::publication_scope_tests::native_registered_fifth_publication_closed_archive_after_scope_refuses_before_bridge_wal",
+        "881": "FAILED",
+        "2d379": "ok"
+      },
+      {
+        "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::hot_policy_tests::publication_scope_tests::native_registered_fifth_publication_retained_middle_history_after_scope_refuses",
+        "881": "FAILED",
+        "2d379": "ok"
+      },
+      {
+        "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::native_registered_fifth_remote_new_actual_materialization_independent_fetch_all_pin_owners",
+        "881": "ok",
+        "2d379": "FAILED"
+      },
+      {
+        "name": "distribution_native_host::provisional_listener::tests::learner_enrollment_tests::promotion_tests::registered_image_baseline::remote_source_tests::source_export_retirement_tests::remote_new_tests::remote_decision_tests::native_registered_fifth_remote_decision_actual_postcommit_cancel_reconciles_same_xid",
+        "881": "FAILED",
+        "2d379": "ok"
+      }
+    ],
+    "six_previous_failures_passed_one_previous_pass_failed": true,
+    "causal_explanation": "NOT_ESTABLISHED; no timing/CPU/IO/flakiness/Azure-cause inference from these outcome changes."
+  },
+  "remote_D_positive_failed_API": {
+    "error": "QueryTimedOut at original118 success assertion",
+    "actual_compact_native_fields": {
+      "/actual_test_cut/code": {
+        "available": false,
+        "reason": "field not observed"
+      },
+      "/actual_test_cut/fired": {
+        "available": false,
+        "reason": "field not observed"
+      },
+      "/native/actual_commit_sync_fault_count": 0,
+      "/native/actual_issued_xid": 22,
+      "/native/actual_native_attempt/bytes_sha256": "f3252e08cb3eb9a4b899319fac95e3ffadd6c1c0411a19363049475f4a2cdf13",
+      "/native/actual_native_attempt/native_xid": 22,
+      "/native/actual_native_attempt/outcome/actual_xid": 22,
+      "/native/actual_native_attempt/outcome/error": {
+        "available": false,
+        "reason": "field not observed"
+      },
+      "/native/actual_native_attempt/outcome/state": "actual_commit_returned",
+      "/native/actual_native_attempt/provenance_bytes_sha256": "681fc30b85e3e9f2565b95eaa933cd033594580d3f8c062ba365f1c54f0657ab",
+      "/native/actual_native_attempt/record/checksum_sha256": "5f791ac3ede4171ee9eaf4a8bb6168dec66733307599661c7fa85c0d10e55935",
+      "/native/native_attempt_limit": 1,
+      "/original_phase": "01a1dd02-7f8b-7af1-9a94-6083bff8823c",
+      "/retained_request_contexts": 1
+    },
+    "actual_compact_health_fields": {
+      "core_health": "Healthy",
+      "database_open": "3c2a786b-fa01-4536-bc8d-61dd95dffafc",
+      "native_status_without_health_admission": "Committed",
+      "page_health": "Healthy",
+      "requested_own_xid": 22,
+      "wal_health": "Healthy"
+    },
+    "original_large_diagnostic_omitted_bytes": 1486461,
+    "compact_original_utf8_bytes": 3380,
+    "compact_original_utf8_sha256": "2ad7b1708af12e51c0fc5a4a73b453c3da4e51769712156f8730f55618190833",
+    "qualification": "Actual private native22 commit return/Healthy is historical DATA, not full helper success/fresh authority. Later reader-fence controls unreached; no native replay/rollback inference."
+  },
+  "source_pins": [
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests.rs",
+      "git_blob": "1627a1890d23628e13b55a49d9ff5705cec5112d",
+      "sha256": "eb4f3535b0e2e0fc009a17dca14a2a1cfba5417efa500eacc4f69636c58bb358"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests/collection_binding_tests.rs",
+      "git_blob": "04f5e71e2b1ff22a73dc90d5164251df3e051e51",
+      "sha256": "d3bf1559b7db4a24275e4f15928f0bc9165fb385b65b80c7aac6ec12a6c0157c"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/hot_policy_tests/fresh_collection_tests.rs",
+      "git_blob": "8d19c426686202d59d708737e6d454c528aad669",
+      "sha256": "dc531f32e24709aa9dce70a64a85f7db03782dc3ea406a6dd6e3413300a527e9"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests.rs",
+      "git_blob": "0df68b58d6e187e494cda3859938a6a513de793f",
+      "sha256": "83e0d7c10c135c4facf2f8de1c752bd0ef789136a6852b1014aa598284cd8f8e"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests/remote_decision_tests.rs",
+      "git_blob": "9928c9c40b8183c600d07557cb3b240865e8ffaa",
+      "sha256": "fd7f424a0a828751280ebed34a65613b36bd59deb78c8153ba23fc5903a6760b"
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests/remote_decision_tests/failure_evidence.rs",
+      "git_blob": "5744d533cd93a73a361a36bd01b205566e4615c6",
+      "sha256": "4c687e5e54f876de735bb01b8aa01e9bbac681abfa0dbe653769ca62a403f96b"
+    }
+  ],
+  "frozen_archive": {
+    "canonical_private_root": "/root/bicdb-ha-private-evidence/native516-pr204-2d379154a-run43662386840",
+    "manifest_sha256": "54ec2007f1ec3526c060b6d8c7724341d463cdf9ecd3b8652e7c8b7a533fc463",
+    "complete_capture_verification_sha256": "fe15a8ee5d9f07f9a78f1f96be7ba9fb0812b43ff39dbb5ce2cfc8839fef7df7",
+    "classifier_sha256": "524efd661d0fe817d9702ca75273e55fca315d8570f5edbf73e20763db29cb5c",
+    "original_post_WAL_projection_sha256": "cf018344fd0694ff7236aa84261ec7c567fdb1f0e09c958f7c19b947d2ba1e3c",
+    "remote_compact_projection_sha256": "31fdaddb6c36de434d90a4e24777e01a8f61570f7f558cda83243470b2a7dc50",
+    "parser_projection_sha256": "76fbe255dcc2786ba9923a6d20f729cf3c084ba162df48c318e58f0deb884249",
+    "files": 85,
+    "full_gzip_logs": 11,
+    "original_unique_ZIPs": 8,
+    "CRC_and_hash_verified_ZIP_members": 28,
+    "allocated_bytes": 56586240,
+    "unavailable": 0,
+    "partials": 0,
+    "modes": "0700 directory/0600 files",
+    "Native_raw_bytes": 13595331,
+    "Native_raw_sha256": "e525127ed9cb5dbf9e34047465bd8348e4a804f65679d2613eb9ee0c0f4c3314",
+    "Native_original_gzip_sha256": "0d1f729561864ec31ff2f5cf4c76665ae44bc61634efcc2cf7c19f1a85fe4de2",
+    "independent_checks": [
+      {
+        "path": "/tmp/bicdb-native-foundations-ci/native516-2d379-final-independent-capture-check.json",
+        "sha256": "2ad9b06ea697547968e327b30220c0e740d9cd2fe92fabac030ad57b1731a5e1"
+      },
+      {
+        "path": "/tmp/bicdb-native-foundations-ci/native516-2d379-real-hash-guard-negative-control.json",
+        "sha256": "409c5e8f56e92169126edf2da4083ef3c578187e794dca1ea9997aa6a68395ce"
+      },
+      {
+        "path": "/tmp/bicdb-native-foundations-ci/native516-2d379-root-complete-archive-verification.json",
+        "sha256": "c9b5d22ca0ff5a3cf497a2bfa3e7e1cd3d083f52432905ef232e96662bbfea08"
+      },
+      {
+        "path": "/tmp/bicdb-native-foundations-ci/native516-2d379-root-execution-classifier-verification.json",
+        "sha256": "17beca21550da694aa1f761bbe4c7ec2928959deb0690dd501708cfaadc23c89"
+      }
+    ],
+    "negative_controls": "Actual corrupted original ZIP/gzip copies in RAM refused; same hash-check function passes original and rejects altered expectedSHA. Canonical bytes untouched.",
+    "public_scope": "This committed packet contains a logical whitelist projection and hashes only; full logs/ZIPs remain in referenced private custody. Private local modes do not guarantee public-repository GitHub artifact confidentiality. No DB/engine opened or repaired."
+  },
+  "future_source_and_remaining_gates": {
+    "later_source_NOT_tested_by_this_run": [
+      "467325de68372cba764ea1d9c64636a4cab1f706 KnownRead/owned catalogue/Certified producer",
+      "af1a322a8 exact archive diagnostic assertions",
+      "current-main semantic composition/owned activation/generation union"
+    ],
+    "not_qualified": [
+      "external functional SDK workload/collector",
+      "all-new physical writes or sustained capacity",
+      "full remote Certified\u2192Open\u2192ALLrelease\u2192Serving/controller",
+      "two-populated-range repeated movement/independent stalled nativeIO",
+      "cold self-healing/permanently unavailable OLD replacement",
+      "production deployment/physical four-to-five growth/RPO/RTO",
+      "original Azure failure cause"
+    ],
+    "qualification": false
+  },
+  "provenance_note": "No original failed head or archive is rewritten. The first preliminary parser omitted the ignored-with-reason line; final 347-name reconciliation includes it and normalizes ignored reason strings when comparing881."
+}

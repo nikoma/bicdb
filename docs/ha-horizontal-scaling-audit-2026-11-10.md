@@ -30,7 +30,42 @@ visibility/catch-up cases, and its hot fixture used4000ms rather than the
 candidate's1500ms. Counts are not an interchangeable benchmark or proof of
 independent-host HA, current binary qualification or full64-range convergence.
 
-## Current complete execution — sourced3 failed, 2026-11-15 UTC
+## Current execution — source4f native failed, 2026-11-15 UTC
+
+Candidate **1.0.520-beta / `4f33a8b016a999d43410ca8698270dc01fbeffd6`**,
+tree `4c87ba7caed1e5a9043eac854d7bdf15ac00b15d`, runs at actual PR checkout
+`2f42e67a11c5d8f81d79e170edd0814d4a741d2d` with the same tree. At the
+**23:30 UTC** checkpoint, all-target/no-default compilation, nonserial Core,
+SQL, PGwire and Rails passed within their respective scopes. Serial native
+runtime **failed: 387 passed, 84 failed, 1 ignored**, 989 filtered, in
+2,971.93 seconds. The remaining-workspace job, including the original CLI
+availability gate, is still running. The candidate cannot merge on these results.
+
+The 84 failures comprise 67 FIRST cases and 17 learner/hot-policy cases.
+Several fail before their intended handoff/fault phase: failed scenarios remain
+failed, while their unreached guarantees remain not tested. Source inspection
+confirmed a full-metadata-versus-effective-native range descriptor mismatch
+during activation and premature service/cleanup contention refusals. Separate
+hot-policy traces show repeated validations consuming the original admission
+window; a complete common cause is not established. Both new registry Known/
+Unknown controls and the original cancellation/old-Store control passed, but
+these component results do not establish CLI availability or complete relocation.
+
+The complete 206,768,590-byte native raw log SHA256 is
+`b2c2ccb8bb005fbd8970824f90a962ccb02c56882571b5297aef05b485efd5c4`;
+whole-log outcome inventory SHA256 is
+`3a1fef2bf4e14be7baeb159a083dc27df46209d4136fb5cbec5af2444ee77c07`.
+See [exact failed cases, source causes and unchanged reproducers](design/native-520-regression-findings.md)
+and the [current operator integration boundary](design/native-operator-four-to-five-gap-audit-2026-11-11.md).
+The older generic placement/relocation implementation and original Azure movement
+are distinct from the protected native operator. Finite native handoff consumers
+exist; an automatic full-range placement/repair loop, populated-target DATA
+admission and complete cold restart integration remain open. No full 64-range/
+8 GiB campaign, fault-safe convergence, stable post-convergence throughput gain,
+physical RPO/RTO, transparent general PostgreSQL application contract or production
+admission is established. Original Azure qualification and teardown are unchanged.
+
+## Previous complete execution — sourced3 failed, 2026-11-15 UTC
 
 Draft **1.0.520-beta / `d3af39c107951802a612d31b42e70fd4bc90e71c`** finished
 all jobs: seven passed, four failed and four optional jobs skipped. Formatting,
@@ -53,8 +88,9 @@ the private validator and two test-control defects are reviewed, uncompiled and
 unrun. The additional production registry self-refusal requires its own
 original-owner/Known-outcome fix; ordinary APP/Strong fences must stay strict.
 See the [actual source identities, exact failure and unchanged reproducers](design/native-520-regression-findings.md).
-Candidate7e99's396/55/1 remains the last executed native result for the candidate
-line; main519's older348/0/1 does not qualify the successor.
+At that completed d3 checkpoint, candidate7e99's396/55/1 was the last executed
+native result for the candidate line; main519's older348/0/1 did not qualify
+the successor. Source4f's later runtime result is recorded above.
 
 A local [registry publication correction](design/native-registry-pending-owned-publication.md)
 is composed with the minimal compiler/test-control fixes. It keeps the strict

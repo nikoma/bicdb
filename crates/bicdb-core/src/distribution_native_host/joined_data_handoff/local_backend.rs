@@ -82,6 +82,14 @@ impl Members {
 
 /// Member custody of one handoff onto `target`, as described in the parent
 /// module documentation. It is created empty and filled by the stages.
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TestHandoffCustodyCut {
+    AfterTargetNew,
+    BeforePreparationOwn,
+    AfterFirstNativePreparation,
+}
+
 pub(crate) struct LocalJoinedHandoffBackend {
     target: ClusterNodeId,
     /// Lifetime of the retained joint owners; never a request budget.

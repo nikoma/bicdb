@@ -321,6 +321,22 @@ impl NativeWriterHostState {
         self.require_original_database(database, range)?;
         self.require_verified_registry_database(database)
     }
+    /// Same proof from the commit callback that is completing `applying`,
+    /// the only caller for which that exact pending command is expected.
+    pub(crate) fn require_database_applying(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+        applying: &crate::db::NativeRangePendingApply,
+    ) -> Result<()> {
+        self.require_original_identity_database(database)?;
+        self.require_range(range)?;
+        #[cfg(feature = "tls-replication")]
+        self.require_serving_data_database_applying(database, range.id, Some(applying))?;
+        #[cfg(not(feature = "tls-replication"))]
+        let _ = applying;
+        self.require_verified_registry_database(database)
+    }
     // Only registry publication may reconcile a durable-but-unpublished audit.
     // This still proves the actual original DB/hook/policy/open, not a role.
     fn require_original_identity_database(&self, database: &BicDb) -> Result<()> {
@@ -816,18 +832,29 @@ impl BicDb {
                 invalid("born-v2 application commit has no actual installed writer policy")
             })?;
         for write in &transaction.writes {
+            let token =
+                crate::distribution::distribution_key_token(&write.collection, &write.record_id);
             let range = state
                 .record
                 .facts
                 .ranges
                 .values()
-                .find(|r| {
-                    r.contains_token(crate::distribution::distribution_key_token(
-                        &write.collection,
-                        &write.record_id,
-                    ))
-                })
+                .find(|r| r.contains_token(token))
                 .ok_or_else(|| invalid("application mutation has no registered native range"))?;
+            // The original policy facts predate any later joint handoff of
+            // this range. Once a verified Serving domain is published for it,
+            // that domain's configuration is the one this writer must hold;
+            // a pending or unresolved publication is refused by the lookup.
+            #[cfg(feature = "tls-replication")]
+            if let Some(serving) = state.effective_serving_data_range(range.id)? {
+                if !serving.contains_token(token) {
+                    return Err(invalid(
+                        "application mutation is outside the verified Serving range",
+                    ));
+                }
+                state.require_database(self, &serving)?;
+                continue;
+            }
             state.require_database(self, range)?;
         }
         Ok(())

@@ -56,6 +56,8 @@ use std::time::Instant;
 
 mod local_backend;
 pub(crate) use local_backend::LocalJoinedHandoffBackend;
+#[cfg(test)]
+pub(crate) use local_backend::TestHandoffCustodyCut;
 
 /// Per-request network budget of one metadata or role acquisition.
 const REQUEST: Duration = Duration::from_secs(5);
@@ -308,6 +310,14 @@ impl NativeJoinedDataHandoff<LocalJoinedHandoffBackend> {
     #[cfg(test)]
     pub(crate) fn test_restart_probes(&self) -> &[(&'static str, String)] {
         self.backend.test_restart_probes()
+    }
+    #[cfg(test)]
+    pub(crate) fn test_cancel_custody_once(&mut self, cut: TestHandoffCustodyCut) {
+        self.backend.test_cancel_custody_once(cut);
+    }
+    #[cfg(test)]
+    pub(crate) fn test_custody_snapshot(&self) -> serde_json::Value {
+        self.backend.test_custody_snapshot()
     }
     /// Bound the records of one copied image step (1..=256).
     pub(crate) fn with_image_batch_records(mut self, records: usize) -> Self {

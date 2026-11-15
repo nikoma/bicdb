@@ -313,8 +313,13 @@ impl NativeClosedWriterDomain {
             ));
         }
         self.require_current_for_store(db, store, data.activation_range())?;
+        // Identity of the freeze only. Quiescence is the caller's check: the
+        // bridge publisher re-reads this catalogue in its postcondition while
+        // it still holds its own Controlled token, and that token, not an
+        // empty controlled set, is what replaces quiescence there. Every
+        // other caller checks quiescence (or its read pin) beside this call.
         db.range_mutation_gate()
-            .validate_quiescent_frozen(data.old_range().id, frozen)
+            .validate_frozen(data.old_range().id, frozen)
     }
     pub(in crate::db::range_image_native) fn require_publication_identity(
         &self,

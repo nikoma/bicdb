@@ -357,6 +357,14 @@ impl RangeWriteStore {
     ) -> Result<NativeJointBridgeCatalogue> {
         self.require_native_joint_bridge_base(database, committed, image, frozen)?;
         let range = committed.data().old_range().id;
+        // An observation holds no Controlled token, so a protected CLOSED
+        // survivor's catalogue is observed only while no controlled WAL or
+        // native callback is active on the frozen range.
+        if committed.closed_writer_domain().is_some() {
+            database
+                .range_mutation_gate()
+                .validate_quiescent_frozen(range, frozen)?;
+        }
         let decisions =
             self.collect_native_resolved_decisions(range, committed.data().range_index())?;
         Ok(NativeJointBridgeCatalogue {

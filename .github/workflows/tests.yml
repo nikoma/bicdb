@@ -241,7 +241,7 @@ jobs:
       - name: cargo test bicdb-core native multi-node fixtures one at a time
         if: matrix.suite.name == 'bicdb-core native multi-node (serial)'
         run: >-
-          python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required-ci-pressure/native.jsonl" -- cargo test --config 'profile.dev.package."*".opt-level=2' ${{ matrix.suite.args }} --locked --
+          python3 scripts/qualification/guard-build-memory.py --log "$RUNNER_TEMP/required-ci-pressure/native.jsonl" -- cargo test --config 'profile.dev.package."*".opt-level=2' --config profile.dev.opt-level=1 ${{ matrix.suite.args }} --locked --
           distribution_native_host:: range_image_native::rf3_fixture::
           --test-threads=1
       - name: cargo test bicdb-sql with bounded linked artifacts
@@ -332,7 +332,18 @@ jobs:
           export BICDB_TEST_EVIDENCE_ROOT="$RUNNER_TEMP/native-core-evidence/fault-state"
           export BICDB_TEST_SOURCE_SHA="$GITHUB_SHA"
           mkdir -p "$BICDB_TEST_EVIDENCE_ROOT"
-          cargo test --config 'profile.dev.package."*".opt-level=2' -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads=4 --show-output \
+          # Multi-node fixtures are qualified one at a time, as in the serial job.
+          # They also build the workspace crates lightly optimized, as the
+          # serial job does: their phase budgets are wall-clock bounds sized
+          # for product builds, and unoptimized record validation exceeds them.
+          threads=4
+          opt=()
+          case "$BICDB_CORE_TEST_FILTER" in
+            *distribution_native_host*|*rf3_fixture*|*native_registered_fifth*|*hot_policy_tests*|*learner_enrollment_tests*|*registered_image_baseline*|*fifth_data_path*)
+              threads=1
+              opt=(--config profile.dev.opt-level=1) ;;
+          esac
+          cargo test --config 'profile.dev.package."*".opt-level=2' "${opt[@]}" -p bicdb-core --lib --locked "$BICDB_CORE_TEST_FILTER" -- --test-threads="$threads" --show-output \
             2>&1 | tee "$RUNNER_TEMP/native-core-evidence/tests.log"
       - name: Retain focused source, log and opted-in fault-state evidence
         if: always()

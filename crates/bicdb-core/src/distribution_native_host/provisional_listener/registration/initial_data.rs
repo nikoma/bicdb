@@ -859,6 +859,33 @@ impl NativeInitialDataHost {
             &token,
         )
     }
+    /// A surviving original member that keeps range leadership across a
+    /// joint handoff leads a new epoch that nothing has recovered yet: the
+    /// joined target recovers only when leadership moves to it. Run the same
+    /// coordinator recovery here. It grants nothing by itself; every write
+    /// still proves its own writer, Serving domain and quorum.
+    fn recover_data_leadership(&mut self, parent: &CancellationToken) -> Result<usize> {
+        parent.check()?;
+        if self.stopping {
+            return Err(invalid(
+                "stopping INITIAL data owner cannot recover leadership",
+            ));
+        }
+        self.admission
+            .as_ref()
+            .ok_or_else(|| invalid("leader recovery requires the retained admission"))?
+            .require_live()?;
+        let coordinator = Arc::clone(
+            &self
+                .enrollment
+                .as_ref()
+                .ok_or_else(|| invalid("leader recovery requires the retained writer"))?
+                .coordinator,
+        );
+        let recovered = coordinator.recover_local_leadership(64)?;
+        parent.check()?;
+        Ok(recovered)
+    }
     /// Re-enroll the SAME retained coordinator at the current committed DATA
     /// configuration. A range whose voter set or epoch changed (a committed
     /// learner allocation, or a completed joint membership change) is outside
@@ -1080,6 +1107,16 @@ impl NativeMetadataControlHost {
             .as_mut()
             .ok_or_else(|| invalid("actual initial DATA owner absent"))?
             .refresh_data_policy(parent)
+    }
+    /// See `NativeInitialDataHost::recover_data_leadership`.
+    pub(crate) fn recover_initial_data_leadership(
+        &mut self,
+        parent: &CancellationToken,
+    ) -> Result<usize> {
+        self.data
+            .as_mut()
+            .ok_or_else(|| invalid("actual initial DATA owner absent"))?
+            .recover_data_leadership(parent)
     }
     pub(crate) fn forget_initial_old_closure(&self, range: crate::RangeId) -> Result<bool> {
         self.data

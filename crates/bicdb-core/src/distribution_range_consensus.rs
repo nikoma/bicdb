@@ -1833,7 +1833,17 @@ impl RangeWriteStore {
     }
 
     fn persist_with(&self, write: impl FnOnce(&Path, &[u8], bool) -> Result<()>) -> Result<()> {
-        self.require_native_writer_host_base()?;
+        self.persist_gated(Self::require_native_writer_host_base, write)
+    }
+
+    /// The gate runs immediately before and after the durable catalogue
+    /// write. Every caller names the host identity that authorises its write.
+    fn persist_gated(
+        &self,
+        gate: impl Fn(&Self) -> Result<()>,
+        write: impl FnOnce(&Path, &[u8], bool) -> Result<()>,
+    ) -> Result<()> {
+        gate(self)?;
         fs::create_dir_all(&self.root)?;
         let envelope = RangeWriteEnvelope::new(self.catalog.clone())?;
         write(
@@ -1841,7 +1851,7 @@ impl RangeWriteStore {
             &serde_json::to_vec_pretty(&envelope)?,
             self.fsync,
         )?;
-        self.require_native_writer_host_base()
+        gate(self)
     }
 
     fn persist_or_restore<T>(&mut self, previous: RangeWriteCatalog, value: T) -> Result<T> {
@@ -4106,7 +4116,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 };
                 let validation = current_range
                     .ok_or_else(|| range_write_error("native callback range disappeared"))
-                    .and_then(|range| self.require_native_writer_host_context(database,&range))
+                    .and_then(|range| self.require_native_writer_host_context_applying(database,&range,&native.pending))
                     .and_then(|()| database.validate_native_wal_apply_receipt(receipt)).and_then(|()| {
                     if database.incarnation_id() != self.local_incarnation
                         || receipt.transaction_id() != evidence.transaction_id

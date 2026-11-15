@@ -222,11 +222,29 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
     ) -> Result<()> {
         self.require_native_writer_host_context_under(database, range, Some(held_topology))
     }
+    /// The commit callback's check while its own command is still pending.
+    pub(crate) fn require_native_writer_host_context_applying(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+        applying: &crate::db::NativeRangePendingApply,
+    ) -> Result<()> {
+        self.require_native_writer_host_context_with(database, range, None, Some(applying))
+    }
     fn require_native_writer_host_context_under(
         &self,
         database: &BicDb,
         range: &RangeDescriptor,
         held_topology: Option<&ClusterTopology>,
+    ) -> Result<()> {
+        self.require_native_writer_host_context_with(database, range, held_topology, None)
+    }
+    fn require_native_writer_host_context_with(
+        &self,
+        database: &BicDb,
+        range: &RangeDescriptor,
+        held_topology: Option<&ClusterTopology>,
+        applying: Option<&crate::db::NativeRangePendingApply>,
     ) -> Result<()> {
         if database.actual_native_writer_enforcement_version()? == 0 {
             return Ok(());
@@ -244,7 +262,10 @@ impl<T: RangeWriteTransport> RangeWriteCoordinator<T> {
                 "native coordinator DB/open identity changed",
             ));
         }
-        state.require_database(database, range)?;
+        match applying {
+            Some(own) => state.require_database_applying(database, range, own)?,
+            None => state.require_database(database, range)?,
+        }
         match held_topology {
             Some(topology) => state.require_topology(topology),
             None => state.require_topology(&self.topology.read_recursive()),

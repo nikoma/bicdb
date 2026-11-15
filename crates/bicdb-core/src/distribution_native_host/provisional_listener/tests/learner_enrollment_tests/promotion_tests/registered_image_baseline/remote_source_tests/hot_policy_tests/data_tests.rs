@@ -228,6 +228,7 @@ fn new_key(topology: &ClusterTopology, range: crate::RangeId, label: &str) -> St
 pub(super) fn exercise(
     case: SourceCase,
     control: &mut NativeMetadataControlHost,
+    controls: &mut [NativeMetadataControlHost],
     original: &crate::ClusterEventClient,
     factory: &Arc<crate::distribution_native_host::NativeUnassignedLearnerFactory>,
     _clients: &[Arc<TcpClusterRelocationTransport>],
@@ -296,6 +297,15 @@ pub(super) fn exercise(
             published.registered_range.as_ref().unwrap()["leader_recovered_prefix_observed"],
             false
         );
+        // The surviving original leader now leads the activation epoch and
+        // must recover it itself; the target, a follower, never does.
+        let leader = (0..4)
+            .find(|i| node(*i) == data.activation_range().leader)
+            .expect("activation leader is a surviving original member");
+        let recovered = controls[leader]
+            .recover_initial_data_leadership(&budget(5000))
+            .unwrap();
+        assert!(recovered >= 1, "surviving leader recovered no range");
     }
     assert!(published.dispatcher_published);
     for acknowledged in acknowledged {

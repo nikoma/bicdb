@@ -209,7 +209,7 @@ impl RangeWriteStore {
         if existing.is_none() && image.is_some() {
             self.catalog.image_install_intents.remove(&range);
         }
-        let persisted = self.persist();
+        let persisted = self.persist_native_joint(database, range);
         #[cfg(test)]
         eprintln!("ACTUAL_JOINT_OPEN_CATALOGUE_PERSIST node={} success={} uncertain={} range={} scoped=true",self.catalog.node_id,persisted.is_ok(),self.recovery_persistence_uncertain,range);
         persisted?;

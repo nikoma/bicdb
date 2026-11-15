@@ -204,6 +204,25 @@ impl NativeJointOldObservation {
             pin.as_ref().map(|pin| &**pin),
         )
     }
+    /// Retirement-only revalidation once this plan's joint successor may be
+    /// published on the member; see the plan's successor configuration rule.
+    pub(crate) fn require_current_after_joint_open(&self) -> Result<()> {
+        let pin = self
+            .pin
+            .try_lock()
+            .ok_or_else(|| invalid("old closure pin transition busy"))?;
+        let service = self
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("old closure service busy during revalidation"))?;
+        service.require_native_joint_old_observation_after_joint_open(
+            &self.plan,
+            &self.native,
+            &self.promise,
+            &self.frozen,
+            pin.as_ref().map(|pin| &**pin),
+        )
+    }
     pub(super) fn original_issuance_deadline(&self) -> std::time::Instant {
         self.role.deadline().max(self.plan.original_deadline())
     }

@@ -441,6 +441,27 @@ impl ClusterDataNodeService {
         frozen: &FrozenRangeMutationPermit,
         pin: Option<&SourceCaptureReadPin>,
     ) -> Result<()> {
+        self.require_native_joint_old_observation_at(plan, native, promise, frozen, pin, false)
+    }
+    pub(crate) fn require_native_joint_old_observation_after_joint_open(
+        &self,
+        plan: &NativeJointHandoffPlan,
+        native: &NativeJointOldCloseReceipt,
+        promise: &NativeJointOldPromiseReceipt,
+        frozen: &FrozenRangeMutationPermit,
+        pin: Option<&SourceCaptureReadPin>,
+    ) -> Result<()> {
+        self.require_native_joint_old_observation_at(plan, native, promise, frozen, pin, true)
+    }
+    fn require_native_joint_old_observation_at(
+        &self,
+        plan: &NativeJointHandoffPlan,
+        native: &NativeJointOldCloseReceipt,
+        promise: &NativeJointOldPromiseReceipt,
+        frozen: &FrozenRangeMutationPermit,
+        pin: Option<&SourceCaptureReadPin>,
+        after_joint_open: bool,
+    ) -> Result<()> {
         let database = checked_database_read(&self.db, &self.storage_policy)?;
         self.require_native_catalog_database(&database)?;
         if native.native_admission().local_node_id() != &self.node_id
@@ -448,7 +469,16 @@ impl ClusterDataNodeService {
         {
             return Err(data_error("old closure service/session identity changed"));
         }
-        native.require_closed_fact_current(&database, plan, promise, &self.range_writes)?;
+        if after_joint_open {
+            native.require_closed_fact_after_joint_open(
+                &database,
+                plan,
+                promise,
+                &self.range_writes,
+            )?;
+        } else {
+            native.require_closed_fact_current(&database, plan, promise, &self.range_writes)?;
+        }
         let gate = database.range_mutation_gate();
         match pin {
             Some(pin) => gate.validate_source_capture_read_pin(plan.old_range().id, pin),

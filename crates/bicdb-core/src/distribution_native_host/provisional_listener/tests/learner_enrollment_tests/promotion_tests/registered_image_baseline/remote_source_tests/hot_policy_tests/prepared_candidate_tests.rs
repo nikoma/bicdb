@@ -146,11 +146,16 @@ pub(super) fn exercise(
         }
         SourceCase::TargetPreparedCandidateForeignService => {
             assert!(own_live_before_count && after < original_deadline);
-            assert!(matches!(
-                error,
-                crate::BicDbError::Cluster(detail)
-                    if detail == "native range image: native writer store/root/open changed"
-            ));
+            // Two identity checks refuse another node's service: the writer
+            // enrollment (store root and open id) and the service's database
+            // binding (root and incarnation). Which one is reached first is
+            // not a contract; either one names the foreign database/open.
+            let text = error.to_string();
+            assert!(
+                text.contains("cluster service belongs to another actual database/open")
+                    || text.contains("native writer store/root/open changed"),
+                "foreign service must be refused for its identity: {text}"
+            );
             assert!(!count_parent.is_cancel_requested());
         }
         SourceCase::TargetPreparedCandidateMissingArchive => {

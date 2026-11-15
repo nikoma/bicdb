@@ -211,7 +211,14 @@ fn run_registered_image_baseline_with_placement_and_source(
         Some(remote_source_tests::SourceCase::TwoRangeSourceReplyStall)
     );
     let single_range_move = hot_policy || two_range_stall;
-    let mut f = EnrollmentFixture::new();
+    // Retain the original acceptance fixture's 1.5-second OWN ceiling.
+    // Successful execution under main517's four-second fixture is recorded
+    // separately; it cannot substitute for this original short-window gate.
+    let mut f = if hot_policy {
+        EnrollmentFixture::with_spares_and_io_timeout(1, 1500)
+    } else {
+        EnrollmentFixture::new()
+    };
     let (factory, mut host) = f.factory("actual-registered-fifth-image-target");
     assert!(factory.spec.initial_ranges.is_empty());
     let token = CancellationToken::uncancelable();
@@ -1026,8 +1033,25 @@ fn run_registered_image_baseline_with_placement_and_source(
             cleanup.push(error.to_string());
         }
     }
-    if let Err(error) = host.stop_owned_metadata(&budget(5000)) {
-        cleanup.push(error.to_string());
+    // A first policy that is durable but whose hook publication was refused
+    // has an unknown outcome: the target's stop must refuse and keep that
+    // custody closed rather than discard it. Only that exact refusal, from
+    // the target alone, is expected; every other stop must still be clean.
+    let retained_unknown_first_policy = matches!(
+        source_case,
+        Some(remote_source_tests::SourceCase::TargetHotFirstPolicyTermBeforeHook)
+    ) && result.is_ok();
+    match host.stop_owned_metadata(&budget(5000)) {
+        Ok(()) if retained_unknown_first_policy => cleanup.push(
+            "target stop discarded a first policy with an unknown outcome".to_string(),
+        ),
+        Ok(()) => {}
+        Err(error)
+            if retained_unknown_first_policy
+                && error.to_string().contains(
+                    "Assigned unknown native policy retained CLOSED; explicit reconciliation required",
+                ) => {}
+        Err(error) => cleanup.push(error.to_string()),
     }
     if let Err(error) = host.shutdown() {
         cleanup.push(error.to_string());

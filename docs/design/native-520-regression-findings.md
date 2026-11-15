@@ -41,7 +41,16 @@ Rails built and exercised a CI debug binary with SHA-256
 `64e18a818ebade9ebfbca810f4932bd132bf827ff4a1dfffbb9279483dda9245`.
 This is not a retained optimized physical-qualification binary or published
 release/deployment. The sole collector exited normally after every job became
-terminal; complete archive finalization/independent verification is in progress.
+terminal. The complete archive is frozen: 98 premanifest files, 101 total files,
+11 complete raw-log gzips and eight original artifact ZIPs / 28 members.
+Canonical manifest SHA-256:
+`48e180b4f4c6e48e061837fd00fb3634887aeba467b7b954d9f49dc01c401b5c`;
+complete-capture verification:
+`fe16354e66e73842e13417d3a329338d7939d6766fb224c82720ee20643680cf`;
+independent root full-archive rehash/inventory/ZIP verification:
+`1e8b772a079138d6c392ba918e683c8242d676751466d09f105ea21473a4c8e2`.
+Every non-skipped job and original artifact ID is covered. No useful run was
+cancelled or restarted, and these immutable originals receive no later writes.
 
 The Core job executed 1,300 passing / one failing / 13 ignored case-result rows
 across 38 summaries; these are executed rows, not 1,300 independent trials.

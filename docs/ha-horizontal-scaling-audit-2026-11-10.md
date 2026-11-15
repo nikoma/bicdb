@@ -22,7 +22,8 @@ completed375/37/1 and failed; remaining-workspace passed1,062/0/6. SQL completed
 Strong-read timeout and sixteen later policy/retry/retirement failures. A
 same-service identity expiry component passed; its release/cancellation controls
 failed setup. Every required job is terminal and the overall Tests run failed.
-The sole collector exited normally; archive finalization is in progress.
+The sole collector exited normally. The complete frozen archive was independently
+verified: 101 files, eleven full logs and eight original ZIPs / 28 members.
 Compilation and partial component passes do not qualify full HA.
 
 Preceding520 candidate `7c77418656a41ec6e25c7601319e061c328f48e1` passed workspace

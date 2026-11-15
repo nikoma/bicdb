@@ -157,6 +157,57 @@ struct SourceDiscoveryAdmission<'a> {
     caller: &'a CancellationToken,
 }
 impl SourceDiscoveryAdmission<'_> {
+    /// Wait only within this original request/OWN. No service, DB, journal or
+    /// publication-version guard may span this private MStore acquisition.
+    fn lock_original_metadata(
+        &self,
+        stage: &'static str,
+    ) -> Result<parking_lot::MutexGuard<'_, crate::MetadataConsensusStore>> {
+        self.caller.check()?;
+        self.own.require_live_request(self.business)?;
+        self.member.publication_version().require_current_memory()?;
+        #[cfg(test)]
+        let diagnostics = self.original.image_sources.upgrade();
+        #[cfg(test)]
+        if let Some(registry) = &diagnostics {
+            registry.test_before_source_metadata_wait(stage, self.caller, &self.own);
+        }
+        let result = (|| loop {
+            self.caller.check()?;
+            self.own.require_live_request(self.business)?;
+            self.member.publication_version().require_current_memory()?;
+            let deadline = self
+                .caller
+                .deadline()
+                .map_or(self.own.deadline(), |d| d.min(self.own.deadline()));
+            let remaining = deadline
+                .checked_duration_since(Instant::now())
+                .filter(|d| !d.is_zero())
+                .ok_or(BicDbError::QueryTimedOut)?;
+            let store = self
+                .metadata
+                .try_lock_for(remaining.min(Duration::from_millis(5)));
+            // Cancellation/expiry or an actual authority change during the
+            // wait must refuse even when the mutex became available.
+            self.caller.check()?;
+            self.own.require_live_request(self.business)?;
+            self.member.publication_version().require_current_memory()?;
+            if let Some(store) = store {
+                return Ok(store);
+            }
+            #[cfg(test)]
+            if let Some(registry) = &diagnostics {
+                registry.test_busy_source_metadata_wait(stage, self.caller, &self.own);
+            }
+        })();
+        #[cfg(test)]
+        if let (Some(registry), Err(error)) = (&diagnostics, &result) {
+            registry.test_failed_source_metadata_wait(stage, error);
+        }
+        #[cfg(not(test))]
+        let _ = stage;
+        result
+    }
     fn require_current(&self) -> Result<()> {
         self.caller.check()?;
         self.original.require_live()?;
@@ -167,10 +218,7 @@ impl SourceDiscoveryAdmission<'_> {
             self.old.node_id(),
         )?;
         {
-            let store = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("source discovery metadata busy at boundary"))?;
+            let store = self.lock_original_metadata("boundary")?;
             store.require_listener_database(&self.original.database)?;
             self.member.require_current(&store)?;
         }
@@ -191,10 +239,7 @@ impl SourceDiscoveryAdmission<'_> {
             self.member.require_database(&db)?;
         }
         {
-            let store = self
-                .metadata
-                .try_lock()
-                .ok_or_else(|| invalid("source discovery metadata busy after local check"))?;
+            let store = self.lock_original_metadata("after_local_check")?;
             self.member.require_current(&store)?;
         }
         self.original.require_live()?;
@@ -421,6 +466,21 @@ impl NativeInitialDataAdmission {
 }
 #[cfg(test)]
 impl NativeMetadataControlHost {
+    pub(crate) fn test_arm_source_metadata_wait(
+        &self,
+        after_local: bool,
+        before: Box<dyn FnOnce(&CancellationToken, Instant, serde_json::Value) + Send>,
+        busy: Box<dyn FnOnce(&CancellationToken, Instant, serde_json::Value) + Send>,
+        failure: Box<dyn FnOnce(&'static str) + Send>,
+    ) -> Result<()> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("actual donor absent"))?
+            .image_sources
+            .as_ref()
+            .ok_or_else(|| invalid("original donor registry absent"))?
+            .test_arm_source_metadata_wait(after_local, before, busy, failure)
+    }
     pub(crate) fn test_source_discovery_state(
         &self,
         range: crate::RangeId,

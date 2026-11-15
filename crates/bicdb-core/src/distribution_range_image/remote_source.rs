@@ -18,6 +18,8 @@ use parking_lot::Mutex;
 use std::collections::BTreeMap;
 mod discovery;
 mod export_retirement;
+#[cfg(test)]
+mod metadata_wait_controls;
 pub(crate) use discovery::{
     ActualNativeSourceDiscovery, NativeSourceDiscoveryOperationV1, NativeSourceDiscoveryReplyV1,
     NativeSourceDiscoveryRequestV1,
@@ -696,6 +698,8 @@ pub(crate) struct NativeRemoteImageSourceRegistry {
     export_callback_final_own_remaining_us: std::sync::atomic::AtomicU64,
     #[cfg(test)]
     export_work_diagnostics: export_retirement::ExportWorkDiagnostics,
+    #[cfg(test)]
+    metadata_wait_control: Mutex<Option<Arc<metadata_wait_controls::SourceMetadataWaitControl>>>,
     transport: Arc<TcpClusterRelocationTransport>,
     provider: Arc<crate::distribution_metadata_read_provider::MetadataReadProvider>,
     original_process: std::sync::OnceLock<CancellationToken>,
@@ -724,6 +728,8 @@ impl NativeRemoteImageSourceRegistry {
             export_callback_final_own_remaining_us: std::sync::atomic::AtomicU64::new(0),
             #[cfg(test)]
             export_work_diagnostics: Default::default(),
+            #[cfg(test)]
+            metadata_wait_control: Mutex::new(None),
             transport,
             provider,
             original_process: std::sync::OnceLock::new(),

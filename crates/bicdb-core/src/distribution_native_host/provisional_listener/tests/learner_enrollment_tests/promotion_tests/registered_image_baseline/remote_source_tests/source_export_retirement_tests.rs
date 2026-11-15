@@ -4,6 +4,7 @@ use super::*;
 mod callback_liveness_tests;
 mod original_work_tests;
 mod remote_new_tests;
+mod source_metadata_wait_tests;
 use crate::distribution_range_image::{
     NativeSourceDiscoveryOperationV1 as DiscoveryOp, NativeSourceDiscoveryRequestV1,
     NativeSourceExportOperationV1 as ExportOp, NativeSourceExportRequestV1,
@@ -11,6 +12,7 @@ use crate::distribution_range_image::{
 
 pub(super) fn is_case(case: SourceCase) -> bool {
     remote_new_tests::is_case(case)
+        || source_metadata_wait_tests::is_case(case)
         || matches!(
             case,
             SourceCase::TargetSourceExportRetire
@@ -501,6 +503,9 @@ pub(super) fn exercise(
             ))
             .unwrap();
     }
+    let metadata_wait_control = source_metadata_wait_tests::is_case(case).then(|| {
+        source_metadata_wait_tests::install(case, &controls[donor], &metadata[donor], output)
+    });
     let sent_by = if matches!(case, SourceCase::TargetSourceExportWrongActor) {
         node(0)
     } else {
@@ -554,7 +559,12 @@ pub(super) fn exercise(
         eprintln!("S2_RPC_OUTCOME_EVIDENCE_ERROR original_rpc={result:?} diagnostic={error}");
     }
     saved.expect("original RPC outcome evidence missing");
-    if matches!(case, SourceCase::TargetSourceExportExpiryAtDetach) {
+    if let Some(control) = &metadata_wait_control {
+        control.observe_original_return(&result);
+    }
+    if matches!(case, SourceCase::TargetSourceExportExpiryAtDetach)
+        || source_metadata_wait_tests::is_case(case)
+    {
         original_work_tests::await_original_work(&controls[donor], &request, &result, output);
     }
     let target_gate_after = factory
@@ -595,8 +605,23 @@ pub(super) fn exercise(
             | SourceCase::TargetSourceExportProcessCancelAtDetach
             | SourceCase::TargetSourceExportCallbackCancelAtDetach
             | SourceCase::TargetSourceExportCallbackExpiryAtDetach
+            | SourceCase::TargetSourceMetadataWaitCallerCanceled
+            | SourceCase::TargetSourceMetadataWaitScopeExpired
     );
     evidence(&output.join("source-export-retirement-before-assertions.json"),&serde_json::json!({"version":1,"case":format!("{case:?}"),"actual_donor":node(donor),"range_leader":selected.leader,"retiring_replica":plan.retiring_source(),"request":request,"before":before,"after":after,"exact_error":result.as_ref().err().map(|e|format!("{e:?}")),"actual_reply":result.as_ref().ok(),"old_native_before":native_before,"old_native_after":native_after,"target_before":original_target,"target_before_retire":target_before_retire,"target_health":factory.database.read().test_registered_native_health_status(None),"actual_target_gate_after":target_gate_after,"source_manifest":manifest,"source_frame_journal":journal,"acknowledged":acknowledged,"old_retirement_tested":false,"serving_tested":false,"physical_qualification":false})).unwrap();
+    if let Some(control) = &metadata_wait_control {
+        control.finish(
+            case,
+            &result,
+            &before,
+            &after,
+            &native_before,
+            &native_after,
+            &target_before_retire,
+            state(&factory.database, pending, &node(4), ranges),
+            output,
+        );
+    }
     if callback_liveness_tests::is_case(case) {
         callback_liveness_tests::finish(
             case,
@@ -798,9 +823,13 @@ pub(super) fn exercise(
         .try_as_frozen()
         .unwrap();
     assert!(!factory.database.read().commit_admission_ready());
-    if remote_new_tests::is_case(case) {
+    if remote_new_tests::is_case(case) || source_metadata_wait_tests::positive(case) {
         remote_new_tests::exercise(
-            case,
+            if source_metadata_wait_tests::positive(case) {
+                SourceCase::TargetRemoteNewAfterCancel
+            } else {
+                case
+            },
             controls,
             clients,
             services,

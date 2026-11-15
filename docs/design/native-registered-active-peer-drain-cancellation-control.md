@@ -36,9 +36,12 @@ Before resuming, the test records the actual same Assigned listener,
 state. It releases and joins the genuine peer. That peer must retain the
 normal exact ended-Closed transport refusal, not an arbitrary error or
 metadata acquisition success. Its request business must match the actual
-server observation. Cleanup releases/cancels before scoped joins on errors
-and panics; all peer failures are logged and primary action failure retains
-precedence. Missing/wrong/expired cuts fail the component rather than pass,
+server observation. On the normal path, `release_auth` runs before the
+explicit peer join; the cleanup guard cancels that peer only after the join,
+preserving its exact original server refusal. The same order applies after a
+caught primary action error/panic, whose attribution remains primary. An
+early unwind past the cleanup guard releases and cancels before the automatic
+scoped join. All peer failures are logged. Missing/wrong/expired cuts fail the component rather than pass,
 skip or masquerade as the intended refusal.
 
 A distinct normal target actor command must then drain that same retained

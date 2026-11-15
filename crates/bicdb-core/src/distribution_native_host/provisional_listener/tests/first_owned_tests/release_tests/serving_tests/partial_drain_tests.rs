@@ -44,8 +44,10 @@ pub(super) fn run(
         .map_err(|_| invalid("actual Installed Assigned listener cut unavailable"))?;
     let (cancelled, retained, held, peer) = std::thread::scope(|scope| -> Result<_> {
         let reader = scope.spawn(move || peer_call());
-        // Release/cancel is established AFTER the scope/worker, so every
-        // action error or panic releases the actual handler BEFORE joins.
+        // Normal path: release_auth precedes the explicit join; cancellation
+        // occurs only on guard drop AFTER that join, preserving the exact
+        // original peer error. Early unwind drops this guard (declared after
+        // the worker) before automatic scope join, releasing AND cancelling.
         let cleanup = Release {
             listener: &listener,
             peer: &peer_request,

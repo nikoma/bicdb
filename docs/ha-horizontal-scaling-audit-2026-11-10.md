@@ -11,7 +11,34 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Current complete execution — source700 failed, 2026-11-15 UTC
+## Current complete execution — source7e99 native failed, 2026-11-15 UTC
+
+Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Draft **1.0.520-beta / `7e99c9c96970b78a44402c975627c64e001adffa`** passed
+all-target/no-default compilation, Core1873/0/16, SQL2682/0/4, PGwire511/0/2,
+remaining-workspace1062/0/6 and Rails20 runs/100 assertions. The separately
+selected serial native job **failed396/55/1**: 34 FIRST and 21 HOT failures.
+Every job finished naturally; ten passed, one failed and four optional jobs were
+skipped. Component successes do not clear the failed native or whole-HA gate.
+
+The failures expose original-window exhaustion during catalogue Open, actual
+service/maintenance contention, stale writer policy after learner allocation,
+rapid metadata socket-probe exhaustion and an incorrect numeric-XID test
+expectation. Remote bridge RPC timeouts and intervening-IO diagnostic refusal
+also remain unresolved; the fixes in preparation do not establish their closure.
+No failure is silently reclassified as a successful refusal or acknowledged loss.
+See the [exact findings, source identities and next controls](design/native-520-regression-findings.md).
+
+The complete archive is frozen and independently verified: 101 files, eleven
+full gzip logs and eight original ZIPs/28 members. Its manifest SHA256 is
+`124bdadc431992c03a89035e8879944acd20e732b8c31d3e9995ba5775ccf9fa`.
+Focused corrective source is uncompiled and unrun. No converged four-to-five-node
+expansion, sustained five-node capacity gain, physical RPO/RTO or production
+qualification has been established. The original Azure run remains a failed
+qualification; its 23 resources were deleted and no new infrastructure was
+provisioned for this run.
+
+## Previous complete execution — source700 failed, 2026-11-15 UTC
 
 Draft520 `700726e90f041815b132cda4f87ca92337f55baa` advanced past the three
 sourcebd09 library diagnostics. All-target, Core and Native jobs then failed on

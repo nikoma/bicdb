@@ -4,6 +4,86 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
+### Source7e99: full compilation passed; native runtime failed
+
+Latest completed draft PR207 source **1.0.520-beta /
+`7e99c9c96970b78a44402c975627c64e001adffa`**, tree
+`8022e9f6e6d51f9eb4691ca877c328229b29c3b1`, ran at actual merge checkout
+`4c46808e3bbef80e5792cce2cbd9de8203839bbe` with the same tree. All jobs in
+[Tests43737698638](https://github.com/nikoma/bicdb/actions/runs/43737698638) and
+[Rails43737698666](https://github.com/nikoma/bicdb/actions/runs/43737698666)
+finished naturally. Ten jobs passed, one failed and four optional jobs were
+skipped. The Tests workflow **failed**; Rails passed. Main remains **1.0.519-beta /
+`587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**. This candidate is unmerged and
+is neither a published release nor a verified deployment.
+
+| Exact-head scope | Classification | Actual result |
+| --- | --- | --- |
+| Workspace all-targets and no-Core-default compilation | Passed | The eighteen source700 test-compilation diagnostics are absent |
+| Core job | Passed | 1,873 passed / 0 failed / 16 ignored across 139 summaries; includes the actual legacy primary-only FORMAT and backup refusal control |
+| SQL job | Passed | 2,682 / 0 / 4 across 282 summaries; actual committed-error cleanup and SQLSTATE controls passed |
+| PGwire job | Passed | 511 / 0 / 2 across 28 summaries, including its separate Oracle HR target |
+| Rails application | Passed | 20 runs, 100 assertions, no failures/errors/skips; process-kill queue/cache and HTTP/WebSocket checks |
+| Remaining workspace | Passed | 1,062 / 0 / 6 across 129 summaries; Python suites 47/3/34 and Node 2/0 also passed |
+| Serial native job | **Failed** | 396 / 55 / 1; 452 unique cases, 986 filtered; 34 FIRST and 21 HOT failures |
+| Independent physical expansion, stable five-node throughput, production admission | Not tested | No qualification gate is cleared |
+
+Core contains one genuinely repeated child case and SQL contains one repeated
+case across targets; these are result rows, not counts of independent trials.
+Core's pass does not substitute for its separately selected failed native job.
+The three INITIAL socket-transition, three dispatcher-publication and three
+same-service identity-wait controls passed in the native job. No new first-policy
+stage marker was reached in the failed HOT cases, so older first-policy failures
+cannot be declared resolved.
+
+The complete frozen archive has **101 regular files / 98 premanifest files**,
+eleven complete gzip logs and eight original ZIPs / 28 members. Manifest SHA256:
+`124bdadc431992c03a89035e8879944acd20e732b8c31d3e9995ba5775ccf9fa`.
+Root independently verified the full inventories, source/tree identity,
+stored/decompressed log hashes, API ZIP sizes/digests, CRCs and member hashes;
+receipt SHA256 `a08a618b81bee40e26723a5ee01e8f3309d39a6b1237b63e1c37bef017a2abe3`.
+Capture-side positive and deliberately wrong-manifest controls are retained;
+the collector exited naturally and the canonical archive is read-only.
+Native raw log is 70,455,181 bytes, SHA256
+`b59d517171ecf60921177338f5593bef6422806caeecdb72ecd005f2a866c8db`;
+gzip is 5,595,906 bytes, SHA256
+`7b7df7c518c498dd6409604b548791ae9fd62c1620865c829d3b906557d9542c`.
+Complete native classification SHA256:
+`9f195fa10e66d20f96d0a6715eb68a8c1f52c8a9b2a61464e3ccc5e98edc9f95`;
+original FIRST-error projection SHA256:
+`7e1441e68f48597ad1bc8ed9023eacbe8be4b2732ccf0411a6fb7ca2cf27475e`.
+The original failed Azure archive and all predecessor archives are unchanged.
+
+The reproducible native command remains:
+
+```sh
+cargo test --config 'profile.dev.package."*".opt-level=2' --config profile.dev.opt-level=1 -p bicdb-core --lib --locked -- distribution_native_host:: range_image_native::rf3_fixture:: --test-threads=1
+```
+
+It is recorded from CI, not executed locally. The native helper build and test
+compilation passed before the runtime failures. Every future result must name
+its own version, commit and tested tree; this run is not an inherited pass.
+
+| Failure group | Classification | Next smallest deterministic check |
+| --- | --- | --- |
+| First local HOT catalogue Open | Failed | All 21 ran out of original proof time before the final local native scope; twenty final foreign sweeps began with 87–222 ms and consumed 94,470–297,515 microseconds. Test the [combined full domain validation](native-hot-open-combined-domain-7e99.md) under the unchanged 1500 ms listener window and original final fault/SDK assertions |
+| FIRST service/maintenance/status contention | Failed | Hold the actual service or same maintenance State; require finite original-caller continuation, cancellation and refusal on expiry. A completed Open must not be replayed merely to obtain final status |
+| Two cross-protocol cases' later SDK append | Failed | Actual range policy is epoch 1 while the committed learner allocation requires epoch 2. Test a separately verified same-worker policy continuation with unchanged SDK calls; do not replace the writer, relax exact epoch checks or treat registry refresh as readiness |
+| Metadata probe attempts exhausted rapidly | Failed | Retain actual errors and test [same-context paced real-TLS retries](native-metadata-probe-exhaustion-7e99.md). The original listener-reset cause remains inconclusive |
+| Final-WAL test compares numeric XID with boolean | Failed | Require the actual [protected committed XID](native-7e99-first-final-xid-control.md); preserve all later fault, denial and SDK assertions |
+| Remote bridge RPC deadlines and absent native attempt | Failed | Instrument the actual ALL-prepared collection, post-ALL local observation and native entry under the original request. The wait fixes do not establish closure; an intended native fault not reached is not a passed control |
+| Catalogue intervening-IO forensic continuation | Failed | Retain original IO uncertainty and diagnostic refusal separately; reproduce the exact native-owner denial before changing a recovery path |
+| Relationship of these failures to the original Azure unreadable ACKs | Inconclusive | No retained evidence establishes the same cause, consistency mode or restoration event |
+| Corrective runtime source, complete rebalance and physical qualification | Not tested after correction | Source review and formatting are not compilation, runtime acceptance or physical evidence |
+
+Private corrective work is being composed separately from this immutable failed
+run. Removing repeated observations, waiting under an original finite caller,
+adding socket pacing and fixing an incorrect assertion do not by themselves
+prove the original full native cases now pass. Unknown native IO remains
+unknown; no proof window, quorum, original assertion or production gate is
+relaxed. Automatic source retirement/completion, repeated-move custody,
+coordinator restart, source loss and populated cold recovery remain open.
+
 ### Source700: complete failed run; Core/Native test execution not reached
 
 Draft PR207 source **1.0.520-beta /
@@ -181,7 +261,7 @@ acceptance. The original failed source and all original assertions remain intact
 
 ### Source6de: Core and Native failed; compilation, SQL, PGwire and Rails passed
 
-Current draft PR207 source is **1.0.520-beta /
+Historical draft PR207 source was **1.0.520-beta /
 `6de646beb603accf39358017d8e0c83c39c741b1`**, tree
 `de0b68af8d158f39358604590769afb8237115f0`. Normal
 [Tests43714999361](https://github.com/nikoma/bicdb/actions/runs/43714999361) and

@@ -10,6 +10,14 @@ distinctions to implementation, tests and retained hardware evidence. The
 automatic data/leader movement but did not pass capacity or fault-safe rebalance
 qualification; no Phase-9 checkbox is closed by that exploratory trial.
 
+Current exact-head qualification checkpoint: draft **1.0.520-beta /
+`7e99c9c96970b78a44402c975627c64e001adffa`** passed compilation and several
+component/application jobs, but the serial native job failed **396/55/1**.
+The [complete result and unresolved failure groups](design/native-520-regression-findings.md)
+remain a merge and qualification blocker. Corrective source, API availability
+and checked roadmap items do not establish fault-safe automatic convergence.
+No physical expansion or production checkbox changes at this checkpoint.
+
 The goal is a cluster where an operator joins a server and BicDB automatically
 places, replicates, moves, and balances data without application-level shard
 routing:

@@ -88,6 +88,7 @@ impl NativeDataListenerMode {
 mod initial_preparation;
 mod learner_birth;
 pub(crate) mod metadata_append;
+mod metadata_leadership_transfer;
 mod native_abort;
 mod native_activation;
 mod native_image_source;
@@ -406,6 +407,10 @@ enum ClusterDataRequest {
     MetadataVote {
         request: MetadataVoteRequest,
     },
+    /// The metadata leader asks one caught-up voter to campaign now.
+    MetadataLeadershipTransfer {
+        request: crate::distribution_consensus::MetadataLeadershipTransferRequest,
+    },
     MetadataAppend {
         request: MetadataAppendRequest,
     },
@@ -625,6 +630,7 @@ impl ClusterDataRequest {
             Self::FetchBootstrapSnapshot
             | Self::FetchTopology
             | Self::MetadataVote { .. }
+            | Self::MetadataLeadershipTransfer { .. }
             | Self::MetadataAppend { .. }
             | Self::MetadataReadProbe { .. }
             | Self::MetadataReadAcquire { .. }
@@ -653,6 +659,7 @@ impl ClusterDataRequest {
         matches!(
             self,
             Self::MetadataVote { .. }
+                | Self::MetadataLeadershipTransfer { .. }
                 | Self::MetadataAppend { .. }
                 | Self::MetadataReadProbe { .. }
                 | Self::MetadataReadAcquire { .. }
@@ -701,6 +708,7 @@ enum ClusterDataResponse {
     BootstrapSnapshot(ClusterBootstrapSnapshot),
     Topology(ClusterTopology),
     MetadataVote(MetadataVoteResponse),
+    MetadataLeadershipTransfer(crate::distribution_consensus::MetadataLeadershipTransferResponse),
     MetadataAppend(MetadataAppendResponse),
     MetadataReadProbe(MetadataReadProbeResponse),
     MetadataReadAcquire(MetadataReadAcquireResponse),
@@ -1513,6 +1521,7 @@ fn handle_cluster_data_connection(
                 ClusterDataRequest::Ping
                     | ClusterDataRequest::NativeInitialPreparation { .. }
                     | ClusterDataRequest::MetadataVote { .. }
+                    | ClusterDataRequest::MetadataLeadershipTransfer { .. }
                     | ClusterDataRequest::MetadataAppend { .. }
                     | ClusterDataRequest::MetadataReadProbe { .. }
                     | ClusterDataRequest::MetadataReadAcquire { .. }
@@ -1533,6 +1542,7 @@ fn handle_cluster_data_connection(
                         | ClusterDataRequest::FetchBootstrapSnapshot
                         | ClusterDataRequest::ExportSchemaBundle { .. }
                         | ClusterDataRequest::MetadataVote { .. }
+                        | ClusterDataRequest::MetadataLeadershipTransfer { .. }
                         | ClusterDataRequest::MetadataAppend { .. }
                         | ClusterDataRequest::MetadataReadProbe { .. }
                         | ClusterDataRequest::MetadataReadAcquire { .. }
@@ -3600,6 +3610,28 @@ fn dispatch_cluster_data_request(
             }
             Ok(ClusterDataResponse::MetadataVote(
                 consensus.handle_vote_request(request)?,
+            ))
+        }
+        ClusterDataRequest::MetadataLeadershipTransfer { request } => {
+            // Identity DATA only. The caller was authenticated against its
+            // pinned membership certificate before dispatch; the store itself
+            // decides whether that caller is the leader it follows now.
+            if &request.leader_id != caller_node_id {
+                return Err(transport_error(
+                    "metadata leadership transfer leader does not match authenticated caller",
+                ));
+            }
+            let consensus = metadata_consensus
+                .ok_or_else(|| transport_error("metadata consensus is not active on this node"))?;
+            let mut consensus = consensus.lock();
+            if let Some(actual) = listener_database {
+                consensus.require_listener_database(actual)?;
+            }
+            Ok(ClusterDataResponse::MetadataLeadershipTransfer(
+                consensus.handle_leadership_transfer(
+                    &request,
+                    metadata_leadership_transfer::CAMPAIGN_WINDOW,
+                )?,
             ))
         }
         ClusterDataRequest::MetadataAppend { request } => {

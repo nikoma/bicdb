@@ -148,8 +148,13 @@ fn coordinating(
         .metadata_leader()
         .map_err(|error| unknown(format!("the metadata leader is unknown: {error}")))?;
     if &leader != local {
+        // This node's own committed copy, to tell the operator what to do.
+        let advice = hosts
+            .committed_topology()
+            .map(|topology| advice(&topology, range, target, &leader))
+            .unwrap_or_default();
         return Err(lost(format!(
-            "this node ({local}) is not the metadata leader ({leader})"
+            "this node ({local}) is not the metadata leader ({leader}){advice}"
         )));
     }
     let topology = hosts
@@ -168,9 +173,61 @@ fn coordinating(
         return Ok(topology);
     }
     Err(lost(format!(
-        "this node ({local}) is not the leader of range {range} ({})",
-        descriptor.leader
+        "this node ({local}) is not the leader of range {range} ({}){}",
+        descriptor.leader,
+        advice(&topology, range, target, &leader)
     )))
+}
+/// What the operator does when the metadata leader and the coordinator of the
+/// range differ: "; range R is led by nX; metadata is led by nY; run ...".
+/// Empty when the range is unknown.
+fn advice(
+    topology: &ClusterTopology,
+    range: RangeId,
+    target: &ClusterNodeId,
+    metadata_leader: &ClusterNodeId,
+) -> String {
+    let Some(descriptor) = topology.range_by_id(range) else {
+        return String::new();
+    };
+    // A committed relocation onto the target keeps its source as coordinator
+    // after the membership stages named another range leader.
+    let source = topology
+        .relocations
+        .values()
+        .find(|plan| {
+            plan.range_id == range
+                && &plan.target == target
+                && plan.phase != RelocationPhase::Completed
+        })
+        .and_then(|plan| plan.source.clone())
+        .filter(|source| source != &descriptor.leader);
+    let (coordinator, role) = match &source {
+        Some(source) => (
+            source,
+            format!("the committed move of range {range} onto {target} is coordinated by its source {source}"),
+        ),
+        None => (
+            &descriptor.leader,
+            format!("range {range} is led by {}", descriptor.leader),
+        ),
+    };
+    let facts = format!("; {role}; metadata is led by {metadata_leader}");
+    if coordinator == metadata_leader {
+        return format!("{facts}; send move-range to {coordinator}");
+    }
+    let voter = topology.nodes.get(coordinator).is_some_and(|member| {
+        member.lifecycle == ClusterNodeLifecycle::Active
+            && member.metadata_role == MetadataMemberRole::Voter
+    });
+    if !voter {
+        return format!(
+            "{facts}; {coordinator} is not an active metadata voter, so metadata leadership cannot be transferred to it: this range cannot be moved until {coordinator} is a metadata voter"
+        );
+    }
+    format!(
+        "{facts}; run transfer-metadata-leadership --to {coordinator} on {metadata_leader}, then send move-range to {coordinator}"
+    )
 }
 fn unfinished(topology: &ClusterTopology, range: RangeId, target: &ClusterNodeId) -> bool {
     topology.relocations.values().any(|plan| {

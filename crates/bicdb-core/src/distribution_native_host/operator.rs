@@ -79,6 +79,14 @@ pub enum NativeMetadataHostAction {
     AbortMoveRange {
         range: RangeId,
     },
+    /// Hand metadata leadership from THIS host to `to`, so that the metadata
+    /// leader and a range's leader coincide before `MoveRange`. Accepted only
+    /// on the current metadata leader; `to` must be another active metadata
+    /// voter. Bounded: on failure this host keeps leading where it still can
+    /// and the error says what happened.
+    TransferMetadataLeadership {
+        to: ClusterNodeId,
+    },
     Status,
     Stop,
 }
@@ -100,6 +108,12 @@ pub struct NativeMetadataHostStatus {
     pub node_id: ClusterNodeId,
     pub phase: NativeMetadataHostPhase,
     pub metadata: Option<MetadataConsensusStatus>,
+    /// The metadata leader as this node's own store knows it: this node when
+    /// it leads, else the leader it follows. `None` while none is known.
+    /// Diagnostic DATA only, never an authority.
+    pub metadata_leader: Option<ClusterNodeId>,
+    /// Outcome of the last `TransferMetadataLeadership` on this host.
+    pub last_metadata_leadership_transfer: Option<serde_json::Value>,
     pub last_enrolled_learner: Option<ClusterNodeId>,
     pub last_caught_up_learner_store_id: Option<Uuid>,
     pub last_metadata_maintenance: Option<serde_json::Value>,
@@ -128,6 +142,7 @@ pub struct NativeMetadataHost {
     last_caught_up_learner_store_id: Option<Uuid>,
     last_metadata_maintenance: Option<serde_json::Value>,
     last_metadata_promotion: Option<serde_json::Value>,
+    last_metadata_leadership_transfer: Option<serde_json::Value>,
     range_move: Option<NativeRangeMoveSlot>,
 }
 impl NativeMetadataHost {
@@ -213,6 +228,7 @@ impl NativeMetadataHost {
             last_caught_up_learner_store_id: None,
             last_metadata_maintenance: None,
             last_metadata_promotion: None,
+            last_metadata_leadership_transfer: None,
             range_move: None,
         })
     }
@@ -279,6 +295,14 @@ impl NativeMetadataHost {
             version: 1,
             node_id: self.template.node_id.clone(),
             phase: self.phase,
+            metadata_leader: metadata.as_ref().and_then(|status| {
+                if status.role == crate::MetadataConsensusRole::Leader {
+                    Some(status.node_id.clone())
+                } else {
+                    status.leader_id.clone()
+                }
+            }),
+            last_metadata_leadership_transfer: self.last_metadata_leadership_transfer.clone(),
             metadata,
             last_enrolled_learner: self.last_enrolled_learner.clone(),
             last_caught_up_learner_store_id: self.last_caught_up_learner_store_id,
@@ -485,6 +509,26 @@ impl NativeMetadataHost {
             }
             NativeMetadataHostAction::AbortMoveRange { range } => {
                 request_range_move_abort(&mut self.range_move, range, &token)?;
+            }
+            NativeMetadataHostAction::TransferMetadataLeadership { to } => {
+                let outcome = self
+                    .control
+                    .as_ref()
+                    .ok_or_else(|| {
+                        invalid("metadata leadership transfer requires the owned native metadata control (enable-control)")
+                    })
+                    .and_then(|control| control.transfer_metadata_leadership(&to, &token));
+                self.last_metadata_leadership_transfer = Some(match &outcome {
+                    Ok(report) => {
+                        serde_json::json!({"to": to, "transferred": true, "report": report})
+                    }
+                    Err(error) => serde_json::json!({
+                        "to": to,
+                        "transferred": false,
+                        "error": error.to_string().chars().take(2048).collect::<String>(),
+                    }),
+                });
+                outcome?;
             }
             NativeMetadataHostAction::Stop => {
                 if let Some(range_move) = self.range_move.as_mut() {

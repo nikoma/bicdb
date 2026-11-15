@@ -532,6 +532,7 @@ impl MetadataConsensusStore {
             state,
             match_index: BTreeMap::new(),
             last_leader_contact_ms: unix_time_ms(),
+            leadership_transfer: Default::default(),
             native_owner: Some(owner),
             publication_version: super::publication_version::MetadataPublicationVersion::new(),
         };
@@ -743,6 +744,7 @@ impl MetadataConsensusStore {
             state,
             match_index: BTreeMap::new(),
             last_leader_contact_ms: unix_time_ms(),
+            leadership_transfer: Default::default(),
             native_owner: Some(owner),
             publication_version: super::publication_version::MetadataPublicationVersion::new(),
         });
@@ -880,6 +882,7 @@ impl MetadataConsensusStore {
             state,
             match_index: BTreeMap::new(),
             last_leader_contact_ms: unix_time_ms(),
+            leadership_transfer: Default::default(),
             native_owner: Some(owner),
             publication_version: super::publication_version::MetadataPublicationVersion::new(),
         });

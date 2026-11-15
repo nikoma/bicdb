@@ -30,6 +30,10 @@ pub const METADATA_READ_ACQUISITION_PROTOCOL_VERSION: u32 = 1;
 mod publication_version;
 pub(crate) use publication_version::{NativeMetadataPublicationGuard, NativeMetadataVersionPoint};
 mod host_read;
+mod leadership_transfer;
+pub use leadership_transfer::{
+    MetadataLeadershipTransferRequest, MetadataLeadershipTransferResponse,
+};
 mod native_metadata_store;
 mod native_supervisor;
 pub(crate) use host_read::{
@@ -1347,6 +1351,7 @@ pub struct MetadataConsensusStore {
     state: MetadataConsensusState,
     match_index: BTreeMap<ClusterNodeId, u64>,
     last_leader_contact_ms: u64,
+    leadership_transfer: leadership_transfer::MetadataLeadershipTransferState,
     // Close phase versions before dropping the native metadata owner.
     publication_version: publication_version::MetadataPublicationVersionOwner,
     native_owner: Option<native_metadata_store::NativeMetadataStoreOwner>,
@@ -1561,6 +1566,7 @@ impl MetadataConsensusStore {
             state,
             match_index: BTreeMap::new(),
             last_leader_contact_ms: unix_time_ms(),
+            leadership_transfer: Default::default(),
             native_owner: None,
             publication_version: publication_version::MetadataPublicationVersion::new(),
         };
@@ -2094,6 +2100,7 @@ impl MetadataConsensusStore {
         if self.state.role != MetadataConsensusRole::Leader {
             return Err(metadata_error("only the leader can propose topology"));
         }
+        self.require_no_leadership_transfer()?;
         topology.validate()?;
         self.ensure_cluster(&topology.cluster_id)?;
         crate::distribution::validate_native_store_birth_transition(
@@ -2163,6 +2170,7 @@ impl MetadataConsensusStore {
                 "only the leader can propose restore activation",
             ));
         }
+        self.require_no_leadership_transfer()?;
         activation.validate()?;
         let topology = self
             .state

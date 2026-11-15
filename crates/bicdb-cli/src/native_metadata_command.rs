@@ -185,6 +185,23 @@ pub enum Command {
         #[arg(long, default_value_t = 5000)]
         timeout_ms: u64,
     },
+    /// Hand metadata leadership from the host that leads metadata now to
+    /// another metadata voter (--to), so that the metadata leader and the
+    /// leader of a range coincide before move-range. Send it to the current
+    /// metadata leader (`metadata_leader` in every host's status); any other
+    /// host refuses. Bounded: on failure the error says who leads.
+    TransferMetadataLeadership {
+        #[arg(long)]
+        command_file: PathBuf,
+        #[arg(long)]
+        status_file: PathBuf,
+        #[arg(long)]
+        sequence: u64,
+        #[arg(long)]
+        to: String,
+        #[arg(long, default_value_t = 5000)]
+        timeout_ms: u64,
+    },
     /// Register ONLY this TLS node's metadata learner CONFIG identity.
     Register {
         #[arg(long)]
@@ -981,6 +998,55 @@ pub fn run(command: Command) -> Result<()> {
                 ensure!(
                     Instant::now() < deadline,
                     "native range move request timed out; actual pending state is retained"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+        Command::TransferMetadataLeadership {
+            command_file,
+            status_file,
+            sequence,
+            to,
+            timeout_ms,
+        } => {
+            ensure!(
+                sequence > 0 && (1..=5000).contains(&timeout_ms),
+                "unsupported operator sequence/budget"
+            );
+            ensure!(
+                command_file != status_file,
+                "operator command/status paths must differ"
+            );
+            let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+            write(
+                &command_file,
+                &Request {
+                    version: 1,
+                    sequence,
+                    action: NativeMetadataHostAction::TransferMetadataLeadership {
+                        to: ClusterNodeId::new(to)?,
+                    },
+                    budget_ms: timeout_ms,
+                },
+            )?;
+            loop {
+                let reply: serde_json::Value =
+                    serde_json::from_slice(&read_bounded(&status_file, 1024 * 1024)?)?;
+                if reply["sequence"].as_u64() == Some(sequence) {
+                    ensure!(
+                        reply["error"].is_null(),
+                        "native metadata leadership transfer refused: {}",
+                        reply["error"]
+                    );
+                    println!(
+                        "{}",
+                        serde_json::to_string(&reply["host"]["last_metadata_leadership_transfer"])?
+                    );
+                    break;
+                }
+                ensure!(
+                    Instant::now() < deadline,
+                    "native metadata leadership transfer request timed out; read `metadata_leader` in the host status"
                 );
                 std::thread::sleep(Duration::from_millis(5));
             }

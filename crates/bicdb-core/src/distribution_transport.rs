@@ -1767,9 +1767,16 @@ fn handle_cluster_data_connection(
             })?;
             let parent =
                 CancellationToken::new(Arc::new(AtomicBool::new(false)), Some(request_deadline));
-            return source
-                .observe_remote_old(peer, &request, &parent)
-                .map(|actual| ClusterDataResponse::NativeRemoteOld(actual.into_reply()));
+            #[cfg(test)]
+            source.test_first_note_old_dispatch(&request);
+            let reply = source
+                .observe_remote_old(peer, &request, &parent)?
+                .into_reply();
+            #[cfg(test)]
+            if source.test_first_take_close_reply_loss(&reply) {
+                suppress_actual_completion_reply.set(true);
+            }
+            return Ok(ClusterDataResponse::NativeRemoteOld(reply));
         }
         if let ClusterDataRequest::NativeRemoteNew { request } = request.request {
             let peer = authenticated_caller.as_ref().ok_or_else(|| {

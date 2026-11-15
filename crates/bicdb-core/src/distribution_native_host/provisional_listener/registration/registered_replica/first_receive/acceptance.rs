@@ -13,6 +13,16 @@ impl NativeMetadataControlHost {
             .first_receive
             .test_arm(fault)
     }
+    pub(in crate::distribution_native_host) fn test_first_receiver_barrier(
+        &self,
+        op: Op,
+    ) -> Result<crate::distribution_native_host::remote_first::NativeFirstIngressBarrier> {
+        self.replica
+            .as_ref()
+            .ok_or_else(|| invalid("actual FIRST receiver absent"))?
+            .first_receive
+            .test_arm_barrier(op)
+    }
     pub(in crate::distribution_native_host) fn test_first_receiver_snapshot(
         &self,
     ) -> Result<serde_json::Value> {

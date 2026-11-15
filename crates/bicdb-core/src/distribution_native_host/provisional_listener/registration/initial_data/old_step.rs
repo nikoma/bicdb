@@ -6,6 +6,8 @@ mod remote_new;
 mod remote_old;
 pub(crate) use constraint_step::NativeInitialOldConstraintStep;
 #[cfg(test)]
+mod first_reply_loss;
+#[cfg(test)]
 mod sink_test;
 use crate::distribution_consensus::{
     HostMetadataReadObservation, MetadataConsensusStore, NativeOwnedMetadataMemberObservation,

@@ -72,4 +72,34 @@ impl NativeMetadataHost {
             .ok_or_else(|| invalid("actual FIRST source owner absent"))?
             .test_first_new_mutation_after_unknown(range, parent)
     }
+    pub(in crate::distribution_native_host) fn test_first_arm_close_loss(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<impl Drop + Send + 'static> {
+        self.test_first_control()?.test_first_arm_close_loss(range)
+    }
+    pub(in crate::distribution_native_host) fn test_first_close_loss_snapshot(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        self.test_first_control()?
+            .test_first_close_loss_snapshot(range)
+    }
+
+    pub(in crate::distribution_native_host) fn test_first_concurrent_admission(
+        &mut self,
+        range: crate::RangeId,
+        barrier: &crate::distribution_native_host::remote_first::NativeFirstIngressBarrier,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual FIRST source absent"))?
+            .test_first_concurrent_admission(range, barrier, parent)
+    }
+
+    pub(in crate::distribution_native_host) fn test_first_stop_state(&self) -> serde_json::Value {
+        serde_json::json!({"phase":self.phase,"supervisor_slot_present":self.supervisor.is_some(),
+            "control_listener_running":self.control.as_ref().is_some_and(|c|c.is_running()),"memory_only":true})
+    }
 }

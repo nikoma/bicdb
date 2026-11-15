@@ -8,7 +8,9 @@ use std::time::Instant;
 
 mod ingress;
 #[cfg(test)]
-pub(in crate::distribution_native_host) use ingress::NativeFirstIngressFault;
+pub(in crate::distribution_native_host) use ingress::{
+    NativeFirstIngressBarrier, NativeFirstIngressFault,
+};
 pub(crate) use ingress::{NativeFirstReceiveIngress, NativeFirstReceiveQueue};
 
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]

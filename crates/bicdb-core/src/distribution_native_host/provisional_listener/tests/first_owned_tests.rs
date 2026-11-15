@@ -12,6 +12,7 @@ use crate::distribution_native_host::{
 use crate::distribution_range_image::{
     NativeRemoteImageSourceOperationV1 as Frame, RangeImageCursorV1, RangeImageHistoryCursorV1,
 };
+use std::io::Write as _;
 use std::sync::mpsc;
 use std::time::Instant;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,7 +24,15 @@ enum Case {
     LostStart,
     UnknownFinal,
     Over512,
+    LostClose,
+    ConcurrentAdmission,
 }
+#[derive(Clone, Copy, Debug)]
+enum SetupCut {
+    ReturnError,
+    Panic,
+}
+
 enum OwnerCommand {
     Snapshot(mpsc::SyncSender<serde_json::Value>),
 }
@@ -46,10 +55,14 @@ fn snapshot(sender: &mpsc::Sender<OwnerCommand>) -> Result<serde_json::Value> {
 struct Report {
     events: Vec<serde_json::Value>,
     omitted: u64,
+    stderr_write_errors: u64,
 }
 impl Report {
     fn event(&mut self, value: serde_json::Value) {
-        eprintln!("NATIVE_FIRST_ACTUAL {}", value);
+        // Logging failure must never replace the original API/panic result.
+        if writeln!(std::io::stderr().lock(), "NATIVE_FIRST_ACTUAL {}", value).is_err() {
+            self.stderr_write_errors = self.stderr_write_errors.saturating_add(1);
+        }
         if self.events.len() < 4096 {
             self.events.push(value);
         } else {
@@ -90,6 +103,9 @@ struct Five {
 }
 impl Five {
     fn start(report: &mut Report) -> Result<Self> {
+        Self::start_with_cut(report, None)
+    }
+    fn start_with_cut(report: &mut Report, cut: Option<SetupCut>) -> Result<Self> {
         let PlannedNetwork {
             mut root,
             plan,
@@ -133,138 +149,197 @@ impl Five {
         };
         let mut reserved = ports.into_iter().map(Some).collect::<Vec<_>>();
         let fifth_address = reserved[4].as_ref().unwrap().local_addr()?.to_string();
-        let mut sources = Vec::new();
-        for i in 0..4 {
-            // Every other endpoint remains actually reserved until its own
-            // normal host is ready to bind. There is no free-port lottery.
-            drop(reserved[i].take());
-            sources.push(report.call("normal_initial_host_start", || {
-                NativeMetadataHost::start_fresh_metadata_only(
-                    &root.path().join(format!("normal-initial-{i}")),
-                    public.clone(),
-                    node(i),
-                    &initial.nodes[&node(i)].address,
-                    networks[i].clone(),
-                    8 * 1024 * 1024,
-                    &lifetime,
-                )
-            })?);
-        }
-        for action in [HostAction::Prepare, HostAction::Launch] {
-            for host in &mut sources {
-                report.call("normal_initial_host_action", || {
-                    host.apply(action.clone(), &lifetime)
+        // Own every returned normal host immediately, before the next
+        // fallible setup call. No live source/learner is stranded in locals.
+        let mut five = Self {
+            sources: Vec::new(),
+            target: None,
+            lifetime,
+            config,
+            topology: initial.clone(),
+            root,
+        };
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
+            for i in 0..4 {
+                // Every other endpoint remains actually reserved until its own
+                // normal host is ready to bind. There is no free-port lottery.
+                drop(reserved[i].take());
+                five.sources
+                    .push(report.call("normal_initial_host_start", || {
+                        NativeMetadataHost::start_fresh_metadata_only(
+                            &five.root.path().join(format!("normal-initial-{i}")),
+                            public.clone(),
+                            node(i),
+                            &initial.nodes[&node(i)].address,
+                            networks[i].clone(),
+                            8 * 1024 * 1024,
+                            &five.lifetime,
+                        )
+                    })?);
+            }
+            for action in [HostAction::Prepare, HostAction::Launch] {
+                for host in &mut five.sources {
+                    report.call("normal_initial_host_action", || {
+                        host.apply(action.clone(), &five.lifetime)
+                    })?;
+                }
+            }
+            report.call("normal_actual_metadata_election", || {
+                five.sources[0].apply(HostAction::Elect, &five.lifetime)
+            })?;
+            for host in &mut five.sources {
+                report.call("normal_control_transition", || {
+                    host.apply(HostAction::EnableControl, &five.lifetime)
+                })?;
+                report.call("normal_original_supervisor", || {
+                    host.start_automatic_metadata(&five.lifetime)
                 })?;
             }
-        }
-        report.call("normal_actual_metadata_election", || {
-            sources[0].apply(HostAction::Elect, &lifetime)
-        })?;
-        for host in &mut sources {
-            report.call("normal_control_transition", || {
-                host.apply(HostAction::EnableControl, &lifetime)
-            })?;
-            report.call("normal_original_supervisor", || {
-                host.start_automatic_metadata(&lifetime)
-            })?;
-        }
-        // Same ordinary public opening API for every retained normal host.
-        // Each invocation retains the API's original 5s bound.
-        std::thread::scope(|scope| -> Result<()> {
-            let handles = sources
-                .iter_mut()
-                .enumerate()
-                .map(|(ordinal, host)| {
-                    report.event(
+            if let Some(cut) = cut {
+                report.event(serde_json::json!({"stage":"actual_partial_setup_cut_after_four_supervisors",
+                "cut":format!("{cut:?}"),"actual_host_count":five.sources.len(),"synthetic_native_failure":false}));
+                match cut {
+                    SetupCut::ReturnError => {
+                        return Err(invalid("intentional partial FIRST fixture setup return"))
+                    }
+                    SetupCut::Panic => {
+                        std::panic::panic_any("intentional partial FIRST fixture setup panic")
+                    }
+                }
+            }
+            // Same ordinary public opening API for every retained normal host.
+            // Each invocation retains the API's original 5s bound.
+            std::thread::scope(|scope| -> Result<()> {
+                let handles = five
+                    .sources
+                    .iter_mut()
+                    .enumerate()
+                    .map(|(ordinal, host)| {
+                        report.event(
                         serde_json::json!({"stage":"normal_initial_open_dispatch","ordinal":ordinal,
                         "original_action_budget_ms":5000}),
                     );
-                    let parent = &lifetime;
-                    scope.spawn(move || host.apply(HostAction::OpenInitialData, parent))
-                })
-                .collect::<Vec<_>>();
-            for handle in handles {
-                let result = match handle.join() {
-                    Ok(actual) => actual,
-                    Err(panic) => std::panic::resume_unwind(panic),
-                };
-                report.call("normal_initial_data_return", || result)?;
-            }
-            Ok(())
-        })?;
-        let mut fifth = crate::ClusterNode::new(node(4), fifth_address.clone(), 1, 1 << 30, 10)?
-            .as_metadata_learner()
-            .with_tls_certificate_sha256(
-                crate::replication_transport::replication_certificate_sha256(
-                    &networks[4].tls.as_ref().unwrap().cert_path,
-                )?,
-            )?;
-        fifth.labels = initial.nodes[&node(0)].labels.clone();
-        report.call("actual_tls_register_metadata_learner", || {
-            sources[0].test_first_register_learner(fifth, &lifetime)
-        })?;
-        drop(reserved[4].take());
-        let mut target = report.call("normal_join_fresh_host_start", || {
-            NativeMetadataLearnerHost::start_fresh_metadata_only(
-                &root.path().join("normal-join-fresh"),
-                initial.cluster_id.clone(),
-                node(4),
-                &fifth_address,
-                1,
-                node(0),
-                &initial.nodes[&node(0)].address,
-                networks[4].clone(),
-                8 * 1024 * 1024,
-                &lifetime,
-            )
-        })?;
-        report.call("normal_native_birth_enrollment", || {
-            sources[0].apply(HostAction::EnrollLearner { node: node(4) }, &lifetime)
-        })?;
-        report.call("normal_learner_owned_metadata", || {
-            target.start_metadata(&lifetime)
-        })?;
-        report.call("normal_actual_learner_catchup", || {
-            sources[0].apply(HostAction::CatchUpLearner { node: node(4) }, &lifetime)
-        })?;
-        let promotion = report.call("normal_actual_metadata_maintenance", || {
-            sources[0].maintain_metadata(&lifetime)
-        })?;
-        report.event(serde_json::json!({"stage":"actual_maintenance_stage","value":promotion.last_metadata_maintenance}));
-        report.call("normal_registered_control", || {
-            target.enable_metadata_control(&lifetime)
-        })?;
-        report.call("normal_target_original_supervisor", || {
-            target.start_automatic_metadata(&lifetime)
-        })?;
-        report.call("normal_sealed_fresh_receiver", || {
-            target.open_replica_receiver(&lifetime)
-        })?;
-        for host in &mut sources {
-            report.call("normal_initial_registry_refresh", || {
-                host.refresh_initial_data_registry(&lifetime)
+                        let parent = &five.lifetime;
+                        scope.spawn(move || host.apply(HostAction::OpenInitialData, parent))
+                    })
+                    .collect::<Vec<_>>();
+                for handle in handles {
+                    let result = match handle.join() {
+                        Ok(actual) => actual,
+                        Err(panic) => std::panic::resume_unwind(panic),
+                    };
+                    report.call("normal_initial_data_return", || result)?;
+                }
+                Ok(())
             })?;
+            let mut fifth =
+                crate::ClusterNode::new(node(4), fifth_address.clone(), 1, 1 << 30, 10)?
+                    .as_metadata_learner()
+                    .with_tls_certificate_sha256(
+                        crate::replication_transport::replication_certificate_sha256(
+                            &networks[4].tls.as_ref().unwrap().cert_path,
+                        )?,
+                    )?;
+            fifth.labels = initial.nodes[&node(0)].labels.clone();
+            report.call("actual_tls_register_metadata_learner", || {
+                five.sources[0].test_first_register_learner(fifth, &five.lifetime)
+            })?;
+            drop(reserved[4].take());
+            let target = report.call("normal_join_fresh_host_start", || {
+                NativeMetadataLearnerHost::start_fresh_metadata_only(
+                    &five.root.path().join("normal-join-fresh"),
+                    initial.cluster_id.clone(),
+                    node(4),
+                    &fifth_address,
+                    1,
+                    node(0),
+                    &initial.nodes[&node(0)].address,
+                    networks[4].clone(),
+                    8 * 1024 * 1024,
+                    &five.lifetime,
+                )
+            })?;
+            five.target = Some(target);
+            report.call("normal_native_birth_enrollment", || {
+                five.sources[0].apply(HostAction::EnrollLearner { node: node(4) }, &five.lifetime)
+            })?;
+            report.call("normal_learner_owned_metadata", || {
+                five.target.as_mut().unwrap().start_metadata(&five.lifetime)
+            })?;
+            report.call("normal_actual_learner_catchup", || {
+                five.sources[0].apply(HostAction::CatchUpLearner { node: node(4) }, &five.lifetime)
+            })?;
+            let promotion = report.call("normal_actual_metadata_maintenance", || {
+                five.sources[0].maintain_metadata(&five.lifetime)
+            })?;
+            report.event(serde_json::json!({"stage":"actual_maintenance_stage","value":promotion.last_metadata_maintenance}));
+            report.call("normal_registered_control", || {
+                five.target
+                    .as_mut()
+                    .unwrap()
+                    .enable_metadata_control(&five.lifetime)
+            })?;
+            report.call("normal_target_original_supervisor", || {
+                five.target
+                    .as_mut()
+                    .unwrap()
+                    .start_automatic_metadata(&five.lifetime)
+            })?;
+            report.call("normal_sealed_fresh_receiver", || {
+                five.target
+                    .as_mut()
+                    .unwrap()
+                    .open_replica_receiver(&five.lifetime)
+            })?;
+            for host in &mut five.sources {
+                report.call("normal_initial_registry_refresh", || {
+                    host.refresh_initial_data_registry(&five.lifetime)
+                })?;
+            }
+            let topology = report.call("actual_committed_topology", || {
+                five.sources[0].test_first_topology(&five.lifetime)
+            })?;
+            five.topology = topology;
+            Ok(())
+        }));
+        match outcome {
+            Ok(Ok(())) => Ok(five),
+            Ok(Err(error)) => {
+                report.event(
+                    serde_json::json!({"stage":"partial_setup_primary_error_before_cleanup",
+                    "error":crate::distribution_native_host::remote_first::error_data(&error)}),
+                );
+                five.stop(report);
+                Err(error)
+            }
+            Err(panic) => {
+                report.event(
+                    serde_json::json!({"stage":"partial_setup_primary_panic_before_cleanup"}),
+                );
+                five.stop(report);
+                std::panic::resume_unwind(panic)
+            }
         }
-        let topology = report.call("actual_committed_topology", || {
-            sources[0].test_first_topology(&lifetime)
-        })?;
-        Ok(Self {
-            sources,
-            target: Some(target),
-            lifetime,
-            config,
-            topology,
-            root,
-        })
     }
+
     fn stop(&mut self, report: &mut Report) {
         if let Some(mut target) = self.target.take() {
-            let _ = report.call("actual_target_stop", || target.stop(&self.lifetime));
+            let cleanup = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                report.call("actual_target_stop", || target.stop(&self.lifetime))
+            }));
+            report.event(serde_json::json!({"stage":"actual_target_cleanup_return",
+                "returned_ok":cleanup.as_ref().is_ok_and(|r|r.is_ok()),"panicked":cleanup.is_err(),
+                "full_drain_claim":false}));
         }
-        for source in &mut self.sources {
-            let _ = report.call("actual_source_stop", || {
-                source.apply(HostAction::Stop, &self.lifetime)
-            });
+        for (ordinal, source) in self.sources.iter_mut().enumerate() {
+            let cleanup = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                report.data_call("actual_source_stop", || {
+                    source.apply(HostAction::Stop, &self.lifetime)
+                })
+            }));
+            report.event(serde_json::json!({"stage":"actual_source_cleanup_return","ordinal":ordinal,
+                "returned_ok":cleanup.as_ref().is_ok_and(|r|r.is_ok()),"panicked":cleanup.is_err(),
+                "actual_state_after":source.test_first_stop_state(),"new_completion_timeout":false}));
         }
         self.lifetime.cancel();
     }
@@ -298,10 +373,80 @@ fn native_first_actual_final_wal_cancel_retains_xid_and_blocks_next_mutation() {
 fn native_first_over_512_real_row_steps_compact_and_refuse_consumed_sequence() {
     run(Case::Over512);
 }
+#[test]
+fn native_first_actual_lost_close_readonly_resolves_original_record_without_replay() {
+    run(Case::LostClose);
+}
+#[test]
+fn native_first_actual_concurrent_new_sequence_cannot_replace_admitted_original() {
+    run(Case::ConcurrentAdmission);
+}
+#[test]
+fn native_first_partial_normal_setup_error_and_panic_stop_returned_supervisors() {
+    for cut in [SetupCut::ReturnError, SetupCut::Panic] {
+        let mut report = Report {
+            events: Vec::new(),
+            omitted: 0,
+            stderr_write_errors: 0,
+        };
+        let actual = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            Five::start_with_cut(&mut report, Some(cut))
+        }));
+        let original = match &actual {
+            Ok(Err(error)) => serde_json::json!({"returned_error":error.to_string()}),
+            Err(payload) => serde_json::json!({"panic":payload.downcast_ref::<&str>().copied()}),
+            _ => serde_json::json!({"unexpected_success":true}),
+        };
+        let cleanup = report
+            .events
+            .iter()
+            .filter(|e| e["stage"] == "actual_source_cleanup_return")
+            .cloned()
+            .collect::<Vec<_>>();
+        report.event(
+            serde_json::json!({"actual_partial_setup_primary":original,"cleanup":cleanup,
+            "original_stop_API_join_semantics":true,"independent_process_exit_claim":false}),
+        );
+        match cut {
+            SetupCut::ReturnError => assert!(actual.as_ref().is_ok_and(|r| r
+                .as_ref()
+                .err()
+                .is_some_and(|e| e
+                    .to_string()
+                    .contains("intentional partial FIRST fixture setup return")))),
+            SetupCut::Panic => assert!(actual
+                .as_ref()
+                .err()
+                .and_then(|p| p.downcast_ref::<&str>())
+                .is_some_and(|p| *p == "intentional partial FIRST fixture setup panic")),
+        }
+        assert_eq!(
+            cleanup.len(),
+            4,
+            "all returned actual source owners stopped"
+        );
+        for observed in cleanup {
+            assert_eq!(
+                observed["returned_ok"], true,
+                "original stop failed; no drain claim"
+            );
+            assert_eq!(
+                observed["actual_state_after"]["supervisor_slot_present"],
+                false
+            );
+            assert_eq!(observed["actual_state_after"]["phase"], "Stopped");
+            assert_eq!(
+                observed["actual_state_after"]["control_listener_running"],
+                false
+            );
+        }
+    }
+}
 fn run(case: Case) {
     let mut report = Report {
         events: Vec::new(),
         omitted: 0,
+        stderr_write_errors: 0,
     };
     let mut five = match Five::start(&mut report) {
         Ok(five) => five,
@@ -316,7 +461,7 @@ fn run(case: Case) {
         exercise(&mut five, &mut report, case)
     }));
     five.stop(&mut report);
-    let evidence = serde_json::json!({"events":report.events,"omitted":report.omitted,
+    let evidence = serde_json::json!({"events":report.events,"omitted":report.omitted,"stderr_write_errors":report.stderr_write_errors,
         "global_capture_complete":false,"automatic_operator":false,"serving_claim":false});
     let _ = std::fs::write(
         five.root.path().join("first-actual-report.json"),
@@ -429,6 +574,28 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
             five.sources[donor_index].test_first_drop_discovery_reply()
         })?;
     }
+    let barrier = if case == Case::ConcurrentAdmission {
+        Some(report.call("arm_actual_original_ingress_barrier", || {
+            target.test_first_receiver_barrier(Op::Enroll)
+        })?)
+    } else {
+        None
+    };
+    let close_peer = selected
+        .replicas
+        .iter()
+        .filter(|r| r.role == RangeReplicaRole::Voter)
+        .map(|r| r.node_id.clone())
+        .min()
+        .unwrap();
+    let close_peer_index = (0..4).find(|i| node(*i) == close_peer).unwrap();
+    let _close_loss_guard = if case == Case::LostClose {
+        Some(report.call("arm_actual_original_OLD_Close_reply_loss", || {
+            five.sources[close_peer_index].test_first_arm_close_loss(selected.id)
+        })?)
+    } else {
+        None
+    };
     let (owner_send, owner_receive) = mpsc::channel();
     let stop = Arc::new(AtomicBool::new(false));
     let active = stop.clone();
@@ -493,7 +660,52 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                 };
             }
             drive!("actual_target_N_fence", Action::FenceTarget)?;
-            if matches!(
+            if case == Case::ConcurrentAdmission {
+                let actual = report.data_call(
+                    "actual_source_factory_two_concurrent_TLS_requests",
+                    || {
+                        five.sources[coordinator].test_first_concurrent_admission(
+                            selected.id,
+                            barrier.as_ref().unwrap(),
+                            &five.lifetime,
+                        )
+                    },
+                )?;
+                let target_after = report
+                    .data_call("actual_target_after_original_and_denied_concurrent", || {
+                        snapshot(&owner_send)
+                    })?;
+                assert_eq!(actual["actual_returns"]["barrier"]["entered"], true);
+                assert_eq!(
+                    actual["actual_returns"]["barrier"]["event"]["original_window_live_after_hold"],
+                    true,
+                    "hold must not outlive original ingress"
+                );
+                assert_eq!(
+                    actual["actual_returns"]["first_ok"], true,
+                    "original request failed; preserve actual result"
+                );
+                assert_eq!(actual["original_postchecks_ok"], true);
+                assert_eq!(actual["actual_returns"]["second_ok"], false);
+                assert!(actual["actual_returns"]["second_error"]["display_prefix"]
+                    .as_str()
+                    .is_some_and(
+                        |e| e.contains("FIRST original request is still pending/in flight")
+                    ));
+                assert_eq!(
+                    target_after["attempts"].as_array().unwrap().len(),
+                    1,
+                    "only original A"
+                );
+                assert_eq!(
+                    target_after["queue"]["admission"]["admitted_watermark"],
+                    actual["actual_returns"]["first_request"]["sequence"]
+                );
+                assert_eq!(
+                    target_after["attempts"][0]["attempt"],
+                    actual["actual_returns"]["first_reply"]["target_attempt"]
+                );
+            } else if matches!(
                 case,
                 Case::LostEnroll | Case::CancelledQueued | Case::ExpiredQueued
             ) {
@@ -634,11 +846,66 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
             } else {
                 None
             };
-            for (name, action) in [
-                ("actual_ALL_OLD_constrain", Action::ConstrainAll),
-                ("actual_ALL_OLD_close", Action::CloseAll),
-            ] {
-                drive!(name, action)?;
+            drive!("actual_ALL_OLD_constrain", Action::ConstrainAll)?;
+            if case == Case::LostClose {
+                let first = drive!("actual_Close_then_wire_reply_loss", Action::CloseAll);
+                let source_unknown = report.data_call("source_original_Close_unknown", || {
+                    five.sources[coordinator].test_first_coordinator_snapshot(selected.id)
+                })?;
+                let before = report
+                    .data_call("actual_OLD_original_close_before_resolution", || {
+                        five.sources[close_peer_index].test_first_close_loss_snapshot(selected.id)
+                    })?;
+                assert!(first.is_err());
+                assert_eq!(
+                    before["event"]["fired"], true,
+                    "real successful Close wire cut required"
+                );
+                assert_eq!(before["close_dispatches"], 1);
+                assert_eq!(source_unknown["pending_control"]["kind"], "Close");
+                let repeated = drive!(
+                    "unresolved_Close_mutation_replay_must_refuse",
+                    Action::CloseAll
+                );
+                let still = report.data_call("actual_OLD_after_refused_Close_replay", || {
+                    five.sources[close_peer_index].test_first_close_loss_snapshot(selected.id)
+                })?;
+                assert!(repeated.as_ref().err().is_some_and(|e| e
+                    .to_string()
+                    .contains("unresolved Close requires readonly observation")));
+                assert_eq!(before, still, "no second Close dispatched");
+                let observed = drive!(
+                    "fresh_actual_readonly_original_Close_resolution",
+                    Action::ObservePendingClose
+                )?;
+                let after = report
+                    .data_call("actual_OLD_after_readonly_Close_resolution", || {
+                        five.sources[close_peer_index].test_first_close_loss_snapshot(selected.id)
+                    })?;
+                assert_eq!(after["close_dispatches"], 1);
+                assert_eq!(after["observe_dispatches"], 1);
+                assert_eq!(observed["new_Close_issued"], false);
+                assert_eq!(observed["original_call_relabelled_success"], false);
+                assert_eq!(
+                    observed["original_unknown_return"],
+                    source_unknown["pending_original_return"]
+                );
+                let old = &before["event"]["actual_reply"];
+                assert_eq!(old["closed"], observed["readonly_actual_reply"]["closed"]);
+                assert_eq!(
+                    old["closed_native_record"],
+                    observed["readonly_actual_reply"]["closed_native_record"]
+                );
+                let encoded: Vec<u8> =
+                    serde_json::from_value(old["closed_native_record"]["encoded"].clone())?;
+                let record: serde_json::Value = serde_json::from_slice(&encoded)?;
+                assert!(record["native_page_xid"].as_u64().is_some_and(|n| n > 0));
+                drive!(
+                    "actual_remaining_OLD_Close_after_known_original",
+                    Action::CloseAll
+                )?;
+            } else {
+                drive!("actual_ALL_OLD_close", Action::CloseAll)?;
             }
             let start = drive!(
                 "actual_target_owned_SourceStart",

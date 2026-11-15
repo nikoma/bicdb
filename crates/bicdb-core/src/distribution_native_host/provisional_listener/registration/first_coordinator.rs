@@ -17,6 +17,7 @@ use crate::distribution_range_image::NativeRemoteImageSourceOperationV1;
 pub(crate) enum NativeFirstCoordinatorAction {
     EnrollTarget,
     ObservePending,
+    ObservePendingClose,
     ConstrainAll,
     CloseAll,
     FenceTarget,
@@ -45,10 +46,11 @@ pub(super) struct NativeFirstCoordinator {
     /// Observe/retries do not overwrite its unknown/history classification.
     pending_original_return: Option<serde_json::Value>,
     last_return: Option<serde_json::Value>,
+    last_close_resolution: Option<serde_json::Value>,
     returned_count: u64,
     outcome_chain: Sha256,
 }
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum NativeFirstControlKind {
     Fence,
     Constrain,
@@ -171,6 +173,7 @@ impl NativeMetadataControlHost {
                 inflight_intent: None,
                 pending_original_return: None,
                 last_return: None,
+                last_close_resolution: None,
                 returned_count: 0,
                 outcome_chain: Sha256::new(),
             },
@@ -290,6 +293,15 @@ impl NativeFirstCoordinator {
                 "FIRST prior control outcome unresolved; another effect refused",
             ));
         }
+        if self
+            .pending_control
+            .as_ref()
+            .is_some_and(|(old, _, _)| *old == NativeFirstControlKind::Close)
+        {
+            return Err(invalid(
+                "FIRST unresolved Close requires readonly observation; mutation replay refused",
+            ));
+        }
         Ok(())
     }
     fn drive(
@@ -303,6 +315,7 @@ impl NativeFirstCoordinator {
             .child_with_deadline(Instant::now() + Duration::from_secs(5));
         token.check()?;
         match action {
+            NativeFirstCoordinatorAction::ObservePendingClose => self.observe_pending_close(&token),
             NativeFirstCoordinatorAction::ObservePending => {
                 let sequence = self
                     .pending_receive
@@ -465,6 +478,92 @@ impl NativeFirstCoordinator {
                 self.receive(operation, frame, &token)
             }
         }
+    }
+    /// Resolve ONLY the known original peer/session's completed Close from a
+    /// fresh actual authenticated readonly producer. This never calls Close,
+    /// creates a local OLD observation/quorum, or relabels the lost return.
+    fn observe_pending_close(&mut self, token: &CancellationToken) -> Result<serde_json::Value> {
+        if self.pending_receive.is_some() {
+            return Err(invalid(
+                "FIRST target outcome unresolved before Close observation",
+            ));
+        }
+        let (kind, peer, original_intent) = self
+            .pending_control
+            .as_ref()
+            .ok_or_else(|| invalid("FIRST original pending Close absent"))?;
+        if *kind != NativeFirstControlKind::Close {
+            return Err(invalid(
+                "FIRST readonly Close observation requires original Close intent",
+            ));
+        }
+        let peer = peer.clone();
+        let original_intent = original_intent.clone();
+        let original: NativeRemoteOldRequestV1 =
+            serde_json::from_value(original_intent["request"].clone())?;
+        original.require_plan(&self.plan)?;
+        if original.operation != NativeRemoteOldOperationV1::Close {
+            return Err(invalid(
+                "FIRST pending control is not its original Close request",
+            ));
+        }
+        let (own, business) = self.own(token)?;
+        let request = NativeRemoteOldRequestV1::from_plan(
+            &self.plan,
+            NativeRemoteOldOperationV1::Observe,
+            business,
+            remaining_ms(token)?,
+        )?;
+        self.reserve_intent(serde_json::json!({"readonly_Close_resolution_peer":peer,
+            "request":request,"original_unknown_intent":original_intent}))?;
+        let result = self
+            .backend
+            .transport
+            .request_remote_native_old(&peer, &self.plan, &request, &own, token);
+        self.record_return(serde_json::json!({"readonly_actual_return":true,"ok":result.is_ok(),
+            "error":result.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+            "actual_reply":result.as_ref().ok().map(|r|r.reply())}));
+        let actual = result?;
+        actual.require_request_live()?;
+        let reply = actual.reply();
+        // The strict actual transport and receiver validated the exact
+        // retained Close CURRENT/archive, body/facts/plan and native status.
+        // Constraint-only, absent or uncertain outcomes cannot pass here.
+        let facts = reply.closed.as_ref().ok_or_else(|| {
+            invalid("FIRST Close still unresolved: readonly response is constraint-only")
+        })?;
+        let record = reply.closed_native_record.as_ref().ok_or_else(|| {
+            invalid("FIRST Close still unresolved: actual exact native record absent")
+        })?;
+        record.require_materialized_facts(facts)?;
+        record.require_plan(&self.plan)?;
+        if reply.request != request
+            || reply.node_id != peer
+            || actual.actual_observer() != &self.backend.node_id
+        {
+            return Err(invalid(
+                "FIRST readonly Close resolution changed original peer/observer/session",
+            ));
+        }
+        token.check()?;
+        actual.require_request_live()?;
+        let resolution = serde_json::json!({"original_unknown_return":self.pending_original_return,
+            "original_unknown_intent":original_intent,"readonly_actual_reply":reply,
+            "original_call_relabelled_success":false,"new_Close_issued":false,
+            "native_grant_or_local_OLD_quorum_created":false});
+        // Existing OLD replies are bounded to 2 MiB; the original request
+        // and bounded error projection fit inside this fixed DATA envelope.
+        let encoded = crate::distribution_range_image::bounded_json(&resolution, 4 * 1024 * 1024)?;
+        self.outcome_chain
+            .update((encoded.len() as u64).to_be_bytes());
+        self.outcome_chain.update(encoded);
+        token.check()?;
+        actual.require_request_live()?;
+        self.last_close_resolution = Some(resolution.clone());
+        self.closed.insert(peer);
+        self.pending_control = None;
+        self.pending_original_return = None;
+        Ok(resolution)
     }
     fn receive(
         &mut self,

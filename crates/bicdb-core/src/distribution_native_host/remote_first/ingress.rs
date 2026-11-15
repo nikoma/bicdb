@@ -12,7 +12,9 @@ use std::sync::Weak;
 #[cfg(test)]
 mod controls;
 #[cfg(test)]
-pub(in crate::distribution_native_host) use controls::NativeFirstIngressFault;
+pub(in crate::distribution_native_host) use controls::{
+    NativeFirstIngressBarrier, NativeFirstIngressFault,
+};
 
 pub(crate) struct NativeFirstReceiveIngress {
     pub(in crate::distribution_native_host) peer: MetadataReadParticipant,

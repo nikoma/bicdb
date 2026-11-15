@@ -75,6 +75,20 @@ impl NativeMetadataLearnerHost {
         }
     }
     #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_first_receiver_barrier(
+        &self,
+        op: crate::distribution_native_host::NativeFirstReceiveOperationV1,
+    ) -> Result<crate::distribution_native_host::remote_first::NativeFirstIngressBarrier> {
+        match &self.host {
+            NativeLearnerLifecycle::Fresh(host) => host
+                .test_registered_image_control()?
+                .test_first_receiver_barrier(op),
+            NativeLearnerLifecycle::Cold(_) => {
+                Err(invalid("FIRST test never casts cold owner to Fresh"))
+            }
+        }
+    }
+    #[cfg(test)]
     pub(in crate::distribution_native_host) fn test_first_receiver_snapshot(
         &self,
     ) -> Result<serde_json::Value> {

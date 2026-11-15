@@ -73,3 +73,10 @@ results** and not a first-publication fault schedule. Required next acceptance:
 
 No application assertion, historical fixture, configured budget or original
 failed-run evidence is weakened by this correction.
+
+Source review of first leaf `73a4bd9cf` found that the full hook validator could
+reacquire the routing read lock internally after an earlier snapshot was
+released. Corrective child `b1fcfa750` instead holds the actual bounded routing
+guard during `require_for_coordinator_with_topology`; routing contention drops
+the database and service before retrying. The original full checks remain.
+Neither leaf has compiled or executed.

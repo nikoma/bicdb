@@ -43,7 +43,9 @@ An already-enrolled primary-only root remains strict. The original missing
 kernel gate inode check runs before this boundary and refuses replacement.
 The existing FORMAT file is opened existing-only without truncation and
 synced, followed by the storage layer's existing parent-directory barrier,
-without rewriting its bytes. This is a new actual barrier, not an inference
+without rewriting its bytes. Non-Windows opens use a read-only descriptor;
+only Windows requests write access for its actual `FlushFileBuffers` call.
+This avoids imposing an unnecessary FORMAT-write permission on Unix exports. This is a new actual barrier, not an inference
 that a previously visible flag's earlier sync succeeded. Errors propagate
 unchanged and prevent a handle from being returned. Windows retains the
 existing file-flush/directory-entry contract; no stronger platform durability

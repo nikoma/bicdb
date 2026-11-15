@@ -2222,12 +2222,13 @@ pub(crate) fn prepare_physical_backup_gate_for_open(root: &Path, enroll_new: boo
     // from an earlier failed sync to durable enrollment without a NEW actual
     // file/directory barrier. Existing missing-gate refusal already ran.
     let path = root.join(FORMAT_METADATA_FILE);
-    // Existing-only and nontruncating; writable access also permits the
-    // actual FlushFileBuffers barrier on Windows. No content is written.
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(&path)?;
+    // Existing-only and nontruncating. Unix can sync the read-only actual
+    // descriptor; only Windows needs write access for FlushFileBuffers.
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    options.write(true);
+    let file = options.open(&path)?;
     bicdb_page::test_faults::io_fault("physical_gate.existing.file_sync", &path)?;
     file.sync_all()?;
     bicdb_page::test_faults::io_fault("physical_gate.existing.dir_sync", &path)?;

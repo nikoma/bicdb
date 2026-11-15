@@ -101,3 +101,9 @@ Core raw SHA-256 is
 Complete post-merge archive finalization remains pending while workspace CI
 continues. Neither the earlier pass nor these failures provide physical RPO,
 RTO, throughput or production qualification.
+
+The [legacy concurrent-backup issue](legacy-standard-live-backup-defect.md)
+records the cross-layer gate concern and eleven exact source pins. The separate
+owned-capture target reported fourteen passes in pre-merge CI, including its
+actual concurrent-commits/DDL exact-cut case. That passing protocol is distinct
+from the failed legacy API and its unchanged acceptance assertions.

@@ -979,12 +979,11 @@ fn config_for(path: &Path) -> Result<DbConfig> {
 /// Whether opening `path` a second time is refused because the page engine holds
 /// an exclusive lock on it.
 ///
-/// An *online* backup runs against a database another handle already has open.
-/// The paged engine refuses a second opener (it would corrupt the store), so any
-/// backup step that works by opening the database has to tolerate not being able
-/// to. That is sound for the paged engine specifically: a commit is durable in
-/// its WAL before it returns, so a file-level copy plus WAL replay is restorable
-/// without anyone flushing anything first. The step is skipped, not faked.
+/// The paged engine refuses a second opener. This predicate classifies that
+/// refusal only; it is not a snapshot-consistency proof for a live source.
+/// Each online producer must independently preserve its actual page/WAL cut.
+/// Legacy Standard copying retains an open cross-layer exclusion defect and
+/// its strict size/hash checks; see docs/design/legacy-standard-live-backup-defect.md.
 fn already_open(error: &BicDbError) -> bool {
     matches!(error, BicDbError::PagedStorage(message) if message.contains("already open"))
 }
@@ -2260,9 +2259,9 @@ impl OnlineBackupCheckpoint {
         lock_file.sync_data()?;
         // Flush so the copy captures the in-memory tail of the segment engine.
         // If another handle already holds the database, there is no flush to be
-        // had — see `already_open`. Proceeding is correct rather than merely
-        // convenient: the segment log and the page WAL are both append-only and
-        // recover their own tails, which is what makes an online copy restorable.
+        // had — see `already_open`. Accepting that refusal does not establish
+        // a consistent live page/WAL snapshot. The selected producer must
+        // supply its own protocol; Standard still refuses a changed file.
         match BicDb::open_with_config(db_path, config_for(db_path)?) {
             Ok(db) => db.flush()?,
             Err(error) if already_open(&error) => {}

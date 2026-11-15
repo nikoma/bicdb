@@ -1,0 +1,90 @@
+{
+  "classification": "failed CI acceptance; engine correction open",
+  "failed_postmerge": {
+    "case": "a_backup_taken_while_writes_are_in_flight_restores_consistently",
+    "job": 132667643037,
+    "line": 271,
+    "native_data_loss": "not established",
+    "run": 43666718926,
+    "source_mutator_schedule": "not identified",
+    "source_path": "crates/bicdb-core/tests/backup_paged.rs",
+    "target_counts": {
+      "failed": 1,
+      "ignored": 0,
+      "passed": 3
+    }
+  },
+  "fix": "not implemented; complete cross-layer mutation and lock-order audit required",
+  "guards_and_assertions": "preserve original legacy producer, expected success, verify/restore, all original row assertions, size/hash refusal; no alternate-producer substitution",
+  "owned_protocol_separate_CI": {
+    "actual_full_cut_case": "full_backup_restores_the_exact_cut_while_normal_commits_and_ddl_complete",
+    "job": 132645298230,
+    "physical_qualification": "not established by these results",
+    "postmerge_backup_repository_target": "not reached after earlier legacy failure",
+    "premerge_run": 43659430043,
+    "reported_target_passes": 14,
+    "root_execution_receipt_sha256": "15b12cbcbbb5f2167355edb4a1bc97e53170f52702a0ed5afa1249f8980b0bf6"
+  },
+  "review_memo_sha256": "ad35de31210719bc665b3d8300596121642f333f943a5b84640eba2af5bcd384",
+  "schema": "bicdb-legacy-live-backup-source-issue-v1",
+  "source_commit": "bde74650c40934096e1cc6c6e75a3ea3c4643cf4",
+  "source_pins": [
+    {
+      "blob": "9a65e48bc4bdf533b4e8f19265e56da689034217",
+      "path": "crates/bicdb-core/tests/backup_paged.rs",
+      "sha256": "3c46eb92e74f1c570f207e3510295adfcbba27e295355dc2e860229d6725cd6f"
+    },
+    {
+      "blob": "809636a3266012f8c681e06397e5d44752fe5939",
+      "path": "crates/bicdb-core/src/backup.rs",
+      "sha256": "b53af0adbda4bc281b10b12ee563ca4c526b0a8211812aad25414e9e32758d91"
+    },
+    {
+      "blob": "8e33ce6384a52085094951a597f3abfa3cb8cacb",
+      "path": "crates/bicdb-core/src/storage.rs",
+      "sha256": "eeece5ddf6b753a661af7cac57f71697e057d32661c9f8c4780cf633801df50e"
+    },
+    {
+      "blob": "eb9bba6622f9cb0b172abf601c7d91f0d9f3a30a",
+      "path": "crates/bicdb-core/src/db.rs",
+      "sha256": "ab3865caa2bc6a80ec5f9364f73d9339a2f7785885f7b01e7f7e902c5aef572c"
+    },
+    {
+      "blob": "6deffce19caf69f6093e529d56c18ce9003824be",
+      "path": "crates/bicdb-core/src/db/spatial_paged.rs",
+      "sha256": "065d4258ba052d3bbd5e9ab01f3fb9bf2f28f02b1bc5d8d30249cd3dc031559d"
+    },
+    {
+      "blob": "9a4a86a4dc839537eab1bc7c6dca76ddff0d27db",
+      "path": "crates/bicdb-core/src/db/online_backup.rs",
+      "sha256": "b49542a72a831a3797ee0339343c884c5962f7211f12299c431ddcafc7779db7"
+    },
+    {
+      "blob": "d3dad778aab52575dc97a799cc244196efc62a33",
+      "path": "crates/bicdb-core/src/backup/capture.rs",
+      "sha256": "aebbe1d4e93e63ff23fb6a5778d08a47aa5765c599b75dba67076ff152956374"
+    },
+    {
+      "blob": "67ffa80aab328b44781e170425c9fc5c7402832c",
+      "path": "crates/bicdb-core/src/backup/repository.rs",
+      "sha256": "84464f3f792547307e161784bca370316d1c9f08047b4863fe0aa15a5999212c"
+    },
+    {
+      "blob": "7d7f660144c7c20a118e1dfe5274ca83feca08b6",
+      "path": "crates/bicdb-page/src/paged.rs",
+      "sha256": "c9f06d19b35187a18b80bf349f81b2d902f20b0b50f490386903231a1bc2d6f2"
+    },
+    {
+      "blob": "6d8a9fedc44331b36a245f03df222d5540ec4a11",
+      "path": "crates/bicdb-page/src/wal.rs",
+      "sha256": "d6b9abef139b95974e935235532301da9d67d4c99faa5d8edd02633f195b6cd2"
+    },
+    {
+      "blob": "f44f4bd33cf24eb2bcaf1c5456eaf7580f4b8440",
+      "path": "crates/bicdb-core/tests/backup_repository.rs",
+      "sha256": "8aff46e55a12f723b90292d052897a40b64f2e02dde6b4e56503eca5733691fa"
+    }
+  ],
+  "source_version": "1.0.517-beta",
+  "tree": "7ee0e1f37c310612165b56e3ca0c1dc10a8e0e9c"
+}

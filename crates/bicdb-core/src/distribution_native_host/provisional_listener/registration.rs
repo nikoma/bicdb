@@ -15,6 +15,7 @@ mod first_coordinator;
 #[cfg(test)]
 pub(in crate::distribution_native_host) use first_catalogue_certification::test_cuts::arm as test_arm_remote_metadata_head_drift;
 pub(crate) use first_catalogue_certification::NativeFirstCatalogueCertificationIntent;
+pub(crate) use first_catalogue_certification::NativeRemoteActivationScope;
 pub(crate) use first_catalogue_certification::NativeRemoteMembershipScope;
 mod initial_data;
 mod remote_new_metadata;

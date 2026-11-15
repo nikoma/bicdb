@@ -15,6 +15,8 @@ pub(super) fn is_case(case: Case) -> bool {
             | Case::ServingSuccessorRead
             | Case::ServingDrainResume
             | Case::ServingPartialDrainResume
+            | Case::ServingMetadataActivation
+            | Case::ServingActivationMissingReleased
     )
 }
 enum Control {
@@ -490,7 +492,11 @@ pub(super) fn exercise(
                     .is_null());
             }
             for member in members {
-                if case == Case::ServingMissingReleased && *member == node(4) {
+                if matches!(
+                    case,
+                    Case::ServingMissingReleased | Case::ServingActivationMissingReleased
+                ) && *member == node(4)
+                {
                     continue;
                 }
                 if case == Case::ReleaseCancelledAfterDrop && *member == node(4) {
@@ -505,6 +511,20 @@ pub(super) fn exercise(
                 same_point(&points[member], &released["point"]);
                 assert_eq!(released["point"]["actual_dropped_open"], true);
                 assert_eq!(released["point"]["actual_writer_installed"], false);
+            }
+            if case == Case::ServingActivationMissingReleased {
+                return serving_tests::metadata_activation_missing_released(
+                    coordinator,
+                    metadata,
+                    relocation,
+                    range,
+                    phase,
+                    members,
+                    &controls,
+                    target,
+                    report,
+                    &lifetime,
+                );
             }
             if case == Case::ServingMissingReleased {
                 return serving_tests::missing_released(
@@ -547,6 +567,7 @@ pub(super) fn exercise(
                     | Case::ServingSuccessorRead
                     | Case::ServingDrainResume
                     | Case::ServingPartialDrainResume
+                    | Case::ServingMetadataActivation
             ) {
                 serving_tests::serve(
                     coordinator,

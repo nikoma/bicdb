@@ -50,8 +50,8 @@ pub(crate) use materialized::{
 mod remote_new;
 #[cfg(feature = "tls-replication")]
 pub(crate) use remote_new::{
-    NativeMetadataOwnerCatalogueScope, NativeRemoteAllOpenQuorum,
-    NativeRemoteAllOpenRetirementAdmission, NativeRemoteAllOpenRound,
+    NativeMetadataOwnerCatalogueScope, NativeRemoteActivatedMetadataProof,
+    NativeRemoteAllOpenQuorum, NativeRemoteAllOpenRetirementAdmission, NativeRemoteAllOpenRound,
     NativeRemoteAllReleasedQuorum, NativeRemoteAllReleasedRound, NativeRemoteCatalogueDecisionV1,
     NativeRemoteCatalogueRound, NativeRemoteDecisionAdmission, NativeRemoteDecisionBindingV1,
     NativeRemoteDecisionReceiptV1, NativeRemoteDecisionSourceData,

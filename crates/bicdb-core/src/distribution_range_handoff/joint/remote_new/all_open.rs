@@ -9,7 +9,9 @@ use crate::distribution_native_host::NativeRemoteServingOperationV1;
 use crate::distribution_transport::AuthenticatedNativeRemoteServingFrame;
 use std::sync::Arc;
 mod all_released;
-pub(crate) use all_released::{NativeRemoteAllReleasedQuorum, NativeRemoteAllReleasedRound};
+pub(crate) use all_released::{
+    NativeRemoteActivatedMetadataProof, NativeRemoteAllReleasedQuorum, NativeRemoteAllReleasedRound,
+};
 
 pub(crate) struct NativeRemoteAllOpenRound {
     manifest: Arc<NativeRemoteImageManifestV1>,

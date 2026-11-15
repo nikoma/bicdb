@@ -76,6 +76,8 @@ enum Case {
     ServingSuccessorRead,
     ServingDrainResume,
     ServingPartialDrainResume,
+    ServingMetadataActivation,
+    ServingActivationMissingReleased,
 }
 fn is_catalogue_case(case: Case) -> bool {
     matches!(
@@ -115,6 +117,8 @@ fn is_catalogue_case(case: Case) -> bool {
             | Case::ServingSuccessorRead
             | Case::ServingDrainResume
             | Case::ServingPartialDrainResume
+            | Case::ServingMetadataActivation
+            | Case::ServingActivationMissingReleased
     )
 }
 #[derive(Clone, Copy, Debug)]
@@ -966,7 +970,7 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                         worker_omitted += 1;
                     }
                 }
-                if matches!(case,Case::Preparation|Case::PreparationCancelledAfterNative|Case::PreparationCommitUnknown|Case::PreparationHostPollCancelled|Case::PreparationHostPollExpired|Case::Bridge|Case::BridgeMissingPrepared|Case::BridgeCancelledAfterNative|Case::BridgeCommitUnknown|Case::Open|Case::OpenR2Progress|Case::OpenLaterIoFailed|Case::OpenCancelledAfterIo|Case::OpenIoUnknown|Case::Release|Case::ReleaseMissingOpen|Case::ReleaseCancelledAfterDrop|Case::Serving|Case::ServingMissingReleased|Case::ServingSuccessorRead|Case::ServingDrainResume|Case::ServingPartialDrainResume) {
+                if matches!(case,Case::Preparation|Case::PreparationCancelledAfterNative|Case::PreparationCommitUnknown|Case::PreparationHostPollCancelled|Case::PreparationHostPollExpired|Case::Bridge|Case::BridgeMissingPrepared|Case::BridgeCancelledAfterNative|Case::BridgeCommitUnknown|Case::Open|Case::OpenR2Progress|Case::OpenLaterIoFailed|Case::OpenCancelledAfterIo|Case::OpenIoUnknown|Case::Release|Case::ReleaseMissingOpen|Case::ReleaseCancelledAfterDrop|Case::Serving|Case::ServingMissingReleased|Case::ServingSuccessorRead|Case::ServingDrainResume|Case::ServingPartialDrainResume|Case::ServingMetadataActivation|Case::ServingActivationMissingReleased) {
                     // Every real poll has its own caller token; expiring or
                     // canceling it must not stop the retained owner/process.
                     let window=if case==Case::PreparationHostPollExpired {Duration::from_millis(100)} else {Duration::from_secs(5)};
@@ -1572,6 +1576,8 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                     | Case::ServingSuccessorRead
                     | Case::ServingDrainResume
                     | Case::ServingPartialDrainResume
+                    | Case::ServingMetadataActivation
+                    | Case::ServingActivationMissingReleased
             ) {
                 // Same five retained normal hosts; real range leader directly
                 // observes OLD/survivor/Registered NEW, donor remains neither leader.
@@ -2078,6 +2084,8 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                                 | Case::ServingSuccessorRead
                                 | Case::ServingDrainResume
                                 | Case::ServingPartialDrainResume
+                                | Case::ServingMetadataActivation
+                                | Case::ServingActivationMissingReleased
                         )
                         .then(|| {
                             (
@@ -2291,4 +2299,14 @@ fn native_first_actual_registered_cancelled_closed_drain_resumes_same_installed_
 fn native_first_actual_registered_shutdown_active_authenticated_peer_cancel_then_same_owner_resume()
 {
     run(Case::ServingPartialDrainResume);
+}
+
+#[test]
+fn native_first_actual_metadata_owner_outside_final_voters_records_released_activation() {
+    run(Case::ServingMetadataActivation);
+}
+
+#[test]
+fn native_first_actual_metadata_activation_refuses_original_unreleased_recipient_before_proposal() {
+    run(Case::ServingActivationMissingReleased);
 }

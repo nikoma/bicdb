@@ -15,7 +15,8 @@ mod bridged;
 pub(crate) use bridged::{NativeRemoteBridgeQuorum, NativeRemoteBridgeRound};
 mod all_open;
 pub(crate) use all_open::{
-    NativeRemoteAllOpenQuorum, NativeRemoteAllOpenRetirementAdmission, NativeRemoteAllOpenRound,
+    NativeRemoteActivatedMetadataProof, NativeRemoteAllOpenQuorum,
+    NativeRemoteAllOpenRetirementAdmission, NativeRemoteAllOpenRound,
     NativeRemoteAllReleasedQuorum, NativeRemoteAllReleasedRound,
 };
 mod catalogue;

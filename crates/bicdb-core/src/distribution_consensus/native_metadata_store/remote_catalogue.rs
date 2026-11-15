@@ -152,4 +152,21 @@ impl MetadataConsensusStore {
         }
         Ok(())
     }
+
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn propose_native_remote_activation(
+        &mut self,
+        topology: crate::ClusterTopology,
+        scope: &crate::distribution_native_host::NativeRemoteActivationScope<'_>,
+    ) -> Result<MetadataLogEntry> {
+        scope.require_control_leader(self)?;
+        scope.require_proposal(
+            &self.state.committed_topology,
+            &topology,
+            &self.state.node_id,
+        )?;
+        self.authority_operation(|store| {
+            store.propose_topology_checked_inner(topology, || scope.require_request())
+        })
+    }
 }

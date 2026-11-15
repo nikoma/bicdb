@@ -1,8 +1,10 @@
 //! Actual metadata-leader owner independently reads recipient dual durability.
 //! Immutable coordinator input is intent DATA, never a forwarded quorum.
 use super::*;
+mod activation;
 mod preparation;
 mod serving;
+pub(crate) use activation::NativeRemoteActivationScope;
 #[cfg(test)]
 pub(in crate::distribution_native_host) mod test_cuts;
 use crate::distribution_range_handoff::{
@@ -55,6 +57,8 @@ pub(super) struct NativeFirstCatalogueCertificationAttempt {
     membership_history: Vec<serving::NativeFirstMembershipAttempt>,
     pub(super) stopped: bool,
     serving: Option<preparation::NativeFirstServingCoordinator>,
+    activation: Option<activation::NativeFirstActivationAttempt>,
+    activation_first_error: Option<serde_json::Value>,
 }
 impl NativeMetadataControlHost {
     /// Finite operator component on the REAL metadata owner. It is not a
@@ -111,6 +115,8 @@ impl NativeMetadataControlHost {
                     membership_history: Vec::new(),
                     stopped: false,
                     serving: None,
+                    activation: None,
+                    activation_first_error: None,
                 },
             );
         }

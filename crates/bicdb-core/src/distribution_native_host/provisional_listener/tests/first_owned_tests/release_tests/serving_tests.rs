@@ -409,6 +409,20 @@ pub(super) fn serve(
         original.get_strong("items", &new_key)
     })?;
     assert_eq!(serde_json::to_value(read)?, value);
+    if case == Case::ServingMetadataActivation {
+        metadata_activation_after_actual_serving(
+            coordinator,
+            metadata,
+            relocation,
+            range,
+            phase,
+            members,
+            controls,
+            target,
+            report,
+            parent,
+        )?;
+    }
     report.event(serde_json::json!({"actual_inprocess_original_SDK_ACK_and_full_Strong_controls_reached":true,
         "independent_process_VM_RPO_capacity_NOT_QUALIFIED":true,
         "final_metadata_controller_cold_repeated_relocation_cleanup_NOT_COMPLETE":true}));
@@ -660,5 +674,186 @@ fn verify_actual_cancelled_drain_resume(
             original_count + 1
         );
     }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn metadata_activation_missing_released(
+    coordinator: &mut NativeMetadataHost,
+    metadata: usize,
+    relocation: crate::distribution::RelocationId,
+    range: crate::RangeId,
+    phase: Uuid,
+    members: &[ClusterNodeId],
+    controls: &BTreeMap<ClusterNodeId, mpsc::Sender<Control>>,
+    target: &mpsc::Sender<OwnerCommand>,
+    report: &mut Report,
+    parent: &CancellationToken,
+) -> Result<()> {
+    assert!(
+        !members.contains(&node(metadata)),
+        "actual metadata observer must be outside final data voters"
+    );
+    let topology_before = coordinator.test_first_topology(parent)?;
+    let before = actual_snapshot(
+        coordinator,
+        metadata,
+        &node(4),
+        range,
+        phase,
+        controls,
+        target,
+    )?;
+    let actual = report.data_call(
+        "actual_outside_NEW_metadata_owner_collects_unreleased_recipient_before_proposal",
+        || coordinator.record_finite_remote_activation(relocation, phase, parent),
+    );
+    let topology_after = coordinator.test_first_topology(parent);
+    let after = actual_snapshot(
+        coordinator,
+        metadata,
+        &node(4),
+        range,
+        phase,
+        controls,
+        target,
+    );
+    let owner_state = coordinator.test_remote_activation_state(relocation, phase);
+    report.event(serde_json::json!({"actual_activation_return":actual.as_ref().ok(),
+        "original_error":actual.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+        "before":before,"after":after.as_ref().ok(),"after_error":after.as_ref().err().map(ToString::to_string),
+        "topology_before":topology_before,"topology_after":topology_after.as_ref().ok(),
+        "topology_error":topology_after.as_ref().err().map(ToString::to_string),
+        "actual_target_Release_not_called":true,"metadata_observer_outside_final_NEW":true,
+        "actual_metadata_owner_attempt":owner_state.as_ref().ok(),"owner_state_error":owner_state.as_ref().err().map(ToString::to_string)}));
+    let error = actual.expect_err("actual unreleased recipient must refuse ALL activation proof");
+    let expected=format!("cluster node {} rejected RPC cluster_data_operation_failed: cluster error: Serving writer policy still has an actual Frozen owner",node(4));
+    assert!(
+        matches!(&error,BicDbError::Cluster(body) if body==&expected),
+        "earlier unrelated error is an unreached control: {error:?}"
+    );
+    let topology_after = topology_after?;
+    let after = after?;
+    let owner_state = owner_state?;
+    assert!(!owner_state["first_original_API_error"].is_null());
+    assert_eq!(owner_state["actual_attempt_present"], false);
+    assert!(owner_state["actual_issued_entry"].is_null());
+    assert_eq!(
+        topology_before, topology_after,
+        "failed proof cannot append a metadata transition"
+    );
+    same_native(&before, &after);
+    assert_eq!(before["queue"], after["queue"]);
+    assert_eq!(
+        topology_after.relocations[&relocation]
+            .native_joint_handoff_v1
+            .as_ref()
+            .unwrap()
+            .stage(),
+        crate::distribution::NativeJointHandoffStageV1::AwaitingActivation
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn metadata_activation_after_actual_serving(
+    coordinator: &mut NativeMetadataHost,
+    metadata: usize,
+    relocation: crate::distribution::RelocationId,
+    range: crate::RangeId,
+    phase: Uuid,
+    members: &[ClusterNodeId],
+    controls: &BTreeMap<ClusterNodeId, mpsc::Sender<Control>>,
+    target: &mpsc::Sender<OwnerCommand>,
+    report: &mut Report,
+    parent: &CancellationToken,
+) -> Result<()> {
+    assert!(
+        !members.contains(&node(metadata)),
+        "actual metadata leader must be outside final data voters"
+    );
+    let topology_before = coordinator.test_first_topology(parent)?;
+    let mut before = BTreeMap::new();
+    for member in members {
+        before.insert(
+            member.clone(),
+            actual_snapshot(
+                coordinator,
+                metadata,
+                member,
+                range,
+                phase,
+                controls,
+                target,
+            )?,
+        );
+    }
+    let actual = report.data_call(
+        "actual_metadata_owner_ALL_released_proof_and_protected_activation_commit",
+        || coordinator.record_finite_remote_activation(relocation, phase, parent),
+    );
+    let topology_after = coordinator.test_first_topology(parent);
+    let mut after = BTreeMap::new();
+    for member in members {
+        after.insert(
+            member.clone(),
+            actual_snapshot(
+                coordinator,
+                metadata,
+                member,
+                range,
+                phase,
+                controls,
+                target,
+            ),
+        );
+    }
+    report.event(serde_json::json!({"actual_activation_return":actual.as_ref().ok(),
+        "original_error":actual.as_ref().err().map(crate::distribution_native_host::remote_first::error_data),
+        "topology_before":topology_before,"topology_after":topology_after.as_ref().ok(),
+        "topology_error":topology_after.as_ref().err().map(ToString::to_string),
+        "before":before,"after":after.iter().map(|(node,r)|(node,serde_json::json!({"actual":r.as_ref().ok(),"error":r.as_ref().err().map(ToString::to_string)}))).collect::<BTreeMap<_,_>>(),
+        "earlier_original_SDK_ACK_and_full_Strong_assertions_reached":true,
+        "metadata_observer_outside_final_NEW":true,"source_retirement_and_cold_cleanup_NOT_PROVEN":true}));
+    let actual = actual?;
+    let topology_after = topology_after?;
+    assert_eq!(actual["known_selected_commit"], true);
+    let record = topology_after.relocations[&relocation]
+        .native_joint_handoff_v1
+        .as_ref()
+        .unwrap();
+    assert_eq!(
+        record.stage(),
+        crate::distribution::NativeJointHandoffStageV1::AwaitingCleanup
+    );
+    assert_eq!(
+        record.activated_quorum_sha256(),
+        actual["actual_activation_sha256"].as_str()
+    );
+    assert_eq!(record.source_cleanup_sha256(), None);
+    assert_eq!(
+        topology_after.relocations[&relocation].phase,
+        crate::distribution::RelocationPhase::CleaningUp
+    );
+    assert_eq!(
+        topology_before.ranges, topology_after.ranges,
+        "activation metadata changes no data membership"
+    );
+    for (member, observed) in after {
+        let observed = observed?;
+        same_native(&before[&member], &observed);
+        assert_eq!(before[&member]["queue"], observed["queue"]);
+    }
+    // A distinct request observes the SAME known issued entry. No second
+    // one-shot collection or topology mutation is used to infer old success.
+    let repeated = report.data_call(
+        "distinct_request_observes_same_actual_activation_commit_without_reproposal",
+        || coordinator.record_finite_remote_activation(relocation, phase, parent),
+    )?;
+    assert_eq!(
+        repeated["actual_issued_entry"],
+        actual["actual_issued_entry"]
+    );
+    assert_eq!(coordinator.test_first_topology(parent)?, topology_after);
     Ok(())
 }

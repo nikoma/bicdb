@@ -217,6 +217,87 @@ fn sha256_hex(value: &str) -> bool {
             .bytes()
             .all(|v| v.is_ascii_digit() || (b'a'..=b'f').contains(&v))
 }
+
+#[cfg(feature = "tls-replication")]
+impl DistributionStore {
+    /// Distinct actual metadata-owner remote proof; never a JSON-to-local-D
+    /// conversion. Only the activation record changes, not membership/data.
+    pub(crate) fn record_native_remote_joint_activation(
+        &mut self,
+        scope: &crate::distribution_native_host::NativeRemoteActivationScope<'_>,
+        actor: &ClusterNodeId,
+        now_ms: u64,
+    ) -> Result<()> {
+        if !self.ephemeral {
+            return Err(cluster_error(
+                "remote activation requires actual consensus-proposal view",
+            ));
+        }
+        self.ensure_actor(actor)?;
+        scope.require_view(&self.topology, actor)?;
+        let mf = scope.manifest();
+        let plan = self
+            .topology
+            .relocations
+            .get(&mf.relocation_id)
+            .ok_or_else(|| cluster_error("remote activation original relocation absent"))?;
+        let record = plan
+            .native_joint_handoff_v1
+            .as_ref()
+            .ok_or_else(|| cluster_error("remote activation original decision absent"))?;
+        let range = self
+            .topology
+            .range_by_id(mf.capture_range.id)
+            .ok_or_else(|| cluster_error("remote activation current range absent"))?;
+        if record.immutable_binding() != scope.certified().immutable_binding()
+            || record.stage() != NativeJointHandoffStageV1::AwaitingActivation
+            || plan.id != mf.relocation_id
+            || plan.plan_id != mf.plan_id
+            || plan.range_id != mf.capture_range.id
+            || plan.learner_epoch != mf.capture_range.epoch
+            || plan.handoff_session.as_ref().is_none_or(|session| {
+                session.session_id != mf.handoff_session || session.nonce != mf.nonce
+            })
+            || plan.phase != RelocationPhase::CleaningUp
+            || plan.promoted_epoch != Some(mf.activation_range.epoch)
+            || plan.source.as_ref() != Some(&mf.source_id)
+            || plan.target != mf.target_id
+            || crate::distribution_native_read::canonical_range(range)
+                != crate::distribution_native_read::canonical_range(&mf.activation_range)
+            || !range.replicas.iter().any(|replica| {
+                replica.id == plan.target_replica_id
+                    && replica.node_id == mf.target_id
+                    && replica.role == RangeReplicaRole::Voter
+            })
+        {
+            return Err(cluster_error(
+                "remote activation changed exact certified final membership",
+            ));
+        }
+        let mut next = record.clone();
+        next.record_activation(
+            scope.certified().decision_sha256(),
+            scope.activation_sha256(),
+        )?;
+        let plan = self
+            .topology
+            .relocations
+            .get_mut(&mf.relocation_id)
+            .unwrap();
+        plan.native_joint_handoff_v1 = Some(next);
+        plan.updated_at_ms = now_ms;
+        scope.require_request()?;
+        self.commit_change(
+            actor.clone(),
+            now_ms,
+            format!(
+                "{} actual remote ALL-released activation recorded; source retirement pending",
+                mf.relocation_id
+            ),
+        )?;
+        Ok(())
+    }
+}
 /// Sequential proposals and authoritative snapshot jumps preserve every known
 /// decision and tombstone. Stage data alone never authorizes a runtime action.
 pub(crate) fn validate_native_joint_handoff_preservation(

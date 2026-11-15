@@ -23,6 +23,7 @@ pub(crate) use registration::NativeJoinedRangeReceivePreflight;
 pub(crate) use registration::NativeJoinedRemoteInstallPreflight;
 pub(in crate::distribution_native_host) use registration::NativeMetadataMaintenanceReport;
 pub use registration::NativeRegisteredReplicaReceiverStatus;
+pub(crate) use registration::NativeRemoteActivationScope;
 pub(crate) use registration::NativeRemoteMembershipScope;
 #[cfg(test)]
 pub(crate) use registration::{

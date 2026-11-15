@@ -111,6 +111,30 @@ pub struct NativeMetadataHost {
 }
 impl NativeMetadataHost {
     #[cfg(test)]
+    pub(in crate::distribution_native_host) fn test_remote_activation_state(
+        &self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_ref()
+            .ok_or_else(|| invalid("actual activation metadata control absent"))?
+            .test_remote_activation_state(relocation, phase)
+    }
+    /// Finite metadata-only completion component on the SAME original
+    /// certification owner. It does not retire a source or grant Serving.
+    pub(crate) fn record_finite_remote_activation(
+        &mut self,
+        relocation: crate::distribution::RelocationId,
+        phase: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.control
+            .as_mut()
+            .ok_or_else(|| invalid("actual remote activation metadata control absent"))?
+            .record_finite_remote_activation(relocation, phase, parent)
+    }
+    #[cfg(test)]
     pub(in crate::distribution_native_host) fn test_registered_successor_read_dispatch(
         &self,
         relocation: crate::distribution::RelocationId,

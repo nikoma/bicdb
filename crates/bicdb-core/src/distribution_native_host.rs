@@ -75,6 +75,8 @@ mod remote_serving;
 #[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::NativeFirstCoordinatorAction;
 #[cfg(feature = "tls-replication")]
+pub(crate) use provisional_listener::NativeRemoteActivationScope;
+#[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::NativeRemoteMembershipScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use provisional_listener::{

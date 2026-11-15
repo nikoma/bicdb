@@ -10822,7 +10822,9 @@ impl BicDb {
         }
         online_backup::ensure_no_pending_restore(&path)?;
         // A standby bootstrap staged by the previous run is installed first.
-        ha_bootstrap::finish_standby_bootstrap(&path)?;
+        let _bootstrap_installed = ha_bootstrap::finish_standby_bootstrap(&path)?;
+        #[cfg(test)]
+        ha_bootstrap::test_after_initial_bootstrap_check(&path, _bootstrap_installed);
         let open_trace = std::env::var("BICDB_OPEN_TRACE").is_ok();
         let trace_start = std::time::Instant::now();
         macro_rules! open_trace {

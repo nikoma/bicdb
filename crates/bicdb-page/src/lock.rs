@@ -233,6 +233,71 @@ impl DirectoryLock {
         }
     }
 
+    /// Necessary live-claim identity observation after the SAME directory was
+    /// renamed. Unlike require_directory, this does not consult the old path,
+    /// and it cannot admit a writer transfer or create a new claim. The actual
+    /// retained lock File must still match expected/store.lock. No second Unix
+    /// store.lock descriptor is opened (closing one releases POSIX locks).
+    pub fn require_retained_directory_at(&self, expected: &Path) -> Result<()> {
+        let invalid = || {
+            PageError::io(
+                expected,
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "current directory/lock inode differs from the same retained live claim",
+                ),
+            )
+        };
+        let file = self.file.as_ref().ok_or_else(invalid)?;
+        let named_path = expected.join(LOCK_FILE);
+        let named = std::fs::symlink_metadata(&named_path)
+            .map_err(|error| PageError::io(&named_path, error))?;
+        let directory =
+            std::fs::symlink_metadata(expected).map_err(|error| PageError::io(expected, error))?;
+        if !directory.is_dir()
+            || directory.file_type().is_symlink()
+            || !named.is_file()
+            || named.file_type().is_symlink()
+        {
+            return Err(invalid());
+        }
+        #[cfg(unix)]
+        {
+            let held = file
+                .metadata()
+                .map_err(|error| PageError::io(&named_path, error))?;
+            if directory.dev() != self.identity.device
+                || directory.ino() != self.identity.inode
+                || held.dev() != named.dev()
+                || held.ino() != named.ino()
+            {
+                return Err(invalid());
+            }
+            Ok(())
+        }
+        #[cfg(windows)]
+        {
+            if windows_metadata_identity(expected, true)? != self.directory_identity
+                || windows_metadata_identity(&named_path, false)?
+                    != crate::physical_gate::identity(file, &named_path)?
+            {
+                return Err(invalid());
+            }
+            Ok(())
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = file;
+            Err(PageError::io(
+                expected,
+                std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "moved directory observation requires native identity",
+                ),
+            ))
+        }
+    }
+
     /// Path of the lock file, for diagnostics.
     pub fn path(&self) -> &Path {
         &self.path

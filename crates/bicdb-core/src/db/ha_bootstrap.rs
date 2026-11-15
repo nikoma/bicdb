@@ -14,6 +14,9 @@ use super::*;
 use std::fs::OpenOptions;
 
 const BOOTSTRAP_READY: &str = "BOOTSTRAP_READY";
+#[cfg(test)]
+mod namespace_cut;
+mod rename_no_replace;
 
 /// Staging directory used while a standby bootstrap is installed.
 pub fn standby_bootstrap_staging(path: &Path) -> PathBuf {
@@ -179,47 +182,78 @@ pub fn finish_standby_bootstrap(path: &Path) -> Result<bool> {
     // All real closed owners are acquired before any removal or rename. No
     // guard is rebound by its textual path after a directory moves.
     let ownership = BootstrapInstallOwnership {
-        _old: BootstrapTreeOwner::acquire_if_existing(path)?,
+        old: BootstrapTreeOwner::acquire_if_existing(path)?,
         staged: BootstrapTreeOwner::acquire_if_existing(&staging)?,
-        _replaced: BootstrapTreeOwner::acquire_if_existing(&replaced)?,
+        replaced: BootstrapTreeOwner::acquire_if_existing(&replaced)?,
     };
+    #[cfg(test)]
+    namespace_cut::observe(
+        path,
+        "after_owner_capture",
+        serde_json::json!({
+            "original_old_claimed":ownership.old.is_some(),
+            "original_replaced_claimed":ownership.replaced.is_some(),
+            "original_staged_claimed":ownership.staged.is_some(),
+        }),
+    );
     if !staging_exists {
-        let ready = prepare_bootstrap_ready_durability(path, &ownership)?;
-        complete_bootstrap_install(path, &ready)?;
+        let installed = ownership.old.as_ref().ok_or_else(|| {
+            BicDbError::Replication(
+                "bootstrap completion has no actual installed-tree owner".into(),
+            )
+        })?;
+        let ready = prepare_bootstrap_ready_durability(path, &ownership, installed)?;
+        complete_bootstrap_install(path, &ready, ownership.replaced.as_ref())?;
         return Ok(true);
     }
-    if ownership.staged.is_none() {
-        return Err(BicDbError::Replication(
-            "bootstrap staging disappeared before ownership".into(),
-        ));
-    }
+    let installed = ownership.staged.as_ref().ok_or_else(|| {
+        BicDbError::Replication("bootstrap staging disappeared before ownership".into())
+    })?;
     if !path_entry_exists(&staging.join(BOOTSTRAP_READY))? {
-        // Interrupted while staging: only this actual closed staging owner
-        // may remove it. The original root remains whole.
+        installed.require_at(&staging)?;
         fs::remove_dir_all(&staging)?;
         return Ok(false);
     }
-    let ready = prepare_bootstrap_ready_durability(&staging, &ownership)?;
-    if path_entry_exists(&replaced)? {
+    let ready = prepare_bootstrap_ready_durability(&staging, &ownership, installed)?;
+    // Only the actual originally retained cleanup owner may be removed.
+    // A path which appeared after an original None is not cleanup authority.
+    if let Some(original_replaced) = ownership.replaced.as_ref() {
+        original_replaced.require_at(&replaced)?;
         fs::remove_dir_all(&replaced)?;
     }
-    let renamed = bicdb_page::test_faults::io_fault(&format!("{BOOTSTRAP_SITE}.rename"), path)
-        .map_err(BicDbError::from)
-        .and_then(|()| {
-            if path.exists() {
-                fs::rename(path, &replaced)?;
-            }
-            fs::rename(&staging, path)?;
-            Ok(())
-        });
-    renamed.map_err(|error| BicDbError::WriteFailed {
+    let renamed = (|| -> Result<Option<&BootstrapTreeOwner>> {
+        bicdb_page::test_faults::io_fault(&format!("{BOOTSTRAP_SITE}.rename"), path)?;
+        let old_at_replaced = if let Some(old) = ownership.old.as_ref() {
+            old.require_at(path)?;
+            rename_no_replace::rename(path, &replaced)?;
+            Some(old)
+        } else {
+            None
+        };
+        installed.require_at(&staging)?;
+        // This atomic destination condition closes normal Core creation after
+        // custody capture; never move aside a fresh unowned root or replace it.
+        rename_no_replace::rename(&staging, path)?;
+        Ok(old_at_replaced)
+    })();
+    let old_at_replaced = renamed.map_err(|error| BicDbError::WriteFailed {
         site: format!("{BOOTSTRAP_SITE}.rename"),
         detail: format!("{}: {error}", path.display()),
     })?;
     bicdb_page::test_faults::crash_point(&format!("{BOOTSTRAP_SITE}.after_rename"));
-    // The original old/staged SH and backup-owner FDs follow their inodes.
-    // No storage resolver is called under the new path while old bindings live.
-    complete_bootstrap_install(path, &ready)?;
+    #[cfg(test)]
+    namespace_cut::observe(
+        path,
+        "after_install_rename",
+        serde_json::json!({
+            "original_old_claimed":ownership.old.is_some(),
+            "original_replaced_claimed":ownership.replaced.is_some(),
+            "actual_old_moved_to_replaced":old_at_replaced.is_some(),
+        }),
+    );
+    // The SAME staged owner now follows the installed root; only the SAME
+    // original old owner (if actually moved) follows cleanup at replaced.
+    complete_bootstrap_install(path, &ready, old_at_replaced)?;
     eprintln!(
         "bicdb replication: installed a snapshot of the primary into {}",
         path.display()
@@ -242,7 +276,7 @@ fn require_bootstrap_restore_complete(root: &Path) -> Result<()> {
 struct BootstrapTreeOwner {
     _physical: storage::BackupWriteGuard,
     _backup: File,
-    _paged: Option<bicdb_page::DirectoryLock>,
+    _paged: bicdb_page::DirectoryLock,
     _root: bicdb_page::DirectoryLock,
 }
 
@@ -271,19 +305,28 @@ impl BootstrapTreeOwner {
             .require_directory(root)
             .map_err(|error| BicDbError::Replication(error.to_string()))?;
         let backup = crate::backup::open_backup_lock_file(&root.join(storage::BACKUP_ONLINE_LOCK))?;
-        let paged_path = root.join(DEFAULT_PAGED_DIR);
-        let paged = if bootstrap_directory_exists(&paged_path)? {
-            let claim = bicdb_page::DirectoryLock::acquire(&paged_path).map_err(|error| {
-                BicDbError::Replication(format!("bootstrap Page owner remains live: {error}"))
-            })?;
-            claim
-                .require_directory(&paged_path)
-                .map_err(|error| BicDbError::Replication(error.to_string()))?;
-            Some(claim)
-        } else {
-            None
-        };
+        // Core uses this order too. Hold real SH before creating a missing
+        // conventional child, then take its nonblocking claim even in Memory
+        // mode. A later standalone Page owner cannot enter a formerly None slot.
         let physical = storage::acquire_database_backup_write_guard(root)?;
+        #[cfg(test)]
+        namespace_cut::observe(
+            root,
+            "before_page_claim",
+            serde_json::json!({
+                "actual_root_claimed":true,"actual_root_SH_acquired":true,
+            }),
+        );
+        let paged_path = root.join(DEFAULT_PAGED_DIR);
+        if !bootstrap_directory_exists(&paged_path)? {
+            fs::create_dir_all(&paged_path)?;
+        }
+        let paged = bicdb_page::DirectoryLock::acquire(&paged_path).map_err(|error| {
+            BicDbError::Replication(format!("bootstrap Page owner remains live: {error}"))
+        })?;
+        paged
+            .require_directory(&paged_path)
+            .map_err(|error| BicDbError::Replication(error.to_string()))?;
         Ok(Some(Self {
             _physical: physical,
             _backup: backup,
@@ -291,12 +334,20 @@ impl BootstrapTreeOwner {
             _root: claim,
         }))
     }
+    fn require_at(&self, expected: &Path) -> Result<()> {
+        self._root
+            .require_retained_directory_at(expected)
+            .map_err(|error| BicDbError::Replication(error.to_string()))?;
+        self._paged
+            .require_retained_directory_at(&expected.join(DEFAULT_PAGED_DIR))
+            .map_err(|error| BicDbError::Replication(error.to_string()))
+    }
 }
 
 struct BootstrapInstallOwnership {
-    _old: Option<BootstrapTreeOwner>,
+    old: Option<BootstrapTreeOwner>,
     staged: Option<BootstrapTreeOwner>,
-    _replaced: Option<BootstrapTreeOwner>,
+    replaced: Option<BootstrapTreeOwner>,
 }
 
 struct BootstrapReadSource {
@@ -322,6 +373,7 @@ impl BootstrapReadSource {
 /// those actual files/owners across the subsequent rename/completion tail.
 struct BootstrapReadyDurability<'a> {
     _ownership: &'a BootstrapInstallOwnership,
+    tree: &'a BootstrapTreeOwner,
     _ready: File,
     _node: File,
 }
@@ -346,8 +398,10 @@ fn bootstrap_barrier_file(path: &Path) -> Result<File> {
 fn prepare_bootstrap_ready_durability<'a>(
     root: &Path,
     ownership: &'a BootstrapInstallOwnership,
+    tree: &'a BootstrapTreeOwner,
 ) -> Result<BootstrapReadyDurability<'a>> {
     use std::io::Read;
+    tree.require_at(root)?;
     require_bootstrap_restore_complete(root)?;
     let result = (|| -> Result<(File, File)> {
         let mut ready = bootstrap_barrier_file(&root.join(BOOTSTRAP_READY))?;
@@ -379,6 +433,7 @@ fn prepare_bootstrap_ready_durability<'a>(
         bicdb_page::test_faults::io_fault("bootstrap.ready.dir_sync", root)?;
         storage::sync_parent_directory(&root.join(BOOTSTRAP_READY))?;
         require_bootstrap_restore_complete(root)?;
+        tree.require_at(root)?;
         Ok((ready, node))
     })();
     let (ready, node) = result.map_err(|error| BicDbError::WriteFailed {
@@ -387,6 +442,7 @@ fn prepare_bootstrap_ready_durability<'a>(
     })?;
     Ok(BootstrapReadyDurability {
         _ownership: ownership,
+        tree,
         _ready: ready,
         _node: node,
     })
@@ -394,7 +450,12 @@ fn prepare_bootstrap_ready_durability<'a>(
 
 /// The durable tail of an install: the parent directory `fsync` (the commit
 /// point), then the marker and the old directory go.
-fn complete_bootstrap_install(path: &Path, _ready: &BootstrapReadyDurability<'_>) -> Result<()> {
+fn complete_bootstrap_install(
+    path: &Path,
+    ready: &BootstrapReadyDurability<'_>,
+    original_old_at_replaced: Option<&BootstrapTreeOwner>,
+) -> Result<()> {
+    ready.tree.require_at(path)?;
     let synced = bicdb_page::test_faults::io_fault(&format!("{BOOTSTRAP_SITE}.dir_sync"), path)
         .map_err(BicDbError::from)
         .and_then(|()| storage::sync_parent_directory(path));
@@ -403,10 +464,12 @@ fn complete_bootstrap_install(path: &Path, _ready: &BootstrapReadyDurability<'_>
         detail: format!("{}: {error}", path.display()),
     })?;
     bicdb_page::test_faults::crash_point(&format!("{BOOTSTRAP_SITE}.after_dir_sync"));
+    ready.tree.require_at(path)?;
     fs::remove_file(path.join(BOOTSTRAP_READY))?;
     storage::sync_parent_directory(&path.join(BOOTSTRAP_READY))?;
-    let replaced = sibling_path(path, "replaced");
-    if replaced.exists() {
+    if let Some(original_old) = original_old_at_replaced {
+        let replaced = sibling_path(path, "replaced");
+        original_old.require_at(&replaced)?;
         fs::remove_dir_all(&replaced)?;
     }
     Ok(())
@@ -414,3 +477,17 @@ fn complete_bootstrap_install(path: &Path, _ready: &BootstrapReadyDurability<'_>
 
 #[cfg(all(test, unix))]
 mod physical_gate_tests;
+
+#[cfg(all(test, unix))]
+mod namespace_race_tests;
+
+#[cfg(test)]
+pub(super) fn test_after_initial_bootstrap_check(path: &Path, actual_installed: bool) {
+    namespace_cut::observe(
+        path,
+        "after_core_bootstrap_check",
+        serde_json::json!({
+            "actual_initial_bootstrap_installed":actual_installed,
+        }),
+    );
+}

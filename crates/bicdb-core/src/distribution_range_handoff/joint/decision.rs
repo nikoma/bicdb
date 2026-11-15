@@ -183,6 +183,28 @@ impl NativeJointDecisionData {
         }
         Ok(())
     }
+    /// The exact body every remote publisher derives from the SAME plan and
+    /// certified source manifest. Comparison only; it grants nothing.
+    #[cfg(feature = "tls-replication")]
+    pub(super) fn require_remote_certificate_scope(
+        &self,
+        plan: &NativeJointHandoffPlan,
+        manifest: &crate::distribution_range_image::NativeRemoteImageManifestV1,
+    ) -> Result<()> {
+        self.validate()?;
+        if &self.scope != plan.data()
+            || self.old_closed != manifest.actual_old_closures
+            || self.selected_source != manifest.source_id
+            || self.range_index != manifest.range_index
+            || self.h0 != manifest.h0
+            || self.h != manifest.h
+        {
+            return Err(invalid(
+                "remote decision body differs from the coordinator's plan/certified source cut",
+            ));
+        }
+        Ok(())
+    }
     #[cfg(feature = "tls-replication")]
     pub(crate) fn remote_new_facts(
         &self,
@@ -775,6 +797,28 @@ impl NativeJointDecisionPublicationRound {
             self.prepared.require_actual_receipt(receipt)?;
         }
         Ok(())
+    }
+}
+/// Seal for [`NativeJointDecisionProof`]: nameable only inside the joint
+/// handoff module tree, so no other module can supply a membership proof.
+pub(in crate::distribution_range_handoff::joint) mod proof_seal {
+    pub trait Sealed {}
+}
+/// Exactly what the three metadata membership stages read from a durable
+/// dual-quorum decision. An implementor is a capability, never decoded DATA:
+/// it exists only where the actual OLD and NEW durable majorities were counted
+/// (in-process owners, or transport-authenticated remote decision frames).
+pub(crate) trait NativeJointDecisionProof: proof_seal::Sealed {
+    fn data(&self) -> &NativeJointDecisionData;
+    fn require_current(&self) -> Result<()>;
+}
+impl proof_seal::Sealed for NativeJointDurableDecision {}
+impl NativeJointDecisionProof for NativeJointDurableDecision {
+    fn data(&self) -> &NativeJointDecisionData {
+        NativeJointDurableDecision::data(self)
+    }
+    fn require_current(&self) -> Result<()> {
+        NativeJointDurableDecision::require_current(self)
     }
 }
 impl NativeJointDurableDecision {

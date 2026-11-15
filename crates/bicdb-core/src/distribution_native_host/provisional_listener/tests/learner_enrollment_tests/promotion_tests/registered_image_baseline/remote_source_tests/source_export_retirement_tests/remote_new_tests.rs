@@ -1,6 +1,7 @@
 //! Genuine mTLS participant creation/callback/handoff, following the actual
 //! S2 export retirement. No local OLD/NEW owner is passed to an RPC caller.
 use super::*;
+mod decision_certificate_tests;
 mod remote_decision_tests;
 mod remote_old_decision_tests;
 use crate::distribution_range_handoff::{
@@ -12,6 +13,7 @@ use crate::distribution_transport::AuthenticatedNativeRemoteNewFrame;
 pub(super) fn is_case(case: SourceCase) -> bool {
     remote_old_decision_tests::is_case(case)
         || remote_decision_tests::is_case(case)
+        || decision_certificate_tests::is_case(case)
         || matches!(
             case,
             SourceCase::TargetRemoteNewPins
@@ -145,6 +147,8 @@ pub(super) fn exercise(
     controls: &mut [NativeMetadataControlHost],
     clients: &[Arc<TcpClusterRelocationTransport>],
     services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
+    metadata: &[Arc<Mutex<crate::MetadataConsensusStore>>],
+    template: &crate::DistributionConfig,
     target_control: &NativeMetadataControlHost,
     factory: &Arc<crate::distribution_native_host::NativeUnassignedLearnerFactory>,
     pending: &ClusterTopology,
@@ -199,6 +203,22 @@ pub(super) fn exercise(
     let read_round = NativeJointOldRound::begin(observed, business, mf.relocation_id).unwrap();
     let plan = read_round.plan();
     drop(read_round);
+    if decision_certificate_tests::is_case(case) {
+        // The coordinator initiator runs the complete remote round itself.
+        decision_certificate_tests::exercise(
+            case,
+            controls,
+            clients,
+            metadata,
+            template,
+            target_control,
+            mf,
+            phase_id,
+            &plan,
+            output,
+        );
+        return;
+    }
     let mut round =
         NativeRemoteNewRound::begin(plan.clone(), mf.clone(), phase_id, &collection).unwrap();
     let native_before = old_records(services, &plan);

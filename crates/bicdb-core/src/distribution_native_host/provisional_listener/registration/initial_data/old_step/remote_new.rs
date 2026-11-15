@@ -197,6 +197,17 @@ impl NativeInitialDataAdmission {
         } else {
             first
         };
+        let mut native_decision_body = None;
+        if matches!(
+            &request.operation,
+            NativeRemoteNewOperationV1::ObserveDecision
+        ) {
+            // Read-only: the original participant re-proves its own committed
+            // native DECISION. A missing/unknown attempt is refused, not made.
+            let (receipt, body) = state.observe_remote_decision(request, &token)?;
+            native_decision = Some(receipt);
+            native_decision_body = Some(body);
+        }
         state.require_current(&token)?;
         current.require_current()?;
         self.require_listener(&service, &runtime)?;
@@ -207,6 +218,7 @@ impl NativeInitialDataAdmission {
             snapshot: state.snapshot().clone(),
             handoff: state.handoff_outcome()?,
             native_decision,
+            native_decision_body,
             metadata_term: current.own.term(),
             metadata_read_index: current.own.read_index(),
             metadata_context_id: current.own.context_id(),

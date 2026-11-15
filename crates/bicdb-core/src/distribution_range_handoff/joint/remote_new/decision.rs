@@ -134,9 +134,18 @@ impl NativeRemoteDecisionReceiptV1 {
         request: &NativeRemoteNewRequestV1,
         facts: &NativeRemoteNewFactSetV1,
     ) -> Result<()> {
+        self.require_observation(request, &facts.checksum_sha256)
+    }
+    /// Same exact shape rule for a read-only durable observation, whose request
+    /// carries no fact set: the retained original handoff intent names it.
+    pub(crate) fn require_observation(
+        &self,
+        request: &NativeRemoteNewRequestV1,
+        fact_set_sha256: &str,
+    ) -> Result<()> {
         self.binding.require_manifest(&request.manifest)?;
         if self.phase_id != request.phase_id
-            || self.fact_set_sha256 != facts.checksum_sha256
+            || self.fact_set_sha256 != fact_set_sha256
             || (self.node_id != request.manifest.target_id
                 && !request.manifest.old_members.contains_key(&self.node_id))
             || self.native_page_xid == 0

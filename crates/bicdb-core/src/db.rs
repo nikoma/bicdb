@@ -12241,11 +12241,18 @@ impl BicDb {
 
     pub fn process_memory_index_jobs(&self, limit: usize) -> Result<MemoryIndexProcessReport> {
         let limit = limit.max(1);
+        // Snapshot at most 4096 live claims BEFORE borrowing job metadata.
+        // A slow first job must not consume every other worker's fixed limit.
+        // This snapshot grants nothing: final claim + current-job admission
+        // below remain mandatory and handle intervening races.
+        let in_flight = self.memory_job_in_flight.lock().clone();
         let pending_jobs = self
             .memory_index_jobs
             .read()
             .iter()
-            .filter(|job| job.status == MemoryJobStatus::Pending)
+            .filter(|job| {
+                job.status == MemoryJobStatus::Pending && !in_flight.contains(&job.job_id)
+            })
             .take(limit)
             .cloned()
             .collect::<Vec<_>>();
@@ -12383,6 +12390,10 @@ impl BicDb {
             })
             .cloned()
             .collect::<Vec<_>>();
+        #[cfg(test)]
+        commit_visibility_tests::after_memory_job_claim(
+            current_jobs.iter().map(|job| job.job_id).collect(),
+        );
         let prepared = current_jobs
             .iter()
             .map(|job| self.prepare_memory_index_job(job))

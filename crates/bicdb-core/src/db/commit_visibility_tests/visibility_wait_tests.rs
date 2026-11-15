@@ -843,3 +843,171 @@ fn actual_older_pending_worker_snapshot_cannot_replay_after_other_worker_retains
     verify_pair_indexes(&reopened);
     reopened.close().unwrap();
 }
+
+#[test]
+fn actual_held_memory_job_claim_allows_other_eligible_job_at_same_limit_one() {
+    let (directory, mut db, config, first, model) =
+        setup_actual_async_source("first-real-claim-job");
+    let second = full_record("second-real-eligible-job", 22);
+    db.insert(B_COLLECTION, second.clone()).unwrap();
+    let original_jobs = db.memory_index_jobs();
+    assert_eq!(original_jobs.len(), 2);
+    assert!(original_jobs
+        .iter()
+        .all(|job| job.status == MemoryJobStatus::Pending));
+    std::thread::scope(|scope| {
+        let before_sequence = db.last_commit_seq();
+        let paged = db.paged_records.as_ref().unwrap();
+        let before_xid = paged.store().transactions().next_xid();
+        let before_lsn = paged.store().wal().next_lsn();
+        let (claimed_sender, claimed) = mpsc::channel();
+        let (release_sender, release_receiver) = mpsc::channel();
+        let mut release_first = ReleaseLower(Some(release_sender));
+        let (first_sender, first_result) = mpsc::channel();
+        let first_worker = scope.spawn(|| {
+            let _hook = arm_after_memory_job_claim(Box::new(move |ids| {
+                claimed_sender.send(ids).unwrap();
+                release_receiver
+                    .recv_timeout(Duration::from_secs(30))
+                    .unwrap();
+            }));
+            first_sender.send(db.process_memory_index_jobs(1)).unwrap();
+        });
+        let actual_claims = receive(&claimed, "first actual lexical job claim");
+        assert_eq!(actual_claims.len(), 1);
+        let first_job = original_jobs
+            .iter()
+            .find(|job| job.job_id == actual_claims[0])
+            .unwrap();
+        let other_job = original_jobs
+            .iter()
+            .find(|job| job.job_id != actual_claims[0])
+            .unwrap();
+        assert!(db.memory_job_in_flight.lock().contains(&first_job.job_id));
+        // The cut is after real claim/current-status admission but before any
+        // derived native transaction, model evaluation, or record write.
+        assert_eq!(db.last_commit_seq(), before_sequence);
+        assert_eq!(paged.store().transactions().next_xid(), before_xid);
+        assert_eq!(paged.store().wal().next_lsn(), before_lsn);
+        let (second_sender, second_result) = mpsc::channel();
+        let second_worker = scope.spawn(|| {
+            // The identical requested limit is the regression: selecting the
+            // first busy Pending ID again would starve this eligible other ID.
+            second_sender.send(db.process_memory_index_jobs(1)).unwrap();
+        });
+        let result = receive(
+            &second_result,
+            "other actual eligible job with first claim held",
+        );
+        let during = db.memory_index_jobs();
+        eprintln!(
+            "ISSUE205_REAL_CLAIM_INDEPENDENT_PROGRESS {}",
+            json!({
+                "actual_held_job_id": first_job.job_id,
+                "other_actual_job_id": other_job.job_id,
+                "both_requested_limits": 1,
+                "actual_second_result": format!("{result:?}"),
+                "actual_jobs_while_first_claim_held": during,
+                "actual_first_claim_still_held": db.memory_job_in_flight.lock().contains(&first_job.job_id),
+                "scope": "memory-job claim progress component; not stalled disk/relocation/physical scale proof"
+            })
+        );
+        let report = result.unwrap();
+        assert_eq!(report.processed, 1);
+        assert_eq!(report.failed, 0);
+        assert_eq!(report.pending, 1);
+        assert_eq!(report.unresolved, 0);
+        assert_eq!(report.claim_deferred, 0);
+        assert_eq!(
+            during
+                .iter()
+                .find(|job| job.job_id == first_job.job_id)
+                .unwrap()
+                .status,
+            MemoryJobStatus::Pending
+        );
+        assert_eq!(
+            during
+                .iter()
+                .find(|job| job.job_id == other_job.job_id)
+                .unwrap()
+                .status,
+            MemoryJobStatus::Indexed
+        );
+        assert!(db.memory_job_in_flight.lock().contains(&first_job.job_id));
+        let originals = [&first, &second];
+        std::thread::scope(|read_scope| {
+            read_scope
+                .spawn(|| {
+                    let reader = db.begin_transaction().unwrap();
+                    for source in originals {
+                        let mut expected = (*source).clone();
+                        if source.id == other_job.record_id {
+                            expected.vector = Some(
+                                model
+                                    .embed(source.metadata["body"].as_str().unwrap())
+                                    .unwrap(),
+                            );
+                        }
+                        assert_eq!(
+                            reader.get(B_COLLECTION, &source.id).unwrap().as_deref(),
+                            Some(&expected)
+                        );
+                    }
+                })
+                .join()
+                .unwrap();
+        });
+        release_first.release();
+        let result = receive(&first_result, "same original held claim resumption").unwrap();
+        assert_eq!(result.processed, 1);
+        assert_eq!(result.failed, 0);
+        assert_eq!(result.pending, 0);
+        assert_eq!(result.unresolved, 0);
+        second_worker.join().unwrap();
+        first_worker.join().unwrap();
+        assert!(db.memory_job_in_flight.lock().is_empty());
+    });
+    let expected = [first, second].map(|mut record| {
+        record.vector = Some(
+            model
+                .embed(record.metadata["body"].as_str().unwrap())
+                .unwrap(),
+        );
+        record
+    });
+    let verify = |db: &BicDb| {
+        std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let reader = db.begin_transaction().unwrap();
+                    for record in &expected {
+                        assert_eq!(
+                            reader.get(B_COLLECTION, &record.id).unwrap().as_deref(),
+                            Some(record)
+                        );
+                    }
+                })
+                .join()
+                .unwrap();
+        });
+        let index = db.verify_index(&format!("{B_COLLECTION}_ordinal")).unwrap();
+        assert!(index.valid);
+        assert_eq!(index.expected_records, 2);
+        assert_eq!(index.indexed_records, 2);
+        assert!(db
+            .memory_index_jobs()
+            .iter()
+            .all(|job| job.status == MemoryJobStatus::Indexed));
+    };
+    verify(&db);
+    let before_retry = db.last_commit_seq();
+    let empty = db.process_memory_index_jobs(1).unwrap();
+    assert_eq!(empty.processed, 0);
+    assert_eq!(empty.failed, 0);
+    assert_eq!(db.last_commit_seq(), before_retry);
+    db.close().unwrap();
+    let reopened = BicDb::open_with_config(directory.path(), config).unwrap();
+    verify(&reopened);
+    reopened.close().unwrap();
+}

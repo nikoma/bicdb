@@ -179,3 +179,31 @@ pub(super) fn after_memory_job_selection(ids: Vec<Uuid>) {
         callback(ids);
     }
 }
+
+// Actual per-job claims remain owned by the caller, but no claim mutex or job
+// metadata guard survives into this callback. Only selected actual IDs escape.
+thread_local! {
+    static JOB_CLAIM: RefCell<Option<JobSelectionHook>> = const { RefCell::new(None) };
+}
+struct JobClaimGuard(PhantomData<Rc<()>>);
+impl Drop for JobClaimGuard {
+    fn drop(&mut self) {
+        JOB_CLAIM.with(|slot| {
+            slot.borrow_mut().take();
+        });
+    }
+}
+pub(super) fn arm_after_memory_job_claim(callback: JobSelectionHook) -> impl Drop {
+    JOB_CLAIM.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        assert!(slot.is_none(), "memory job claim hook already armed");
+        *slot = Some(callback);
+    });
+    JobClaimGuard(PhantomData)
+}
+pub(super) fn after_memory_job_claim(ids: Vec<Uuid>) {
+    let callback = JOB_CLAIM.with(|slot| slot.borrow_mut().take());
+    if let Some(callback) = callback {
+        callback(ids);
+    }
+}

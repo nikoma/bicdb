@@ -126,8 +126,12 @@ source concern. Its derived write still requires ordinary global completion.
 
 Same-open workers claim actual job IDs with bounded lexical ownership (at most
 4096 concurrent claims). The brief claim mutex is released before embedding,
-transactions and status I/O. Other IDs remain independently eligible. After a
-claim, the worker rereads the same current job; an older captured Pending cohort
+transactions and status I/O. Async selection copies the bounded live-claim ID
+set before borrowing job metadata and excludes those IDs before applying its
+original limit. A slow first job therefore does not consume every other fixed
+worker limit (subject to the explicit 4096 simultaneous-claim cap). The real
+final claim and fresh status check still handle races;
+Sync selection continues to require all selected obligations. After a claim, the worker rereads the same current job; an older captured Pending cohort
 cannot execute a job already retained as OutcomeUnknown. Claims live through the
 real write result and status publication, and release on return or unwind.
 Reports expose selected `deferred` and `claim_deferred` counts, including the cap.
@@ -176,7 +180,11 @@ The reader check simulates a current validator lacking the new capability; it is
 not execution of an older binary. Additional real atomic-barrier failure and stale-worker-cohort controls are
 source definitions, not results. The per-job claim-cap/claimed-Sync-specific
 negative is not executed or defined by these controls; the strict selected-job
-completion predicate is source-reviewed only. No local Rust execution has occurred.
+completion predicate is source-reviewed only. A separate real claim-held control
+keeps one original worker at its actual pre-model claim boundary while a second
+worker processes another actual job at the same requested limit of one, then
+checks both complete vectors/indexes and ordinary reopen. No local Rust execution
+has occurred.
 
 All earlier design notes and frozen PR203/204 evidence remain unchanged. This
 proposal assigns no source version, built binary, release, deployment or complete

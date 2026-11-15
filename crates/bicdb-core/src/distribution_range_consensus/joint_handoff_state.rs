@@ -18,11 +18,14 @@ mod bridge;
 pub(crate) use bridge::NativeJointBridgeCatalogue;
 mod activation;
 mod release;
+mod retirement;
 use activation::NativeJointCatalogueActivation;
 pub(crate) use activation::{
     NativeJointCatalogueActivationFact, NativeJointCatalogueActivationReceipt,
 };
 pub(crate) use release::NativeJointReleaseObservedObligations;
+use retirement::NativeJointSourceRetirement;
+pub(crate) use retirement::NativeJointSourceRetirementReceipt;
 
 pub(super) const NATIVE_JOINT_HANDOFF_CATALOG_FORMAT: u32 = 14;
 #[derive(Debug)]
@@ -153,6 +156,9 @@ pub(super) struct NativeJointLocalState {
     global_decision_native_sha256: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     serving_activation: Option<NativeJointCatalogueActivation>,
+    /// Written only by a retired source; see `retirement`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_retirement: Option<NativeJointSourceRetirement>,
 }
 impl NativeJointLocalState {
     /// Read-only binding check; a hash/decoded state never mints recovery.
@@ -176,6 +182,18 @@ impl NativeJointLocalState {
             if self.global_decision_sha256.as_deref() != Some(activation.decision_sha256()) {
                 return Err(range_write_error(
                     "joint catalogue activation lost complete decision binding",
+                ));
+            }
+        }
+        if let Some(retirement) = &self.source_retirement {
+            retirement.validate()?;
+            // A retired source never activated this handoff as a new member.
+            if self.global_decision_sha256.as_deref() != Some(retirement.decision_sha256())
+                || self.old_closed_native_sha256.is_none()
+                || self.serving_activation.is_some()
+            {
+                return Err(range_write_error(
+                    "joint source retirement lost its closed decision binding",
                 ));
             }
         }
@@ -416,6 +434,7 @@ impl RangeWriteStore {
                 global_decision_sha256: None,
                 global_decision_native_sha256: None,
                 serving_activation: None,
+                source_retirement: None,
             });
         self.catalog.handoff_promises.insert(range, promise.clone());
         self.catalog.format_version = self
@@ -588,6 +607,7 @@ impl RangeWriteStore {
                 global_decision_sha256: None,
                 global_decision_native_sha256: None,
                 serving_activation: None,
+                source_retirement: None,
             });
         current.global_decision_sha256 = Some(receipt.decision_sha256().into());
         current.global_decision_native_sha256 = Some(receipt.checksum_sha256().into());

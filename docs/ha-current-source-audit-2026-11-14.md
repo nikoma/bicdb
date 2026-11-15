@@ -7,6 +7,15 @@ Delivered-main observation, November 15 00:15 UTC: **1.0.514-beta**,
 That documentation merge did not deliver the separate candidate repairs,
 a new optimized binary, physical expansion or production qualification.
 
+The newer separate [source881 native acceptance](design/native-881-failed-acceptance.md)
+finished with **325 passed /21 failed /one ignored**. This blocks acceptance;
+all other required jobs and Rails passed on that exact source.
+Seven failures were preparation timeouts, nine were first-publication timeouts,
+three were diagnostic/history assertions and two were remote API timeouts.
+The two remote cases retained actual known native commits, so their API errors
+are not rollback evidence. Six focused Strong/routing cases passed on this exact
+source, within their component scope. No physical qualification follows.
+
 Newer separate candidate feedback: [native c05 acceptance](design/native-c05-acceptance-result.md)
 finished with **331 passed /15 failed /one ignored**. Four remote-decision
 controls passed, but native acceptance failed. The later source follow-up is

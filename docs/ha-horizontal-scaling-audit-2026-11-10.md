@@ -37,6 +37,14 @@ Same-attempt ownership does not persist original-target or renamed-predecessor
 association across calls/restarts. Runtime reproduction is **not tested** and
 the cold-recovery protocol remains blocked; this is not a proven Azure cause.
 
+Cell/offline encryption rotation has a separate
+[Prepared source-head enforcement gap](design/cell-key-rotation-prepared-source-head-gap.md).
+The same implementation exists in merged main519 and candidate2ce. A staged
+digest does not establish inclusion of source writes accepted between calls;
+the retired old ciphertext may retain them. This is a source finding with an
+unexecuted regression, not measured durable erasure. Repairing the new gate
+integration failure does not qualify this cold-resume scenario.
+
 ## Earlier execution checkpoint — head0a failed, 2026-11-15 UTC
 
 Remote main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.

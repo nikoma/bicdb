@@ -88,6 +88,13 @@ subsequent recovery. Original-target and renamed-predecessor association must
 survive restart; a RAM flag or newly acquired DirectoryLock does not supply it.
 This is not an established cause of the historical Azure visibility failures.
 
+The separate [Prepared key-rotation source-head gap](cell-key-rotation-prepared-source-head-gap.md)
+also remains open: per-call closed ownership does not prevent ordinary source
+writes between preparation and a later resume. The staged digest alone cannot
+prove inclusion of those writes. Its deterministic regression is unexecuted;
+the retained retired ciphertext distinguishes active-view rollback risk from
+durable erasure. The physical-gate repair does not close this boundary.
+
 ### Earlier head0a: Core guard compilation and Page profile assertion failures
 
 Source **`0a04ccc06db33a04d254a5e00776248d7ea1772a`**, tree `06a13e5accafa331271049a9ae44f1bf3628661a`, failed [Tests 43694564959](https://github.com/nikoma/bicdb/actions/runs/43694564959) and [Rails 43694565004](https://github.com/nikoma/bicdb/actions/runs/43694565004). Actual checkout `8295fbbb5e0c724ddbfe2d6325c30805b847a568` has the identical tree. Six jobs failed Core `E0277` at `paged_collection.rs:494`: the facade promises `Result<impl Drop>`, but the new owning Page guard has field cleanup without an explicit `Drop` implementation. Core and Native stopped in projection-helper compilation with zero actual cases; SQL, PGwire/Oracle, Rails and nondefault runtime acceptance were not reached.

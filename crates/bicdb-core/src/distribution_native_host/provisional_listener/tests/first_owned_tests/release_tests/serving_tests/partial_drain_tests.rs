@@ -87,13 +87,13 @@ pub(super) fn run(
         };
         // Actual action failure remains primary; every peer panic/error is
         // already retained. A successful action cannot suppress failed cleanup.
-        let actual = actual?;
+        let actual = require_actual_ok(actual?)?;
         let retained = retained?;
         let peer = match read {
             Ok(value) => value?,
             Err(panic) => std::panic::resume_unwind(panic),
         };
-        Ok((require_actual_ok(actual)?, retained, held, peer))
+        Ok((actual, retained, held, peer))
     })?;
     let cut = &cancelled["actual_shutdown_active_drain_cut"];
     assert_eq!(cut["same_original_listener"], true);

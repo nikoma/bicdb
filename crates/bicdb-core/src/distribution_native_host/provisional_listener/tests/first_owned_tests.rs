@@ -3,6 +3,7 @@
 //! No legacy enrollment fixture/local OLD quorum,
 //! manufactured MF, backend substitute or native grant constructor is used.
 use super::*;
+mod cross_protocol_tests;
 use crate::distribution_native_host::remote_first::NativeFirstIngressFault as Fault;
 use crate::distribution_native_host::{
     NativeFirstCoordinatorAction as Action, NativeFirstReceiveOperationV1 as Op,

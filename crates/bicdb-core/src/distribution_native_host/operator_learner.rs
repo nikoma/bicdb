@@ -676,3 +676,19 @@ impl NativeMetadataLearnerHost {
         Ok(())
     }
 }
+
+#[cfg(test)]
+impl NativeMetadataLearnerHost {
+    pub(in crate::distribution_native_host) fn test_first_cross_protocol_target_snapshot(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        let NativeLearnerLifecycle::Fresh(host) = &self.host else {
+            return Err(invalid(
+                "cross-protocol control cannot cast cold owner to Fresh",
+            ));
+        };
+        host.test_registered_image_control()?
+            .test_first_cross_protocol_target_snapshot(range)
+    }
+}

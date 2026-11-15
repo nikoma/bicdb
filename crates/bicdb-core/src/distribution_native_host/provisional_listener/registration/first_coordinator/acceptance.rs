@@ -363,3 +363,126 @@ impl NativeMetadataControlHost {
         Ok(result)
     }
 }
+
+impl NativeMetadataControlHost {
+    /// Send through the original range-leader factory and genuine pinned
+    /// transport. The extra target UUID is request correlation DATA only.
+    pub(in crate::distribution_native_host) fn test_first_competing_handoff_step(
+        &self,
+        range: crate::RangeId,
+        target_attempt: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        use crate::distribution_range_handoff::{
+            NativeJointHandoffStepOperationV1, NativeJointHandoffStepRequestV1,
+        };
+        let actual = self
+            .first_coordinators
+            .get(&range)
+            .ok_or_else(|| invalid("cross-protocol actual FIRST factory absent"))?;
+        actual.process.check()?;
+        let token = parent
+            .child_linked_to(&actual.process)
+            .child_with_deadline(Instant::now() + Duration::from_secs(5));
+        // This is the existing real OWN+attached current-MStore producer; no
+        // old role/token is revived and no request-supplied plan is admitted.
+        let (own, business) = actual.own(&token)?;
+        let request = NativeJointHandoffStepRequestV1::from_plan(
+            &actual.plan,
+            NativeJointHandoffStepOperationV1::TargetInstall {
+                donor: actual.donor.clone(),
+                target_attempt,
+            },
+            business,
+            remaining_ms(&token)?,
+        )?;
+        let started = Instant::now();
+        let result = actual.backend.transport.request_native_joint_handoff_step(
+            &actual.target,
+            &actual.plan,
+            &request,
+            &own,
+            &token,
+        );
+        // Capture the EXACT exchange return before diagnostic allocation or
+        // any later check. This facade returns DATA even for an RPC error;
+        // that must never be interpreted as a successful install/observer.
+        let rpc_ok = result.is_ok();
+        let error = result
+            .as_ref()
+            .err()
+            .map(crate::distribution_native_host::remote_first::error_data);
+        let reply = result.as_ref().ok().map(|frame| frame.reply().clone());
+        Ok(
+            serde_json::json!({"request":request,"actual_sender":actual.backend.node_id,
+            "actual_target":actual.target,"actual_rpc_returned_ok":rpc_ok,
+            "actual_rpc_error":error,"actual_rpc_reply":reply,"elapsed_us":started.elapsed().as_micros(),
+            "original_factory_operation":actual.operation,"original_factory_target_attempt":actual.target_attempt,
+            "facade_return_is_DATA_not_RPC_success":true,"raw_owner_or_grant_exported":false}),
+        )
+    }
+    fn test_first_cross_protocol_native_snapshot(
+        &self,
+        range: crate::RangeId,
+        source_lineage: bool,
+    ) -> Result<serde_json::Value> {
+        let database = self
+            .backend
+            .service
+            .try_lock()
+            .ok_or_else(|| invalid("cross-protocol actual diagnostic service busy"))?
+            .database();
+        let db = database
+            .try_read()
+            .ok_or_else(|| invalid("cross-protocol actual diagnostic DB busy"))?;
+        let counters = db.test_joint_prepublication_storage(range)?;
+        let (records, lineage) = if source_lineage {
+            // The target-only8-record inventory is not a supported bound for
+            // a populated INITIAL donor. Read its actual protected lineage.
+            let actual = db.current_native_range_source_lineage(range)?;
+            (
+                None,
+                Some(serde_json::json!({
+                    "range_index":actual.range_index(),"local_B":actual.actual_local_visibility_sequence(),
+                    "native_receipt_sha256":actual.native_receipt_sha256(),
+                    "history_generation":actual.history_generation(),"H":actual.logical_history_sha256(),
+                    "native_write_range":actual.native_write_range()?,
+                    "joint_decision_sha256":actual.current_joint_decision_sha256(),
+                })),
+            )
+        } else {
+            (Some(db.test_registered_remote_native_inventory()?), None)
+        };
+        Ok(
+            serde_json::json!({"same_actual_database_open":db.incarnation_id(),
+            "actual_native_storage":counters,"actual_target_native_record_hashes":records,
+            "actual_source_lineage":lineage,
+            "health_checked":true,"read_only":true,"authority_granted":false}),
+        )
+    }
+    pub(in crate::distribution_native_host) fn test_first_cross_protocol_target_snapshot(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        // Each existing helper drops its own guards before the next helper.
+        // This combined result is explicitly NOT an atomic global snapshot.
+        let first = self.test_first_receiver_snapshot()?;
+        let step = self.test_joint_handoff_step_state(range)?;
+        let native = self.test_first_cross_protocol_native_snapshot(range, false)?;
+        Ok(
+            serde_json::json!({"first":first,"step":step,"native":native,
+            "non_atomic_combined_DATA":true,"authority_granted":false}),
+        )
+    }
+    pub(in crate::distribution_native_host) fn test_first_cross_protocol_source_snapshot(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        let source = self.test_source_discovery_state(range)?;
+        let native = self.test_first_cross_protocol_native_snapshot(range, true)?;
+        Ok(
+            serde_json::json!({"source_discovery":source,"native":native,
+            "non_atomic_combined_DATA":true,"authority_granted":false}),
+        )
+    }
+}

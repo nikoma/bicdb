@@ -103,3 +103,24 @@ impl NativeMetadataHost {
             "control_listener_running":self.control.as_ref().is_some_and(|c|c.is_running()),"memory_only":true})
     }
 }
+
+// Cross-protocol controls execute on the SAME actual normal host. Only DATA
+// leaves these facades; no retained plan/backend/transport/owner is exposed.
+impl NativeMetadataHost {
+    pub(in crate::distribution_native_host) fn test_first_competing_handoff_step(
+        &self,
+        range: crate::RangeId,
+        target_attempt: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<serde_json::Value> {
+        self.test_first_control()?
+            .test_first_competing_handoff_step(range, target_attempt, parent)
+    }
+    pub(in crate::distribution_native_host) fn test_first_cross_protocol_source_snapshot(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        self.test_first_control()?
+            .test_first_cross_protocol_source_snapshot(range)
+    }
+}

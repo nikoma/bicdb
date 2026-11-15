@@ -33,7 +33,7 @@ New **test-only** `NativeJointPhaseTrace` spans expose the original remaining re
 
 The spans surround existing calls outside service, DB and consensus guards. Early errors leave an incomplete span; successful boundaries mark it complete. They do not renew the original Role/OWN/actor window or turn an identifier into authority. The shared collection spans also apply when the existing bridge readonly consumer calls that function.
 
-The finite coordinator additionally emits the already-retained bounded original error, resolution error and up to eight owner-poll errors after the actual RPC returns and engine guards have unwound. The original error is returned unchanged. Production code, mutation ordering, all original assertions, IO-fault counts, per-call deadlines and SDK/Strong tails remain unchanged.
+The finite coordinator additionally emits the already-retained bounded original error, resolution error and up to eight owner-poll errors after the actual RPC returns and engine guards have unwound. The direct diagnostic and the shared test-only phase trace use fallible locked-stderr writes; an output error is ignored rather than panicking over the original RPC result. The original error is returned unchanged. Production code, mutation ordering, all original assertions, IO-fault counts, per-call deadlines and SDK/Strong tails remain unchanged.
 
 ## Classification and next checks
 

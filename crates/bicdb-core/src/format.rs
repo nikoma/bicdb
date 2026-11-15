@@ -56,6 +56,7 @@ pub const NATIVE_RECOVERY_SERVING_FEATURE_FLAG: &str = "native_recovery_serving_
 /// Local decision-catalogue custody contract; old writers must refuse.
 pub const NATIVE_CATALOGUE_CUSTODY_FEATURE_FLAG: &str = "native_catalogue_custody_v1";
 pub const NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG: &str = "native_writer_enrollment_v1";
+pub const NATIVE_WRITER_ALLOCATION_POLICY_FEATURE_FLAG: &str = "native_writer_allocation_policy_v1";
 pub const NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG: &str = "native_joint_data_handoff_v1";
 /// Local qualified recovery in an already activated joint domain.
 pub const NATIVE_CURRENT_JOINT_RECOVERY_FEATURE_FLAG: &str = "native_current_joint_recovery_v1";
@@ -128,6 +129,7 @@ const KNOWN_FEATURE_FLAGS: &[&str] = &[
     CURRENT_IMAGE_PROPOSAL_FEATURE_FLAG,
     NATIVE_RECOVERY_SERVING_FEATURE_FLAG,
     NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG,
+    NATIVE_WRITER_ALLOCATION_POLICY_FEATURE_FLAG,
     NATIVE_JOINT_DATA_HANDOFF_FEATURE_FLAG,
     NATIVE_CURRENT_JOINT_RECOVERY_FEATURE_FLAG,
     NATIVE_ABORT_HISTORY_FEATURE_FLAG,
@@ -1055,6 +1057,44 @@ pub(crate) fn enable_native_writer_enrollment(root: &Path) -> Result<()> {
         .feature_flags
         .insert(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG.into());
     persist_metadata(root, &metadata, true)
+}
+
+/// Reader barrier BEFORE a SAME-open allocation-policy audit. A flag alone
+/// cannot create a writer, epoch policy, recovered prefix or Ready proof.
+pub(crate) fn enable_native_writer_allocation_policy(root: &Path) -> Result<()> {
+    let lock = feature_flags_lock(root);
+    let _guard = lock.lock();
+    let mut metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    if !metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_ENROLLMENT_FEATURE_FLAG)
+    {
+        return Err(BicDbError::InvalidConfig(
+            "allocation policy needs enforced native writer".into(),
+        ));
+    }
+    metadata
+        .feature_flags
+        .insert(NATIVE_WRITER_ALLOCATION_POLICY_FEATURE_FLAG.into());
+    persist_metadata(root, &metadata, true)
+}
+#[cfg(test)]
+pub(crate) fn test_reader_without_allocation_policy_feature(root: &Path) -> Result<()> {
+    let metadata = read_or_legacy_metadata(root)?;
+    let old = KNOWN_FEATURE_FLAGS
+        .iter()
+        .copied()
+        .filter(|f| *f != NATIVE_WRITER_ALLOCATION_POLICY_FEATURE_FLAG)
+        .collect::<Vec<_>>();
+    validate_supported_with_flags(&metadata, &old)
+}
+pub(crate) fn native_writer_allocation_policy_active(root: &Path) -> Result<bool> {
+    let metadata = read_or_legacy_metadata(root)?;
+    validate_supported(&metadata)?;
+    Ok(metadata
+        .feature_flags
+        .contains(NATIVE_WRITER_ALLOCATION_POLICY_FEATURE_FLAG))
 }
 
 /// Fresh factory only; existing roots cannot obtain bootstrap authority from it.

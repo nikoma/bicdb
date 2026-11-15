@@ -787,20 +787,29 @@ impl NativeInitialDataHost {
             }
             None => false,
         };
+        let current = self.initial.topology.try_read();
         let ranges = self
             .genesis
             .values()
-            .map(|proof| NativeInitialDataRangeStatus {
-                range_id: proof.range().id,
-                epoch: proof.range().epoch,
-                local_leader: proof.range().leader == self.initial.seed.spec.node_id,
-                leader_admission_observed: self.enrollment.as_ref().is_some_and(|owner| {
-                    owner
-                        .coordinator
-                        .initial_data_leader_admission_observed(proof.range())
-                }),
+            .map(|proof| {
+                let selected = current
+                    .as_ref()
+                    .and_then(|c| c.range_by_id(proof.range().id));
+                let descriptor = selected.unwrap_or(proof.range());
+                NativeInitialDataRangeStatus {
+                    range_id: descriptor.id,
+                    epoch: descriptor.epoch,
+                    local_leader: descriptor.leader == self.initial.seed.spec.node_id,
+                    leader_admission_observed: selected.is_some()
+                        && self.enrollment.as_ref().is_some_and(|owner| {
+                            owner
+                                .coordinator
+                                .initial_data_leader_admission_observed(descriptor)
+                        }),
+                }
             })
             .collect();
+        drop(current);
         Ok(NativeInitialDataStatus {
             receiver_listening: self.listener.is_some(),
             writer_policy_current,
@@ -1140,6 +1149,17 @@ fn network_address(
 }
 
 impl NativeMetadataControlHost {
+    pub(crate) fn observe_initial_data_allocation(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        self.data
+            .as_ref()
+            .and_then(|d| d.hot_recovery.as_ref())
+            .ok_or_else(|| invalid("allocation observation original maintenance owner absent"))?
+            .observe_allocation_epoch(range, parent)
+    }
     /// See `NativeInitialDataHost::refresh_data_policy`.
     pub(crate) fn refresh_initial_data_policy(&mut self, parent: &CancellationToken) -> Result<()> {
         self.data
@@ -1222,6 +1242,136 @@ impl NativeMetadataControlHost {
                 }
             }
         }
+        Ok(())
+    }
+    #[cfg(test)]
+    pub(crate) fn test_initial_allocation_inventory(&self) -> Result<serde_json::Value> {
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("allocation inventory original DATA absent"))?;
+        let db = data
+            .initial
+            .seed
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("allocation inventory actual DB busy"))?;
+        data.enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("allocation inventory original enrollment absent"))?
+            .guard
+            .test_allocation_physical_inventory(&db)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_initial_allocation_reader_barrier(&self) -> Result<()> {
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("allocation reader barrier original DATA absent"))?;
+        let db = data
+            .initial
+            .seed
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("allocation reader barrier actual DB busy"))?;
+        crate::format::test_reader_without_allocation_policy_feature(db.data_path())
+    }
+    #[cfg(test)]
+    pub(crate) fn test_initial_allocation_generic_recovery(
+        &self,
+        range: crate::RangeId,
+        parent: &CancellationToken,
+    ) -> Result<bool> {
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("allocation original DATA owner absent"))?;
+        let current = data
+            .initial
+            .topology
+            .try_read()
+            .and_then(|c| c.range_by_id(range).cloned())
+            .ok_or_else(|| invalid("allocation actual current selected range absent"))?;
+        data.enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("allocation original enrollment absent"))?
+            .coordinator
+            .recover_native_range_leadership_bounded(&current, parent)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_initial_allocation_native_point(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("allocation native point original DATA absent"))?;
+        let db = data
+            .initial
+            .seed
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("allocation native point actual DB busy"))?;
+        let point = db.current_native_range_source_lineage(range)?;
+        Ok(
+            serde_json::json!({"actual_range":point.native_write_range()?,"range_index":point.range_index(),
+            "history":point.logical_history_sha256(),"native_receipt":point.native_receipt_sha256(),
+            "same_open":db.incarnation_id(),"read_only_DATA_not_ready":true}),
+        )
+    }
+    #[cfg(test)]
+    pub(crate) fn test_initial_allocation_foreign_owner(
+        &self,
+        foreign: &Arc<crate::db::InstalledNativeWriterHostGuard>,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let data = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("allocation real initial DATA owner absent"))?;
+        let token = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        let coordinator = &data
+            .enrollment
+            .as_ref()
+            .ok_or_else(|| invalid("allocation real enrollment absent"))?
+            .coordinator;
+        let business = Uuid::now_v7();
+        let leader = data
+            .initial
+            .provider
+            .current_metadata_leader_hint(&token)?
+            .ok_or_else(|| invalid("allocation real metadata leader absent"))?;
+        let own = data.initial.transport.acquire_host_metadata_observation(
+            &leader,
+            business,
+            Duration::from_secs(5),
+            &token,
+        )?;
+        let point = ClusterDataNodeService::capture_actual_joint_metadata_point_waiting(
+            &data.initial.service,
+            &own,
+            business,
+            &token,
+        )?
+        .ok_or_else(|| invalid("allocation actual metadata point absent"))?;
+        let db = data
+            .initial
+            .seed
+            .database
+            .try_read()
+            .ok_or_else(|| invalid("allocation actual DB busy"))?;
+        // Prepare only: the real factory must refuse the OTHER actual guard
+        // before any allocation native publication method can be called.
+        ClusterDataNodeService::prepare_native_writer_allocation_refresh(
+            &data.initial.service,
+            &db,
+            coordinator,
+            foreign,
+            own,
+            business,
+            point,
+        )?;
         Ok(())
     }
     #[cfg(test)]

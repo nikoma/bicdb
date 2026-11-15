@@ -138,6 +138,11 @@ fn exercise_order(five: &mut Five, report: &mut Report, order: Order) -> Result<
             source.refresh_initial_data_registry(&five.lifetime)
         })?;
     }
+    for source in &five.sources {
+        report.call("cross_observe_actual_same_worker_allocation_epoch", || {
+            source.observe_initial_data_allocation(selected.id, &five.lifetime)
+        })?;
+    }
     let relocation = pending
         .relocations
         .values()

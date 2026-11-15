@@ -17,8 +17,10 @@ use std::collections::BTreeSet;
 use std::sync::OnceLock;
 use std::thread::JoinHandle;
 
+mod allocation_policy;
 mod replica_debt;
 mod request_wait;
+use allocation_policy::AllocationJob;
 #[cfg(test)]
 pub(crate) use replica_debt::NativeHotDebtScheduleHold;
 const MAX_JOBS: usize = 64;
@@ -67,6 +69,7 @@ struct Job {
 #[derive(Default)]
 struct State {
     jobs: BTreeMap<crate::RangeId, Job>,
+    allocation_jobs: BTreeMap<crate::RangeId, AllocationJob>,
     replica_debts: BTreeMap<crate::RangeId, replica_debt::ReplicaDebt>,
     cursor: usize,
 }
@@ -312,14 +315,11 @@ impl NativeHotRecoveryMaintenance {
         if !std::ptr::eq::<State>(&**state, self.state.data_ptr()) {
             return Err(invalid("hot DATA turn substituted actual retained State"));
         }
-        let ranges = self
-            .initial
-            .seed
-            .spec
-            .initial_ranges
-            .iter()
-            .filter(|r| r.leader == self.initial.seed.spec.node_id)
-            .collect::<Vec<_>>();
+        let actual_ranges = self.current_allocation_ranges(&**state, parent)?;
+        if self.continue_allocation(&mut **state, &actual_ranges, parent)? {
+            return Ok(());
+        }
+        let ranges = actual_ranges.iter().collect::<Vec<_>>();
         if ranges.is_empty() {
             return Ok(());
         }
@@ -379,7 +379,9 @@ impl NativeHotRecoveryMaintenance {
                     retired.diagnostic("converged_session_retired_for_new_actual_origin_pending"),
                 );
             }
-            if state.jobs.len() + state.replica_debts.len() >= MAX_JOBS {
+            if state.jobs.len() + state.replica_debts.len() + state.allocation_jobs.len()
+                >= MAX_JOBS
+            {
                 return Err(invalid("hot DATA retained job bound exhausted"));
             }
             let role = self.fresh_role(&range, Uuid::now_v7(), parent)?;

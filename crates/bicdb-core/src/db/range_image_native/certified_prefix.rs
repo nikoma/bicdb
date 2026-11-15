@@ -1032,6 +1032,7 @@ impl BicDb {
             .try_lock_for(NATIVE_COMMAND_JOURNAL_WAIT)
             .ok_or_else(|| invalid("native journal busy; retry before decision"))?;
         let lineage = self.current_native_range_source_lineage(intent.range().id)?;
+        self.require_allocation_origin_configuration(intent.range(), &lineage)?;
         intent.validate_native_base(&lineage)?;
         let (global_image_generation, range_image_generation) =
             self.native_range_image_generations(&lineage.birth, intent.range().id)?;
@@ -1379,6 +1380,51 @@ impl BicDb {
         })?
         .ok_or_else(|| invalid("native completion has no page store"))?;
         proof.require_live()?;
+        Ok(())
+    }
+}
+
+impl BicDb {
+    /// The allocation audit admits recovery but cannot itself authorize a new
+    /// native origin epoch. Even a generic recovered-epoch marker is insufficient.
+    pub(crate) fn require_allocation_origin_configuration(
+        &self,
+        range: &crate::RangeDescriptor,
+        lineage: &SourceRangeImageLineage,
+    ) -> Result<()> {
+        if lineage.current_database_incarnation != self.incarnation_id() {
+            return Err(invalid(
+                "allocation origin lineage belongs to another actual open",
+            ));
+        }
+        if format::native_writer_allocation_policy_active(self.data_path())?
+            && crate::distribution_native_read::canonical_range(lineage.native_write_range()?)
+                != crate::distribution_native_read::canonical_range(range)
+        {
+            return Err(invalid("allocation origin requires actual completed native serving configuration, not a policy/epoch marker"));
+        }
+        Ok(())
+    }
+}
+
+impl BicDb {
+    /// Necessary exact predecessor constraint over actual protected native
+    /// lineage. Physical capture may be older; effective serving epoch may not
+    /// be discarded or normalized to a policy descriptor.
+    pub(crate) fn require_native_allocation_predecessor(
+        &self,
+        lineage: &SourceRangeImageLineage,
+        before: &crate::RangeDescriptor,
+    ) -> Result<()> {
+        if lineage.current_database_incarnation != self.incarnation_id()
+            || crate::distribution_native_read::canonical_range(lineage.native_write_range()?)
+                != crate::distribution_native_read::canonical_range(before)
+            || lineage.current_joint_decision_sha256().is_some()
+        {
+            return Err(invalid(
+                "allocation actual native predecessor requires distinct transition proof",
+            ));
+        }
         Ok(())
     }
 }

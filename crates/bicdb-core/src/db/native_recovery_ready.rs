@@ -16,6 +16,8 @@ fn invalid(message: &str) -> BicDbError {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "tls-replication")]
+    mod allocation_predecessor_tests;
     use super::*;
     use crate::distribution_range_consensus::{
         native_origin_fixture, native_ready_test_command, seed_actual_origin, RangeWriteCommand,

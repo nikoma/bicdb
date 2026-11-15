@@ -61,7 +61,7 @@ fn canonical_range(range: &RangeDescriptor) -> RangeDescriptor {
     range
 }
 impl HostWriterPolicyFacts {
-    fn from_actual(
+    pub(crate) fn from_actual(
         topology: &ClusterTopology,
         native: &NativeRecoveryAdmission,
         schema: String,
@@ -165,6 +165,86 @@ impl HostWriterPolicyFacts {
         };
         crate::distribution_range_image::bounded_json(&facts, 256 * 1024)?;
         Ok(facts)
+    }
+    /// Pure same-domain comparison. Range changes still need the separate
+    /// actual allocation constructor and protected successor chain.
+    pub(crate) fn require_allocation_domain_successor(&self, previous: &Self) -> Result<()> {
+        let mut domain = self.clone();
+        domain.ranges = previous.ranges.clone();
+        domain.require_registry_successor(previous)
+    }
+    /// SAME leader/voters and exact committed learner-allocation predecessor.
+    /// This predicate validates historical DATA; it mints no current authority.
+    pub(crate) fn require_allocation_successor(
+        &self,
+        previous: &Self,
+        topology: &ClusterTopology,
+    ) -> Result<()> {
+        self.require_allocation_domain_successor(previous)?;
+        self.require_refresh_topology(topology)?;
+        if self.ranges.len() != previous.ranges.len() {
+            return Err(invalid("allocation successor changed range inventory"));
+        }
+        let mut changed = false;
+        for (id, before) in &previous.ranges {
+            let after = self
+                .ranges
+                .get(id)
+                .ok_or_else(|| invalid("allocation original range disappeared"))?;
+            if after == before {
+                continue;
+            }
+            changed = true;
+            let current = topology
+                .range_by_id(*id)
+                .ok_or_else(|| invalid("allocation current range absent"))?;
+            let plan = topology
+                .active_relocation_for_range(*id)
+                .ok_or_else(|| invalid("allocation exact committed plan absent"))?;
+            let session = plan
+                .handoff_session
+                .as_ref()
+                .ok_or_else(|| invalid("allocation exact committed handoff session absent"))?;
+            if session.session_id.is_nil() || session.nonce.is_nil() {
+                return Err(invalid(
+                    "allocation original committed session/nonce invalid",
+                ));
+            }
+            let mut same = after.clone();
+            same.epoch = before.epoch;
+            if same != *before
+                || before.epoch.checked_add(1) != Some(after.epoch)
+                || plan.expected_epoch != before.epoch
+                || plan.learner_epoch != after.epoch
+                || current.replicas.len() != before.replicas.len() + 1
+                || !matches!(
+                    plan.phase,
+                    crate::distribution::RelocationPhase::LearnerAllocated
+                        | crate::distribution::RelocationPhase::SnapshotCopying
+                        | crate::distribution::RelocationPhase::CatchingUp
+                        | crate::distribution::RelocationPhase::ReadyToPromote
+                )
+                || current
+                    .replicas
+                    .iter()
+                    .filter(|r| {
+                        r.id == plan.target_replica_id
+                            && r.node_id == plan.target
+                            && r.role == RangeReplicaRole::Learner
+                    })
+                    .count()
+                    != 1
+                || canonical_range(current) != *after
+            {
+                return Err(invalid(
+                    "allocation successor is not exact unchanged-voter/leader learner predecessor",
+                ));
+            }
+        }
+        if !changed {
+            return Err(invalid("allocation successor has no actual epoch change"));
+        }
+        Ok(())
     }
     /// Additions only, with ALL original and previously added identities and
     /// the original DATA policy unchanged. Neither facts object mints a grant.
@@ -390,6 +470,10 @@ impl SealedHostWriterEnrollment {
     ) -> Result<serde_json::Value> {
         self.metadata
             .joint_writer_domain_audit(self.business, decision)
+    }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn allocation_policy_audit(&self) -> Result<serde_json::Value> {
+        self.metadata.allocation_writer_policy_audit(self.business)
     }
     pub(crate) fn stable_registry_audit(&self) -> Result<serde_json::Value> {
         let topology = self.metadata.committed_topology(self.business)?;

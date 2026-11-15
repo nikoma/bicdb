@@ -1,5 +1,6 @@
 //! Public metadata-only owner. Configuration DTOs never become birth/vote/data
 //! proofs; every action consumes the existing actual native producer.
+mod allocation_policy;
 use super::*;
 use crate::{ClusterNetworkTransportConfig, DistributionConfig, MetadataConsensusStatus};
 use serde::{Deserialize, Serialize};

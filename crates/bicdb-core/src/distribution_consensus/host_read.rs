@@ -300,6 +300,30 @@ impl HostMetadataReadObservation {
         self.require_live_request(business)?;
         Ok(serde_json::from_slice(&encoded)?)
     }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn allocation_writer_policy_audit(
+        &self,
+        business: Uuid,
+    ) -> Result<serde_json::Value> {
+        self.require_live_request(business)?;
+        let evidence = &self.response.evidence;
+        let identities = |voters: &[MetadataReadVoterProof]| {
+            voters
+                .iter()
+                .map(|v| (v.node_id.clone(), v.clone()))
+                .collect::<BTreeMap<_, _>>()
+        };
+        if identities(&evidence.old_voters) != identities(&evidence.new_voters)
+            || evidence.joint_configuration_candidate.is_some()
+        {
+            return Err(metadata_error(
+                "allocation writer policy waits for finalized metadata membership/proposal",
+            ));
+        }
+        let encoded = crate::distribution_range_image::bounded_json(&self.response, 256 * 1024)?;
+        self.require_live_request(business)?;
+        Ok(serde_json::from_slice(&encoded)?)
+    }
     pub(crate) fn stable_writer_registry_audit(&self, business: Uuid) -> Result<serde_json::Value> {
         self.require_live_request(business)?;
         let evidence = &self.response.evidence;

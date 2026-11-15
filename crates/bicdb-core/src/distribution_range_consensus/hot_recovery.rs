@@ -272,6 +272,124 @@ impl RangeWriteCoordinator<TcpClusterRelocationTransport> {
         }
         Ok(())
     }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn publish_allocation_native_recovery(
+        self: &Arc<Self>,
+        runtime: &Arc<RangeRecoveryRuntime>,
+        host: &Arc<InstalledNativeWriterHostGuard>,
+        held: &NativeHotRangeReservation<'_>,
+        role: &RecoveryRoleAdmission,
+        scope: &RecoveryFenceScope,
+        parent: &CancellationToken,
+    ) -> Result<()> {
+        let token = parent.child_with_deadline(role.deadline());
+        token.check()?;
+        scope.require_role(role)?;
+        self.require_hot_reservation(held, role)?;
+        runtime.require_point_read_service(&self.local_service, &self.local_node_id)?;
+        let remaining = || -> Result<Duration> {
+            token.check()?;
+            token
+                .deadline()
+                .and_then(|d| d.checked_duration_since(Instant::now()))
+                .filter(|d| !d.is_zero())
+                .map(|d| d.min(Duration::from_secs(5)))
+                .ok_or(BicDbError::QueryTimedOut)
+        };
+        let metadata_leader = runtime
+            .event_metadata_leader_hint(&token)?
+            .ok_or_else(|| range_write_error("hot recovery current metadata leader unknown"))?;
+        let business = Uuid::now_v7();
+        let first = self.transport.acquire_metadata_read_observation(
+            &metadata_leader,
+            business,
+            scope.range_id,
+            scope.range_epoch,
+            remaining()?,
+            &token,
+        )?;
+        self.require_hot_reservation(held, role)?;
+        let candidate =
+            runtime.acquire_native_read_candidate(first, business, Uuid::now_v7(), &token)?;
+        self.require_hot_reservation(held, role)?;
+        let collected = {
+            let service = loop {
+                token.check()?;
+                if let Some(s) = self.local_service.try_lock_for(Duration::from_millis(5)) {
+                    break s;
+                }
+            };
+            let db = service.database();
+            let db = db.try_read().ok_or_else(|| {
+                range_write_error("hot recovery DB busy validating original writer")
+            })?;
+            host.require_for_coordinator(&db, role.current_range(), self)?;
+            drop(db);
+            candidate.into_allocation_recovered_open(&service, role, scope, &token)?
+        };
+        // No DB/service latch crosses either network boundary.
+        self.require_hot_reservation(held, role)?;
+        let final_metadata = self.transport.acquire_metadata_read_observation(
+            &metadata_leader,
+            business,
+            scope.range_id,
+            scope.range_epoch,
+            remaining()?,
+            &token,
+        )?;
+        self.require_hot_reservation(held, role)?;
+        let service = loop {
+            token.check()?;
+            if let Some(s) = self.local_service.try_lock_for(Duration::from_millis(5)) {
+                break s;
+            }
+        };
+        collected.require_current(&service, &final_metadata, business)?;
+        let db = service.database();
+        let db = db.try_read().ok_or_else(|| {
+            range_write_error("hot recovery DB busy before recovered publication")
+        })?;
+        host.require_for_coordinator(&db, role.current_range(), self)?;
+        self.require_hot_reservation(held, role)?;
+        let topology = self
+            .topology
+            .try_read()
+            .ok_or_else(|| range_write_error("hot recovery topology publication busy"))?;
+        if topology
+            .range_by_id(scope.range_id)
+            .is_none_or(|r| crate::distribution_native_read::canonical_range(r) != held.range)
+        {
+            return Err(range_write_error(
+                "hot repair original range changed before publication",
+            ));
+        }
+        token.check()?;
+        role.require_live_request()?;
+        self.recovered_epochs
+            .lock()
+            .insert(scope.range_id, scope.range_epoch);
+        // SAME reservation still excludes every APP ACK until this last check.
+        if let Err(error) = token
+            .check()
+            .and_then(|_| final_metadata.require_live_request(business))
+            .and_then(|_| role.require_live_request())
+            .and_then(|_| held.require_actual_store_slot())
+            // The routing read guard taken above is still held: prove the
+            // host against that same guard instead of locking it again.
+            .and_then(|_| {
+                host.require_for_coordinator_with_topology(
+                    &db,
+                    role.current_range(),
+                    self,
+                    &topology,
+                )
+            })
+        {
+            self.recovered_epochs.lock().remove(&scope.range_id);
+            return Err(error);
+        }
+        Ok(())
+    }
 }
 #[cfg(test)]
 impl RangeWriteCoordinator<TcpClusterRelocationTransport> {

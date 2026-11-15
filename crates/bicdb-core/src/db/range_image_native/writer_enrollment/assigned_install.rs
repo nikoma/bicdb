@@ -526,6 +526,16 @@ impl NativeAssignedWriterInstallAttempt {
                     coordinator: Arc::downgrade(&authority),
                     registry_extension: parking_lot::RwLock::new(None),
                     registry_publication_pending: std::sync::atomic::AtomicBool::new(false),
+                    #[cfg(feature = "tls-replication")]
+                    allocation_attempt: parking_lot::Mutex::new(None),
+                    #[cfg(all(test, feature = "tls-replication"))]
+                    allocation_fault: std::sync::atomic::AtomicU8::new(0),
+                    #[cfg(all(test, feature = "tls-replication"))]
+                    allocation_cut: parking_lot::Mutex::new(None),
+                    #[cfg(all(test, feature = "tls-replication"))]
+                    allocation_recovery_hold: std::sync::atomic::AtomicBool::new(false),
+                    #[cfg(all(test, feature = "tls-replication"))]
+                    allocation_recovery_cut: std::sync::atomic::AtomicU64::new(0),
                     data_domains: parking_lot::RwLock::new(Default::default()),
                 });
                 self.publication = Publication::NativeReadBack {

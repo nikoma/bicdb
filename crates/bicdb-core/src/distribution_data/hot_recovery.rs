@@ -23,6 +23,24 @@ impl ClusterDataNodeService {
         parent.check()?;
         Ok(fact)
     }
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn observe_allocation_recovered_open(
+        &self,
+        role: &RecoveryRoleAdmission,
+        scope: &RecoveryFenceScope,
+        parent: &CancellationToken,
+    ) -> Result<NativeHotRecoveredOpen> {
+        parent.check()?;
+        let db = checked_database_read(&self.db, &self.storage_policy)?;
+        self.require_native_writer_host_for_range(&db, role.current_range())?;
+        let slot = self.range_writes.guard();
+        slot.require_live()?;
+        let fact = self
+            .range_writes
+            .observe_allocation_recovered_open(&db, role, scope, slot, parent)?;
+        parent.check()?;
+        Ok(fact)
+    }
     pub(crate) fn revalidate_hot_recovered_open(
         &self,
         fact: &NativeHotRecoveredOpen,

@@ -3861,6 +3861,7 @@ impl<Transport: RangeWriteTransport> RangeWriteCoordinator<Transport> {
                 incarnation,
             )?;
             let lineage = database.current_native_range_source_lineage(range.id)?;
+            database.require_allocation_origin_configuration(&range, &lineage)?;
             let plan =
                 NativeRangeCommandIntent::plan_source(&command, &range, &topology, &lineage)?;
             plan.validate_native_base(&lineage)?;

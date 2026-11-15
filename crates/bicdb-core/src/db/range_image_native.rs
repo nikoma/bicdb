@@ -741,6 +741,26 @@ impl SourceRangeImageLineage {
             None => Ok(&self.base.range),
         }
     }
+    /// Protected current Native-WAL serving record only. A metadata epoch or
+    /// sequence counter cannot construct this actual-lineage projection.
+    pub(crate) fn recovered_allocation_serving_range(
+        &self,
+        requested: &RangeDescriptor,
+    ) -> Option<&RangeDescriptor> {
+        let serving = self.serving.as_ref()?;
+        if !serving.binds_current_base(&self.base)
+            || self.base.range.epoch >= requested.epoch
+            || crate::distribution_native_read::canonical_range(serving.range())
+                != crate::distribution_native_read::canonical_range(requested)
+            || !matches!(
+                serving.scope.purpose,
+                crate::distribution_consensus::MetadataRecoveryRolePurpose::NormalRecovery
+            )
+        {
+            return None;
+        }
+        Some(serving.range())
+    }
     /// Physical voter credentials derived from the immutable descriptor,
     /// excluding unrelated metadata-only birth members. The birth map stays
     /// intact and no caller-selected member list can enter this projection.

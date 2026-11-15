@@ -5,12 +5,24 @@ use crate::distribution_consensus::HostMetadataReadAcquireResponse;
 use crate::distribution_data::NativeWriterRegistryRefresh;
 use std::sync::atomic::Ordering;
 
+#[cfg(feature = "tls-replication")]
+mod allocation;
+#[cfg(all(test, feature = "tls-replication"))]
+pub(super) use allocation::AllocationCut;
+#[cfg(feature = "tls-replication")]
+pub(super) use allocation::RetainedAllocationAttempt;
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+enum ExtensionPurpose {
+    AllocationEpoch,
+}
 const MAX_EXTENSIONS: u32 = 64;
 const MAX_EXTENSION_BYTES: usize = 256 * 1024;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct RegistryExtensionRecord {
     version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    purpose: Option<ExtensionPurpose>,
     sequence: u32,
     original_policy_sha256: String,
     registration_generation: Uuid,
@@ -36,7 +48,9 @@ impl RegistryExtensionRecord {
         )?)))
     }
     fn validate(&self, original: &NativeWriterPolicyRecord) -> Result<()> {
-        if self.version != 1
+        if !matches!(self.version, 1 | 2)
+            || (self.version == 1 && self.purpose.is_some())
+            || (self.version == 2 && self.purpose != Some(ExtensionPurpose::AllocationEpoch))
             || self.sequence == 0
             || self.sequence > MAX_EXTENSIONS
             || self.original_policy_sha256 != original.checksum_sha256
@@ -53,7 +67,12 @@ impl RegistryExtensionRecord {
         {
             return Err(invalid("damaged/orphan native writer registry extension"));
         }
-        self.facts.require_registry_successor(&original.facts)?;
+        if self.version == 1 {
+            self.facts.require_registry_successor(&original.facts)?;
+        } else {
+            self.facts
+                .require_allocation_domain_successor(&original.facts)?;
+        }
         let audit: HostMetadataReadAcquireResponse =
             serde_json::from_value(self.metadata_audit.clone())?;
         audit.validate(&audit.request)?;
@@ -81,14 +100,20 @@ impl RegistryExtensionRecord {
         }
         self.facts
             .require_refresh_topology(&audit.evidence.committed_topology)?;
+        if self.purpose.is_some() && audit.evidence.joint_configuration_candidate.is_some() {
+            return Err(invalid(
+                "allocation audit contains uncommitted metadata candidate",
+            ));
+        }
         if let Some(candidate) = &audit.evidence.joint_configuration_candidate {
             self.facts.require_refresh_topology(candidate)?;
             for range in candidate.ranges.values() {
                 self.facts.require_range(range)?;
-                if range
-                    .replicas
-                    .iter()
-                    .any(|replica| replica.role != crate::RangeReplicaRole::Voter)
+                if self.version == 1
+                    && range
+                        .replicas
+                        .iter()
+                        .any(|replica| replica.role != crate::RangeReplicaRole::Voter)
                 {
                     return Err(invalid(
                         "registry historical audit contains DATA learner transition",
@@ -106,6 +131,11 @@ impl RegistryExtensionRecord {
 /// Clone retains already-verified facts; no Deserialize/DTO constructor.
 #[derive(Clone, Debug)]
 pub(super) struct VerifiedRegistryExtension(RegistryExtensionRecord);
+impl VerifiedRegistryExtension {
+    pub(super) fn facts(&self) -> &HostWriterPolicyFacts {
+        &self.0.facts
+    }
+}
 fn current_key(generation: Uuid) -> String {
     format!("writer-enrollment/registry/{generation}/current")
 }
@@ -120,7 +150,7 @@ impl NativeWriterHostState {
                 "sequence":value.0.sequence,"native_audit_sha256":value.0.checksum_sha256,
                 "metadata_context_id":value.0.metadata_context_id,"metadata_term":value.0.metadata_term,
                 "metadata_read_index":value.0.metadata_read_index,
-                "metadata_voters":value.0.facts.metadata_voters})),
+                "metadata_voters":value.0.facts.metadata_voters,"effective_range_policy":value.0.facts.ranges})),
             "scope":"retained same-open verified audit DATA; not role or Ready"})
     }
     pub(super) fn require_registry_topology(
@@ -147,6 +177,14 @@ impl NativeWriterHostState {
             (None, None) => Ok(()),
             (Some(cached), Some(stored)) => {
                 stored.validate(&self.record)?;
+                if stored.version == 2 {
+                    if !format::native_writer_allocation_policy_active(database.data_path())? {
+                        return Err(invalid("allocation policy reader barrier absent"));
+                    }
+                    if self.load_registry_chain(database)?.as_ref() != Some(&stored) {
+                        return Err(invalid("allocation policy complete ancestry differs"));
+                    }
+                }
                 let archive: RegistryExtensionRecord = database
                     .read_native_range_image_record(&history_key(
                         self.record.generation,
@@ -183,6 +221,20 @@ impl NativeWriterHostState {
                 .read_native_range_image_record(&history_key(self.record.generation, sequence))?
                 .ok_or_else(|| invalid("native registry ancestry missing"))?;
             entry.validate(&self.record)?;
+            if entry.version == 2
+                && database
+                    .paged_records
+                    .as_ref()
+                    .ok_or_else(|| invalid("allocation audit actual native page store absent"))?
+                    .store()
+                    .transactions()
+                    .status(entry.native_page_xid)
+                    != bicdb_page::TxStatus::Committed
+            {
+                return Err(invalid(
+                    "allocation audit ancestry has no actual committed native XID",
+                ));
+            }
             if entry.sequence != sequence
                 || entry.predecessor_sha256 != previous_sha
                 || entry.metadata_term < previous_term
@@ -190,7 +242,16 @@ impl NativeWriterHostState {
             {
                 return Err(invalid("native registry audit ancestry changed"));
             }
-            entry.facts.require_registry_successor(&previous_facts)?;
+            if entry.purpose == Some(ExtensionPurpose::AllocationEpoch) {
+                let audit: HostMetadataReadAcquireResponse =
+                    serde_json::from_value(entry.metadata_audit.clone())?;
+                entry.facts.require_allocation_successor(
+                    &previous_facts,
+                    &audit.evidence.committed_topology,
+                )?;
+            } else {
+                entry.facts.require_registry_successor(&previous_facts)?;
+            }
             previous_sha = entry.checksum_sha256.clone();
             previous_facts = entry.facts.clone();
             previous_term = entry.metadata_term;
@@ -247,6 +308,10 @@ impl InstalledNativeWriterHostGuard {
         parent: &CancellationToken,
     ) -> Result<()> {
         parent.check()?;
+        #[cfg(feature = "tls-replication")]
+        if self.state.allocation_attempt.lock().is_some() {
+            return Err(invalid("allocation publication must resolve its SAME retained attempt before registry-only refresh"));
+        }
         let _gate = database
             .serializable_commit_admission
             .try_write()
@@ -301,6 +366,7 @@ impl InstalledNativeWriterHostGuard {
             }
             let mut record = RegistryExtensionRecord {
                 version: 1,
+                purpose: None,
                 sequence,
                 original_policy_sha256: self.state.record.checksum_sha256.clone(),
                 registration_generation: self.state.record.generation,

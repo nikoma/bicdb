@@ -255,6 +255,9 @@ impl BicDb {
         self.schema_compatibility_fingerprint()?;
         self.require_normal_native_range_mutation_allowed(command.range_id)?;
         let actual = self.current_native_range_source_lineage(command.range_id)?;
+        self.require_allocation_origin_configuration(intent.range(), &actual)?;
+        let actual_intent = intent.bind_recovered_allocation(&actual);
+        let intent = &actual_intent;
         intent.validate_native_configuration(&actual)?;
         if command.index <= actual.range_index() {
             return self.native_replica_materialization(&actual, intent.range(), Some(command));

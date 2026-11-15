@@ -122,3 +122,25 @@ which intentionally read historical artifacts retain their original bytes.
 The byte/source compatibility assertions in those tests do not execute or
 qualify a historical reader binary. See the [physical gate contract](design/standard-live-backup-physical-gate.md)
 and the [520 test-oracle correction](design/page-gated-profile-test-correction.md).
+
+### Live native allocation-policy audit (source-only candidate)
+
+The private first-allocation continuation adds the sticky local
+`native_writer_allocation_policy_v1` reader requirement before publishing a
+version2 `AllocationEpoch` writer audit. Version1 registry records keep their
+original strict layout and registry-only meaning. The new audit preserves the
+original registration, writer State, DB/Store and coordinator; it is not a
+portable lease or permission to reconstruct them after restart. Native
+CURRENT/archive/ancestry and the actual committed XID must match before the
+live verified cache can use the exact new descriptor.
+
+An attempted FORMAT flag or visible audit bytes do not establish Ready,
+successful fsync, native Serving, APP or Strong. Unknown native IO remains
+blocked; real closed native readiness, completion, activation and fresh
+quorums are separate gates. The controlled old-feature-set validator definition
+is not execution of an old binary. Backward-binary, mixed-artifact, restore and
+cold continuation qualification have not been run for this profile. The
+[implementation boundary](design/native-live-allocation-first-lane-source-unit.md)
+also records the unimplemented RegistryAfterAllocation/repeated-cohort and
+shared-history capacity gates; this profile does not establish scalable
+add-node delivery.

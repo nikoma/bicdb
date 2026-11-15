@@ -96,6 +96,8 @@ pub(crate) use native_joint_handoff::{
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use native_joint_handoff::{NativeRemoteReleaseObservation, NativeRemoteReleaseOwner};
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_writer::NativeWriterAllocationRefresh;
 pub(crate) use native_writer::NativeWriterRegistryRefresh;
 mod current_image_replacement;
 mod current_image_resume;

@@ -244,3 +244,120 @@ impl ClusterDataNodeService {
         })
     }
 }
+
+/// Distinct live allocation purpose. It preserves the ORIGINAL installed
+/// writer; this is not a registry refresh, Role, Ready or new host factory.
+#[cfg(feature = "tls-replication")]
+pub(crate) struct NativeWriterAllocationRefresh {
+    policy: SealedHostWriterEnrollment,
+    audit: serde_json::Value,
+    writer: Arc<NativeWriterHostState>,
+    service: Weak<Mutex<ClusterDataNodeService>>,
+    slot: super::RangeWriteServiceSlotGuard,
+    point: Arc<ActualNativeJointMetadataPoint>,
+}
+#[cfg(feature = "tls-replication")]
+impl NativeWriterAllocationRefresh {
+    pub(crate) fn policy(&self) -> &SealedHostWriterEnrollment {
+        &self.policy
+    }
+    pub(crate) fn audit(&self) -> &serde_json::Value {
+        &self.audit
+    }
+    pub(crate) fn point(&self) -> &ActualNativeJointMetadataPoint {
+        &self.point
+    }
+    pub(crate) fn require_memory(&self) -> Result<()> {
+        self.slot.require_live()?;
+        self.policy.require_live()?;
+        self.point.require_current_memory()
+    }
+    pub(crate) fn with_current<
+        T: crate::distribution_range_consensus::RangeWriteTransport + 'static,
+    >(
+        &self,
+        db: &BicDb,
+        coordinator: &Arc<crate::distribution_range_consensus::RangeWriteCoordinator<T>>,
+        guard: &crate::db::InstalledNativeWriterHostGuard,
+        publish: impl FnOnce() -> Result<()>,
+    ) -> Result<()> {
+        self.require_memory()?;
+        let actual = self
+            .service
+            .upgrade()
+            .ok_or_else(|| data_error("allocation original service ended"))?;
+        coordinator.require_registry_refresh_service(&actual)?;
+        let service = actual
+            .try_lock()
+            .ok_or_else(|| data_error("allocation original service busy"))?;
+        service.validate_native_writer_enrollment(db, &self.policy)?;
+        self.point
+            .require_native_store_point(db, &service.range_writes)?;
+        let writer = service.range_writes.native_writer_host_state()?;
+        if !Arc::ptr_eq(&writer, &self.writer)
+            || service.range_writes.native_writer_store_open_id() != self.slot.id()
+        {
+            return Err(data_error("allocation substituted actual writer/Store"));
+        }
+        guard.require_allocation_refresh_origin(db, coordinator, &writer)?;
+        self.require_memory()?;
+        publish()
+    }
+}
+#[cfg(feature = "tls-replication")]
+impl ClusterDataNodeService {
+    /// The point was captured against the SAME OWN outside all DB/service
+    /// guards. Only this actual producer can construct the borrowed purpose.
+    pub(crate) fn prepare_native_writer_allocation_refresh<
+        T: crate::distribution_range_consensus::RangeWriteTransport + 'static,
+    >(
+        actual: &Arc<Mutex<Self>>,
+        db: &BicDb,
+        coordinator: &Arc<crate::distribution_range_consensus::RangeWriteCoordinator<T>>,
+        guard: &crate::db::InstalledNativeWriterHostGuard,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        point: Arc<ActualNativeJointMetadataPoint>,
+    ) -> Result<NativeWriterAllocationRefresh> {
+        own.require_live_request(business)?;
+        point.require_request(&own, business)?;
+        coordinator.require_registry_refresh_service(actual)?;
+        let service = actual
+            .try_lock()
+            .ok_or_else(|| data_error("allocation actual service busy"))?;
+        let writer = service.range_writes.native_writer_host_state()?;
+        guard.require_allocation_refresh_origin(db, coordinator, &writer)?;
+        point.require_native_store_point(db, &service.range_writes)?;
+        let slot = service.native_replica_listener_store_open_guard();
+        // Reject unsupported changed-voter/epoch domains BEFORE the existing
+        // enrollment helper can enter any catalogue sync/IO.
+        let topology = own.committed_topology(business)?;
+        let native = db.native_recovery_admission(
+            &topology.cluster_id,
+            topology
+                .range_image_bootstrap_id
+                .ok_or_else(|| data_error("allocation bootstrap absent"))?,
+            own.requester_node_id(),
+            own.requester_incarnation(),
+        )?;
+        let preview = crate::distribution_native_writer::HostWriterPolicyFacts::from_actual(
+            topology,
+            &native,
+            db.schema_compatibility_fingerprint()?.sha256,
+            own.restore_activation(business)?.cloned(),
+        )?;
+        guard.require_allocation_candidate(&preview, topology)?;
+        let policy = service.prepare_native_host_writer_enrollment(db, own, business)?;
+        let audit = policy.allocation_policy_audit()?;
+        let result = NativeWriterAllocationRefresh {
+            policy,
+            audit,
+            writer,
+            service: Arc::downgrade(actual),
+            slot,
+            point,
+        };
+        result.require_memory()?;
+        Ok(result)
+    }
+}

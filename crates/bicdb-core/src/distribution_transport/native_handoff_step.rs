@@ -252,6 +252,30 @@ impl TcpClusterRelocationTransport {
         self.request_native_joint_bridge_step(recipient, data, request, own, parent)
     }
 
+    /// Coordinator -> NEW member holding its own confirmed bridge. The member
+    /// persists its own catalogue activation after collecting, itself, fresh
+    /// OPEN observations of every other NEW member before and after its
+    /// durable write. The frame reports the member's own activation checksum
+    /// once the member confirmed it.
+    pub(crate) fn request_native_joint_bridge_open(
+        &self,
+        recipient: &ClusterNodeId,
+        data: &NativeJointDecisionData,
+        request: &NativeJointHandoffStepRequestV1,
+        own: &HostMetadataReadObservation,
+        parent: &CancellationToken,
+    ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
+        if !matches!(
+            &request.operation,
+            NativeJointHandoffStepOperationV1::BridgeOpen { .. }
+        ) {
+            return Err(transport_error(
+                "joint bridge open exchange carries another operation",
+            ));
+        }
+        self.request_native_joint_bridge_step(recipient, data, request, own, parent)
+    }
+
     /// Coordinator or NEW member -> another NEW member. Read-only: the member
     /// re-proves its own retained state under its own fresh metadata.
     pub(crate) fn request_native_joint_bridge_phase_observation(

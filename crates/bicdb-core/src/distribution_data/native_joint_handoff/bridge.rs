@@ -748,6 +748,25 @@ impl ClusterDataNodeService {
         self.range_writes
             .arm_native_joint_activated_open(&database, receipt)
     }
+    /// The checksum of this service's actual protected catalogue activation
+    /// over `bridge`, read from the store; `None` when none exists. A durable
+    /// fact with no request lifetime; it grants nothing.
+    pub(crate) fn durable_native_joint_activation_sha256(
+        &self,
+        bridge: Arc<crate::db::NativeJointServingBridgeReceipt>,
+    ) -> Result<Option<String>> {
+        let database = checked_database_read(&self.db, &self.storage_policy)?;
+        self.require_native_catalog_database(&database)?;
+        if bridge.local_node_id() != &self.node_id {
+            return Err(data_error(
+                "protected joint activation belongs to another actual service",
+            ));
+        }
+        self.range_writes
+            .observe_native_joint_activation_fact(&database, bridge)?
+            .map(|fact| fact.activation_sha256())
+            .transpose()
+    }
     pub(crate) fn require_actual_native_joint_bridge(
         &self,
         receipt: &crate::db::NativeJointServingBridgeReceipt,

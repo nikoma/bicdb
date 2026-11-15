@@ -43,6 +43,20 @@ pub(super) struct NativeBridgeMemberStep {
     /// native publisher returned it and before any later check.
     bridge: Option<Arc<crate::db::NativeJointServingBridgeReceipt>>,
     bridge_confirmed: bool,
+    /// Same marker for this member's own catalogue activation.
+    activation_pending: bool,
+    #[allow(dead_code)] // continued by the release step
+    /// This member's own catalogue activation receipt, retained as soon as
+    /// the local activation returned it; historical once its phase ended.
+    activation:
+        Option<Arc<crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt>>,
+    activation_sha256: Option<String>,
+    activation_confirmed: bool,
+    #[allow(dead_code)] // continued by the release step
+    /// The original Registered receiver's release owner, retained under the
+    /// same live admission that activated; the later release step continues
+    /// from it. Always `None` on a surviving original member.
+    release_owner: Option<crate::distribution_native_host::NativeRegisteredRemoteJointReleaseOwner>,
 }
 impl Drop for NativeBridgeMemberStep {
     fn drop(&mut self) {
@@ -67,6 +81,15 @@ impl NativeBridgeMemberStep {
             "retained_bridge_sha256":self.bridge.as_ref().map(|receipt|receipt.checksum_sha256().to_owned()),
             "read_pin_released":custody.map(|c|c.test_read_pin_released()).transpose()?,
             "durable_bridge":custody.map(|c|c.test_durable_bridge_record()).transpose()?.flatten(),
+            "activation_pending":self.activation_pending,
+            "activation_confirmed":self.activation_confirmed,
+            "retained_activation_sha256":self.activation_sha256,
+            "retained_activation_bridge_sha256":self.activation.as_ref().map(|a|a.native_bridge_sha256().to_owned()),
+            "release_owner_retained":self.release_owner.is_some(),
+            "durable_activation_sha256":match (custody,&self.bridge) {
+                (Some(custody),Some(bridge)) => custody.durable_activation_sha256(bridge)?,
+                _ => None,
+            },
         }))
     }
     /// Infallible custody transfer immediately after the genuine producer.
@@ -147,6 +170,11 @@ pub(super) fn retained_prepare_step<'a>(
                 publishing: Arc::new(AtomicBool::new(false)),
                 bridge: None,
                 bridge_confirmed: false,
+                activation_pending: false,
+                activation: None,
+                activation_sha256: None,
+                activation_confirmed: false,
+                release_owner: None,
             },
         );
     }
@@ -313,18 +341,34 @@ pub(super) fn observe_bridge_phase(
     fresh: BridgeStepOwn,
     token: &CancellationToken,
 ) -> Result<(NativeJointHandoffStepOutcomeV1, (u64, u64, Uuid))> {
-    if kind != NativeJointBridgePhaseKindV1::Preparation {
-        // The bridge and activation receipts these kinds attest are retained
-        // by the publish/open steps; nothing here may stand in for them.
-        return Err(invalid(
-            "joint bridge phase observation of this kind has no retained member state yet",
-        ));
-    }
-    let custody = {
+    let (custody, bridge) = {
         let held = steps.hold()?;
-        held.get(&request.range_id)
+        let step = held.get(&request.range_id);
+        let custody = step
             .and_then(|step| step.custody().cloned())
-            .ok_or_else(|| invalid("joint bridge phase member retains no preparation"))?
+            .ok_or_else(|| invalid("joint bridge phase member retains no preparation"))?;
+        let bridge = match kind {
+            NativeJointBridgePhaseKindV1::Preparation => None,
+            // Only a bridge this member itself published AND confirmed is
+            // attested; an unconfirmed or absent one has nothing to report.
+            NativeJointBridgePhaseKindV1::Open => Some(
+                step.filter(|step| step.bridge_confirmed && !step.publication_pending)
+                    .and_then(|step| step.bridge.clone())
+                    .ok_or_else(|| {
+                        invalid(
+                            "joint bridge phase observation of this kind has no retained member state yet",
+                        )
+                    })?,
+            ),
+            // The release state is retained by a later step; nothing here
+            // may stand in for it.
+            NativeJointBridgePhaseKindV1::Release => {
+                return Err(invalid(
+                    "joint bridge phase observation of this kind has no retained member state yet",
+                ))
+            }
+        };
+        (custody, bridge)
     };
     // The NEW member set comes from the decision this member itself holds
     // natively, never from the request or from the peer.
@@ -341,8 +385,10 @@ pub(super) fn observe_bridge_phase(
         ));
     }
     let BridgeStepOwn { own, business, .. } = fresh;
-    let facts: NativeJointPreparationPhaseFacts =
-        custody.observe_fresh_preparation_phase(own, business, token)?;
+    let facts: NativeJointPreparationPhaseFacts = match &bridge {
+        None => custody.observe_fresh_preparation_phase(own, business, token)?,
+        Some(bridge) => custody.observe_fresh_open_phase(bridge, own, business, token)?,
+    };
     let remaining = facts
         .deadline
         .checked_duration_since(Instant::now())
@@ -353,14 +399,16 @@ pub(super) fn observe_bridge_phase(
         facts.metadata_read_index,
         facts.metadata_context_id,
     );
-    Ok((
-        prepared_outcome(
-            request.binding()?,
-            facts.retained,
-            Some((kind, remaining.as_millis().clamp(1, 5000) as u64)),
-        ),
-        anchor,
-    ))
+    let mut outcome = prepared_outcome(
+        request.binding()?,
+        facts.retained,
+        Some((kind, remaining.as_millis().clamp(1, 5000) as u64)),
+    );
+    if let Some((bridge_sha256, bridge_anchor)) = facts.bridge {
+        outcome.bridge_receipt_sha256 = Some(bridge_sha256);
+        outcome.bridge_anchor = Some(bridge_anchor);
+    }
+    Ok((outcome, anchor))
 }
 
 /// Clears the single-attempt claim when one publication attempt ends.
@@ -495,6 +543,174 @@ pub(super) fn publish_member_bridge(
     }
     token.check()?;
     Ok((published_outcome(&custody, &receipt)?, anchor))
+}
+
+/// This member persists its OWN catalogue activation over its own confirmed
+/// durable bridge. Same shape as `publish_member_bridge`: first window,
+/// post-quorum observation, the unchanged local activation (which recovers an
+/// exact existing one), receipt and release owner retained, then a second
+/// window that must report every other member unchanged before the reply
+/// reports anything.
+pub(super) fn open_member_bridge(
+    steps: &NativeBridgeMemberSteps,
+    provider: &MetadataReadProvider,
+    transport: &TcpClusterRelocationTransport,
+    request: &NativeJointHandoffStepRequestV1,
+    fresh: BridgeStepOwn,
+    registered: bool,
+    token: &CancellationToken,
+) -> Result<(NativeJointHandoffStepOutcomeV1, (u64, u64, Uuid))> {
+    let binding = request.binding()?;
+    let decision = request
+        .operation
+        .bridge_decision_sha256()
+        .ok_or_else(|| invalid("joint bridge step needs a committed decision identity"))?
+        .to_owned();
+    let opened_outcome = |custody: &NativeJointPreparationCustody,
+                          bridge: &crate::db::NativeJointServingBridgeReceipt,
+                          activation_sha256: &str|
+     -> Result<NativeJointHandoffStepOutcomeV1> {
+        let mut outcome = prepared_outcome(binding.clone(), custody.retained_facts()?, None);
+        outcome.bridge_receipt_sha256 = Some(bridge.checksum_sha256().into());
+        outcome.activation_sha256 = Some(activation_sha256.to_owned());
+        Ok(outcome)
+    };
+    let anchor = fresh.anchor;
+    let (custody, bridge, confirmed, claim) = {
+        let mut held = steps.hold()?;
+        let step = held
+            .get_mut(&request.range_id)
+            .filter(|step| step.decision_sha256 == decision)
+            .ok_or_else(|| invalid("joint bridge open member retains no preparation"))?;
+        let custody = step
+            .custody()
+            .cloned()
+            .ok_or_else(|| invalid("joint bridge open member retains no preparation"))?;
+        // The decision this member itself protected, never request DATA.
+        request.require_decision(custody.data())?;
+        let bridge = step
+            .bridge
+            .clone()
+            .filter(|_| step.bridge_confirmed && !step.publication_pending)
+            .ok_or_else(|| {
+                invalid("joint bridge open member holds no confirmed bridge publication")
+            })?;
+        if step.activation_confirmed && !step.activation_pending {
+            (custody, bridge, step.activation_sha256.clone(), None)
+        } else {
+            if step.publishing.swap(true, Ordering::AcqRel) {
+                return Err(invalid("joint bridge open member attempt already running"));
+            }
+            // Uncertain from here until a second window confirms.
+            step.activation_pending = true;
+            (
+                custody,
+                bridge,
+                None,
+                Some(PublishingClaim(step.publishing.clone())),
+            )
+        }
+    };
+    if let Some(activation_sha256) = confirmed {
+        // An identical retry: the SAME retained activation, re-read as this
+        // member's actual protected catalogue fact under its own lock.
+        if custody.durable_activation_sha256(&bridge)?.as_deref()
+            != Some(activation_sha256.as_str())
+        {
+            return Err(invalid(
+                "joint bridge open retained activation is absent or changed in the store",
+            ));
+        }
+        token.check()?;
+        return Ok((
+            opened_outcome(&custody, &bridge, &activation_sha256)?,
+            anchor,
+        ));
+    }
+    let _claim = claim;
+    let leader = provider
+        .current_metadata_leader_hint(token)?
+        .ok_or_else(|| invalid("joint bridge step current metadata leader unavailable"))?;
+    let BridgeStepOwn { own, business, .. } = fresh;
+    // Retained BEFORE the release owner, the second window or any later
+    // check can fail.
+    let mut retain = |activation: &Arc<
+        crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt,
+    >| {
+        if let Some(step) = steps
+            .hold_for_retention()
+            .get_mut(&request.range_id)
+            .filter(|step| step.decision_sha256 == decision)
+        {
+            step.activation = Some(activation.clone());
+        }
+    };
+    let (opened, release_owner) = custody.open_remote_activation(
+        &bridge,
+        transport,
+        &leader,
+        &own,
+        business,
+        registered,
+        token,
+        &mut retain,
+    )?;
+    {
+        let mut held = steps.hold_for_retention();
+        let step = held
+            .get_mut(&request.range_id)
+            .filter(|step| step.decision_sha256 == decision)
+            .ok_or_else(|| invalid("joint bridge open member custody ended"))?;
+        if step
+            .activation_sha256
+            .as_deref()
+            .is_some_and(|old| old != opened.activation_sha256())
+        {
+            return Err(invalid(
+                "joint bridge open changed this member's retained catalogue activation",
+            ));
+        }
+        step.activation = Some(opened.activation().clone());
+        step.activation_sha256 = Some(opened.activation_sha256().to_owned());
+        if let Some(owner) = release_owner {
+            step.release_owner = Some(owner);
+        }
+    }
+    let incomplete = || {
+        NativeJointHandoffStepOutcomeV1::bridge_progress(
+            binding.clone(),
+            Stage::BridgeActivation,
+            decision.clone(),
+        )
+    };
+    if bridge_remaining(token).map_or(true, |left| left < MIN_BRIDGE_SUBSTEP_BUDGET) {
+        return Ok((incomplete(), anchor));
+    }
+    if let Err(_error) =
+        custody.confirm_remote_open_second_window(&opened, &bridge, transport, &leader, token)
+    {
+        // Fail closed: the durable activation exists but is not reported.
+        #[cfg(test)]
+        eprintln!(
+            "NATIVE_BRIDGE_OPEN_UNCONFIRMED node={} error={_error}",
+            custody.local_node_id()
+        );
+        return Ok((incomplete(), anchor));
+    }
+    {
+        let mut held = steps.hold_for_retention();
+        let step = held
+            .get_mut(&request.range_id)
+            .filter(|step| step.decision_sha256 == decision)
+            .ok_or_else(|| invalid("joint bridge open member custody ended"))?;
+        step.activation_confirmed = true;
+        step.activation_pending = false;
+    }
+    token.check()?;
+    Ok((
+        opened_outcome(&custody, &bridge, opened.activation_sha256())?,
+        anchor,
+    ))
 }
 
 pub(super) fn bridge_reply(

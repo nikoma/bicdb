@@ -7,8 +7,8 @@ use crate::distribution_consensus::MetadataReadParticipant;
 use crate::distribution_metadata_read_provider::MetadataReadProvider;
 use crate::distribution_native_host::provisional_listener::registration::bridge_step::{
     acquire_bridge_step_own, bridge_remaining, bridge_reply, observe_bridge_phase,
-    publish_member_bridge, retained_prepare_step, BridgeStepOwn, NativeBridgeMemberSteps,
-    MIN_BRIDGE_SUBSTEP_BUDGET,
+    open_member_bridge, publish_member_bridge, retained_prepare_step, BridgeStepOwn,
+    NativeBridgeMemberSteps, MIN_BRIDGE_SUBSTEP_BUDGET,
 };
 use crate::distribution_native_host::provisional_listener::registration::NativeDataOwnerAdmission;
 use crate::distribution_range_handoff::{
@@ -87,6 +87,15 @@ impl NativeInitialDataAdmission {
                 &owners.transport,
                 request,
                 fresh,
+                &token,
+            )?,
+            StepOperation::BridgeOpen { .. } => open_member_bridge(
+                &steps,
+                &owners.provider,
+                &owners.transport,
+                request,
+                fresh,
+                false,
                 &token,
             )?,
             StepOperation::TargetInstall { .. } => unreachable!("refused above"),

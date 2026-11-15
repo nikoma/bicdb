@@ -5,8 +5,8 @@ use super::*;
 use crate::distribution_consensus::MetadataReadParticipant;
 use crate::distribution_data::NativeJointServingLease;
 use crate::distribution_native_host::provisional_listener::registration::bridge_step::{
-    acquire_bridge_step_own, bridge_reply, observe_bridge_phase, publish_member_bridge,
-    retained_prepare_step, BridgeStepOwn, NativeBridgeMemberSteps,
+    acquire_bridge_step_own, bridge_reply, observe_bridge_phase, open_member_bridge,
+    publish_member_bridge, retained_prepare_step, BridgeStepOwn, NativeBridgeMemberSteps,
 };
 use crate::distribution_range_handoff::{
     NativeJointHandoffStepOperationV1 as StepOperation, NativeJointHandoffStepOutcomeV1,
@@ -68,6 +68,17 @@ impl NativeRegisteredReplicaAdmission {
                 &backend.transport,
                 request,
                 fresh,
+                token,
+            )?,
+            // The original Registered receiver also retains its release
+            // owner under the same live admission that activated.
+            StepOperation::BridgeOpen { .. } => open_member_bridge(
+                &steps,
+                &backend.provider,
+                &backend.transport,
+                request,
+                fresh,
+                true,
                 token,
             )?,
             StepOperation::TargetInstall { .. } => {

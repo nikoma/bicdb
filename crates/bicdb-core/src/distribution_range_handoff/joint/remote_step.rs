@@ -39,6 +39,11 @@ pub(crate) enum NativeJointHandoffStepOperationV1 {
     /// NEW member over its own pinned transport, before and after its own
     /// durable write; the request carries no observation, quorum or phase.
     BridgePublish { decision_sha256: String },
+    /// A member holding its own confirmed bridge persists its own catalogue
+    /// activation. As for `BridgePublish`, the member itself collects fresh
+    /// OPEN observations of every other NEW member before and after its own
+    /// durable write; the request carries no observation, quorum or phase.
+    BridgeOpen { decision_sha256: String },
 }
 impl NativeJointHandoffStepOperationV1 {
     /// The committed decision a bridge operation is bound to; `None` for the
@@ -48,6 +53,7 @@ impl NativeJointHandoffStepOperationV1 {
             Self::TargetInstall { .. } => None,
             Self::BridgePrepare { decision_sha256 }
             | Self::BridgePublish { decision_sha256 }
+            | Self::BridgeOpen { decision_sha256 }
             | Self::BridgePhaseObserve {
                 decision_sha256, ..
             } => Some(decision_sha256),
@@ -169,6 +175,7 @@ impl NativeJointHandoffStepRequestV1 {
             }
             NativeJointHandoffStepOperationV1::BridgePrepare { decision_sha256 }
             | NativeJointHandoffStepOperationV1::BridgePublish { decision_sha256 }
+            | NativeJointHandoffStepOperationV1::BridgeOpen { decision_sha256 }
             | NativeJointHandoffStepOperationV1::BridgePhaseObserve {
                 decision_sha256, ..
             } => {
@@ -225,6 +232,7 @@ impl NativeJointHandoffStepRequestV1 {
             }
             NativeJointHandoffStepOperationV1::BridgePrepare { .. }
             | NativeJointHandoffStepOperationV1::BridgePublish { .. }
+            | NativeJointHandoffStepOperationV1::BridgeOpen { .. }
             | NativeJointHandoffStepOperationV1::BridgePhaseObserve { .. } => {
                 // A Pending plan names no decision. Bridge operations are
                 // bound only by `require_decision` to a committed decision.
@@ -301,6 +309,9 @@ pub(crate) enum NativeJointHandoffStepStageV1 {
     /// observation window did not confirm an unchanged NEW member set. The
     /// same request identity resumes it under a distinct fresh phase.
     BridgePublication,
+    /// The member's catalogue activation is not confirmed; same resumption
+    /// rule as `BridgePublication`.
+    BridgeActivation,
     Complete,
 }
 
@@ -345,6 +356,14 @@ pub(crate) struct NativeJointHandoffStepOutcomeV1 {
     /// only on a complete `BridgePublish` outcome.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bridge_receipt_sha256: Option<String>,
+    /// The post-quorum metadata anchor recorded in that durable bridge.
+    /// Present only on an OPEN phase observation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bridge_anchor: Option<(u64, u64, Uuid)>,
+    /// The recipient's own durable catalogue activation. Present only on a
+    /// complete `BridgeOpen` outcome.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation_sha256: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub phase_kind: Option<NativeJointBridgePhaseKindV1>,
     /// What was left of the recipient's own fresh metadata observation when
@@ -378,6 +397,8 @@ impl NativeJointHandoffStepOutcomeV1 {
             store_open_id: None,
             writer_identity_sha256: None,
             bridge_receipt_sha256: None,
+            bridge_anchor: None,
+            activation_sha256: None,
             phase_kind: None,
             window_remaining_ms: None,
         }
@@ -416,11 +437,30 @@ impl NativeJointHandoffStepOutcomeV1 {
                 self.decision_sha256.as_ref() == Some(decision_sha256)
                     && self.phase_kind.is_none()
                     && self.bridge_receipt_sha256.is_none()
-                    && self.stage != NativeJointHandoffStepStageV1::BridgePublication
+                    && self.activation_sha256.is_none()
+                    && !matches!(
+                        self.stage,
+                        NativeJointHandoffStepStageV1::BridgePublication
+                            | NativeJointHandoffStepStageV1::BridgeActivation
+                    )
+            }
+            NativeJointHandoffStepOperationV1::BridgeOpen { decision_sha256 } => {
+                self.decision_sha256.as_ref() == Some(decision_sha256)
+                    && self.phase_kind.is_none()
+                    && self.bridge_anchor.is_none()
+                    && self.bridge_receipt_sha256.is_some() == self.complete
+                    && self.activation_sha256.is_some() == self.complete
+                    && matches!(
+                        self.stage,
+                        NativeJointHandoffStepStageV1::BridgeActivation
+                            | NativeJointHandoffStepStageV1::Complete
+                    )
             }
             NativeJointHandoffStepOperationV1::BridgePublish { decision_sha256 } => {
                 self.decision_sha256.as_ref() == Some(decision_sha256)
                     && self.phase_kind.is_none()
+                    && self.bridge_anchor.is_none()
+                    && self.activation_sha256.is_none()
                     && self.bridge_receipt_sha256.is_some() == self.complete
                     && matches!(
                         self.stage,
@@ -434,7 +474,10 @@ impl NativeJointHandoffStepOutcomeV1 {
             } => {
                 self.decision_sha256.as_ref() == Some(decision_sha256)
                     && self.phase_kind == Some(*kind)
-                    && self.bridge_receipt_sha256.is_none()
+                    && self.activation_sha256.is_none()
+                    && self.bridge_receipt_sha256.is_some()
+                        == (*kind == NativeJointBridgePhaseKindV1::Open)
+                    && self.bridge_anchor.is_some() == self.bridge_receipt_sha256.is_some()
                     && self.complete
             }
         };
@@ -461,10 +504,20 @@ impl NativeJointHandoffStepOutcomeV1 {
                     NativeJointHandoffStepStageV1::BridgeWriterDomain
                         | NativeJointHandoffStepStageV1::BridgePreparation
                         | NativeJointHandoffStepStageV1::BridgePublication
+                        | NativeJointHandoffStepStageV1::BridgeActivation
                         | NativeJointHandoffStepStageV1::Complete
                 )
                 || fields.iter().any(|present| *present != complete)
                 || (self.bridge_receipt_sha256.is_some() && !complete)
+                || (self.bridge_anchor.is_some() && self.bridge_receipt_sha256.is_none())
+                || (self.activation_sha256.is_some() && self.bridge_receipt_sha256.is_none())
+                || self.bridge_anchor.is_some_and(|(term, index, context)| {
+                    term == 0 || index == 0 || context.is_nil()
+                })
+                || self
+                    .activation_sha256
+                    .as_deref()
+                    .is_some_and(|x| !is_digest(x))
                 || self
                     .bridge_receipt_sha256
                     .as_deref()
@@ -500,6 +553,8 @@ impl NativeJointHandoffStepOutcomeV1 {
         }
         if self.bridge_fields().iter().any(|present| *present)
             || self.bridge_receipt_sha256.is_some()
+            || self.bridge_anchor.is_some()
+            || self.activation_sha256.is_some()
             || self.phase_kind.is_some()
             || self.window_remaining_ms.is_some()
             || matches!(
@@ -507,6 +562,7 @@ impl NativeJointHandoffStepOutcomeV1 {
                 NativeJointHandoffStepStageV1::BridgeWriterDomain
                     | NativeJointHandoffStepStageV1::BridgePreparation
                     | NativeJointHandoffStepStageV1::BridgePublication
+                    | NativeJointHandoffStepStageV1::BridgeActivation
             )
         {
             return Err(invalid("joint handoff step outcome DATA is inconsistent"));

@@ -23,7 +23,7 @@ use crate::distribution_transport::{
 use std::time::{Duration, Instant};
 
 /// One whole remote phase, as the in-process phase round is bounded.
-const REMOTE_PHASE_BUDGET: Duration = Duration::from_secs(4);
+pub(super) const REMOTE_PHASE_BUDGET: Duration = Duration::from_secs(4);
 
 /// What one other NEW member reported about itself in one authenticated
 /// exchange: everything the in-process phase compares for that member.
@@ -38,11 +38,15 @@ pub(crate) struct NativeJointBridgeMemberIdentity {
     pub(crate) preparation_sha256: String,
     pub(crate) local_visibility_sequence: u64,
     pub(crate) writer_identity_sha256: String,
+    /// OPEN phase only: the member's own durable bridge receipt and the
+    /// post-quorum metadata anchor recorded in it.
+    pub(crate) bridge: Option<(String, (u64, u64, Uuid))>,
 }
 
-/// Every rule one counted PREPARATION frame must satisfy. The member is the
-/// peer the transport authenticated, never an argument or reply DATA.
-fn require_preparation_frame(
+/// Every rule one counted phase frame must satisfy. The member is the peer
+/// the transport authenticated, never an argument or reply DATA.
+fn require_phase_frame(
+    kind: NativeJointBridgePhaseKindV1,
     data: &NativeJointDecisionData,
     observer: &ClusterNodeId,
     node: &ClusterNodeId,
@@ -65,12 +69,18 @@ fn require_preparation_frame(
         || &reply.birth != frame.actual_peer_birth()
         || !matches!(
             &reply.request.operation,
-            NativeJointHandoffStepOperationV1::BridgePhaseObserve {
-                kind: NativeJointBridgePhaseKindV1::Preparation,
-                ..
-            }
+            NativeJointHandoffStepOperationV1::BridgePhaseObserve { kind: actual, .. }
+                if *actual == kind
         )
-        || outcome.phase_kind != Some(NativeJointBridgePhaseKindV1::Preparation)
+        || outcome.phase_kind != Some(kind)
+        || !matches!(
+            kind,
+            NativeJointBridgePhaseKindV1::Preparation | NativeJointBridgePhaseKindV1::Open
+        )
+        || (kind == NativeJointBridgePhaseKindV1::Open)
+            != (outcome.bridge_receipt_sha256.is_some() && outcome.bridge_anchor.is_some())
+        || (kind == NativeJointBridgePhaseKindV1::Preparation
+            && (outcome.bridge_receipt_sha256.is_some() || outcome.bridge_anchor.is_some()))
         || !outcome.complete
         || outcome.decision_sha256.as_deref() != Some(data.checksum_sha256())
     {
@@ -94,21 +104,27 @@ fn require_preparation_frame(
         preparation_sha256: outcome.preparation_sha256.clone().ok_or_else(missing)?,
         local_visibility_sequence: outcome.local_visibility_sequence.ok_or_else(missing)?,
         writer_identity_sha256: outcome.writer_identity_sha256.clone().ok_or_else(missing)?,
+        bridge: outcome
+            .bridge_receipt_sha256
+            .clone()
+            .zip(outcome.bridge_anchor),
     })
 }
 
-/// One bounded window of authenticated PREPARATION observations, one from
-/// every NEW member other than the observer. Constructed only by `collect`,
-/// which performs the exchanges itself.
+/// One bounded window of authenticated phase observations of one kind, one
+/// from every NEW member other than the observer. Constructed only by
+/// `collect`, which performs the exchanges itself.
 pub(super) struct RemotePreparationWindow {
-    observer: ClusterNodeId,
-    frames: BTreeMap<ClusterNodeId, AuthenticatedNativeJointBridgeStepFrame>,
-    identities: BTreeMap<ClusterNodeId, NativeJointBridgeMemberIdentity>,
+    pub(super) kind: NativeJointBridgePhaseKindV1,
+    pub(super) observer: ClusterNodeId,
+    pub(super) frames: BTreeMap<ClusterNodeId, AuthenticatedNativeJointBridgeStepFrame>,
+    pub(super) identities: BTreeMap<ClusterNodeId, NativeJointBridgeMemberIdentity>,
 }
 impl RemotePreparationWindow {
     /// `own` is the observer's fresh committed metadata every exchange of
     /// this window is bound to; every frame's window is at most its lifetime.
-    fn collect(
+    pub(super) fn collect(
+        kind: NativeJointBridgePhaseKindV1,
         data: &NativeJointDecisionData,
         client: &TcpClusterRelocationTransport,
         own: &crate::distribution_consensus::HostMetadataReadObservation,
@@ -124,18 +140,13 @@ impl RemotePreparationWindow {
                 data,
                 NativeJointHandoffStepOperationV1::BridgePhaseObserve {
                     decision_sha256: data.checksum_sha256().into(),
-                    kind: NativeJointBridgePhaseKindV1::Preparation,
+                    kind,
                 },
                 business,
                 budget_ms,
             )?;
             let frame = client.request_native_joint_bridge_phase_observation(
-                node,
-                data,
-                NativeJointBridgePhaseKindV1::Preparation,
-                &request,
-                own,
-                token,
+                node, data, kind, &request, own, token,
             )?;
             frame.require_live()?;
             // The counted member is the peer this exchange authenticated.
@@ -147,11 +158,12 @@ impl RemotePreparationWindow {
             }
             identities.insert(
                 actual.clone(),
-                require_preparation_frame(data, &observer, &actual, &frame)?,
+                require_phase_frame(kind, data, &observer, &actual, &frame)?,
             );
             frames.insert(actual, frame);
         }
         let window = Self {
+            kind,
             observer,
             frames,
             identities,
@@ -160,7 +172,7 @@ impl RemotePreparationWindow {
         Ok(window)
     }
     /// EVERY other NEW member exactly once, each frame unchanged and live.
-    fn require_complete(&self, data: &NativeJointDecisionData) -> Result<()> {
+    pub(super) fn require_complete(&self, data: &NativeJointDecisionData) -> Result<()> {
         if !data.new_members().contains_key(&self.observer)
             || self.frames.keys().ne(data
                 .new_members()
@@ -174,7 +186,7 @@ impl RemotePreparationWindow {
         }
         for (node, frame) in &self.frames {
             frame.require_live()?;
-            if require_preparation_frame(data, &self.observer, node, frame)?
+            if require_phase_frame(self.kind, data, &self.observer, node, frame)?
                 != self.identities[node]
             {
                 return Err(invalid("remote preparation window member identity changed"));
@@ -182,13 +194,13 @@ impl RemotePreparationWindow {
         }
         Ok(())
     }
-    fn require_live(&self) -> Result<()> {
+    pub(super) fn require_live(&self) -> Result<()> {
         for frame in self.frames.values() {
             frame.require_live()?;
         }
         Ok(())
     }
-    fn contexts(&self) -> std::collections::BTreeSet<Uuid> {
+    pub(super) fn contexts(&self) -> std::collections::BTreeSet<Uuid> {
         self.frames
             .values()
             .map(|frame| frame.metadata_anchor().2)
@@ -196,7 +208,7 @@ impl RemotePreparationWindow {
     }
 }
 
-fn remaining(token: &crate::CancellationToken) -> Result<Duration> {
+pub(super) fn remaining(token: &crate::CancellationToken) -> Result<Duration> {
     token.check()?;
     token
         .deadline()
@@ -224,9 +236,11 @@ impl RemoteActivationBacking {
         if let Some(custody) = &local.custody {
             custody.require_original_caller()?;
         }
-        if &self.window.observer != local.local_node_id() {
+        if &self.window.observer != local.local_node_id()
+            || self.window.kind != NativeJointBridgePhaseKindV1::Preparation
+        {
             return Err(invalid(
-                "remote preparation window was observed by another member",
+                "remote preparation window was observed by another member/phase",
             ));
         }
         self.window.require_live()
@@ -375,7 +389,7 @@ pub(crate) fn test_arm_bridge_second_window_fault(
         .push((member.clone(), decision_sha256.to_owned(), fault));
 }
 #[cfg(test)]
-fn test_take_second_window_fault(
+pub(super) fn test_take_second_window_fault(
     member: &ClusterNodeId,
     decision_sha256: &str,
 ) -> Option<NativeBridgeSecondWindowFault> {
@@ -469,8 +483,14 @@ impl NativeJointPreparationCustody {
         let phase = phase.child_with_deadline(local_phase.deadline());
         phase.check()?;
         // (2) Every other NEW member, each under its own lock and metadata.
-        let window =
-            RemotePreparationWindow::collect(data, client, collector, collector_business, &phase)?;
+        let window = RemotePreparationWindow::collect(
+            NativeJointBridgePhaseKindV1::Preparation,
+            data,
+            client,
+            collector,
+            collector_business,
+            &phase,
+        )?;
         // (3) Only THIS member's read pin. It is a slot of this database's
         // own mutation gate; no other member's pin gates this journal. The
         // release validates this member completely before and after.
@@ -587,7 +607,14 @@ impl NativeJointPreparationCustody {
                 "remote publication second window is not after the post-quorum observation",
             ));
         }
-        let window = RemotePreparationWindow::collect(data, client, &own, business, &phase)?;
+        let window = RemotePreparationWindow::collect(
+            NativeJointBridgePhaseKindV1::Preparation,
+            data,
+            client,
+            &own,
+            business,
+            &phase,
+        )?;
         #[allow(unused_mut)]
         let mut identities = window.identities.clone();
         #[cfg(test)]

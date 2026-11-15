@@ -163,6 +163,32 @@ impl NativeJointPreparationCustody {
         business: Uuid,
         parent: &crate::CancellationToken,
     ) -> Result<NativeJointPreparationPhaseFacts> {
+        self.observe_fresh_phase(None, metadata, business, parent)
+    }
+    /// The member-local half of one fresh OPEN phase over this member's own
+    /// durable bridge: the complete protected check the in-process open
+    /// phase performs for this member under its lock. Strictly read-only:
+    /// the store's own persistence uncertainty is NOT reconciled here (only
+    /// this member's own Open step does that), so an uncertain member
+    /// refuses to attest.
+    #[cfg(feature = "tls-replication")]
+    pub(crate) fn observe_fresh_open_phase(
+        self: &Arc<Self>,
+        bridge: &Arc<crate::db::NativeJointServingBridgeReceipt>,
+        metadata: crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        parent: &crate::CancellationToken,
+    ) -> Result<NativeJointPreparationPhaseFacts> {
+        self.observe_fresh_phase(Some(bridge), metadata, business, parent)
+    }
+    #[cfg(feature = "tls-replication")]
+    fn observe_fresh_phase(
+        self: &Arc<Self>,
+        bridge: Option<&Arc<crate::db::NativeJointServingBridgeReceipt>>,
+        metadata: crate::distribution_consensus::HostMetadataReadObservation,
+        business: Uuid,
+        parent: &crate::CancellationToken,
+    ) -> Result<NativeJointPreparationPhaseFacts> {
         // A fresh request may not detach from the ORIGINAL session ancestry.
         let request = self.actual.bound_preparation_request(parent);
         request.check()?;
@@ -198,9 +224,24 @@ impl NativeJointPreparationCustody {
             )?;
             // The complete protected CURRENT/archive/State/writer check the
             // in-process phase performs for this member under this lock.
-            let writer = self
-                .actual
-                .require_current_under_preparation_custody(&service, &fresh, self)?;
+            let writer = match bridge {
+                None => self
+                    .actual
+                    .require_current_under_preparation_custody(&service, &fresh, self)?,
+                Some(bridge) => {
+                    if bridge.data() != data || bridge.local_node_id() != self.local_node_id() {
+                        return Err(invalid(
+                            "fresh open phase bridge belongs to another decision/member",
+                        ));
+                    }
+                    self.actual.require_current_under_open_preparation_custody(
+                        &service,
+                        &fresh,
+                        bridge.clone(),
+                        self,
+                    )?
+                }
+            };
             if fresh.data() != data {
                 return Err(invalid(
                     "fresh preparation phase changed protected global decision",
@@ -218,6 +259,12 @@ impl NativeJointPreparationCustody {
                 metadata_read_index,
                 metadata_context_id,
                 deadline: fresh.deadline(),
+                bridge: bridge.map(|bridge| {
+                    (
+                        bridge.checksum_sha256().to_owned(),
+                        bridge.metadata_anchor(),
+                    )
+                }),
             }
         };
         request.check()?;
@@ -313,4 +360,7 @@ pub(crate) struct NativeJointPreparationPhaseFacts {
     pub(crate) metadata_read_index: u64,
     pub(crate) metadata_context_id: Uuid,
     pub(crate) deadline: Instant,
+    /// OPEN phase only: this member's own durable bridge receipt checksum
+    /// and the post-quorum metadata anchor recorded in it.
+    pub(crate) bridge: Option<(String, (u64, u64, Uuid))>,
 }

@@ -439,7 +439,10 @@ impl NativeRegisteredReplicaAdmission {
         };
         match step.stage {
             Stage::Discovering | Stage::Complete => unreachable!("handled by the caller"),
-            Stage::BridgeWriterDomain | Stage::BridgePreparation | Stage::BridgePublication => {
+            Stage::BridgeWriterDomain
+            | Stage::BridgePreparation
+            | Stage::BridgePublication
+            | Stage::BridgeActivation => {
                 return Err(invalid(
                     "joint handoff step target install has no bridge stage",
                 ))

@@ -3,7 +3,7 @@
 //! opaque observation; a decoded reply is never a local owner, quorum or grant.
 use super::*;
 use crate::distribution_range_handoff::{
-    NativeJointBridgePhaseKindV1, NativeJointDecisionData, NativeJointHandoffPlan,
+    NativeJointBridgeDecision, NativeJointBridgePhaseKindV1, NativeJointHandoffPlan,
     NativeJointHandoffStepOperationV1, NativeJointHandoffStepOutcomeV1,
     NativeJointHandoffStepReplyV1, NativeJointHandoffStepRequestV1,
 };
@@ -212,7 +212,7 @@ impl TcpClusterRelocationTransport {
     pub(crate) fn request_native_joint_bridge_prepare(
         &self,
         recipient: &ClusterNodeId,
-        data: &NativeJointDecisionData,
+        data: &dyn NativeJointBridgeDecision,
         request: &NativeJointHandoffStepRequestV1,
         own: &HostMetadataReadObservation,
         parent: &CancellationToken,
@@ -236,7 +236,7 @@ impl TcpClusterRelocationTransport {
     pub(crate) fn request_native_joint_bridge_publish(
         &self,
         recipient: &ClusterNodeId,
-        data: &NativeJointDecisionData,
+        data: &dyn NativeJointBridgeDecision,
         request: &NativeJointHandoffStepRequestV1,
         own: &HostMetadataReadObservation,
         parent: &CancellationToken,
@@ -260,7 +260,7 @@ impl TcpClusterRelocationTransport {
     pub(crate) fn request_native_joint_bridge_open(
         &self,
         recipient: &ClusterNodeId,
-        data: &NativeJointDecisionData,
+        data: &dyn NativeJointBridgeDecision,
         request: &NativeJointHandoffStepRequestV1,
         own: &HostMetadataReadObservation,
         parent: &CancellationToken,
@@ -281,7 +281,7 @@ impl TcpClusterRelocationTransport {
     pub(crate) fn request_native_joint_bridge_phase_observation(
         &self,
         recipient: &ClusterNodeId,
-        data: &NativeJointDecisionData,
+        data: &dyn NativeJointBridgeDecision,
         kind: NativeJointBridgePhaseKindV1,
         request: &NativeJointHandoffStepRequestV1,
         own: &HostMetadataReadObservation,
@@ -310,7 +310,7 @@ impl TcpClusterRelocationTransport {
     fn request_native_joint_bridge_step(
         &self,
         recipient: &ClusterNodeId,
-        data: &NativeJointDecisionData,
+        data: &dyn NativeJointBridgeDecision,
         request: &NativeJointHandoffStepRequestV1,
         own: &HostMetadataReadObservation,
         parent: &CancellationToken,

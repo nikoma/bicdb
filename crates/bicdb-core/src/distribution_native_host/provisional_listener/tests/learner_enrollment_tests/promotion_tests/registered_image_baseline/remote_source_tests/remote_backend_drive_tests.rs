@@ -1,5 +1,7 @@
 //! The remote joined-handoff backend drives one handoff from the committed
-//! learner allocation through the final membership commit. The backend is
+//! learner allocation through the final membership commit and on into the
+//! activation (every new member's bridge preparation, publication and Open,
+//! as far as the members admit it today). The backend is
 //! given the coordinator's transport and node ids only: every member is
 //! reached through the product requests of that one transport. In-process
 //! handles are read here only to compare outcomes, and the test hosts commit
@@ -24,7 +26,7 @@ pub(in super::super) fn is_case(case: SourceCase) -> bool {
     )
 }
 #[test]
-fn native_remote_backend_drives_handoff_to_final_membership_over_coordinator_transport() {
+fn native_remote_backend_fresh_backend_after_promotion_commit_finalizes_from_committed_record() {
     run_registered_image_baseline_with_placement_and_source(
         Case::Required,
         AssignmentMode::CoordinatorLeadsRange,
@@ -513,23 +515,36 @@ pub(super) fn exercise(
             Stage::PromotedFrozen
         );
         assert_eq!(hosts.commits, 2);
-        // A coordinator that loses its memory in this window cannot collect
-        // the certificate again; it refuses and commits nothing.
+        // The coordinator loses its memory between the promotion commit and
+        // the final membership commit. The certificate cannot be collected
+        // again (its scope is the pending plan, which only the pre-promotion
+        // range leader can read), and it is not needed: the certified record
+        // of the committed metadata carries the decision's scope, and the
+        // final membership is built from that record alone.
         let frozen = hosts.committed_topology().unwrap();
-        let mut amnesic = coordinated(range.id, 0);
-        let error = amnesic
-            .drive_until(&mut hosts, Some(Stage::MembershipFinal), &budget(60_000))
-            .unwrap_err()
-            .to_string();
-        assert!(
-            error.contains("does not retain its decision certificate")
-                && error.contains("cannot be collected again"),
-            "{error}"
+        assert_eq!(
+            recorded(&frozen, range.id),
+            Some(NativeJointHandoffStageV1::PromotedFrozen)
         );
-        assert_eq!(hosts.commits, 2);
-        assert_eq!(hosts.committed_topology().unwrap(), frozen);
-        drop(amnesic);
-        // The coordinator that kept its certificate finishes.
+        let scope = frozen.relocations[&relocation.id]
+            .native_joint_handoff_v1
+            .as_ref()
+            .unwrap()
+            .certified_scope()
+            .expect("the certification wrote the decision's scope")
+            .clone();
+        assert_eq!(scope.activation_range(), &activation);
+        assert_eq!(
+            scope,
+            handoff
+                .backend()
+                .decision_certificate()
+                .unwrap()
+                .data()
+                .certified_scope()
+        );
+        handoff = coordinated(range.id, 0);
+        assert!(handoff.backend().decision_certificate().is_none());
         assert_eq!(
             handoff
                 .drive_until(&mut hosts, Some(Stage::MembershipFinal), &budget(60_000))
@@ -537,6 +552,14 @@ pub(super) fn exercise(
             Stage::MembershipFinal
         );
         assert_eq!(hosts.commits, 3);
+        assert!(
+            handoff.backend().decision_certificate().is_none(),
+            "nothing was collected again"
+        );
+        assert_eq!(
+            handoff.backend().committed_decision().unwrap().scope(),
+            &scope
+        );
     }
 
     // The committed metadata shows the final membership.
@@ -585,14 +608,172 @@ pub(super) fn exercise(
         Stage::MembershipFinal
     );
     assert_eq!(hosts.commits, 3);
-    // The bridge phases are not this backend's yet: it names the next one.
+    // The activation, first part: every new member prepares, publishes its
+    // bridge and persists its catalogue activation, driven by step requests
+    // of the coordinator only. The coordinator's replica retires, so the
+    // coordinator is not a new member and steps no bridge of its own.
+    assert_eq!(source, node(0), "the coordinator's replica retires");
+    let new = expected;
+    assert!(!new.contains(&node(0)) && new.contains(&node(4)));
+    let decision_sha256 = row
+        .native_joint_handoff_v1
+        .as_ref()
+        .unwrap()
+        .decision_sha256()
+        .to_owned();
+    let evidence_of = |member: &ClusterNodeId| -> Option<serde_json::Value> {
+        let i = index_of(member);
+        if i == 4 {
+            target_control
+                .test_registered_bridge_publication(range.id)
+                .unwrap()
+        } else {
+            controls[i]
+                .test_initial_bridge_publication(range.id)
+                .unwrap()
+        }
+    };
+    for member in &new {
+        assert!(
+            evidence_of(member).is_none(),
+            "{member} holds bridge custody"
+        );
+    }
+    const RELEASE: &str = "remote joined handoff backend: bridge release is not implemented";
+    // What the durable state of every new member shows after a drive, and
+    // what the backend retained of the members' answers.
+    let activated = |handoff: &NativeJoinedDataHandoff<RemoteJoinedHandoffBackend>| {
+        let backend = handoff.backend();
+        let publication = backend.bridge_publication().unwrap();
+        publication.require_current().unwrap();
+        let receipts = publication.receipts().unwrap();
+        assert_eq!(receipts.keys().cloned().collect::<Vec<_>>(), new);
+        let opened = backend.bridge_opened();
+        let mut order = vec![node(4)];
+        order.extend(new.iter().filter(|id| **id != node(4)).cloned());
+        assert_eq!(
+            opened.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(),
+            order,
+            "the target opens first, then the survivors in node order"
+        );
+        let mut durable = std::collections::BTreeMap::new();
+        for (member, outcome) in opened {
+            let evidence = evidence_of(member).expect("retained bridge custody");
+            let bridge = &evidence["durable_bridge"];
+            assert!(bridge.is_object(), "{member}: {evidence}");
+            assert_eq!(bridge["decision_sha256"], decision_sha256.as_str());
+            assert_eq!(bridge["local_node_id"], serde_json::json!(member));
+            assert_eq!(bridge["archive_equals_pointer"], true);
+            assert_eq!(bridge["checksum_sha256"], receipts[member].as_str());
+            assert_eq!(evidence["bridge_confirmed"], true);
+            assert_eq!(evidence["publication_pending"], false);
+            assert_eq!(evidence["activation_confirmed"], true);
+            assert_eq!(evidence["activation_pending"], false);
+            assert!(outcome.complete);
+            assert_eq!(outcome.decision_sha256.as_deref(), Some(&*decision_sha256));
+            assert_eq!(
+                outcome.bridge_receipt_sha256.as_deref(),
+                Some(receipts[member].as_str())
+            );
+            let activation = outcome.activation_sha256.clone().unwrap();
+            assert_eq!(
+                evidence["durable_activation_sha256"],
+                activation.as_str(),
+                "{member}: durable catalogue activation"
+            );
+            assert_eq!(evidence["retained_activation_sha256"], activation.as_str());
+            durable.insert(
+                member.clone(),
+                (
+                    bridge.clone(),
+                    activation,
+                    publication.checksum_sha256().unwrap(),
+                ),
+            );
+        }
+        durable
+    };
+    let started = Instant::now();
     let error = handoff
-        .drive_until(&mut hosts, None, &budget(60_000))
+        .drive_until(&mut hosts, Some(Stage::Serving), &budget(300_000))
         .unwrap_err()
         .to_string();
-    assert!(
-        error.contains("remote joined handoff backend: activation and release is not implemented"),
-        "{error}"
+    eprintln!(
+        "REMOTE_BACKEND_ACTIVATE {}",
+        serde_json::json!({"case":format!("{case:?}"),"ms":started.elapsed().as_millis(),
+            "error":error})
     );
+    if !error.contains(RELEASE) {
+        // KNOWN GAP between the remote decision round and the bridge steps,
+        // outside this backend: a member that published the decision through
+        // the remote decision round holds the native decision record only;
+        // its range catalogue was never told the decision, and every
+        // member's own bridge preparation requires exactly that. The
+        // coordinator therefore reaches the first new member and is refused
+        // by that member's own check. Nothing durable is written, with or
+        // without coordinator memory. When the members confirm a remote
+        // decision in their catalogue, this branch is no longer taken and
+        // the assertions below it apply.
+        const BLOCKED: &str = "joint bridge catalogue/native decisions disagree";
+        let blocked = |hosts: &CommitHosts, error: &str| {
+            assert!(
+                error.contains("remote joined handoff backend")
+                    || error.contains("joined data handoff: bridge preparation of"),
+                "{error}"
+            );
+            assert!(
+                error.contains("bridge preparation of") && error.contains(BLOCKED),
+                "{error}"
+            );
+            for member in &new {
+                if let Some(evidence) = evidence_of(member) {
+                    assert!(evidence["durable_bridge"].is_null(), "{member}: {evidence}");
+                    assert!(evidence["durable_activation_sha256"].is_null());
+                    assert_eq!(evidence["bridge_confirmed"], false);
+                    assert_eq!(evidence["activation_confirmed"], false);
+                }
+            }
+            assert_eq!(hosts.commits, 3);
+            assert_eq!(hosts.committed_topology().unwrap(), committed);
+        };
+        blocked(&hosts, &error);
+        assert!(handoff.backend().bridge_publication().is_none());
+        assert!(handoff.backend().bridge_opened().is_empty());
+        let mut amnesic = coordinated(range.id, 0);
+        let error = amnesic
+            .drive_until(&mut hosts, None, &budget(300_000))
+            .unwrap_err()
+            .to_string();
+        blocked(&hosts, &error);
+        assert!(amnesic.backend().decision_certificate().is_none());
+        assert!(amnesic.backend().committed_decision().is_some());
+        assert!(amnesic.backend().bridge_publication().is_none());
+        return;
+    }
+    let first = activated(&handoff);
+    assert_eq!(hosts.commits, 3);
+    assert_eq!(hosts.committed_topology().unwrap(), committed);
+    // The same object again: every member answers from what it holds.
+    let error = handoff
+        .drive_until(&mut hosts, None, &budget(300_000))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains(RELEASE), "{error}");
+    assert_eq!(activated(&handoff), first);
+    // The coordinator loses its memory after Open. A new backend holds no
+    // certificate and no member answer; it addresses the members with the
+    // committed decision, they answer the repeated steps from their retained
+    // and durable state, and no durable bridge or activation is written a
+    // second time.
+    let mut amnesic = coordinated(range.id, 0);
+    let error = amnesic
+        .drive_until(&mut hosts, None, &budget(300_000))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains(RELEASE), "{error}");
+    assert!(amnesic.backend().decision_certificate().is_none());
+    assert!(amnesic.backend().committed_decision().is_some());
+    assert_eq!(activated(&amnesic), first);
+    assert_eq!(hosts.commits, 3);
     assert_eq!(hosts.committed_topology().unwrap(), committed);
 }

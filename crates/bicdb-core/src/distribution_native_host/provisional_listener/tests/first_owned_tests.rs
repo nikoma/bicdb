@@ -1492,8 +1492,10 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                     "Committed"
                 );
                 assert_eq!(
-                    before["native_states"][0]["state"]["final_image"]["actual_commit_returned"],
-                    true
+                    before["native_states"][0]["state"]["final_image"]["actual_commit_returned"]
+                        .as_u64(),
+                    Some(xid),
+                    "actual final-image commit return must match the protected committed XID"
                 );
                 assert_eq!(
                     before["native_states"][0]["state"]["final_image"]["state"],

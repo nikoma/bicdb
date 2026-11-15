@@ -42,7 +42,8 @@ pub(crate) use joint::{
     NativeJointBridgePhaseKindV1, NativeJointHandoffStepOperationV1,
     NativeJointHandoffStepOutcomeV1, NativeJointHandoffStepReplyV1,
     NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
-    NativeJointSourceRetirementDataV1,
+    NativeJointSourceRetirementDataV1, MAX_STEP_HOST_COMMAND_ERROR_BYTES,
+    MAX_STEP_WRITER_AUDIT_BYTES,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use joint::{

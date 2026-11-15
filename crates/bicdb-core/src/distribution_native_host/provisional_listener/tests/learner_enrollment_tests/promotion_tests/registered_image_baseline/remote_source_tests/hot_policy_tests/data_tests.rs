@@ -254,6 +254,69 @@ pub(super) fn exercise(
     acknowledged: &[serde_json::Value],
     output: &std::path::Path,
 ) {
+    exercise_with_serve(
+        &format!("{case:?}"),
+        matches!(case, SourceCase::TargetHotDataFollower),
+        control,
+        controls,
+        original,
+        services,
+        topology,
+        data,
+        acknowledged,
+        output,
+        &mut |control| {
+            let before_owner = control.test_registered_first_policy_evidence().unwrap();
+            let mut phase_ledger = Vec::new();
+            operation(
+                output,
+                &mut phase_ledger,
+                "actual_registered_first_custody_to_joined_socket",
+                || control.open_registered_joined_data(&budget(5000)),
+            )
+            .unwrap();
+            let adopted = control.test_registered_first_policy_evidence().unwrap();
+            assert_eq!(
+                before_owner, adopted,
+                "exact original attempt/guard/coordinator survived transfer"
+            );
+            let bound = control.joined_data_status().unwrap();
+            evidence(
+                &output.join("registered-hot-data-bound.json"),
+                &serde_json::json!({
+                "actual_status":bound,"before_owner":before_owner,"after_owner":adopted,
+                "actual_factory_initial_ranges":factory.spec.initial_ranges,"new_initial_owner":false,
+                "leader_ready_synthesized":false}),
+            )
+            .unwrap();
+            assert!(!bound.dispatcher_published);
+            operation(
+                output,
+                &mut phase_ledger,
+                "actual_registered_joined_recovery_and_guarded_dispatch",
+                || control.publish_joined_data(&budget(5000)),
+            )
+            .unwrap();
+        },
+    );
+}
+/// The client-visible acceptance around the target's serving transition.
+/// `serve` performs that transition: the in-process route calls the host
+/// directly, the step route sends `TargetServe` and runs the host loop call.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn exercise_with_serve(
+    label: &str,
+    follower: bool,
+    control: &mut NativeMetadataControlHost,
+    controls: &mut [NativeMetadataControlHost],
+    original: &crate::ClusterEventClient,
+    services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
+    topology: &ClusterTopology,
+    data: &NativeJointDecisionData,
+    acknowledged: &[serde_json::Value],
+    output: &std::path::Path,
+    serve: &mut dyn FnMut(&mut NativeMetadataControlHost),
+) {
     let mut ledger = Vec::new();
     let key = acknowledged[0]["key"].as_str().unwrap();
     let expected = &acknowledged[0]["value"];
@@ -275,39 +338,9 @@ pub(super) fn exercise(
     if let Ok(value) = before {
         assert_eq!(&value, expected, "no false absence before readiness");
     }
-    let before_owner = control.test_registered_first_policy_evidence().unwrap();
-    let mut phase_ledger = Vec::new();
-    operation(
-        output,
-        &mut phase_ledger,
-        "actual_registered_first_custody_to_joined_socket",
-        || control.open_registered_joined_data(&budget(5000)),
-    )
-    .unwrap();
-    let adopted = control.test_registered_first_policy_evidence().unwrap();
-    assert_eq!(
-        before_owner, adopted,
-        "exact original attempt/guard/coordinator survived transfer"
-    );
-    let bound = control.joined_data_status().unwrap();
-    evidence(
-        &output.join("registered-hot-data-bound.json"),
-        &serde_json::json!({
-        "actual_status":bound,"before_owner":before_owner,"after_owner":adopted,
-        "actual_factory_initial_ranges":factory.spec.initial_ranges,"new_initial_owner":false,
-        "leader_ready_synthesized":false}),
-    )
-    .unwrap();
-    assert!(!bound.dispatcher_published);
-    operation(
-        output,
-        &mut phase_ledger,
-        "actual_registered_joined_recovery_and_guarded_dispatch",
-        || control.publish_joined_data(&budget(5000)),
-    )
-    .unwrap();
+    serve(control);
     let published = control.joined_data_status().unwrap();
-    if matches!(case, SourceCase::TargetHotDataFollower) {
+    if follower {
         assert_ne!(data.activation_range().leader, node(4));
         assert_eq!(
             published.registered_range.as_ref().unwrap()["leader_recovered_prefix_observed"],
@@ -400,11 +433,15 @@ pub(super) fn exercise(
             "record_error":row.as_ref().err().map(ToString::to_string),"native_watermarks":point.as_ref().ok(),
             "watermark_error":point.as_ref().err().map(ToString::to_string)})
     }).collect::<Vec<_>>();
-    evidence(&output.join("registered-hot-data-result.json"),&serde_json::json!({
-        "case":format!("{case:?}"),"actual_joined_status":published,"acknowledged_source_operations":acknowledged,
+    evidence(
+        &output.join("registered-hot-data-result.json"),
+        &serde_json::json!({
+        "case":label,"actual_joined_status":published,"acknowledged_source_operations":acknowledged,
         "new_ack":{"key":next_key,"record_id":record_id,"value":next},"full_strong_value":read,
         "actual_physical_replicas":physical,"external_api_ledger":ledger,
         "ordinary_postgresql_sql_tested":false,"automatic_controller_tested":false,
         "in_process_functional_test":true,"independent_host_failure_tested":false,
-        "physical_scale_or_production_qualification":false})).unwrap();
+        "physical_scale_or_production_qualification":false}),
+    )
+    .unwrap();
 }

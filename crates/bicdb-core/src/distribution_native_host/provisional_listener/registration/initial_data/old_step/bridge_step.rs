@@ -7,9 +7,9 @@ use crate::distribution_consensus::MetadataReadParticipant;
 use crate::distribution_metadata_read_provider::MetadataReadProvider;
 use crate::distribution_native_host::provisional_listener::registration::bridge_step::{
     acquire_bridge_step_own, bridge_remaining, bridge_reply, observe_bridge_phase,
-    open_member_bridge, publish_member_bridge, release_member_bridge, retained_prepare_step,
-    retire_joint_source, retire_member_old_custody, BridgeStepOwn, NativeBridgeMemberSteps,
-    MIN_BRIDGE_SUBSTEP_BUDGET,
+    open_member_bridge, publish_member_bridge, publish_member_writer_policy, release_member_bridge,
+    retained_prepare_step, retire_joint_source, retire_member_old_custody, BridgeStepOwn,
+    NativeBridgeMemberSteps, MIN_BRIDGE_SUBSTEP_BUDGET,
 };
 use crate::distribution_native_host::provisional_listener::registration::NativeDataOwnerAdmission;
 use crate::distribution_range_handoff::{
@@ -75,9 +75,45 @@ impl NativeInitialDataAdmission {
             acquire_bridge_step_own(&owners.provider, &owners.transport, peer, request, &token)?;
         let local = owners.transport.local_metadata_read_participant();
         let birth = fresh.birth.clone();
+        let mut writer_audit = None;
         let (outcome, anchor) = match &request.operation {
-            StepOperation::BridgePhaseObserve { kind, .. } => {
-                observe_bridge_phase(&steps, peer, request, *kind, fresh, &token)?
+            StepOperation::BridgePhaseObserve { kind, .. } => observe_bridge_phase(
+                &steps,
+                peer,
+                request,
+                *kind,
+                fresh,
+                &mut writer_audit,
+                &token,
+            )?,
+            // A survivor keeps its writer State and socket: its own retained
+            // CLOSED transition publishes the Serving policy right here.
+            StepOperation::BridgeWriterPolicy { .. } => publish_member_writer_policy(
+                &steps,
+                &owners.provider,
+                &owners.transport,
+                request,
+                fresh,
+                &|admission| {
+                    self.publish_survivor_writer_policy(&owners, peer, request, admission, &token)
+                },
+                &|| {
+                    Ok(self
+                        .writer_data_domains
+                        .upgrade()
+                        .ok_or_else(|| {
+                            invalid("joint bridge step original DATA continuation ended")
+                        })?
+                        .try_lock()
+                        .ok_or_else(|| invalid("joint bridge step DATA continuation table busy"))?
+                        .serving_published(request.range_id))
+                },
+                &token,
+            )?,
+            StepOperation::TargetServe { .. } => {
+                return Err(invalid(
+                    "joint target serve requires the original Registered target",
+                ))
             }
             StepOperation::BridgePrepare { .. } => {
                 self.prepare_survivor_bridge(&owners, &steps, peer, request, fresh, &token)?
@@ -155,8 +191,48 @@ impl NativeInitialDataAdmission {
             birth,
             outcome,
             anchor,
+            writer_audit,
             &token,
         )
+    }
+
+    /// The same survivor-local publication the owning host runs in-process:
+    /// an own fresh committed read taken AFTER the all-released admission,
+    /// the writer DATA policy built from it, and the retained CLOSED
+    /// transition's unchanged Serving publication under that admission.
+    fn publish_survivor_writer_policy(
+        &self,
+        owners: &SurvivorBridgeOwners,
+        peer: &MetadataReadParticipant,
+        request: &NativeJointHandoffStepRequestV1,
+        admission: &crate::distribution_range_handoff::NativeJointServingPolicyAdmission,
+        token: &CancellationToken,
+    ) -> Result<()> {
+        // The decision this member itself protected, never request DATA.
+        request.require_decision(admission.data())?;
+        let domains = self
+            .writer_data_domains
+            .upgrade()
+            .ok_or_else(|| invalid("joint bridge step original DATA continuation ended"))?;
+        let mut domains = domains
+            .try_lock()
+            .ok_or_else(|| invalid("joint bridge step DATA continuation table busy"))?;
+        // No host service, DB, native journal or MStore guard spans the RPC.
+        let BridgeStepOwn { own, business, .. } =
+            acquire_bridge_step_own(&owners.provider, &owners.transport, peer, request, token)?;
+        owners
+            .transport
+            .install_topology(own.committed_topology(business)?.clone())?;
+        let policy = NativeWriterDataDomainPolicy::from_actual(
+            &owners.service,
+            &owners.metadata,
+            own,
+            business,
+            token,
+        )?;
+        domains.advance_serving(request.range_id, admission, &policy)
+        // No ordinary enrolled readQQ, recovered Ready or dispatcher/APP
+        // publication occurs in this necessary policy-only transition.
     }
 
     /// The same survivor-local sequence the owning host runs in-process:
@@ -441,6 +517,18 @@ impl NativeMetadataControlHost {
             .get(&range)
             .and_then(|step| step.custody())
             .map(|custody| custody.test_evidence()))
+    }
+    /// Memory evidence of this member's own writer policy step; grants nothing.
+    pub(crate) fn test_initial_bridge_writer_policy(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<serde_json::Value> {
+        Ok(self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("original INITIAL host absent"))?
+            .bridge_steps
+            .test_writer_policy_evidence(range))
     }
     /// Fixture custody transfer: the in-process donor seed's export source
     /// moves into this donor's own original registry.

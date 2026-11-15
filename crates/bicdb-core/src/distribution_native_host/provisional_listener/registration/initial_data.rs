@@ -72,8 +72,18 @@ pub(crate) struct NativeInitialDataAdmission {
     // changes who may run one bounded step, never what that step must prove.
     writer_data_domains: Weak<Mutex<super::writer_data_domain::NativeHostWriterDataDomains>>,
     bridge_steps: Weak<super::bridge_step::NativeBridgeMemberSteps>,
+    // Joined continuation of an original Registered receiver only: that
+    // receiver keeps serving its own bridge observations and host commands
+    // on this owner's socket. Empty on every INITIAL and generic Joined host.
+    registered_bridge: Weak<super::NativeRegisteredReplicaAdmission>,
 }
 impl NativeInitialDataAdmission {
+    /// The original Registered receiver whose step RPC this socket serves.
+    pub(crate) fn registered_bridge_receiver(
+        &self,
+    ) -> Option<Arc<super::NativeRegisteredReplicaAdmission>> {
+        self.registered_bridge.upgrade()
+    }
     /// Necessary original INITIAL process/slot/writer identity only. All
     /// metadata/native proof is independent; this memory check creates none.
     pub(crate) fn require_remote_new_original_memory(
@@ -142,6 +152,7 @@ impl NativeInitialDataAdmission {
         store_slot: crate::distribution_data::RangeWriteServiceSlotGuard,
         life: &Arc<AtomicBool>,
         published: Arc<AtomicBool>,
+        registered_bridge: Weak<super::NativeRegisteredReplicaAdmission>,
     ) -> Self {
         Self {
             service: Arc::downgrade(service),
@@ -163,6 +174,7 @@ impl NativeInitialDataAdmission {
             old_transport: Weak::new(),
             writer_data_domains: Weak::new(),
             bridge_steps: Weak::new(),
+            registered_bridge,
         }
     }
     pub(crate) fn require_live(&self) -> Result<()> {
@@ -459,6 +471,7 @@ impl NativeInitialDataHost {
                 old_transport: Arc::downgrade(&self.initial.transport),
                 writer_data_domains: Arc::downgrade(&self.writer_data_domains),
                 bridge_steps: Arc::downgrade(&self.bridge_steps),
+                registered_bridge: Weak::new(),
             }));
         }
         if self.hot_recovery.is_none() {

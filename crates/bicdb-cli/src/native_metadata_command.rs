@@ -874,6 +874,10 @@ pub fn run(command: Command) -> Result<()> {
                             error = Some(e.to_string());
                         }
                     }
+                    // Process-owned joint handoff host commands of this
+                    // member: at most one per tick, outcome retained for the
+                    // coordinator's repeated step.
+                    let _ = host.advance_joint_bridge_host_commands(&lifetime);
                     write(
                         &status_file,
                         &Reply {

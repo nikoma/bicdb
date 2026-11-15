@@ -129,11 +129,32 @@ impl NativeBridgeMemberStep {
         })
     }
 }
+/// This member's own writer DATA policy progress for one range. Kept beside
+/// the member step it continues; never a policy, quorum or serving grant.
+struct NativeBridgeWriterPolicyState {
+    decision_sha256: String,
+    /// Set BEFORE this member's first policy attempt and cleared only when a
+    /// second observation window confirmed it.
+    pending: bool,
+    confirmed: bool,
+}
 #[derive(Default)]
 pub(super) struct NativeBridgeMemberSteps {
     steps: Mutex<BTreeMap<crate::RangeId, NativeBridgeMemberStep>>,
+    /// A short latch: every holder performs a few memory operations and
+    /// never keeps it across network, store or engine work.
+    writer_policies: Mutex<BTreeMap<crate::RangeId, NativeBridgeWriterPolicyState>>,
 }
 impl NativeBridgeMemberSteps {
+    /// Memory evidence of this member's own writer policy step; DATA.
+    #[cfg(test)]
+    pub(super) fn test_writer_policy_evidence(&self, range: crate::RangeId) -> serde_json::Value {
+        match self.writer_policies.lock().get(&range) {
+            Some(state) => serde_json::json!({"decision_sha256":state.decision_sha256,
+                "policy_pending":state.pending,"policy_confirmed":state.confirmed}),
+            None => serde_json::Value::Null,
+        }
+    }
     pub(super) fn hold(
         &self,
     ) -> Result<parking_lot::MutexGuard<'_, BTreeMap<crate::RangeId, NativeBridgeMemberStep>>> {
@@ -390,6 +411,7 @@ pub(super) fn observe_bridge_phase(
     request: &NativeJointHandoffStepRequestV1,
     kind: NativeJointBridgePhaseKindV1,
     fresh: BridgeStepOwn,
+    writer_audit: &mut Option<serde_json::Value>,
     token: &CancellationToken,
 ) -> Result<(NativeJointHandoffStepOutcomeV1, (u64, u64, Uuid))> {
     enum Retained {
@@ -424,11 +446,13 @@ pub(super) fn observe_bridge_phase(
             }
             // Only a catalogue activation this member itself persisted AND
             // confirmed has a release continuation entry to attest.
-            NativeJointBridgePhaseKindV1::Release => Retained::Release(
-                step.filter(|step| step.activation_confirmed && !step.activation_pending)
-                    .and_then(|step| step.release.clone())
-                    .ok_or_else(nothing)?,
-            ),
+            NativeJointBridgePhaseKindV1::Release | NativeJointBridgePhaseKindV1::WriterAudit => {
+                Retained::Release(
+                    step.filter(|step| step.activation_confirmed && !step.activation_pending)
+                        .and_then(|step| step.release.clone())
+                        .ok_or_else(nothing)?,
+                )
+            }
         }
     };
     // The NEW member set comes from the decision this member itself holds
@@ -460,7 +484,20 @@ pub(super) fn observe_bridge_phase(
     let (custody, bridge) = match retained {
         Retained::Preparation(custody, bridge) => (custody, bridge),
         Retained::Release(release) => {
-            let facts = release.observe_fresh_release_phase(own, business, token)?;
+            let facts = if kind == NativeJointBridgePhaseKindV1::WriterAudit {
+                // This member's own audit of this very observation: DATA the
+                // observing member validates completely and never trusts.
+                release.observe_fresh_writer_audit_phase(own, business, token)?
+            } else {
+                release.observe_fresh_release_phase(own, business, token)?
+            };
+            *writer_audit = facts.writer_audit;
+            #[cfg(test)]
+            if let Some(substitute) = writer_audit.as_ref().and_then(|_| {
+                test_take_writer_audit_substitute(release.local_node_id(), &facts.activation_sha256)
+            }) {
+                *writer_audit = Some(substitute);
+            }
             let mut outcome = prepared_outcome(
                 request.binding()?,
                 facts.retained,
@@ -1108,6 +1145,7 @@ pub(super) fn bridge_reply(
     birth: crate::distribution::NativeStoreBirthV1,
     outcome: NativeJointHandoffStepOutcomeV1,
     anchor: (u64, u64, Uuid),
+    writer_audit: Option<serde_json::Value>,
     token: &CancellationToken,
 ) -> Result<NativeJointHandoffStepReplyV1> {
     let mut reply = NativeJointHandoffStepReplyV1 {
@@ -1119,10 +1157,387 @@ pub(super) fn bridge_reply(
         metadata_read_index: anchor.1,
         metadata_context_id: anchor.2,
         source_manifest: None,
+        writer_audit,
         checksum_sha256: String::new(),
     };
     reply.checksum_sha256 = reply.checksum()?;
     reply.require_request(request)?;
     token.check()?;
     Ok(reply)
+}
+
+#[cfg(test)]
+static TEST_WRITER_AUDIT_SUBSTITUTES: Mutex<Vec<(ClusterNodeId, String, serde_json::Value)>> =
+    Mutex::new(Vec::new());
+/// One-shot fault: the next WRITER AUDIT observation of `member` (released,
+/// holding `activation_sha256`) replies with `audit` instead of its own.
+#[cfg(test)]
+pub(crate) fn test_arm_writer_audit_substitute(
+    member: &ClusterNodeId,
+    activation_sha256: &str,
+    audit: serde_json::Value,
+) {
+    TEST_WRITER_AUDIT_SUBSTITUTES.lock().push((
+        member.clone(),
+        activation_sha256.to_owned(),
+        audit,
+    ));
+}
+#[cfg(test)]
+fn test_take_writer_audit_substitute(
+    member: &ClusterNodeId,
+    activation_sha256: &str,
+) -> Option<serde_json::Value> {
+    let mut faults = TEST_WRITER_AUDIT_SUBSTITUTES.lock();
+    let at = faults
+        .iter()
+        .position(|(node, activation, _)| node == member && activation == activation_sha256)?;
+    Some(faults.remove(at).2)
+}
+
+/// This member's confirmed release for `request`: its continuation entry and
+/// its armed generation. Memory custody; every use re-observes.
+pub(super) fn released_member_of(
+    steps: &NativeBridgeMemberSteps,
+    request: &NativeJointHandoffStepRequestV1,
+) -> Result<(Arc<NativeJointMemberRelease>, Uuid)> {
+    let decision = request
+        .operation
+        .bridge_decision_sha256()
+        .ok_or_else(|| invalid("joint bridge step needs a committed decision identity"))?;
+    let held = steps.hold()?;
+    let missing = || invalid("joint bridge member holds no confirmed release");
+    let step = held
+        .get(&request.range_id)
+        .filter(|step| {
+            step.decision_sha256 == decision && step.release_confirmed && !step.release_pending
+        })
+        .ok_or_else(missing)?;
+    let release = step.release.clone().ok_or_else(missing)?;
+    let generation = step.released_generation.ok_or_else(missing)?;
+    // The decision this member itself protected, never request DATA.
+    request.require_decision(release.data())?;
+    Ok((release, generation))
+}
+
+/// The complete outcome of a writer policy or target serve step.
+pub(super) fn policy_outcome(
+    binding: String,
+    release: &NativeJointMemberRelease,
+    generation: Uuid,
+    recovered: Option<u64>,
+) -> NativeJointHandoffStepOutcomeV1 {
+    let mut outcome = released_outcome(binding, release);
+    outcome.released = Some(true);
+    outcome.released_generation = Some(generation);
+    outcome.writer_policy_installed = Some(true);
+    outcome.target_recovered_ranges = recovered;
+    outcome
+}
+
+/// A surviving released member publishes its OWN writer DATA policy for the
+/// final membership.
+///
+/// Same shape as `release_member_bridge`: own pre-quorum release observation
+/// (released and armed), a first window of authenticated WRITER AUDIT
+/// observations of every other NEW member (each released, each audit
+/// validated as DATA), a distinct post-quorum observation, `publish` (the
+/// unchanged local policy publication, which reconciles an existing exact
+/// record instead of rewriting it), and a second window that must report
+/// every other member unchanged and this member still released before the
+/// reply reports anything. `published` re-reads this member's own retained
+/// publication for an identical retry.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn publish_member_writer_policy(
+    steps: &NativeBridgeMemberSteps,
+    provider: &MetadataReadProvider,
+    transport: &TcpClusterRelocationTransport,
+    request: &NativeJointHandoffStepRequestV1,
+    fresh: BridgeStepOwn,
+    publish: &dyn Fn(
+        &crate::distribution_range_handoff::NativeJointServingPolicyAdmission,
+    ) -> Result<()>,
+    published: &dyn Fn() -> Result<bool>,
+    token: &CancellationToken,
+) -> Result<(NativeJointHandoffStepOutcomeV1, (u64, u64, Uuid))> {
+    let binding = request.binding()?;
+    let anchor = fresh.anchor;
+    let (release, generation) = released_member_of(steps, request)?;
+    let decision = release.data().checksum_sha256().to_owned();
+    let (confirmed, claim) = {
+        let held = steps.hold()?;
+        let step = held
+            .get(&request.range_id)
+            .filter(|step| step.decision_sha256 == decision)
+            .ok_or_else(|| invalid("joint bridge writer policy member custody ended"))?;
+        let mut policies = steps.writer_policies.lock();
+        let state =
+            policies
+                .entry(request.range_id)
+                .or_insert_with(|| NativeBridgeWriterPolicyState {
+                    decision_sha256: decision.clone(),
+                    pending: false,
+                    confirmed: false,
+                });
+        if state.decision_sha256 != decision {
+            return Err(invalid(
+                "joint bridge writer policy retains another exact decision",
+            ));
+        }
+        if state.confirmed && !state.pending {
+            (true, None)
+        } else {
+            if step.publishing.swap(true, Ordering::AcqRel) {
+                return Err(invalid(
+                    "joint bridge writer policy member attempt already running",
+                ));
+            }
+            // Uncertain from here until a second window confirms.
+            state.pending = true;
+            (false, Some(PublishingClaim(step.publishing.clone())))
+        }
+    };
+    let BridgeStepOwn { own, business, .. } = fresh;
+    if confirmed {
+        // An identical retry: this member's actual armed generation and its
+        // retained verified publication, re-read under its own locks.
+        let facts = release.observe_fresh_release_phase(own, business, token)?;
+        if facts.released_generation != Some(generation) || !published()? {
+            return Err(invalid(
+                "joint bridge writer policy retained publication is absent or changed",
+            ));
+        }
+        token.check()?;
+        return Ok((policy_outcome(binding, &release, generation, None), anchor));
+    }
+    let _claim = claim;
+    let leader = provider
+        .current_metadata_leader_hint(token)?
+        .ok_or_else(|| invalid("joint bridge step current metadata leader unavailable"))?;
+    let (admission, observed) =
+        release.acquire_remote_writer_policy(transport, &leader, &own, business, token)?;
+    publish(&admission)?;
+    drop(admission);
+    let incomplete = || {
+        NativeJointHandoffStepOutcomeV1::bridge_progress(
+            binding.clone(),
+            Stage::BridgeWriterPolicy,
+            decision.clone(),
+        )
+    };
+    if bridge_remaining(token).map_or(true, |left| left < MIN_BRIDGE_SUBSTEP_BUDGET) {
+        return Ok((incomplete(), anchor));
+    }
+    // The second window compares every other member's identity, durable
+    // activation and armed generation with the first window and re-observes
+    // this member's own armed generation under its own lock.
+    match release.confirm_remote_release_second_window(&observed, transport, &leader, token) {
+        Ok(after) if after == generation && published()? => {}
+        _result => {
+            // Fail closed: the durable policy exists but is not reported.
+            #[cfg(test)]
+            eprintln!(
+                "NATIVE_BRIDGE_WRITER_POLICY_UNCONFIRMED node={} result={:?}",
+                release.local_node_id(),
+                _result.map_err(|error| error.to_string())
+            );
+            return Ok((incomplete(), anchor));
+        }
+    }
+    {
+        let mut policies = steps.writer_policies.lock();
+        let state = policies
+            .get_mut(&request.range_id)
+            .filter(|state| state.decision_sha256 == decision)
+            .ok_or_else(|| invalid("joint bridge writer policy member custody ended"))?;
+        state.confirmed = true;
+        state.pending = false;
+    }
+    token.check()?;
+    Ok((policy_outcome(binding, &release, generation, None), anchor))
+}
+
+/// One command the member's HOST thread performs: identity DATA only.
+#[derive(Clone)]
+pub(super) struct NativeBridgeHostCommand {
+    pub(super) request: NativeJointHandoffStepRequestV1,
+    pub(super) binding_sha256: String,
+    pub(super) decision_sha256: String,
+}
+impl NativeBridgeHostCommand {
+    pub(super) fn serves(&self) -> bool {
+        self.request.operation.target_serve()
+    }
+}
+#[derive(Default)]
+struct NativeBridgeHostCommandSlot {
+    /// At most one command; it stays here while the host thread runs it.
+    pending: Option<NativeBridgeHostCommand>,
+    /// The retained failure text of the last attempt of one binding.
+    failed: Option<(String, String)>,
+    /// Retained successful outcomes; nothing is evicted.
+    done: Vec<(NativeBridgeHostCommand, Option<u64>)>,
+}
+/// What the step receiver reports about a host command.
+pub(super) enum NativeBridgeHostCommandState {
+    /// The host thread retained this successful outcome.
+    Done(Option<u64>),
+    /// Recorded for the host thread; carries the previous attempt's failure.
+    Pending(Option<String>),
+}
+/// The command slot the step receiver shares with its owning host. The
+/// receiver only records identity DATA; the host thread performs the
+/// transition and retains its outcome here.
+#[derive(Default)]
+pub(super) struct NativeBridgeHostCommands {
+    slot: Mutex<NativeBridgeHostCommandSlot>,
+}
+impl NativeBridgeHostCommands {
+    /// Called by the step receiver only AFTER it authorised `request`.
+    pub(super) fn accept(
+        &self,
+        request: &NativeJointHandoffStepRequestV1,
+    ) -> Result<NativeBridgeHostCommandState> {
+        let binding_sha256 = request.binding()?;
+        let decision_sha256 = request
+            .operation
+            .bridge_decision_sha256()
+            .ok_or_else(|| invalid("joint bridge step needs a committed decision identity"))?
+            .to_owned();
+        let mut slot = self.slot.lock();
+        // One command at a time: while one is pending or running, any other
+        // command is refused, including a replay of a completed one.
+        if let Some(pending) = &slot.pending {
+            if pending.binding_sha256 != binding_sha256 {
+                return Err(invalid(
+                    "joint bridge host command refused: another command of this member is pending on its host thread",
+                ));
+            }
+            return Ok(NativeBridgeHostCommandState::Pending(None));
+        }
+        if let Some((_, recovered)) = slot
+            .done
+            .iter()
+            .find(|(command, _)| command.binding_sha256 == binding_sha256)
+        {
+            return Ok(NativeBridgeHostCommandState::Done(*recovered));
+        }
+        if slot.done.len() >= 8 {
+            return Err(invalid(
+                "joint bridge host command capacity; nothing is evicted",
+            ));
+        }
+        // A repeated step after a failed attempt arms the same command again
+        // and reports what that attempt retained.
+        let failure = slot
+            .failed
+            .take()
+            .filter(|(binding, _)| *binding == binding_sha256)
+            .map(|(_, text)| text);
+        slot.pending = Some(NativeBridgeHostCommand {
+            request: request.clone(),
+            binding_sha256,
+            decision_sha256,
+        });
+        Ok(NativeBridgeHostCommandState::Pending(failure))
+    }
+    /// Whether the host retained a successful writer policy of `decision`.
+    pub(super) fn writer_policy_done(&self, range: crate::RangeId, decision: &str) -> bool {
+        self.slot.lock().done.iter().any(|(command, _)| {
+            !command.serves()
+                && command.request.range_id == range
+                && command.decision_sha256 == decision
+        })
+    }
+    /// Host thread only: the pending command, which stays in the slot.
+    pub(super) fn pending(&self) -> Option<NativeBridgeHostCommand> {
+        self.slot.lock().pending.clone()
+    }
+    /// Host thread only: retain the outcome of the command it just ran.
+    pub(super) fn finish(
+        &self,
+        command: &NativeBridgeHostCommand,
+        result: std::result::Result<Option<u64>, String>,
+    ) {
+        let mut slot = self.slot.lock();
+        if slot
+            .pending
+            .as_ref()
+            .is_none_or(|pending| pending.binding_sha256 != command.binding_sha256)
+        {
+            return;
+        }
+        slot.pending = None;
+        match result {
+            Ok(recovered) => slot.done.push((command.clone(), recovered)),
+            Err(text) => {
+                let bound = crate::distribution_range_handoff::MAX_STEP_HOST_COMMAND_ERROR_BYTES;
+                let text = text.chars().take(bound / 4).collect::<String>();
+                slot.failed = Some((command.binding_sha256.clone(), text));
+            }
+        }
+    }
+    #[cfg(test)]
+    pub(super) fn test_evidence(&self) -> serde_json::Value {
+        let slot = self.slot.lock();
+        serde_json::json!({
+            "pending":slot.pending.as_ref().map(|command|&command.request.operation),
+            "failed":slot.failed.as_ref().map(|(_,text)|text),
+            "done":slot.done.iter().map(|(command,recovered)|serde_json::json!({
+                "operation":command.request.operation,"recovered":recovered})).collect::<Vec<_>>(),
+        })
+    }
+}
+
+/// The added member's step receiver for a host command: `request` is already
+/// authorised against this member's own fresh committed metadata. The
+/// receiver proves the member's own confirmed release, records the command
+/// for the host thread and reports the retained outcome or `pending`.
+pub(super) fn accept_member_host_command(
+    steps: &NativeBridgeMemberSteps,
+    commands: &NativeBridgeHostCommands,
+    request: &NativeJointHandoffStepRequestV1,
+    fresh: BridgeStepOwn,
+    token: &CancellationToken,
+) -> Result<(NativeJointHandoffStepOutcomeV1, (u64, u64, Uuid))> {
+    let binding = request.binding()?;
+    let anchor = fresh.anchor;
+    let (release, generation) = released_member_of(steps, request)?;
+    let decision = release.data().checksum_sha256().to_owned();
+    if request.operation.target_serve() && !commands.writer_policy_done(request.range_id, &decision)
+    {
+        return Err(invalid(
+            "joint target serve refused: this member holds no confirmed writer policy",
+        ));
+    }
+    let outcome = match commands.accept(request)? {
+        NativeBridgeHostCommandState::Done(recovered) => {
+            if recovered.is_some() != request.operation.target_serve() {
+                return Err(invalid(
+                    "joint bridge host command retained another operation's outcome",
+                ));
+            }
+            // An identical retry: this member's actual armed generation,
+            // re-read under its own lock by a fresh release observation.
+            let BridgeStepOwn { own, business, .. } = fresh;
+            let facts = release.observe_fresh_release_phase(own, business, token)?;
+            if facts.released_generation != Some(generation) {
+                return Err(invalid(
+                    "joint bridge host command retained generation is absent or changed",
+                ));
+            }
+            policy_outcome(binding, &release, generation, recovered)
+        }
+        NativeBridgeHostCommandState::Pending(failure) => {
+            let mut outcome = NativeJointHandoffStepOutcomeV1::bridge_progress(
+                binding,
+                Stage::BridgeHostCommand,
+                decision,
+            );
+            outcome.host_command_error = failure;
+            outcome
+        }
+    };
+    token.check()?;
+    Ok((outcome, anchor))
 }

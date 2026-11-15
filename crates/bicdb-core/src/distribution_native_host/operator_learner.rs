@@ -544,6 +544,24 @@ impl NativeMetadataLearnerHost {
         }
         self.refresh(&token)
     }
+    /// Process-owned: performs at most one pending joint handoff host
+    /// command of this member (its first writer DATA policy, or the move of
+    /// that policy to its ordinary DATA socket and ingress publication) on
+    /// the thread that owns this host, and retains the outcome for the
+    /// coordinator's repeated step. `process` is the process lifetime, not a
+    /// request budget. Returns whether a command ran.
+    pub fn advance_joint_bridge_host_commands(
+        &mut self,
+        process: &CancellationToken,
+    ) -> Result<bool> {
+        if self.stopped || !self.metadata_started {
+            return Ok(false);
+        }
+        match &mut self.host {
+            NativeLearnerLifecycle::Fresh(host) => host.advance_joint_bridge_host_commands(process),
+            NativeLearnerLifecycle::Cold(host) => host.advance_joint_bridge_host_commands(process),
+        }
+    }
     pub fn maintain_metadata(
         &mut self,
         parent: &CancellationToken,

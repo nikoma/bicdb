@@ -677,6 +677,9 @@ pub(in super::super) fn exercise(
             metadata,
             template,
             services,
+            original_gateway,
+            factory,
+            acknowledged,
         );
         return;
     }

@@ -166,6 +166,13 @@ pub(crate) use range_image_native::NativeRegisteredRemoteMutationScope;
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::NativeRemoteJointDecisionAttempt;
 pub(crate) use range_image_native::NativeReplicaMaterialization;
+#[cfg(feature = "tls-replication")]
+pub(crate) use range_image_native::{
+    require_remote_serving_member_audit, NativeClosedWriterDomain,
+    NativeWriterClosedHistoricalReadScope, NativeWriterDataDomainPolicy,
+    NativeWriterDataDomainTransition, NativeWriterHistoricalPredecessor,
+    NativeWriterServingDomainPublication,
+};
 pub(crate) use range_image_native::{
     FreshNativeCatalogueBootstrap, FreshRangeGenesisAuthority, InstalledNativeWriterHostGuard,
     KnownNativeRecoveryPrefix, NativeAbortCatalogueBootstrap, NativeHistoryPublicationBinding,
@@ -192,12 +199,6 @@ pub(crate) use range_image_native::{
     NativeJointOldCloseRecordData, NativeJointOldPhysicalProof,
     NativeJointPreparedPublicationScope, NativeJointServingBridgeReceipt,
     NativeJointServingPreparation, NativeReadyObserverReadScope,
-};
-#[cfg(feature = "tls-replication")]
-pub(crate) use range_image_native::{
-    NativeClosedWriterDomain, NativeWriterClosedHistoricalReadScope, NativeWriterDataDomainPolicy,
-    NativeWriterDataDomainTransition, NativeWriterHistoricalPredecessor,
-    NativeWriterServingDomainPublication,
 };
 #[cfg(feature = "tls-replication")]
 pub(crate) use range_image_native::{

@@ -24,8 +24,18 @@ pub(crate) struct NativeAssignedDataAdmission {
     writer: Arc<NativeWriterHostState>,
     root: PathBuf,
     life: Weak<AtomicBool>,
+    // The original Registered receiver this owner continues, when it has
+    // one. It keeps serving its own bridge observations and host commands
+    // on this owner's socket; this reference grants nothing itself.
+    registered_bridge: Weak<NativeRegisteredReplicaAdmission>,
 }
 impl NativeAssignedDataAdmission {
+    /// The original Registered receiver whose step RPC this socket serves.
+    pub(crate) fn registered_bridge_receiver(
+        &self,
+    ) -> Option<Arc<NativeRegisteredReplicaAdmission>> {
+        self.registered_bridge.upgrade()
+    }
     pub(crate) fn require_routing_service(
         &self,
         service: &Arc<Mutex<ClusterDataNodeService>>,
@@ -267,6 +277,10 @@ impl NativeAssignedDataHost {
                 writer,
                 root,
                 life: Arc::downgrade(&self.life),
+                registered_bridge: match &self.registered {
+                    Some(_) => Arc::downgrade(&self.parts.admission),
+                    None => Weak::new(),
+                },
             }));
         }
         let admission = self.admission.as_ref().unwrap();

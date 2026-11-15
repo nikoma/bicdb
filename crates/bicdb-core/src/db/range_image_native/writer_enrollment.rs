@@ -38,7 +38,8 @@ pub(crate) use original_identity::NativeOriginalWriterIdentityBorrow;
 mod data_domains;
 #[cfg(feature = "tls-replication")]
 pub(crate) use data_domains::{
-    NativeClosedWriterDomain, NativeWriterClosedHistoricalReadScope, NativeWriterDataDomainPolicy,
+    require_remote_serving_member_audit, NativeClosedWriterDomain,
+    NativeWriterClosedHistoricalReadScope, NativeWriterDataDomainPolicy,
     NativeWriterDataDomainTransition, NativeWriterHistoricalPredecessor,
     NativeWriterServingDomainPublication,
 };

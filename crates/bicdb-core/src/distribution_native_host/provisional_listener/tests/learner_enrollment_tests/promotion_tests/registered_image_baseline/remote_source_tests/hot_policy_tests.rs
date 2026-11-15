@@ -1043,6 +1043,7 @@ pub(in super::super) fn exercise(
         data_tests::exercise(
             case,
             target_control,
+            controls,
             original_gateway,
             factory,
             &all_clients,

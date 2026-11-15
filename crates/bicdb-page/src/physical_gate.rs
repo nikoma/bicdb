@@ -101,6 +101,61 @@ fn failure(path: &Path, detail: impl std::fmt::Display) -> PageError {
     }
 }
 
+/// Resolve actual enclosing ancestry without creating any path. A direct
+/// directory symlink must not hide an enrolled Core ancestor behind a nearer
+/// standalone gate. Missing normal suffixes may be appended to the deepest
+/// existing canonical directory; missing `..` traversal and dangling aliases
+/// refuse rather than choosing an unrelated physical domain.
+pub fn physical_parent_for_file(path: &Path) -> Result<PathBuf> {
+    use std::path::Component;
+    let parent = path
+        .parent()
+        .ok_or_else(|| failure(path, "file has no parent"))?;
+    let mut existing = if parent.as_os_str().is_empty() {
+        PathBuf::from(".")
+    } else {
+        parent.to_path_buf()
+    };
+    let mut missing = Vec::new();
+    loop {
+        match std::fs::canonicalize(&existing) {
+            Ok(mut physical) => {
+                if !std::fs::metadata(&physical)
+                    .map_err(|error| PageError::io(&physical, error))?
+                    .is_dir()
+                {
+                    return Err(failure(&existing, "physical parent is not a directory"));
+                }
+                for name in missing.iter().rev() {
+                    physical.push(name);
+                }
+                return Ok(physical);
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                match std::fs::symlink_metadata(&existing) {
+                    Ok(_) => return Err(PageError::io(&existing, error)),
+                    Err(missing) if missing.kind() == io::ErrorKind::NotFound => {}
+                    Err(other) => return Err(PageError::io(&existing, other)),
+                }
+                let Some(Component::Normal(name)) = existing.components().next_back() else {
+                    return Err(failure(
+                        &existing,
+                        "cannot resolve physical ancestry through a missing non-normal suffix",
+                    ));
+                };
+                missing.push(name.to_os_string());
+                if !existing.pop() {
+                    return Err(PageError::io(&existing, error));
+                }
+                if existing.as_os_str().is_empty() {
+                    existing.push(".");
+                }
+            }
+            Err(error) => return Err(PageError::io(&existing, error)),
+        }
+    }
+}
+
 impl PhysicalGate {
     /// Retain an already-bound actual identity for denial/admission checks.
     /// This returns no kernel lock and cannot authorize physical IO.
@@ -168,9 +223,7 @@ impl PhysicalGate {
     /// Resolve once, before any page/WAL/pool lock. Symlinks never enroll a
     /// different root. Subsequent operations validate this exact inode.
     pub fn for_file(path: &Path) -> Result<Self> {
-        let parent = path
-            .parent()
-            .ok_or_else(|| failure(path, "file has no parent"))?;
+        let parent = physical_parent_for_file(path)?;
         for root in parent.ancestors() {
             let metadata_path = root.join("format.json");
             match File::open(&metadata_path) {
@@ -227,7 +280,7 @@ impl PhysicalGate {
                 Err(e) => return Err(PageError::io(candidate, e)),
             }
         }
-        Self::at_root(parent)
+        Self::at_root(&parent)
     }
 
     fn validate(&self) -> Result<()> {

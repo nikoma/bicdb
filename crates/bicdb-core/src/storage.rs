@@ -844,10 +844,12 @@ pub(crate) fn acquire_database_backup_exclusive_guard(db_path: &Path) -> Result<
 }
 
 fn backup_write_gate_path(path: &Path) -> Result<Option<PathBuf>> {
+    let parent = bicdb_page::physical_gate::physical_parent_for_file(path)
+        .map_err(|error| BicDbError::Backup(error.to_string()))?;
     // A standalone child inode cannot shadow the enclosing enrolled Core
     // domain. Resolve all enrollment first, exactly as Page's resolver does.
     // Walk the complete input path: depth is not permission to omit a gate.
-    for root in path.ancestors().skip(1) {
+    for root in parent.ancestors() {
         if crate::format::load_metadata(root)?.is_some_and(|metadata| {
             metadata
                 .feature_flags
@@ -866,7 +868,7 @@ fn backup_write_gate_path(path: &Path) -> Result<Option<PathBuf>> {
     // Preserve standalone/legacy-codec behavior only after proving there is
     // no enclosing enrolled Core root. Actual acquisition still checks inode
     // identity and obtains the kernel lock before any physical mutation.
-    for root in path.ancestors().skip(1) {
+    for root in parent.ancestors() {
         let gate = root.join(BACKUP_WRITE_GATE);
         if bicdb_page::physical_gate::PhysicalGate::retained_at_root(root).is_some() {
             return Ok(Some(gate));
@@ -3030,6 +3032,174 @@ mod tests {
         assert_eq!(after_release.unwrap(), replacement);
         assert!(db.get("root_cut_values", "acknowledged").unwrap().is_some());
         drop(child_shared);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn direct_page_directory_alias_keeps_page_and_atomic_writers_in_actual_core_domain() {
+        use std::os::unix::fs::{symlink, MetadataExt};
+        use std::sync::mpsc;
+
+        let directory = tempfile::tempdir().unwrap();
+        let external = tempfile::tempdir().unwrap();
+        let root = directory.path().canonicalize().unwrap();
+        let paged = root.join("paged");
+        fs::create_dir_all(&paged).unwrap();
+        let child_gate = bicdb_page::physical_gate::PhysicalGate::at_root(&paged).unwrap();
+        let (original, _) = bicdb_page::PagedStore::open(
+            &paged,
+            bicdb_page::PagedStoreOptions::default().with_buffer_pool_bytes(1024 * 1024),
+        )
+        .unwrap();
+        let xid = original.begin();
+        original
+            .put(xid, b"original", b"complete original standalone payload")
+            .unwrap();
+        original.commit(xid).unwrap();
+        drop(original);
+        // A real auxiliary Page child is enrolled by real Core Memory open.
+        // Retain its older distinct gate to expose wrong alias-domain selection.
+        let db = crate::BicDb::open(&root).unwrap();
+        crate::format::require_physical_backup_gate(&root).unwrap();
+        db.close().unwrap();
+        let alias = external.path().join("direct-page-alias");
+        symlink(&paged, &alias).unwrap();
+        let atomic = alias.join("alias-atomic.json");
+        let original_atomic = b"{\"value\":\"before\"}\n";
+        let replacement = b"{\"value\":\"after exact root exclusion\"}\n";
+        write_atomic(&atomic, original_atomic, true).unwrap();
+        let metadata = fs::metadata(root.join(BACKUP_WRITE_GATE)).unwrap();
+        let root_identity = (metadata.dev(), metadata.ino());
+        let child_metadata = fs::metadata(paged.join(BACKUP_WRITE_GATE)).unwrap();
+        assert_ne!(root_identity, (child_metadata.dev(), child_metadata.ino()));
+        let page_before = fs::read(paged.join("store.pages")).unwrap();
+        let wal_before = fs::read(paged.join("store.wal")).unwrap();
+        let (page_tx, page_rx) = mpsc::channel();
+        let (atomic_tx, atomic_rx) = mpsc::channel();
+        let page_root = root.clone();
+        let atomic_root = root.clone();
+        let page_alias = alias.clone();
+        let atomic_path = atomic.clone();
+        let observed = std::thread::scope(|scope| {
+            // Scope cleanup releases the real EX before automatic joins,
+            // including on unwinding. No EX permission crosses to workers.
+            let _observer = backup_gate_observation::arm(&root, true, Box::new(|_| {})).unwrap();
+            let exclusive = acquire_database_backup_exclusive_guard(&root).unwrap();
+            let snapshots = backup_gate_observation::live_exclusive_guards(&root);
+            let page_worker = scope.spawn(move || -> bicdb_page::Result<Vec<u8>> {
+                let _observer = backup_gate_observation::arm(
+                    &page_root,
+                    false,
+                    Box::new(move |event| {
+                        if !event.acquired && !event.released {
+                            let _ = page_tx.send(event);
+                        }
+                    }),
+                )
+                .map_err(|error| bicdb_page::PageError::BackupSnapshot {
+                    reason: error.to_string(),
+                })?;
+                let (store, _) = bicdb_page::PagedStore::open(
+                    &page_alias,
+                    bicdb_page::PagedStoreOptions::default().with_buffer_pool_bytes(1024 * 1024),
+                )?;
+                assert_eq!(
+                    store.get(b"original")?,
+                    Some(b"complete original standalone payload".to_vec())
+                );
+                let xid = store.begin();
+                store.put(
+                    xid,
+                    b"after-root-ex",
+                    b"complete Page payload after actual exclusion",
+                )?;
+                store.commit(xid)?;
+                Ok(store
+                    .get(b"after-root-ex")?
+                    .expect("actual committed value"))
+            });
+            let atomic_worker = scope.spawn(move || -> Result<()> {
+                let _observer = backup_gate_observation::arm(
+                    &atomic_root,
+                    false,
+                    Box::new(move |event| {
+                        if !event.acquired && !event.released {
+                            let _ = atomic_tx.send(event);
+                        }
+                    }),
+                )?;
+                write_atomic(&atomic_path, replacement, true)
+            });
+            let page_contention = page_rx.recv_timeout(Duration::from_secs(5));
+            let atomic_contention = atomic_rx.recv_timeout(Duration::from_secs(5));
+            let live_before = snapshots.len() == 1 && snapshots[0].is_live();
+            let pages = fs::read(paged.join("store.pages"));
+            let wal = fs::read(paged.join("store.wal"));
+            let bytes = fs::read(&atomic);
+            let live_after = snapshots.len() == 1 && snapshots[0].is_live();
+            drop(exclusive);
+            let page_result = page_worker.join();
+            let atomic_result = atomic_worker.join();
+            (
+                page_contention,
+                atomic_contention,
+                snapshots,
+                live_before,
+                pages,
+                wal,
+                bytes,
+                live_after,
+                page_result,
+                atomic_result,
+            )
+        });
+        let (
+            page_cut,
+            atomic_cut,
+            snapshots,
+            live_before,
+            pages,
+            wal,
+            bytes,
+            live_after,
+            page_result,
+            atomic_result,
+        ) = observed;
+        eprintln!("ACTUAL_DIRECT_PAGE_ALIAS_ROOT_EX {{root_identity:{root_identity:?}, ex:{snapshots:?}, page_cut:{page_cut:?}, atomic_cut:{atomic_cut:?}, live_before:{live_before}, live_after:{live_after}, page_result:{page_result:?}, atomic_result:{atomic_result:?}}}");
+        assert!(
+            live_before && live_after,
+            "INCONCLUSIVE: same actual EX was not live across byte reads"
+        );
+        for cut in [page_cut, atomic_cut] {
+            let cut =
+                cut.expect("INCONCLUSIVE: actual alias writer did not reach root SH contention");
+            assert_eq!(cut.gate, root.join(BACKUP_WRITE_GATE));
+            assert_eq!(cut.file_identity, Some(root_identity));
+            assert!(!cut.exclusive && !cut.acquired && !cut.released);
+        }
+        assert_eq!(pages.unwrap(), page_before);
+        assert_eq!(wal.unwrap(), wal_before);
+        assert_eq!(bytes.unwrap(), original_atomic);
+        assert_eq!(
+            page_result.expect("actual Page worker panic").unwrap(),
+            b"complete Page payload after actual exclusion".to_vec()
+        );
+        atomic_result.expect("actual atomic worker panic").unwrap();
+        assert_eq!(fs::read(&atomic).unwrap(), replacement);
+        let (reopened, _) = bicdb_page::PagedStore::open(
+            &alias,
+            bicdb_page::PagedStoreOptions::default().with_buffer_pool_bytes(1024 * 1024),
+        )
+        .unwrap();
+        assert_eq!(
+            reopened.get(b"original").unwrap(),
+            Some(b"complete original standalone payload".to_vec())
+        );
+        assert_eq!(
+            reopened.get(b"after-root-ex").unwrap(),
+            Some(b"complete Page payload after actual exclusion".to_vec())
+        );
+        drop(child_gate);
     }
 
     #[cfg(unix)]

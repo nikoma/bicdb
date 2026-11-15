@@ -412,3 +412,21 @@ fn remaining_decision_custody(participant: bool, export: bool) -> Option<&'stati
         ),
     }
 }
+
+#[cfg(test)]
+mod custody_report_tests {
+    use super::remaining_decision_custody;
+
+    /// Retirement reports success only when nothing that holds the freeze
+    /// was left in place; otherwise it names what remains.
+    #[test]
+    fn native_bridge_step_added_member_custody_report_names_what_remains() {
+        assert_eq!(remaining_decision_custody(false, false), None);
+        let participant = remaining_decision_custody(true, false).unwrap();
+        assert!(participant.contains("participant") && !participant.contains("export"));
+        let export = remaining_decision_custody(false, true).unwrap();
+        assert!(export.contains("export") && !export.contains("participant"));
+        let both = remaining_decision_custody(true, true).unwrap();
+        assert!(both.contains("participant") && both.contains("export"));
+    }
+}

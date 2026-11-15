@@ -88,6 +88,19 @@
         "raw_line": 274633,
         "raw_sha256": "09bf2b735688fd5a69341d7271d0164ef763cc81a3b66c1baff15e05f98cf338",
         "gzip_sha256": "61a67b36b0766bd7d095dfb11e26e630bcf169e57b1c46b99e91056ebd0e806a"
+      },
+      "complete_archive": {
+        "frozen_files_before_manifest": 93,
+        "full_gzip_logs": 11,
+        "original_ZIPs": 8,
+        "ZIP_members": 27,
+        "missing": 0,
+        "manifest_sha256": "da13165944c106e172f584422ec076f277e81945fce7ae091488e5b2aa135a6a",
+        "root_complete_independent_verification_sha256": "2c88e780e823e3559c1f4ba0193d50cd6d9ca2b35097dbbd4776dd94397bc5bf",
+        "offline_positive": "passed",
+        "wrong_manifest_digest": "rejected",
+        "collector": "exited naturally; not restarted",
+        "scope": "Full stored/raw log hashes, original ZIP API digest/size/CRC/member hashes and source/API IDs independently verified; archive integrity is not runtime or physical qualification."
       }
     }
   ],

@@ -41,6 +41,17 @@ The overall Tests run remains **failed** because of the three compiler-blocked
 jobs above. Neither actual native acceptance nor physical qualification follows
 from the independent application/workspace passes.
 
+The complete original archive is frozen:93 files before the manifest,11 full
+gzip logs and8 original ZIPs/27 members, with zero missing captures or partials.
+Manifest SHA256:
+`da13165944c106e172f584422ec076f277e81945fce7ae091488e5b2aa135a6a`.
+Independent root verification SHA256:
+`2c88e780e823e3559c1f4ba0193d50cd6d9ca2b35097dbbd4776dd94397bc5bf`.
+That verification covers full raw/stored hashes, API identities/digests/sizes,
+ZIP CRCs and member hashes; positive and wrong-digest offline controls passed
+and refused respectively. The collector exited naturally and was not restarted.
+Archive integrity does not establish database qualification.
+
 The narrow correction `75ed90d49a73c50dce400e8020b5d2947d206f69` uses the existing
 checked `RangeId::new(1/2)` constructors, accesses the actual retained field and
 borrows the existing formatted diagnostic strings. Every edited site is test

@@ -28,6 +28,19 @@ jobs were still live at this finding's capture; their final results must be
 retained separately before the source is updated. No useful run is cancelled
 or restarted for the correction.
 
+At the later terminal capture, SQL and remaining workspace both **passed**.
+Workspace job132693725819 includes the actual
+`script_workflow::route_tests::script_schedules_fire_as_the_schedule_identity_and_write_declared_sql`
+pass at raw line274633; its enclosing app-runtime summary is159/0/1.
+Across127 workspace summaries the repeated totals are1051 passed,0 failed,
+6 ignored, not1051 unique tests. Raw log SHA256 is
+`09bf2b735688fd5a69341d7271d0164ef763cc81a3b66c1baff15e05f98cf338`;
+stored gzip SHA256 is
+`61a67b36b0766bd7d095dfb11e26e630bcf169e57b1c46b99e91056ebd0e806a`.
+The overall Tests run remains **failed** because of the three compiler-blocked
+jobs above. Neither actual native acceptance nor physical qualification follows
+from the independent application/workspace passes.
+
 The narrow correction `75ed90d49a73c50dce400e8020b5d2947d206f69` uses the existing
 checked `RangeId::new(1/2)` constructors, accesses the actual retained field and
 borrows the existing formatted diagnostic strings. Every edited site is test

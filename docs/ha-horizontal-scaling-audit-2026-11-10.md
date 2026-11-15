@@ -45,6 +45,15 @@ still **failed**, and no new independent-machine expansion or stable five-node
 throughput comparison has passed. Source517 and candidate518 observations below
 remain historical evidence with their original identities.
 
+At the later terminal capture of sourcefbb run43675202613, SQL and remaining
+workspace also passed. Its overall Tests result remains failed on the three
+test-compilation jobs; no Core/native controls ran. The
+[fbb finding](design/native-fbb-test-compilation-failure.md) records the actual
+schedule-control pass and full raw log identity. The separate
+[draft209 review](design/native-draft209-source-review.md) distinguishes reusable
+source mechanisms from incompatible recovery paths and unfinished controller
+stages. That draft is neither delivered main nor qualification evidence.
+
 ## Earlier evidence checkpoint — main517, 2026-11-15 UTC
 
 Remote main inspected for this checkpoint is **1.0.517-beta /

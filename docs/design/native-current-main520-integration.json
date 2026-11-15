@@ -68,12 +68,27 @@
       "actual_passed": [
         "Rails",
         "PGwire",
-        "SQL"
+        "SQL",
+        "remaining workspace"
       ],
-      "live": [
-        "rest of workspace"
-      ],
-      "limit": "No actual Core/native outcomes. The original useful run is retained until terminal; corrections and520 require separate execution."
+      "live": [],
+      "limit": "No actual Core/native outcomes. Terminal application/workspace passes do not validate the520 correction. Original complete source-pinned evidence is retained separately.",
+      "terminal_result": "failure",
+      "terminal_workspace": {
+        "job": 132693725819,
+        "result": "success",
+        "summary_count": 127,
+        "repeated_summary_totals_not_unique_tests": {
+          "passed": 1051,
+          "failed": 0,
+          "ignored": 6
+        },
+        "actual_schedule_control": "script_workflow::route_tests::script_schedules_fire_as_the_schedule_identity_and_write_declared_sql",
+        "actual_control_outcome": "ok",
+        "raw_line": 274633,
+        "raw_sha256": "09bf2b735688fd5a69341d7271d0164ef763cc81a3b66c1baff15e05f98cf338",
+        "gzip_sha256": "61a67b36b0766bd7d095dfb11e26e630bcf169e57b1c46b99e91056ebd0e806a"
+      }
     }
   ],
   "source_checks_at_reviewed_revision": {

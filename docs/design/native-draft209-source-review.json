@@ -1,0 +1,232 @@
+{
+  "schema": "bicdb-draft-source-audit/v1",
+  "inspected_revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+  "base_main": "587dd6e4775e454cc9e8224d5fed76e8795c6ff6",
+  "pull_request": 209,
+  "draft": true,
+  "delivered": false,
+  "source_review_only": true,
+  "compiled_or_executed_by_review": false,
+  "findings": [
+    {
+      "scope": "Opaque recipient-owned ALL-prepared collection idea",
+      "outcome": "passed",
+      "evidence": "remote_publication.rs127-240,263-392,471-609; transport/native_handoff_step.rs383-499",
+      "details": "Actual transport creates opaque pinned frames; each member collects other NEW itself and retains actual local preparation/writer plus fresh post-ALL metadata. Private remote backing is separate from local backing. This inspected mechanism is not simply a decoder constructing a local quorum. No full protocol approval.",
+      "runtime_result": "not tested by this review",
+      "next_smallest_test": "Real authenticated ALL-recipient control: each recipient independently observes fixed NEW, rejects missing/duplicate/wrong-incarnation/expired frames and requires a fresh actual local metadata/physical point before publication."
+    },
+    {
+      "scope": "Native preparation original attempt retention before outer failure",
+      "outcome": "failed",
+      "evidence": "registered_replica/remote_attempt/bridge_step.rs191-215; initial_data/old_step/bridge_step.rs289-315",
+      "details": "Actual prepare_local_* helper returns through ? before step.retain_custody. Real original lease remains, but no private native issued-XID/candidate/API-return attempt is retained on postcommit helper failure. Required KnownCommitted versus actual IO Unknown distinction is absent at this boundary. This is a source contract gap, not an executed replay/loss report.",
+      "runtime_result": "not tested by this review",
+      "next_smallest_test": "Inject actual native ReturnedOk followed by original-server cancellation before outer owner retention; preserve issued XID/candidate/API outcome, resolve only the same attempt under a fresh read and prove no next-XID/LSN advance. Separately inject actual commit-sync Unknown and require refusal."
+    },
+    {
+      "scope": "Generic global uncertainty helper unavailable as recovery authority",
+      "outcome": "failed",
+      "evidence": "remote_open.rs226-234 -> distribution_data/native_joint_handoff/bridge.rs618-655 -> joint_handoff_state/activation.rs253-325",
+      "details": "Draft reaches existing with_own_uncertainty_set_aside and global flag clear. It has no same original whole-head candidate/IO-generation ownership at that call. Root reviewed typed owned-proof/generation correction must be composed; do not import this old route over it.",
+      "runtime_result": "not tested by this review",
+      "next_smallest_test": "Inject actual unrelated-range catalogue persistence uncertainty between selected read and final publication; require refusal without clearing global uncertainty. Same-owner recovery must prove exact original/candidate/IO generation and actual whole-head/open/directory state."
+    },
+    {
+      "scope": "Original member process lifetime on preparation session",
+      "outcome": "inconclusive",
+      "evidence": "bridge_step.rs201 session new unparented token,60-65 Drop cancellation; request handlers original admission/current checks",
+      "details": "The session is allocated without original host-process ancestry and canceled in member-step Drop. Handler owner checks exist; exact concurrent stop and retained-owner lifetime relation was not fully proved in this narrow review. Do not treat it as equivalent to actual process-bound lifetime without stop/control proof.",
+      "runtime_result": "not tested by this review",
+      "next_smallest_test": "Stop the original host/process at native entry and before readonly result publication; require old process-bound owners to refuse without creating a replacement session. Preserve actual entry/return/outcome."
+    },
+    {
+      "scope": "Registered release handle take before fallible continuation factory",
+      "outcome": "inconclusive",
+      "evidence": "bridge_step.rs794-804; remote_release.rs58-116; registered_target.rs551-576; remote_joint/release.rs14-75",
+      "details": "The handle is taken before fallible factory, but it only holds Arc to the original Registered owner; retain_release keeps original Frozen/activation in that owner and can reissue same handle. Therefore no permanent custody-loss defect is asserted from take alone. Interrupted-progress controls still required.",
+      "runtime_result": "not tested by this review",
+      "next_smallest_test": "Interrupt after taking the Registered Arc handle and before continuation retention; retry from the same original owner, prove original Frozen/activation identity and no duplicate adoption."
+    },
+    {
+      "scope": "Runtime/compile/qualification on this inspected source",
+      "outcome": "not tested",
+      "details": "No compiler, Rust tests, CI action, binary or physical experiment executed by this review. PR body/source title is not evidence.",
+      "runtime_result": "not tested by this review",
+      "next_smallest_test": "Run normal exact-source CI only after a coherent corrected/versioned batch; preserve every original failed result. No physical qualification follows."
+    },
+    {
+      "classification": "confirmed incomplete source",
+      "finding": "activate_new_members calls recipient prepare/publish/Open then unconditionally returns bridge release not implemented. serve and activation/source-retirement record stage paths also refuse. Operator command cannot complete a production move at this exact source.",
+      "runtime_result": "not tested by this review",
+      "next_smallest_test": "One actual cross-process range move must pass release, Serving and metadata completion; require original ACK/Strong checks. A not-implemented error is a failure, never a successful move."
+    },
+    {
+      "classification": "confirmed source contract limitation",
+      "finding": "Controller requires same metadata leader/range coordinator; backend rejects coordinator in final NEW because its own local bridge steps are absent. Supported subset retires coordinator replica. Not arbitrary leader/replica balancing.",
+      "runtime_result": "not tested by this review",
+      "next_smallest_test": "Cover a coordinator that remains a NEW member and metadata/range leaders on different nodes, using actual owners without manual role impersonation."
+    },
+    {
+      "classification": "confirmed source contract limitation",
+      "finding": "One operator-selected range/target move per host. Production request_range_move caller found only operator MoveRange. No node-join placement trigger or automatic startup discovery of unfinished moves found in examined controller/operator/backend paths. A configured worker retries the chosen stage; that is narrower than automatic self-healing placement.",
+      "runtime_result": "not tested by this review",
+      "next_smallest_test": "Add the fifth node through supported membership only; no MoveRange/range-ID call. Require native planner initiation, actual data/leadership movement and restart discovery of unfinished moves."
+    },
+    {
+      "classification": "restart/routing guarantee not proven",
+      "finding": "Route acknowledgement unsettled set is process memory initialized None. It is set only after observing metadata commit and installing coordinator topology. Commit/reply failures or constructing fresh hosts need explicit reconciliation of participating-member applied config before assuming prior ACK barrier. No stale-read/loss observation or demonstrated safety bypass is inferred.",
+      "runtime_result": "not tested by this review",
+      "next_smallest_test": "Interrupt after actual metadata commit before route-ACK retention, recreate controller hosts, and require participating nodes to apply the committed configuration before progression or Strong-read success."
+    },
+    {
+      "classification": "source implementation, not physical bound",
+      "finding": "Single worker has120s step token; failure backoff500ms doubles to30s; one stage per tick. Token/cancellation checks and same worker retention do not prove kernel IO boundedness, independent-range concurrency or physical RTO.",
+      "runtime_result": "not tested by this review",
+      "next_smallest_test": "Stall one actual range on IO; verify other ranges keep progressing and status diagnoses persistent failure within the advertised operator bound. Record actual durations, not token values."
+    }
+  ],
+  "source_pins": [
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/remote_publication.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "0b9249b8e609e63c2f7957670a4016c9283de654",
+      "sha256": "da100ebbf790365af501cc2df007effc66bccb7df111bff459570f68e417c8a8",
+      "bytes": 29716
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/preparation_custody.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "236224eda0250dd7f18d9625ae46860d4aeec9fd",
+      "sha256": "e7114ac6545cd8ffffc1e00d462c840aeab56ee4aec058cbb248405705938f6f",
+      "bytes": 15800
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/publication/remote_open.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "7bbb31864ab2b9a8bc82c70c8f2e4945dbe0d7d6",
+      "sha256": "6ffe5bc8c56b5f5fc73ee89eecc8045eccb3ff0460e1bb6c837bcd88d08fe6f4",
+      "bytes": 17972
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/publication/release_phase/remote_release.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "545ac9274e70a92fe5bf478f8d6c85b3ef1fdf70",
+      "sha256": "9acc36afaad7db2e7bfdc50ebf0a63a8fc0a49cf09e2cb3bd5063b1072b22f6a",
+      "bytes": 38182
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "e49e5d49e1407967c29ee981d707dac94fbfc950",
+      "sha256": "c4f1d94382e4930b34b1448abc7b4acd29517c84d1eda27a4ffd6742f34c96f1",
+      "bytes": 35686
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_handoff/joint/bridge/publication.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "01ef6711a8f6974c9adee246e9afaa14900be504",
+      "sha256": "7a62964c45a544eeb9ddde4648d0390ca1c28ebb3ab7de8234334a527a0fe8dd",
+      "bytes": 24903
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/bridge_step.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "2feac4bb11d9a054bc60c045e04b953fc1b90f16",
+      "sha256": "a6a34086ffd18fb33fba2b269de4b7d3c3f3a4ccd93ce6ae00322b213256840b",
+      "bytes": 47716
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/initial_data/old_step/bridge_step.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "e230b0e27a07495fca7c9201c7c88077855c048f",
+      "sha256": "04bbdb9b19d290d1f18dff0355b6f54f6ecc070d05978b832cf0265fa5de1520",
+      "bytes": 20717
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_attempt/bridge_step.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "21250af0abba0051b2ff923fb50a8fda6f32c8c7",
+      "sha256": "f4de628631dd90c39b45f94e2393fbc2278468551378915ff8acde4ecbf62d09",
+      "bytes": 10610
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport/native_handoff_step.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "4d1046747bd0bb68d273c5d59337398c463397d3",
+      "sha256": "23c853a5d11958d881cf63fc57dda55155b98c9db6ffb5d80b4b6464b6d61246",
+      "bytes": 21425
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff/bridge.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "4115f731244362ebd0650bd4290797c02afc9c44",
+      "sha256": "64586561ab69455aef36d325082e517eac64b43800dd364ae2ca5100c1216955",
+      "bytes": 48192
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_data/native_joint_handoff/registered_target.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "be0ee0f22b7102e080c1cacecd779ef23f592d4f",
+      "sha256": "fed1e26a3be26a57284eecd38cd04d9adf935c07f0e3f13716f6ecbd7b0c0550",
+      "bytes": 24434
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_attempt/remote_joint/release.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "1083902547726a9b1616f24613546cf47210893e",
+      "sha256": "834355e702111c7382f354511d38acaa5debfbcddc610b3588a169287247a7f2",
+      "bytes": 7328
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_range_consensus/joint_handoff_state/activation.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "a2898a2ff5ca0af57ea43f41ecedc2286f424519",
+      "sha256": "72ee67064f6cc680932566f94879fb2ca550dafe1cc964cdb9b4b7be6b7ec7aa",
+      "bytes": 34270
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/joined_data_handoff/remote_backend.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "55f9b1ae0871056df5ba9da56dcab78ba6b32849",
+      "sha256": "01e5e497843aa215529fc00da41e1b871c6e311298e94d8303d8b5fad005c456",
+      "bytes": 67932
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/range_move.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "ccdb9ba212b4ded6cf8e681d04f31ef5de85e0b4",
+      "sha256": "83cb550262039d7e6a9af8206efbf7df939e573890bf09f68477f69097ca6834",
+      "bytes": 25121
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/operator.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "e4c8fb00da0ceb51ca7fafe423a17ea1079441a5",
+      "sha256": "38c0a0c71a6b5f998ad2736d5cde2b56d9e0aa5a53f46739ceccd5d18d355625",
+      "bytes": 24150
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/range_move_hosts.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "7abdf7f4c753fdeeff800e4c4459bb2cafdc2f5f",
+      "sha256": "238c27a6075c2f4b94c6674859666e24c42f7e18bb3c9f47475e1ad503787015",
+      "bytes": 12734
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution/native_joint_handoff.rs",
+      "revision": "7bd1cabbfd255596c76a6903440926cb3fe6b9d0",
+      "git_blob": "c1a2155a988dce2b10e138ff9c5f7bbb58656cb3",
+      "sha256": "f13f40b4456ec986c0c3fe90612a5f77e976ab97e7b3fd95ca050cac78a17928",
+      "bytes": 53993
+    }
+  ],
+  "production_admission": false,
+  "limits": [
+    "Narrow source review, no comprehensive protocol proof",
+    "Passed means examined source mechanism only, never a runtime test",
+    "Failed means an identified source contract or implementation gap, never an observed loss report",
+    "Inconclusive is retained where lifetime/progress was not established",
+    "Later draft revisions require new inspection; main519/private520 are separate identities"
+  ]
+}

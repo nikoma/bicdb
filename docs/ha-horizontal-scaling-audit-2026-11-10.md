@@ -40,6 +40,9 @@ SQL, PGwire and Rails passed within their respective scopes. Serial native
 runtime **failed: 387 passed, 84 failed, 1 ignored**, 989 filtered, in
 2,971.93 seconds. The remaining-workspace job, including the original CLI
 availability gate, is still running. The candidate cannot merge on these results.
+These failures concern the protected native virtual-range host fixtures. The
+legacy/file-shipping, single-primary streaming, Cell and application-fleet modes
+retain their separate evidence and qualification boundaries below.
 
 The 84 failures comprise 67 FIRST cases and 17 learner/hot-policy cases.
 Several fail before their intended handoff/fault phase: failed scenarios remain

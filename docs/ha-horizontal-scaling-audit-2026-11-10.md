@@ -11,7 +11,20 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Latest execution checkpoint — head0a failed, 2026-11-15 UTC
+## Latest execution checkpoint — head2ce incomplete, 2026-11-15 UTC
+
+Remote main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Unmerged520 source `2ce4c48202d4d1bb1ef759b08a41dc36f431af6d` passed PGwire
+511/0/2 and separate Rails application20/100 checks, including process-kill
+recovery. All-target, Core and Native failed test compilation on an unconstrained
+channel type; no actual Core/Native cases executed. SQL and remaining-workspace
+are still live. The narrow local test correction is source-reviewed only.
+See the [exact findings](design/native-520-regression-findings.md) for pins and
+independent evidence scopes. The candidate remains unmerged; strong-read,
+bounded relocation, cold recovery, physical expansion and capacity qualification
+remain open. The failed Azure baseline is unchanged.
+
+## Earlier execution checkpoint — head0a failed, 2026-11-15 UTC
 
 Remote main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
 Unmerged520 source `0a04ccc06db33a04d254a5e00776248d7ea1772a` failed its normal

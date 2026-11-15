@@ -4,7 +4,41 @@ This record covers candidate **1.0.520-beta / `326c363477477950f76bdb51fe6425cab
 
 ## Actual execution
 
-### Latest head0a: Core guard compilation and Page profile assertion failures
+### Current head2ce: independent application passes, HA compilation blocked
+
+This is an **incomplete execution checkpoint**, not a completed archive or a
+passing candidate. Source **`2ce4c48202d4d1bb1ef759b08a41dc36f431af6d`**, tree
+`f4d72164c2a2a906857b179d44df216d4457b9f8`, is the public PR207 head. Actual
+checkout `e1ef338cb41d51d4d9dfbc8660502e4afbc3f366` has that identical tree.
+[Tests43696050976](https://github.com/nikoma/bicdb/actions/runs/43696050976)
+remains running at this checkpoint; SQL and remaining-workspace are still live.
+No useful job has been cancelled or restarted to publish the next correction.
+
+| Scope | Classification | Exact result and limit |
+| --- | --- | --- |
+| All-target, Core and Native | **Failed compilation** | Core test `storage.rs:2910` has E0282 for an unconstrained `mpsc::channel()` payload. Core/Native helper builds passed, but library-test compilation failed with zero actual Core/Native cases. The nondefault-consumer check was skipped. |
+| PGwire | **Passed, CI scope** | 511 passed / 0 failed / 2 ignored across target summaries. Separate Oracle HR: 50/0; embedded HA: 11/0; verification: 3/0. These do not exercise the complete distributed handoff or physical expansion. |
+| Rails | **Passed, application CI scope** | [Rails43696050973](https://github.com/nikoma/bicdb/actions/runs/43696050973): 20 runs, 100 assertions, zero failures/errors/skips; real queue/cache process-kill recovery, 24 completed reports and 24 cable messages. This does not qualify distributed HA. |
+| SQL and remaining workspace | **Inconclusive; still running** | Do not inherit earlier results or classify pending profile/CLI/application controls as passed. |
+| Physical expansion and release qualification | **Not tested** | No new Azure experiment, stable five-node throughput comparison or production admission. |
+
+The completed raw PGwire log is 1,323,097 bytes, SHA-256
+`6ad1a62b5f5256fbbf176f7e04061ab74cec6592889a835f2c88f0a923d3f099`;
+Rails is 1,185,534 bytes, SHA-256
+`3978cc0707f57abac7640839e1b0b20f9bce7c88bb941d94167f40246a4a691c`.
+The overall archive remains open until the remaining jobs terminate and their
+logs/artifacts are retained and independently verified.
+
+Local correction **`781b4e8029f0e8c747fee69252c94a9f04992103`** specifies
+`mpsc::channel::<()>()` in the failed test. Only dropping the sender releases the
+existing receive; no payload is sent. The actual thread-held shared guard,
+timeouts, ordering and assertions remain unchanged. This correction has source
+review and standalone formatting only; it has not been compiled or executed.
+The smallest next check is compilation of the actual Core test target followed
+by the unchanged backup exclusion control and required broad suites. The
+original FIRST/Strong/ACK, cold recovery and controller gates remain open.
+
+### Earlier head0a: Core guard compilation and Page profile assertion failures
 
 Source **`0a04ccc06db33a04d254a5e00776248d7ea1772a`**, tree `06a13e5accafa331271049a9ae44f1bf3628661a`, failed [Tests 43694564959](https://github.com/nikoma/bicdb/actions/runs/43694564959) and [Rails 43694565004](https://github.com/nikoma/bicdb/actions/runs/43694565004). Actual checkout `8295fbbb5e0c724ddbfe2d6325c30805b847a568` has the identical tree. Six jobs failed Core `E0277` at `paged_collection.rs:494`: the facade promises `Result<impl Drop>`, but the new owning Page guard has field cleanup without an explicit `Drop` implementation. Core and Native stopped in projection-helper compilation with zero actual cases; SQL, PGwire/Oracle, Rails and nondefault runtime acceptance were not reached.
 

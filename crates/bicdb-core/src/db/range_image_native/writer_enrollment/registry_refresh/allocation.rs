@@ -253,8 +253,9 @@ impl InstalledNativeWriterHostGuard {
                     if mode==1 {
                         let cut=AllocationCut{mode,parent_live:parent.check().is_ok(),own_live:prepared.require_memory().is_ok(),
                             parent_deadline:parent.deadline(),fired:0,xid:0};
+                        let fire=cut.parent_live && cut.own_live;
                         *self.state.allocation_cut.lock()=Some(cut);
-                        parent.cancel();
+                        if fire {parent.cancel();}
                         parent.check()?;
                     }
                     #[cfg(test)]
@@ -305,11 +306,14 @@ impl InstalledNativeWriterHostGuard {
                     fired: 0,
                     xid: 0,
                 };
+                let fire = cut.parent_live && cut.own_live;
                 *self.state.allocation_cut.lock() = Some(cut);
                 if let Some(cut) = self.state.allocation_cut.lock().as_mut() {
                     cut.xid = attempt.record.native_page_xid;
                 }
-                parent.cancel();
+                if fire {
+                    parent.cancel();
+                }
                 parent.check()?;
             }
             // A new request may inspect ONLY this real successful native return.

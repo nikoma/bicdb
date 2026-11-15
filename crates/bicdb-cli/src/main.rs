@@ -6292,8 +6292,9 @@ fn main() -> Result<()> {
                     println!("{}", serde_json::to_string_pretty(&report)?);
                 } else {
                     println!(
-                        "Processed memory jobs: processed={}, failed={}, pending={}",
-                        report.processed, report.failed, report.pending
+                        "Processed memory jobs: processed={}, failed={}, pending={}, unresolved={}, deferred={}, claim_deferred={}",
+                        report.processed, report.failed, report.pending, report.unresolved,
+                        report.deferred, report.claim_deferred
                     );
                 }
             }

@@ -260,8 +260,9 @@ impl NativeRegisteredRemoteRowTransactionGrant {
     pub(in crate::db) fn retain_wal_durable(&self, sequence: u64) {
         *self.logical.lock() = LogicalOutcome::WalDurablePendingApply(sequence);
     }
-    /// Actual inner applied/visible state, before outbox finalizers. It does
-    /// not clear a durability fence or replace fresh scope validation.
+    /// Actual inner fully applied LOCAL state, before outbox finalizers. It
+    /// proves no ordinary global ACK visibility, clears no durability fence,
+    /// and does not replace fresh scope validation.
     pub(in crate::db) fn retain_applied_known(&self, sequence: u64) {
         *self.logical.lock() = LogicalOutcome::AppliedKnown(sequence);
         #[cfg(test)]
@@ -275,6 +276,17 @@ impl NativeRegisteredRemoteRowTransactionGrant {
                 "actual_logical_sequence":sequence,"actual_boundary":"retain_applied_known"
             }),
         );
+    }
+    pub(in crate::db) fn require_applied_known(&self, db: &BicDb, tx: &Transaction) -> Result<()> {
+        self.require_current(db, tx)?;
+        if tx.state() != crate::db::TxState::Committed
+            || !matches!(*self.logical.lock(), LogicalOutcome::AppliedKnown(actual) if Some(actual) == tx.committed_seq)
+        {
+            return Err(invalid(
+                "Registered local completion needs original applied Tx outcome",
+            ));
+        }
+        Ok(())
     }
     pub(in crate::db) fn require_current(&self, db: &BicDb, tx: &Transaction) -> Result<()> {
         self.lexical
@@ -618,7 +630,7 @@ impl RetainedRemoteRows {
             let claim = authority.claim();
             tx.range_mutation_claim = Some(authority.claim());
             tx.native_registered_remote_row_grant =
-                Some(Box::new(NativeRegisteredRemoteRowTransactionGrant {
+                Some(Arc::new(NativeRegisteredRemoteRowTransactionGrant {
                     request: context.point.retain_transaction_request()?,
                     lexical: context.scope.retained_scope_liveness(),
                     fence: context.fence.clone(),

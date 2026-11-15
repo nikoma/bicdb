@@ -305,6 +305,22 @@ impl ActualNativeRf3Fixture {
     pub(crate) fn new_with_initial_ranges(initial_ranges: u32) -> Self {
         Self::new_with_network_and_initial_ranges(&BTreeMap::new(), initial_ranges)
     }
+    /// Explicit INITIAL test configuration only, before every database's
+    /// birth/genesis. This is neither a live leader transfer nor a Role grant.
+    pub(crate) fn new_with_split_initial_range_leaders() -> Self {
+        let leaders = [
+            ClusterNodeId::new("n1").unwrap(),
+            ClusterNodeId::new("n0").unwrap(),
+        ];
+        Self::new_with_initial_enrollment_and_leaders(
+            &BTreeMap::new(),
+            2,
+            false,
+            false,
+            false,
+            Some(&leaders),
+        )
+    }
     fn new_with_network_and_initial_ranges(
         network: &BTreeMap<ClusterNodeId, (String, String)>,
         initial_ranges: u32,
@@ -336,6 +352,23 @@ impl ActualNativeRf3Fixture {
         enroll: bool,
         enforce_from_birth: bool,
         event_schema: bool,
+    ) -> Self {
+        Self::new_with_initial_enrollment_and_leaders(
+            network,
+            initial_ranges,
+            enroll,
+            enforce_from_birth,
+            event_schema,
+            None,
+        )
+    }
+    fn new_with_initial_enrollment_and_leaders(
+        network: &BTreeMap<ClusterNodeId, (String, String)>,
+        initial_ranges: u32,
+        enroll: bool,
+        enforce_from_birth: bool,
+        event_schema: bool,
+        initial_range_leaders: Option<&[ClusterNodeId]>,
     ) -> Self {
         assert!(matches!(initial_ranges, 1 | 2));
         let root = tempfile::tempdir().unwrap();
@@ -399,6 +432,15 @@ impl ActualNativeRf3Fixture {
                     node_id: ClusterNodeId::new(id).unwrap(),
                     role: RangeReplicaRole::Voter,
                 });
+            }
+        }
+        if let Some(leaders) = initial_range_leaders {
+            assert_eq!(leaders.len(), topology.ranges.len());
+            for (range, leader) in topology.ranges.values_mut().zip(leaders) {
+                assert!(range.replicas.iter().any(|replica| {
+                    replica.node_id == *leader && replica.role == RangeReplicaRole::Voter
+                }));
+                range.leader = leader.clone();
             }
         }
         if !network.is_empty() {
@@ -806,3 +848,5 @@ fn native_normal_apply_actual_rf3_services_materialize_two_acks_and_lost_apply_c
 mod native_repair_regression;
 
 mod native_commit_uncertainty;
+#[cfg(test)]
+mod native_local_visibility_tests;

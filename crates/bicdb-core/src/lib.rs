@@ -525,7 +525,8 @@ pub use memory::{
 };
 pub use memory_index::{
     EmbeddingProviderKind, EmbeddingRuntime, MemoryIndexConsistency, MemoryIndexDefinition,
-    MemoryIndexJob, MemoryIndexMode, MemoryIndexProcessReport, MemoryJobStatus, ModelRegistryEntry,
+    MemoryIndexJob, MemoryIndexMode, MemoryIndexProcessReport, MemoryJobStatus,
+    MemoryJobWriteUncertainty, ModelRegistryEntry,
 };
 pub use mutation::{
     MutationActor, MutationGrantId, MutationGrantSpec, MutationOperation, MutationPolicy,

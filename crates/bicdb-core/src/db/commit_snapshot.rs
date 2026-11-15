@@ -51,12 +51,12 @@ impl BicDb {
     /// next transaction of every other session. Lower sequences are past
     /// validation and only applying; a fenced database or a stall past the
     /// bound stops the wait rather than hanging the commit.
-    pub(crate) fn wait_until_visible(&self, commit_seq: u64) {
+    pub(crate) fn wait_until_visible(&self, commit_seq: u64) -> bool {
         let mut spins = 0_u32;
         let mut started = None;
         while self.last_committed_tx.load(AtomicOrdering::SeqCst) < commit_seq {
             if self.durability.is_failed() {
-                return;
+                return false;
             }
             if spins < 64 {
                 spins += 1;
@@ -65,10 +65,11 @@ impl BicDb {
             }
             let started = *started.get_or_insert_with(std::time::Instant::now);
             if started.elapsed() > std::time::Duration::from_secs(5) {
-                return;
+                return false;
             }
             std::thread::yield_now();
         }
+        true
     }
 
     /// Encodes a committed transaction's WAL frames into a single byte buffer

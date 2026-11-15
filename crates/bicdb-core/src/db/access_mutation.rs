@@ -752,7 +752,9 @@ impl BicDb {
     /// Returns the commit sequence; the caller MUST call `tx_log_handle().
     /// write_durable(seq)` AFTER releasing the read lock (so concurrent commits
     /// pipeline and coalesce their durable writes), then call
-    /// [`Transaction::finalize_commit_admission`], before acknowledging.
+    /// [`Transaction::finalize_commit_admission`], before acknowledging. The
+    /// sequence is an incomplete handoff, not a success receipt: the finalizer
+    /// can report uncertainty if the original bounded visibility wait expired.
     pub fn commit_buffered_transaction(&self, tx: &mut Transaction) -> Result<u64> {
         self.commit_transaction(tx)
     }
@@ -998,6 +1000,7 @@ impl BicDb {
             native_prepare_only_rejection: None,
             native_uncertain_admission: None,
             committed_seq: None,
+            visibility_wait_exhausted: false,
             paged_snapshot: self
                 .paged_records
                 .as_ref()

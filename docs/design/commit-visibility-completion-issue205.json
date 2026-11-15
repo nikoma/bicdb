@@ -1,0 +1,44 @@
+{
+  "basis": "1fcfdc3adf7e38422173e072e6fec4ad56e48188",
+  "derived_memory_jobs": {
+    "all_obligations": "Enqueue every actual collection before processing Sync work or returning its first error. Failed persistence retains RAM obligations without claiming atomic cold reconstruction.",
+    "barrier_error": "Actual reader-barrier/status I/O failure retains the observed original uncertainty in RAM, returns typed original uncertainty where known, and invokes the existing durability fence. A healthy visibility timeout itself never fences the database. Conservative sticky feature publication is not undone after status-write failure.",
+    "baseline_read_limit": "Existing get/latest_snapshot and same-source_hash dedup semantics are not redesigned: an older eligible same-body job may observe a later physically applied record. No successful incorrect ordinary ACK follows from this source observation alone; derived writes still require global completion. No reproduction or physical claim.",
+    "failure_attribution": "Persistence helper fences generic I/O; current update wraps only its newly observed actual uncertainty, not first global old job. Every observed outcome remains retained even when one representative error is returned.",
+    "no_replay": "Derived row IDs/source hashes converge, but ordinary audit/sync events can be regenerated. Therefore no automatic retry of an unknown derived write is added. Concurrent older status updates and same-source enqueue cannot erase its uncertainty.",
+    "older_reader": "Before persisting unknown job semantics, every sidecar writer holds its shared jobs snapshot through an unconditional durable memory_job_outcome_unknown_v1 root-format barrier and then status publication. This early mandatory feature blocks older readers before page/log recovery. Late strict status decoding alone is insufficient: old open can rewrite WAL before decoding jobs. The component exercises the current validator with that feature removed, not an old binary.",
+    "open": "Same-original derived-outcome reconciliation is not implemented. The pre-existing job-metadata persistence/crash handoff gap is not repaired by pretending record WAL alone reconstructs jobs. Existing persistence errors remain explicit; this is not an exactly-once or cold job-recovery protocol. An unrecorded in-flight derived write across a crash remains an existing job handoff gap; no old/new-binary exactly-once or complete recovery guarantee is inferred from the new feature.",
+    "readiness": "Each newly committed source job carries DATA from its actual original committed sequence. Legacy jobs and existing genuinely visible scan/stale-read producers keep no floor. Both worker paths defer before model/record reads until the actual contiguous watermark covers a source floor; other eligible jobs can continue.",
+    "same_open_ownership": "Per-job lexical claims (4096 maximum) span actual result/status publication. Reread same current Pending/noUnknown after claim; stale worker snapshots cannot reexecute a retained Unknown. Report deferred and claim_deferred scalars; other IDs remain independent. Sync requires each selected actual obligation Indexed; no new wait is minted.",
+    "sync": "Enqueue all actual obligations before reporting uncertainty. A sync obligation that cannot yet read its source is not silently downgraded to successful asynchronous completion, including under a native-local profile.",
+    "unknown_write": "A real derived write returning CommitOutcomeUnknown is retained as OutcomeUnknown, with every observed original transaction/sequence/incarnation/error. It is neither Failed nor Indexed nor processed. Ordinary workers refuse replay, and later equal payloads do not prove its old outcome."
+  },
+  "issue": "https://github.com/nikoma/bicdb/issues/205",
+  "native_local_completion": {
+    "lifetime": "Grant Arc clones share one genuine original object and do not strengthen its weak lexical authorization. The pending profile borrows the original scope owner. No permanent WAL-pin map or new Role/OWN/session exists.",
+    "meaning": "This profile supplies only local durable full-apply completion. Native WAL mint/validation and later independent range lineage, certificate, local-B, QQ and command-completion checks remain strict. It is not a native APP ACK, Strong, Serving, or global SQL proof.",
+    "ordinary_admitted_recovery": "Ordinary native-admitted uncertainty can release its Tx pin without local_applied. Durable full CQ command/checksum survives unresolved status; actual historical recovery validates original protected pending/prefix with fresh real authority and replays the same certified command with imported projection. Availability requires actual quorum/runtime/freeze and may refuse; no old-receipt resurrection or automatic cold protocol.",
+    "ordinary_escape": "The public ordinary finalizer independently checks actual global visibility even after a native-local handoff; a false wait-exhausted flag cannot authorize success. Native-local completion does not set a generic successful thread floor.",
+    "producers": "Only the three certified/origin/historical native apply callers and the two private Registered/Joined row-import entrypoints construct this profile. Ordinary entrypoints pass no profile.",
+    "profile": "The private pre-effect NativeWalApplyPreparation retains the actual NativeRangePendingApply plus real mutation authority, or the same original Registered/Joined RowGrant allocation. No serde, Clone, numeric-floor, or flag-only constructor exists.",
+    "validation": "Revalidate the same actual DB/transaction, original open, mutation hash, armed original command-scope allocation/lease, protected pending/native birth/generations, or exact original RowGrant allocation and unchanged full lexical validator before WAL. At completion require original AppliedKnown state or a genuine same-Tx synchronized WAL receipt."
+  },
+  "ordinary_completion": {
+    "PG_deferred_scope_limit": "PG extracts committed DDL DATA before finalizer errors; no undo-on-Drop. Actual Committed+durable+finalizerError now attempts unchanged header/context/token/child-proven cleanup under nonblocking recursive shared borrow before propagating exactprimary, with secondarynotice if needed. No exclusiveDBwait/newdeadline. Busy/refused scope or mutable purge mayremain deferred; no complete cold protocol.",
+    "SQL_retained_owner": "Consuming API delegates to in-place retained owner with original operation order. SQL inspects actual TxState before original drop. Committed+Err detaches committed DDL from rollback state and commits session/GUC/savepoint state before fallible cleanup; original error retained, no successful independent/session floor. Pending+Unknown is not abort proof; existing unresolved behavior unchanged.",
+    "bound": "The original five-second visibility wait and its position inside commit admission remain unchanged.",
+    "buffered": "The existing public buffered sequence is an incomplete handoff. Its caller must deliver WAL and invoke the ordinary admission finalizer before acknowledging. PGwire retains physically committed session/DDL cleanup but updates its session floor only after successful durability and finalizers.",
+    "exhaustion": "Keep actual durable apply, original transaction/sequence/incarnation, SSI/catalog cleanup and audit/broker/sync obligations. Return CommitOutcomeUnknown; publish no ordinary Committed receipt or successful thread floor. Do not replay the original transaction.",
+    "later_progress": "Later prefix convergence does not retroactively change the returned uncertainty into an ACK. No fresh five-second window is minted by a later finalizer.",
+    "success": "Ordinary completion requires the actual contiguous visibility watermark to cover the selected committed sequence. An assigned counter, absent error flag, or local native receipt does not supply this proof."
+  },
+  "schema": "commit-visibility-completion-issue205-source-proposal-v1",
+  "scope_limits": [
+    "The original A/B source concern was not executed on the baseline; no observed data loss or successful Strong false-absence claim is made.",
+    "Strong uses its own genuine opaque target-local materialization floor and independent fresh authority. It is not globally clamped by this ordinary SQL rule.",
+    "Existing notifications retain their existing durability predicate; no new durable notification/reconciliation protocol is claimed.",
+    "The new real WAL/apply concurrency and native controls are test definitions only until actual repository CI runs them.",
+    "No source version, release, binary, deployment, controller, cold handoff, or physical HA qualification is assigned by this proposal."
+  ],
+  "status": "Unversioned source proposal; not compiled, executed, merged, or qualified"
+}

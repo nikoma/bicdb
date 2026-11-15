@@ -32,6 +32,8 @@ mod cast_lookup_tests;
 #[cfg(test)]
 mod catalog_join_tests;
 #[cfg(test)]
+mod committed_error_tests;
+#[cfg(test)]
 mod driver_metadata_tests;
 pub(crate) mod functions_insert;
 mod join_lookup_tests;
@@ -4487,10 +4489,21 @@ impl<'db> SqlSession<'db> {
         }
         self.pg_large_objects.clear();
         let mut committed_sequence = 0;
-        if let Some(tx) = self.tx.take() {
+        let mut committed_error = None;
+        if let Some(mut tx) = self.tx.take() {
             let owner_reads = tx.enter_catalog_read_access().ok();
-            match tx.commit_with_sequence() {
+            let result = tx.commit_with_sequence_in_place();
+            // Error tags, sequences and generic receipts are not local-commit
+            // proof. Inspect the SAME original owner before its original drop
+            // boundary, then retain ordinary row-lock/admission cleanup timing.
+            let actually_committed = tx.state() == bicdb_core::TxState::Committed;
+            drop(tx);
+            match result {
                 Ok(sequence) => committed_sequence = sequence,
+                Err(error) if actually_committed => {
+                    committed_error = Some(SqlError::from(error));
+                    crate::statement_context::note_independent_execution();
+                }
                 Err(error) => {
                     let _ddl_rollback = self.rollback_ddl_after_transaction_end(owner_reads);
                     self.savepoints.clear();
@@ -4502,29 +4515,57 @@ impl<'db> SqlSession<'db> {
         if self.oracle_autonomous {
             self.oracle_autonomous_epoch += 1;
             self.oracle_autonomous_active = false;
-            crate::statement_context::note_independent_commit(committed_sequence);
-            self.snapshot_floor = self.snapshot_floor.max(committed_sequence);
-        } else if self.defer_commit {
+            if committed_error.is_none() {
+                crate::statement_context::note_independent_commit(committed_sequence);
+                self.snapshot_floor = self.snapshot_floor.max(committed_sequence);
+            }
+        } else if self.defer_commit && committed_error.is_none() {
             crate::statement_context::note_independent_commit(committed_sequence);
             self.snapshot_floor = self.snapshot_floor.max(committed_sequence);
         }
-        let committed_catalog_work = !self.ddl_undo.is_empty();
-        finish_committed_catalog_scopes(self.db_ref(), &self.ddl_undo)?;
-        self.ddl_undo.clear();
+        // These are committed catalog/GUC obligations even when the caller
+        // receives uncertainty. Never undo durable DDL because ACK visibility
+        // was not established. Preserve the primary error on cleanup failure.
+        // Detach committed entries BEFORE any fallible cleanup. Statement
+        // error wrappers may subsequently request rollback, but these entries
+        // are no longer rollback obligations. Durable rename/purge journals
+        // remain the recovery source if committed cleanup itself fails.
+        let committed_ddl = std::mem::take(&mut self.ddl_undo);
+        let committed_catalog_work = !committed_ddl.is_empty();
         self.savepoints.clear();
         self.commit_guc_transaction();
-        recycle_bin_journal::stage("deferred_purge_decided");
-        // The purge decision is already in the durable outer commit. A cleanup
-        // error must preserve its marker for startup, never undo committed DDL.
-        // Concurrent/shared COMMIT cannot mutate the collection catalog. Its
-        // durable purge markers remain hidden until exclusive cleanup/startup.
-        if self.exclusive {
-            if committed_catalog_work {
-                finish_committed_recycle_bin_purges(self.db_mut()?)?;
-            } else {
-                recycle_bin_journal::recover_purges(self.db_mut()?)?;
+        let cleanup = (|| -> Result<()> {
+            finish_committed_catalog_scopes(self.db_ref(), &committed_ddl)?;
+            recycle_bin_journal::stage("deferred_purge_decided");
+            // The purge decision is already in the durable outer commit. A cleanup
+            // error must preserve its marker for startup, never undo committed DDL.
+            // Concurrent/shared COMMIT cannot mutate the collection catalog. Its
+            // durable purge markers remain hidden until exclusive cleanup/startup.
+            if self.exclusive {
+                if committed_catalog_work {
+                    finish_committed_recycle_bin_purges(self.db_mut()?)?;
+                } else {
+                    recycle_bin_journal::recover_purges(self.db_mut()?)?;
+                }
             }
+            Ok(())
+        })();
+        if let Some(primary) = committed_error {
+            return match cleanup {
+                Ok(()) => Err(primary),
+                Err(secondary) => Err(SqlError::WithNotices {
+                    error: Box::new(primary),
+                    notices: vec![crate::SqlNotice {
+                        sqlstate: "01000".into(),
+                        message: format!(
+                            "locally committed transaction cleanup remains deferred: {secondary}"
+                        ),
+                        fields: Vec::new(),
+                    }],
+                }),
+            };
         }
+        cleanup?;
         Ok(SqlResult::command("COMMIT"))
     }
 

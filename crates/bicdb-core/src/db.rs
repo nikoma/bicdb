@@ -6,6 +6,8 @@ pub use catalog_admission::{
     CatalogCreatedCollectionUndo, CatalogReadAccess, CatalogScopeAccess, CatalogScopeToken,
 };
 mod commit_snapshot;
+#[cfg(test)]
+mod commit_visibility_tests;
 mod decimal_predicate;
 mod deferred_materialize;
 mod exact_decimal_sum;
@@ -300,7 +302,8 @@ use crate::large_value::{self, LargeValueReader, LargeValueRef};
 use crate::memory_index::{
     embed_text, memory_error, record_memory_text, score_memory_results, source_hash,
     EmbeddingRuntime, MemoryIndexConsistency, MemoryIndexDefinition, MemoryIndexJob,
-    MemoryIndexMode, MemoryIndexProcessReport, MemoryJobStatus, ModelRegistryEntry,
+    MemoryIndexMode, MemoryIndexProcessReport, MemoryJobStatus, MemoryJobWriteUncertainty,
+    ModelRegistryEntry,
 };
 use crate::mutation::{
     MutationActor, MutationGrant, MutationGrantId, MutationGrantSpec, MutationOperation,
@@ -4210,6 +4213,9 @@ pub struct BicDb {
     model_registry: RwLock<FxHashMap<String, ModelRegistryEntry>>,
     memory_indexes: RwLock<FxHashMap<String, MemoryIndexDefinition>>,
     memory_index_jobs: RwLock<Vec<MemoryIndexJob>>,
+    // Bounded, same-open lexical exclusion per actual job. No worker retains
+    // the mutex while embedding, committing, or publishing job status.
+    memory_job_in_flight: Mutex<BTreeSet<Uuid>>,
     // Cold paths (no vectors/graphs in OLTP): a single RwLock each is enough to
     // let the shared-lock commit apply mutate them through `&self` without
     // per-entry churn; readers (vector search / graph queries) take the read side.
@@ -8571,12 +8577,30 @@ impl ReadImages {
     }
 }
 
+const MEMORY_JOB_IN_FLIGHT_CAP: usize = 4096;
+
+/// Only a same-open worker may own a selected job until its actual result and
+/// status publication finish. Other job IDs remain independently eligible.
+struct MemoryJobBatchClaims<'a> {
+    claimed: &'a Mutex<BTreeSet<Uuid>>,
+    ids: BTreeSet<Uuid>,
+}
+impl Drop for MemoryJobBatchClaims<'_> {
+    fn drop(&mut self) {
+        let mut claimed = self.claimed.lock();
+        for id in &self.ids {
+            claimed.remove(id);
+        }
+    }
+}
+
 struct PreparedMemoryIndexJob {
     job_id: Uuid,
     action: PreparedMemoryIndexJobAction,
 }
 
 enum PreparedMemoryIndexJobAction {
+    Deferred,
     Index {
         collection: String,
         record: Record,
@@ -9814,10 +9838,10 @@ pub struct Transaction {
     // Heap ownership preserves the same sealed grant and outcome custody.
     #[cfg(feature = "tls-replication")]
     native_registered_remote_row_grant:
-        Option<Box<range_image_native::NativeRegisteredRemoteRowTransactionGrant>>,
+        Option<Arc<range_image_native::NativeRegisteredRemoteRowTransactionGrant>>,
     #[cfg(feature = "tls-replication")]
     native_joined_remote_row_grant:
-        Option<Box<range_image_native::NativeJoinedRemoteRowTransactionGrant>>,
+        Option<Arc<range_image_native::NativeJoinedRemoteRowTransactionGrant>>,
     range_mutation_claim: Option<crate::distribution_range_mutation::RangeMutationClaim>,
     database_mutation_permit: Option<crate::distribution_range_mutation::DatabaseMutationPermit>,
     native_wal_retention: Option<native_wal_apply::NativeWalRetentionPin>,
@@ -9830,6 +9854,9 @@ pub struct Transaction {
         crate::distribution_range_consensus::NativePrepareOnlyRejection,
     )>,
     committed_seq: Option<u64>,
+    // Original bounded wait result, not a new deadline or a durability grant.
+    // It stays sticky through outer finalization even if the prefix later closes.
+    visibility_wait_exhausted: bool,
     // Paged mode: the page-store snapshot captured when this transaction began,
     // used to read rows a lazy collection has never touched this session (they
     // have no shard entry to consult). Capturing at begin rather than at each
@@ -11874,6 +11901,7 @@ impl BicDb {
             model_registry,
             memory_indexes,
             memory_index_jobs,
+            memory_job_in_flight: Mutex::new(BTreeSet::new()),
             hnsw_indexes,
             graphs,
             tx_states: Arc::new(ShardedMutexMap::from_iter_with_shards(
@@ -12183,7 +12211,7 @@ impl BicDb {
             .insert(definition.name.clone(), definition);
         self.persist_memory_index_catalog()?;
         let records = self.scan_collection_unchecked(collection)?;
-        self.enqueue_memory_jobs_for_records(collection, &records)?;
+        self.enqueue_memory_jobs_for_records(collection, &records, None)?;
         if mode == MemoryIndexMode::Sync {
             self.process_sync_memory_jobs_for_records(collection, &records)?;
         }
@@ -12221,6 +12249,10 @@ impl BicDb {
             .take(limit)
             .cloned()
             .collect::<Vec<_>>();
+        #[cfg(test)]
+        commit_visibility_tests::after_memory_job_selection(
+            pending_jobs.iter().map(|job| job.job_id).collect(),
+        );
         self.process_memory_index_job_batch(pending_jobs)
     }
 
@@ -12261,15 +12293,61 @@ impl BicDb {
     }
 
     fn finalize_memory_jobs_for_committed_transaction(&self, tx: &Transaction) -> Result<()> {
-        // Without any memory index or pending memory job there is nothing to
-        // enqueue or process; skip before `memory_upserts_by_collection`
-        // deep-clones every record the transaction wrote.
+        // Keep the existing fast path before cloning actual source rows.
         if self.memory_indexes.read().is_empty() && self.memory_index_jobs.read().is_empty() {
             return Ok(());
         }
-        for (collection, records) in tx.memory_upserts_by_collection() {
-            self.enqueue_memory_jobs_for_records(&collection, &records)?;
-            self.process_sync_memory_jobs_for_records(&collection, &records)?;
+        let visible = !tx.visibility_wait_exhausted
+            && tx
+                .committed_seq
+                .is_some_and(|sequence| self.current_visibility_watermark() >= sequence);
+        let upserts = tx.memory_upserts_by_collection();
+        let mut enqueue_error = None;
+        for (collection, records) in &upserts {
+            if let Err(error) =
+                self.enqueue_memory_jobs_for_records(collection, records, tx.committed_seq)
+            {
+                // Retain every actual source obligation in RAM even if an
+                // earlier sidecar publication failed. That failure remains
+                // explicit; record WAL is not cold job reconstruction.
+                if enqueue_error.is_none() {
+                    enqueue_error = Some(error);
+                }
+            }
+        }
+        if let Some(error) = enqueue_error {
+            return Err(error);
+        }
+        let mut sync_deferred = false;
+        let mut sync_error = None;
+        for (collection, records) in &upserts {
+            if visible {
+                if let Err(error) = self.process_sync_memory_jobs_for_records(collection, records) {
+                    if sync_error.is_none() {
+                        sync_error = Some(error);
+                    }
+                }
+            } else {
+                // Enqueue EVERY actual obligation before reporting uncertainty.
+                // A native-local proof does not turn a global-snapshot memory
+                // worker into a reader above its source's actual visibility.
+                sync_deferred |= self.memory_indexes.read().values().any(|definition| {
+                    definition.collection == *collection
+                        && definition.mode == MemoryIndexMode::Sync
+                        && records
+                            .iter()
+                            .any(|record| record_memory_text(record, &definition.field).is_some())
+                });
+            }
+        }
+        if let Some(error) = sync_error {
+            return Err(error);
+        }
+        if sync_deferred {
+            return Err(BicDbError::CommitOutcomeUnknown {
+                sequence: tx.committed_seq, transaction_id: Some(tx.id.0), incarnation: self.incarnation.clone(),
+                detail: "required sync memory indexing is durably queued but its original source sequence is not visible to the ordinary worker; no success or automatic original-transaction replay".into(),
+            });
         }
         Ok(())
     }
@@ -12278,17 +12356,55 @@ impl BicDb {
         &self,
         jobs: Vec<MemoryIndexJob>,
     ) -> Result<MemoryIndexProcessReport> {
-        let prepared = jobs
+        let claims = {
+            let mut claimed = self.memory_job_in_flight.lock();
+            let mut ids = BTreeSet::new();
+            for job in &jobs {
+                if claimed.len() < MEMORY_JOB_IN_FLIGHT_CAP && claimed.insert(job.job_id) {
+                    ids.insert(job.job_id);
+                }
+            }
+            MemoryJobBatchClaims {
+                claimed: &self.memory_job_in_flight,
+                ids,
+            }
+        };
+        // The input may be an older worker snapshot captured before another
+        // worker retained Unknown. Read the SAME current job after claiming it;
+        // never authorize a write from the stale Pending copy.
+        let current_jobs = self
+            .memory_index_jobs
+            .read()
+            .iter()
+            .filter(|job| {
+                claims.ids.contains(&job.job_id)
+                    && job.status == MemoryJobStatus::Pending
+                    && job.unresolved_derived_writes.is_empty()
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let prepared = current_jobs
             .iter()
             .map(|job| self.prepare_memory_index_job(job))
             .collect::<Vec<_>>();
         let mut indexed_by_collection = BTreeMap::<String, Vec<(Uuid, Record)>>::new();
         let mut stale_by_collection = BTreeMap::<String, Vec<Record>>::new();
         let mut statuses = Vec::<(Uuid, MemoryJobStatus, Option<String>)>::new();
-        let mut report = MemoryIndexProcessReport::default();
+        let mut unresolved = Vec::<(Uuid, MemoryJobWriteUncertainty)>::new();
+        let mut report = MemoryIndexProcessReport {
+            deferred: jobs.len().saturating_sub(current_jobs.len()),
+            claim_deferred: jobs
+                .iter()
+                .filter(|job| !claims.ids.contains(&job.job_id))
+                .count(),
+            ..MemoryIndexProcessReport::default()
+        };
 
         for prepared in prepared {
             match prepared.action {
+                PreparedMemoryIndexJobAction::Deferred => {
+                    report.deferred += 1;
+                }
                 PreparedMemoryIndexJobAction::Index { collection, record } => {
                     indexed_by_collection
                         .entry(collection)
@@ -12323,6 +12439,28 @@ impl BicDb {
                         statuses.push((job_id, MemoryJobStatus::Indexed, None));
                     }
                 }
+                Err(error @ BicDbError::CommitOutcomeUnknown { .. }) => {
+                    let BicDbError::CommitOutcomeUnknown {
+                        sequence,
+                        transaction_id,
+                        incarnation,
+                        ..
+                    } = &error
+                    else {
+                        unreachable!()
+                    };
+                    let actual = MemoryJobWriteUncertainty {
+                        transaction_id: *transaction_id,
+                        sequence: *sequence,
+                        incarnation: incarnation.clone(),
+                        error: error.to_string(),
+                    };
+                    // The row projection converges, but its ordinary audit and
+                    // sync events cannot be safely replayed from payload equality.
+                    for (job_id, _) in indexed {
+                        unresolved.push((job_id, actual.clone()));
+                    }
+                }
                 Err(error) => {
                     report.failed += indexed.len();
                     report.failures.push(error.to_string());
@@ -12333,9 +12471,9 @@ impl BicDb {
             }
         }
 
-        self.update_memory_job_statuses(&statuses)?;
+        self.update_memory_job_statuses(&statuses, &unresolved)?;
         for (collection, records) in stale_by_collection {
-            self.enqueue_memory_jobs_for_records(&collection, &records)?;
+            self.enqueue_memory_jobs_for_records(&collection, &records, None)?;
         }
         report.pending = self
             .memory_index_jobs
@@ -12343,10 +12481,35 @@ impl BicDb {
             .iter()
             .filter(|job| job.status == MemoryJobStatus::Pending)
             .count();
+        report.unresolved = self
+            .memory_index_jobs
+            .read()
+            .iter()
+            .filter(|job| job.status == MemoryJobStatus::OutcomeUnknown)
+            .count();
         Ok(report)
     }
 
     fn prepare_memory_index_job(&self, job: &MemoryIndexJob) -> PreparedMemoryIndexJob {
+        if job.status == MemoryJobStatus::OutcomeUnknown
+            || !job.unresolved_derived_writes.is_empty()
+        {
+            return PreparedMemoryIndexJob {
+                job_id: job.job_id,
+                action: PreparedMemoryIndexJobAction::Deferred,
+            };
+        }
+        if job
+            .source_commit_seq
+            .is_some_and(|floor| self.current_visibility_watermark() < floor)
+        {
+            // Both async and sync callers use this producer. A source record
+            // below its actual visibility floor is not missing or stale.
+            return PreparedMemoryIndexJob {
+                job_id: job.job_id,
+                action: PreparedMemoryIndexJobAction::Deferred,
+            };
+        }
         let model = self.model_registry.read().get(&job.model).cloned();
         let Some(model) = model else {
             return PreparedMemoryIndexJob {
@@ -12456,13 +12619,36 @@ impl BicDb {
             .iter()
             .filter(|job| {
                 job.collection == collection
-                    && job.status == MemoryJobStatus::Pending
+                    && matches!(
+                        job.status,
+                        MemoryJobStatus::Pending | MemoryJobStatus::OutcomeUnknown
+                    )
                     && record_ids.contains(job.record_id.as_str())
                     && sync_index_names.contains(&job.index_name)
             })
             .cloned()
             .collect::<Vec<_>>();
+        let selected = jobs.iter().map(|job| job.job_id).collect::<FxHashSet<_>>();
         let report = self.process_memory_index_job_batch(jobs)?;
+        let selected_complete = {
+            let held = self.memory_index_jobs.read();
+            if let Some(actual) = held
+                .iter()
+                .filter(|job| selected.contains(&job.job_id))
+                .flat_map(|job| &job.unresolved_derived_writes)
+                .next()
+            {
+                return Err(BicDbError::CommitOutcomeUnknown {
+                    sequence: actual.sequence, transaction_id: actual.transaction_id,
+                    incarnation: actual.incarnation.clone(),
+                    detail: format!("sync memory indexing retained an unresolved original derived write; ordinary worker replay is refused: {}", actual.error),
+                });
+            }
+            selected.iter().all(|id| {
+                held.iter()
+                    .any(|job| job.job_id == *id && job.status == MemoryJobStatus::Indexed)
+            })
+        };
         if report.failed > 0 {
             return Err(memory_error(format!(
                 "sync memory indexing failed for {} job(s): {}",
@@ -12470,10 +12656,26 @@ impl BicDb {
                 report.failure_summary()
             )));
         }
+        if !selected_complete {
+            // In-flight ownership/cap deferral is not successful Sync work.
+            // This internal boundary has no new derived transaction identity;
+            // its original source-Tx finalizer supplies that actual identity.
+            return Err(BicDbError::CommitOutcomeUnknown {
+                sequence: None,
+                transaction_id: None,
+                incarnation: self.incarnation.clone(),
+                detail: "selected sync memory-index obligations are not Indexed; deferred or in-flight work is not completion and no original transaction may be replayed".into(),
+            });
+        }
         Ok(())
     }
 
-    fn enqueue_memory_jobs_for_records(&self, collection: &str, records: &[Record]) -> Result<()> {
+    fn enqueue_memory_jobs_for_records(
+        &self,
+        collection: &str,
+        records: &[Record],
+        source_commit_seq: Option<u64>,
+    ) -> Result<()> {
         let definitions = self
             .memory_indexes
             .read()
@@ -12501,12 +12703,15 @@ impl BicDb {
                         if job.source_hash == source_hash
                             && matches!(
                                 job.status,
-                                MemoryJobStatus::Pending | MemoryJobStatus::Indexed
+                                MemoryJobStatus::Pending
+                                    | MemoryJobStatus::Indexed
+                                    | MemoryJobStatus::OutcomeUnknown
                             )
                         {
                             already_queued = true;
                         } else if job.source_hash != source_hash
                             && job.status != MemoryJobStatus::Stale
+                            && job.status != MemoryJobStatus::OutcomeUnknown
                         {
                             job.status = MemoryJobStatus::Stale;
                             job.updated_at = now;
@@ -12517,6 +12722,8 @@ impl BicDb {
                         continue;
                     }
                     jobs.push(MemoryIndexJob {
+                        source_commit_seq,
+                        unresolved_derived_writes: Vec::new(),
                         job_id: Uuid::new_v4(),
                         index_name: definition.name.clone(),
                         collection: definition.collection.clone(),
@@ -12542,8 +12749,9 @@ impl BicDb {
     fn update_memory_job_statuses(
         &self,
         updates: &[(Uuid, MemoryJobStatus, Option<String>)],
+        unresolved: &[(Uuid, MemoryJobWriteUncertainty)],
     ) -> Result<()> {
-        if updates.is_empty() {
+        if updates.is_empty() && unresolved.is_empty() {
             return Ok(());
         }
         {
@@ -12551,13 +12759,40 @@ impl BicDb {
             let now = unix_timestamp();
             for (job_id, status, error) in updates {
                 if let Some(job) = jobs.iter_mut().find(|job| job.job_id == *job_id) {
+                    // A concurrent older worker result is not reconciliation
+                    // of the retained original unresolved write.
+                    if job.status == MemoryJobStatus::OutcomeUnknown {
+                        continue;
+                    }
                     job.status = *status;
                     job.error = error.clone();
                     job.updated_at = now;
                 }
             }
+            for (job_id, actual) in unresolved {
+                if let Some(job) = jobs.iter_mut().find(|job| job.job_id == *job_id) {
+                    job.status = MemoryJobStatus::OutcomeUnknown;
+                    job.error = Some(actual.error.clone());
+                    if !job.unresolved_derived_writes.contains(actual) {
+                        job.unresolved_derived_writes.push(actual.clone());
+                    }
+                    job.updated_at = now;
+                }
+            }
         }
-        self.persist_memory_index_jobs()
+        self.persist_memory_index_jobs().map_err(|error| {
+            // Attribute this API result only to THIS update's actual derived
+            // attempt. An unrelated older unresolved job is not this caller.
+            match unresolved.first() {
+                Some((_, actual)) => BicDbError::CommitOutcomeUnknown {
+                    sequence: actual.sequence,
+                    transaction_id: actual.transaction_id,
+                    incarnation: actual.incarnation.clone(),
+                    detail: format!("original derived write remains unresolved; its reader barrier/status publication failed: {error}; original outcome: {}", actual.error),
+                },
+                None => error,
+            }
+        })
     }
 
     fn persist_model_registry(&self) -> Result<()> {
@@ -12581,13 +12816,36 @@ impl BicDb {
     }
 
     fn persist_memory_index_jobs(&self) -> Result<()> {
-        persist_memory_index_jobs(
-            &self.path,
-            &self.memory_index_jobs.read(),
-            self.config.fsync,
-            &self.encryption,
-            storage::FailClosed::AfterRename(&self.durability),
-        )
+        // Keep the read guard through barrier + publication. Every metadata
+        // writer uses this helper, so a concurrent ordinary job update cannot
+        // serialize newly observed Unknown semantics before the reader fence.
+        let jobs = self.memory_index_jobs.read();
+        let unresolved = jobs.iter().any(|job| {
+            job.status == MemoryJobStatus::OutcomeUnknown
+                || !job.unresolved_derived_writes.is_empty()
+        });
+        let result = (|| {
+            if unresolved {
+                crate::format::enable_memory_job_outcome_unknown(&self.path)?;
+            }
+            persist_memory_index_jobs(
+                &self.path,
+                &jobs,
+                self.config.fsync,
+                &self.encryption,
+                storage::FailClosed::AfterRename(&self.durability),
+            )
+        })();
+        if unresolved {
+            if let Err(error) = result {
+                drop(jobs);
+                // This is a genuine failed semantic durability barrier or
+                // metadata write, not fencing a healthy visibility timeout.
+                self.fence_durability("memory_jobs.unresolved_publication", &error);
+                return Err(error);
+            }
+        }
+        result
     }
 
     pub fn replication_watermark(&self) -> ReplicationWatermark {
@@ -19479,9 +19737,17 @@ impl Transaction {
     /// Independently committing SQL calls use it to carry read-your-writes
     /// across their caller's suspended transaction.
     pub fn commit_with_sequence(mut self) -> Result<u64> {
+        self.commit_with_sequence_in_place()
+    }
+
+    /// Complete this original transaction while retaining its owner for honest
+    /// cleanup after an error. The same WAL/finalizer/checkpoint order as the
+    /// consuming API applies. An error is not an abort proof: inspect actual
+    /// state, then dispose of this owner; never replay a committed transaction.
+    pub fn commit_with_sequence_in_place(&mut self) -> Result<u64> {
         let db = self.db;
         // Safety: see db_mut; this avoids holding a borrow through `self`.
-        let commit_seq = unsafe { db.as_ref() }.commit_transaction(&mut self)?;
+        let commit_seq = unsafe { db.as_ref() }.commit_transaction(self)?;
         // Direct (single-owner) commits are durable on return: write inline. The
         // pgwire path instead defers this to decoupled group commit after
         // releasing the database write lock.
@@ -19500,15 +19766,21 @@ impl Transaction {
     fn commit_registered_remote_image_with_sequence(mut self) -> Result<u64> {
         let db = self.db;
         let database = unsafe { db.as_ref() };
-        self.native_registered_remote_row_grant
+        let actual = self
+            .native_registered_remote_row_grant
             .as_ref()
             .ok_or_else(|| {
                 BicDbError::Cluster("Registered row commit requires actual private grant".into())
-            })?
-            .require_current(database, &self)?;
-        let sequence = database.commit_transaction(&mut self)?;
+            })?;
+        actual.require_current(database, &self)?;
+        let local = native_wal_apply::NativeWalApplyPreparation::for_registered(
+            database,
+            &self,
+            Arc::clone(actual),
+        )?;
+        let sequence = database.commit_transaction_with_native_preparation(&mut self, &local)?;
         database.tx_log.write_durable(sequence)?;
-        self.finalize_commit_admission()?;
+        self.finalize_native_local_apply(&local, None)?;
         self.finalize_committed_broker_outbox();
         self.finalize_committed_memory_jobs()?;
         Ok(sequence)
@@ -19527,15 +19799,21 @@ impl Transaction {
                 "Joined row commit has mixed grant provenance".into(),
             ));
         }
-        self.native_joined_remote_row_grant
+        let actual = self
+            .native_joined_remote_row_grant
             .as_ref()
             .ok_or_else(|| {
                 BicDbError::Cluster("Joined row commit needs actual private grant".into())
-            })?
-            .require_current(database, &self)?;
-        let sequence = database.commit_transaction(&mut self)?;
+            })?;
+        actual.require_current(database, &self)?;
+        let local = native_wal_apply::NativeWalApplyPreparation::for_joined(
+            database,
+            &self,
+            Arc::clone(actual),
+        )?;
+        let sequence = database.commit_transaction_with_native_preparation(&mut self, &local)?;
         database.tx_log.write_durable(sequence)?;
-        self.finalize_commit_admission()?;
+        self.finalize_native_local_apply(&local, None)?;
         self.finalize_committed_broker_outbox();
         self.finalize_committed_memory_jobs()?;
         Ok(sequence)
@@ -19544,6 +19822,23 @@ impl Transaction {
     /// Checkpoint the range command as locally applied only after the caller's
     /// ordinary WAL durability boundary has completed.
     pub fn finalize_commit_admission(&mut self) -> Result<()> {
+        self.require_commit_visibility_completion()?;
+        self.finalize_commit_admission_inner()
+    }
+
+    fn finalize_native_local_apply(
+        &mut self,
+        preparation: &native_wal_apply::NativeWalApplyPreparation<'_>,
+        receipt: Option<&NativeWalApplyReceipt>,
+    ) -> Result<()> {
+        let db = unsafe { self.db.as_ref() };
+        preparation.require_applied(db, self, receipt)?;
+        #[cfg(test)]
+        commit_visibility_tests::probe_native_public_finalizer(self);
+        self.finalize_commit_admission_inner()
+    }
+
+    fn finalize_commit_admission_inner(&mut self) -> Result<()> {
         self.finalize_committed_record_audit_events()?;
         if let Some((admission, ticket)) = self.commit_admission_ticket.as_ref() {
             let commit_seq = self.committed_seq.ok_or_else(|| {
@@ -19574,6 +19869,43 @@ impl Transaction {
         // helper may retain a shared private receipt beyond this transaction.
         self.native_wal_retention = None;
         Ok(())
+    }
+
+    /// Require ordinary ACK visibility from the actual contiguous prefix. A
+    /// native-local completion is a separate private typed consumer; its WAL
+    /// minter does not claim ordinary global visibility, range QQ or Serving.
+    fn require_commit_visibility_completion(&self) -> Result<()> {
+        if self.state != TxState::Committed {
+            return Err(BicDbError::TransactionNotPending);
+        }
+        let sequence = self
+            .committed_seq
+            .ok_or(BicDbError::TransactionNotPending)?;
+        let db = unsafe { self.db.as_ref() };
+        if !self.visibility_wait_exhausted && db.current_visibility_watermark() >= sequence {
+            return Ok(());
+        }
+        // Preserve actual derived-job obligations before returning uncertainty.
+        // A spent ordinary window only enqueues obligations; worker processing
+        // never reads below the recorded original source visibility floor. Existing
+        // metadata persistence failures remain explicit completion failures;
+        // record WAL alone is not claimed to reconstruct those jobs on reopen.
+        let jobs = self.finalize_committed_memory_jobs();
+        let reason = if self.visibility_wait_exhausted {
+            "the original bounded commit visibility wait expired after durable local apply"
+        } else {
+            "the actual local apply does not establish an ordinary global-visibility ACK"
+        };
+        let detail = match jobs {
+            Ok(()) => format!("{reason}; any required derived jobs have been enqueued pending their actual source visibility; do not replay the original transaction"),
+            Err(error) => format!("{reason}; derived-job completion remains unresolved: {error}; record WAL alone does not prove cold derived-job recovery"),
+        };
+        Err(BicDbError::CommitOutcomeUnknown {
+            sequence: self.committed_seq,
+            transaction_id: Some(self.id.0),
+            incarnation: db.incarnation.clone(),
+            detail,
+        })
     }
 
     /// Publish record-audit entries only after the transaction WAL is durable.
@@ -19663,7 +19995,16 @@ impl Transaction {
         }
         // Safety: the transaction stores the database pointer it was created
         // from. This mirrors commit/rollback and only uses shared database APIs.
-        unsafe { self.db.as_ref() }.finalize_memory_jobs_for_committed_transaction(self)
+        let db = unsafe { self.db.as_ref() };
+        db.finalize_memory_jobs_for_committed_transaction(self).map_err(|error| {
+            if matches!(error, BicDbError::CommitOutcomeUnknown { .. }) {
+                BicDbError::CommitOutcomeUnknown {
+                    sequence: self.committed_seq, transaction_id: Some(self.id.0),
+                    incarnation: db.incarnation.clone(),
+                    detail: format!("the original transaction applied locally, but its derived memory-index obligation remains unresolved: {error}; do not replay the original transaction"),
+                }
+            } else { error }
+        })
     }
 
     /// Appends the transaction's durable outbox messages after its commit WAL

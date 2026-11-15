@@ -4,7 +4,7 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
-### Source6de: compilation, PGwire and Rails passed; other runtime jobs pending
+### Source6de: Core failed; compilation, PGwire and Rails passed
 
 Current draft PR207 source is **1.0.520-beta /
 `6de646beb603accf39358017d8e0c83c39c741b1`**, tree
@@ -15,8 +15,9 @@ checked out `7714bd37b9cfe87658e3baadd1f906a187a06b58` with that identical tree.
 Workspace/all-target and no-default consumer compilation passed. PGwire completed
 511 passed / 0 failed / 2 ignored across 28 summaries. Rails completed 20 runs /
 100 assertions, zero failures/errors/skips, including actual process-kill queue
-and cache recovery, 24 completed reports and 24 cable messages. Core, Native,
-SQL and remaining-workspace are still pending at this checkpoint; no overall
+and cache recovery, 24 completed reports and 24 cable messages. Core has failed
+at the legacy primary-record-only format-preservation assertion described below.
+Native, SQL and remaining-workspace are still pending at this checkpoint; no overall
 pass or inherited Native acceptance is claimed.
 
 This successor composes the two backup-vector expectations, all-worker INITIAL
@@ -39,6 +40,36 @@ Rails built and exercised a CI debug binary with SHA-256
 `64e18a818ebade9ebfbca810f4932bd132bf827ff4a1dfffbb9279483dda9245`.
 This is not a retained optimized physical-qualification binary or published
 release/deployment. The full source6de archive is not frozen while useful jobs run.
+
+The Core job executed 1,300 passing / one failing / 13 ignored case-result rows
+across 38 summaries; these are executed rows, not 1,300 independent trials.
+Library975/0/8 and visibility8, Standard3, bootstrap11 and rekey4 controls passed.
+The original full encrypted backup/verify/restore case now passed at raw24404;
+the 40-definition backup inventory has 32 actual passes and eight unexecuted
+definitions. This is component coverage, not a physical backup certificate.
+
+The failure is
+`index_disabled_primary_handle_preserves_legacy_predicates_and_refuses_mutations`
+at `crates/bicdb-core/tests/decimal_predicate_generations.rs:118`. Its actual
+main482 legacy fixture retains its verified original hashes. Opening with
+`with_secondary_indexes(false)` reads the acknowledged row, refuses the
+duplicate mutation as primary-record-only, preserves duplicate absence and
+leaves `indexes.json` byte-identical; those assertions passed before FORMAT
+equality failed. The actual FORMAT differs only by adding
+`physical_backup_gate_v1`. Classification: **failed legacy export metadata
+preservation; implementation boundary under investigation**. No acknowledged-row
+loss, broken uniqueness or physical-recovery result follows from that failure.
+The original fixture and byte-equality assertion remain intact; they are not
+silently adjusted to accept an upgrade by a primary-only export handle.
+
+Complete Core raw log: 2,516,374 bytes, SHA-256
+`d6c409afc703404fc1bded0b8d1266022fbfcfcfa887d2b5f2eda9322a9b7117`;
+gzip SHA-256 `013d775639fab566d50f435149f7497928a5dd17ce258b0711733f7b33cba67b`.
+Independent complete-log verification receipt SHA-256:
+`0f3d65f50ac123aa2f69947c7ca12751deaef9d3773659ebc3b55d8918a430bd`;
+original assertion/cut classifier SHA-256:
+`4babc8214096f5504a0e7c166bb81666b2e4a8990978f259968fe7974df03578`.
+Later targets not reached by this failed Core job receive no passing coverage.
 
 ### Completed source7c: Core and Native failed; workspace and application components passed
 

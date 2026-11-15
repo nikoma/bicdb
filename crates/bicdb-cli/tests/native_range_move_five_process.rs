@@ -768,8 +768,7 @@ impl Availability {
                 let round = Instant::now();
                 let finished = *done.lock().unwrap();
                 if let Some(finished) = finished {
-                    if (read_after && write_after) || finished.elapsed() > Duration::from_secs(60)
-                    {
+                    if (read_after && write_after) || finished.elapsed() > Duration::from_secs(60) {
                         break;
                     }
                 }
@@ -819,7 +818,10 @@ impl Availability {
                     write: true,
                     key,
                     ok,
-                    error: write.err().map(|error| error.to_string()).unwrap_or_default(),
+                    error: write
+                        .err()
+                        .map(|error| error.to_string())
+                        .unwrap_or_default(),
                     stage: now,
                 });
                 write_after |= ok && finished.is_some();
@@ -875,7 +877,14 @@ fn availability_summary(attempts: &[Attempt], origin: f64, end: f64) -> Vec<Stri
         }
         if let Some((from, stage, error, count)) = open.take() {
             let last = own.last().unwrap();
-            outages.push((from, last.at, stage, format!("{} (never recovered)", last.stage), error, count));
+            outages.push((
+                from,
+                last.at,
+                stage,
+                format!("{} (never recovered)", last.stage),
+                error,
+                count,
+            ));
         }
         let total: f64 = outages.iter().map(|outage| outage.1 - outage.0).sum();
         let first = own.iter().find(|attempt| !attempt.ok);
@@ -906,9 +915,10 @@ fn availability_summary(attempts: &[Attempt], origin: f64, end: f64) -> Vec<Stri
                 .map(|c| if c.is_ascii_digit() { '#' } else { c })
                 .take(300)
                 .collect::<String>();
-            let entry = texts
-                .entry(text)
-                .or_insert((0, attempt.stage.clone(), attempt.stage.clone()));
+            let entry =
+                texts
+                    .entry(text)
+                    .or_insert((0, attempt.stage.clone(), attempt.stage.clone()));
             entry.0 += 1;
             entry.2 = attempt.stage.clone();
         }
@@ -1274,8 +1284,11 @@ fn native_range_move_five_process_operator_sequence() {
                     blocked_at - move_origin,
                     current["last_error"]
                 );
-                let aborted =
-                    cluster.accepted_patiently(l, "move-range", &["--range-id", &range_text, "--abort"]);
+                let aborted = cluster.accepted_patiently(
+                    l,
+                    "move-range",
+                    &["--range-id", &range_text, "--abort"],
+                );
                 assert_eq!(
                     aborted.status["host"]["range_move"]["aborted"], true,
                     "the abort before the cut must be committed: {}",
@@ -1442,8 +1455,14 @@ fn native_range_move_five_process_operator_sequence() {
     // Where the coordinating host spent the move, part by part.
     for i in 0..5 {
         if let Ok(text) = std::fs::read_to_string(cluster.root.join(format!("node{i}.stderr"))) {
-            for line in text.lines().filter(|line| line.contains("RANGE_MOVE_TRACE")) {
-                println!("XPROC_M node{i} {}", line.chars().take(420).collect::<String>());
+            for line in text
+                .lines()
+                .filter(|line| line.contains("RANGE_MOVE_TRACE"))
+            {
+                println!(
+                    "XPROC_M node{i} {}",
+                    line.chars().take(420).collect::<String>()
+                );
             }
         }
     }

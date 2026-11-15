@@ -695,14 +695,15 @@ pub struct VersionChainRepairReport {
     pub repaired_fault: VersionChainTerminal,
 }
 
-/// A crash-recoverable keyed store over first-party pages.
-#[derive(Debug)]
 /// Holds physical exclusion before the original reentrant writer mutex.
+#[derive(Debug)]
 pub struct PagedWriteGuard<'a> {
     _writer: ReentrantMutexGuard<'a, ()>,
     _physical: crate::physical_gate::PhysicalWriteGuard,
 }
 
+/// A crash-recoverable keyed store over first-party pages.
+#[derive(Debug)]
 pub struct PagedStore {
     pool: Arc<BufferPool>,
     heap: HeapFile,

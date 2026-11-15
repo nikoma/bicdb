@@ -815,7 +815,7 @@ impl MetadataReadObservation {
 }
 
 impl MetadataReadAcquireResponse {
-    fn validate(&self, request: &MetadataReadAcquireRequest) -> Result<()> {
+    pub(super) fn validate(&self, request: &MetadataReadAcquireRequest) -> Result<()> {
         self.validate_quorum_evidence(request)?;
         validate_acquire_requester(request, &self.committed_topology)?;
         if self.committed_topology.nodes[&self.metadata_leader_id].lifecycle

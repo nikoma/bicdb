@@ -262,7 +262,10 @@ impl NativeRegisteredReplicaAdmission {
             StepOperation::BridgePrepare { .. }
             | StepOperation::BridgePhaseObserve { .. }
             | StepOperation::BridgePublish { .. }
-            | StepOperation::BridgeOpen { .. } => {
+            | StepOperation::BridgeOpen { .. }
+            | StepOperation::RetireOldCustody { .. }
+            | StepOperation::BridgeRelease { .. }
+            | StepOperation::SourceRetire { .. } => {
                 // Bridge operations run after the membership is final and
                 // prove themselves against the committed decision, not a
                 // Pending plan.
@@ -608,7 +611,8 @@ impl NativeRegisteredReplicaAdmission {
             Stage::BridgeWriterDomain
             | Stage::BridgePreparation
             | Stage::BridgePublication
-            | Stage::BridgeActivation => {
+            | Stage::BridgeActivation
+            | Stage::BridgeRelease => {
                 return Err(invalid(
                     "joint handoff step target install has no bridge stage",
                 ))

@@ -154,6 +154,9 @@ impl NativeJointBridgeDecision for RemoteBridgeDecision {
     fn old_range(&self) -> &RangeDescriptor {
         self.identity().old_range()
     }
+    fn old_members(&self) -> &BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember> {
+        self.identity().old_members()
+    }
     fn new_members(&self) -> &BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember> {
         self.identity().new_members()
     }

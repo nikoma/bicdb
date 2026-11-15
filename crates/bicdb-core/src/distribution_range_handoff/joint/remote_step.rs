@@ -57,6 +57,21 @@ pub(crate) enum NativeJointHandoffStepOperationV1 {
     /// OPEN observations of every other NEW member before and after its own
     /// durable write; the request carries no observation, quorum or phase.
     BridgeOpen { decision_sha256: String },
+    /// A surviving original member retires the obsolete OLD custody it still
+    /// holds (its own OLD observation and, on the donor, the remote export
+    /// certificate) after IT observed every other NEW member durably open in
+    /// one bounded window of authenticated RELEASE observations. Absent
+    /// custody is success; no source data is cleaned.
+    RetireOldCustody { decision_sha256: String },
+    /// A durably open member releases its own retained freeze and arms its
+    /// own same-open generation. The member itself collects fresh RELEASE
+    /// observations of every other NEW member before and after its release.
+    BridgeRelease { decision_sha256: String },
+    /// The RETIRED source (an original member absent from the final
+    /// membership) records its own retirement from the range on its own
+    /// committed metadata read, or confirms the record it already holds.
+    /// No row is deleted and no fence is released.
+    SourceRetire { decision_sha256: String },
 }
 impl NativeJointHandoffStepOperationV1 {
     /// The donor and target attempt of an install-family operation, which
@@ -74,6 +89,9 @@ impl NativeJointHandoffStepOperationV1 {
             Self::BridgePrepare { .. }
             | Self::BridgePublish { .. }
             | Self::BridgeOpen { .. }
+            | Self::RetireOldCustody { .. }
+            | Self::BridgeRelease { .. }
+            | Self::SourceRetire { .. }
             | Self::BridgePhaseObserve { .. } => None,
         }
     }
@@ -85,6 +103,9 @@ impl NativeJointHandoffStepOperationV1 {
             Self::BridgePrepare { decision_sha256 }
             | Self::BridgePublish { decision_sha256 }
             | Self::BridgeOpen { decision_sha256 }
+            | Self::RetireOldCustody { decision_sha256 }
+            | Self::BridgeRelease { decision_sha256 }
+            | Self::SourceRetire { decision_sha256 }
             | Self::BridgePhaseObserve {
                 decision_sha256, ..
             } => Some(decision_sha256),
@@ -98,7 +119,10 @@ impl NativeJointHandoffStepOperationV1 {
             | Self::SourceExportRetire { .. }
             | Self::BridgePrepare { .. }
             | Self::BridgePublish { .. }
-            | Self::BridgeOpen { .. } => false,
+            | Self::BridgeOpen { .. }
+            | Self::RetireOldCustody { .. }
+            | Self::BridgeRelease { .. }
+            | Self::SourceRetire { .. } => false,
         }
     }
 }
@@ -218,6 +242,9 @@ impl NativeJointHandoffStepRequestV1 {
             NativeJointHandoffStepOperationV1::BridgePrepare { decision_sha256 }
             | NativeJointHandoffStepOperationV1::BridgePublish { decision_sha256 }
             | NativeJointHandoffStepOperationV1::BridgeOpen { decision_sha256 }
+            | NativeJointHandoffStepOperationV1::RetireOldCustody { decision_sha256 }
+            | NativeJointHandoffStepOperationV1::BridgeRelease { decision_sha256 }
+            | NativeJointHandoffStepOperationV1::SourceRetire { decision_sha256 }
             | NativeJointHandoffStepOperationV1::BridgePhaseObserve {
                 decision_sha256, ..
             } => {
@@ -276,6 +303,9 @@ impl NativeJointHandoffStepRequestV1 {
             NativeJointHandoffStepOperationV1::BridgePrepare { .. }
             | NativeJointHandoffStepOperationV1::BridgePublish { .. }
             | NativeJointHandoffStepOperationV1::BridgeOpen { .. }
+            | NativeJointHandoffStepOperationV1::RetireOldCustody { .. }
+            | NativeJointHandoffStepOperationV1::BridgeRelease { .. }
+            | NativeJointHandoffStepOperationV1::SourceRetire { .. }
             | NativeJointHandoffStepOperationV1::BridgePhaseObserve { .. } => {
                 // A Pending plan names no decision. Bridge operations are
                 // bound only by `require_decision` to a committed decision.
@@ -355,7 +385,48 @@ pub(crate) enum NativeJointHandoffStepStageV1 {
     /// The member's catalogue activation is not confirmed; same resumption
     /// rule as `BridgePublication`.
     BridgeActivation,
+    /// The member's release is not confirmed; same resumption rule as
+    /// `BridgePublication`. The freeze may already be dropped and armed.
+    BridgeRelease,
     Complete,
+}
+
+/// What the retired source's own durable retirement record states. Reported
+/// DATA: the completing metadata stage compares every field with the
+/// committed relocation and takes the member from the authenticated peer.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct NativeJointSourceRetirementDataV1 {
+    pub cluster_id: crate::distribution::ClusterId,
+    pub node_id: ClusterNodeId,
+    pub node_incarnation: u64,
+    pub relocation_id: RelocationId,
+    pub range_id: RangeId,
+    pub session_id: Uuid,
+    pub nonce: Uuid,
+    pub activation_epoch: u64,
+    pub decision_sha256: String,
+    pub activated_quorum_sha256: String,
+    /// Checksum of the source's own durable retirement record.
+    pub checksum_sha256: String,
+}
+impl NativeJointSourceRetirementDataV1 {
+    pub(crate) fn require_shape(&self) -> Result<()> {
+        if self.node_id.as_str().is_empty()
+            || self.node_id.as_str().len() > 1024
+            || self.relocation_id.get() == 0
+            || self.range_id.get() == 0
+            || self.session_id.is_nil()
+            || self.nonce.is_nil()
+            || self.activation_epoch == 0
+            || !is_digest(&self.decision_sha256)
+            || !is_digest(&self.activated_quorum_sha256)
+            || !is_digest(&self.checksum_sha256)
+        {
+            return Err(invalid("invalid joint source retirement DATA"));
+        }
+        Ok(())
+    }
 }
 
 /// Retained once by the recipient and returned unchanged to every retry of
@@ -407,6 +478,22 @@ pub(crate) struct NativeJointHandoffStepOutcomeV1 {
     /// complete `BridgeOpen` outcome.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub activation_sha256: Option<String>,
+    /// RELEASE observation and complete `BridgeRelease` only: whether the
+    /// recipient's own freeze is dropped AND its same-open generation armed,
+    /// as its own fresh release observation saw it under its service lock.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub released: Option<bool>,
+    /// The armed same-open generation; present exactly when released.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub released_generation: Option<Uuid>,
+    /// Complete `RetireOldCustody` only: the recipient holds no OLD custody
+    /// of this decision any more.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub old_custody_retired: Option<bool>,
+    /// Complete `SourceRetire` only, and the only member DATA of that
+    /// outcome: the retired source prepared nothing for the new membership.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_retirement: Option<NativeJointSourceRetirementDataV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub phase_kind: Option<NativeJointBridgePhaseKindV1>,
     /// What was left of the recipient's own fresh metadata observation when
@@ -442,6 +529,10 @@ impl NativeJointHandoffStepOutcomeV1 {
             bridge_receipt_sha256: None,
             bridge_anchor: None,
             activation_sha256: None,
+            released: None,
+            released_generation: None,
+            old_custody_retired: None,
+            source_retirement: None,
             phase_kind: None,
             window_remaining_ms: None,
         }
@@ -454,6 +545,20 @@ impl NativeJointHandoffStepOutcomeV1 {
     ) -> Self {
         let mut result = Self::install(binding_sha256, stage, None, None);
         result.decision_sha256 = Some(decision_sha256);
+        result
+    }
+    /// The retired source's complete outcome.
+    pub(crate) fn source_retired(
+        binding_sha256: String,
+        decision_sha256: String,
+        retirement: NativeJointSourceRetirementDataV1,
+    ) -> Self {
+        let mut result = Self::bridge_progress(
+            binding_sha256,
+            NativeJointHandoffStepStageV1::Complete,
+            decision_sha256,
+        );
+        result.source_retirement = Some(retirement);
         result
     }
     fn bridge_fields(&self) -> [bool; 6] {
@@ -472,13 +577,35 @@ impl NativeJointHandoffStepOutcomeV1 {
         operation: &NativeJointHandoffStepOperationV1,
     ) -> Result<()> {
         self.require_shape()?;
+        let later_none = self.released.is_none() && self.old_custody_retired.is_none();
+        if self.source_retirement.is_some()
+            != matches!(
+                operation,
+                NativeJointHandoffStepOperationV1::SourceRetire { .. }
+            )
+        {
+            return Err(invalid(
+                "joint handoff step outcome DATA answers another operation",
+            ));
+        }
         let matches = match operation {
+            NativeJointHandoffStepOperationV1::SourceRetire { decision_sha256 } => {
+                self.decision_sha256.as_ref() == Some(decision_sha256)
+                    && later_none
+                    && self.complete
+                    && self.phase_kind.is_none()
+                    && self
+                        .source_retirement
+                        .as_ref()
+                        .is_some_and(|retirement| &retirement.decision_sha256 == decision_sha256)
+            }
             NativeJointHandoffStepOperationV1::TargetInstall { .. }
             | NativeJointHandoffStepOperationV1::SourceExportRetire { .. } => {
                 self.decision_sha256.is_none()
             }
             NativeJointHandoffStepOperationV1::BridgePrepare { decision_sha256 } => {
                 self.decision_sha256.as_ref() == Some(decision_sha256)
+                    && later_none
                     && self.phase_kind.is_none()
                     && self.bridge_receipt_sha256.is_none()
                     && self.activation_sha256.is_none()
@@ -486,10 +613,36 @@ impl NativeJointHandoffStepOutcomeV1 {
                         self.stage,
                         NativeJointHandoffStepStageV1::BridgePublication
                             | NativeJointHandoffStepStageV1::BridgeActivation
+                            | NativeJointHandoffStepStageV1::BridgeRelease
+                    )
+            }
+            NativeJointHandoffStepOperationV1::RetireOldCustody { decision_sha256 } => {
+                self.decision_sha256.as_ref() == Some(decision_sha256)
+                    && self.phase_kind.is_none()
+                    && self.bridge_anchor.is_none()
+                    && self.released.is_none()
+                    && self.complete
+                    && self.bridge_receipt_sha256.is_some()
+                    && self.activation_sha256.is_some()
+                    && self.old_custody_retired == Some(true)
+            }
+            NativeJointHandoffStepOperationV1::BridgeRelease { decision_sha256 } => {
+                self.decision_sha256.as_ref() == Some(decision_sha256)
+                    && self.phase_kind.is_none()
+                    && self.bridge_anchor.is_none()
+                    && self.old_custody_retired.is_none()
+                    && self.bridge_receipt_sha256.is_some() == self.complete
+                    && self.activation_sha256.is_some() == self.complete
+                    && self.released == self.complete.then_some(true)
+                    && matches!(
+                        self.stage,
+                        NativeJointHandoffStepStageV1::BridgeRelease
+                            | NativeJointHandoffStepStageV1::Complete
                     )
             }
             NativeJointHandoffStepOperationV1::BridgeOpen { decision_sha256 } => {
                 self.decision_sha256.as_ref() == Some(decision_sha256)
+                    && later_none
                     && self.phase_kind.is_none()
                     && self.bridge_anchor.is_none()
                     && self.bridge_receipt_sha256.is_some() == self.complete
@@ -502,6 +655,7 @@ impl NativeJointHandoffStepOutcomeV1 {
             }
             NativeJointHandoffStepOperationV1::BridgePublish { decision_sha256 } => {
                 self.decision_sha256.as_ref() == Some(decision_sha256)
+                    && later_none
                     && self.phase_kind.is_none()
                     && self.bridge_anchor.is_none()
                     && self.activation_sha256.is_none()
@@ -518,9 +672,12 @@ impl NativeJointHandoffStepOutcomeV1 {
             } => {
                 self.decision_sha256.as_ref() == Some(decision_sha256)
                     && self.phase_kind == Some(*kind)
-                    && self.activation_sha256.is_none()
+                    && self.old_custody_retired.is_none()
+                    && self.activation_sha256.is_some()
+                        == (*kind == NativeJointBridgePhaseKindV1::Release)
+                    && self.released.is_some() == self.activation_sha256.is_some()
                     && self.bridge_receipt_sha256.is_some()
-                        == (*kind == NativeJointBridgePhaseKindV1::Open)
+                        != (*kind == NativeJointBridgePhaseKindV1::Preparation)
                     && self.bridge_anchor.is_some() == self.bridge_receipt_sha256.is_some()
                     && self.complete
             }
@@ -549,9 +706,23 @@ impl NativeJointHandoffStepOutcomeV1 {
                         | NativeJointHandoffStepStageV1::BridgePreparation
                         | NativeJointHandoffStepStageV1::BridgePublication
                         | NativeJointHandoffStepStageV1::BridgeActivation
+                        | NativeJointHandoffStepStageV1::BridgeRelease
                         | NativeJointHandoffStepStageV1::Complete
                 )
-                || fields.iter().any(|present| *present != complete)
+                || fields
+                    .iter()
+                    .any(|present| *present != (complete && self.source_retirement.is_none()))
+                || self.source_retirement.as_ref().is_some_and(|retirement| {
+                    !complete
+                        || retirement.require_shape().is_err()
+                        || self.bridge_receipt_sha256.is_some()
+                        || self.old_custody_retired.is_some()
+                        || self.phase_kind.is_some()
+                })
+                || (self.released.is_some() && self.activation_sha256.is_none())
+                || self.released_generation.is_some() != (self.released == Some(true))
+                || self.released_generation.is_some_and(|x| x.is_nil())
+                || (self.old_custody_retired.is_some() && !complete)
                 || (self.bridge_receipt_sha256.is_some() && !complete)
                 || (self.bridge_anchor.is_some() && self.bridge_receipt_sha256.is_none())
                 || (self.activation_sha256.is_some() && self.bridge_receipt_sha256.is_none())
@@ -599,6 +770,10 @@ impl NativeJointHandoffStepOutcomeV1 {
             || self.bridge_receipt_sha256.is_some()
             || self.bridge_anchor.is_some()
             || self.activation_sha256.is_some()
+            || self.released.is_some()
+            || self.released_generation.is_some()
+            || self.old_custody_retired.is_some()
+            || self.source_retirement.is_some()
             || self.phase_kind.is_some()
             || self.window_remaining_ms.is_some()
             || matches!(
@@ -607,6 +782,7 @@ impl NativeJointHandoffStepOutcomeV1 {
                     | NativeJointHandoffStepStageV1::BridgePreparation
                     | NativeJointHandoffStepStageV1::BridgePublication
                     | NativeJointHandoffStepStageV1::BridgeActivation
+                    | NativeJointHandoffStepStageV1::BridgeRelease
             )
         {
             return Err(invalid("joint handoff step outcome DATA is inconsistent"));

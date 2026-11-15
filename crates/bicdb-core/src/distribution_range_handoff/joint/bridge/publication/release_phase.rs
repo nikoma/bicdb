@@ -8,8 +8,16 @@ use crate::distribution_data::{
 use crate::distribution_range_consensus::NativeJointCatalogueActivationReceipt;
 use std::time::{Duration, Instant};
 mod activated_quorum;
+#[cfg(feature = "tls-replication")]
+mod remote_release;
 mod writer_policy;
-pub(crate) use activated_quorum::NativeJointActivatedQuorum;
+pub(crate) use activated_quorum::{NativeJointActivatedQuorum, NativeJointActivationProof};
+#[cfg(feature = "tls-replication")]
+pub(crate) use remote_release::{
+    NativeJointMemberRelease, NativeJointMemberReleaseOwner, NativeJointReleasePhaseFacts,
+    NativeJointRemoteOldRetirementProof, NativeRemoteBridgeReleased,
+    NativeRemoteJointActivationCertificate,
+};
 pub(crate) use writer_policy::NativeJointServingPolicyAdmission;
 
 enum ReleaseOwner {
@@ -57,11 +65,23 @@ pub(crate) struct NativeJointReleasePhaseQuorum {
 /// One distinct post-all-member MQ and one release attempt. It never renews
 /// the old receipt, supplies a Frozen or authorizes a different/new open.
 pub(crate) struct NativeJointReleaseAdmission {
-    phase: Arc<NativeJointReleasePhaseQuorum>,
+    backing: ReleaseBacking,
     local: ClusterNodeId,
     post: ActualServiceNativeJointReleaseEvidence,
     cancellation: crate::CancellationToken,
     attempted: std::sync::atomic::AtomicBool,
+}
+/// What stands behind a release admission for every NEW member other than
+/// the local one. The local member is always its own original continuation
+/// entry and its own fresh release observations under its service lock.
+enum ReleaseBacking {
+    /// Every member's actual service and owner is reachable in this process.
+    Local(Arc<NativeJointReleasePhaseQuorum>),
+    /// Every other member is a transport-minted authenticated RELEASE
+    /// observation this member collected itself inside one bounded window.
+    /// Private construction: only this member's own remote release.
+    #[cfg(feature = "tls-replication")]
+    Remote(remote_release::RemoteReleaseBacking),
 }
 impl NativeJointPublishedServingQuorum {
     pub(crate) fn retain_release_continuation(
@@ -509,7 +529,7 @@ impl NativeJointReleasePhaseQuorum {
             cancellation: self
                 .cancellation
                 .child_with_deadline(post.committed().deadline()),
-            phase: self.clone(),
+            backing: ReleaseBacking::Local(self.clone()),
             local: node,
             post,
             attempted: std::sync::atomic::AtomicBool::new(false),
@@ -525,8 +545,24 @@ impl NativeJointReleaseAdmission {
     {
         self.post.committed().native_publication_guard()
     }
+    /// The local member's original continuation entry.
+    fn member(&self) -> &ReleaseMember {
+        match &self.backing {
+            ReleaseBacking::Local(phase) => &phase.continuation.members[&self.local],
+            #[cfg(feature = "tls-replication")]
+            ReleaseBacking::Remote(remote) => remote.member(),
+        }
+    }
+    /// The local member's own pre-quorum release observation of this phase.
+    fn local_phase(&self) -> &ActualServiceNativeJointReleaseEvidence {
+        match &self.backing {
+            ReleaseBacking::Local(phase) => &phase.members[&self.local],
+            #[cfg(feature = "tls-replication")]
+            ReleaseBacking::Remote(remote) => remote.local_phase(),
+        }
+    }
     pub(crate) fn writer_domain(&self) -> &crate::db::NativeJointWriterDomain {
-        &self.phase.continuation.members[&self.local].writer_domain
+        &self.member().writer_domain
     }
 
     pub(crate) fn native(&self) -> &crate::db::NativeJointServingBridgeReceipt {
@@ -539,7 +575,13 @@ impl NativeJointReleaseAdmission {
     }
     pub(crate) fn require_live(&self) -> Result<()> {
         self.cancellation.check()?;
-        self.phase.require_live()?;
+        match &self.backing {
+            ReleaseBacking::Local(phase) => phase.require_live()?,
+            // Liveness of every counted observation plus the in-process rule
+            // that the post observation independently follows EVERY member's.
+            #[cfg(feature = "tls-replication")]
+            ReleaseBacking::Remote(remote) => remote.require_live(&self.local, &self.post)?,
+        }
         self.post.require_live()
     }
     pub(crate) fn require_recipient(
@@ -548,7 +590,7 @@ impl NativeJointReleaseAdmission {
         native: &crate::db::NativeJointServingBridgeReceipt,
     ) -> Result<()> {
         self.require_live()?;
-        let member = &self.phase.continuation.members[&self.local];
+        let member = self.member();
         if !Arc::ptr_eq(service, &member.service)
             || native.checksum_sha256() != member.native.checksum_sha256()
             || native.native_database_incarnation() != member.native.native_database_incarnation()
@@ -568,7 +610,8 @@ impl NativeJointReleaseAdmission {
     ) -> Result<()> {
         self.require_live()?;
         service.require_joint_release_metadata_point(self.post.committed(), scope.database())?;
-        self.phase.members[&self.local].require_current_with_scope(service, scope, owner)?;
+        self.local_phase()
+            .require_current_with_scope(service, scope, owner)?;
         self.post
             .require_current_with_scope(service, scope, owner)?;
         self.require_live()
@@ -583,17 +626,27 @@ impl NativeJointReleaseAdmission {
         self.post
             .committed()
             .require_native_publication_metadata(scope.database(), store)?;
-        self.phase.members[&self.local].require_current_with_store_scope(store, scope, owner)?;
+        self.local_phase()
+            .require_current_with_store_scope(store, scope, owner)?;
         self.post
             .require_current_with_store_scope(store, scope, owner)?;
         self.require_live()
     }
     pub(crate) fn require_external_current(&self) -> Result<()> {
         self.require_live()?;
-        for node in self.phase.members.keys() {
-            if node != &self.local {
-                self.phase.require_member_current(node)?;
+        match &self.backing {
+            ReleaseBacking::Local(phase) => {
+                for node in phase.members.keys() {
+                    if node != &self.local {
+                        phase.require_member_current(node)?;
+                    }
+                }
             }
+            // No other member's lock is reachable from this process. Every
+            // other NEW member must still be inside the bounded window in
+            // which it re-proved, under ITS lock, the state counted here.
+            #[cfg(feature = "tls-replication")]
+            ReleaseBacking::Remote(remote) => remote.require_external_current(&self.local)?,
         }
         self.require_live()
     }
@@ -606,7 +659,7 @@ impl NativeJointReleaseAdmission {
             return Err(invalid("joint release admission already attempted"));
         }
         self.require_external_current()?;
-        let member = &self.phase.continuation.members[&self.local];
+        let member = self.member();
         match &member.owner {
             ReleaseOwner::Survivor(runtime) => {
                 runtime.release_with_fresh_phase(self, member.activation.clone())
@@ -632,7 +685,7 @@ impl NativeJointReleaseAdmission {
             return Err(invalid("joint release admission already attempted"));
         }
         self.require_external_current()?;
-        let member = &self.phase.continuation.members[&self.local];
+        let member = self.member();
         match &member.owner {
             ReleaseOwner::Image(owner) => owner
                 .try_lock()

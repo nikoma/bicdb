@@ -276,6 +276,72 @@ impl TcpClusterRelocationTransport {
         self.request_native_joint_bridge_step(recipient, data, request, own, parent)
     }
 
+    /// Coordinator -> durably open NEW member. The member retires its own
+    /// obsolete OLD custody after proving, itself, every NEW member open.
+    pub(crate) fn request_native_joint_bridge_retire_old_custody(
+        &self,
+        recipient: &ClusterNodeId,
+        data: &dyn NativeJointBridgeDecision,
+        request: &NativeJointHandoffStepRequestV1,
+        own: &HostMetadataReadObservation,
+        parent: &CancellationToken,
+    ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
+        if !matches!(
+            &request.operation,
+            NativeJointHandoffStepOperationV1::RetireOldCustody { .. }
+        ) {
+            return Err(transport_error(
+                "joint bridge custody retirement exchange carries another operation",
+            ));
+        }
+        self.request_native_joint_bridge_step(recipient, data, request, own, parent)
+    }
+
+    /// Coordinator -> durably open NEW member. The member releases its own
+    /// retained freeze after collecting, itself, fresh RELEASE observations
+    /// of every other NEW member before and after its release. The frame
+    /// reports the armed generation once the member confirmed it.
+    pub(crate) fn request_native_joint_bridge_release(
+        &self,
+        recipient: &ClusterNodeId,
+        data: &dyn NativeJointBridgeDecision,
+        request: &NativeJointHandoffStepRequestV1,
+        own: &HostMetadataReadObservation,
+        parent: &CancellationToken,
+    ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
+        if !matches!(
+            &request.operation,
+            NativeJointHandoffStepOperationV1::BridgeRelease { .. }
+        ) {
+            return Err(transport_error(
+                "joint bridge release exchange carries another operation",
+            ));
+        }
+        self.request_native_joint_bridge_step(recipient, data, request, own, parent)
+    }
+
+    /// Coordinator -> the RETIRED source of the committed decision. The
+    /// source records its own retirement on its own committed metadata read;
+    /// the frame reports that durable record.
+    pub(crate) fn request_native_joint_source_retire(
+        &self,
+        recipient: &ClusterNodeId,
+        data: &dyn NativeJointBridgeDecision,
+        request: &NativeJointHandoffStepRequestV1,
+        own: &HostMetadataReadObservation,
+        parent: &CancellationToken,
+    ) -> Result<AuthenticatedNativeJointBridgeStepFrame> {
+        if !matches!(
+            &request.operation,
+            NativeJointHandoffStepOperationV1::SourceRetire { .. }
+        ) {
+            return Err(transport_error(
+                "joint source retirement exchange carries another operation",
+            ));
+        }
+        self.request_native_joint_bridge_step(recipient, data, request, own, parent)
+    }
+
     /// Coordinator or NEW member -> another NEW member. Read-only: the member
     /// re-proves its own retained state under its own fresh metadata.
     pub(crate) fn request_native_joint_bridge_phase_observation(
@@ -328,10 +394,31 @@ impl TcpClusterRelocationTransport {
             .nodes
             .get(&self.caller_node_id)
             .ok_or_else(|| transport_error("joint bridge step caller missing"))?;
-        let expected = data
-            .new_members()
-            .get(recipient)
-            .ok_or_else(|| transport_error("joint bridge step recipient is not a NEW member"))?;
+        // Every operation addresses a member of the new set, except the
+        // source retirement, which addresses exactly the committed
+        // relocation's source: an OLD member absent from the new set.
+        let expected = if matches!(
+            &request.operation,
+            NativeJointHandoffStepOperationV1::SourceRetire { .. }
+        ) {
+            if data.new_members().contains_key(recipient)
+                || current
+                    .relocations
+                    .get(&request.relocation_id)
+                    .is_none_or(|relocation| relocation.source.as_ref() != Some(recipient))
+            {
+                return Err(transport_error(
+                    "joint source retirement recipient is not the committed retired source",
+                ));
+            }
+            data.old_members().get(recipient).ok_or_else(|| {
+                transport_error("joint source retirement recipient is not an OLD member")
+            })?
+        } else {
+            data.new_members()
+                .get(recipient)
+                .ok_or_else(|| transport_error("joint bridge step recipient is not a NEW member"))?
+        };
         let native_birth = member
             .native_store_birth_v1
             .as_ref()

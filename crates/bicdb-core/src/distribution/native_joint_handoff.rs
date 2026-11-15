@@ -779,13 +779,15 @@ impl DistributionStore {
         Ok(epoch)
     }
     /// Record that every member of the new set durably activated the range
-    /// and was released. The proof is the live all-released quorum itself;
-    /// no digest is accepted from a caller. Membership does not change. This
+    /// and was released. The proof is the live all-released quorum itself
+    /// (every member's service in this process, or this member's own state
+    /// plus authenticated release frames of every other member); the trait
+    /// is sealed and no digest is accepted from a caller. Membership does not change. This
     /// permits the retirement of the old source and nothing else. Returns
     /// false, committing nothing, when this activation is already recorded.
     pub(crate) fn record_native_joint_activation(
         &mut self,
-        proof: &crate::distribution_range_handoff::NativeJointActivatedQuorum,
+        proof: &dyn crate::distribution_range_handoff::NativeJointActivationProof,
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         actor: &ClusterNodeId,
@@ -838,11 +840,12 @@ impl DistributionStore {
     /// Record the retired source's own durable retirement from the range and
     /// complete the relocation. The proof is the receipt the source's service
     /// issued after ITS OWN committed metadata read showed the recorded
-    /// activation quorum. Membership does not change and no row is deleted.
+    /// activation quorum: held in this process, or reported by the source
+    /// in an exchange the pinned transport authenticated (sealed trait). Membership does not change and no row is deleted.
     /// Returns false, committing nothing, when it is already recorded.
     pub(crate) fn complete_native_joint_source_retirement(
         &mut self,
-        proof: &crate::distribution_data::NativeJointSourceRetired,
+        proof: &dyn crate::distribution_data::NativeJointSourceRetirementProof,
         fresh: &crate::distribution_consensus::HostMetadataReadObservation,
         business: Uuid,
         actor: &ClusterNodeId,

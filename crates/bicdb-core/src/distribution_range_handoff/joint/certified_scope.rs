@@ -69,6 +69,7 @@ pub(crate) trait NativeJointBridgeDecision: Send + Sync {
     fn plan_sha256(&self) -> Result<String>;
     fn promise(&self) -> &RangeHandoffPromise;
     fn old_range(&self) -> &RangeDescriptor;
+    fn old_members(&self) -> &BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember>;
     fn new_members(&self) -> &BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember>;
     fn require_metadata_domain(
         &self,
@@ -88,6 +89,9 @@ impl NativeJointBridgeDecision for NativeJointDecisionData {
     }
     fn old_range(&self) -> &RangeDescriptor {
         NativeJointDecisionData::old_range(self)
+    }
+    fn old_members(&self) -> &BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember> {
+        NativeJointDecisionData::old_members(self)
     }
     fn new_members(&self) -> &BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember> {
         NativeJointDecisionData::new_members(self)
@@ -141,6 +145,9 @@ impl NativeJointBridgeDecision for NativeJointCommittedDecision {
     }
     fn old_range(&self) -> &RangeDescriptor {
         self.scope.old_range()
+    }
+    fn old_members(&self) -> &BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember> {
+        self.scope.old_members()
     }
     fn new_members(&self) -> &BTreeMap<ClusterNodeId, crate::db::RangeImageBirthMember> {
         self.scope.new_members()

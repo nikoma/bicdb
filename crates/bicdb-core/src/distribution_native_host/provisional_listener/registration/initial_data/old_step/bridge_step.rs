@@ -7,8 +7,9 @@ use crate::distribution_consensus::MetadataReadParticipant;
 use crate::distribution_metadata_read_provider::MetadataReadProvider;
 use crate::distribution_native_host::provisional_listener::registration::bridge_step::{
     acquire_bridge_step_own, bridge_remaining, bridge_reply, observe_bridge_phase,
-    open_member_bridge, publish_member_bridge, retained_prepare_step, BridgeStepOwn,
-    NativeBridgeMemberSteps, MIN_BRIDGE_SUBSTEP_BUDGET,
+    open_member_bridge, publish_member_bridge, release_member_bridge, retained_prepare_step,
+    retire_joint_source, retire_member_old_custody, BridgeStepOwn, NativeBridgeMemberSteps,
+    MIN_BRIDGE_SUBSTEP_BUDGET,
 };
 use crate::distribution_native_host::provisional_listener::registration::NativeDataOwnerAdmission;
 use crate::distribution_range_handoff::{
@@ -89,15 +90,60 @@ impl NativeInitialDataAdmission {
                 fresh,
                 &token,
             )?,
+            // A survivor's release owner is the runtime that owns the real
+            // freeze of its own retained OLD closure.
             StepOperation::BridgeOpen { .. } => open_member_bridge(
                 &steps,
                 &owners.provider,
                 &owners.transport,
                 request,
                 fresh,
-                false,
+                Some(&|| self.retained_old_runtime(request.range_id, &request.scope_sha256)),
                 &token,
             )?,
+            // The donor holds BOTH the remote export certificate and its own
+            // OLD observation; every other survivor only the latter.
+            StepOperation::RetireOldCustody { .. } => retire_member_old_custody(
+                &steps,
+                &owners.provider,
+                &owners.transport,
+                request,
+                fresh,
+                &|proof| {
+                    if let Some(source) = self.retained_export_source(request.range_id)? {
+                        source.retire_old_export_custody_after_remote_joint_open(proof)?;
+                    }
+                    self.retire_old_observation_after_remote_joint_open(request.range_id, proof)
+                },
+                &token,
+            )?,
+            StepOperation::BridgeRelease { .. } => release_member_bridge(
+                &steps,
+                &owners.provider,
+                &owners.transport,
+                request,
+                fresh,
+                &|| {
+                    if self.retains_old_observation(request.range_id)?
+                        || self
+                            .retained_export_source(request.range_id)?
+                            .map(|source| source.old_custody_retired_after_joint_open())
+                            .transpose()?
+                            == Some(false)
+                    {
+                        return Err(invalid(
+                            "joint bridge release refused: this member still retains OLD custody",
+                        ));
+                    }
+                    Ok(())
+                },
+                &token,
+            )?,
+            // Only the retired source passes the authorisation above for
+            // this operation; a member of the final membership never does.
+            StepOperation::SourceRetire { .. } => {
+                retire_joint_source(&owners.service, local.node_id(), request, fresh, &token)?
+            }
             StepOperation::TargetInstall { .. } | StepOperation::SourceExportRetire { .. } => {
                 unreachable!("refused above")
             }
@@ -270,6 +316,17 @@ impl NativeInitialDataAdmission {
         Ok((step.prepare_outcome(Stage::Complete)?, anchor))
     }
 
+    /// The export source this original donor process retained for `range`.
+    fn retained_export_source(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<Option<Arc<crate::distribution_range_image::NativeRetainedRemoteImageSource>>> {
+        match self.image_sources.upgrade() {
+            Some(registry) => registry.retained_range_source(range),
+            None => Ok(None),
+        }
+    }
+
     /// The real freeze of this member's own retained OLD closure. Nothing is
     /// rebuilt from the request: a missing or foreign closure refuses.
     fn retained_survivor_lease(
@@ -309,6 +366,50 @@ impl NativeInitialDataAdmission {
     }
 }
 
+impl NativeMetadataControlHost {
+    /// Coordinator side, in the metadata leader's own process: observe that
+    /// EVERY member of the new set of `data` (the decision this coordinator
+    /// observed committed) is durably activated, released and open.
+    ///
+    /// A coordinator that is itself a member of the new set re-observes its
+    /// own released member under its own lock and collects one authenticated
+    /// release observation from every other member; a coordinator outside
+    /// the new set (it holds no replica of the moved range, or its replica
+    /// is the retired source) collects one from EVERY member. Both run over this host's own pinned transport. The
+    /// result backs the metadata activation record and nothing else.
+    pub(crate) fn certify_remote_joint_activation(
+        &self,
+        data: &crate::distribution_range_handoff::NativeJointDecisionData,
+        parent: &CancellationToken,
+    ) -> Result<crate::distribution_range_handoff::NativeRemoteJointActivationCertificate> {
+        parent.check()?;
+        let leader = self
+            .backend
+            .lock_metadata(parent)?
+            .status()
+            .leader_id
+            .ok_or_else(|| invalid("joint activation metadata leader unknown"))?;
+        let transport = &self.backend.transport;
+        let local = transport.local_metadata_read_participant();
+        if !data.new_members().contains_key(local.node_id()) {
+            return crate::distribution_range_handoff::NativeRemoteJointActivationCertificate::observe_as_outside_coordinator(
+                data, transport, &leader, parent,
+            );
+        }
+        let initial = self
+            .data
+            .as_ref()
+            .ok_or_else(|| invalid("joint activation observer is not an original member host"))?;
+        let release = initial.bridge_steps.released_member(data.old_range().id)?;
+        if release.data() != data {
+            return Err(invalid(
+                "joint activation observer member holds another decision",
+            ));
+        }
+        release.certify_remote_activated_quorum(transport, &leader, parent)
+    }
+}
+
 #[cfg(test)]
 impl NativeMetadataControlHost {
     /// Historical identity of the preparation this original INITIAL member
@@ -326,6 +427,37 @@ impl NativeMetadataControlHost {
             .get(&range)
             .and_then(|step| step.custody())
             .map(|custody| custody.test_evidence()))
+    }
+    /// Fixture custody transfer: the in-process donor seed's export source
+    /// moves into this donor's own original registry.
+    pub(crate) fn test_adopt_remote_export_custody(
+        &self,
+        range: crate::RangeId,
+        source: crate::distribution_range_image::NativeRetainedRemoteImageSource,
+    ) {
+        self.data
+            .as_ref()
+            .expect("original INITIAL host absent")
+            .image_sources
+            .as_ref()
+            .expect("original INITIAL image registry absent")
+            .test_adopt_range_source(range, source);
+    }
+    /// Whether the export source this donor retains for `range` retired its
+    /// OLD certificate custody; `None` when it retains no source.
+    pub(crate) fn test_remote_export_custody_retired(
+        &self,
+        range: crate::RangeId,
+    ) -> Result<Option<bool>> {
+        self.data
+            .as_ref()
+            .ok_or_else(|| invalid("original INITIAL host absent"))?
+            .image_sources
+            .as_ref()
+            .ok_or_else(|| invalid("original INITIAL image registry absent"))?
+            .retained_range_source(range)?
+            .map(|source| source.old_custody_retired_after_joint_open())
+            .transpose()
     }
     /// What this original INITIAL member retained and durably holds of its
     /// own bridge publication; grants nothing.

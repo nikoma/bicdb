@@ -83,13 +83,15 @@ mod registered_remote_catalogue;
 mod registered_remote_installing;
 pub(crate) use native_durability::ClusterServiceOpenGuard;
 use native_durability::{checked_database_read, checked_database_write, ServiceStoragePolicy};
+#[cfg(feature = "tls-replication")]
+pub(crate) use native_joint_handoff::NativeRemoteJointSourceRetirementCertificate;
 pub(crate) use native_joint_handoff::{
     ActualServiceNativeJointCaptureInputs, ActualServiceNativeJointCommittedEvidence,
     ActualServiceNativeJointConstraints, ActualServiceNativeJointNewEvidence,
     ActualServiceNativeJointOldEvidence, ActualServiceNativeJointPreparedEvidence,
     ActualServiceNativeJointReleaseEvidence, NativeJointImageReleaseOwner,
     NativeJointIrrevocableFacts, NativeJointReleaseOwnerView, NativeJointServingLease,
-    NativeJointSourceRetired,
+    NativeJointSourceRetired, NativeJointSourceRetirementProof,
 };
 pub(crate) use native_writer::NativeWriterRegistryRefresh;
 mod current_image_replacement;

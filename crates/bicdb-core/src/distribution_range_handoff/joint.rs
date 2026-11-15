@@ -33,6 +33,7 @@ pub(crate) use remote_step::{
     NativeJointBridgePhaseKindV1, NativeJointHandoffStepOperationV1,
     NativeJointHandoffStepOutcomeV1, NativeJointHandoffStepReplyV1,
     NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
+    NativeJointSourceRetirementDataV1,
 };
 #[cfg(feature = "tls-replication")]
 mod remote_bridge_certificate;
@@ -87,6 +88,7 @@ mod committed;
 pub(crate) use committed::CommittedNativeJointDecisionObservation;
 
 mod bridge;
+pub(crate) use bridge::NativeJointActivationProof;
 pub(crate) use bridge::{
     NativeJointActivatedQuorum, NativeJointActivationAdmission, NativeJointOpenAdmission,
     NativeJointOpenPhaseQuorum, NativeJointOpenPhaseRound, NativeJointPreparationCustody,
@@ -98,6 +100,12 @@ pub(crate) use bridge::{
     NativeJointReleaseAdmission, NativeJointReleaseContinuation, NativeJointReleasePhaseQuorum,
     NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
     NativeJointServingPublicationRound,
+};
+#[cfg(feature = "tls-replication")]
+pub(crate) use bridge::{
+    NativeJointMemberRelease, NativeJointMemberReleaseOwner, NativeJointReleasePhaseFacts,
+    NativeJointRemoteOldRetirementProof, NativeRemoteBridgeReleased,
+    NativeRemoteJointActivationCertificate,
 };
 
 #[cfg(test)]

@@ -680,6 +680,10 @@ impl NativeRemoteImageSourceSession {
 pub(crate) struct NativeRemoteImageSourceRegistry {
     sessions: Mutex<BTreeMap<Uuid, Arc<Mutex<NativeRemoteImageSourceSession>>>>,
     discoveries: Mutex<BTreeMap<RangeId, Arc<discovery::NativeSourceDiscoveryAttempt>>>,
+    /// A source the fixture's in-process donor seed retained outside any
+    /// discovery attempt, handed to this original registry for custody.
+    #[cfg(test)]
+    test_adopted_sources: Mutex<BTreeMap<RangeId, Arc<NativeRetainedRemoteImageSource>>>,
     #[cfg(test)]
     drop_next_discovery_reply: std::sync::atomic::AtomicBool,
     #[cfg(test)]
@@ -708,6 +712,8 @@ impl NativeRemoteImageSourceRegistry {
         Self {
             sessions: Mutex::new(BTreeMap::new()),
             discoveries: Mutex::new(BTreeMap::new()),
+            #[cfg(test)]
+            test_adopted_sources: Mutex::new(BTreeMap::new()),
             #[cfg(test)]
             drop_next_discovery_reply: std::sync::atomic::AtomicBool::new(false),
             #[cfg(test)]
@@ -1020,6 +1026,31 @@ impl NativeRetainedRemoteImageSource {
         &self,
         phase: &crate::distribution_range_handoff::NativeJointReleasePhaseQuorum,
     ) -> Result<()> {
+        self.retire_old_export_custody_with(|old| phase.require_remote_old_owner_retirement(old))
+    }
+    /// Whether this source's OLD certificate custody was already retired.
+    pub(crate) fn old_custody_retired_after_joint_open(&self) -> Result<bool> {
+        let source = self
+            .session
+            .try_lock()
+            .ok_or_else(|| invalid("source OLD retirement busy"))?;
+        Ok(matches!(&source.old, ActualSourceOld::RetiredJoint { .. }))
+    }
+    /// Same retirement when the other NEW members live in other processes:
+    /// the proof is this donor's own bounded window of authenticated RELEASE
+    /// observations plus its own fresh release observation.
+    pub(crate) fn retire_old_export_custody_after_remote_joint_open(
+        &self,
+        proof: &crate::distribution_range_handoff::NativeJointRemoteOldRetirementProof,
+    ) -> Result<()> {
+        self.retire_old_export_custody_with(|old| proof.require_remote_old_owner_retirement(old))
+    }
+    fn retire_old_export_custody_with(
+        &self,
+        validate: impl FnOnce(
+            &Arc<crate::distribution_range_handoff::NativeRemoteOldCutCertificate>,
+        ) -> Result<()>,
+    ) -> Result<()> {
         // Full foreign phase validation must precede this source latch.
         let old = {
             let source = self
@@ -1041,7 +1072,7 @@ impl NativeRetainedRemoteImageSource {
                 }
             }
         };
-        phase.require_remote_old_owner_retirement(&old)?;
+        validate(&old)?;
         let mut source = self
             .session
             .try_lock()

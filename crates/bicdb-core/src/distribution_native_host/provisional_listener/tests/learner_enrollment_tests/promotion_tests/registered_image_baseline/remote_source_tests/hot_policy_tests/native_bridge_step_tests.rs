@@ -21,7 +21,15 @@ pub(super) fn is_case(case: SourceCase) -> bool {
             | SourceCase::NativeBridgeStepPublish
             | SourceCase::NativeBridgeStepPublishFaults
             | SourceCase::NativeBridgeStepOpen
+            | SourceCase::NativeBridgeStepRelease
     )
+}
+#[test]
+fn native_bridge_step_release_retires_old_custody_then_every_member_releases_own_freeze() {
+    run_registered_image_baseline_with_source(
+        Case::Required,
+        Some(SourceCase::NativeBridgeStepRelease),
+    );
 }
 #[test]
 fn native_bridge_step_open_every_member_activates_own_catalogue_and_recovers_unconfirmed() {
@@ -77,6 +85,21 @@ fn open_operation(data: &NativeJointDecisionData) -> StepOperation {
         decision_sha256: data.checksum_sha256().into(),
     }
 }
+fn retire_operation(data: &NativeJointDecisionData) -> StepOperation {
+    StepOperation::RetireOldCustody {
+        decision_sha256: data.checksum_sha256().into(),
+    }
+}
+fn release_operation(data: &NativeJointDecisionData) -> StepOperation {
+    StepOperation::BridgeRelease {
+        decision_sha256: data.checksum_sha256().into(),
+    }
+}
+fn source_retire_operation(data: &NativeJointDecisionData) -> StepOperation {
+    StepOperation::SourceRetire {
+        decision_sha256: data.checksum_sha256().into(),
+    }
+}
 fn observe_operation(data: &NativeJointDecisionData, kind: PhaseKind) -> StepOperation {
     StepOperation::BridgePhaseObserve {
         decision_sha256: data.checksum_sha256().into(),
@@ -125,11 +148,18 @@ fn exchange(
         StepOperation::BridgeOpen { .. } => {
             client.request_native_joint_bridge_open(member, data, &request, &own, &parent)
         }
+        StepOperation::RetireOldCustody { .. } => client
+            .request_native_joint_bridge_retire_old_custody(member, data, &request, &own, &parent),
+        StepOperation::BridgeRelease { .. } => {
+            client.request_native_joint_bridge_release(member, data, &request, &own, &parent)
+        }
         StepOperation::BridgePhaseObserve { kind, .. } => client
             .request_native_joint_bridge_phase_observation(
                 member, data, *kind, &request, &own, &parent,
             ),
-        StepOperation::TargetInstall { .. } | StepOperation::SourceExportRetire { .. } => {
+        StepOperation::SourceRetire { .. }
+        | StepOperation::TargetInstall { .. }
+        | StepOperation::SourceExportRetire { .. } => {
             unreachable!()
         }
     };
@@ -208,6 +238,24 @@ fn open(
         assert!(frame.outcome().activation_sha256.is_none());
     }
     panic!("member {member} did not confirm its catalogue activation in four bounded steps");
+}
+/// Repeats the same logical release step until the member reports its own
+/// confirmed armed generation.
+fn release(
+    client: &TcpClusterRelocationTransport,
+    member: &ClusterNodeId,
+    data: &NativeJointDecisionData,
+    ledger: &mut Ledger<'_>,
+) -> AuthenticatedNativeJointBridgeStepFrame {
+    for _ in 0..4 {
+        let frame = exchange(client, member, data, release_operation(data), ledger).unwrap();
+        if frame.outcome().complete {
+            return frame;
+        }
+        assert_eq!(frame.outcome().stage, StepStage::BridgeRelease);
+        assert!(frame.outcome().released.is_none());
+    }
+    panic!("member {member} did not confirm its release in four bounded steps");
 }
 /// What the member itself retained and durably holds of its publication.
 fn publication(
@@ -321,6 +369,11 @@ pub(super) fn exercise(
     current: &ClusterTopology,
     selected: crate::RangeId,
     output: &std::path::Path,
+    donor: usize,
+    export: crate::distribution_range_image::NativeRetainedRemoteImageSource,
+    metadata: &[Arc<Mutex<crate::MetadataConsensusStore>>],
+    template: &crate::DistributionConfig,
+    services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
 ) {
     assert!(is_case(case));
     let data = decision.data().clone();
@@ -370,11 +423,37 @@ pub(super) fn exercise(
         SourceCase::NativeBridgeStepPublish
             | SourceCase::NativeBridgeStepPublishFaults
             | SourceCase::NativeBridgeStepOpen
+            | SourceCase::NativeBridgeStepRelease
     ) {
         let clients = new
             .iter()
             .map(|member| (member.clone(), all_clients[initiator(member)].clone()))
             .collect::<BTreeMap<_, _>>();
+        if matches!(case, SourceCase::NativeBridgeStepRelease) {
+            // The fixture's in-process donor seed retained the remote export
+            // certificate outside any discovery attempt. Its custody moves to
+            // the donor's own original registry, where a process that served
+            // discovery itself would hold it.
+            assert!(new.contains(&node(donor)), "the donor is a survivor");
+            controls[donor].test_adopt_remote_export_custody(selected, export);
+            return exercise_release(
+                &data,
+                &new,
+                &clients,
+                all_clients,
+                controls,
+                target_control,
+                &bystander,
+                donor,
+                selected,
+                metadata,
+                template,
+                services,
+                &outsider,
+                &mut ledger,
+            );
+        }
+        let _export = export;
         exercise_publish(
             case,
             &data,
@@ -1110,4 +1189,519 @@ fn exercise_open(
             Some(&bridges[member])
         );
     }
+}
+
+/// After prepare, publish and open, every member is driven through custody
+/// retirement and its own release purely by step RPC. Covers the Release
+/// observation, the refusals, one unconfirmed second window and its recovery.
+#[allow(clippy::too_many_arguments)]
+fn exercise_release(
+    data: &NativeJointDecisionData,
+    new: &[ClusterNodeId],
+    clients: &BTreeMap<ClusterNodeId, Arc<TcpClusterRelocationTransport>>,
+    all_clients: &[Arc<TcpClusterRelocationTransport>],
+    controls: &[NativeMetadataControlHost],
+    target_control: &NativeMetadataControlHost,
+    bystander: &ClusterNodeId,
+    donor: usize,
+    selected: crate::RangeId,
+    metadata: &[Arc<Mutex<crate::MetadataConsensusStore>>],
+    template: &crate::DistributionConfig,
+    services: &[Arc<Mutex<crate::ClusterDataNodeService>>],
+    outsider: &ClusterNodeId,
+    ledger: &mut Ledger<'_>,
+) {
+    let evidence_of =
+        |member: &ClusterNodeId| publication(controls, target_control, member, selected);
+    let foreign = |operation: StepOperation| {
+        NativeJointHandoffStepRequestV1::from_decision(data, operation, Uuid::now_v7(), 5000)
+            .unwrap()
+    };
+    let target = node(4);
+    let survivors = new
+        .iter()
+        .filter(|n| **n != target)
+        .cloned()
+        .collect::<Vec<_>>();
+    for member in new {
+        prepare(&clients[member], member, data, ledger);
+    }
+    // 1. No member has a release continuation before its own activation.
+    for member in new {
+        publish(&clients[member], member, data, ledger);
+    }
+    let error = exchange(
+        &clients[bystander],
+        bystander,
+        data,
+        observe_operation(data, PhaseKind::Release),
+        ledger,
+    )
+    .err()
+    .expect("no member can attest a Release phase before it activated")
+    .to_string();
+    assert!(error.contains("no retained member state yet"), "{error}");
+    let error = raw(
+        &clients[bystander],
+        bystander,
+        &foreign(release_operation(data)),
+        "bridge_release_before_own_activation",
+        ledger,
+    );
+    assert!(
+        error.contains("holds no confirmed catalogue activation"),
+        "{error}"
+    );
+    let mut activations = BTreeMap::new();
+    let mut bridges = BTreeMap::new();
+    for member in new {
+        let frame = open(&clients[member], member, data, ledger);
+        activations.insert(
+            member.clone(),
+            frame.outcome().activation_sha256.clone().unwrap(),
+        );
+        bridges.insert(
+            member.clone(),
+            frame.outcome().bridge_receipt_sha256.clone().unwrap(),
+        );
+    }
+    // 2. Release observation: durably open, still Frozen, same identity.
+    let observe = |member: &ClusterNodeId, ledger: &mut Ledger<'_>| {
+        exchange(
+            &clients[member],
+            member,
+            data,
+            observe_operation(data, PhaseKind::Release),
+            ledger,
+        )
+        .unwrap()
+        .outcome()
+        .clone()
+    };
+    let mut identities = BTreeMap::new();
+    for member in new {
+        let outcome = observe(member, ledger);
+        assert_eq!(
+            outcome.activation_sha256.as_ref(),
+            Some(&activations[member])
+        );
+        assert_eq!(
+            outcome.bridge_receipt_sha256.as_ref(),
+            Some(&bridges[member])
+        );
+        assert_eq!(outcome.released, Some(false));
+        assert!(outcome.released_generation.is_none());
+        assert_eq!(
+            evidence_of(member).unwrap()["durable_activation_sha256"],
+            serde_json::json!(outcome.activation_sha256)
+        );
+        identities.insert(member.clone(), outcome.writer_identity_sha256.clone());
+    }
+    // 3. A survivor that still holds OLD custody refuses its own release;
+    // its preparation custody and freeze are untouched.
+    let error = raw(
+        &clients[bystander],
+        bystander,
+        &foreign(release_operation(data)),
+        "bridge_release_before_old_custody_retirement",
+        ledger,
+    );
+    assert!(error.contains("still retains OLD custody"), "{error}");
+    let after = evidence_of(bystander).unwrap();
+    assert_eq!(after["preparation_custody_retained"], true);
+    assert_eq!(after["release_pending"], false);
+    assert_eq!(observe(bystander, ledger).released, Some(false));
+    // 4. Mutations from a NEW member that is not the coordinator.
+    let other = new
+        .iter()
+        .find(|n| *n != bystander && **n != target)
+        .cloned()
+        .unwrap();
+    for (name, operation) in [
+        (
+            "bridge_retire_old_custody_from_non_initiator_new_member",
+            retire_operation(data),
+        ),
+        (
+            "bridge_release_from_non_initiator_new_member",
+            release_operation(data),
+        ),
+    ] {
+        let error = raw(
+            &all_clients[index(bystander)],
+            &other,
+            &foreign(operation),
+            name,
+            ledger,
+        );
+        assert!(error.contains("not an admitted initiator"), "{error}");
+    }
+    assert!(controls[index(&other)]
+        .test_constraint_close_custody(selected)
+        .is_ok());
+    assert_eq!(
+        controls[donor]
+            .test_remote_export_custody_retired(selected)
+            .unwrap(),
+        Some(false)
+    );
+    // 5. Custody retirement on every NEW member; repeatable.
+    for member in new {
+        for _ in 0..2 {
+            let frame = exchange(
+                &clients[member],
+                member,
+                data,
+                retire_operation(data),
+                ledger,
+            )
+            .unwrap();
+            let outcome = frame.outcome();
+            assert!(outcome.complete);
+            assert_eq!(outcome.old_custody_retired, Some(true));
+            assert_eq!(
+                outcome.activation_sha256.as_ref(),
+                Some(&activations[member])
+            );
+        }
+        let after = evidence_of(member).unwrap();
+        assert_eq!(after["old_custody_retired"], true);
+        // Retirement ends OLD memory custody only.
+        assert_eq!(after["preparation_custody_retained"], true);
+        assert_eq!(after["release_confirmed"], false);
+        if *member != target {
+            assert!(controls[index(member)]
+                .test_constraint_close_custody(selected)
+                .is_err());
+        }
+    }
+    assert_eq!(
+        controls[donor]
+            .test_remote_export_custody_retired(selected)
+            .unwrap(),
+        Some(true)
+    );
+    // 6. The target releases first. Its release happens, then the second
+    // window does not confirm an unchanged member set: fail closed, report
+    // nothing, and the next call continues the SAME dropped owner.
+    test_arm_bridge_second_window_fault(
+        &target,
+        data.checksum_sha256(),
+        NativeBridgeSecondWindowFault::ChangedIdentity,
+    );
+    let frame = exchange(
+        &clients[&target],
+        &target,
+        data,
+        release_operation(data),
+        ledger,
+    )
+    .unwrap();
+    assert!(!frame.outcome().complete);
+    assert_eq!(frame.outcome().stage, StepStage::BridgeRelease);
+    assert!(frame.outcome().released.is_none());
+    let unconfirmed = evidence_of(&target).unwrap();
+    assert_eq!(unconfirmed["release_pending"], true);
+    assert_eq!(unconfirmed["release_confirmed"], false);
+    assert_eq!(unconfirmed["preparation_custody_retained"], false);
+    let mut generations = BTreeMap::new();
+    for member in std::iter::once(&target).chain(survivors.iter()) {
+        let started = Instant::now();
+        let frame = release(&clients[member], member, data, ledger);
+        let outcome = frame.outcome().clone();
+        assert_eq!(outcome.released, Some(true));
+        assert_eq!(
+            outcome.activation_sha256.as_ref(),
+            Some(&activations[member])
+        );
+        assert_eq!(
+            outcome.bridge_receipt_sha256.as_ref(),
+            Some(&bridges[member])
+        );
+        let generation = outcome.released_generation.unwrap();
+        let after = evidence_of(member).unwrap();
+        assert_eq!(after["release_pending"], false);
+        assert_eq!(after["release_confirmed"], true);
+        assert_eq!(after["released_generation"], serde_json::json!(generation));
+        assert_eq!(after["preparation_custody_retained"], false);
+        // The member's own fresh observation agrees.
+        let observed = observe(member, ledger);
+        assert_eq!(observed.released, Some(true));
+        assert_eq!(observed.released_generation, Some(generation));
+        assert_eq!(observed.writer_identity_sha256, identities[member]);
+        // An identical retry returns the SAME outcome and releases nothing.
+        let again = release(&clients[member], member, data, ledger);
+        assert_eq!(again.outcome(), &outcome);
+        // Members released later are still Frozen at this point.
+        for later in new
+            .iter()
+            .filter(|n| !generations.contains_key(*n) && *n != member)
+        {
+            assert_eq!(observe(later, ledger).released, Some(false));
+        }
+        // The activation record needs EVERY member released: the
+        // coordinator's own member first, then every other one.
+        if generations.len() + 1 < new.len() {
+            let error = controls[0]
+                .certify_remote_joint_activation(data, &budget(5000))
+                .err()
+                .expect("no activation certificate while a member is still Frozen")
+                .to_string();
+            assert!(
+                error.contains("holds no confirmed release")
+                    || error.contains("still has an actual Frozen or unarmed owner"),
+                "{error}"
+            );
+        }
+        ledger.record(serde_json::json!({"operation":"member_released_own_freeze",
+            "member":member,"released_generation":generation,
+            "elapsed_ms":started.elapsed().as_millis() as u64,"identical_retry":true}));
+        generations.insert(member.clone(), generation);
+    }
+    assert_eq!(generations.len(), new.len());
+    for member in new {
+        let observed = observe(member, ledger);
+        assert_eq!(observed.released_generation, Some(generations[member]));
+        assert_eq!(
+            observed.activation_sha256.as_ref(),
+            Some(&activations[member])
+        );
+    }
+    // 7. The coordinator (the metadata leader; in this fixture it holds no
+    // replica of the moved range, so it is outside the new set) observes
+    // the all-released quorum over its own transport. Its digest is the
+    // in-process function of the same durable per-member facts.
+    assert!(!new.contains(&node(0)));
+    let members = new
+        .iter()
+        .map(|member| {
+            (
+                member.clone(),
+                data.new_members()[member].incarnation,
+                bridges[member].clone(),
+                activations[member].clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let expected = hex::encode(<sha2::Sha256 as sha2::Digest>::digest(
+        serde_json::to_vec(&(
+            "bicdb-native-joint-activated-quorum-v1",
+            data.checksum_sha256(),
+            data.promise().relocation_id,
+            data.activation_range().id,
+            data.activation_range().epoch,
+            &members,
+        ))
+        .unwrap(),
+    ));
+    // 8. The existing metadata stage commits the activation record from it.
+    let relocation = data.promise().relocation_id;
+    let stage_of = || {
+        let committed = metadata[0].lock().committed_topology().clone();
+        let record = committed.relocations[&relocation]
+            .native_joint_handoff_v1
+            .clone()
+            .unwrap();
+        (
+            record.stage(),
+            record.activated_quorum_sha256().map(str::to_owned),
+        )
+    };
+    assert_eq!(
+        stage_of(),
+        (
+            crate::distribution::NativeJointHandoffStageV1::AwaitingActivation,
+            None
+        )
+    );
+    let planning = |parent: &CancellationToken| {
+        let (fresh, business) = own(&all_clients[0], parent);
+        let snapshot = crate::ClusterBootstrapSnapshot {
+            topology: fresh.committed_topology(business).unwrap().clone(),
+            config_template: template.clone(),
+            metadata_leader_id: Some(node(0)),
+        };
+        let root = tempfile::tempdir().unwrap();
+        let config = crate::provision_cluster_member_directory(
+            root.path(),
+            &snapshot,
+            &node(0),
+            template.transport.clone(),
+            true,
+        )
+        .unwrap();
+        let view = crate::DistributionStore::open(root.path(), config, true)
+            .unwrap()
+            .fork_ephemeral();
+        (view, fresh, business, root)
+    };
+    let record = || {
+        let parent = budget(5000);
+        let (mut view, fresh, business, _root) = planning(&parent);
+        // The proof is a live bounded window: observe it right before use.
+        let certificate = controls[0]
+            .certify_remote_joint_activation(data, &parent)
+            .unwrap();
+        assert_eq!(certificate.checksum_sha256(), expected);
+        assert!(certificate.data() == data);
+        let changed = view
+            .record_native_joint_activation(&certificate, &fresh, business, &node(0), 204)
+            .unwrap();
+        if changed {
+            commit_candidate(
+                controls,
+                metadata,
+                all_clients,
+                view.topology().clone(),
+                &parent,
+            );
+        }
+        changed
+    };
+    // The retired source refuses to retire before the activation record is
+    // committed in ITS OWN metadata.
+    assert!(!new.contains(outsider));
+    let error = raw(
+        &all_clients[0],
+        outsider,
+        &foreign(source_retire_operation(data)),
+        "source_retire_before_activation_record",
+        ledger,
+    );
+    assert!(
+        error.contains("differs from the decision committed in own metadata"),
+        "{error}"
+    );
+    assert!(record());
+    assert_eq!(
+        stage_of(),
+        (
+            crate::distribution::NativeJointHandoffStageV1::AwaitingCleanup,
+            Some(expected.clone())
+        )
+    );
+    // A second, distinct observation of the same completed Open yields the
+    // SAME record: nothing more is committed.
+    assert!(!record());
+    ledger.record(
+        serde_json::json!({"operation":"remote_activation_record_committed",
+        "activated_quorum_sha256":expected,"members":members,
+        "stage":"AwaitingCleanup","second_certificate_commits_nothing":true}),
+    );
+    // A released member of the new set observing the same quorum through
+    // its own member state plus the other members' frames computes the
+    // SAME digest: observer kind does not enter the record.
+    let member_observer = new.iter().find(|n| **n != target).cloned().unwrap();
+    let by_member = controls[index(&member_observer)]
+        .certify_remote_joint_activation(data, &budget(5000))
+        .unwrap();
+    assert_eq!(by_member.checksum_sha256(), expected);
+    drop(by_member);
+    // 9. The retired source records its own retirement by one step RPC.
+    // Refused from a non-initiator and on a member of the final membership.
+    let error = raw(
+        &all_clients[index(bystander)],
+        outsider,
+        &foreign(source_retire_operation(data)),
+        "source_retire_from_non_initiator_new_member",
+        ledger,
+    );
+    assert!(error.contains("not an admitted initiator"), "{error}");
+    let error = raw(
+        &clients[bystander],
+        bystander,
+        &foreign(source_retire_operation(data)),
+        "source_retire_sent_to_a_final_member",
+        ledger,
+    );
+    assert!(
+        error.contains("differs from the decision committed in own metadata"),
+        "{error}"
+    );
+    let retire_source = |parent: &CancellationToken, ledger: &mut Ledger<'_>| {
+        let business = Uuid::now_v7();
+        let observed = all_clients[0]
+            .acquire_host_metadata_observation(&node(0), business, Duration::from_secs(5), parent)
+            .unwrap();
+        let request = NativeJointHandoffStepRequestV1::from_decision(
+            data,
+            source_retire_operation(data),
+            business,
+            5000,
+        )
+        .unwrap();
+        let frame = all_clients[0]
+            .request_native_joint_source_retire(outsider, data, &request, &observed, parent)
+            .unwrap();
+        ledger.record(
+            serde_json::json!({"operation":"native_joint_source_retire_step",
+            "request":request,"recipient":outsider,"actual_initiator":node(0),
+            "outcome":frame.outcome(),"reply_is_checksummed_DATA_not_authority":true}),
+        );
+        assert_eq!(frame.actual_peer(), outsider);
+        assert_eq!(
+            frame.actual_peer_incarnation(),
+            data.old_members()[outsider].incarnation
+        );
+        frame
+    };
+    let parent = budget(5000);
+    let (mut view, fresh, business, _root) = planning(&parent);
+    let frame = retire_source(&parent, ledger);
+    let reported = frame.outcome().source_retirement.clone().unwrap();
+    assert_eq!(&reported.node_id, outsider);
+    assert_eq!(reported.activated_quorum_sha256, expected);
+    assert_eq!(reported.decision_sha256, data.checksum_sha256());
+    let certificate =
+        crate::distribution_data::NativeRemoteJointSourceRetirementCertificate::from_frame(
+            data, frame,
+        )
+        .unwrap();
+    assert!(view
+        .complete_native_joint_source_retirement(&certificate, &fresh, business, &node(0), 205)
+        .unwrap());
+    commit_candidate(
+        controls,
+        metadata,
+        all_clients,
+        view.topology().clone(),
+        &parent,
+    );
+    let committed = metadata[0].lock().committed_topology().clone();
+    let plan = &committed.relocations[&relocation];
+    assert_eq!(plan.phase, crate::distribution::RelocationPhase::Completed);
+    let cleaned = plan.native_joint_handoff_v1.as_ref().unwrap();
+    assert_eq!(
+        cleaned.stage(),
+        crate::distribution::NativeJointHandoffStageV1::Cleaned
+    );
+    // The source's own store holds exactly the record it reported.
+    let parent = budget(5000);
+    let (source_own, source_business) = own(&all_clients[index(outsider)], &parent);
+    let held = crate::ClusterDataNodeService::retire_actual_native_joint_source(
+        &services[index(outsider)],
+        &source_own,
+        source_business,
+        selected,
+        &parent,
+    )
+    .unwrap();
+    assert_eq!(held.checksum_sha256(), reported.checksum_sha256);
+    // A repeated step reports the SAME record and completes nothing more.
+    let (mut view, fresh, business, _root) = planning(&parent);
+    let again = retire_source(&parent, ledger);
+    assert_eq!(again.outcome().source_retirement.as_ref(), Some(&reported));
+    let certificate =
+        crate::distribution_data::NativeRemoteJointSourceRetirementCertificate::from_frame(
+            data, again,
+        )
+        .unwrap();
+    assert!(!view
+        .complete_native_joint_source_retirement(&certificate, &fresh, business, &node(0), 206)
+        .unwrap());
+    ledger.record(
+        serde_json::json!({"operation":"relocation_completed_from_remote_frames",
+        "retired_source":outsider,"source_retirement_sha256":reported.checksum_sha256,
+        "phase":"Completed","stage":"Cleaned","repeated_step_same_record":true}),
+    );
 }

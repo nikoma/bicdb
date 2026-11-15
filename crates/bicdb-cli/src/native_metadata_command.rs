@@ -289,6 +289,87 @@ struct Reply<'a, T: Serialize> {
     error: Option<String>,
     data_serving: bool,
 }
+/// What the operator's command file holds for a host that last applied the
+/// sequence `applied`.
+enum Pending {
+    /// No file, or a command at or below `applied`: the one already
+    /// answered. A reused sequence is ignored here; the sending command
+    /// refuses it before it writes (see `require_next_sequence`).
+    Nothing,
+    /// The well-formed command with exactly the next sequence.
+    Next(Request),
+    /// A command the host refuses and ignores: unreadable, of an unsupported
+    /// version or budget, or with a skipped sequence. The text is recorded
+    /// in the status file. An operator's typo never ends the host.
+    Refused(String),
+}
+fn pending_request(command_file: &Path, applied: u64) -> Pending {
+    let bytes = match read_bounded(command_file, 16 * 1024) {
+        Ok(bytes) => bytes,
+        Err(_) if !command_file.exists() => return Pending::Nothing,
+        Err(error) => {
+            return Pending::Refused(format!(
+                "operator command refused and ignored: unreadable command file: {error}"
+            ))
+        }
+    };
+    let request: Request = match serde_json::from_slice(&bytes) {
+        Ok(request) => request,
+        Err(error) => {
+            return Pending::Refused(format!(
+                "operator command refused and ignored: malformed command file: {error}"
+            ))
+        }
+    };
+    if request.sequence <= applied {
+        return Pending::Nothing;
+    }
+    if request.version != 1 || !(1..=5000).contains(&request.budget_ms) {
+        return Pending::Refused(format!(
+            "operator command with sequence {} refused and ignored: unsupported version or budget",
+            request.sequence
+        ));
+    }
+    if request.sequence != applied + 1 {
+        return Pending::Refused(format!(
+            "operator command with sequence {} refused and ignored: the sequence must advance exactly one, to {}; the host keeps running and its last applied sequence is still {applied}",
+            request.sequence,
+            applied + 1
+        ));
+    }
+    Pending::Next(request)
+}
+/// Sender side, before the command file is written: `sequence` must be
+/// exactly one above the sequence the host last applied. A reused sequence
+/// would be ignored by the host while its old reply, which carries that
+/// sequence, would look like the answer to this command; a skipped one is
+/// refused by the host. An earlier command that is still being applied is
+/// waited for inside this command's own budget.
+fn require_next_sequence(status_file: &Path, sequence: u64, deadline: Instant) -> Result<()> {
+    loop {
+        let reply: serde_json::Value = serde_json::from_slice(
+            &read_bounded(status_file, 1024 * 1024)
+                .context("the host's status file is unreadable; is the host running?")?,
+        )?;
+        let applied = reply["sequence"]
+            .as_u64()
+            .context("the host's status file carries no applied sequence")?;
+        ensure!(
+            applied < sequence,
+            "sequence {sequence} was already used: the host last applied sequence {applied} and ignores a reused one, so nothing was sent; send the command with --sequence {}",
+            applied + 1
+        );
+        if applied + 1 == sequence {
+            return Ok(());
+        }
+        ensure!(
+            Instant::now() < deadline,
+            "sequence {sequence} skips ahead: the host last applied sequence {applied} and refuses a sequence that does not advance exactly one, so nothing was sent; send the command with --sequence {}",
+            applied + 1
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
 fn read_bounded(path: &Path, max: u64) -> Result<Vec<u8>> {
     use std::io::Read;
     let file = std::fs::File::open(path)?;
@@ -544,20 +625,34 @@ pub fn run(command: Command) -> Result<()> {
             )?;
             let mut sequence = 0;
             let mut command_error: Option<String> = None;
+            let mut refusal: Option<String> = None;
+            let mut move_error: Option<String> = None;
             let mut last_tick = Instant::now();
             while lifetime.check().is_ok() && status.phase != NativeMetadataHostPhase::Stopped {
-                if command_file.exists() {
-                    let request: Request =
-                        serde_json::from_slice(&read_bounded(&command_file, 16 * 1024)?)?;
-                    ensure!(
-                        request.version == 1 && request.budget_ms > 0 && request.budget_ms <= 5000,
-                        "unsupported metadata operator request"
-                    );
-                    if request.sequence > sequence {
-                        ensure!(
-                            request.sequence == sequence + 1,
-                            "metadata operator sequence must advance exactly one"
-                        );
+                match pending_request(&command_file, sequence) {
+                    Pending::Nothing => {}
+                    Pending::Refused(text) => {
+                        // Recorded once per distinct refusal; the applied
+                        // sequence does not move and the host keeps running.
+                        if refusal.as_ref() != Some(&text) {
+                            eprintln!("native metadata host: {text}");
+                            command_error = Some(text.clone());
+                            write(
+                                &status_file,
+                                &Reply {
+                                    version: 1,
+                                    sequence,
+                                    process_id: std::process::id(),
+                                    host: Some(&status),
+                                    error: Some(text.clone()),
+                                    data_serving: status.data_serving,
+                                },
+                            )?;
+                            refusal = Some(text);
+                        }
+                    }
+                    Pending::Next(request) => {
+                        refusal = None;
                         let token = lifetime.child_with_deadline(
                             Instant::now() + Duration::from_millis(request.budget_ms),
                         );
@@ -620,7 +715,20 @@ pub fn run(command: Command) -> Result<()> {
                     // Process-owned range-move scheduling: starts at most one
                     // step on its own worker and never waits for it. Its
                     // outcome is the `range_move` status section only.
-                    let _ = host.advance_range_move(&lifetime);
+                    // A step that could not be started is reported on stderr,
+                    // once per distinct error.
+                    match host.advance_range_move(&lifetime) {
+                        Ok(()) => move_error = None,
+                        Err(error) => {
+                            let text = error.to_string();
+                            if move_error.as_ref() != Some(&text) {
+                                eprintln!(
+                                    "native metadata host: range move step not started: {text}"
+                                );
+                                move_error = Some(text);
+                            }
+                        }
+                    }
                     if !manual_enrollment {
                         // A distinct finite process-maintenance attempt. Public
                         // EventClient request budgets remain unchanged. No root
@@ -761,21 +869,32 @@ pub fn run(command: Command) -> Result<()> {
             )?;
             let mut sequence = 0;
             let mut command_error: Option<String> = None;
+            let mut refusal: Option<String> = None;
             let mut last_refresh = Instant::now();
             let mut stopping = false;
             while lifetime.check().is_ok() && !stopping {
-                if command_file.exists() {
-                    let request: Request =
-                        serde_json::from_slice(&read_bounded(&command_file, 16 * 1024)?)?;
-                    ensure!(
-                        request.version == 1 && (1..=5000).contains(&request.budget_ms),
-                        "unsupported learner command version/budget"
-                    );
-                    if request.sequence > sequence {
-                        ensure!(
-                            request.sequence == sequence + 1,
-                            "learner sequence must advance exactly one"
-                        );
+                match pending_request(&command_file, sequence) {
+                    Pending::Nothing => {}
+                    Pending::Refused(text) => {
+                        if refusal.as_ref() != Some(&text) {
+                            eprintln!("native metadata learner host: {text}");
+                            command_error = Some(text.clone());
+                            write(
+                                &status_file,
+                                &Reply {
+                                    version: 1,
+                                    sequence,
+                                    process_id: std::process::id(),
+                                    host: Some(&status),
+                                    error: Some(text.clone()),
+                                    data_serving: false,
+                                },
+                            )?;
+                            refusal = Some(text);
+                        }
+                    }
+                    Pending::Next(request) => {
+                        refusal = None;
                         let token = lifetime.child_with_deadline(
                             Instant::now() + Duration::from_millis(request.budget_ms),
                         );
@@ -885,7 +1004,7 @@ pub fn run(command: Command) -> Result<()> {
                             sequence,
                             process_id: std::process::id(),
                             host: Some(&status),
-                            error: if sequence > 0 {
+                            error: if sequence > 0 || refusal.is_some() {
                                 command_error.clone()
                             } else {
                                 error
@@ -920,6 +1039,7 @@ pub fn run(command: Command) -> Result<()> {
                 "operator command/status paths must differ"
             );
             let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+            require_next_sequence(&status_file, sequence, deadline)?;
             write(
                 &command_file,
                 &Request {
@@ -978,6 +1098,7 @@ pub fn run(command: Command) -> Result<()> {
                 _ => NativeMetadataHostAction::AbortMoveRange { range },
             };
             let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+            require_next_sequence(&status_file, sequence, deadline)?;
             write(
                 &command_file,
                 &Request {
@@ -1022,6 +1143,7 @@ pub fn run(command: Command) -> Result<()> {
                 "operator command/status paths must differ"
             );
             let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+            require_next_sequence(&status_file, sequence, deadline)?;
             write(
                 &command_file,
                 &Request {

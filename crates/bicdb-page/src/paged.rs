@@ -900,6 +900,16 @@ impl PagedStore {
         options: PagedStoreOptions,
     ) -> Result<(Self, RecoveryReport)> {
         let dir = dir.as_ref();
+        Self::validate_open_options(&options)?;
+        std::fs::create_dir_all(dir).map_err(|e| PageError::io(dir, e))?;
+        // Claim first. A resolver paused before this point cannot select a
+        // standalone inode and later enter after Core enrollment changes.
+        let mut claim = Some(DirectoryLock::acquire(dir)?);
+        Self::open_with_directory_claim(dir, options, &mut claim)
+    }
+
+    /// Pure envelope validation; it acquires no claim and performs no IO.
+    pub fn validate_open_options(options: &PagedStoreOptions) -> Result<()> {
         // Validate the complete resident/recovery envelope before creating a
         // directory or file. A typo in an operator limit must fail without
         // partially initializing a database.
@@ -926,15 +936,76 @@ impl PagedStore {
                 ),
             });
         }
-        std::fs::create_dir_all(dir).map_err(|e| PageError::io(dir, e))?;
+        Ok(())
+    }
+
+    /// Durably fence any existing conventional Page payload while the actual
+    /// directory claim is retained. This is reader enrollment only, not a
+    /// transaction/data readiness grant. No Page owner survives this helper.
+    pub fn prepare_existing_physical_reader(
+        dir: impl AsRef<Path>,
+        claim: &DirectoryLock,
+    ) -> Result<()> {
+        let dir = dir.as_ref();
+        claim.require_directory(dir)?;
+        let paths = PagedPaths::in_dir(dir);
+        match std::fs::symlink_metadata(&paths.pages) {
+            Ok(_) => {
+                // Normal existing-store enrollment validates the old physical
+                // header/layout, writes the mandatory profile, and performs
+                // its actual file/directory durability barriers unconditionally.
+                let store = PageStore::open_existing_auto(&paths.pages, true)?;
+                crate::manager::require_physical_gate_profile(&paths.pages)?;
+                drop(store);
+                claim.require_directory(dir)?;
+                Ok(())
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                for entry in std::fs::read_dir(dir).map_err(|e| PageError::io(dir, e))? {
+                    let entry = entry.map_err(|e| PageError::io(dir, e))?;
+                    let name = entry.file_name();
+                    if name != "store.lock"
+                        && name != crate::physical_gate::PHYSICAL_GATE_FILE
+                        && name != ".backup-online.lock"
+                    {
+                        return Err(PageError::BackupSnapshot {
+                            reason: "existing Page payload has no superblock; require its original recovery producer before Core enrollment".into(),
+                        });
+                    }
+                }
+                Ok(())
+            }
+            Err(error) => Err(PageError::io(&paths.pages, error)),
+        }
+    }
+
+    /// Consume exactly one genuine existing claim, with no acquire/drop gap.
+    /// Invalid options, None or a wrong directory are refusals before any Page
+    /// mutation and leave an existing Some(claim) untouched. After the unique
+    /// take, IO/recovery failures keep the original failed-open drop semantics.
+    pub fn open_with_directory_claim(
+        dir: impl AsRef<Path>,
+        options: PagedStoreOptions,
+        claim: &mut Option<DirectoryLock>,
+    ) -> Result<(Self, RecoveryReport)> {
+        let dir = dir.as_ref();
+        Self::validate_open_options(&options)?;
+        claim
+            .as_ref()
+            .ok_or_else(|| PageError::InvalidMaintenanceLimits {
+                reason: "actual retained Page directory claim is absent".into(),
+            })?
+            .require_directory(dir)?;
         let paths = PagedPaths::in_dir(dir);
         let physical_gate = crate::physical_gate::PhysicalGate::for_file(&paths.pages)?;
         let _physical_open = physical_gate.shared()?;
-
-        // Before recovery, and before any page is read or written: recovery
-        // itself mutates the file, so two concurrent openers would replay and
-        // truncate the same log against each other.
-        let lock = DirectoryLock::acquire(dir)?;
+        // Actual admission succeeded while the SAME kernel file remained
+        // owned by the caller. Transfer it once, never clone/reacquire it.
+        let lock = claim
+            .take()
+            .ok_or_else(|| PageError::InvalidMaintenanceLimits {
+                reason: "actual Page directory claim disappeared at unique transfer".into(),
+            })?;
 
         let store = Arc::new(PageStore::open(
             &paths.pages,

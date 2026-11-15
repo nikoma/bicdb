@@ -26,7 +26,7 @@ pub const PHYSICAL_GATE_READER_FEATURE: &str = "physical_backup_gate_v1";
 const WAIT: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Identity {
+pub(crate) struct Identity {
     volume: u64,
     file: u64,
 }
@@ -347,7 +347,7 @@ impl PhysicalBackupGuard {
 }
 
 #[cfg(unix)]
-fn identity(file: &File, path: &Path) -> Result<Identity> {
+pub(crate) fn identity(file: &File, path: &Path) -> Result<Identity> {
     use std::os::unix::fs::MetadataExt;
     let metadata = file.metadata().map_err(|e| PageError::io(path, e))?;
     Ok(Identity {
@@ -357,7 +357,7 @@ fn identity(file: &File, path: &Path) -> Result<Identity> {
 }
 
 #[cfg(windows)]
-fn identity(file: &File, path: &Path) -> Result<Identity> {
+pub(crate) fn identity(file: &File, path: &Path) -> Result<Identity> {
     use std::os::windows::io::AsRawHandle;
     #[repr(C)]
     struct Information {
@@ -391,7 +391,7 @@ fn identity(file: &File, path: &Path) -> Result<Identity> {
 }
 
 #[cfg(not(any(unix, windows)))]
-fn identity(_file: &File, path: &Path) -> Result<Identity> {
+pub(crate) fn identity(_file: &File, path: &Path) -> Result<Identity> {
     // Do not turn an unsupported identity/locking implementation into a
     // successful physical backup. Native platform support is required here.
     Err(failure(

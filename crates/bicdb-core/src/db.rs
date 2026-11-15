@@ -10899,6 +10899,38 @@ impl BicDb {
         // Recheck after claiming ownership: a restore may have started after
         // the read-only preflight and then died before this lock was acquired.
         online_backup::ensure_no_pending_restore(&path)?;
+        // Retain the actual child claim BEFORE any Core FORMAT enrollment.
+        // A current/old standalone Page owner must refuse this open while the
+        // root remains unenrolled, not merely after the flag was published.
+        let paged_options = crate::paged_collection::PagedRecordsOptions {
+            page_size: config.paged_page_size,
+            buffer_pool_bytes: config.paged_buffer_pool_bytes,
+            read_ahead_queue_pages: config.paged_read_ahead_queue_pages,
+            wal_max_bytes: config.paged_wal_max_bytes,
+            wal_segment_bytes: config.paged_wal_segment_bytes,
+            extent_bytes: config.paged_extent_bytes,
+            fsync: config.fsync,
+            accept_legacy_meta: config.paged_accept_legacy_meta,
+        };
+        if effective_mode == StorageMode::ServerPaged {
+            crate::paged_collection::PagedRecords::validate_open_options(&paged_options)?;
+        }
+        let paged_dir = path.join(DEFAULT_PAGED_DIR);
+        let mut paged_directory_claim =
+            if effective_mode == StorageMode::ServerPaged || path_entry_exists(&paged_dir)? {
+                fs::create_dir_all(&paged_dir)?;
+                let claim = bicdb_page::DirectoryLock::acquire(&paged_dir)
+                    .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
+                // Existing auxiliary Page files also belong to the physical root
+                // even when an absent FORMAT defaults Standard to memory mode.
+                // Upgrade their real reader fence under this exact claim before
+                // publishing Core enrollment; never infer it from a scalar flag.
+                bicdb_page::PagedStore::prepare_existing_physical_reader(&paged_dir, &claim)
+                    .map_err(|e| BicDbError::PagedStorage(e.to_string()))?;
+                Some(claim)
+            } else {
+                None
+            };
         // Format migration and cleanup can write. Do them only after ownership
         // and the restore marker have been checked under the directory lock.
         format::ensure_open_compatible_in_mode(&path, config.fsync, effective_mode.clone())?;
@@ -10923,19 +10955,13 @@ impl BicDb {
             });
         }
         let paged_records = if effective_mode == StorageMode::ServerPaged {
-            Some(Arc::new(crate::paged_collection::PagedRecords::open(
-                path.join(DEFAULT_PAGED_DIR),
-                crate::paged_collection::PagedRecordsOptions {
-                    page_size: config.paged_page_size,
-                    buffer_pool_bytes: config.paged_buffer_pool_bytes,
-                    read_ahead_queue_pages: config.paged_read_ahead_queue_pages,
-                    wal_max_bytes: config.paged_wal_max_bytes,
-                    wal_segment_bytes: config.paged_wal_segment_bytes,
-                    extent_bytes: config.paged_extent_bytes,
-                    fsync: config.fsync,
-                    accept_legacy_meta: config.paged_accept_legacy_meta,
-                },
-            )?))
+            Some(Arc::new(
+                crate::paged_collection::PagedRecords::open_with_directory_claim(
+                    path.join(DEFAULT_PAGED_DIR),
+                    paged_options,
+                    &mut paged_directory_claim,
+                )?,
+            ))
         } else {
             None
         };

@@ -2329,4 +2329,171 @@ mod physical_backup_gate_tests {
             .close()
             .unwrap();
     }
+    #[test]
+    fn live_current_standalone_page_owner_prevents_core_and_standard_enrollment() {
+        let directory = tempfile::tempdir().unwrap();
+        let archive_directory = tempfile::tempdir().unwrap();
+        let paged_dir = directory.path().join("paged");
+        let (standalone, _) = bicdb_page::PagedStore::open(
+            &paged_dir,
+            bicdb_page::PagedStoreOptions::default().with_buffer_pool_bytes(1024 * 1024),
+        )
+        .unwrap();
+        let xid = standalone.begin();
+        standalone
+            .put(xid, b"original standalone", b"full original payload")
+            .unwrap();
+        standalone.commit(xid).unwrap();
+        // This is the CURRENT engine's actual gated Page profile, not a
+        // fabricated old header or an assumed absence of Page enrollment.
+        bicdb_page::manager::require_physical_gate_profile(&paged_dir.join("store.pages")).unwrap();
+        assert!(load_metadata(directory.path()).unwrap().is_none());
+        let page_before = std::fs::read(paged_dir.join("store.pages")).unwrap();
+        let wal_before = std::fs::read(paged_dir.join("store.wal")).unwrap();
+        let issued = standalone.transactions().next_xid();
+        let lsn = standalone.wal().next_lsn();
+        let config = crate::DbConfig::default()
+            .with_storage_mode(StorageMode::ServerPaged)
+            .with_paged_buffer_pool_bytes(1024 * 1024);
+        let refused = crate::BicDb::open_with_config(directory.path(), config)
+            .err()
+            .expect("actual live child must refuse Core open");
+        eprintln!("ACTUAL_LIVE_CURRENT_CHILD_CORE_REFUSAL {refused:?}");
+        assert!(
+            matches!(refused, BicDbError::PagedStorage(ref detail) if detail.contains("page store is already open"))
+        );
+        assert!(
+            load_metadata(directory.path()).unwrap().is_none(),
+            "no new Core FORMAT enrollment"
+        );
+
+        // No FORMAT means Standard actually defaults to EmbeddedMemory.
+        // It must still acquire the existing conventional child, not ignore it.
+        let archive = archive_directory.path().join("must-not-exist.bicbackup");
+        let refused = crate::backup::create_backup(
+            directory.path(),
+            &archive,
+            crate::backup::BackupCreateOptions {
+                passphrase: "synthetic-enrollment-test".into(),
+                base_backup: None,
+            },
+        )
+        .unwrap_err();
+        eprintln!("ACTUAL_LIVE_CURRENT_CHILD_STANDARD_REFUSAL {refused:?}");
+        assert!(
+            matches!(refused, BicDbError::Backup(ref detail) if detail.contains("not enrolled"))
+        );
+        assert!(load_metadata(directory.path()).unwrap().is_none());
+        assert!(!archive.exists());
+        assert_eq!(
+            std::fs::read(paged_dir.join("store.pages")).unwrap(),
+            page_before
+        );
+        assert_eq!(
+            std::fs::read(paged_dir.join("store.wal")).unwrap(),
+            wal_before
+        );
+        assert_eq!(standalone.transactions().next_xid(), issued);
+        assert_eq!(standalone.wal().next_lsn(), lsn);
+        assert_eq!(
+            standalone.get(b"original standalone").unwrap(),
+            Some(b"full original payload".to_vec())
+        );
+        let next = standalone.begin();
+        standalone
+            .put(
+                next,
+                b"after refusal",
+                b"same actual original owner continues",
+            )
+            .unwrap();
+        standalone.commit(next).unwrap();
+        assert_eq!(
+            standalone.get(b"after refusal").unwrap(),
+            Some(b"same actual original owner continues".to_vec())
+        );
+    }
+
+    #[test]
+    fn closed_current_page_child_transfers_original_claim_into_real_core_store() {
+        let directory = tempfile::tempdir().unwrap();
+        let paged_dir = directory.path().join("paged");
+        let (standalone, _) = bicdb_page::PagedStore::open(
+            &paged_dir,
+            bicdb_page::PagedStoreOptions::default().with_buffer_pool_bytes(1024 * 1024),
+        )
+        .unwrap();
+        drop(standalone);
+        assert!(load_metadata(directory.path()).unwrap().is_none());
+        let config = crate::DbConfig::default()
+            .with_storage_mode(StorageMode::ServerPaged)
+            .with_paged_buffer_pool_bytes(1024 * 1024)
+            .with_fsync(true);
+        let mut db = crate::BicDb::open_with_config(directory.path(), config.clone()).unwrap();
+        require_physical_backup_gate(directory.path()).unwrap();
+        db.create_collection("claim_transfer").unwrap();
+        let record = crate::Record::new("after actual transfer")
+            .with_metadata(serde_json::json!({"full":true,"nullable":null}))
+            .with_payload(b"actual complete Core payload".to_vec());
+        db.insert("claim_transfer", record.clone()).unwrap();
+        assert_eq!(
+            db.get("claim_transfer", &record.id)
+                .unwrap()
+                .unwrap()
+                .as_ref(),
+            &record
+        );
+        assert!(matches!(
+            bicdb_page::PagedStore::open(
+                &paged_dir,
+                bicdb_page::PagedStoreOptions::default().with_buffer_pool_bytes(1024 * 1024)
+            ),
+            Err(bicdb_page::PageError::AlreadyOpen { .. })
+        ));
+        db.close().unwrap();
+        let db = crate::BicDb::open_with_config(directory.path(), config).unwrap();
+        assert_eq!(
+            db.get("claim_transfer", &record.id)
+                .unwrap()
+                .unwrap()
+                .as_ref(),
+            &record
+        );
+    }
+
+    #[test]
+    fn auxiliary_page_reader_barrier_failure_cannot_publish_core_enrollment() {
+        let directory = tempfile::tempdir().unwrap();
+        let paged_dir = directory.path().join("paged");
+        let (standalone, _) = bicdb_page::PagedStore::open(
+            &paged_dir,
+            bicdb_page::PagedStoreOptions::default().with_buffer_pool_bytes(1024 * 1024),
+        )
+        .unwrap();
+        drop(standalone);
+        assert!(load_metadata(directory.path()).unwrap().is_none());
+        let failure = bicdb_page::test_faults::arm_io_failure(
+            "physical_gate.page_fence.sync",
+            directory.path(),
+            1,
+            true,
+        );
+        let refused = crate::BicDb::open(directory.path())
+            .err()
+            .expect("actual auxiliary Page sync failure must refuse memory-mode enrollment");
+        eprintln!(
+            "ACTUAL_AUXILIARY_PAGE_FENCE_FAILURE {refused:?} fired={}",
+            failure.fired()
+        );
+        assert!(
+            failure.fired() > 0,
+            "required actual sync fault cut was not reached"
+        );
+        assert!(load_metadata(directory.path()).unwrap().is_none());
+        drop(failure);
+        let db = crate::BicDb::open(directory.path()).unwrap();
+        require_physical_backup_gate(directory.path()).unwrap();
+        bicdb_page::manager::require_physical_gate_profile(&paged_dir.join("store.pages")).unwrap();
+        db.close().unwrap();
+    }
 }

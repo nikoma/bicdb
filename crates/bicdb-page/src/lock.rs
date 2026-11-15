@@ -62,6 +62,8 @@ pub struct DirectoryLock {
     file: Option<File>,
     #[cfg(unix)]
     identity: DirectoryIdentity,
+    #[cfg(windows)]
+    directory_identity: crate::physical_gate::Identity,
 }
 
 #[cfg(unix)]
@@ -159,12 +161,76 @@ impl DirectoryLock {
             process_locks_guard().remove(&identity);
             return Err(error);
         }
+        #[cfg(windows)]
+        let directory_identity = windows_metadata_identity(dir, true)?;
         Ok(Self {
             path,
             file: Some(file),
             #[cfg(unix)]
             identity,
+            #[cfg(windows)]
+            directory_identity,
         })
+    }
+
+    /// Verify this same live kernel claim before transferring it into a Page
+    /// writer. Identity is checked, not just a path or a caller assertion.
+    /// This never opens a second Unix store.lock descriptor: closing one would
+    /// release the incumbent process's POSIX record locks.
+    pub fn require_directory(&self, expected: &Path) -> Result<()> {
+        let invalid = || {
+            PageError::io(expected, std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "retained directory claim does not match the actual requested directory/lock inode",
+        ))
+        };
+        let file = self.file.as_ref().ok_or_else(invalid)?;
+        let claimed = self.path.parent().ok_or_else(invalid)?;
+        let named =
+            std::fs::symlink_metadata(&self.path).map_err(|e| PageError::io(&self.path, e))?;
+        if !named.is_file() || named.file_type().is_symlink() {
+            return Err(invalid());
+        }
+        #[cfg(unix)]
+        {
+            let actual = std::fs::metadata(expected).map_err(|e| PageError::io(expected, e))?;
+            let original = std::fs::metadata(claimed).map_err(|e| PageError::io(claimed, e))?;
+            let held = file.metadata().map_err(|e| PageError::io(&self.path, e))?;
+            if !actual.is_dir()
+                || !original.is_dir()
+                || actual.dev() != self.identity.device
+                || actual.ino() != self.identity.inode
+                || original.dev() != self.identity.device
+                || original.ino() != self.identity.inode
+                || held.dev() != named.dev()
+                || held.ino() != named.ino()
+            {
+                return Err(invalid());
+            }
+            Ok(())
+        }
+        #[cfg(windows)]
+        {
+            if windows_metadata_identity(expected, true)? != self.directory_identity
+                || windows_metadata_identity(claimed, true)? != self.directory_identity
+                || windows_metadata_identity(&self.path, false)?
+                    != crate::physical_gate::identity(file, &self.path)?
+            {
+                return Err(invalid());
+            }
+            Ok(())
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = (file, claimed);
+            Err(PageError::io(
+                expected,
+                std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "retained directory identity verification requires supported native locking",
+                ),
+            ))
+        }
     }
 
     /// Path of the lock file, for diagnostics.
@@ -194,6 +260,41 @@ impl DirectoryLock {
         }
         physical_directory_birth(dir)
     }
+}
+
+#[cfg(windows)]
+fn windows_metadata_identity(
+    path: &Path,
+    directory: bool,
+) -> Result<crate::physical_gate::Identity> {
+    use std::os::windows::fs::OpenOptionsExt;
+    let metadata = std::fs::symlink_metadata(path).map_err(|e| PageError::io(path, e))?;
+    if metadata.file_type().is_symlink() || (directory && !metadata.is_dir()) {
+        return Err(PageError::io(
+            path,
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "claimed identity path is not the original native object",
+            ),
+        ));
+    }
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    let flags = FILE_FLAG_OPEN_REPARSE_POINT
+        | if directory {
+            FILE_FLAG_BACKUP_SEMANTICS
+        } else {
+            0
+        };
+    // Desired access zero requests only metadata. It does not request read,
+    // write or delete access denied by the existing exclusive share owner.
+    let handle = OpenOptions::new()
+        .access_mode(0)
+        .share_mode(0x7)
+        .custom_flags(flags)
+        .open(path)
+        .map_err(|e| PageError::io(path, e))?;
+    crate::physical_gate::identity(&handle, path)
 }
 
 /// Whether some handle currently owns a store directory, observed without

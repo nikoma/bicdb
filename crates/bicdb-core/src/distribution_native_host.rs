@@ -71,6 +71,10 @@ mod metadata_supervisor;
 #[cfg(feature = "tls-replication")]
 use provisional_listener::{NativeMetadataControlBackend, NativeMetadataMaintenanceReport};
 #[cfg(feature = "tls-replication")]
+mod range_move;
+#[cfg(feature = "tls-replication")]
+pub use range_move::NativeRangeMoveStatus;
+#[cfg(feature = "tls-replication")]
 mod operator;
 #[cfg(feature = "tls-replication")]
 pub(crate) use metadata_supervisor::{NativeMetadataSupervisor, NativeMetadataSupervisorConfig};

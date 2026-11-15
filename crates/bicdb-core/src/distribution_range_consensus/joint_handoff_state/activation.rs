@@ -9,7 +9,9 @@ use crate::distribution_range_handoff::NativeJointOpenAdmission;
 use crate::distribution_range_image_install::NativeJointImageMaterialization;
 use crate::distribution_range_mutation::{FrozenRangeMutationPermit, RangeMutationAuthority};
 pub(crate) use owned_catalogue::NativeJointActivationComparison;
-pub(super) use owned_catalogue::{ActivationIoHistory, NativeJointActivationPublication};
+pub(in crate::distribution_range_consensus) use owned_catalogue::{
+    ActivationIoHistory, NativeJointActivationPublication,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]

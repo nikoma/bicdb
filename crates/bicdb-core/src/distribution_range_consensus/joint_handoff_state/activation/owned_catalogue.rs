@@ -574,7 +574,7 @@ impl RangeWriteStore {
                 .catalog
                 .native_abort_protocol
                 .as_ref()
-                .map(|p| p.store_id)
+                .map(|p| p.store_id())
                 != db.native_abort_catalogue_store_id()?
             || self.catalog.native_abort_protocol.is_none()
         {

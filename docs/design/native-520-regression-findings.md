@@ -22,8 +22,11 @@ three diagnostics: two E0425 unresolved `BicDb` types in
 `NativeJointLocalServingPolicy` purposes. Both complete logs contain **zero
 test-case rows and zero runtime summaries**. The no-default consumer and Rails
 application steps were not reached, not passed. SQL and PGwire have also failed;
-their full failure cuts are not yet classified at this checkpoint. Core, Native
-and remaining-workspace are still running. No earlier passing result is inherited.
+their full failure cuts are not yet classified at this checkpoint. Core and
+Native subsequently failed the chaos-helper library build on the same three
+errors, before test-only compilation or runtime: both contain zero executed
+cases/summaries and their actual test steps were skipped. Remaining-workspace
+is still running. No earlier passing result is inherited.
 
 All-target complete raw95,210 bytes, SHA-256
 `820b96be94fac96483bc256dc83b9dec9a82ce235fece4bb0f47c24f93cd3d23`;
@@ -31,6 +34,15 @@ Rails raw108,757 bytes,
 `58d95fb772cca5b3ec6ff295116a78727337c755b1c794bd69790a14ad9aa56c`.
 Independent root complete-log compiler/result-scope receipt:
 `3b93957ad58c70cb15089f17410ef00a77b28cc0dd7308c25fca0e60cde7854a`.
+Native raw158,473 bytes SHA-256
+`efd16c221c341dc70b2a499baf3b85e0e23b9e9b902891eba340c42f82180164`;
+Core raw158,940 bytes
+`c73885f57fafc73d1421eaf1486056a9dd6d77e29cd6a5c5ea7db2b8fd746367`.
+Independent complete-log prerequisite classifiers respectively:
+`5a2a7eb6ab05ccd8b58f861fe9312d7a95ed031ee9339903caefdcdc5b20a917`,
+`efd0809531ff318680355331462ef6182d66d47a3312f73b94f68df5c7452b0a`.
+The new controls and stage clocks remain unassessed; helper build failure is
+not a Native runtime failure at any intended fault cut.
 The sole collector remains on this exact source; useful jobs are not cancelled
 or restarted to publish a correction.
 

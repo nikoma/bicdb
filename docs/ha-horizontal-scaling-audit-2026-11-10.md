@@ -16,8 +16,10 @@ scaling and fault-safe rebalance of the current artifact remain unqualified.
 Draft520 `bd09a77e8e72bb88e73c395b9629d96812061c30` failed all-target and Rails
 compilation on two unresolved `BicDb` types and an incomplete generic-recovery
 purpose match. Those jobs executed no tests; no-default consumer and Rails
-application acceptance were not reached. SQL and PGwire also failed, with exact
-cuts still being classified; other useful jobs remain running. Local source
+application acceptance were not reached. Core and Native also failed their
+helper library build on those same errors; no test-only compilation, runtime
+control or new timing diagnostic executed. SQL and PGwire failed, with exact
+cuts still being classified; remaining-workspace is still running. Local source
 corrections qualify the types and explicitly refuse the narrow serving purposes
 at the generic consumer; they are uncompiled and unexecuted. Source6de passes
 below do not transfer to this successor. Main remains519; no binary, deployment,

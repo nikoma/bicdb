@@ -168,7 +168,7 @@ pub(super) fn serve(
     old_key: &str,
     original_topology: &ClusterTopology,
     relocation: crate::distribution::RelocationId,
-    route_component_only: bool,
+    case: Case,
 ) -> Result<()> {
     let old_value = serde_json::json!({"actual":"selected-original-ACK"});
     // All earlier sdk() attempts must have returned successfully for this
@@ -210,6 +210,19 @@ pub(super) fn serve(
     }
     let mut installed = BTreeMap::new();
     for member in members {
+        if case == Case::ServingDrainResume && *member == node(4) {
+            return verify_actual_cancelled_drain_resume(
+                coordinator,
+                metadata,
+                member,
+                range,
+                phase,
+                controls,
+                target,
+                report,
+                parent,
+            );
+        }
         let raw = report.data_call(
             "actual_fresh_local_self_role_and_native_policy_install",
             || {
@@ -240,7 +253,7 @@ pub(super) fn serve(
         );
         installed.insert(member.clone(), actual);
     }
-    if route_component_only {
+    if case == Case::ServingSuccessorRead {
         return verify_registered_replacement_route(
             coordinator,
             relocation,
@@ -456,5 +469,182 @@ fn verify_registered_replacement_route(
     same_native(&before, &after);
     assert_eq!(before["queue"], after["queue"]);
     assert_eq!(before["actual_successor"], after["actual_successor"]);
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn verify_actual_cancelled_drain_resume(
+    coordinator: &mut NativeMetadataHost,
+    metadata: usize,
+    member: &ClusterNodeId,
+    range: crate::RangeId,
+    phase: Uuid,
+    controls: &BTreeMap<ClusterNodeId, mpsc::Sender<Control>>,
+    target: &mpsc::Sender<OwnerCommand>,
+    report: &mut Report,
+    parent: &CancellationToken,
+) -> Result<()> {
+    let (send, receive) = mpsc::sync_channel(1);
+    target
+        .send(OwnerCommand::LocalServingDrainCancel(range, phase, send))
+        .map_err(|_| invalid("actual target drain actor ended"))?;
+    let cancelled = report.data_call(
+        "actual_Registered_Closed_drain_API_cancel_return_and_retained_owner",
+        || {
+            receive
+                .recv_timeout(Duration::from_secs(5))
+                .map_err(|_| invalid("actual cancelled drain return unavailable"))
+        },
+    );
+    let retained = report.data_call(
+        "actual_same_native_and_successor_after_failed_Closed_drain",
+        || target_control(target, range, phase, false, None),
+    );
+    report.event(
+        serde_json::json!({"actual_cancelled_drain":cancelled.as_ref().ok(),
+        "delivery_error":cancelled.as_ref().err().map(ToString::to_string),
+        "actual_retained_native_successor":retained.as_ref().ok(),
+        "snapshot_error":retained.as_ref().err().map(ToString::to_string),
+        "snapshots_are_separate_nonatomic_DATA":true}),
+    );
+    let cancelled = require_actual_ok(cancelled?)?;
+    let retained = retained?;
+    assert_eq!(
+        cancelled["actual_cut_after_original_Closed_life_ended"],
+        true
+    );
+    assert!(
+        cancelled["actual_original_remaining_us_before_cancel"]
+            .as_u64()
+            .is_some_and(|n| n > 0),
+        "expiry or an earlier failure did not reach the selected live cancellation cut"
+    );
+    assert_eq!(
+        cancelled["actual_stop_and_drain_return"]["actual_returned_ok"],
+        false
+    );
+    assert_eq!(
+        cancelled["actual_stop_and_drain_return"]["actual_typed_QueryCanceled"], true,
+        "the original actual drain API must return exact QueryCanceled, not another failure"
+    );
+    assert_eq!(cancelled["original_policy_API_returned_ok"], false);
+    assert_eq!(cancelled["original_policy_typed_QueryCanceled"], true);
+    assert!(!cancelled["original_policy_error"].is_null());
+    assert!(!cancelled["actual_stop_and_drain_return"]["original_error"].is_null());
+    assert_eq!(
+        cancelled["actual_retained_Assigned"]["actual_original_Closed_life"],
+        false
+    );
+    assert_eq!(
+        cancelled["actual_retained_Assigned"]["actual_same_listener_retained"],
+        true
+    );
+    assert_eq!(
+        cancelled["actual_retained_Assigned"]["actual_stopping"],
+        false
+    );
+    assert_eq!(cancelled["actual_Joined_owner_present"], false);
+    assert_eq!(
+        cancelled["actual_original_install_evidence"]["stage"],
+        "Installed"
+    );
+    assert!(cancelled["install_evidence_error"].is_null());
+    for history in ["policy_API_returns", "policy_outer_API_returns"] {
+        assert_eq!(
+            retained["actual_successor"][history]["last_actual_return_ok"],
+            false
+        );
+        assert!(
+            !retained["actual_successor"][history]["first_original_error"].is_null(),
+            "original actual policy/drain error must be retained in {history}"
+        );
+    }
+    // A distinct actual owner command, SAME retained Installed/native attempt.
+    // Production repair must finish the real drain/transfer before obtaining
+    // new self-TLS authority. It never revives the old Closed admission.
+    let resumed = report.data_call(
+        "distinct_actor_same_Installed_owner_actual_drain_transfer_Joined_bind",
+        || {
+            actor_call(
+                coordinator,
+                metadata,
+                member,
+                range,
+                phase,
+                controls,
+                target,
+                parent,
+                false,
+            )
+        },
+    );
+    let (send, receive) = mpsc::sync_channel(1);
+    target
+        .send(OwnerCommand::PolicySocketProfile(range, phase, send))
+        .map_err(|_| invalid("actual resumed Joined owner ended"))?;
+    let profile = report.data_call(
+        "actual_same_Installed_owner_after_resumed_Joined_bind",
+        || {
+            receive
+                .recv_timeout(Duration::from_secs(5))
+                .map_err(|_| invalid("actual resumed Joined profile unavailable"))
+        },
+    );
+    let after = report.data_call(
+        "actual_native_and_successor_after_distinct_drain_resume",
+        || target_control(target, range, phase, false, None),
+    );
+    report.event(serde_json::json!({"actual_resume":resumed.as_ref().ok(),
+        "actual_resume_error":resumed.as_ref().err().map(ToString::to_string),
+        "actual_Joined_profile":profile.as_ref().ok(),
+        "profile_error":profile.as_ref().err().map(ToString::to_string),
+        "actual_native_after":after.as_ref().ok(),
+        "native_snapshot_error":after.as_ref().err().map(ToString::to_string),
+        "source_component_only_no_SDK_Strong_or_automatic_recovery_claim":true}));
+    let resumed = require_actual_ok(resumed?)?;
+    let profile = require_actual_ok(profile?)?;
+    let after = after?;
+    assert_eq!(
+        resumed["transition"],
+        "actual_policy_installed_readiness_still_request_bound"
+    );
+    assert_eq!(resumed["incomplete"], true);
+    assert_eq!(resumed["Serving"], false);
+    assert_eq!(profile["actual_Registered_Joined_owner"], true);
+    assert_eq!(profile["actual_replacement_listener_bound"], true);
+    assert_eq!(profile["actual_original_drained_owner_verified"], true);
+    assert_eq!(profile["actual_APP_dispatcher_published"], false);
+    assert_eq!(
+        profile["original_listeners"]["replica_listener_present"],
+        false
+    );
+    assert_eq!(
+        profile["original_listeners"]["old_replica_listener_present"],
+        false
+    );
+    assert_eq!(
+        profile["actual_original_install_evidence"], cancelled["actual_original_install_evidence"],
+        "drain recovery must consume the exact original Installed coordinator/open/native record"
+    );
+    same_native(&retained, &after);
+    assert_eq!(retained["queue"], after["queue"]);
+    for history in ["policy_API_returns", "policy_outer_API_returns"] {
+        assert_eq!(
+            after["actual_successor"][history]["first_original_error"],
+            retained["actual_successor"][history]["first_original_error"],
+            "a new actual continuation result must not rewrite the old error"
+        );
+        assert_eq!(
+            after["actual_successor"][history]["last_actual_return_ok"],
+            true
+        );
+        let original_count = retained["actual_successor"][history]["returns"]
+            .as_u64()
+            .expect("original actual policy history required");
+        assert_eq!(
+            after["actual_successor"][history]["returns"],
+            original_count + 1
+        );
+    }
     Ok(())
 }

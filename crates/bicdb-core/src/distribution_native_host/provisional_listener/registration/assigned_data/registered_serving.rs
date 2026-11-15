@@ -3,6 +3,8 @@
 use super::*;
 use crate::distribution_native_host::NativeRegisteredRemoteJointOwner;
 use crate::distribution_range_handoff::NativeJointServingPolicyAdmission;
+#[cfg(test)]
+mod drain_tests;
 
 pub(super) struct RegisteredServingPolicy {
     owner: Arc<NativeRegisteredRemoteJointOwner>,
@@ -74,6 +76,11 @@ impl NativeAssignedDataHost {
         parent: &CancellationToken,
     ) -> Result<DrainedClusterDataListener> {
         parent.check()?;
+        if self.stopping {
+            return Err(invalid(
+                "stopping Registered Assigned owner cannot transfer to Joined",
+            ));
+        }
         let registered = self.registered.as_ref().ok_or_else(|| {
             invalid("local-image Assigned owner cannot become original Registered Joined")
         })?;
@@ -108,16 +115,29 @@ impl NativeAssignedDataHost {
                 "Registered Joined transfer lost original cleanup owner",
             ));
         }
+        // A failed missing-listener precondition must not end this still
+        // bindable owner. An actual retained listener is required BEFORE the
+        // one-way life transition; a retry resumes that SAME handle's drain.
+        if self.listener.is_none() {
+            return Err(invalid(
+                "Registered FIRST Closed socket must be bound before actual Joined drain",
+            ));
+        }
         // This old mode is always Closed. Its actual listener must drain and
         // cannot return by flipping a flag. Original receiver lifetime survives.
         self.life.store(false, Ordering::Release);
+        #[cfg(test)]
+        drain_tests::after_actual_closed_life_ended(parent)?;
         let drained = self
             .listener
             .as_mut()
             .ok_or_else(|| {
                 invalid("Registered FIRST Closed socket must be bound before actual Joined drain")
             })?
-            .stop_and_drain(parent)?;
+            .stop_and_drain(parent);
+        #[cfg(test)]
+        drain_tests::note_actual_drain_return(&drained);
+        let drained = drained?;
         while self.parts.runtime.active_contexts()? != 0 {
             parent.check()?;
             std::thread::sleep(Duration::from_millis(5));
@@ -330,6 +350,11 @@ impl NativeMetadataControlHost {
         let Some(owner) = self.assigned.as_mut() else {
             return Ok(());
         };
+        if owner.stopping {
+            return Err(invalid(
+                "stopping Registered Assigned owner cannot repair a policy socket",
+            ));
+        }
         // Before an actual Installed return the original replica listener is
         // still the owner. Absence is not permission to drain or mint a policy.
         let Some(guard) = owner.attempt.as_ref().and_then(|a| a.installed_guard()) else {
@@ -375,6 +400,13 @@ impl NativeMetadataControlHost {
             .ok_or_else(|| invalid("Policy socket repair actual DB busy"))?;
         guard.require_for_coordinator(&database, &owner.range, coordinator)?;
         drop(database);
+        if owner.listener.is_some() {
+            // SAME actual Installed owner/handle, even if a prior fallible
+            // transfer already ended its Closed admission. Resume the real
+            // drain→Drained proof→owner transfer; never revive life or try to
+            // bind the obsolete Closed admission before fresh self metadata.
+            return self.open_registered_joined_data(parent);
+        }
         self.replica
             .as_mut()
             .ok_or_else(|| invalid("Policy socket repair lost original drain owner"))?

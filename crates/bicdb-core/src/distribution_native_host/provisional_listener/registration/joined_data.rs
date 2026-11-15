@@ -434,6 +434,7 @@ impl NativeMetadataControlHost {
             "actual_original_drained_owner_verified":true,
             "original_listeners":old.test_retained_listener_presence(),
             "actual_native_decision":successor.native().data().checksum_sha256(),
+            "actual_original_install_evidence":self.test_registered_first_policy_evidence()?,
             "readonly_DATA_not_policy_authority":true}))
     }
     #[cfg(test)]

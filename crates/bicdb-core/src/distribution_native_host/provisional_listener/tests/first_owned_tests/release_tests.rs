@@ -13,6 +13,7 @@ pub(super) fn is_case(case: Case) -> bool {
             | Case::Serving
             | Case::ServingMissingReleased
             | Case::ServingSuccessorRead
+            | Case::ServingDrainResume
     )
 }
 enum Control {
@@ -539,7 +540,10 @@ pub(super) fn exercise(
             );
             report.event(serde_json::json!({"actual_ALL_original_owner_release_component":true,"Serving":false,
                 "selected_APP_Strong_NOT_PROVEN":true,"automatic_controller_cold_cleanup_NOT_IMPLEMENTED":true}));
-            if matches!(case, Case::Serving | Case::ServingSuccessorRead) {
+            if matches!(
+                case,
+                Case::Serving | Case::ServingSuccessorRead | Case::ServingDrainResume
+            ) {
                 serving_tests::serve(
                     coordinator,
                     metadata,
@@ -554,7 +558,7 @@ pub(super) fn exercise(
                     original_selected_key,
                     &original_topology,
                     relocation,
-                    case == Case::ServingSuccessorRead,
+                    case,
                 )?;
             }
             Ok(())

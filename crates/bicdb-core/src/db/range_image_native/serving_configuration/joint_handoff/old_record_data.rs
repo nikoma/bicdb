@@ -78,6 +78,7 @@ impl NativeJointOldCloseRecordData {
         Ok(())
     }
     /// Pure comparison only; this cannot create an OLD owner or plan.
+    #[cfg(feature = "tls-replication")]
     pub(crate) fn require_metadata_owner_catalogue_scope(
         &self,
         plan: &crate::distribution_range_handoff::NativeMetadataOwnerCatalogueScope,

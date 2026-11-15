@@ -546,9 +546,17 @@ fn driver_stub(
             "{error}"
         );
     };
-    refused(
-        backend.activate(hosts, &members, &token),
-        "activation and release",
+    // The activation sends bridge steps, which the new members admit from
+    // the metadata leader: another coordinator is refused before a request.
+    let error = backend
+        .activate(hosts, &members, &token)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("remote joined handoff backend: coordinator")
+            && error.contains("is not the metadata leader")
+            && error.contains("admit bridge steps from the metadata leader"),
+        "{error}"
     );
     refused(backend.serve(hosts, &token).map(|_| ()), "target serving");
     backend.forget_aborted_allocation();

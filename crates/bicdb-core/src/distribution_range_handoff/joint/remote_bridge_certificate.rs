@@ -16,13 +16,15 @@ use std::collections::BTreeMap;
 
 const MAX_CERTIFICATE_BYTES: usize = 64 * 1024;
 
-pub(crate) struct NativeRemoteBridgePublicationCertificateRound {
-    data: NativeJointDecisionData,
+/// `D` is the coordinator's own identity of the decision: its decision body
+/// (the default), or the certified record of its committed metadata.
+pub(crate) struct NativeRemoteBridgePublicationCertificateRound<D = NativeJointDecisionData> {
+    data: D,
     coordinator: ClusterNodeId,
     frames: BTreeMap<ClusterNodeId, AuthenticatedNativeJointBridgeStepFrame>,
 }
-pub(crate) struct NativeRemoteBridgePublicationCertificate {
-    data: NativeJointDecisionData,
+pub(crate) struct NativeRemoteBridgePublicationCertificate<D = NativeJointDecisionData> {
+    data: D,
     coordinator: ClusterNodeId,
     frames: BTreeMap<ClusterNodeId, AuthenticatedNativeJointBridgeStepFrame>,
 }
@@ -30,7 +32,7 @@ pub(crate) struct NativeRemoteBridgePublicationCertificate {
 /// Every rule one counted frame must satisfy. Pure re-validation of a
 /// retained authenticated observation; liveness is checked when it is counted.
 fn require_frame<'a>(
-    data: &NativeJointDecisionData,
+    data: &dyn NativeJointBridgeDecision,
     coordinator: &ClusterNodeId,
     node: &ClusterNodeId,
     frame: &'a AuthenticatedNativeJointBridgeStepFrame,
@@ -79,11 +81,12 @@ fn require_frame<'a>(
         .ok_or_else(|| invalid("bridge certificate frame carries no durable bridge receipt"))
 }
 
-impl NativeRemoteBridgePublicationCertificateRound {
-    /// `data` is the decision the coordinator itself observed committed;
+impl<D: NativeJointBridgeDecision> NativeRemoteBridgePublicationCertificateRound<D> {
+    /// `data` is the decision the coordinator itself observed committed (its
+    /// decision body, or the certified record of its committed metadata);
     /// `coordinator` is the member whose transport counts the others.
     pub(crate) fn begin(
-        data: NativeJointDecisionData,
+        data: D,
         coordinator: ClusterNodeId,
         parent: &CancellationToken,
     ) -> Result<Self> {
@@ -111,7 +114,7 @@ impl NativeRemoteBridgePublicationCertificateRound {
         self.frames.insert(node, frame);
         Ok(())
     }
-    pub(crate) fn finish(self) -> Result<NativeRemoteBridgePublicationCertificate> {
+    pub(crate) fn finish(self) -> Result<NativeRemoteBridgePublicationCertificate<D>> {
         let result = NativeRemoteBridgePublicationCertificate {
             data: self.data,
             coordinator: self.coordinator,
@@ -122,7 +125,7 @@ impl NativeRemoteBridgePublicationCertificateRound {
     }
 }
 
-impl NativeRemoteBridgePublicationCertificate {
+impl<D: NativeJointBridgeDecision> NativeRemoteBridgePublicationCertificate<D> {
     /// The in-process aggregation rule: EVERY final NEW member, exactly once.
     fn verify(&self) -> Result<()> {
         if self.frames.keys().ne(self.data.new_members().keys()) {
@@ -135,7 +138,7 @@ impl NativeRemoteBridgePublicationCertificate {
         }
         Ok(())
     }
-    pub(crate) fn data(&self) -> &NativeJointDecisionData {
+    pub(crate) fn data(&self) -> &D {
         &self.data
     }
     /// Complete re-validation of the retained authenticated observations.

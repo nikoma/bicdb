@@ -156,7 +156,7 @@ impl NativeJointHandoffStepRequestV1 {
     /// plan exists any more. The identity comes from the committed decision
     /// the SENDER itself observed; the recipient compares it with its own.
     pub(crate) fn from_decision(
-        data: &NativeJointDecisionData,
+        data: &dyn NativeJointBridgeDecision,
         operation: NativeJointHandoffStepOperationV1,
         business: Uuid,
         budget_ms: u64,
@@ -288,7 +288,7 @@ impl NativeJointHandoffStepRequestV1 {
     }
     /// The caller compares against the decision IT observed committed at its
     /// own metadata point; the request never supplies that decision.
-    pub(crate) fn require_decision(&self, data: &NativeJointDecisionData) -> Result<()> {
+    pub(crate) fn require_decision(&self, data: &dyn NativeJointBridgeDecision) -> Result<()> {
         self.require_shape()?;
         let p = data.promise();
         if data.old_range().id != self.range_id

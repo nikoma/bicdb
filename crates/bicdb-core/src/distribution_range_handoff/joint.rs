@@ -7,6 +7,10 @@ fn invalid(detail: impl Into<String>) -> BicDbError {
 }
 mod scope;
 use scope::{canonical_range, NativeJointScopeData};
+mod certified_scope;
+pub(crate) use certified_scope::{
+    NativeJointBridgeDecision, NativeJointCertifiedScope, NativeJointCommittedDecision,
+};
 mod plan;
 pub(crate) use plan::NativeJointHandoffPlan;
 #[cfg(feature = "tls-replication")]

@@ -12,6 +12,8 @@ use crate::record::Record;
 use crate::replication::{CommitFrame, ReplicationTlsConfig};
 
 mod native_joint_handoff;
+#[cfg(test)]
+pub(crate) use native_joint_handoff::validate_native_joint_handoff_preservation as test_validate_native_joint_handoff_preservation;
 pub use native_joint_handoff::{
     NativeJointHandoffMetadataV1, NativeJointHandoffStageV1,
     NATIVE_JOINT_HANDOFF_TOPOLOGY_FORMAT_VERSION,

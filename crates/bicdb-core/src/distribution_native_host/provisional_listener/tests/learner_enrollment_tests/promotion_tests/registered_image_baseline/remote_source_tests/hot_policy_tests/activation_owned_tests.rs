@@ -4,6 +4,8 @@ use super::*;
 use crate::distribution_range_handoff::{
     NativeJointOpenAdmission, NativeJointOpenPhaseQuorum, NativeJointPublishedServingQuorum,
 };
+mod absence_tests;
+pub(super) use absence_tests::absent_then_canceled;
 pub(super) fn is_case(case: SourceCase) -> bool {
     matches!(
         case,
@@ -14,6 +16,7 @@ pub(super) fn is_case(case: SourceCase) -> bool {
             | SourceCase::TargetActivationLaterSameBytes
             | SourceCase::TargetActivationLawfulOtherRange
             | SourceCase::TargetActivationLargeHeadDirSyncRetry
+            | SourceCase::TargetActivationAbsentThenCanceled
     )
 }
 macro_rules! case {

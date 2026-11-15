@@ -27,10 +27,43 @@ impl RangeWriteStore {
         database: &crate::BicDb,
         admission: &NativeJointOpenAdmission,
     ) -> Result<Option<NativeJointCatalogueActivationReceipt>> {
+        #[cfg(test)]
+        let mut trace = crate::distribution_range_handoff::NativeJointPhaseTrace::new(
+            "open-existing-activation-recovery-lookup",
+            &self.catalog.node_id,
+            admission.cancellation(),
+        );
         admission.require_live()?;
         admission
             .committed()
             .require_native_publication_metadata(database, self)?;
+        let range = admission.data().old_range().id;
+        // Absence grants no receipt or permission. With NO retained owner,
+        // uncertainty, activated Open or image-install intent there is no
+        // recovery operation to validate. The distinct new-publication path
+        // below still performs every original full owner/domain/foreign/
+        // native/gate check before any memory or IO effect. In particular an
+        // owned original/candidate ambiguity must never take this shortcut.
+        let no_activation = self
+            .catalog
+            .native_joint_handoffs
+            .as_ref()
+            .and_then(|m| m.get(&range))
+            .and_then(|s| s.serving_activation.as_ref())
+            .is_none();
+        if no_activation
+            && self.owned_joint_activation.is_none()
+            && !self.recovery_persistence_uncertain
+            && !self.native_joint_activated_opens.contains_key(&range)
+            && !self.catalog.image_install_intents.contains_key(&range)
+        {
+            admission.require_live()?;
+            #[cfg(test)]
+            trace.complete();
+            #[cfg(test)]
+            test_cuts::after_actual_absence()?;
+            return Ok(None);
+        }
         let (writer, writer_root) =
             admission.original_phase_owner_for_activation(database, self)?;
         let writer_domain = admission.original_writer_domain_for_activation(database, self)?;
@@ -47,6 +80,8 @@ impl RangeWriteStore {
             .and_then(|s| s.serving_activation.as_ref())
             .is_none()
         {
+            #[cfg(test)]
+            trace.complete();
             return Ok(None);
         }
         admission.require_external_publications_current()?;
@@ -88,6 +123,8 @@ impl RangeWriteStore {
             .committed()
             .require_native_publication_metadata(database, self)?;
         let _version = admission.committed().native_publication_guard()?;
+        #[cfg(test)]
+        trace.complete();
         Ok(Some(receipt))
     }
     #[allow(clippy::too_many_arguments)]

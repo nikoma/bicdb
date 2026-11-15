@@ -1,13 +1,32 @@
 # HA and horizontal scaling: evidence checkpoint, November 14, 2026
 
-Delivered-main observation, November 15 00:15 UTC: **1.0.514-beta**,
+Latest delivered-main observation, November 15 02:13 UTC:
+**1.0.517-beta**, `bde74650c40934096e1cc6c6e75a3ea3c4643cf4`, merged through
+[PR206](https://github.com/nikoma/bicdb/pull/206). Its tree
+`7ee0e1f37c310612165b56e3ca0c1dc10a8e0e9c` is identical to source
+`23e2b7682ccbfd5db8fbca93e9fc2740f842aefc`, whose normal
+[required CI](https://github.com/nikoma/bicdb/actions/runs/43659430043) passed,
+including the native job. The separate post-merge push runs were still live
+at this observation. Source delivery and that CI result do not establish a
+new binary, release, deployment, automatic remote operator, physical expansion
+or production qualification.
+
+PR206 uses a different native validation setting: the hot fixture's configured
+IO/OWN ceiling is four seconds, versus source881's original 1.5 seconds, and
+the native job additionally optimizes workspace code. Its older source line
+does not contain eight later source881 negative controls. This is a separate
+passing result; it does not retroactively pass the failed source881 run below
+or prove the original windows on the composed current-main source. Complete
+source-pinned CI capture and reconciliation are being retained separately.
+
+Earlier delivered-main observation, November 15 00:15 UTC: **1.0.514-beta**,
 `7fc833e3a9130ea710a0fbbfbaba6b065eedf8d3`. Its normal
 [required CI](https://github.com/nikoma/bicdb/actions/runs/43636965492) and
 [Rails checks](https://github.com/nikoma/bicdb/actions/runs/43636965456) passed.
 That documentation merge did not deliver the separate candidate repairs,
 a new optimized binary, physical expansion or production qualification.
 
-The newer separate [source881 native acceptance](design/native-881-failed-acceptance.md)
+The separate [source881 native acceptance](design/native-881-failed-acceptance.md)
 finished with **325 passed /21 failed /one ignored**. This blocks acceptance;
 all other required jobs and Rails passed on that exact source.
 Seven failures were preparation timeouts, nine were first-publication timeouts,
@@ -15,6 +34,14 @@ three were diagnostic/history assertions and two were remote API timeouts.
 The two remote cases retained actual known native commits, so their API errors
 are not rollback evidence. Six focused Strong/routing cases passed on this exact
 source, within their component scope. No physical qualification follows.
+
+The separate [sourcef516 ordinary visibility controls](design/visibility-f516-eight-core-controls.md)
+actually passed all eight cases in normal Core CI, including the original
+five-second uncertain-outcome bound and deferred-index/replay controls.
+Compilation and the nondefault consumer also passed. That test checkout used
+the earlier main514 base; it does not establish current-main517 integration,
+native-local or physical acceptance. The remaining cold WAL/job-intent gap is
+explicitly open.
 
 Newer separate candidate feedback: [native c05 acceptance](design/native-c05-acceptance-result.md)
 finished with **331 passed /15 failed /one ignored**. Four remote-decision

@@ -11,25 +11,28 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Current partial execution — source6de, 2026-11-15 UTC
+## Current complete execution — source6de failed, 2026-11-15 UTC
 
 Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
 Current draft520 `6de646beb603accf39358017d8e0c83c39c741b1` passed workspace /
 no-default compilation, PGwire511/0/2 and Rails20 runs/100 assertions. Core
 subsequently failed legacy primary-record-only FORMAT preservation. Native
-completed375/37/1 and failed; remaining-workspace is pending. SQL completed
+completed375/37/1 and failed; remaining-workspace passed1,062/0/6. SQL completed
 2,682/0/4. The native failures include twenty setup prerequisites, one later
 Strong-read timeout and sixteen later policy/retry/retirement failures. A
 same-service identity expiry component passed; its release/cancellation controls
-failed setup. Compilation and partial component passes do not qualify full HA.
+failed setup. Every required job is terminal and the overall Tests run failed.
+The sole collector exited normally; archive finalization is in progress.
+Compilation and partial component passes do not qualify full HA.
 
 Preceding520 candidate `7c77418656a41ec6e25c7601319e061c328f48e1` passed workspace
 and no-default compilation, PGwire511/0/2 and Rails20 runs/100 assertions.
 Core library passed975/0/8; visibility8, Standard3, bootstrap11 and new Cell
 rekey4 controls passed. Its later backup assertion failed because the expected
 capability vector omits mandatory `physical_backup_gate_v1`; subsequent restore
-assertions were not reached. The two-vector source correction remains local
-and **not tested**. SQL passed2,682/0/4, including the actual committed-error/DDL
+assertions were not reached in that run. Source6de corrected both expectations
+and passed the original full encrypted backup/verify/restore case; that component
+pass does not qualify all backups. SQL passed2,682/0/4, including the actual committed-error/DDL
 cleanup and SQLSTATE controls. Native failed363/45/1. The failures include INITIAL startup and later
 FIRST prerequisites, hot catalogue Open timeouts and a fault that never fired.
 Separate typed-local/combined-Strong components passed within their own scope.
@@ -43,7 +46,7 @@ expansion, sustained capacity gain, RPO/RTO or production gate is cleared.
 The original Azure qualification remains failed. Source, CI acceptance, binary,
 deployment and production qualification remain separate.
 
-## Latest completed execution — head2ce failed, 2026-11-15 UTC
+## Historical completed execution — head2ce failed, 2026-11-15 UTC
 
 Remote main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
 Unmerged520 source `2ce4c48202d4d1bb1ef759b08a41dc36f431af6d` passed PGwire

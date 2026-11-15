@@ -17,8 +17,8 @@ Workspace/all-target and no-default consumer compilation passed. PGwire complete
 100 assertions, zero failures/errors/skips, including actual process-kill queue
 and cache recovery, 24 completed reports and 24 cable messages. Core has failed
 at the legacy primary-record-only format-preservation assertion described below.
-SQL has completed 2,682/0/4. Native completed 375/37/1; remaining-workspace is
-still pending at this checkpoint. No overall
+SQL completed 2,682/0/4, Native failed 375/37/1 and remaining-workspace passed
+1,062/0/6. All required jobs are terminal; the overall Tests run failed. No overall
 pass or inherited Native acceptance is claimed.
 
 This successor composes the two backup-vector expectations, all-worker INITIAL
@@ -40,7 +40,8 @@ Independent complete-log receipts respectively:
 Rails built and exercised a CI debug binary with SHA-256
 `64e18a818ebade9ebfbca810f4932bd132bf827ff4a1dfffbb9279483dda9245`.
 This is not a retained optimized physical-qualification binary or published
-release/deployment. The full source6de archive is not frozen while useful jobs run.
+release/deployment. The sole collector exited normally after every job became
+terminal; complete archive finalization/independent verification is in progress.
 
 The Core job executed 1,300 passing / one failing / 13 ignored case-result rows
 across 38 summaries; these are executed rows, not 1,300 independent trials.
@@ -146,6 +147,17 @@ metadata host, and require either a fresh authenticated read under the original
 finite parent or the original cancel/expiry refusal before readiness publication.
 Semantic, identity and mutation errors must remain terminal; increasing setup
 budgets or serializing the fixture would not prove that recovery contract.
+
+Source6de remaining-workspace job132814521575 passed **1,062 / zero / six**
+case-result rows across 129 Rust summaries. Separate Python groups passed
+47 platform, three Oracle HR and 34 Oracle reference controls; two notebook
+Node controls passed. Complete raw log: 148,746,194 bytes, SHA-256
+`6f43dcb5eff8acfc649f56e97ac3fb9e8e7c6e3baa96c46681b09f787da5181b`;
+gzip SHA-256 `0e5fe3135641f773e166ea27ca85b6bbe46fae38a0dabdf0f729fb34cedbb30a`.
+Root complete raw/summary/case verification receipt:
+`52dc8d00019b86153e16c30903470a5876bfe86f6b2834575abbf631afc02c81`.
+These component and tooling passes do not repair failed Core/Native acceptance,
+execute the later startup corrections or qualify physical HA.
 
 ### Completed source7c: Core and Native failed; workspace and application components passed
 

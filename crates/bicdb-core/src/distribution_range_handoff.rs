@@ -30,6 +30,11 @@ pub(crate) use joint::{
     NativeJointReleasePhaseQuorum, NativeJointReleasePhaseRound, NativeJointServingPolicyAdmission,
     NativeJointServingPublicationRound,
 };
+#[cfg(feature = "tls-replication")]
+pub(crate) use joint::{
+    NativeJointHandoffStepOperationV1, NativeJointHandoffStepOutcomeV1,
+    NativeJointHandoffStepReplyV1, NativeJointHandoffStepRequestV1, NativeJointHandoffStepStageV1,
+};
 #[cfg(test)]
 pub(crate) use joint::{NativeJointPhaseTrace, NativeRefreshTraceContext};
 #[cfg(feature = "tls-replication")]

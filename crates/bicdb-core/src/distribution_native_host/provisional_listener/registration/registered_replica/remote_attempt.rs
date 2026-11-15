@@ -18,6 +18,8 @@ pub(crate) use remote_joint::{
     NativeRegisteredRemoteJointTarget, NativeRegisteredServingDataPolicyOrigin,
 };
 mod remote_installing;
+mod remote_step;
+pub(super) use remote_step::RegisteredTargetInstallStep;
 
 pub(crate) struct NativeRegisteredRemoteInstallPreflight {
     original: Arc<NativeRegisteredReplicaAdmission>,
@@ -292,7 +294,8 @@ impl NativeMetadataControlHost {
             .replica
             .as_ref()
             .ok_or_else(|| invalid("actual Registered receiver absent"))?;
-        let actual = owner
+        let held = owner.remote_install.hold()?;
+        let actual = held
             .remote_attempts
             .get(&range)
             .ok_or_else(|| invalid("retained actual remote attempt absent"))?;
@@ -320,7 +323,8 @@ impl NativeMetadataControlHost {
             .replica
             .as_ref()
             .ok_or_else(|| invalid("actual Registered receiver absent"))?;
-        let actual = receiver
+        let held = receiver.remote_install.hold()?;
+        let actual = held
             .remote_attempts
             .get(&range)
             .ok_or_else(|| invalid("retained actual remote attempt absent"))?;
@@ -356,6 +360,54 @@ impl NativeMetadataControlHost {
         business: Uuid,
         parent: &CancellationToken,
     ) -> Result<()> {
+        let data_owner = self.assigned.is_some() || self.data.is_some();
+        let Some(receiver) = self.replica.as_ref() else {
+            return Err(invalid(if data_owner {
+                "Registered transfer cannot replace an existing DATA host"
+            } else {
+                "original Registered receiver absent"
+            }));
+        };
+        let mut held = receiver.remote_install.hold()?;
+        receiver
+            .remote_install_custody(&mut held, data_owner)
+            .prepare_registered_remote_install_attempt(source, frame, role, own, business, parent)
+    }
+    pub(crate) fn publish_registered_remote_proposal(
+        &mut self,
+        source: &Arc<NativeRemoteImageFact>,
+        frame: &NativeRemoteImageStep<'_>,
+        role: HandoffRoleAdmission,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<crate::db::NativeRegisteredRemoteProposalPointer> {
+        let data_owner = self.assigned.is_some() || self.data.is_some();
+        let Some(receiver) = self.replica.as_ref() else {
+            return Err(invalid(if data_owner {
+                "Registered proposal cannot replace DATA owner"
+            } else {
+                "actual Registered receiver absent"
+            }));
+        };
+        let mut held = receiver.remote_install.hold()?;
+        receiver
+            .remote_install_custody(&mut held, data_owner)
+            .publish_registered_remote_proposal(source, frame, role, own, business, parent)
+    }
+}
+impl RegisteredRemoteInstallCustody<'_> {
+    /// Capture real readonly facts, retain this exact attempt, then transfer
+    /// the unique actual runtime permit N→A. No durable writes occur here.
+    pub(super) fn prepare_registered_remote_install_attempt(
+        &mut self,
+        source: Arc<NativeRemoteImageFact>,
+        frame: &NativeRemoteImageStep<'_>,
+        role: HandoffRoleAdmission,
+        own: HostMetadataReadObservation,
+        business: Uuid,
+        parent: &CancellationToken,
+    ) -> Result<()> {
         parent.check()?;
         frame.require_request_live()?;
         if !std::ptr::eq(Arc::as_ref(&source), frame.source()) {
@@ -363,15 +415,12 @@ impl NativeMetadataControlHost {
                 "registered attempt requires identical actual owned MF source",
             ));
         }
-        if self.assigned.is_some() || self.data.is_some() {
+        if self.data_owner {
             return Err(invalid(
                 "Registered transfer cannot replace an existing DATA host",
             ));
         }
-        let receiver = self
-            .replica
-            .as_mut()
-            .ok_or_else(|| invalid("original Registered receiver absent"))?;
+        let receiver = self;
         let scope = RecoveryFenceScope::from_role(role.role())?;
         let range = scope.range_id;
         let attempt = source.manifest().target_attempt;
@@ -458,7 +507,7 @@ impl NativeMetadataControlHost {
         preflight.require_request(&request, frame)?;
         parent.check()
     }
-    pub(crate) fn publish_registered_remote_proposal(
+    pub(super) fn publish_registered_remote_proposal(
         &mut self,
         source: &Arc<NativeRemoteImageFact>,
         frame: &NativeRemoteImageStep<'_>,
@@ -468,13 +517,10 @@ impl NativeMetadataControlHost {
         parent: &CancellationToken,
     ) -> Result<crate::db::NativeRegisteredRemoteProposalPointer> {
         parent.check()?;
-        if self.assigned.is_some() || self.data.is_some() {
+        if self.data_owner {
             return Err(invalid("Registered proposal cannot replace DATA owner"));
         }
-        let receiver = self
-            .replica
-            .as_mut()
-            .ok_or_else(|| invalid("actual Registered receiver absent"))?;
+        let receiver = self;
         let range = role.role().current_range().id;
         let attempt = receiver
             .remote_attempts

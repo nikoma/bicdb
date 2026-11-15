@@ -338,6 +338,7 @@ impl NativeMetadataControlHost {
             self.assigned = Some(NativeAssignedDataHost::new_registered_serving(
                 parts, owner, admission,
             )?);
+            self.close_registered_remote_install_for_data_owner();
         }
         self.advance_assigned_closed_data_policy(parent)
     }

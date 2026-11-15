@@ -526,12 +526,29 @@ impl NativeInitialDataAdmission {
             member.require_current(&store)?;
         }
         if let Some(actual) = actual {
-            actual.require_current()?;
+            actual.require_current_for_request(
+                &token
+                    .child_linked_to(&own.original_request_cancellation())
+                    .child_with_deadline(own.deadline()),
+            )?;
         } else {
             let s = service.try_lock().ok_or_else(|| {
                 invalid("OLD actual constraint service busy before readonly reply")
             })?;
             constraint_owner.as_ref().unwrap().actual_facts(&s)?;
+        }
+        // The bounded service observation may yield to other work. With all
+        // service/DB/pin guards now dropped, recheck the SAME original MStore
+        // member before returning its authenticated historical frame.
+        {
+            let store = loop {
+                token.check()?;
+                own.require_live_request(own_business)?;
+                if let Some(store) = metadata.try_lock_for(METADATA_LOCK_POLL) {
+                    break store;
+                }
+            };
+            member.require_current(&store)?;
         }
         self.require_live()?;
         token.check()?;

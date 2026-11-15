@@ -119,10 +119,18 @@ impl RemoteNewRecipientMetadata {
             let plan = crate::distribution_range_handoff::NativeJointHandoffPlan::from_actual_role_and_own(role, &own, business)?;
             request.require_plan(&plan)?;
         }
-        let database = service
-            .try_lock()
-            .ok_or_else(|| invalid("remote NEW actual service busy before MStore"))?
-            .listener_open_guard();
+        // No table/service/DB/MStore guard is held. Preserve this exact
+        // acquisition's caller, OWN and (when present) witnessed Role window.
+        let identity = parent.child_with_deadline(
+            role.as_ref()
+                .map_or(own.deadline(), |role| role.deadline().min(own.deadline())),
+        );
+        let database =
+            ClusterDataNodeService::capture_actual_listener_identity_waiting(service, &identity)?;
+        own.require_live_request(business)?;
+        if let Some(role) = &role {
+            role.require_own_host_metadata(&own, business)?;
+        }
         let member = {
             let store = loop {
                 parent.check()?;
@@ -134,8 +142,8 @@ impl RemoteNewRecipientMetadata {
             store.require_listener_database(&database)?;
             store.observe_owned_native_metadata_member(&own, business, parent)?
         };
-        let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
-            service, &own, business, parent,
+        let point = ClusterDataNodeService::capture_actual_joint_metadata_point_waiting(
+            service, &own, business, &identity,
         )?
         .ok_or_else(|| invalid("remote NEW requires real current native MStore point"))?;
         let result = Self {

@@ -150,7 +150,7 @@ impl NativeMetadataControlHost {
                 "FIRST coordinator capacity; no uncertain-owner eviction",
             ));
         }
-        let point = ClusterDataNodeService::capture_actual_joint_metadata_point(
+        let point = ClusterDataNodeService::capture_actual_joint_metadata_point_waiting(
             &self.backend.service,
             &own,
             business,

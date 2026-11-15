@@ -6,6 +6,7 @@ use crate::distribution_consensus::{
     HostMetadataReadObservation, NativeMetadataPublicationGuard,
     NativeOwnedMetadataMemberObservation,
 };
+mod request_wait;
 #[cfg(test)]
 mod waiting_tests;
 

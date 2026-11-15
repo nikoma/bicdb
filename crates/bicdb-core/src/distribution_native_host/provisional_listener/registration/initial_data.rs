@@ -10,6 +10,8 @@ use std::sync::Weak;
 mod cleanup;
 mod hot_recovery;
 mod old_step;
+#[cfg(test)]
+mod request_wait_controls;
 mod writer_data_domain;
 use cleanup::{NativeInitialDataCleanup, NativeInitialDataCleanupSender};
 use hot_recovery::NativeHotRecoveryMaintenance;
@@ -1165,12 +1167,17 @@ impl NativeMetadataControlHost {
         &mut self,
         parent: &CancellationToken,
     ) -> Result<()> {
+        // The manual API also accepts a process parent without a deadline.
+        // Anchor ONE finite turn before registry and maintenance, using their
+        // existing five-second bound; never renew it after either operation.
+        let request = parent.child_with_deadline(Instant::now() + Duration::from_secs(5));
+        request.check()?;
         if let Some(data) = self.data.as_mut() {
-            let registry = data.refresh_registry(parent);
+            let registry = data.refresh_registry(&request);
             let hot = data
                 .hot_recovery
                 .as_ref()
-                .map_or(Ok(()), |h| h.tick(parent));
+                .map_or(Ok(()), |h| h.tick_for_request(&request));
             registry?;
             hot?;
         }

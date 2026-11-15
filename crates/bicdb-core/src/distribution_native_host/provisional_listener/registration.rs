@@ -907,12 +907,21 @@ impl NativeMetadataControlHost {
         parent: &CancellationToken,
     ) -> Result<crate::MetadataConsensusStatus> {
         parent.check()?;
-        let actual = self
-            .backend
-            .service
-            .try_lock()
-            .ok_or_else(|| invalid("native control status service busy"))?
-            .listener_open_guard();
+        let actual = if parent.deadline().is_some() {
+            // Status only: a finite action may have already completed its
+            // transition. Wait on its SAME token instead of replaying it.
+            ClusterDataNodeService::capture_actual_listener_identity_waiting(
+                &self.backend.service,
+                parent,
+            )?
+        } else {
+            // Preserve the existing instantaneous unbounded-caller API.
+            self.backend
+                .service
+                .try_lock()
+                .ok_or_else(|| invalid("native control status service busy"))?
+                .listener_open_guard()
+        };
         let store = self.backend.lock_metadata(parent)?;
         store.require_listener_database(&actual)?;
         Ok(store.status())

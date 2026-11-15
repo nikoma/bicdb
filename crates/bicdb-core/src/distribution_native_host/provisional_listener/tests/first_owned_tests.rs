@@ -24,8 +24,18 @@ mod metadata_head_tests;
 mod open_tests;
 mod preparation_tests;
 mod release_tests;
+mod request_wait_tests;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Case {
+    HotRequestWait,
+    HotRequestCancel,
+    HotRequestExpiry,
+    StatusRequestWait,
+    StatusRequestCancel,
+    StatusRequestExpiry,
+    OldRequestWait,
+    OldRequestCancel,
+    OldRequestExpiry,
     MetadataIdentityWait,
     MetadataIdentityCancel,
     MetadataIdentityExpiry,
@@ -815,6 +825,30 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
             )?;
         }
     }
+    if matches!(
+        case,
+        Case::HotRequestWait | Case::HotRequestCancel | Case::HotRequestExpiry
+    ) {
+        return request_wait_tests::hot(
+            &five.sources[coordinator],
+            selected.id,
+            case,
+            report,
+            &five.lifetime,
+        );
+    }
+    if matches!(
+        case,
+        Case::StatusRequestWait | Case::StatusRequestCancel | Case::StatusRequestExpiry
+    ) {
+        return request_wait_tests::status(
+            &five.sources[coordinator],
+            selected.id,
+            case,
+            report,
+            &five.lifetime,
+        );
+    }
     let pending = report.call("actual_host_owned_allocation_quorum_commit", || {
         five.sources[0].test_first_commit_allocation(selected.id, &node(4), &five.lifetime)
     })?;
@@ -1266,6 +1300,18 @@ fn exercise(five: &mut Five, report: &mut Report, case: Case) -> Result<()> {
                 )?;
             } else {
                 drive!("actual_ALL_OLD_close", Action::CloseAll)?;
+            }
+            if matches!(
+                case,
+                Case::OldRequestWait | Case::OldRequestCancel | Case::OldRequestExpiry
+            ) {
+                return request_wait_tests::old(
+                    &five.sources[donor_index],
+                    selected.id,
+                    case,
+                    report,
+                    &five.lifetime,
+                );
             }
             let start = drive!(
                 "actual_target_owned_SourceStart",

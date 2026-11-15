@@ -31,7 +31,7 @@ impl NativeInitialDataAdmission {
             .upgrade()
             .ok_or_else(|| invalid("actual donor source process absent"))?
             .require_original_process()?;
-        let actual = self.retained_actual_old_source(range)?;
+        let actual = self.retained_actual_old_source_for_request(range, &token)?;
         let plan = actual.plan().clone();
         let leader = provider
             .current_metadata_leader_hint(&token)?
@@ -85,7 +85,7 @@ impl NativeInitialDataAdmission {
             .upgrade()
             .ok_or_else(|| invalid("actual donor source process absent after OLD fetch"))?
             .require_original_process()?;
-        actual.require_current()?;
+        actual.require_current_for_request(&token)?;
         for frame in &frames {
             frame.require_request_live()?;
         }
@@ -119,13 +119,16 @@ impl NativeInitialDataAdmission {
                 "remote OLD final metadata regressed or selected phase changed",
             ));
         }
+        let final_request = token
+            .child_linked_to(&final_own.original_request_cancellation())
+            .child_with_deadline(final_own.deadline());
         let mut round =
             NativeRemoteOldRound::begin(actual.clone(), final_own, final_business, &token)?;
         for frame in frames {
             round.record(frame)?;
         }
         let result = round.finish()?;
-        actual.require_current()?;
+        actual.require_current_for_request(&final_request)?;
         self.require_live()?;
         self.image_sources
             .upgrade()
@@ -247,7 +250,13 @@ impl SourceDiscoveryAdmission<'_> {
     fn require_current(&self) -> Result<()> {
         self.caller.check()?;
         self.original.require_live()?;
-        self.old.require_current()?;
+        self.own.require_live_request(self.business)?;
+        self.old.require_current_for_request(
+            &self
+                .caller
+                .child_linked_to(&self.own.original_request_cancellation())
+                .child_with_deadline(self.own.deadline()),
+        )?;
         self.old.plan().require_source_host_metadata(
             &self.own,
             self.business,
@@ -310,7 +319,7 @@ impl NativeInitialDataAdmission {
             .upgrade()
             .ok_or_else(|| invalid("original donor registry ended"))?;
         registry.require_original_process()?;
-        let old = self.retained_actual_old_source(request.range_id)?;
+        let old = self.retained_actual_old_source_for_request(request.range_id, parent)?;
         request.require_plan(old.plan())?;
         let observer_birth = match caller {
             DiscoveryCaller::Target => {

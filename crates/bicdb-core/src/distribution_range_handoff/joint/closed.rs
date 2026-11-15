@@ -6,6 +6,8 @@ use crate::distribution_range_mutation::{FrozenRangeMutationPermit, SourceCaptur
 use crate::distribution_range_recovery::RecoveryRoleAdmission;
 use parking_lot::Mutex;
 use std::sync::Arc;
+#[cfg(feature = "tls-replication")]
+mod source_request;
 
 pub(crate) struct NativeJointOldObservation {
     plan: Arc<NativeJointHandoffPlan>,

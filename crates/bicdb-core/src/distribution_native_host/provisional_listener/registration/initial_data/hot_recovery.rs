@@ -18,6 +18,7 @@ use std::sync::OnceLock;
 use std::thread::JoinHandle;
 
 mod replica_debt;
+mod request_wait;
 #[cfg(test)]
 pub(crate) use replica_debt::NativeHotDebtScheduleHold;
 const MAX_JOBS: usize = 64;
@@ -300,6 +301,17 @@ impl NativeHotRecoveryMaintenance {
             .state
             .try_lock()
             .ok_or_else(|| invalid("hot DATA maintenance attempt already active"))?;
+        self.tick_with_actual_state(parent, &mut state)
+    }
+    fn tick_with_actual_state(
+        &self,
+        parent: &CancellationToken,
+        state: &mut parking_lot::MutexGuard<'_, State>,
+    ) -> Result<()> {
+        self.live(parent)?;
+        if !std::ptr::eq::<State>(&**state, self.state.data_ptr()) {
+            return Err(invalid("hot DATA turn substituted actual retained State"));
+        }
         let ranges = self
             .initial
             .seed

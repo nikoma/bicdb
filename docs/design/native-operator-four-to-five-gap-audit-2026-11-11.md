@@ -23,13 +23,39 @@ also passed its actual 20 runs/100 assertions, zero failures/errors/skips and
 including the unchanged CLI availability control, remain pending. None of
 these component results establishes their outcome or physical qualification.
 
+At the **2026-11-15 23:30 UTC** checkpoint, the serial native job
+[`132975184551`](https://github.com/nikoma/bicdb/actions/runs/43767288668/job/132975184551)
+completed with **387 passed, 84 failed, 1 ignored**, 989 filtered, in
+2,971.93 seconds. This is a runtime failure after successful compilation.
+The complete 472-case inventory assigns 67 failures to FIRST tests and 17
+to learner/hot-policy tests. Observed failure sites include initial fixture
+readiness/control-service contention, activation/history validation and actual
+request timeouts. They are separate observations, not a demonstrated common
+root cause. This candidate cannot merge on these results. The remaining
+workspace job, including the original CLI availability control, is still running.
+
+Both new registry controls executed and passed:
+`native_initial_registry_real_native_sync_unknown_retains_same_owner_and_denies_app`
+and `native_initial_registry_same_known_api_late_cancel_fresh_read_no_replay_and_sdk_strong`.
+The original registry cancellation/old-Store control also passed. These component
+passes establish neither the pending CLI outcome nor complete relocation.
+The full native raw log is 206,768,590 bytes, SHA256
+`b2c2ccb8bb005fbd8970824f90a962ccb02c56882571b5297aef05b485efd5c4`;
+its retained gzip SHA256 is
+`5e7c581c16af9f3e295202c5ec9bacd8ca163a275e639ce4ef7af641067f0db8`.
+The complete outcome inventory SHA256 is
+`3a1fef2bf4e14be7baeb159a083dc27df46209d4136fb5cbec5af2444ee77c07`.
+Failed scenarios remain **failed** even when their prerequisite prevented them
+from reaching the intended injected fault; the unreached guarantee is **not
+tested** by that scenario.
+
 | Boundary | Implemented source | Actual executed evidence and classification |
 | --- | --- | --- |
 | Initial native DATA and explicit Strong point access | Public retained host/CLI open paths, actual coordinator/runtime/listener and request-scoped Strong protocol exist | **Passed within predecessor scope:** d3's REST CLI target passed the actual four-process APP/Strong case. This is not a passing current-candidate or movement result |
 | Fifth metadata voter and original writer refresh | Automatic metadata enrollment/promotion and registry refresh exist | **Failed availability at d3:** the unchanged healthy-old-read/fresh-ACK/readback control failed. All four original writers remained pending; no DATA movement was attempted |
-| Retained registry correction | Current source retains the original publisher/native outcome and separates maintenance identity from strict APP/Strong admission | **Not tested at runtime:** current all-target compilation passed; the source-reviewed correction, two new component controls and original CLI ten-second health gate still require execution |
+| Retained registry correction | Current source retains the original publisher/native outcome and separates maintenance identity from strict APP/Strong admission | **Passed within component scope:** both new actual commit-outcome controls and the original cancellation/old-Store control passed. The original CLI ten-second health gate remains pending; the complete native suite failed |
 | Registered fifth replica receiver | Fresh/registered retained receiver and public join path exist | **Passed within predecessor scope:** d3's CLI receiver case passed with DATA serving false. Receiver ingress or metadata voting does not establish populated DATA ownership |
-| Native image/joint/Open/policy/release steps | Finite internal native host consumers exist, including actual remote-serving participants | **Inconclusive as a complete assembled operation:** existence and source review do not prove successful end-to-end relocation, cleanup, cold recovery or replacement |
+| Native image/joint/Open/policy/release steps | Finite internal native host consumers exist, including actual remote-serving participants | **Failed current native acceptance:** 67 FIRST and 17 learner/hot-policy cases failed. Some intended phases were not reached. Individual passing controls do not establish complete relocation, cleanup, cold recovery or replacement |
 | Multiple native ranges on the joining target | The inspected FIRST planner requires a target with no range replicas; FIRST receiver enrollment rejects an existing DATA owner or another retained receive attempt | **Not implemented by iterating FIRST:** a populated-target admission/continuation producer is still required. This does not claim a first complete handoff passed |
 | Automatic native DATA placement and repair after one join | The public operator loop maintains metadata and initial writer/hot recovery; finite native relocation consumers are not a complete periodic placement controller | **Not implemented as the complete native operator path inspected here; not tested** for automatic full-range four-to-five convergence. This is a functional integration gap as well as a qualification gap |
 | Complete external campaign and capacity comparison | Bounded SDK/receipt/reconciliation components exist | **Not tested:** no current full-dataset physical expansion, complete campaign-wide ledger or stable post-convergence throughput gain |

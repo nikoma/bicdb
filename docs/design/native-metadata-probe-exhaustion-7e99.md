@@ -41,6 +41,13 @@ The coordinator selects an eligible candidate from its bounded queue. A delayed 
 
 The short delays do not guarantee that an arbitrarily long listener interruption is recoverable in four attempts. The original failed case and unchanged caller windows must still pass in the integrated candidate. A subsequent failure must retain its original results and be investigated; it must not be hidden by extending the request, increasing the attempt cap or relabeling refusal as readiness.
 
+Two genuine component definitions are composed under `distribution_metadata_read_provider::tests::tls::probe_rebind_tests`:
+
+- `actual_mtls_original_context_paces_socket_failures_then_rebinds_same_two_voters` retains four actual consensus stores, real TLS identities and listeners. Two original listeners are closed. A delegating transport retains real socket errors, then restores those same listeners before fourth-attempt real ACKs. The asserted retry intervals start at the distinct delegate-return boundary, so the controlled channel hold cannot itself supply the delay. The same context, read request, quorum, deadline and four-attempt cap are checked.
+- `actual_mtls_original_context_cancel_after_paced_socket_retry_refuses_quorum` cancels the still-live original parent after actual paced socket failures and requires `QueryCanceled`, without another acquisition.
+
+Both definitions are **uncompiled and unrun**. Their new test module is selected by the ordinary Core test scope, not by the narrower serial native-host selector. These are provider component controls, not full FIRST or physical acceptance. No new pending-retry expiry control is defined: each real probe has an earlier deadline slice, and holding its error until the outer deadline would misrepresent the actual attempt contract. Original-context expiry remains a required separate check.
+
 ## Finding classification and smallest next controls
 
 | Finding | Classification | Evidence or next test |

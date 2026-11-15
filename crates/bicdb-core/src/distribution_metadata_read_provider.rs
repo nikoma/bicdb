@@ -1905,6 +1905,7 @@ mod tests {
     #[cfg(feature = "tls-replication")]
     mod tls {
         use super::*;
+        mod probe_rebind_tests;
         use crate::{
             start_cluster_data_server, start_cluster_data_server_with_metadata_read_provider,
             BicDb, ClusterDataNodeService, ClusterDataServerHandle, ClusterNetworkTransportConfig,

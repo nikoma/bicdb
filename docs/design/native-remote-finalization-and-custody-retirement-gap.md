@@ -74,7 +74,10 @@ unqualified.
 
 `validate_native_joint_handoff_preservation` forbids removal of an original
 native relocation even after `Cleaned`. The existing history-pruning loop
-excludes native records, while topology history is bounded at 4,096 entries.
+excludes native records, while the topology's relocation map is bounded at
+4,096 entries. This is a different structure from configurable topology-change
+history (default 64, maximum 4,096); that change-history setting is not the
+cause of the native tombstone limit.
 Therefore enough non-prunable native tombstones can eventually refuse new
 allocations. This is a source-derived capacity consequence, not an executed
 exhaustion test. It must not be repaired by deleting protected records or

@@ -1,0 +1,189 @@
+{
+  "schema": "bicdb-source-review/v1",
+  "classification": "source-reviewed; exact-source compilation and execution not tested",
+  "source": {
+    "version": "1.0.520-beta",
+    "revision": "e6a27e6d6ffb53a84cdd42b194b0ec17dac43b44",
+    "tree": "27b1f47ca1c59fe82344fa017ffa9c22530e3662",
+    "delivered_base": {
+      "version": "1.0.519-beta",
+      "revision": "587dd6e4775e454cc9e8224d5fed76e8795c6ff6"
+    }
+  },
+  "findings": [
+    {
+      "id": "shared-install-custody",
+      "classification": "implemented, source-reviewed; runtime not tested",
+      "evidence": "FIRST and member Step use actual RegisteredRemoteInstallTables. FIRST retains its weak denial-only claim at enrollment under the same table lock; Step refuses any retained FIRST claim before discovery or native effects. FIRST refuses an existing member-step attempt. DATA-owner exclusion remains. Claims do not become remote grants or cold-recovery authority."
+    },
+    {
+      "id": "real-request-controls",
+      "classification": "defined, source-reviewed; execution not tested",
+      "tests": [
+        "native_first_actual_enrollment_blocks_authenticated_other_step_before_effects",
+        "native_first_actual_retained_discovery_step_blocks_new_first_enrollment_before_effects"
+      ],
+      "scope": "Actual pinned requests and original owners in the existing five-object single-process fixture; original SDK ACK/full Strong assertions before and after; actual state comparison. No seeded ownership, skipped required cut, changed timeout, physical qualification or throughput claim."
+    },
+    {
+      "id": "decision-protocol-composition",
+      "classification": "implemented, source-reviewed; runtime not tested",
+      "evidence": "Delivered unit ObserveDecision and fact-bearing ObserveKnownDecision retain separate admission/body rules. Native-D certificate is not owned-catalogue confirmation or local preparation/Serving authority. Missing/unrequested body negative controls use valid outer checksums to reach intended predicates."
+    },
+    {
+      "id": "main519-postmerge",
+      "classification": "incomplete job-metadata observation",
+      "run": 43677527718,
+      "passed": [
+        "Core",
+        "PGwire",
+        "SQL",
+        "all-targets",
+        "format",
+        "license",
+        "boundary",
+        "selectors"
+      ],
+      "live": [
+        "native multi-node",
+        "rest of workspace"
+      ],
+      "rails": {
+        "run": 43677527740,
+        "result": "success"
+      },
+      "limit": "No independent raw native case inventory, physical acceptance or candidate520 CI inference."
+    },
+    {
+      "id": "historical-fbb",
+      "classification": "failed test compilation; useful partial application passes",
+      "source": "fbbadef57c5532af6acbc0f3e2016b332a3d16ab",
+      "run": 43675202613,
+      "failed": [
+        "all-targets",
+        "Core",
+        "native"
+      ],
+      "compiler_errors": 8,
+      "actual_passed": [
+        "Rails",
+        "PGwire",
+        "SQL"
+      ],
+      "live": [
+        "rest of workspace"
+      ],
+      "limit": "No actual Core/native outcomes. The original useful run is retained until terminal; corrections and520 require separate execution."
+    }
+  ],
+  "source_checks_at_reviewed_revision": {
+    "version_identity_packages": 29,
+    "standalone_rust_format_parse_changed_files": 151,
+    "python_version_script_tests": 3,
+    "license_packages": 32,
+    "license_scenarios": 18,
+    "open_core_boundary": "passed",
+    "scope": "Source/tool checks only, not Cargo compilation, Rust tests, binary delivery or deployment. Subsequent documentation-only additions require separate link/JSON checks.",
+    "documentation_followup": {
+      "source_head_before_doc_commit": "e6a27e6d6ffb53a84cdd42b194b0ec17dac43b44",
+      "changed_markdown_files": 38,
+      "json_files_parsed": 10,
+      "local_links_checked": 191,
+      "missing_links": 0,
+      "verified_source_pins": 11,
+      "receipt_sha256": "ef0b9b7ddea4b9553eb53068d957f713d266247bf42fa51923be12603a5d6777"
+    }
+  },
+  "source_pins": [
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica.rs",
+      "revision": "e6a27e6d6ffb53a84cdd42b194b0ec17dac43b44",
+      "git_blob": "37a136eb1574454b9803812e905b5b0686813a18",
+      "sha256": "3af0b83b5bca5017280acb1c7f7e2b0cf9315cd5ad31dd0170d868033780f33b",
+      "bytes": 27804
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/first_receive.rs",
+      "revision": "e6a27e6d6ffb53a84cdd42b194b0ec17dac43b44",
+      "git_blob": "3ba904833c3df7cad5058b428d2b474f0172efb7",
+      "sha256": "76b8724d9dff43c12b4e6151df7191fa933f071abcce5a769397695fa9b17139",
+      "bytes": 28295
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/first_receive/acceptance.rs",
+      "revision": "e6a27e6d6ffb53a84cdd42b194b0ec17dac43b44",
+      "git_blob": "9d87db469d7d87bfa6dfe7adc2379c2a234fe252",
+      "sha256": "9b0322585889951713c4bf5968e564e6758e3a12ad60d899a5bf6fbc17f87bd6",
+      "bytes": 4254
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/registered_replica/remote_attempt/remote_step.rs",
+      "revision": "e6a27e6d6ffb53a84cdd42b194b0ec17dac43b44",
+      "git_blob": "804a90b36ef4e721bc2b1f116c70d8e47cab422b",
+      "sha256": "fcc03c4ce2b178d01968c5ba0183a07826aadbc333f07f4789c338ef0915a4a5",
+      "bytes": 34438
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/operator/first_acceptance.rs",
+      "revision": "e6a27e6d6ffb53a84cdd42b194b0ec17dac43b44",
+      "git_blob": "3266a4af40b3af8675eceb91aa3845ee7f8f3a22",
+      "sha256": "14c8a8e9d7d00c77a45c77325ef78b3c6f4e6b0f195d90ef91623fb22a43d737",
+      "bytes": 4924
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/operator_learner.rs",
+      "revision": "e6a27e6d6ffb53a84cdd42b194b0ec17dac43b44",
+      "git_blob": "2714e7f2b32c64df1aa7cd12b8e23cff39011e6c",
+      "sha256": "248a93a7809a8f1cca013f1d70688e6166df74d34918007c9be30db8bb21e970",
+      "bytes": 28588
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/registration/first_coordinator/acceptance.rs",
+      "revision": "e6a27e6d6ffb53a84cdd42b194b0ec17dac43b44",
+      "git_blob": "abaa57cb31b9c7c61360f2f974de4e3cec9a3fde",
+      "sha256": "d21feb4bf9c797099b87ba616c407df50407e45667270daa97ce5354b5910082",
+      "bytes": 21825
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests.rs",
+      "revision": "e6a27e6d6ffb53a84cdd42b194b0ec17dac43b44",
+      "git_blob": "ca34e1eacdbc8bd4f0c938c62bc79e54f4eec1f2",
+      "sha256": "c62eb5ed56df3fbfbef24850e8a3dfd8765a415fb1ec6d92706bfb53f9b36eaf",
+      "bytes": 84683
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/first_owned_tests/cross_protocol_tests.rs",
+      "revision": "e6a27e6d6ffb53a84cdd42b194b0ec17dac43b44",
+      "git_blob": "04635e2f517534a79ca7f271709f083cd9af9994",
+      "sha256": "6819f968967e9b2fd3e5b6ea2c7298e369ca3ba85c56bb21bdb62204072e20c3",
+      "bytes": 19564
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_native_host/provisional_listener/tests/learner_enrollment_tests/promotion_tests/registered_image_baseline/remote_source_tests/source_export_retirement_tests/remote_new_tests/decision_certificate_tests.rs",
+      "revision": "e6a27e6d6ffb53a84cdd42b194b0ec17dac43b44",
+      "git_blob": "a3e430fb6c0c7b31f51eea2dc3868b1c5b1c4838",
+      "sha256": "4a1ae85fcd3b9d5af562276af3ee9f742f9e7f46f0cb5c2cab40f02fd3a503fe",
+      "bytes": 22759
+    },
+    {
+      "path": "crates/bicdb-core/src/distribution_transport/native_new.rs",
+      "revision": "e6a27e6d6ffb53a84cdd42b194b0ec17dac43b44",
+      "git_blob": "b319dba214cef9bfc693b592461293968a431ed5",
+      "sha256": "f9bfd974628c557a99524d87029093ffdec07f8d5fefe3776f58083bc715db59",
+      "bytes": 32868
+    }
+  ],
+  "open_gates": [
+    "Complete remote Serving and operator-reachable automatic controller",
+    "Restart/cold recovery and permanently unavailable OLD recovery",
+    "Physical cleanup and repeated range moves",
+    "Original Standard live-backup success/restore defect",
+    "Current-binary independent-machine four-to-five expansion and complete external ledger",
+    "Zero false Strong not-found, no missing acknowledged commits and bounded fault-safe convergence",
+    "Stable post-convergence sustained throughput gain",
+    "Transparent PostgreSQL routing/joins and durable recoverable general multi-range transactions"
+  ],
+  "physical_qualification": "failed original Azure run; no successful replacement run",
+  "production_admission": false,
+  "next_validation": "Normal exact-source CI of composed520 after original useful fbb job finishes and archive freezes. Do not cancel, restart or relabel old run."
+}

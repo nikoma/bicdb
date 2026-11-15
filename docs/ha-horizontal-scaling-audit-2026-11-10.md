@@ -28,10 +28,18 @@ head/merge tree (`e88a49e83f7f92fc1fea6293b88eb3bfb21bf7c9`). This checkpoint
 has not independently revalidated raw case counts/cuts. Main519's post-merge
 Tests run43677527718 was still live at inspection; its Rails run43677527740
 reported success. Earlier same-tree passes and later execution remain separate.
+At the subsequent metadata inspection, Core, PGwire and SQL also reported
+success; native multi-node and remaining workspace were still live. This is
+job-status evidence, not an independently reconciled case inventory or a
+physical qualification result.
 
 The prior518 composition and reviewed eight-error correction are being integrated
 above519 as a **520 candidate**. Its own exact-source compilation/runtime remain
-pending. The [520 candidate boundary](releases/1.0.520-beta.md) preserves these
+pending. Source review now checks the shared FIRST/member-step install custody
+and two real-path exclusion controls; both controls remain unexecuted. The
+[integration record](design/native-current-main520-integration.json) pins that
+review separately from historical CI. The
+[520 candidate boundary](releases/1.0.520-beta.md) preserves these
 limits and historical results. The original Azure scale-out qualification is
 still **failed**, and no new independent-machine expansion or stable five-node
 throughput comparison has passed. Source517 and candidate518 observations below

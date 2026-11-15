@@ -4,6 +4,89 @@ This record begins with candidate **1.0.520-beta / `326c363477477950f76bdb51fe64
 
 ## Actual execution
 
+### Sourced3: test compilation failed; remaining jobs still running
+
+Public draft **1.0.520-beta / `d3af39c107951802a612d31b42e70fd4bc90e71c`**,
+tree `a80a2894bf8d852641788f23cca142d7f1fb977b`, runs at actual PR checkout
+`7d5f1066dc3c1a666b4daa1d5f1468ee1ebf6595` with the same tree in normal
+[Tests43757717285](https://github.com/nikoma/bicdb/actions/runs/43757717285) and
+[Rails43757717284](https://github.com/nikoma/bicdb/actions/runs/43757717284).
+This is an **incomplete execution checkpoint**: SQL132945377726 and
+remaining-workspace132945377712 are still running. Their outcomes and complete
+archive inventory are not inferred. The same sole collector is retained;
+there was no manual workflow dispatch, rerun or cancellation. Main remains
+**1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+
+| Scope | Classification | Actual result and limit |
+| --- | --- | --- |
+| All-target132945355208 | Failed | Exactly one E0624: TLS probe control at `distribution_metadata_read_provider/tests/tls/probe_rebind_tests.rs:570` calls private `MetadataReadAcquireResponse::validate` at `distribution_consensus.rs:818`; zero executed cases/summaries. The following no-Core-default consumer step was skipped |
+| Core132945377727 and Native132945377679 | Failed prerequisite; runtime not tested | Actual production chaos-helper builds passed. Their subsequent library-test compilation failed on that same E0624. Zero Core/native cases and no new native phase, health or allocation cuts executed |
+| Formatting and three static jobs | Passed within scope | Nested-module resolution now succeeds. Dependency, licensing and selector checks passed; these do not execute native acceptance |
+| PGwire132945377717 | Passed within scope | 511 passed / 0 failed / 2 ignored, 513 unique cases across 28 summaries. Separate Oracle HR target 50/0, embedded HA 11/0, verification 3/0 and protocol target 195/0. These targets do not all run under one Oracle profile |
+| Rails132945355061 | Passed within scope | 20 runs / 100 assertions, zero failures/errors/skips; 24 reports, 24 cable messages, zero failed jobs, two overlapping workers; migration/seed/HTTP/WebSocket and standalone restart acceptance |
+| SQL and remaining workspace | Inconclusive while running | Preserve both useful jobs to natural completion; no earlier source's result transfers |
+| Full corrected native runtime, physical expansion and production qualification | Not tested | Component passes do not clear these gates |
+
+The actual all-target raw log is 1,395,187 bytes, SHA256
+`2ee177da3d88f9a99bda3abc8148b3dc02610f3b8c4eab8802f1933f580c25f9`;
+independent root scope receipt
+`5e54cf183a7ad6b0f5666792b6e887ba0e25c38fb469b4c6376ed66f50e68516`.
+Native raw SHA256
+`06c9b16a1a3b3d4b0749346c8820276b134e1df22f87c40cfa6e8545970a4c15`;
+Core raw SHA256
+`7f5a312c73a1a33492d92b968a8542374d2411e4ee11ba6db5bb250caeca3a44`.
+Core independent root scope receipt
+`2dab64fdc41ae10a172af6c0b2d56f3aba3ee751dc4ecf45dafdff854ff710ee`.
+The earlier two e2 library diagnostics are absent from these builds; that is
+not an all-profile/compiler-suite pass. The last executed native result remains
+source7e99's 396/55/1 below, not a result of d3 or its successor.
+
+Rails raw SHA256
+`0091f1f9da70bdb845d03342426c3cf58ac54fc3c2b331f3e811ec56d68214fc`;
+its original artifact `14179176774` has 16 members and API/archive digest
+`1bfb03f86ce500e96dd7d643fbc99ff8651b07cbe2ec070ed330584fd1a453c0`.
+Independent root full-log/artifact receipt SHA256
+`9e7cb3491818e36244139f80d858a09c6a5a63acf0c5ab5d0b1b77a6eeeaeb4d`.
+The CI report hashes its actual debug executable as
+`0de8eeeef2bb63a9328c4b7b2d59b6fcfa46496adf4e6d8be4aad12cb76af709`;
+the executable itself is not in that evidence ZIP and is not a released or
+verified deployment binary. The harness requests KILL of the actual child
+before queue/cache-canary reconciliation; no independent kernel signal-delivery
+receipt is retained. This is standalone application restart acceptance, not
+native HA, independent-machine or Azure fault qualification.
+
+The smallest reproducer is the unchanged workflow all-target command:
+
+```sh
+cargo check --workspace --all-targets --locked
+```
+
+The existing memory wrapper remains required in CI. No local Cargo/compiler or
+Rust test was executed. The separate minimal successor is
+`980b5983c927859c6218edc78e17b68d71eae2ac`, built on the test-control correction
+`24a7fd168dcfdca8ac39fe96c6a36c9909b994e7`:
+
+| Finding | Classification and correction | Next smallest actual test |
+| --- | --- | --- |
+| Sibling TLS control cannot call the complete response validator | Failed compilation, confirmed by full original log. Permit only its actual crate ancestor via `pub(super)`; the complete validator body, original assertion, proof-producing path and authenticated transport checks remain unchanged. It returns response-DATA validation only and mints no authority | Exact corrected all-target compilation, then unchanged real TLS rebind/cancellation controls in Core; the no-default consumer check must run separately |
+| Test mode 4 consumed before its actual final publication cut | Failed source contract; runtime not tested. This is not an observed d3 runtime failure. Preserve modes 2 and 4 until their existing later producers; no production behavior or guard weakening | Actual held-version health control must retain live parent/OWN, genuine Known XID, fired count and exact atomic refusal |
+| Later mode-0 native attempt overwrites mode-1 original pre-IO XID 0 | Failed source contract; runtime not tested. This is not an observed d3 runtime failure. Post-native stamping requires this invocation's mode 3 and its retained mode-3 cut | Existing pre-IO control must retain XID 0 after genuine fresh completion; mode 2 must reuse its exact Known XID and mode 3 must retain named-fault/Unknown evidence |
+| Relationship to the original Azure temporary unreadability | Inconclusive | Missing original route/error/epoch/watermark/restoration evidence cannot be reconstructed by these source fixes |
+
+See the [test-cut preservation unit](native-allocation-test-cut-retention-d3.md)
+and [validator visibility unit](native-metadata-probe-rebind-validation-visibility-d3.md).
+Root reviews `ac4979d2e340d1aafb4962194c5e31019ab4602dc77327e80e1340fdff4f83f4`
+and `d776749d9f0702f37d949aa825c17eef4c2c5dcc61a98f8859cc8fc16e0619d4`
+reverse only the declared gated edits/visibility token to recover the original
+whole files. Independent peer reviews are
+`509062b7fd536916bc74d72cf6ba31ac31010fa40251da983f73dd8585563661` and
+`a9ac157b5c758559ace0ec44eea4b5282c17e6301226c69a010f35508ccec6bd`.
+Original assertions, full validation, fault counts, request/SDK windows and
+later APP/Strong tails remain intact. Standalone formatting and source review
+pass within their recorded scope; corrected compilation/runtime are **not tested**.
+The separate RegistryAfterAllocation source unit is excluded from this minimal
+successor. No original Azure or production gate changes.
+
 ### Sourcee2: completed run failed compilation; native execution not reached
 
 The assembled runtime correction candidate **1.0.520-beta /

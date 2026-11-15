@@ -11,16 +11,16 @@ automatic data/leader movement but did not pass capacity or fault-safe rebalance
 qualification; no Phase-9 checkbox is closed by that exploratory trial.
 
 Current exact-head qualification checkpoint: draft **1.0.520-beta /
-`e2adb410befd41bd475f015fd6590c33d1afaa4f`** failed Core library compilation
-and child-module resolution. Core/native controls and Rails acceptance were not
-reached; remaining-workspace passed 564 component cases before dependency
-compilation failed. The last executed native result, source7e99, remains
-**396 passed / 55 failed / 1 ignored**. A separate source-reviewed three-file
-correction passes recursive formatting but is not a passing compiler/runtime result.
-The [complete results, exact source identities and next tests](design/native-520-regression-findings.md)
-remain merge and qualification blockers. Corrective source, API availability
-and checked roadmap items do not establish fault-safe automatic convergence.
-No physical expansion or production checkbox changes at this checkpoint.
+`d3af39c107951802a612d31b42e70fd4bc90e71c`** passed formatting, PGwire511/0/2
+and Rails20runs/100assertions. All-target/Core/Native failed test compilation on
+one inaccessible response validator; zero Core/native controls executed.
+SQL and remaining workspace are still running, so their results are not
+inferred. The last executed native result remains source7e99 **396/55/1**.
+Separate minimal source corrections are reviewed, not compiled or executed.
+The [exact results, reproducers and smallest next checks](design/native-520-regression-findings.md)
+remain merge and qualification blockers. APIs, source review and checked
+roadmap items do not establish fault-safe automatic convergence. No physical
+expansion or production checkbox changes at this checkpoint.
 
 The goal is a cluster where an operator joins a server and BicDB automatically
 places, replicates, moves, and balances data without application-level shard

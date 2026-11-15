@@ -11,7 +11,27 @@ transparent distributed SQL and recoverable multi-range SQL transactions to
 ordinary PostgreSQL applications. Independent-machine sustained throughput
 scaling and fault-safe rebalance of the current artifact remain unqualified.
 
-## Current complete execution — sourcee2 compilation failed, 2026-11-15 UTC
+## Current execution checkpoint — sourced3 test compilation failed, 2026-11-15 UTC
+
+Main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
+Draft **1.0.520-beta / `d3af39c107951802a612d31b42e70fd4bc90e71c`** passed
+formatting/static checks, PGwire511/0/2 and Rails20runs/100assertions. All-target,
+Core and serial Native test compilation failed on one private response-validator
+call in the new real-TLS control. The Core/native production helper builds
+passed, but zero Core/native controls executed. The following no-default
+consumer check was skipped. SQL and remaining workspace are still running;
+this is not a complete passing or archived CI run.
+
+A separate minimal source-reviewed successor fixes the validator's internal
+visibility and two test-only cut-retention defects without changing validation
+bodies, authority producers, original assertions or timeouts. It has not
+compiled or run. See the [exact source identities, current classifications and reproducers](design/native-520-regression-findings.md).
+The original source7e99 native failures remain the last executed native result.
+No current physical RPO/RTO, converged four-to-five-node expansion, stable
+post-convergence capacity gain or production qualification is established.
+The original failed Azure run and verified deletion remain unchanged.
+
+## Previous complete execution — sourcee2 compilation failed, 2026-11-15 UTC
 
 Delivered main remains **1.0.519-beta / `587dd6e4775e454cc9e8224d5fed76e8795c6ff6`**.
 Draft **1.0.520-beta / `e2adb410befd41bd475f015fd6590c33d1afaa4f`** finished

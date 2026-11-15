@@ -400,13 +400,15 @@ pub(super) fn prepare_large_head(
                 .expect("ordinary Core R2 key");
             let record=crate::Record::new(id).with_metadata(serde_json::json!({"body":"x".repeat(1536*1024),"ordinal":ordinal,"contract":"public Core/native entry, not event API"}));
             let record_bytes = serde_json::to_vec(&record)?;
-            events.push(serde_json::json!({"stage":"actual_public_core_insert_intent","collection":"items","record_id":record.id,"record_bytes":record_bytes.len(),"record_sha256":hex::encode(Sha256::digest(&record_bytes)),"real_range":other.id,"leader":other.leader,"event_API_64KiB_limit_unchanged":true}));
+            events.push(serde_json::json!({"stage":"actual_public_core_insert_intent","planned_public_calls":["begin_transaction","insert","commit"],"commit_not_yet_entered":true,"collection":"items","record_id":record.id,"record_bytes":record_bytes.len(),"record_sha256":hex::encode(Sha256::digest(&record_bytes)),"real_range":other.id,"leader":other.leader,"event_API_64KiB_limit_unchanged":true}));
             evidence(
                 &output.join("large-native-entry-preparation-before-assertions.json"),
                 &events,
             )?;
             let committed = (|| -> Result<()> {
-                let db = database.write();
+                // SAME actual DB, shared public transaction borrow. Local
+                // native/quorum callbacks may require their own read borrow.
+                let db = database.read();
                 if !db.commit_admission_ready() {
                     return Err(invalid(
                         "large-entry actual native commit hook not installed",
@@ -419,10 +421,8 @@ pub(super) fn prepare_large_head(
                 events.push(serde_json::json!({"stage":"actual_public_core_insert_return","returned_ok":inserted.is_ok(),"exact_error":inserted.as_ref().err().map(ToString::to_string)}));
                 inserted?;
                 events.push(serde_json::json!({"stage":"actual_public_core_commit_intent","record_id":record.id}));
-                evidence(
-                    &output.join("large-native-entry-preparation-before-assertions.json"),
-                    &events,
-                )?;
+                // Only the PUBLIC commit/hook contract may hold this read
+                // borrow across native/RPC work. Evidence IO is outside it.
                 let committed = tx.commit();
                 events.push(serde_json::json!({"stage":"actual_public_core_commit_return","returned_ok":committed.is_ok(),"exact_error":committed.as_ref().err().map(ToString::to_string),"record_id":record.id,"error_is_not_rollback":true}));
                 committed

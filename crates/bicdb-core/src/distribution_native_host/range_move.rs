@@ -22,6 +22,13 @@
 //! backoff that doubles per consecutive failure up to a cap; a timeout is
 //! repeated on the next step without a backoff. Nothing here stops the host.
 //!
+//! Waiting. One part of a stage belongs to another member's own host loop
+//! (the target's writer policy and its serving). While that loop has not
+//! finished, the backend ends its call and names what it waits for. That is
+//! progress of the member, not a failure: the status reports it as
+//! "waiting at <stage>: <what>" with no error, the stage is unchanged, no
+//! backoff applies and the next step repeats the stage.
+//!
 //! Scheduling. `NativeRangeMoveSlot` runs each step on its own owned worker
 //! thread with its own budget, because one stage (the image transfer) cannot
 //! be cut into supervisor-sized pieces: the process loop only starts a step
@@ -94,6 +101,10 @@ pub struct NativeRangeMoveStatus {
     /// "blocked at <stage>: <error>" of the last failed step, or the last
     /// abort refusal. Cleared by the next successful step.
     pub last_error: Option<String>,
+    /// "waiting at <stage>: <what>" when the last step ended only because a
+    /// member has not yet finished work of its own host loop. Not an error:
+    /// the next step repeats the stage. Cleared by the next step.
+    pub waiting: Option<String>,
     /// Why the controller is paused: the precondition does not hold.
     pub paused: Option<String>,
     /// Steps that passed the precondition and the backoff.
@@ -247,6 +258,7 @@ where
     handoff: Option<NativeJoinedDataHandoff<B>>,
     reached: Option<Stage>,
     last_error: Option<String>,
+    waiting: Option<String>,
     paused: Option<String>,
     attempts: u64,
     failures: u32,
@@ -293,6 +305,7 @@ where
             handoff: None,
             reached: None,
             last_error: None,
+            waiting: None,
             paused: None,
             attempts: 0,
             failures: 0,
@@ -321,6 +334,7 @@ where
                 successor(self.reached).map(stage_name)
             },
             last_error: self.last_error.clone(),
+            waiting: self.waiting.clone(),
             paused: self.paused.clone(),
             attempts: self.attempts,
             completed: self.completed,
@@ -376,6 +390,7 @@ where
                 self.reached = None;
             }
             self.paused = Some(refusal.reason);
+            self.waiting = None;
             return;
         }
         self.paused = None;
@@ -387,6 +402,7 @@ where
             return;
         };
         self.attempts += 1;
+        self.waiting = None;
         if let Err(error) = hosts.settle(parent) {
             self.blocked("route confirmation", error);
             return;
@@ -409,7 +425,25 @@ where
                     self.completed = true;
                 }
             }
-            Err(error) => self.blocked(stage_name(next), error),
+            Err(error) => {
+                // The backend names a wait only for the call that just ended.
+                let waiting = self
+                    .handoff
+                    .as_ref()
+                    .and_then(|handoff| handoff.backend().waiting())
+                    .filter(|_| !matches!(error, BicDbError::QueryTimedOut));
+                match waiting {
+                    Some(what) => {
+                        // A member's own host loop has not finished: not a
+                        // failure, no backoff, the stage is repeated.
+                        self.waiting = Some(format!("waiting at {}: {what}", stage_name(next)));
+                        self.last_error = None;
+                        self.failures = 0;
+                        self.retry_at = None;
+                    }
+                    None => self.blocked(stage_name(next), error),
+                }
+            }
         }
     }
 
@@ -467,6 +501,7 @@ where
     fn finish_abort(&mut self, note: Option<String>) {
         self.aborted = true;
         self.handoff = None;
+        self.waiting = None;
         self.paused = None;
         self.retry_at = None;
         self.last_error = note;

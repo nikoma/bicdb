@@ -31,6 +31,8 @@ struct FakeState {
     decided: bool,
     forgotten: usize,
     old_epoch: Option<u64>,
+    /// What the backend reports it is waiting for after a failed call.
+    waiting: Option<String>,
 }
 struct FakeBackend {
     state: Arc<Mutex<FakeState>>,
@@ -133,6 +135,9 @@ impl JoinedHandoffBackend for FakeBackend {
     }
     fn serve(&mut self, _hosts: &mut Self::Hosts, _parent: &CancellationToken) -> Result<usize> {
         Err(scripted("no serving"))
+    }
+    fn waiting(&self) -> Option<String> {
+        self.state.lock().waiting.clone()
     }
 }
 
@@ -506,6 +511,47 @@ fn native_range_move_controller_lifecycle_with_scripted_backend() {
             NativeRangeMoveController::new(local.clone(), range.id, node(4), &hosts, fake(&state))
                 .unwrap()
                 .with_backoff(Duration::from_secs(3600), Duration::from_secs(3600));
+        // A member's own host loop has not finished: the backend ends its
+        // call and names what it waits for. That is progress of the member,
+        // not a failure: no error, no backoff, the stage is unchanged and
+        // the next step repeats it.
+        {
+            let mut state = state.lock();
+            state.waiting = Some("waiting for the host of the target".into());
+            state.admissions.push_back(Some("command pending".into()));
+            state.admissions.push_back(Some("command pending".into()));
+        }
+        for attempts in 1..=2 {
+            slow.tick(&mut hosts, &parent);
+            let status = slow.status();
+            assert_eq!(
+                (
+                    status.stage,
+                    status.next_stage,
+                    status.last_error.clone(),
+                    status.attempts
+                ),
+                (None, Some("target_admitted"), None, attempts)
+            );
+            assert_eq!(
+                status.waiting.as_deref(),
+                Some("waiting at target_admitted: waiting for the host of the target")
+            );
+            assert!(!status.completed && status.paused.is_none());
+        }
+        // A timeout while the backend names a wait is still a timeout.
+        state.lock().admissions.push_back(None);
+        slow.tick(&mut hosts, &parent);
+        let status = slow.status();
+        assert_eq!(
+            (status.waiting.clone(), status.last_error.as_deref()),
+            (
+                None,
+                Some("blocked at target_admitted: timed out; repeated on the next step")
+            )
+        );
+        // Without a named wait the same failure is an error and backs off.
+        state.lock().waiting = None;
         state
             .lock()
             .admissions
@@ -513,7 +559,8 @@ fn native_range_move_controller_lifecycle_with_scripted_backend() {
         slow.tick(&mut hosts, &parent);
         slow.tick(&mut hosts, &parent);
         let status = slow.status();
-        assert_eq!(status.attempts, 1);
+        assert_eq!(status.attempts, 4);
+        assert_eq!(status.waiting, None);
         assert!(status
             .last_error
             .as_deref()

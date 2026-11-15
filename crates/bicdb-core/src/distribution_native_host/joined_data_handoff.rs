@@ -358,6 +358,14 @@ pub(crate) trait JoinedHandoffBackend {
             "this backend does not produce the source retirement",
         ))
     }
+    /// Set when the last call of this backend ended only because a member
+    /// has not yet finished work that belongs to that member's own host
+    /// loop: what is awaited. The call is repeated unchanged; it is progress
+    /// of the member, not a failure of the handoff. `None` for every other
+    /// outcome.
+    fn waiting(&self) -> Option<String> {
+        None
+    }
 }
 
 /// One handoff of `range` onto `target`: the stage logic over a backend that

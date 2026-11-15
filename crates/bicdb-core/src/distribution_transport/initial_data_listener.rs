@@ -89,6 +89,8 @@ pub(super) fn require_request(
         | ClusterDataRequest::ApplyNativeOrigin { .. }
         | ClusterDataRequest::ObserveNativeOrigin { .. }
         | ClusterDataRequest::RangeWriteProgress { .. }
+        // Read-only, answered to the committed range leader only.
+        | ClusterDataRequest::NativeRangeMoveProbe { .. }
         | ClusterDataRequest::ProbeRangeWrite { .. }
         // Typed Get executes the existing missing-dispatcher refusal until
         // publication; it NEVER falls through to an ordinary DB Get.

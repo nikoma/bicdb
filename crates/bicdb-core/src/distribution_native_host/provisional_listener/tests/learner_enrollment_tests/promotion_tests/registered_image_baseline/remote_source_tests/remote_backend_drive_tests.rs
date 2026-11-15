@@ -39,9 +39,32 @@ pub(in super::super) fn is_case(case: SourceCase) -> bool {
         SourceCase::RemoteBackendFullDrive
             | SourceCase::RemoteBackendRedrive
             | SourceCase::RemoteBackendOneDrive
+            | SourceCase::RemoteBackendDecisionMissingNewMember
+            | SourceCase::RemoteBackendDecisionMissingSource
             | SourceCase::RemoteBackendControllerWalk
             | SourceCase::RemoteBackendNotRangeLeader
     )
+}
+/// One new member misses the publication of the joint decision: nothing is
+/// certified and the missing member is named; once it can be reached the
+/// same handoff certifies and the whole move completes.
+#[test]
+fn native_remote_backend_decision_missing_on_a_new_member_is_not_certified_then_completes() {
+    run_registered_image_baseline_with_placement_and_source(
+        Case::Required,
+        AssignmentMode::CoordinatorLeadsRange,
+        Some(SourceCase::RemoteBackendDecisionMissingNewMember),
+    );
+}
+/// The same for the retiring source, which needs the decision to record its
+/// retirement.
+#[test]
+fn native_remote_backend_decision_missing_on_the_retiring_source_is_not_certified_then_completes() {
+    run_registered_image_baseline_with_placement_and_source(
+        Case::Required,
+        AssignmentMode::CoordinatorLeadsRange,
+        Some(SourceCase::RemoteBackendDecisionMissingSource),
+    );
 }
 /// One coordinator object, one `drive()`: the range is moved, the handoff is
 /// `Cleaned`, the relocation `Completed`, and the original client reads its
@@ -659,7 +682,10 @@ pub(super) fn exercise(
     assert_eq!(range.leader, node(0), "the coordinator leads the range");
     if matches!(
         case,
-        SourceCase::RemoteBackendOneDrive | SourceCase::RemoteBackendControllerWalk
+        SourceCase::RemoteBackendOneDrive
+            | SourceCase::RemoteBackendDecisionMissingNewMember
+            | SourceCase::RemoteBackendDecisionMissingSource
+            | SourceCase::RemoteBackendControllerWalk
     ) {
         whole_move(
             case,
@@ -1571,7 +1597,17 @@ fn whole_move(
         controller.tick(&mut *hosts, &budget(60_000));
         assert_eq!(controller.status(), status);
     } else {
-        let mut handoff = NativeJoinedDataHandoff::with_backend(range.id, node(4), build());
+        // The member whose decision publication is lost, when the case has one.
+        let missing = match case {
+            SourceCase::RemoteBackendDecisionMissingNewMember => {
+                Some(new.iter().find(|id| **id != node(4)).unwrap().clone())
+            }
+            SourceCase::RemoteBackendDecisionMissingSource => Some(source.clone()),
+            _ => None,
+        };
+        let fault = Arc::new(Mutex::new(None::<ClusterNodeId>));
+        let faulty = || build().test_decision_publish_fault(fault.clone());
+        let mut handoff = NativeJoinedDataHandoff::with_backend(range.id, node(4), faulty());
         let mut driven = None;
         super::hot_policy_tests::data_tests::exercise_range_with_serve(
             "RemoteBackendOneDrive",
@@ -1585,6 +1621,57 @@ fn whole_move(
             acknowledged,
             output,
             &mut |control| {
+                if let Some(missing) = &missing {
+                    *fault.lock() = Some(missing.clone());
+                    // The same coordinator object, then one without memory:
+                    // neither certifies, both name the missing member, and
+                    // the second computes the same fact set again (the
+                    // member accepts its repeated preparation).
+                    for attempt in 0..2 {
+                        if attempt == 1 {
+                            handoff =
+                                NativeJoinedDataHandoff::with_backend(range.id, node(4), faulty());
+                        }
+                        let error = handoff
+                            .drive_until(&mut *hosts, Some(Stage::Certified), &budget(300_000))
+                            .unwrap_err()
+                            .to_string();
+                        eprintln!("REMOTE_BACKEND_DECISION_MISSING attempt={attempt} {error}");
+                        assert!(
+                            error.contains(
+                                "the joint decision is not durable on every member that needs it"
+                            ) && error.contains(&format!(
+                                "missing: {missing} (publish: test fault: the request was not sent; observe decision: "
+                            )) && error.contains("Nothing was certified"),
+                            "{error}"
+                        );
+                        assert_eq!(hosts.commits, 0, "nothing is committed");
+                        assert_eq!(
+                            recorded(&hosts.committed_topology().unwrap(), range.id),
+                            None
+                        );
+                        assert!(handoff.backend().decision_certificate().is_none());
+                        assert!(!handoff.backend().decision_durable());
+                    }
+                    // The member can be reached again: the same stage
+                    // publishes to it alone and certifies.
+                    *fault.lock() = None;
+                    assert_eq!(
+                        handoff
+                            .drive_until(&mut *hosts, Some(Stage::Certified), &budget(300_000))
+                            .unwrap(),
+                        Stage::Certified
+                    );
+                    assert_eq!(hosts.commits, 1);
+                    let publishers = handoff
+                        .backend()
+                        .decision_certificate()
+                        .unwrap()
+                        .publishers();
+                    for id in old.iter().chain(std::iter::once(&node(4))) {
+                        assert!(publishers.contains(id), "{id}: {publishers:?}");
+                    }
+                }
                 driven = Some(pumped(control, || {
                     handoff.drive(&mut *hosts, &budget(600_000))
                 }));

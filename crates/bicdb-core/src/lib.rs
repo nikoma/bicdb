@@ -4,6 +4,10 @@
 //! JSON metadata, optional f32 vectors, exact vector search, time-series scans,
 //! and a durable pending sync log.
 
+// The joint handoff custody types nest deeply enough that proving `Send` for
+// a thread closure exceeds the default limit on newer compilers.
+#![recursion_limit = "256"]
+
 mod backup;
 mod broker;
 mod cancellation;

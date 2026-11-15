@@ -44,7 +44,10 @@ association or Prepared-rekey source-head gaps.
 The [deferred final-tail design](bootstrap-deferred-final-tail-7c.md) specifies
 both ordinary absent/existing-target association and latest closed-target
 finalization. It is **not implemented or tested**; native final acknowledged-prefix
-coverage remains an explicit missing producer.
+coverage remains an explicit missing producer. The separate
+[root-local fence refinement](bootstrap-root-local-fence-refinement.md) specifies
+shared IO exclusion, ancestor Page admission and pending-marker/FI ordering;
+it is **design only**, with runtime wiring and crash qualification outstanding.
 
 ### Historical pre-CI review of the source7c corrections
 
